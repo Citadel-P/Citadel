@@ -20,7 +20,8 @@ internal sealed class PlatformHealthMonitorJob(
     IServiceScopeFactory scopeFactory,
     IPlatformHealthBroadCaster broadcaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    ILogger<PlatformHealthMonitorJob> logger)
+    ILogger<PlatformHealthMonitorJob> logger,
+    IPlatformConnectionCache? connectionCache = null)
     : BackgroundService, IPlatformHealthMonitorJob
 {
     private readonly ConcurrentDictionary<string, PlatformState> platforms = new();
@@ -196,6 +197,7 @@ internal sealed class PlatformHealthMonitorJob(
         if (!platforms.TryRemove(address, out var state))
             return false;
 
+        connectionCache?.Evict(address);
         await broadcaster.PublishAsync(
             new PlatformHealth(state.Id, address, state.Type, false), cancellationToken);
 

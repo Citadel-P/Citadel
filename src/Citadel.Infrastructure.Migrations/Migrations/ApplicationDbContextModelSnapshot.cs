@@ -5003,6 +5003,84 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("stackreleasevolumebindings", (string)null);
                 });
 
+            modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("AvailableAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("availableat");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<string>("DispatchedCommitSha")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dispatchedcommitsha");
+
+                    b.Property<string>("ExpectedSpecFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("expectedspecfingerprint");
+
+                    b.Property<Guid>("ExpectedStackReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expectedstackreleaseid");
+
+                    b.Property<Guid>("GitRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gitrepositoryid");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("text")
+                        .HasColumnName("lasterror");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat");
+
+                    b.Property<Guid>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stackwebhookdeployqueue");
+
+                    b.HasIndex("GitRepositoryId")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_gitrepositoryid");
+
+                    b.HasIndex("StackId")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_stackid");
+
+                    b.HasIndex("Status", "AvailableAt", "QueuedAt")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_ready");
+
+                    b.ToTable("stackwebhookdeployqueue", (string)null);
+                });
+
             modelBuilder.Entity("Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6031,6 +6109,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_stackreleasevolumebindings_stackreleases_stackreleaseid");
+                });
+
+            modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
+                {
+                    b.HasOne("GitRepository", null)
+                        .WithMany()
+                        .HasForeignKey("GitRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackwebhookdeployqueue_gitrepositories_gitrepositoryid");
+
+                    b.HasOne("Stack", null)
+                        .WithMany()
+                        .HasForeignKey("StackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackwebhookdeployqueue_stacks_stackid");
                 });
 
             modelBuilder.Entity("Tag", b =>

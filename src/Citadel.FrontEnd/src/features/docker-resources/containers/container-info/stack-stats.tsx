@@ -70,11 +70,10 @@ const STACK_STAT_METRICS: MetricConfig[] = [
     kind: 'memory',
     title: 'Memory Usage',
     description: 'Showing memory usage for the selected range',
-    stacked: true,
     fields: [
       {
         key: 'memoryActive',
-        label: 'Active',
+        label: 'Usage',
         color: 'var(--chart-1)',
         formatter: (value) => byteTransform(value, 2),
       },
@@ -88,7 +87,7 @@ const STACK_STAT_METRICS: MetricConfig[] = [
     summaryFields: [
       {
         key: 'memoryActive',
-        label: 'Active',
+        label: 'Usage',
         color: 'var(--chart-1)',
         formatter: (value) => byteTransform(value, 2),
       },
@@ -203,7 +202,13 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
       });
     });
 
-    appendLiveStats(setLiveStats, activeIds, updates, getLiveStatsPointLimit(longestWindow));
+    appendLiveStats(
+      setLiveStats,
+      activeIds,
+      updates,
+      getLiveStatsPointLimit(longestWindow),
+      longestWindow * 60 * 60,
+    );
     lastStatRef.current = Object.fromEntries(Object.entries(lastStatRef.current).filter(([id]) => activeIds.has(id)));
   }, [containers, longestWindow]);
 
@@ -552,12 +557,13 @@ const appendLiveStats = (
   activeIds: Set<string>,
   updates: { id: string; stat: ContainerStatView }[],
   maxPoints: number,
+  maxAgeSeconds: number,
 ) => {
   setLiveStats((current) => {
     const next = Object.fromEntries(Object.entries(current).filter(([id]) => activeIds.has(id)));
 
     updates.forEach(({ id, stat }) => {
-      next[id] = appendBoundedLiveStat(next[id] ?? [], stat, maxPoints);
+      next[id] = appendBoundedLiveStat(next[id] ?? [], stat, maxPoints, maxAgeSeconds);
     });
 
     const removedInactiveContainer = Object.keys(next).length !== Object.keys(current).length;

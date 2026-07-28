@@ -117,12 +117,16 @@ internal static class CronSchedule
             return false;
 
         var local = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone);
+        var dayOfMonthMatches = Matches(fields[2], local.Day, 1, 31);
+        var dayOfWeekMatches = MatchesDayOfWeek(fields[4], local.DayOfWeek);
+        var dayMatches = fields[2] != "*" && fields[4] != "*"
+            ? dayOfMonthMatches || dayOfWeekMatches
+            : dayOfMonthMatches && dayOfWeekMatches;
 
         return Matches(fields[0], local.Minute, 0, 59)
             && Matches(fields[1], local.Hour, 0, 23)
-            && Matches(fields[2], local.Day, 1, 31)
             && Matches(fields[3], local.Month, 1, 12)
-            && MatchesDayOfWeek(fields[4], local.DayOfWeek);
+            && dayMatches;
     }
 
     private static TimeZoneInfo? ResolveTimeZone(string? timeZoneId)

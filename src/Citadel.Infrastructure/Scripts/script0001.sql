@@ -338,6 +338,9 @@ CREATE TABLE platformstats (
     id uuid NOT NULL,
     cpuusage double precision NOT NULL,
     created bigint NOT NULL,
+    disktotalbytes bigint,
+    diskusage double precision,
+    diskusedbytes bigint,
     memoryusage double precision NOT NULL,
     platformid uuid NOT NULL,
     rxbytes double precision NOT NULL,
@@ -742,6 +745,25 @@ CREATE TABLE gitrepositoryrefs (
     CONSTRAINT fk_gitrepositoryrefs_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE CASCADE
 );
 
+CREATE TABLE stackwebhookdeployqueue (
+    id uuid NOT NULL,
+    attempts integer NOT NULL,
+    availableat timestamp with time zone NOT NULL,
+    branch text NOT NULL,
+    dispatchedcommitsha text,
+    expectedspecfingerprint text NOT NULL,
+    expectedstackreleaseid uuid NOT NULL,
+    gitrepositoryid uuid NOT NULL,
+    lasterror text,
+    queuedat timestamp with time zone NOT NULL,
+    stackid uuid NOT NULL,
+    startedat timestamp with time zone,
+    status text NOT NULL,
+    CONSTRAINT pk_stackwebhookdeployqueue PRIMARY KEY (id),
+    CONSTRAINT fk_stackwebhookdeployqueue_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE CASCADE,
+    CONSTRAINT fk_stackwebhookdeployqueue_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE CASCADE
+);
+
 CREATE TABLE containers (
     id uuid NOT NULL,
     controlstartedat bigint,
@@ -1110,6 +1132,10 @@ VALUES ('019d0000-0001-7000-8001-00000000001b', NULL, TIMESTAMPTZ '2026-01-01T00
 
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'RAM > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000023', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Disk > 70% - Platform', '[]', 3, 'Warning', 70.0, 'PlatformDiskHigh');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000024', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Disk > 90% - Platform', '[]', 3, 'Critical', 90.0, 'PlatformDiskHigh');
 
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 1, 1, '30000000-0000-0000-0000-000000000003', 0);
@@ -1431,6 +1457,8 @@ CREATE INDEX ix_containers_stackid ON containers (stackid);
 
 CREATE UNIQUE INDEX ix_containerstats_containerid_created ON containerstats (containerid, created);
 
+CREATE INDEX ix_containerstats_created ON containerstats (created);
+
 CREATE INDEX ix_deployments_controltriggeredby ON deployments (controltriggeredby);
 
 CREATE INDEX ix_deployments_createdbyactorid ON deployments (createdbyactorid);
@@ -1519,6 +1547,8 @@ CREATE INDEX ix_platforms_globalsearch_address_trgm ON platforms USING gin (addr
 
 CREATE INDEX ix_platforms_globalsearch_name_trgm ON platforms USING gin (name gin_trgm_ops);
 
+CREATE INDEX ix_platformstats_created ON platformstats (created);
+
 CREATE UNIQUE INDEX ix_platformstats_platformid_created ON platformstats (platformid, created);
 
 CREATE INDEX ix_refreshtokens_expiresat ON refreshtokens (expiresat);
@@ -1577,6 +1607,12 @@ CREATE INDEX ix_stacks_currentstackreleaseid ON stacks (currentstackreleaseid);
 
 CREATE INDEX ix_stacks_globalsearch_name_trgm ON stacks USING gin (name gin_trgm_ops);
 
+CREATE INDEX ix_stackwebhookdeployqueue_gitrepositoryid ON stackwebhookdeployqueue (gitrepositoryid);
+
+CREATE INDEX ix_stackwebhookdeployqueue_ready ON stackwebhookdeployqueue (status, availableat, queuedat);
+
+CREATE INDEX ix_stackwebhookdeployqueue_stackid ON stackwebhookdeployqueue (stackid);
+
 CREATE INDEX ix_tags_createdbyactorid ON tags (createdbyactorid);
 
 CREATE UNIQUE INDEX ix_tags_normalizedname ON tags (normalizedname);
@@ -1598,7 +1634,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260724115856_migration0001', '10.0.10');
+VALUES ('20260727194428_migration0001', '10.0.10');
 
 COMMIT;
 

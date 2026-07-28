@@ -124,6 +124,23 @@ internal sealed record VolumeBackupCoverageDto(
     }
 }
 
+internal sealed record PlatformBackupSummaryDto(
+    Guid PlatformId,
+    int PolicyCount,
+    int EnabledPolicyCount,
+    int DockerVolumePolicyCount,
+    int StackPolicyCount,
+    int DeploymentPolicyCount,
+    int AttentionPolicyCount,
+    string? LastRunStatus,
+    DateTime? LastRunAt)
+{
+    public PlatformBackupSummaryDto()
+        : this(Guid.Empty, 0, 0, 0, 0, 0, 0, null, null)
+    {
+    }
+}
+
 internal sealed record BackupRunDto(
     Guid Id,
     Guid BackupPolicyId,

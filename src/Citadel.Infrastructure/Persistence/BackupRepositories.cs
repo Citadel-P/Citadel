@@ -1253,6 +1253,121 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
         return [.. rows.Select(static row => row.ToDomain())];
     }
 
+    public async Task<IReadOnlyList<PlatformBackupSummary>> GetPlatformSummariesAsync(
+        IReadOnlyCollection<Guid> platformIds,
+        Guid? userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        var requested = platformIds
+            .Where(static platformId => platformId != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (requested.Length == 0)
+            return [];
+
+        var authorizationCtes = userId.HasValue
+            ? $", {AuthorizationSql.ActorScopeCte}, {AuthorizationSql.GlobalAccessCte}"
+            : string.Empty;
+        var authorizationPredicate = userId.HasValue
+            ? $"AND {AuthorizationSql.ResourcePredicatePrefix}p.Id{AuthorizationSql.ResourcePredicateSuffix}"
+            : string.Empty;
+
+        string sql = $$"""
+            WITH requested AS (
+                SELECT unnest(@PlatformIds::uuid[]) AS PlatformId
+            )
+            {{authorizationCtes}},
+            policies AS (
+                SELECT
+                    p.Id,
+                    p.Enabled,
+                    p.Source->>'$type' AS SourceType,
+                    CASE p.Source->>'$type'
+                        WHEN @DockerVolumeType THEN NULLIF(COALESCE(p.Source->>'PlatformId', p.Source->>'platformId'), '')::uuid
+                        WHEN @StackType THEN sr.PlatformId
+                        WHEN @DeploymentType THEN d.PlatformId
+                        ELSE NULL
+                    END AS PlatformId
+                FROM BackupPolicies p
+                LEFT JOIN Stacks s
+                  ON p.Source->>'$type' = @StackType
+                 AND s.Id = NULLIF(COALESCE(p.Source->>'StackId', p.Source->>'stackId'), '')::uuid
+                LEFT JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+                LEFT JOIN Deployments d
+                  ON p.Source->>'$type' = @DeploymentType
+                 AND d.Id = NULLIF(COALESCE(p.Source->>'DeploymentId', p.Source->>'deploymentId'), '')::uuid
+                WHERE p.ArchivedAt IS NULL
+                  {{authorizationPredicate}}
+            ),
+            platform_policies AS (
+                SELECT p.*
+                FROM policies p
+                JOIN requested r ON r.PlatformId = p.PlatformId
+            ),
+            latest_policy_runs AS (
+                SELECT DISTINCT ON (p.Id)
+                    p.Id AS PolicyId,
+                    p.PlatformId,
+                    r.Status,
+                    COALESCE(r.CompletedAt, r.QueuedAt) AS RunAt
+                FROM platform_policies p
+                JOIN BackupRuns r ON r.BackupPolicyId = p.Id
+                ORDER BY p.Id, r.QueuedAt DESC, r.Id DESC
+            ),
+            latest_platform_runs AS (
+                SELECT DISTINCT ON (r.PlatformId)
+                    r.PlatformId,
+                    r.Status,
+                    r.RunAt
+                FROM latest_policy_runs r
+                ORDER BY r.PlatformId, r.RunAt DESC, r.PolicyId DESC
+            )
+            SELECT
+                requested.PlatformId,
+                COUNT(p.Id)::int AS PolicyCount,
+                COUNT(p.Id) FILTER (WHERE p.Enabled)::int AS EnabledPolicyCount,
+                COUNT(p.Id) FILTER (WHERE p.SourceType = @DockerVolumeType)::int AS DockerVolumePolicyCount,
+                COUNT(p.Id) FILTER (WHERE p.SourceType = @StackType)::int AS StackPolicyCount,
+                COUNT(p.Id) FILTER (WHERE p.SourceType = @DeploymentType)::int AS DeploymentPolicyCount,
+                COUNT(p.Id) FILTER (WHERE latest.Status = ANY(@AttentionStatuses))::int AS AttentionPolicyCount,
+                latest_platform.Status AS LastRunStatus,
+                latest_platform.RunAt AS LastRunAt
+            FROM requested
+            LEFT JOIN platform_policies p ON p.PlatformId = requested.PlatformId
+            LEFT JOIN latest_policy_runs latest ON latest.PolicyId = p.Id
+            LEFT JOIN latest_platform_runs latest_platform ON latest_platform.PlatformId = requested.PlatformId
+            GROUP BY requested.PlatformId, latest_platform.Status, latest_platform.RunAt
+            ORDER BY requested.PlatformId
+            """;
+
+        var rows = await db.QueryAsync<PlatformBackupSummaryDto>(
+            sql,
+            new
+            {
+                PlatformIds = requested,
+                UserId = userId ?? Guid.Empty,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission,
+                DockerVolumeType = "DockerVolume",
+                StackType = "Stack",
+                DeploymentType = "Deployment",
+                AttentionStatuses = new[]
+                {
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Failed),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.TimedOut),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Interrupted)
+                }
+            },
+            transaction: tx());
+
+        return [.. rows.Select(static row => row.ToDomain())];
+    }
+
     public async Task<bool> TryMarkScheduledAsync(Guid id, DateTimeOffset scheduledMinuteUtc, CancellationToken cancellationToken)
     {
         const string sql = """

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260724115856_migration0001")]
+    [Migration("20260727194428_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -569,6 +569,34 @@ namespace Infrastructure.Migrations.Migrations
                             Severity = "Warning",
                             Threshold = 80.0,
                             Type = "PlatformRamHigh"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000023"),
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Disk > 70% - Platform",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Severity = "Warning",
+                            Threshold = 70.0,
+                            Type = "PlatformDiskHigh"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000024"),
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Disk > 90% - Platform",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Severity = "Critical",
+                            Threshold = 90.0,
+                            Type = "PlatformDiskHigh"
                         },
                         new
                         {
@@ -2737,6 +2765,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id")
                         .HasName("pk_containerstats");
 
+                    b.HasIndex("Created")
+                        .HasDatabaseName("ix_containerstats_created");
+
                     b.HasIndex("ContainerId", "Created")
                         .IsUnique()
                         .HasDatabaseName("ix_containerstats_containerid_created");
@@ -4271,6 +4302,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("created");
 
+                    b.Property<long?>("DiskTotalBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("disktotalbytes");
+
+                    b.Property<double?>("DiskUsage")
+                        .HasColumnType("double precision")
+                        .HasColumnName("diskusage");
+
+                    b.Property<long?>("DiskUsedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("diskusedbytes");
+
                     b.Property<double>("MemoryUsage")
                         .HasColumnType("double precision")
                         .HasColumnName("memoryusage");
@@ -4289,6 +4332,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_platformstats");
+
+                    b.HasIndex("Created")
+                        .HasDatabaseName("ix_platformstats_created");
 
                     b.HasIndex("PlatformId", "Created")
                         .IsUnique()
@@ -4958,6 +5004,84 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_stackreleasevolumebindings_release_volumename");
 
                     b.ToTable("stackreleasevolumebindings", (string)null);
+                });
+
+            modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("AvailableAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("availableat");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<string>("DispatchedCommitSha")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dispatchedcommitsha");
+
+                    b.Property<string>("ExpectedSpecFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("expectedspecfingerprint");
+
+                    b.Property<Guid>("ExpectedStackReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expectedstackreleaseid");
+
+                    b.Property<Guid>("GitRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gitrepositoryid");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("text")
+                        .HasColumnName("lasterror");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat");
+
+                    b.Property<Guid>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stackwebhookdeployqueue");
+
+                    b.HasIndex("GitRepositoryId")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_gitrepositoryid");
+
+                    b.HasIndex("StackId")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_stackid");
+
+                    b.HasIndex("Status", "AvailableAt", "QueuedAt")
+                        .HasDatabaseName("ix_stackwebhookdeployqueue_ready");
+
+                    b.ToTable("stackwebhookdeployqueue", (string)null);
                 });
 
             modelBuilder.Entity("Tag", b =>
@@ -5988,6 +6112,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_stackreleasevolumebindings_stackreleases_stackreleaseid");
+                });
+
+            modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
+                {
+                    b.HasOne("GitRepository", null)
+                        .WithMany()
+                        .HasForeignKey("GitRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackwebhookdeployqueue_gitrepositories_gitrepositoryid");
+
+                    b.HasOne("Stack", null)
+                        .WithMany()
+                        .HasForeignKey("StackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackwebhookdeployqueue_stacks_stackid");
                 });
 
             modelBuilder.Entity("Tag", b =>

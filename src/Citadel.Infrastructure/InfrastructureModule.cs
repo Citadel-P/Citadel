@@ -53,11 +53,13 @@ public static class InfrastructureModule
         Helpers.GetOrCreatePublicKey();
         services
             .AddSingleton<HubSigningInterceptor>()
-            .AddSingleton<IGrpcClientFactory>(sp =>
+            .AddSingleton<GrpcClientFactory>(sp =>
             {
                 var interceptor = sp.GetRequiredService<HubSigningInterceptor>();
                 return new GrpcClientFactory(interceptor);
             })
+            .AddSingleton<IGrpcClientFactory>(sp => sp.GetRequiredService<GrpcClientFactory>())
+            .AddSingleton<IPlatformConnectionCache>(sp => sp.GetRequiredService<GrpcClientFactory>())
             .AddGrpc(options =>
             {
                 options.MaxReceiveMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes;

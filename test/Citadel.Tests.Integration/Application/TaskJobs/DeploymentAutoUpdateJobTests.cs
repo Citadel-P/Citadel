@@ -18,8 +18,8 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
 {
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IApplyDeploymentService> _applyDeploymentService = new();
+    private readonly ObservableDbWorkQueue _dbWorkQueue = new();
 
-    private Func<CancellationToken, Task>? _runAutoUpdateJob;
     private Guid _deploymentId;
     private Guid _platformId;
 
@@ -37,14 +37,12 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
 
         services.AddSingleton(_ => _delayWithJitter.Object);
         services.AddScoped(_ => _applyDeploymentService.Object);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(_dbWorkQueue);
 
         _delayWithJitter
             .Setup(x => x.DelayWithJitterForAsync(It.IsAny<Func<CancellationToken, Task>>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
-            .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, __) =>
-            {
-                _runAutoUpdateJob = func;
-                return Task.CompletedTask;
-            });
+            .Returns(Task.CompletedTask);
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -66,8 +64,11 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
         var cache = Services.GetRequiredService<ImageDigestCache>();
         cache.Set(new ImageKey(Constants.DefaultRegistryId, "nginx", "latest"), "old-digest");
 
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -85,8 +86,11 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
         var cache = Services.GetRequiredService<ImageDigestCache>();
         cache.Set(new ImageKey(Constants.DefaultRegistryId, "nginx", "latest"), "new-digest");
 
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -109,8 +113,11 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
             .Setup(x => x.ApplyAsync(_deploymentId, Constants.SystemId, true, It.IsAny<CancellationToken>()))
             .Returns(FailedApplyStream());
 
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -136,21 +143,11 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
     {
-        if (_runAutoUpdateJob is null)
-            throw new InvalidOperationException("Deployment auto-update job was not initialized.");
-
         Services.GetRequiredService<ISyncBarrier>().MarkSynced<DeploymentImageScannerJob>(_platformId);
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(1));
-
-        try
-        {
-            await _runAutoUpdateJob(cts.Token);
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-        }
+        var job = Services.GetServices<IHostedService>()
+            .OfType<DeploymentAutoUpdateJob>()
+            .Single();
+        await job.RunOnceAsync(cancellationToken);
     }
 
     private static async IAsyncEnumerable<DeploymentStreamItem> FailedApplyStream()

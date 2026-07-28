@@ -290,6 +290,7 @@ internal static class WebApiModule
         builder.Services
             .AddOptions<BuildOptions>()
             .BindConfiguration(BuildOptions.SectionName)
+            .Validate(options => options.MaxParallelRuns > 0, "Builds:MaxParallelRuns must be greater than zero.")
             .Validate(options => options.RunRetentionDays > 0, "Builds:RunRetentionDays must be greater than zero.")
             .ValidateOnStart();
         builder.Services

@@ -26,6 +26,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
     private readonly Mock<IOptions<JobConfiguration>> configMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
     private readonly Mock<IImageStreamManager> streamManagerMock = new();
+    private readonly ObservableDbWorkQueue dbWorkQueue = new();
 
     private Guid platformId;
     private const int batchSize = 2;
@@ -45,6 +46,8 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
         services.AddSingleton(imageConnector.Object);
         services.AddSingleton(imageFactoryMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(broadcaster);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(dbWorkQueue);
 
         configMock.Setup(x => x.Value).Returns(new JobConfiguration()
         {
@@ -86,10 +89,12 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
             .ReturnsAsync(Result.Success(freshImages));
         
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken); // wait for jobs to process
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -125,9 +130,12 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
         imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(Result.Success(Fakes.GetDummyImages()));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: Stale image should be removed
         await using var assertScope = Services.CreateAsyncScope();
@@ -159,9 +167,12 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
             .ReturnsAsync(Result.Success(new List<ImageResult>() { newImage } as IReadOnlyList<ImageResult>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: New image should be added
         await using var scope = Services.CreateAsyncScope();
@@ -206,9 +217,12 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
              .ReturnsAsync(Result.Success(new List<ImageResult>() { updatedDockerContainer } as IReadOnlyList<ImageResult>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: CurrentImage should be updated
         await using var scope = Services.CreateAsyncScope();

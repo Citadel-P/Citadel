@@ -5755,6 +5755,48 @@ export interface PermissionView {
   specificPermissions: SpecificPermission[];
 }
 
+export interface PlatformBackupSummariesView {
+  platforms: PlatformBackupSummaryView[];
+}
+
+export interface PlatformBackupSummaryView {
+  /** @format uuid */
+  platformId: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  policyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  enabledPolicyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  dockerVolumePolicyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stackPolicyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  deploymentPolicyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  attentionPolicyCount: number | string;
+  lastRunStatus: null | BackupRunStatus;
+  /** @format date-time */
+  lastRunAt: null | string;
+}
+
 export interface PlatformCapabilities {
   canViewLogs: boolean;
   canInspect: boolean;
@@ -5793,6 +5835,16 @@ export interface PlatformDescriptorDockerPlatformDescriptor {
   osVersion?: null | string;
   osType?: null | string;
   architecture?: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  imageUsedBytes?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  volumeUsedBytes?: null | number | string;
 }
 
 export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
@@ -5839,6 +5891,16 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
   osVersion?: null | string;
   osType?: null | string;
   architecture?: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  imageUsedBytes?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  volumeUsedBytes?: null | number | string;
 }
 
 export interface PlatformDescriptorKubernetesPlatformDescriptor {
@@ -5988,10 +6050,55 @@ export interface PlatformView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   stackCount: number | string;
+  deploymentStatusCounts: PlatformWorkloadStatusCountsView;
+  stackStatusCounts: PlatformWorkloadStatusCountsView;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
   tags?: TagSummaryView[];
   capabilities?: null | PlatformCapabilities;
+}
+
+export interface PlatformWorkloadStatusCountsView {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  total: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  healthy: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  degraded: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failed: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopped: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  paused: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  inProgress: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  unknown: number | string;
 }
 
 export interface PlatformsView {
@@ -14617,6 +14724,35 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name GetPlatformBackupSummaries
+     * @summary Get backup policy summaries for platforms
+     * @request GET:/api/v1/backupPolicies/platform-summaries
+     * @secure
+     * @response `200` `PlatformBackupSummariesView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getPlatformBackupSummaries: (
+      query: {
+        platformIds: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<PlatformBackupSummariesView, ProblemDetails>({
+        path: `/api/v1/backupPolicies/platform-summaries`,
+        method: "GET",
+        query: query,
+        secure: true,
         format: "json",
         ...params,
       }),

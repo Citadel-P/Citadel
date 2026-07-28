@@ -7,7 +7,7 @@ import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { normalizeDockerId } from '@/lib/utils';
 
-export const useStackInfoGroup = (stackId?: string, platformId?: string, stackName?: string) => {
+export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
   const { data, isLoading } = useRead('getContainersData', { stackId });
   const { currentPlatform } = useAppContext();
 
@@ -79,9 +79,27 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string, stackNa
     });
   }, []);
 
+  const mergeContainerStats = useCallback((containers: ContainerDataView[]) => {
+    setLiveContainers((current) => {
+      const next = { ...current };
+
+      containers.forEach((container) => {
+        const id = normalizeDockerId(container.id);
+        if (!id) return;
+
+        next[id] = {
+          ...next[id],
+          containerStat: container.containerStat,
+        };
+      });
+
+      return next;
+    });
+  }, []);
+
   const onContainerEvent = useCallback(
     (event: ContainerEvent) => {
-      if (!stackName || event.container.stack !== stackName) return;
+      if (!stackId || event.container.stackId !== stackId) return;
 
       const id = normalizeDockerId(event.container.containerId);
       if (!id) return;
@@ -115,7 +133,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string, stackNa
         },
       ]);
     },
-    [mergeContainers, stackName],
+    [mergeContainers, stackId],
   );
 
   useDockerDaemonGroup(platformId, { onContainerEvent });
@@ -123,9 +141,9 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string, stackNa
   const handleStackContainersInfoUpdated = useCallback(
     (payload: ContainerDataView[] | { containers?: ContainerDataView[] }) => {
       const containers = Array.isArray(payload) ? payload : (payload.containers ?? []);
-      mergeContainers(containers);
+      mergeContainerStats(containers);
     },
-    [mergeContainers],
+    [mergeContainerStats],
   );
 
   const setupEventListeners = useCallback(

@@ -129,6 +129,15 @@ public static class BackupPolicies
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, BackupPoliciesView.Map);
     }
 
+    public static async Task<Results<Ok<PlatformBackupSummariesView>, ProblemHttpResult>> GetPlatformSummaries(
+        IMediator mediator,
+        [FromQuery] Guid[] platformIds,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetPlatformBackupSummaries(platformIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, PlatformBackupSummariesView.Map);
+    }
+
     public static async Task<Results<Ok<BackupPolicyView>, ProblemHttpResult>> Get(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,

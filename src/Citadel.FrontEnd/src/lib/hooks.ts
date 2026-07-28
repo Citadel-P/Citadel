@@ -466,10 +466,11 @@ type StreamLogEntry = {
   severity?: StreamLogSeverity;
 };
 
+const MAX_STREAM_HISTORY_ENTRIES = 2000;
+const MAX_STREAM_BUFFERED_CHARACTERS = 1024 * 1024;
+
 interface StreamProgressState {
-  lines: string[];
   logs: StreamLogEntry[];
-  text: string;
   isPending: boolean;
   isSuccess: boolean;
   status: StreamStatus;
@@ -677,6 +678,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const handleChunkReceived = useCallback(
     (chunk: string) => {
       bufferRef.current += chunk;
+
       let braceCount = 0;
       let startIndex = -1;
       const newHistory: StreamLogEntry[] = [];
@@ -842,18 +844,35 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       }
 
       bufferRef.current = bufferRef.current.slice(processedIndex);
+      if (bufferRef.current.length > MAX_STREAM_BUFFERED_CHARACTERS) {
+        bufferRef.current = '';
+        setInternalError('Stream output exceeded the maximum buffered message size.');
+        abortControllerRef.current?.abort();
+        return;
+      }
 
-      if (newHistory.length > 0) setHistory((prev) => [...prev, ...newHistory]);
+      if (newHistory.length > 0) {
+        setHistory((previous) => {
+          const incoming = newHistory.slice(-MAX_STREAM_HISTORY_ENTRIES);
+          const retainedCount = Math.max(0, MAX_STREAM_HISTORY_ENTRIES - incoming.length);
+          return [...previous.slice(-retainedCount), ...incoming];
+        });
+      }
       if (updatedActive.size > 0 || activeKeysToDelete.size > 0 || activePrefixesToDelete.size > 0) {
         setActiveItems((prev) => {
           const next = new Map(prev);
           activePrefixesToDelete.forEach((prefix) => {
-            Array.from(next.keys())
-              .filter((key) => key.startsWith(prefix))
-              .forEach((key) => next.delete(key));
+            for (const key of next.keys()) {
+              if (key.startsWith(prefix)) next.delete(key);
+            }
           });
           activeKeysToDelete.forEach((key) => next.delete(key));
           updatedActive.forEach((val, key) => next.set(key, val));
+          let excess = next.size - MAX_STREAM_HISTORY_ENTRIES;
+          for (const key of next.keys()) {
+            if (excess-- <= 0) break;
+            next.delete(key);
+          }
           return next;
         });
       }
@@ -888,8 +907,6 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     return combined;
   }, [history, activeItems, isPending, internalError, streamError, errorMessageDefault, pendingMessage]);
 
-  const text = useMemo(() => logs.map((log) => log.message).join('\n'), [logs]);
-  const lines = useMemo(() => history.map((log) => log.message), [history]);
   const hasWarning = useMemo(() => logs.some((log) => log.severity === 'warning'), [logs]);
 
   useEffect(() => {
@@ -933,9 +950,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const elapsedLabel = useMemo(() => (Math.floor(elapsedMs / 100) / 10).toFixed(1).replace('.', ','), [elapsedMs]);
 
   return {
-    lines,
     logs,
-    text,
     isPending,
     isSuccess,
     status,

@@ -1,4 +1,6 @@
 import {
+  PlatformBackupSummaryView,
+  PlatformConnectorType,
   PlatformDescriptorDockerPlatformDescriptor,
   PlatformStatView,
   PlatformStatus,
@@ -16,13 +18,15 @@ import {
 } from '@/components/ui/chart';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
 import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
-import { toFixedNumber } from '@/lib/utils';
+import { cn, toFixedNumber } from '@/lib/utils';
 import dayjs from 'dayjs';
 import {
-  Boxes,
+  Box,
+  ArchiveRestore,
   Cpu,
   Database,
   HardDrive,
@@ -37,6 +41,15 @@ import {
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import {
+  getContainerStates,
+  getDeploymentStates,
+  getStackStates,
+  PLATFORM_WORKLOAD_ICON_CLASS_NAMES,
+  WorkloadState,
+  WorkloadStatusBreakdown,
+} from '../platform-workload-status';
+import { getBackupMetric, getBackupSourceStates } from '../platform-backups';
 
 type PlatformStatsDatum = {
   created: number;
@@ -102,76 +115,116 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   );
 };
 
-export const PlatformResourceSummary = ({ platform }: { platform: PlatformView }) => {
+export const PlatformResourceSummary = ({
+  platform,
+  backupSummary,
+  isBackupSummaryLoading = false,
+  isBackupSummaryError = false,
+}: {
+  platform: PlatformView;
+  backupSummary?: PlatformBackupSummaryView;
+  isBackupSummaryLoading?: boolean;
+  isBackupSummaryError?: boolean;
+}) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
   const currentDisk = getCurrentDiskUsage(platform);
-  const resourceMetrics = [
+  const backupMetric = getBackupMetric(backupSummary, isBackupSummaryLoading, isBackupSummaryError);
+  const resourceMetrics: ResourceMetric[] = [
     {
-      icon: Boxes,
+      icon: Box,
       label: 'Containers',
       value: descriptor?.containerCount ?? '-',
       to: `/platforms/${platform.id}/containers`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.containers,
+      states: getContainerStates({
+        running: descriptor?.containersRunning,
+        stopped: descriptor?.containersStopped,
+        paused: descriptor?.containersPaused,
+      }),
     },
     {
       icon: Rocket,
       label: 'Deployments',
-      value: platform.deploymentCount ?? 0,
+      value: platform.deploymentStatusCounts?.total ?? platform.deploymentCount ?? 0,
       to: `/deployments?platformId=${platform.id}`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.deployments,
+      states: getDeploymentStates(platform.deploymentStatusCounts),
     },
     {
       icon: Layers,
       label: 'Stacks',
-      value: platform.stackCount ?? 0,
+      value: platform.stackStatusCounts?.total ?? platform.stackCount ?? 0,
       to: `/stacks?platformId=${platform.id}`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.stacks,
+      states: getStackStates(platform.stackStatusCounts),
     },
     {
       icon: ImageIcon,
       label: 'Images',
       value: platform.imageCount ?? '-',
       to: `/platforms/${platform.id}/images`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.images,
+      detail: formatStorageUsage(descriptor?.imageUsedBytes),
+      detailTitle: 'Disk space used by Docker image layers',
     },
     {
       icon: HardDrive,
       label: 'Volumes',
       value: platform.volumeCount ?? '-',
       to: `/platforms/${platform.id}/volumes`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.volumes,
+      detail: formatStorageUsage(descriptor?.volumeUsedBytes),
+      detailTitle: 'Disk space used by Docker local volumes',
     },
     {
       icon: Network,
       label: 'Networks',
       value: platform.networkCount ?? '-',
       to: `/platforms/${platform.id}/networks`,
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.networks,
+    },
+    {
+      icon: ArchiveRestore,
+      label: 'Backups',
+      value: backupMetric.value,
+      to: '/backup-policies',
+      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.backups,
+      states: getBackupSourceStates(backupSummary),
+      detail: backupMetric.detail,
+      detailTitle: backupMetric.detailTitle,
     },
   ];
 
   return (
-    <div className="space-y-3 py-3">
-      <div className="grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {resourceMetrics.map((metric) => (
-          <Metric key={metric.label} {...metric} />
-        ))}
+    <TooltipProvider delayDuration={200}>
+      <div className="space-y-3 py-3">
+        <div className="grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          {resourceMetrics.map((metric) => (
+            <Metric key={metric.label} {...metric} />
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
+          <SystemMetric icon={Cpu} label="CPU" value={`${platform.cpuCount ?? '-'} cores`} />
+          <SystemMetric icon={MemoryStick} label="Memory" value={byteTransform(platform.memTotal, 2)} />
+          <SystemMetric
+            icon={Database}
+            label="Disk"
+            value={
+              currentDisk
+                ? `${byteTransform(currentDisk.usedBytes, 2)} / ${byteTransform(currentDisk.totalBytes, 2)}`
+                : '-'
+            }
+            title={
+              currentDisk
+                ? `Docker storage filesystem, ${formatPercent(currentDisk.usagePercent)} used`
+                : 'Disk metrics unavailable. Mount the host root at /host as read-only in the Citadel Core or Agent container.'
+            }
+          />
+          <SystemMetric icon={PlugZap} label="Connector" value={formatPlatformConnector(platform)} />
+          <SystemMetric icon={Server} label="Docker" value={platform.serverVersion ?? '-'} />
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
-        <SystemMetric icon={Cpu} label="CPU" value={`${platform.cpuCount ?? '-'} cores`} />
-        <SystemMetric icon={MemoryStick} label="Memory" value={byteTransform(platform.memTotal, 2)} />
-        <SystemMetric
-          icon={Database}
-          label="Disk"
-          value={
-            currentDisk
-              ? `${byteTransform(currentDisk.usedBytes, 2)} / ${byteTransform(currentDisk.totalBytes, 2)}`
-              : '-'
-          }
-          title={
-            currentDisk
-              ? `Docker storage filesystem, ${formatPercent(currentDisk.usagePercent)} used`
-              : 'Disk metrics unavailable. Mount the host root at /host as read-only in the Citadel Core or Agent container.'
-          }
-        />
-        <SystemMetric icon={PlugZap} label="Agent" value={platform.agentVersion ?? '-'} />
-        <SystemMetric icon={Server} label="Docker" value={platform.serverVersion ?? '-'} />
-      </div>
-    </div>
+    </TooltipProvider>
   );
 };
 
@@ -203,7 +256,7 @@ const CpuUsageChart = ({
   return (
     <StatsChartCard
       title="CPU Usage"
-      description={`Showing total CPU usage for the past ${windowHours} hours`}
+      description={`Showing container CPU usage as a share of platform capacity for the past ${windowHours} hours`}
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -252,7 +305,7 @@ const MemoryUsageChart = ({
   return (
     <StatsChartCard
       title="Memory Usage"
-      description={`Showing total memory usage for the past ${windowHours} hours`}
+      description={`Showing container working-set memory for the past ${windowHours} hours`}
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -512,25 +565,26 @@ const StatsChartCard = ({
   );
 };
 
-const Metric = ({
-  icon: Icon,
-  label,
-  value,
-  to,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: React.ReactNode;
-  to: string;
-}) => {
+const Metric = ({ icon: Icon, label, value, to, iconClassName, states, detail, detailTitle }: ResourceMetric) => {
   const content = (
-    <div className="flex min-w-0 items-center gap-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground">
-        <Icon className="h-4 w-4" />
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/60">
+        <Icon className={cn('h-4 w-4 text-muted-foreground', iconClassName)} />
       </span>
       <div className="min-w-0">
         <div className="truncate text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
-        <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-foreground">{value}</div>
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-semibold tabular-nums text-foreground">{value}</span>
+          {detail !== undefined && (
+            <>
+              <span className="h-3 w-px shrink-0 bg-border" />
+              <span className="truncate text-xs font-medium tabular-nums text-muted-foreground" title={detailTitle}>
+                {detail}
+              </span>
+            </>
+          )}
+          {states && <WorkloadStatusBreakdown states={states} />}
+        </div>
       </div>
     </div>
   );
@@ -542,6 +596,31 @@ const Metric = ({
       {content}
     </Link>
   );
+};
+
+type ResourceMetric = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+  to: string;
+  iconClassName?: string;
+  states?: WorkloadState[];
+  detail?: React.ReactNode;
+  detailTitle?: string;
+};
+
+const formatStorageUsage = (value: number | string | null | undefined): string => {
+  if (value == null) return 'N/A';
+
+  const bytes = Number(value);
+  return Number.isFinite(bytes) && bytes >= 0 ? byteTransform(bytes, 1) : 'N/A';
+};
+
+export const formatPlatformConnector = (platform: PlatformView): string => {
+  if (platform.connectorType === PlatformConnectorType.Local) return 'Local';
+
+  const name = platform.connectorType === PlatformConnectorType.EdgeAgent ? 'Edge agent' : 'Agent';
+  return platform.agentVersion ? `${name} v${platform.agentVersion}` : name;
 };
 
 const SystemMetric = ({

@@ -32,7 +32,7 @@ const MemoryUsage = ({
     () =>
       ({
         memoryActive: {
-          label: <span className="text-foreground">Active</span>,
+          label: <span className="text-foreground">Usage</span>,
           color: 'var(--chart-1)',
         },
         memoryCache: {
@@ -108,14 +108,12 @@ const MemoryUsage = ({
           type="natural"
           fill="url(#fillmemoryActive)"
           stroke="var(--color-memoryActive)"
-          stackId="a"
         />
         <Area
           dataKey="memoryCache"
           type="natural"
           fill="url(#fillmemoryCache)"
           stroke="var(--color-memoryCache)"
-          stackId="a"
         />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
@@ -155,7 +153,7 @@ const MemoryUsageHeader = ({ container, windowHours, controls }: MemoryUsageHead
       title="Memory Usage"
       description={`Showing total memory usage for the past ${windowHours} hours`}
       controls={controls}>
-      {renderStat('Active', container?.containerStat?.memoryActive)}
+      {renderStat('Usage', container?.containerStat?.memoryActive)}
       {renderStat('Cache', container?.containerStat?.memoryCache)}
       {renderStat('Limit', container?.containerStat?.memoryLimit)}
     </StatsPanelHeader>

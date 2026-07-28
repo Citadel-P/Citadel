@@ -77,7 +77,7 @@ export function DataTable<TData extends Identifiable, TValue>({
   useEffect(() => {
     const handleSelectionChange = onSelectionChangeRef.current;
     if (handleSelectionChange) {
-      const selectedModelRows = tableRef.current.getSelectedRowModel().rows;
+      const selectedModelRows = tableRef.current.getSelectedRowModel().flatRows;
       const selectedRowIds = selectedModelRows.map((r) => r.id).join('\u001f');
       const selectedRows = selectedModelRows.map((r) => r.original);
       const lastSelection = lastSelectionRef.current;

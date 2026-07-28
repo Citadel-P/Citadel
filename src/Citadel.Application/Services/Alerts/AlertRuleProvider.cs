@@ -3,7 +3,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 
 namespace Application.Services.Alerts;
@@ -35,25 +34,43 @@ public sealed class AlertRuleCache(
     IServiceScopeFactory scopeFactory,
     ILogger<AlertRuleCache> logger) : IAlertRuleProvider
 {
-    private readonly ConcurrentDictionary<AlertType, ConcurrentDictionary<Guid, AlertRule>> _rulesByType = new();
-    private readonly ConcurrentDictionary<Guid, AlertType> _ruleTypeIndex = new();
-    private readonly ConcurrentDictionary<Guid, AlertChannel> _channels = new();
+    private readonly Dictionary<AlertType, Dictionary<Guid, AlertRule>> _rulesByType = [];
+    private readonly Dictionary<Guid, AlertType> _ruleTypeIndex = [];
+    private readonly Dictionary<Guid, AlertChannel> _channels = [];
+    private readonly Lock _gate = new();
+    private long _mutationVersion;
 
     private AlertRuleSnapshot _snapshot = AlertRuleSnapshot.Empty;
-    public AlertRuleSnapshot Current => _snapshot;
+    public AlertRuleSnapshot Current => Volatile.Read(ref _snapshot);
 
     public async Task ReloadAsync(CancellationToken ct = default)
     {
         try
         {
-            var (rules, channels) = await LoadData(ct);
-            RebuildStore(rules, channels);
-            PublishSnapshot();
+            while (true)
+            {
+                var observedVersion = Volatile.Read(ref _mutationVersion);
+                var (rules, channels) = await LoadData(ct);
 
-            logger.LogInformation(
-                "AlertRuleCache reloaded with {RuleCount} rules and {ChannelCount} channels",
-                rules.Count,
-                channels.Count);
+                using (_gate.EnterScope())
+                {
+                    if (observedVersion != _mutationVersion)
+                        continue;
+
+                    RebuildStore(rules, channels);
+                    PublishSnapshot();
+                }
+
+                logger.LogInformation(
+                    "AlertRuleCache reloaded with {RuleCount} rules and {ChannelCount} channels",
+                    rules.Count,
+                    channels.Count);
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -63,20 +80,25 @@ public sealed class AlertRuleCache(
 
     public void Upsert(AlertRule rule)
     {
-        if (_ruleTypeIndex.TryGetValue(rule.Id, out var previousType) &&
-            previousType != rule.Type &&
-            _rulesByType.TryGetValue(previousType, out var oldBucket))
+        using (_gate.EnterScope())
         {
-            oldBucket.TryRemove(rule.Id, out _);
-            if (oldBucket.IsEmpty)
-                _rulesByType.TryRemove(previousType, out _);
+            if (_ruleTypeIndex.TryGetValue(rule.Id, out var previousType) &&
+                previousType != rule.Type &&
+                _rulesByType.TryGetValue(previousType, out var oldBucket))
+            {
+                oldBucket.Remove(rule.Id);
+                if (oldBucket.Count == 0)
+                    _rulesByType.Remove(previousType);
+            }
+
+            if (!_rulesByType.TryGetValue(rule.Type, out var bucket))
+                _rulesByType[rule.Type] = bucket = [];
+
+            bucket[rule.Id] = rule;
+            _ruleTypeIndex[rule.Id] = rule.Type;
+            _mutationVersion++;
+            PublishSnapshot();
         }
-
-        var bucket = _rulesByType.GetOrAdd(rule.Type, _ => new());
-        bucket[rule.Id] = rule;
-        _ruleTypeIndex[rule.Id] = rule.Type;
-
-        PublishSnapshot();
     }
 
     public void Remove(IEnumerable<Guid> ids)
@@ -85,26 +107,37 @@ public sealed class AlertRuleCache(
         if (list.Count == 0)
             return;
 
-        foreach (var id in list)
+        using (_gate.EnterScope())
         {
-            if (!_ruleTypeIndex.TryRemove(id, out var type))
-                continue;
-
-            if (_rulesByType.TryGetValue(type, out var bucket))
+            var changed = false;
+            foreach (var id in list)
             {
-                bucket.TryRemove(id, out _);
-                if (bucket.IsEmpty)
-                    _rulesByType.TryRemove(type, out _);
-            }
-        }
+                if (!_ruleTypeIndex.Remove(id, out var type))
+                    continue;
 
-        PublishSnapshot();
+                changed = true;
+                if (_rulesByType.TryGetValue(type, out var bucket))
+                {
+                    bucket.Remove(id);
+                    if (bucket.Count == 0)
+                        _rulesByType.Remove(type);
+                }
+            }
+
+            _mutationVersion++;
+            if (changed)
+                PublishSnapshot();
+        }
     }
 
     public void UpsertChannel(AlertChannel channel)
     {
-        _channels[channel.Id] = channel;
-        PublishSnapshot();
+        using (_gate.EnterScope())
+        {
+            _channels[channel.Id] = channel;
+            _mutationVersion++;
+            PublishSnapshot();
+        }
     }
 
     public void RemoveChannels(IEnumerable<Guid> ids)
@@ -113,10 +146,16 @@ public sealed class AlertRuleCache(
         if (list.Count == 0)
             return;
 
-        foreach (var id in list)
-            _channels.TryRemove(id, out _);
+        using (_gate.EnterScope())
+        {
+            var changed = false;
+            foreach (var id in list)
+                changed |= _channels.Remove(id);
 
-        PublishSnapshot();
+            _mutationVersion++;
+            if (changed)
+                PublishSnapshot();
+        }
     }
 
     private void RebuildStore(
@@ -129,7 +168,9 @@ public sealed class AlertRuleCache(
 
         foreach (var rule in rules)
         {
-            var bucket = _rulesByType.GetOrAdd(rule.Type, _ => new());
+            if (!_rulesByType.TryGetValue(rule.Type, out var bucket))
+                _rulesByType[rule.Type] = bucket = [];
+
             bucket[rule.Id] = rule;
             _ruleTypeIndex[rule.Id] = rule.Type;
         }

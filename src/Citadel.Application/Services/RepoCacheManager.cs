@@ -145,12 +145,9 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
     {
         if (hook is null) return Result.Success();
 
-        // Combine repo root with the command's relative path
-        var executionDir = Path.GetFullPath(Path.Combine(repoRoot, hook.Path));
-
-        // GrpcRequestMetadata: Prevent Directory Traversal
-        if (!executionDir.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure($"Security Violation: Hook path '{hook.Path}' is outside repo root.");
+        var pathResult = ResolveHookWorkingDirectory(repoRoot, hook.Path);
+        if (pathResult.IsFailure(out var error, out var executionDir))
+            return Result.Failure(error);
 
         foreach (var command in hook.Commands)
         {
@@ -159,6 +156,89 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         }
 
         return Result.Success();
+    }
+
+    internal static Result<string> ResolveHookWorkingDirectory(string repoRoot, string hookPath)
+    {
+        if (Path.IsPathRooted(hookPath))
+            return Result.Failure<string>($"Hook path '{hookPath}' must be relative to the repository root.");
+
+        var normalizedRoot = Path.GetFullPath(repoRoot);
+        var executionDirectory = Path.GetFullPath(Path.Combine(normalizedRoot, hookPath));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var rootWithSeparator = Path.EndsInDirectorySeparator(normalizedRoot)
+            ? normalizedRoot
+            : normalizedRoot + Path.DirectorySeparatorChar;
+
+        if (!string.Equals(executionDirectory, normalizedRoot, comparison)
+            && !executionDirectory.StartsWith(rootWithSeparator, comparison))
+        {
+            return Result.Failure<string>($"Hook path '{hookPath}' is outside the repository root.");
+        }
+
+        if (ContainsLinkOutsideRoot(normalizedRoot, executionDirectory, comparison))
+            return Result.Failure<string>($"Hook path '{hookPath}' points outside the repository root.");
+
+        return Result.Success(executionDirectory);
+    }
+
+    private static bool ContainsLinkOutsideRoot(
+        string normalizedRoot,
+        string executionDirectory,
+        StringComparison comparison)
+    {
+        var canonicalRoot = ResolveDirectoryLink(normalizedRoot);
+        var current = canonicalRoot;
+        var relativePath = Path.GetRelativePath(normalizedRoot, executionDirectory);
+
+        foreach (var segment in relativePath.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = ResolveDirectoryLink(Path.Combine(current, segment));
+            if (!IsWithinRoot(canonicalRoot, current, comparison))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string ResolveDirectoryLink(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!Directory.Exists(fullPath))
+            return fullPath;
+
+        try
+        {
+            return new DirectoryInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true) is { } target
+                ? Path.GetFullPath(target.FullName)
+                : fullPath;
+        }
+        catch (IOException)
+        {
+            return fullPath;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return fullPath;
+        }
+    }
+
+    private static bool IsWithinRoot(
+        string normalizedRoot,
+        string path,
+        StringComparison comparison)
+    {
+        if (string.Equals(path, normalizedRoot, comparison))
+            return true;
+
+        var rootWithSeparator = Path.EndsInDirectorySeparator(normalizedRoot)
+            ? normalizedRoot
+            : normalizedRoot + Path.DirectorySeparatorChar;
+        return path.StartsWith(rootWithSeparator, comparison);
     }
 
     private async Task EnsureDeletedAsync(string path, CancellationToken ct)

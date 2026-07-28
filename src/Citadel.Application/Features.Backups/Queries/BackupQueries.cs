@@ -49,6 +49,10 @@ public sealed record GetBackupCoverage(
     IReadOnlyList<BackupCoverageResourceKey> Resources)
     : IQuery<Result<BackupCoverageResult>>;
 
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
+public sealed record GetPlatformBackupSummaries(IReadOnlyCollection<Guid> PlatformIds)
+    : IQuery<Result<IReadOnlyList<PlatformBackupSummary>>>;
+
 internal sealed class GetBackupRepositoriesHandler(IUnitOfWork unitOfWork)
     : IQueryHandler<GetBackupRepositories, Result<BackupRepositoryListResult>>
 {
@@ -94,6 +98,28 @@ internal sealed class GetBackupPoliciesHandler(
             : await unitOfWork.BackupPolicies.GetAllAsync(cancellationToken, tagFilter.TagIds);
 
         return Result.Success(new BackupPolicyListResult([.. policies]));
+    }
+}
+
+internal sealed class GetPlatformBackupSummariesHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor)
+    : IQueryHandler<GetPlatformBackupSummaries, Result<IReadOnlyList<PlatformBackupSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<PlatformBackupSummary>>> Handle(
+        GetPlatformBackupSummaries query,
+        CancellationToken cancellationToken)
+    {
+        var user = userContextAccessor.Current;
+        var summaries = await unitOfWork.BackupPolicies.GetPlatformSummariesAsync(
+            query.PlatformIds,
+            user is not null && !user.IsAdmin ? user.UserId : null,
+            ResourceType.BackupPolicy,
+            PermissionLevel.Read,
+            SpecificPermission.None,
+            cancellationToken);
+
+        return Result.Success(summaries);
     }
 }
 

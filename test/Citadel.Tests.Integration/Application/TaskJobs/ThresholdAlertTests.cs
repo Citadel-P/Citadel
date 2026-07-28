@@ -29,6 +29,8 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
     private readonly Mock<IPlatformStreamManager> _streamManagerMock = new();
     private readonly Channel<(Guid Id, PlatformStatsResult Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PlatformStatsResult Stats)>();
+    private readonly Channel<AlertType> _processedAlertTypes = Channel.CreateUnbounded<AlertType>();
+    private readonly ObservableDbWorkQueue _dbWorkQueue = new();
 
     private Guid _platformId;
     private Guid _alertRuleId;
@@ -51,8 +53,20 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => _broadcaster);
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(_dbWorkQueue);
+        services.RemoveAll<IAlertService>();
+        services.AddScoped<AlertService>();
+        services.AddScoped<IAlertService>(serviceProvider =>
+            new ObservableAlertService(
+                serviceProvider.GetRequiredService<AlertService>(),
+                _processedAlertTypes.Writer));
 
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 3,
+            FlashInterval = 1
+        });
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -67,7 +81,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             alertRuleId: _alertRuleId,
             resourceId: platform.Id,
             actorId: Constants.DefaultAdminId,
-            3);
+            0);
         
         await uow.AlertRules.UpsertAlertRuleStateAsync(alertRuleState, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
@@ -79,7 +93,11 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     [Fact]
     public async Task CpuHighAlert_ShouldTrigger_AfterThreeConsecutiveHighSamples()
     {
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 3 });
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 1,
+            FlashInterval = 1
+        });
 
         _platformFactoryMock
             .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
@@ -89,11 +107,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync("https://original.address", expectedCpuEvaluations: 3);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -116,11 +130,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns(() => GetLowCpuStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync();
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -132,6 +142,11 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     [Fact]
     public async Task CpuHighAlert_ShouldNotTrigger_WhenSequenceIsBroken()
     {
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 1,
+            FlashInterval = 1
+        });
         _platformFactoryMock
             .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(_platformConnector.Object);
@@ -140,11 +155,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns(() => GetBrokenSequenceStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync(expectedCpuEvaluations: 3);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -166,11 +177,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns(() => GetSingleCpuSpikeStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync();
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -256,11 +263,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns(() => GetStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync();
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -299,11 +302,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns(() => GetStatsAsync());
 
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunStatsPipelineAsync();
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -322,7 +321,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, await GetAlertEventCountAsync(TestContext.Current.CancellationToken));
 
         await using (var scope = Services.CreateAsyncScope())
         {
@@ -345,8 +344,6 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             var context = BuildCpuContext([91, 92]);
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         await using var finalScope = Services.CreateAsyncScope();
         var dbFinal = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -399,6 +396,51 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         await alertService.ProcessAsync(AlertType.PlatformCpuHigh, context, cancellationToken);
     }
 
+    private async Task RunStatsPipelineAsync(
+        string address = "addr",
+        int expectedCpuEvaluations = 1)
+    {
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
+        await _broadcaster.PublishAsync(
+            new PlatformHealth(
+                _platformId,
+                address,
+                PlatformConnectorType.Agent,
+                IsOnLine: true),
+            TestContext.Current.CancellationToken);
+
+        var cpuEvaluationCount = 0;
+        while (cpuEvaluationCount < expectedCpuEvaluations)
+        {
+            var processedType = await _processedAlertTypes.Reader
+                .ReadAsync(TestContext.Current.CancellationToken)
+                .AsTask()
+                .WaitAsync(
+                    TimeSpan.FromSeconds(5),
+                    TestContext.Current.CancellationToken);
+            if (processedType == AlertType.PlatformCpuHigh)
+                cpuEvaluationCount++;
+        }
+
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
+    }
+
+    private sealed class ObservableAlertService(
+        IAlertService inner,
+        ChannelWriter<AlertType> processedAlertTypes) : IAlertService
+    {
+        public async Task ProcessAsync(
+            AlertType type,
+            AlertEvaluationContext context,
+            CancellationToken cancellationToken)
+        {
+            await inner.ProcessAsync(type, context, cancellationToken);
+            await processedAlertTypes.WriteAsync(type, cancellationToken);
+        }
+    }
+
     private sealed class InlineDbWorkQueue(IUnitOfWork uow) : IDbWorkQueue
     {
         private readonly Channel<IDbWorkItem> _channel = Channel.CreateUnbounded<IDbWorkItem>();
@@ -415,20 +457,25 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     [Fact]
     public async Task DisabledAlertRule_ShouldNotTrigger()
     {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            rule.Disable();
+            return rule;
+        }, TestContext.Current.CancellationToken);
+
+        _platformFactoryMock
+            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(_platformConnector.Object);
+        _platformConnector
+            .Setup(x => x.StreamStatsAsync(
+                It.IsAny<StreamPlatformStatsCommand>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => GetStatsAsync());
+
+        await RunStatsPipelineAsync();
+
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var rule = await db.AlertRules.GetByIdAsync(_alertRuleId, TestContext.Current.CancellationToken);
-        rule?.Disable();
-        await db.AlertRules.UpdateAsync(rule, TestContext.Current.CancellationToken);
-        await db.CommitAsync(TestContext.Current.CancellationToken);
-
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
-
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
         Assert.Empty(alertEvents.Items);
     }
@@ -437,9 +484,9 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     {
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         yield return BuildStat(time, 50);
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 60, 60);
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 120, 70);
     }
 
@@ -447,9 +494,9 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     {
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         yield return BuildStat(time, 90);
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 60, 40); // breaks sequence
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 120, 95);
     }
 
@@ -457,9 +504,9 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     {
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         yield return BuildStat(time, 25);
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 60, 120);
-        await Task.Delay(50);
+        await Task.Yield();
         yield return BuildStat(time + 120, 30);
     }
 
@@ -469,7 +516,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             123456, 5, 2, 1, "1.0",
             new DockerPlatformStat(
                 created: time,
-                memoryUsage: 500,
+                memoryUsage: 50,
                 cpuUsage: cpu,
                 rxBytes: 100,
                 txBytes: 200,
@@ -506,7 +553,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
 
             yield return stat1;
         }
-        await Task.Delay(50);
+        await Task.Yield();
         {
             var stat2 = new PlatformStatsResult
             (
@@ -530,7 +577,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             );
             yield return stat2;
         }
-        await Task.Delay(50);
+        await Task.Yield();
         {
             var stat2 = new PlatformStatsResult
             (
@@ -569,25 +616,18 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             Stacks: []);
     }
 
-    private async Task<int> WaitForAlertEventCountAsync(int expectedCount, TimeSpan timeout, CancellationToken cancellationToken)
+    private async Task<int> GetAlertEventCountAsync(CancellationToken cancellationToken)
     {
-        var start = DateTime.UtcNow;
-        var count = 0;
-
-        while (DateTime.UtcNow - start < timeout)
-        {
-            await using var scope = Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, cancellationToken);
-            count = alertEvents.Items.Count();
-
-            if (count >= expectedCount)
-                break;
-
-            await Task.Delay(200, cancellationToken);
-        }
-
-        return count;
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(
+            null,
+            null,
+            null,
+            1,
+            50,
+            cancellationToken);
+        return alertEvents.Items.Count();
     }
 
     private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)
@@ -632,7 +672,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, await GetAlertEventCountAsync(TestContext.Current.CancellationToken));
 
         await using var finalScope = Services.CreateAsyncScope();
         var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -675,7 +715,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, await GetAlertEventCountAsync(TestContext.Current.CancellationToken));
 
         await using var finalScope = Services.CreateAsyncScope();
         var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();

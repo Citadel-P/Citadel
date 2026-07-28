@@ -12,7 +12,9 @@ public sealed record PlatformStatsBatchView(
     long ContainersPaused,
     long ContainersRunning,
     long ContainersStopped,
-    PlatformStatView Stat)
+    PlatformStatView Stat,
+    long? ImageUsedBytes = null,
+    long? VolumeUsedBytes = null)
 {
     internal static PlatformStatsBatchView Map(Guid platformId,PlatformStatsResult platform)
     {
@@ -26,7 +28,9 @@ public sealed record PlatformStatsBatchView(
             ContainersRunning: platform.PlatformStat.ContainersRunning,
             ContainersPaused: platform.PlatformStat.ContainersPaused,
             ContainersStopped: platform.PlatformStat.ContainersStopped,
-            Stat: Map(platform.PlatformStat));
+            Stat: Map(platform.PlatformStat),
+            ImageUsedBytes: platform.ImageUsedBytes,
+            VolumeUsedBytes: platform.VolumeUsedBytes);
     }
 
     internal static PlatformStatView Map(DockerPlatformStat stat) => new(

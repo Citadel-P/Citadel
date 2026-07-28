@@ -21,20 +21,36 @@ internal sealed class GitRepositoryPollingJob(
     {
         try
         {
-            await PollOnceAsync(stoppingToken);
+            await PollSafelyAsync(stoppingToken);
 
             using var timer = new PeriodicTimer(PollInterval);
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                await PollOnceAsync(stoppingToken);
+                await PollSafelyAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
     }
 
-    private async Task PollOnceAsync(CancellationToken cancellationToken)
+    private async Task PollSafelyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await PollOnceAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Git repository polling cycle failed.");
+        }
+    }
+
+    internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         var requests = new HashSet<(Guid RepoId, string Branch)>();
 
@@ -45,6 +61,9 @@ internal sealed class GitRepositoryPollingJob(
                 .Where(static repo => repo.SyncMode == GitRepositorySyncMode.PullInterval)
                 .ToList();
             var repositoryIds = repos.Select(static repo => repo.Id).ToArray();
+            if (repositoryIds.Length == 0)
+                return;
+
             var repositoryIdSet = repositoryIds.ToHashSet();
             var subscriptions = (await uow.Stacks.GetGitStackBranchSubscriptionsAsync(cancellationToken))
                 .Where(subscription => repositoryIdSet.Contains(subscription.GitRepositoryId))

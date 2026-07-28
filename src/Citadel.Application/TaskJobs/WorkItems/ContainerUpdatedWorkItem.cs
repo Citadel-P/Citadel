@@ -59,7 +59,8 @@ internal sealed class ContainerUpdatedWorkItem(
                     changedState,
                     existing.DockerContainerId,
                     forcedStatus: null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken,
+                    allowDegradedWhileProcessing: existing.ControlState == ResourceControlState.Processing);
             }
 
             container = await UpdateContainer(uow, existing, cancellationToken);

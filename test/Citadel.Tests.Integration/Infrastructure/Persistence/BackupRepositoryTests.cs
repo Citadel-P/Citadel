@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
@@ -305,6 +306,130 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
     }
 
     [Fact]
+    public async Task PlatformBackupSummaries_ShouldIncludeEveryPlatformScopedSourceAndLatestRunHealth()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var platform = CreatePlatform("backup-summary-platform");
+        var otherPlatform = CreatePlatform(
+            "backup-summary-other-platform",
+            "unix:///var/run/backup-summary-other.sock");
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.Platforms.AddAsync(otherPlatform, cancellationToken);
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_PLATFORM_SUMMARY", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-platform-summary",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup-platform-summary"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+
+        await AddVolumePolicyAsync(
+            uow,
+            repository.Id,
+            platform.Id,
+            "summary-volume",
+            enabled: true,
+            actorId,
+            cancellationToken);
+
+        var stack = Stack.Create(
+            "backup-summary-stack",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack("services: {}", StackUpdateBehavior.Disabled));
+        await uow.Stacks.AddAsync(stack, cancellationToken);
+        await AddPolicyAsync(
+            uow,
+            repository.Id,
+            "policy-summary-stack",
+            new StackBackupSource(stack.Id),
+            enabled: false,
+            actorId,
+            cancellationToken);
+
+        var deployment = new Deployment(
+            "backup-summary-deployment",
+            actorId,
+            platform.Id,
+            new DeploymentSpec(
+                new ExternalImage(Constants.DefaultRegistryId, "example/app:latest"),
+                UpdateBehavior.Disabled));
+        await uow.Deployments.AddAsync(deployment, cancellationToken);
+        var deploymentPolicy = await AddPolicyAsync(
+            uow,
+            repository.Id,
+            "policy-summary-deployment",
+            new DeploymentBackupSource(deployment.Id),
+            enabled: true,
+            actorId,
+            cancellationToken);
+
+        await AddPolicyAsync(
+            uow,
+            repository.Id,
+            "policy-summary-citadel",
+            new CitadelSystemBackupSource(),
+            enabled: true,
+            actorId,
+            cancellationToken);
+        await AddVolumePolicyAsync(
+            uow,
+            repository.Id,
+            otherPlatform.Id,
+            "summary-other-volume",
+            enabled: true,
+            actorId,
+            cancellationToken);
+
+        var failedRun = CreateRun(deploymentPolicy, repository);
+        failedRun.MarkRunning(DateTimeOffset.UtcNow);
+        failedRun.Fail(
+            BackupRunStatus.Failed,
+            exitCode: 1,
+            errorCode: "backup.failed",
+            errorMessage: "Backup failed.",
+            DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(failedRun, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var summaries = await uow.BackupPolicies.GetPlatformSummariesAsync(
+            [platform.Id, otherPlatform.Id],
+            userId: null,
+            ResourceType.BackupPolicy,
+            PermissionLevel.Read,
+            SpecificPermission.None,
+            cancellationToken);
+
+        var summary = Assert.Single(summaries, item => item.PlatformId == platform.Id);
+        Assert.Equal(3, summary.PolicyCount);
+        Assert.Equal(2, summary.EnabledPolicyCount);
+        Assert.Equal(1, summary.DockerVolumePolicyCount);
+        Assert.Equal(1, summary.StackPolicyCount);
+        Assert.Equal(1, summary.DeploymentPolicyCount);
+        Assert.Equal(1, summary.AttentionPolicyCount);
+        Assert.Equal(BackupRunStatus.Failed, summary.LastRunStatus);
+        Assert.NotNull(summary.LastRunAt);
+
+        var otherSummary = Assert.Single(summaries, item => item.PlatformId == otherPlatform.Id);
+        Assert.Equal(1, otherSummary.PolicyCount);
+        Assert.Equal(1, otherSummary.DockerVolumePolicyCount);
+        Assert.Null(otherSummary.LastRunStatus);
+    }
+
+    [Fact]
     public async Task BackupRunItemsAndStackVolumeBindings_ShouldRoundTrip()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -484,11 +609,28 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         bool enabled,
         Guid actorId,
         CancellationToken cancellationToken)
+        => await AddPolicyAsync(
+            uow,
+            repositoryId,
+            $"policy-{volumeName}",
+            new DockerVolumeBackupSource(platformId, volumeName),
+            enabled,
+            actorId,
+            cancellationToken);
+
+    private static async Task<BackupPolicy> AddPolicyAsync(
+        IUnitOfWork uow,
+        Guid repositoryId,
+        string name,
+        BackupSourceSpec source,
+        bool enabled,
+        Guid actorId,
+        CancellationToken cancellationToken)
     {
         var policy = new BackupPolicy(
-            $"policy-{volumeName}",
+            name,
             null,
-            new DockerVolumeBackupSource(platformId, volumeName),
+            source,
             repositoryId,
             enabled,
             cron: null,
@@ -514,10 +656,10 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
             triggerSourceId: null,
             triggeredByActorId: Constants.SystemId);
 
-    private static Platform CreatePlatform(string name)
+    private static Platform CreatePlatform(string name, string address = "unix:///var/run/docker.sock")
         => new(
             name,
-            "unix:///var/run/docker.sock",
+            address,
             networkCount: 0,
             volumeCount: 0,
             imageCount: 0,

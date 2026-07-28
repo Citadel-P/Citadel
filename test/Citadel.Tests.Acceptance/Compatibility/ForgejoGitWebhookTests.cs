@@ -771,6 +771,7 @@ public sealed class ForgejoGitWebhookTests(AcceptancePostgresFixture postgres)
         services:
           runtime:
             image: busybox:1.36.1
+            network_mode: none
             command: ["sh", "-c", "echo citadel-forgejo-release-{release}; exec tail -f /dev/null"]
             stop_grace_period: 1s
             labels:

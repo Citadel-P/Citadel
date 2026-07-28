@@ -24,6 +24,7 @@ namespace Tests.Integration.WebApi;
 public sealed class WebhookListenerTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Channel<GitRepoSyncRequest> _gitSyncChannel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+    private readonly Channel<StackWebhookDeploySignal> _stackDeployChannel = Channel.CreateUnbounded<StackWebhookDeploySignal>();
     private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();
     private readonly Mock<IGitCliRepository> _gitCliRepositoryMock = new();
     private readonly Mock<IApplyStackService> _applyStackServiceMock = new();
@@ -37,6 +38,9 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
         services.AddSingleton(_gitSyncChannel);
         services.AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer);
+        services.AddSingleton(_stackDeployChannel);
+        services.AddSingleton(s => s.GetRequiredService<Channel<StackWebhookDeploySignal>>().Reader);
+        services.AddSingleton(s => s.GetRequiredService<Channel<StackWebhookDeploySignal>>().Writer);
         services.ReplaceService(_repoCacheManagerMock.Object);
         services.ReplaceService(_gitCliRepositoryMock.Object);
         services.ReplaceService(_applyStackServiceMock.Object);

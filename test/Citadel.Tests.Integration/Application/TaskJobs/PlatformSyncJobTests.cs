@@ -26,6 +26,7 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
     private readonly Mock<IPlatformStreamManager> hubManagerMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
+    private readonly ObservableDbWorkQueue dbWorkQueue = new();
     private string? platformName;
     private Guid platformId;
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -40,6 +41,8 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
         services.AddSingleton(_ => platformConnector.Object);
         services.AddSingleton(_ => healthMonitorMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>((_) => broadcaster);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(dbWorkQueue);
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -84,10 +87,12 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
                          .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -109,10 +114,12 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
                          .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -159,10 +166,12 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
         }
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -191,11 +200,10 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
         var nonExistentPlatformId = Guid.NewGuid();
 
         // Act
-        await broadcaster.PublishAsync(
+        var job = Services.GetServices<IHostedService>().OfType<PlatformSyncJob>().Single();
+        await job.SyncPlatform(
             new PlatformHealth(nonExistentPlatformId, "https://notfound.address", PlatformConnectorType.Agent, IsOnLine: true),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken);
 
         // Assert: No hub notification
         hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Never);

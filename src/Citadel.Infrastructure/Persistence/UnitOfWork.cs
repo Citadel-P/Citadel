@@ -70,6 +70,8 @@ internal class UnitOfWork : IUnitOfWork
         BuildRuns = new Lazy<IBuildRunRepository>(() => new BuildRunRepository(connection, GetTransaction));
         BuildRunLogs = new Lazy<IBuildRunLogRepository>(() => new BuildRunLogRepository(connection, GetTransaction));
         GlobalSearch = new Lazy<IGlobalSearchRepository>(() => new GlobalSearchRepository(connection, GetTransaction));
+        StackWebhookDeployQueue = new Lazy<IStackWebhookDeployQueueRepository>(
+            () => new StackWebhookDeployQueueRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -113,6 +115,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBuildRunRepository> BuildRuns { get; }
     private Lazy<IBuildRunLogRepository> BuildRunLogs { get; }
     private Lazy<IGlobalSearchRepository> GlobalSearch { get; }
+    private Lazy<IStackWebhookDeployQueueRepository> StackWebhookDeployQueue { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IUserMfaRepository> UserMfa { get; }
     private Lazy<IMfaChallengeRepository> MfaChallenges { get; }
@@ -173,6 +176,7 @@ internal class UnitOfWork : IUnitOfWork
     IBuildRunRepository IUnitOfWork.BuildRuns => BuildRuns.Value;
     IBuildRunLogRepository IUnitOfWork.BuildRunLogs => BuildRunLogs.Value;
     IGlobalSearchRepository IUnitOfWork.GlobalSearch => GlobalSearch.Value;
+    IStackWebhookDeployQueueRepository IUnitOfWork.StackWebhookDeployQueue => StackWebhookDeployQueue.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

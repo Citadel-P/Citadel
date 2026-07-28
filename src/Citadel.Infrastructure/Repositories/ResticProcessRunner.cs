@@ -17,6 +17,7 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
         using var timeoutCts = new CancellationTokenSource(command.Timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var ct = linkedCts.Token;
+        var redactionValues = PrepareRedactionValues(command.RedactionValues);
 
         var startInfo = new ProcessStartInfo
         {
@@ -44,11 +45,12 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
             EnableRaisingEvents = true
         };
 
-        var channel = Channel.CreateUnbounded<ResticProcessEvent>(
-            new UnboundedChannelOptions
+        var channel = Channel.CreateBounded<ResticProcessEvent>(
+            new BoundedChannelOptions(256)
             {
                 SingleReader = true,
-                SingleWriter = false
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.Wait
             });
 
         string? startError = null;
@@ -58,7 +60,7 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
         }
         catch (Exception ex)
         {
-            startError = Sanitize(ex.Message, command);
+            startError = Sanitize(ex.Message, command.MaxLineBytes, redactionValues);
         }
 
         if (startError is not null)
@@ -68,8 +70,20 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
             yield break;
         }
 
-        var stdoutTask = PumpAsync(process.StandardOutput, ResticProcessStream.StdOut, channel.Writer, command, ct);
-        var stderrTask = PumpAsync(process.StandardError, ResticProcessStream.StdErr, channel.Writer, command, ct);
+        var stdoutTask = PumpAsync(
+            process.StandardOutput,
+            ResticProcessStream.StdOut,
+            channel.Writer,
+            command.MaxLineBytes,
+            redactionValues,
+            ct);
+        var stderrTask = PumpAsync(
+            process.StandardError,
+            ResticProcessStream.StdErr,
+            channel.Writer,
+            command.MaxLineBytes,
+            redactionValues,
+            ct);
         var completionTask = CompleteAsync(process, stdoutTask, stderrTask, channel.Writer, ct);
 
         try
@@ -83,7 +97,10 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
         }
         finally
         {
+            await linkedCts.CancelAsync();
             TryKill(process);
+            channel.Writer.TryComplete();
+            await ObserveCompletionAsync(completionTask);
         }
 
         if (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -104,7 +121,9 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
         {
             await Task.WhenAll(stdoutTask, stderrTask);
             await process.WaitForExitAsync(cancellationToken);
-            await writer.WriteAsync(new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: process.ExitCode), CancellationToken.None);
+            await writer.WriteAsync(
+                new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: process.ExitCode),
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -120,7 +139,8 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
         StreamReader reader,
         ResticProcessStream stream,
         ChannelWriter<ResticProcessEvent> writer,
-        ResticProcessCommand command,
+        int maxLineBytes,
+        IReadOnlyList<string> redactionValues,
         CancellationToken cancellationToken)
     {
         while (true)
@@ -139,25 +159,51 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
                 break;
 
             await writer.WriteAsync(
-                new ResticProcessEvent(stream, Sanitize(line, command)),
+                new ResticProcessEvent(stream, Sanitize(line, maxLineBytes, redactionValues)),
                 cancellationToken);
         }
     }
 
-    private static string Sanitize(string value, ResticProcessCommand command)
+    private static string Sanitize(
+        string value,
+        int maxLineBytes,
+        IReadOnlyList<string> redactionValues)
     {
-        var sanitized = AnsiRegex().Replace(value, string.Empty);
-        foreach (var secret in command.RedactionValues
-            .Where(static x => !string.IsNullOrEmpty(x))
-            .Distinct(StringComparer.Ordinal)
-            .OrderByDescending(static x => x.Length))
+        var sanitized = value.IndexOf('\x1B') >= 0
+            ? AnsiRegex().Replace(value, string.Empty)
+            : value;
+        foreach (var secret in redactionValues)
         {
-            sanitized = sanitized.Replace(secret, "********", StringComparison.Ordinal);
+            if (sanitized.Contains(secret, StringComparison.Ordinal))
+                sanitized = sanitized.Replace(secret, "********", StringComparison.Ordinal);
         }
 
-        return sanitized.Length <= command.MaxLineBytes
+        return sanitized.Length <= maxLineBytes
             ? sanitized
-            : sanitized[..command.MaxLineBytes] + "...";
+            : sanitized[..maxLineBytes] + "...";
+    }
+
+    private static string[] PrepareRedactionValues(IEnumerable<string> redactionValues)
+        => [.. redactionValues
+            .Where(static value => !string.IsNullOrEmpty(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(static value => value.Length)];
+
+    private static async Task ObserveCompletionAsync(Task completionTask)
+    {
+        try
+        {
+            await completionTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ChannelClosedException)
+        {
+        }
+        catch
+        {
+        }
     }
 
     private static void TryKill(Process process)

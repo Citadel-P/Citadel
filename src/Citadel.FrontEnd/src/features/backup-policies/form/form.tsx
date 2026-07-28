@@ -183,6 +183,7 @@ export function BackupPolicyForm({
     localStorage.removeItem(`backup-policy:${id ?? 'new'}`);
     queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
     queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
+    queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
     if (id) {
       queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
     }

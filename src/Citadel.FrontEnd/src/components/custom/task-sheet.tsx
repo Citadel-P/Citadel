@@ -1310,6 +1310,7 @@ function useBackupRunProgress(params: BackupRunParams) {
     queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
     queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
     queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
+    queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
   }, [id, queryClient, state.error, state.isSuccess]);
 
   return state;

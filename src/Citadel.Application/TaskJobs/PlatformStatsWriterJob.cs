@@ -194,7 +194,11 @@ internal sealed class PersistPlatformStatsWorkItem(
                     containersRunning: last.PlatformStat.ContainersRunning,
                     containersPaused: last.PlatformStat.ContainersPaused,
                     containersStopped: last.PlatformStat.ContainersStopped
-                ),
+                ) with
+                {
+                    ImageUsedBytes = last.ImageUsedBytes,
+                    VolumeUsedBytes = last.VolumeUsedBytes
+                },
                 _ => null
             };
 

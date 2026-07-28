@@ -57,7 +57,8 @@ internal sealed class ContainerDestroyedWorkItem(
                     eventInfo.Container?.State ?? ContainerStateStatus.Unknown,
                     existing.DockerContainerId,
                     StackReleaseStatus.Degraded,
-                    cancellationToken);
+                    cancellationToken,
+                    allowDegradedWhileProcessing: existing.ControlState == ResourceControlState.Processing);
             }
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
@@ -116,7 +117,8 @@ internal sealed class ContainerDestroyedWorkItem(
         ContainerStateStatus changedState,
         string changedContainerId,
         StackReleaseStatus? forcedStatus,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowDegradedWhileProcessing = false)
     {
         var stack = await uow.Stacks.GetInfoAsync(stackId, cancellationToken);
         if (stack is null) return (null, null);
@@ -124,7 +126,7 @@ internal sealed class ContainerDestroyedWorkItem(
         var containerStates = containers.ToArray();
         var status = forcedStatus ?? Stack.ToStackStatus(containerStates.Select(x => x.State));
 
-        if (ShouldSkipStackStatusChange(stack, status))
+        if (ShouldSkipStackStatusChange(stack, status, allowDegradedWhileProcessing))
         {
             return (null, null);
         }
@@ -160,11 +162,19 @@ internal sealed class ContainerDestroyedWorkItem(
         return (stack, activity);
     }
 
-    private static bool ShouldSkipStackStatusChange(Stack stack, StackReleaseStatus status)
+    private static bool ShouldSkipStackStatusChange(
+        Stack stack,
+        StackReleaseStatus status,
+        bool allowDegradedWhileProcessing)
     {
         var currentStatus = stack.CurrentStackRelease?.Status;
         if (currentStatus == status) return true;
         if (currentStatus == StackReleaseStatus.Applying) return true;
+
+        if (allowDegradedWhileProcessing && status == StackReleaseStatus.Degraded)
+        {
+            return false;
+        }
 
         return stack.ControlState == ResourceControlState.Processing
             && status is StackReleaseStatus.Pending or StackReleaseStatus.Degraded;

@@ -19,7 +19,12 @@ import {
   StackSource,
   StackView,
 } from '@/api/generated/api.types';
-import { getStackGitUpdateState, getStackImageUpdateStates, hasStackUpdateAvailable } from './update-status';
+import {
+  canCheckStackUpdates,
+  getStackGitUpdateState,
+  getStackImageUpdateCheckMessage,
+  hasStackUpdateAvailable,
+} from './update-status';
 import { getApiErrorDetail } from '@/lib/api-errors';
 
 export const useVariables = (resources: StackView | StackView[]) =>
@@ -135,8 +140,6 @@ export const syncAction: ActionConfig<StackView, any> = {
   },
 };
 
-const imageStateKey = (serviceName: string, imageName: string) => `${serviceName}\n${imageName}`.toLowerCase();
-
 export const checkUpdatesAction: ActionConfig<StackView, any> = {
   key: 'checkUpdates',
   title: 'Check for updates',
@@ -148,18 +151,13 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
     const { mutateAsync, isPending } = useMutate('checkStackUpdates');
-    const canExecute = !!selected && !multiSelect;
-    const resourcePending = !!selected && isProcessing(selected);
+    const canExecute = canCheckStackUpdates(selected) && !multiSelect;
 
     return {
       canExecute,
-      isPending: isPending || resourcePending,
+      isPending,
       run: async () => {
         if (!selected || !canExecute) return;
-
-        const previousImageKeys = new Set(
-          getStackImageUpdateStates(selected).map((state) => imageStateKey(state.serviceName, state.imageName)),
-        );
 
         try {
           const result = await mutateAsync({ stackId: selected.id });
@@ -176,7 +174,8 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
               });
             }
           } else {
-            showStackImageUpdateResult(updated, previousImageKeys);
+            const message = getStackImageUpdateCheckMessage(updated);
+            toast[message.kind](message.title, { description: message.description });
           }
 
           await Promise.all([
@@ -191,39 +190,6 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
       },
     };
   },
-};
-
-const showStackImageUpdateResult = (stack: StackView, previousImageKeys: Set<string>) => {
-  const states = getStackImageUpdateStates(stack);
-  const updateCount = states.filter((state) => state.updateAvailable).length;
-  const baselineCount = states.filter(
-    (state) => !previousImageKeys.has(imageStateKey(state.serviceName, state.imageName)),
-  ).length;
-  const baselineDescription =
-    baselineCount > 0
-      ? ` ${baselineCount} service image ${baselineCount === 1 ? 'baseline was' : 'baselines were'} also recorded.`
-      : '';
-
-  if (updateCount > 0) {
-    toast.info('Updates available', {
-      description: `${updateCount} service ${updateCount === 1 ? 'image has' : 'images have'} newer digests.${baselineDescription}`,
-    });
-    return;
-  }
-
-  if (baselineCount > 0) {
-    toast.info('Image baseline recorded', {
-      description:
-        baselineCount === 1
-          ? 'Citadel will compare future checks against the current registry digest.'
-          : `${baselineCount} image baselines were recorded. Citadel will compare future checks against the current registry digests.`,
-    });
-    return;
-  }
-
-  toast.success('Stack images are up to date', {
-    description: 'No newer service image digest was found.',
-  });
 };
 
 export const stopAction: ActionConfig<StackView, 'stopStacks'> = {

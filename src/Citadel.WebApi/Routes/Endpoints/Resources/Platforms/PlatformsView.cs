@@ -27,6 +27,8 @@ public sealed record PlatformView(
     PlatformConnectorType ConnectorType,
     long DeploymentCount,
     long StackCount,
+    PlatformWorkloadStatusCountsView DeploymentStatusCounts,
+    PlatformWorkloadStatusCountsView StackStatusCounts,
     IEnumerable<PlatformStatView>? Stats,
     PlatformDescriptor? PlatformDescriptor,
     IReadOnlyList<TagSummaryView> Tags = null!,
@@ -109,6 +111,8 @@ internal static class PlatformMapperExtension
         ConnectorType: platform.ConnectorType,
         DeploymentCount: platform.DeploymentCount,
         StackCount: platform.StackCount,
+        DeploymentStatusCounts: PlatformWorkloadStatusCountsView.Map(platform.DeploymentStatusCounts),
+        StackStatusCounts: PlatformWorkloadStatusCountsView.Map(platform.StackStatusCounts),
         NetworkCount: platform.NetworkCount,
         VolumeCount: platform.VolumeCount,
         ImageCount: platform.ImageCount,
@@ -138,4 +142,25 @@ internal static class PlatformMapperExtension
             DiskUsedBytes: stat.DiskUsedBytes,
             DiskTotalBytes: stat.DiskTotalBytes,
             DiskUsage: stat.DiskUsage);
+}
+
+public sealed record PlatformWorkloadStatusCountsView(
+    long Total,
+    long Healthy,
+    long Degraded,
+    long Failed,
+    long Stopped,
+    long Paused,
+    long InProgress,
+    long Unknown)
+{
+    internal static PlatformWorkloadStatusCountsView Map(PlatformWorkloadStatusCounts counts) => new(
+        Total: counts.Total,
+        Healthy: counts.Healthy,
+        Degraded: counts.Degraded,
+        Failed: counts.Failed,
+        Stopped: counts.Stopped,
+        Paused: counts.Paused,
+        InProgress: counts.InProgress,
+        Unknown: counts.Unknown);
 }

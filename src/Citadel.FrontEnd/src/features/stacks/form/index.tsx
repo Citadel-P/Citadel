@@ -47,6 +47,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import {
+  ArrowRight,
   Calendar,
   Check,
   Copy,
@@ -224,17 +225,29 @@ const StackUpdateNotice = ({ stack }: { stack: StackView }) => {
 
   if (!updates?.length) return null;
 
-  const summary = updates
-    .slice(0, 3)
-    .map((state) => `${state.serviceName} (${truncate(state.imageName, 32)})`)
-    .join(', ');
-  const suffix = updates.length > 3 ? `, +${updates.length - 3} more` : '';
-
   return (
-    <AlertMessage type="info" title="Image update available">
-      <div className="flex flex-wrap gap-2 items-center">
-        {summary}
-        {suffix}
+    <AlertMessage type="info" title={updates.length === 1 ? 'Image update available' : 'Image updates available'}>
+      <div className="flex min-w-0 flex-col gap-2">
+        <span>Click Redeploy to apply {updates.length === 1 ? 'this update' : 'these updates'}.</span>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {updates.map((state) => (
+            <div
+              key={`${state.serviceName}-${state.imageName}`}
+              className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+              <span className="font-medium text-foreground">{state.serviceName}</span>
+              <span className="max-w-72 truncate" title={state.imageName}>
+                {state.imageName}
+              </span>
+              <span className="font-mono text-muted-foreground" title={state.currentDigest}>
+                {formatId(state.currentDigest)}
+              </span>
+              <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="font-mono text-amber-700 dark:text-amber-500" title={state.remoteDigest ?? undefined}>
+                {formatId(state.remoteDigest ?? undefined)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </AlertMessage>
   );
@@ -273,7 +286,7 @@ const StackLatestActivity = ({
 };
 
 const StackRuntime = ({ stack }: { stack: StackView }) => {
-  const { containersInfo, isLoading, error } = useStackInfoGroup(stack.id, stack.platformId ?? undefined, stack.name);
+  const { containersInfo, isLoading, error } = useStackInfoGroup(stack.id, stack.platformId ?? undefined);
 
   if (error)
     return (

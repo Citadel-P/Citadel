@@ -1,13 +1,27 @@
 import { appendBoundedLiveStat, mergeStatsByCreated } from './live-stats';
 
 describe('live statistics retention', () => {
-  it('retains only the newest configured number of samples', () => {
+  it('compacts samples while preserving the oldest and newest timestamps', () => {
     const stats = [1, 2, 3].reduce(
       (current, created) => appendBoundedLiveStat(current, { created }, 2),
       [] as Array<{ created: number }>,
     );
 
-    expect(stats).toEqual([{ created: 2 }, { created: 3 }]);
+    expect(stats).toEqual([{ created: 1 }, { created: 3 }]);
+  });
+
+  it('keeps a bounded representation of the full live window', () => {
+    const maxPoints = 20;
+    const windowSeconds = 60 * 60;
+    const stats = Array.from({ length: 500 }, (_, index) => index * 10).reduce(
+      (current, created) => appendBoundedLiveStat(current, { created }, maxPoints, windowSeconds),
+      [] as Array<{ created: number }>,
+    );
+
+    expect(stats.length).toBeLessThanOrEqual(maxPoints);
+    expect(stats[0].created).toBeGreaterThanOrEqual(4990 - windowSeconds - 60);
+    expect(stats[0].created).toBeLessThanOrEqual(4990 - windowSeconds + 300);
+    expect(stats.at(-1)).toEqual({ created: 4990 });
   });
 
   it('replaces a sample with the same timestamp', () => {

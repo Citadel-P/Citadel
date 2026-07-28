@@ -9,6 +9,7 @@ namespace Infrastructure.Repositories;
 
 internal class ShoutrrrCliRepository(ICommandExecutor processService, ILogger<ShoutrrrCliRepository> logger) : IShoutrrrCliRepository
 {
+    private const int MaximumParallelNotifications = 4;
     private readonly string shoutrrrCliPath = "shoutrrr";
 
     public Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, string name, CancellationToken cancellationToken)
@@ -32,7 +33,7 @@ internal class ShoutrrrCliRepository(ICommandExecutor processService, ILogger<Sh
         await Parallel.ForEachAsync(activeChannels, new ParallelOptions
         {
             CancellationToken = cancellationToken,
-            MaxDegreeOfParallelism = Environment.ProcessorCount / 2
+            MaxDegreeOfParallelism = GetMaxDegreeOfParallelism(Environment.ProcessorCount)
         }, async (channel, ct) =>
         {
             var args = new[]
@@ -55,6 +56,9 @@ internal class ShoutrrrCliRepository(ICommandExecutor processService, ILogger<Sh
             }
         });
     }
+
+    internal static int GetMaxDegreeOfParallelism(int processorCount)
+        => Math.Clamp(processorCount / 2, 1, MaximumParallelNotifications);
 
     private async Task<Result> VerifyChannelsAsync(AlertChannel channel, CancellationToken cancellationToken)
     {

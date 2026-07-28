@@ -10,6 +10,26 @@ const createPlatform = (diskUsage: number | null): PlatformView =>
     status: PlatformStatus.Online,
     connectorType: PlatformConnectorType.Local,
     serverVersion: '29.0.0',
+    deploymentStatusCounts: {
+      total: 4,
+      healthy: 2,
+      degraded: 1,
+      failed: 0,
+      stopped: 1,
+      paused: 0,
+      inProgress: 0,
+      unknown: 0,
+    },
+    stackStatusCounts: {
+      total: 5,
+      healthy: 2,
+      degraded: 1,
+      failed: 0,
+      stopped: 1,
+      paused: 1,
+      inProgress: 0,
+      unknown: 0,
+    },
     platformDescriptor: {
       operatingSystem: 'Linux',
       containerCount: 1,
@@ -39,6 +59,15 @@ describe('DockerPlatform disk usage', () => {
     );
 
     expect(screen.getByText('42.5 %')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Platform workloads' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Platform utilization' })).toBeVisible();
+    expect(screen.getAllByLabelText('Healthy: 2')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Degraded: 1')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Stopped: 1')).toHaveLength(2);
+    expect(screen.getByLabelText('Paused: 1')).toBeVisible();
+    expect(screen.getByRole('progressbar', { name: 'CPU usage' })).toHaveAttribute('aria-valuenow', '10');
+    expect(screen.getByRole('progressbar', { name: 'RAM usage' })).toHaveAttribute('aria-valuenow', '20');
+    expect(screen.getByRole('progressbar', { name: 'Disk usage' })).toHaveAttribute('aria-valuenow', '42.5');
 
     rerender(
       <MemoryRouter>
@@ -58,6 +87,7 @@ describe('DockerPlatform disk usage', () => {
     );
 
     expect(screen.getByText('N/A')).toBeVisible();
+    expect(screen.getByRole('progressbar', { name: 'Disk usage' })).not.toHaveAttribute('aria-valuenow');
   });
 
   it('shows unavailable when the streamed disk percentage is invalid', () => {

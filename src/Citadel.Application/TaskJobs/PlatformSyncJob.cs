@@ -117,7 +117,7 @@ internal class PlatformSyncJob(
     /// <summary>
     /// Core logic to synchronize a single platform.
     /// </summary>
-    private async Task SyncPlatform(PlatformHealth evt, CancellationToken cancellationToken)
+    internal async Task SyncPlatform(PlatformHealth evt, CancellationToken cancellationToken)
     {
         try
         {

@@ -52,6 +52,8 @@ export const usePlatformGroup = (id: string) => {
           descriptor.containersRunning = stats.containersRunning;
           descriptor.containersPaused = stats.containersPaused;
           descriptor.containersStopped = stats.containersStopped;
+          descriptor.imageUsedBytes = stats.imageUsedBytes;
+          descriptor.volumeUsedBytes = stats.volumeUsedBytes;
 
           next.platformDescriptor = descriptor;
         }

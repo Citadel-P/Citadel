@@ -15,6 +15,8 @@ public class PlatformMappersTests
             CpuCount = 12,
             MemTotal = 1024,
             AgentVersion = "test",
+            ImageUsedBytes = 2048,
+            VolumeUsedBytes = 4096,
             Stat = new PlatformStatMessage
             {
                 CpuUsage = 0.25,
@@ -34,6 +36,8 @@ public class PlatformMappersTests
         Assert.Null(result.PlatformStat.DiskUsedBytes);
         Assert.Null(result.PlatformStat.DiskTotalBytes);
         Assert.Null(result.PlatformStat.DiskUsage);
+        Assert.Equal(2048, result.ImageUsedBytes);
+        Assert.Equal(4096, result.VolumeUsedBytes);
     }
 
     [Fact]
@@ -66,6 +70,8 @@ public class PlatformMappersTests
             CpuCount: 12,
             MemoryTotal: 1024,
             AgentVersion: "test",
+            ImageUsedBytes: 2048,
+            VolumeUsedBytes: 4096,
             PlatformStatistics: new PlatformStatResult(
                 MemoryUsage: 12,
                 CpuUsage: 0.25,
@@ -80,5 +86,7 @@ public class PlatformMappersTests
 
         Assert.Equal(0.25, result.PlatformStat.CpuUsage);
         Assert.Null(result.PlatformStat.DiskUsage);
+        Assert.Equal(2048, result.ImageUsedBytes);
+        Assert.Equal(4096, result.VolumeUsedBytes);
     }
 }

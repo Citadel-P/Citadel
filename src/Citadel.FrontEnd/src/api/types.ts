@@ -157,7 +157,9 @@ export interface PlatformStatsBatchView {
   containersPaused: number;
   containersStopped: number;
   imageCount: number;
+  imageUsedBytes: number | null;
   memTotal: number;
+  volumeUsedBytes: number | null;
   stat: PlatformStatView;
 }
 

@@ -28,7 +28,9 @@ internal static class PlatformMappers
             stats: platform.Stats?.Select(ToDomain).ToList(),
             description: platform.Description,
             deploymentCount: platform.DeploymentCount,
-            stackCount: platform.StackCount);
+            stackCount: platform.StackCount,
+            deploymentStatusCounts: MapDeploymentStatusCounts(platform),
+            stackStatusCounts: MapStackStatusCounts(platform));
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
@@ -57,6 +59,8 @@ internal static class PlatformMappers
             description: platform.Description,
             deploymentCount: platform.DeploymentCount,
             stackCount: platform.StackCount,
+            deploymentStatusCounts: MapDeploymentStatusCounts(platform),
+            stackStatusCounts: MapStackStatusCounts(platform),
             stats: [new PlatformStat(
                 Created: platform?.Stat_Created ?? 0,
                 MemoryUsage: platform?.Stat_MemoryUsage ?? 0,
@@ -72,6 +76,26 @@ internal static class PlatformMappers
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
     }
+
+    private static PlatformWorkloadStatusCounts MapDeploymentStatusCounts(PlatformDto platform) => new(
+        Total: platform.DeploymentCount,
+        Healthy: platform.DeploymentHealthyCount,
+        Degraded: platform.DeploymentDegradedCount,
+        Failed: platform.DeploymentFailedCount,
+        Stopped: platform.DeploymentStoppedCount,
+        Paused: 0,
+        InProgress: platform.DeploymentInProgressCount,
+        Unknown: platform.DeploymentUnknownCount);
+
+    private static PlatformWorkloadStatusCounts MapStackStatusCounts(PlatformDto platform) => new(
+        Total: platform.StackCount,
+        Healthy: platform.StackHealthyCount,
+        Degraded: platform.StackDegradedCount,
+        Failed: platform.StackFailedCount,
+        Stopped: platform.StackStoppedCount,
+        Paused: platform.StackPausedCount,
+        InProgress: platform.StackInProgressCount,
+        Unknown: platform.StackUnknownCount);
 
     internal static IEnumerable<PlatformStat> ToDomain(this IEnumerable<PlatformStatDto> stats)
         => stats.Select(ToDomain);

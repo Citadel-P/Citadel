@@ -102,6 +102,18 @@ internal static class BackupMappers
                 ToOffset(dto.LastSuccessfulRunAt),
                 ToOffset(dto.NextRunAt)));
 
+    internal static PlatformBackupSummary ToDomain(this PlatformBackupSummaryDto dto)
+        => new(
+            dto.PlatformId,
+            dto.PolicyCount,
+            dto.EnabledPolicyCount,
+            dto.DockerVolumePolicyCount,
+            dto.StackPolicyCount,
+            dto.DeploymentPolicyCount,
+            dto.AttentionPolicyCount,
+            dto.LastRunStatus is null ? null : Enum.Parse<BackupRunStatus>(dto.LastRunStatus),
+            ToOffset(dto.LastRunAt));
+
     internal static BackupRun ToDomain(this BackupRunDto dto)
         => BackupRun.FromPersistence(
             dto.Id,

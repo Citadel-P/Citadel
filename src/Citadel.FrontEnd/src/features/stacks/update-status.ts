@@ -2,11 +2,43 @@ import {
   AutoUpdateStatus,
   ImageUpdateState,
   RecreateStackOnNewCommitState,
+  ResourceControlState,
+  StackReleaseStatus,
   StackView,
 } from '@/api/generated/api.types';
 
+export const canCheckStackUpdates = (stack: StackView | null | undefined): boolean =>
+  !!stack && stack.status !== StackReleaseStatus.Created && stack.controlState !== ResourceControlState.Processing;
+
 export const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
   stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
+
+export type StackImageUpdateCheckMessage = {
+  kind: 'info' | 'success';
+  title: string;
+  description: string;
+};
+
+export const getStackImageUpdateCheckMessage = (stack: StackView): StackImageUpdateCheckMessage => {
+  const states = getStackImageUpdateStates(stack);
+  const updateCount = states.filter((state) => state.updateAvailable).length;
+
+  if (updateCount > 0) {
+    return {
+      kind: 'info',
+      title: 'Updates available',
+      description: `${
+        updateCount === 1 ? '1 service image has a newer digest.' : `${updateCount} service images have newer digests.`
+      } Redeploy the stack to apply the ${updateCount === 1 ? 'change' : 'changes'}.`,
+    };
+  }
+
+  return {
+    kind: 'success',
+    title: 'Stack images are up to date',
+    description: 'No newer service image digest was found.',
+  };
+};
 
 export const getStackGitUpdateState = (stack: StackView): RecreateStackOnNewCommitState | null => {
   const state = stack.stackUpdateState;

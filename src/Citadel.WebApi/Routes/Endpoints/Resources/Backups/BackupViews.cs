@@ -2,6 +2,7 @@ using Application.Features.Backups.Models;
 using Application.Permissions;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -214,6 +215,36 @@ public sealed record BackupPoliciesView(IReadOnlyList<BackupPolicyView> Policies
 
         return new BackupPoliciesView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
+}
+
+public sealed record PlatformBackupSummaryView(
+    Guid PlatformId,
+    int PolicyCount,
+    int EnabledPolicyCount,
+    int DockerVolumePolicyCount,
+    int StackPolicyCount,
+    int DeploymentPolicyCount,
+    int AttentionPolicyCount,
+    BackupRunStatus? LastRunStatus,
+    DateTimeOffset? LastRunAt)
+{
+    internal static PlatformBackupSummaryView Map(PlatformBackupSummary summary)
+        => new(
+            summary.PlatformId,
+            summary.PolicyCount,
+            summary.EnabledPolicyCount,
+            summary.DockerVolumePolicyCount,
+            summary.StackPolicyCount,
+            summary.DeploymentPolicyCount,
+            summary.AttentionPolicyCount,
+            summary.LastRunStatus,
+            summary.LastRunAt);
+}
+
+public sealed record PlatformBackupSummariesView(IReadOnlyList<PlatformBackupSummaryView> Platforms)
+{
+    internal static PlatformBackupSummariesView Map(IReadOnlyList<PlatformBackupSummary> summaries)
+        => new([.. summaries.Select(PlatformBackupSummaryView.Map)]);
 }
 
 public sealed record BackupRunView(

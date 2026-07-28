@@ -19,7 +19,9 @@ public class Platform(
     PlatformDescriptor platformDescriptor,
     string? description = null,
     long deploymentCount = 0,
-    long stackCount = 0)
+    long stackCount = 0,
+    PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
+    PlatformWorkloadStatusCounts? stackStatusCounts = null)
 {
     private readonly List<PlatformStat> stats = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -37,6 +39,10 @@ public class Platform(
     public string? Description { get; private set; } = description;
     public long DeploymentCount { get; private set; } = deploymentCount;
     public long StackCount { get; private set; } = stackCount;
+    public PlatformWorkloadStatusCounts DeploymentStatusCounts { get; private set; } =
+        deploymentStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
+    public PlatformWorkloadStatusCounts StackStatusCounts { get; private set; } =
+        stackStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
@@ -58,7 +64,9 @@ public class Platform(
         IReadOnlyCollection<PlatformStat>? stats = null,
         string? description = null,
         long deploymentCount = 0,
-        long stackCount = 0
+        long stackCount = 0,
+        PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
+        PlatformWorkloadStatusCounts? stackStatusCounts = null
         )
     {
         var platform = new Platform(
@@ -76,7 +84,9 @@ public class Platform(
             platformDescriptor: platformDescriptor,
             description: description,
             deploymentCount: deploymentCount,
-            stackCount: stackCount)
+            stackCount: stackCount,
+            deploymentStatusCounts: deploymentStatusCounts,
+            stackStatusCounts: stackStatusCounts)
         {
             Id = id,
         };

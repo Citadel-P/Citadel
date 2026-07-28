@@ -12,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 using Npgsql;
 using System.Data.Common;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Tests.Integration.Helpers;
@@ -20,7 +21,6 @@ using Tests.Common;
 namespace Tests.Integration;
 
 
-[Collection("Postgres")]
 public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncLifetime
 {
     protected sealed record AuthorizationSubject(Guid UserId, Guid ActorId, Guid? TeamId = null, Guid? TeamActorId = null);
@@ -38,12 +38,38 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
     protected string ConnectionString = default!;
     protected IServiceProvider Services = default!;
     protected WebApplicationFactory<Program> Factory = default!;
+    private ReusableIntegrationTestHost? reusableHost;
 
     public async ValueTask InitializeAsync()
     {
-        ConnectionString = await fixture.CreateDatabaseFromTemplateAsync();
+        if (ReuseApplicationFactory)
+        {
+            reusableHost = await fixture.GetOrCreateReusableHostAsync(
+                GetType(),
+                CreateFactory);
+            await reusableHost.PrepareForTestAsync(fixture);
 
-        Factory = new WebApplicationFactory<Program>()
+            ConnectionString = reusableHost.ConnectionString;
+            Factory = reusableHost.Factory;
+            Services = reusableHost.Services;
+        }
+        else
+        {
+            ConnectionString = await fixture.CreateDatabaseFromTemplateAsync();
+            Factory = CreateFactory(ConnectionString);
+            Services = Factory.Services;
+        }
+
+        Client = Factory.CreateClient();
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            await SeedDbAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        }
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
+    }
+
+    private WebApplicationFactory<Program> CreateFactory(string connectionString)
+        => new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("IntegrationTests");
@@ -52,7 +78,7 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                 {
                     config.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["ConnectionStrings:Postgres"] = ConnectionString,
+                        ["ConnectionStrings:Postgres"] = connectionString,
                         ["Secrets:EncryptionKey"] = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
                     });
                 });
@@ -62,7 +88,7 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                     services.RemoveAll<IHostedService>();
                     services.ReplaceService<NpgsqlDataSource>(_ =>
                     {
-                        var builder = new NpgsqlDataSourceBuilder(ConnectionString);
+                        var builder = new NpgsqlDataSourceBuilder(connectionString);
                         return builder.Build();
                     });
                     services.ReplaceService<IDbConnectionFactory>(sp =>
@@ -77,13 +103,15 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                 });
             });
 
-        Services = Factory.Services;
-        Client = Factory.CreateClient();
-        await SeedDbAsync(Factory.Services.GetRequiredService<IUnitOfWork>());
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
-    }
-
     protected HttpMessageHandler CreateServerHandler() => Factory.Server.CreateHandler();
+
+    // Service override delegates commonly capture mocks owned by one xUnit test instance.
+    protected virtual bool ReuseApplicationFactory
+        => GetType()
+            .GetMethod(
+                nameof(ConfigureTestServices),
+                BindingFlags.Instance | BindingFlags.NonPublic)!
+            .DeclaringType == typeof(IntegrationTestBase);
 
     protected virtual bool UseRealLicenseEntitlements => false;
 
@@ -282,11 +310,27 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
         await transaction.CommitAsync(TestContext.Current.CancellationToken);
     }
 
-    public async ValueTask DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
         Client?.Dispose();
-        if (Factory != null) await Factory.DisposeAsync();
+        if (reusableHost is not null)
+        {
+            return;
+        }
 
-        NpgsqlConnection.ClearAllPools();
+        try
+        {
+            if (Factory != null)
+            {
+                await Factory.DisposeAsync();
+            }
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(ConnectionString))
+            {
+                await fixture.DropDatabaseAsync(ConnectionString);
+            }
+        }
     }
 }

@@ -25,6 +25,7 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
     private readonly Mock<IPlatformStreamManager> _streamManagerMock = new();
     private readonly Channel<(Guid Id, PlatformStatsResult Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PlatformStatsResult Stats)>();
+    private readonly ObservableDbWorkQueue _dbWorkQueue = new();
 
 
     private Guid _platformId;
@@ -44,6 +45,8 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(_ => _platformConnector.Object);
         services.AddSingleton(_ => _platformFactoryMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => _broadcaster);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(_dbWorkQueue);
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer);
 
@@ -75,10 +78,12 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
         // Act
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken); // wait for jobs to process
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -92,16 +97,18 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     public async Task ExecuteAsync_ShouldFlushWhenFlushIntervalIsReached()
     {
         // Arrange
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 100, FlashInterval = 0 });
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 100, FlashInterval = 1 });
         _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
         _platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
         // Act
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -125,6 +132,8 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             VolumeCount: 1,
             NetworkCount: 1,
             AgentVersion: "1.0.0",
+            ImageUsedBytes: 2048,
+            VolumeUsedBytes: 4096,
             PlatformStat: new DockerPlatformStat(
                 created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 memoryUsage: 10,
@@ -136,18 +145,25 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
                 containersStopped: 0,
                 containersRunning: 1));
 
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _channel.Writer.WriteAsync(
             (_platformId, stat),
             TestContext.Current.CancellationToken);
-        await Task.Delay(3000, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(
             _platformId,
             TestContext.Current.CancellationToken);
+        var platform = await db.Platforms.GetByIdAsync(_platformId, TestContext.Current.CancellationToken);
+        var descriptor = Assert.IsType<DockerPlatformDescriptor>(platform?.PlatformDescriptor);
 
         Assert.Single(stats);
+        Assert.Equal(2048, descriptor.ImageUsedBytes);
+        Assert.Equal(4096, descriptor.VolumeUsedBytes);
     }
 
     [Fact]
@@ -293,8 +309,11 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         );
 
         // Act
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _channel.Writer.WriteAsync((_platformId, stat), TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -334,7 +353,7 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
 
             yield return stat1;
         }
-        await Task.Delay(100);
+        await Task.Yield();
         {
             var stat2 = new PlatformStatsResult
             (

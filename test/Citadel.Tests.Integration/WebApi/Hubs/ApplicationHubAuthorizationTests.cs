@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Tests.Integration.Helpers;
 using WebApi.Hubs;
@@ -18,7 +19,8 @@ using WebApi.Routes.Endpoints.Resources.Alerters;
 
 namespace Tests.Integration.WebApi.Hubs;
 
-public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
+public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fixture)
+    : IntegrationTestBase(fixture)
 {
     private static readonly Guid AdminRoleId = Guid.Parse("30000000-0000-0000-0000-000000000001");
     private readonly List<HubConnection> connections = [];
@@ -51,8 +53,7 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         containerId = container.DockerContainerId[..12];
     }
 
-    [Fact]
-    public async Task JoinGroup_EnforcesRepresentativePermissionMatrix()
+    protected async Task RunRepresentativePermissionMatrixScenarioAsync()
     {
         var resourceId = Guid.CreateVersion7();
         var admin = await CreateAuthorizationSubjectAsync(directRoleId: AdminRoleId);
@@ -68,18 +69,17 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         var disabled = await CreateAuthorizationSubjectAsync(teamRoleId: ViewerRoleId);
         await SetActorEnabledAsync(disabled.ActorId, false);
 
-        await AssertJoinAllowedAsync(admin, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinAllowedAsync(directGlobal, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinAllowedAsync(teamGlobal, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinAllowedAsync(directGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinAllowedAsync(teamGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinDeniedAsync(directGrant, Constants.WellKnownSignalRGroups.DeploymentsGroup);
-        await AssertJoinDeniedAsync(noGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
-        await AssertJoinDeniedAsync(disabled, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationAllowedAsync(admin, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationAllowedAsync(directGlobal, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationAllowedAsync(teamGlobal, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationAllowedAsync(directGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationAllowedAsync(teamGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationDeniedAsync(directGrant, Constants.WellKnownSignalRGroups.DeploymentsGroup);
+        await AssertAuthorizationDeniedAsync(noGrant, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
+        await AssertAuthorizationDeniedAsync(disabled, Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId));
     }
 
-    [Fact]
-    public async Task JoinGroup_RequiresSpecificLogAndTerminalPermissions()
+    protected async Task RunSpecificPermissionScenarioAsync()
     {
         var stackId = Guid.CreateVersion7();
         var readOnly = await CreateAuthorizationSubjectAsync(
@@ -116,22 +116,21 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
                     SpecificPermission.Logs)
             ]);
 
-        await AssertJoinDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
-        await AssertJoinDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId));
-        await AssertJoinDeniedAsync(
+        await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
+        await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId));
+        await AssertAuthorizationDeniedAsync(
             readOnly,
             Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, "read-only-session"));
-        await AssertJoinAllowedAsync(logReader, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
-        await AssertJoinAllowedAsync(
+        await AssertAuthorizationAllowedAsync(logReader, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
+        await AssertAuthorizationAllowedAsync(
             containerLogReader,
             Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId));
-        await AssertJoinAllowedAsync(
+        await AssertAuthorizationAllowedAsync(
             terminalUser,
             Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, "terminal-session"));
     }
 
-    [Fact]
-    public async Task ProtectedGroup_DeliversOnlyToAuthorizedRecipient()
+    protected async Task RunProtectedGroupDeliveryScenarioAsync()
     {
         var resourceId = Guid.CreateVersion7();
         var authorized = await CreateAuthorizationSubjectAsync(
@@ -139,10 +138,12 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         var unauthorized = await CreateAuthorizationSubjectAsync();
         var authorizedEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var unauthorizedEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unauthorizedBarrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var authorizedConnection = await CreateConnectionAsync(authorized);
         var unauthorizedConnection = await CreateConnectionAsync(unauthorized);
         authorizedConnection.On("ProtectedEvent", () => authorizedEvent.TrySetResult());
         unauthorizedConnection.On("ProtectedEvent", () => unauthorizedEvent.TrySetResult());
+        unauthorizedConnection.On("DeliveryBarrier", () => unauthorizedBarrier.TrySetResult());
         var groupId = Constants.WellKnownSignalRGroups.DeploymentGroup(resourceId);
 
         await authorizedConnection.InvokeAsync(
@@ -158,21 +159,26 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         await hubContext.Clients.Group(groupId).SendAsync(
             "ProtectedEvent",
             TestContext.Current.CancellationToken);
+        await hubContext.Clients.Client(unauthorizedConnection.ConnectionId!).SendAsync(
+            "DeliveryBarrier",
+            TestContext.Current.CancellationToken);
 
         await authorizedEvent.Task.WaitAsync(
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
-        await Task.Delay(250, TestContext.Current.CancellationToken);
+        await unauthorizedBarrier.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
         Assert.False(unauthorizedEvent.Task.IsCompleted);
     }
 
-    [Fact]
-    public async Task AlertEvent_DeliversOnlyToSelectedUserGroup()
+    protected async Task RunAlertEventDeliveryScenarioAsync()
     {
         var recipient = await CreateAuthorizationSubjectAsync();
         var nonRecipient = await CreateAuthorizationSubjectAsync();
         var recipientEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var nonRecipientEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var nonRecipientBarrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var recipientConnection = await CreateConnectionAsync(recipient);
         var nonRecipientConnection = await CreateConnectionAsync(nonRecipient);
         recipientConnection.On<AlertEventView>(
@@ -181,6 +187,7 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         nonRecipientConnection.On<AlertEventView>(
             "AlertEventReceived",
             _ => nonRecipientEvent.TrySetResult());
+        nonRecipientConnection.On("DeliveryBarrier", () => nonRecipientBarrier.TrySetResult());
 
         await recipientConnection.InvokeAsync(
             "JoinGroup",
@@ -201,27 +208,32 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
             AlertResourceType.Platform);
         var dispatcher = Services.GetRequiredService<IApplicationHubDispatcher>();
         await dispatcher.SendTriggeredAlertEvent(alertEvent, [recipient.UserId]);
+        var hubContext = Services.GetRequiredService<IHubContext<ApplicationHub>>();
+        await hubContext.Clients.Client(nonRecipientConnection.ConnectionId!).SendAsync(
+            "DeliveryBarrier",
+            TestContext.Current.CancellationToken);
 
         await recipientEvent.Task.WaitAsync(
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
-        await Task.Delay(250, TestContext.Current.CancellationToken);
+        await nonRecipientBarrier.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
         Assert.False(nonRecipientEvent.Task.IsCompleted);
     }
 
-    [Fact]
-    public async Task JoinGroup_RejectsUntypedActivityAndPrivateAlertGroupNames()
+    protected async Task RunPrivateGroupNameScenarioAsync()
     {
         var resourceId = Guid.CreateVersion7();
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants: [new ResourceGrant(ResourceType.Deployment, resourceId, PermissionLevel.Read)]);
 
-        await AssertJoinAllowedAsync(
+        await AssertAuthorizationAllowedAsync(
             subject,
             Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.Deployment), resourceId));
-        await AssertJoinAllowedAsync(subject, Constants.WellKnownSignalRGroups.AlertEventsGroup);
-        await AssertJoinDeniedAsync(subject, $"activity:{resourceId}");
-        await AssertJoinDeniedAsync(
+        await AssertAuthorizationAllowedAsync(subject, Constants.WellKnownSignalRGroups.AlertEventsGroup);
+        await AssertAuthorizationDeniedAsync(subject, $"activity:{resourceId}");
+        await AssertAuthorizationDeniedAsync(
             subject,
             Constants.WellKnownSignalRGroups.AlertEventsUserGroup(Guid.CreateVersion7()));
     }
@@ -265,6 +277,40 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
             cancellationToken: TestContext.Current.CancellationToken));
     }
 
+    private Task AssertAuthorizationAllowedAsync(
+        AuthorizationSubject subject,
+        string groupId) =>
+        AssertAuthorizationAsync(subject, groupId, expected: true);
+
+    private Task AssertAuthorizationDeniedAsync(
+        AuthorizationSubject subject,
+        string groupId) =>
+        AssertAuthorizationAsync(subject, groupId, expected: false);
+
+    private async Task AssertAuthorizationAsync(
+        AuthorizationSubject subject,
+        string groupId,
+        bool expected)
+    {
+        var principal = new ClaimsPrincipal(
+            new ClaimsIdentity(
+                [
+                    new Claim(JwtRegisteredClaimNames.Sub, subject.UserId.ToString()),
+                    new Claim("actorId", subject.ActorId.ToString())
+                ],
+                authenticationType: "IntegrationTest"));
+
+        await using var scope = Services.CreateAsyncScope();
+        var authorizationService =
+            scope.ServiceProvider.GetRequiredService<ISignalRGroupAuthorizationService>();
+        var actual = await authorizationService.CanJoinAsync(
+            principal,
+            groupId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, actual);
+    }
+
     private async Task<HubConnection> CreateConnectionAsync(
         AuthorizationSubject subject,
         IEnumerable<Claim>? claims = null)
@@ -284,11 +330,55 @@ public sealed class ApplicationHubAuthorizationTests(PostgresTestFixture fixture
         return connection;
     }
 
-    public new async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
-        foreach (var connection in connections)
-            await connection.DisposeAsync();
-
-        await base.DisposeAsync();
+        try
+        {
+            await Task.WhenAll(connections.Select(connection => connection.DisposeAsync().AsTask()));
+        }
+        finally
+        {
+            await base.DisposeAsync();
+        }
     }
+}
+
+public sealed class ApplicationHubAuthorizationTestsPermissionMatrix(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task JoinGroup_EnforcesRepresentativePermissionMatrix()
+        => RunRepresentativePermissionMatrixScenarioAsync();
+}
+
+public sealed class ApplicationHubAuthorizationTestsSpecificPermission(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task JoinGroup_RequiresSpecificLogAndTerminalPermissions()
+        => RunSpecificPermissionScenarioAsync();
+}
+
+public sealed class ApplicationHubAuthorizationTestsProtectedGroup(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task ProtectedGroup_DeliversOnlyToAuthorizedRecipient()
+        => RunProtectedGroupDeliveryScenarioAsync();
+}
+
+public sealed class ApplicationHubAuthorizationTestsAlertEvent(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task AlertEvent_DeliversOnlyToSelectedUserGroup()
+        => RunAlertEventDeliveryScenarioAsync();
+}
+
+public sealed class ApplicationHubAuthorizationTestsPrivateGroup(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task JoinGroup_RejectsUntypedActivityAndPrivateAlertGroupNames()
+        => RunPrivateGroupNameScenarioAsync();
 }

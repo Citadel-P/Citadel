@@ -33,9 +33,9 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IPlatformContainerCache> _platformCach = new();
     private readonly Mock<IAlertEventStreamManager> _alertEventStreamManager = new();
-
-    private Func<CancellationToken, Task>? _runImageScannerJob;
-    private Func<CancellationToken, Task>? _runAutoUpdateJob;
+    private readonly ObservableDbWorkQueue _dbWorkQueue = new();
+    private readonly TaskCompletionSource _alertNotification =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private Guid _platformId;
     private Guid _alertRuleId;
@@ -64,6 +64,8 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         services.AddSingleton(_ => _platformCach.Object);
         services.AddSingleton(_ => _imageConnectorMock.Object);
         services.AddSingleton(_ => _alertEventStreamManager.Object);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(_dbWorkQueue);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
         var cacheEntry = new PlatformCacheEntry(_platformId, "localhost", PlatformConnectorType.Local, new Dictionary<string, Guid>().ToImmutableDictionary());
@@ -76,23 +78,18 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var dist = new DistributionResult(new OCIDescriptorResult("zip", "new-digest", 2000000, new OCIPlatformResult("x86", "linux", "6.2"), "art-1"));
         _imageConnectorMock.Setup(x => x.DistributionInspectAsync(It.IsAny<DistributionInspectCommand>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult(Result.Success(dist)));
+        _alertEventStreamManager
+            .Setup(x => x.SendTriggeredAlertEvent(
+                It.IsAny<AlertEvent>(),
+                It.IsAny<IEnumerable<Guid>>()))
+            .Callback(() => _alertNotification.TrySetResult())
+            .Returns(Task.CompletedTask);
 
         _delayWithJitter
            .Setup(x => x.DelayWithJitterForAsync(It.IsAny<Func<CancellationToken, Task>>(),
                                                  It.IsAny<TimeSpan>(),
                                                  It.IsAny<CancellationToken>()))
-           .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, __) =>
-           {
-               if (func.Method.Name == "RunPeriodicScanAsync")
-               {
-                   _runImageScannerJob = func;
-               }
-               else if (func.Method.Name == "RunPeriodicAutoUpdate")
-               {
-                   _runAutoUpdateJob = func;
-               }
-               return Task.CompletedTask;
-           });
+           .Returns(Task.CompletedTask);
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -155,7 +152,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
 
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, await GetAlertEventCountAsync(TestContext.Current.CancellationToken));
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -163,7 +160,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
 
         Assert.Single(alertEvents.Items);
         Assert.Equal(AlertType.DeploymentImageUpdateAvailable, alertEvents.Items.ElementAt(0).Type);
-        await WaitForAlertStreamNotificationAsync(Times.Once(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await WaitForAlertStreamNotificationAsync(TestContext.Current.CancellationToken);
         _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.Is<AlertEvent>(a => a.Type == AlertType.DeploymentImageUpdateAvailable), It.IsAny<IEnumerable<Guid>>()), Times.Once);
     }
 
@@ -189,11 +186,10 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         }, TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        await WaitForAlertStreamNotificationAsync(Times.Once(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, await GetAlertEventCountAsync(TestContext.Current.CancellationToken));
+        await WaitForAlertStreamNotificationAsync(TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         await using var finalScope = Services.CreateAsyncScope();
         var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -227,7 +223,6 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         }, TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -260,7 +255,6 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         }, TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -280,7 +274,6 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         }, TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -292,72 +285,40 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
     {
-        var start = DateTime.UtcNow;
-        while ((_runImageScannerJob is null || _runAutoUpdateJob is null) && DateTime.UtcNow - start < TimeSpan.FromSeconds(2))
-        {
-            await Task.Delay(50, cancellationToken);
-        }
+        var hostedServices = Services.GetServices<IHostedService>().ToArray();
+        var scannerJob = hostedServices.OfType<DeploymentImageScannerJob>().Single();
+        var autoUpdateJob = hostedServices.OfType<DeploymentAutoUpdateJob>().Single();
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
 
-        if (_runImageScannerJob is null || _runAutoUpdateJob is null)
-            throw new InvalidOperationException("Deployment image scanner or auto-update job was not initialized.");
-
-        await RunScheduledJobOnceAsync(_runImageScannerJob, cancellationToken);
-        await RunScheduledJobOnceAsync(_runAutoUpdateJob, cancellationToken);
+        await scannerJob.ScanOnceAsync(cancellationToken);
+        await autoUpdateJob.RunOnceAsync(cancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(checkpoint, cancellationToken);
     }
 
-    private static async Task RunScheduledJobOnceAsync(Func<CancellationToken, Task> job, CancellationToken cancellationToken)
+    private async Task<int> GetAlertEventCountAsync(CancellationToken cancellationToken)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(1));
-
-        try
-        {
-            await job(cts.Token);
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-        }
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(
+            null,
+            null,
+            null,
+            1,
+            50,
+            cancellationToken);
+        return alertEvents.Items.Count();
     }
 
-    private async Task<int> WaitForAlertEventCountAsync(int expectedCount, TimeSpan timeout, CancellationToken cancellationToken)
+    private async Task WaitForAlertStreamNotificationAsync(CancellationToken cancellationToken)
     {
-        var start = DateTime.UtcNow;
-        var count = 0;
-
-        while (DateTime.UtcNow - start < timeout)
-        {
-            await using var scope = Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, cancellationToken);
-            count = alertEvents.Items.Count();
-
-            if (count >= expectedCount)
-                break;
-
-            await Task.Delay(200, cancellationToken);
-        }
-
-        return count;
-    }
-
-    private async Task WaitForAlertStreamNotificationAsync(Times times, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        var start = DateTime.UtcNow;
-
-        while (DateTime.UtcNow - start < timeout)
-        {
-            try
-            {
-                _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), times);
-                return;
-            }
-            catch (MockException)
-            {
-                await Task.Delay(100, cancellationToken);
-            }
-        }
-
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), times);
+        await _alertNotification.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            cancellationToken);
+        _alertEventStreamManager.Verify(
+            x => x.SendTriggeredAlertEvent(
+                It.IsAny<AlertEvent>(),
+                It.IsAny<IEnumerable<Guid>>()),
+            Times.Once);
     }
 
     private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)

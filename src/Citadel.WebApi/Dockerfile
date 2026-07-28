@@ -20,11 +20,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build:image
 
 # Build and publish the application
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
-ARG VERSION=0.0.0-local
-ARG ASSEMBLY_VERSION=0.0.0.0
-ARG FILE_VERSION=0.0.0.0
-ARG INFORMATIONAL_VERSION=0.0.0-local
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS restore
 ENV NBGV_GitEngine=Disabled
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
@@ -42,25 +38,41 @@ COPY ["src/Citadel.VolumeHelper/Citadel.VolumeHelper.csproj", "Citadel.VolumeHel
 COPY ["src/Citadel.Contracts/Directory.Build.props", "Citadel.Contracts/"]
 COPY ["src/Citadel.Contracts/Directory.Packages.props", "Citadel.Contracts/"]
 
-COPY ["src/Citadel.Contracts/src/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
-COPY ["src/Citadel.Contracts/src/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
-COPY ["src/Citadel.Contracts/src/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
-COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/Citadel.Hosting.DockerClient/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/src/Citadel.Hosting/"]
+COPY ["src/Citadel.Contracts/src/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/src/Citadel.SourceGen/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/src/Citadel.Hosting.Common/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/src/Citadel.Hosting.DockerClient/"]
 
 # Restore
-RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj" \
-    && dotnet restore "Citadel.VolumeHelper/Citadel.VolumeHelper.csproj"
+RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj" -r linux-musl-x64 \
+    && dotnet restore "Citadel.VolumeHelper/Citadel.VolumeHelper.csproj" -r linux-musl-x64
 
-COPY src/ .
+FROM restore AS build
+
+COPY ["src/Citadel.WebApi/", "Citadel.WebApi/"]
+COPY ["src/Citadel.Domain/", "Citadel.Domain/"]
+COPY ["src/Citadel.Application/", "Citadel.Application/"]
+COPY ["src/Citadel.Infrastructure/", "Citadel.Infrastructure/"]
+COPY ["src/Citadel.VolumeHelper/", "Citadel.VolumeHelper/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting/", "Citadel.Contracts/src/Citadel.Hosting/"]
+COPY ["src/Citadel.Contracts/src/Citadel.SourceGen/", "Citadel.Contracts/src/Citadel.SourceGen/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.Common/", "Citadel.Contracts/src/Citadel.Hosting.Common/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/", "Citadel.Contracts/src/Citadel.Hosting.DockerClient/"]
 
 WORKDIR /src/Citadel.WebApi
+
+ARG VERSION=0.0.0-local
+ARG ASSEMBLY_VERSION=0.0.0.0
+ARG FILE_VERSION=0.0.0.0
+ARG INFORMATIONAL_VERSION=0.0.0-local
+
 # Publish
-RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
+RUN dotnet publish Citadel.WebApi.csproj --no-restore -c Release -o /app/publish \
     -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
     /p:Version="${VERSION}" /p:PackageVersion="${VERSION}" \
     /p:AssemblyVersion="${ASSEMBLY_VERSION}" /p:FileVersion="${FILE_VERSION}" \
     /p:InformationalVersion="${INFORMATIONAL_VERSION}" \
-    && dotnet publish ../Citadel.VolumeHelper/Citadel.VolumeHelper.csproj -c Release -o /app/volume-helper \
+    && dotnet publish ../Citadel.VolumeHelper/Citadel.VolumeHelper.csproj --no-restore -c Release -o /app/volume-helper \
         -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
         /p:Version="${VERSION}" /p:PackageVersion="${VERSION}" \
         /p:AssemblyVersion="${ASSEMBLY_VERSION}" /p:FileVersion="${FILE_VERSION}" \

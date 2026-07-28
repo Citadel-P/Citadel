@@ -7,8 +7,8 @@ import {
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
-import { Power, PowerOff, CirclePause, PlugZap, Rocket, Layers } from 'lucide-react';
-import { toFixedNumber } from '@/lib/utils';
+import { Box, Cpu, HardDrive, Layers, MemoryStick, PlugZap, Rocket } from 'lucide-react';
+import { cn, toFixedNumber } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ActionData } from '@/pages/types';
@@ -17,6 +17,15 @@ import { ContentCard } from '@/components/custom/content-card';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { getTagTextColor } from '@/features/tags/tag-colors';
 import { OverflowCountBadge } from '@/components/custom/common';
+import { byteTransform } from '@/lib/bytes.helper';
+import {
+  getContainerStates,
+  getDeploymentStates,
+  getStackStates,
+  PLATFORM_WORKLOAD_ICON_CLASS_NAMES,
+  WorkloadState,
+  WorkloadStatusBreakdown,
+} from './platform-workload-status';
 
 export const DockerPlatform = ({
   platform,
@@ -55,50 +64,54 @@ export const DockerPlatform = ({
     parsedDiskUsedBytes <= parsedDiskTotalBytes
       ? Number(toFixedNumber(parsedDiskUsage))
       : null;
+  const diskUsageDetails =
+    diskUsage != null && parsedDiskUsedBytes != null && parsedDiskTotalBytes != null
+      ? `${byteTransform(parsedDiskUsedBytes, 1)} of ${byteTransform(parsedDiskTotalBytes, 1)} used`
+      : 'Disk usage is unavailable';
 
   return (
-    <ContentCard>
+    <ContentCard className="overflow-hidden">
       <TooltipProvider delayDuration={200}>
-        <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-4 px-4 py-4 pr-12 xl:grid-cols-[auto_minmax(18rem,32rem)_minmax(28rem,1fr)_auto] xl:items-center xl:gap-x-5 xl:pr-4">
+        <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 px-4 py-3 pr-12 2xl:grid-cols-[auto_minmax(15rem,1fr)_minmax(18rem,0.9fr)_minmax(17rem,0.9fr)_auto] 2xl:items-center 2xl:gap-x-5 2xl:pr-4">
           {/* Logo + status */}
           <div className="relative shrink-0">
-            <div className="h-16 w-16 rounded-full border border-border/60">
+            <div className="h-12 w-12 rounded-full border border-border/60 p-0.5">
               <DockerIcon />
             </div>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  className={`absolute top-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                  className={`absolute top-0 right-0 h-3 w-3 rounded-full border-2 border-card ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
                 />
               </TooltipTrigger>
               <TooltipContent>
                 {isOnline ? 'Online' : 'Offline'}
-                {lastSnapshot ? ` · ${fromNow(lastSnapshot)}` : ''}
+                {lastSnapshot ? ` - ${fromNow(lastSnapshot)}` : ''}
               </TooltipContent>
             </Tooltip>
           </div>
 
           {/* Identity + resource links */}
-          <div className="min-w-0 overflow-hidden space-y-1.5 self-center">
+          <div className="min-w-0 space-y-1 overflow-hidden self-center">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <Link
                 to={`/platforms/edit/${platform.id}`}
-                className="min-w-0 truncate text-sm font-medium text-foreground hover:underline">
+                className="min-w-0 truncate text-[15px] font-medium text-foreground hover:underline">
                 {platform.name}
               </Link>
+            </div>
+
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <span className="min-w-0 truncate text-xs text-muted-foreground">
                 {descriptor.operatingSystem} v{platform.serverVersion}
               </span>
-
+              <span className="hidden h-3 w-px bg-border sm:block" />
               <span className="inline-flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
                 <PlugZap className="h-3.5 w-3.5" /> {getConnectorLabel(platform.connectorType, platform.agentVersion)}
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
-                {descriptor.containerCount ?? '-'} containers
-              </Link>
               <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
                 {platform.imageCount ?? '-'} images
               </Link>
@@ -108,141 +121,166 @@ export const DockerPlatform = ({
               <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
                 {platform.networkCount ?? '-'} networks
               </Link>
+              <CompactTagSummary tags={platform.tags} />
             </div>
           </div>
 
-          <div className="absolute right-2 top-2 xl:static xl:col-start-4 xl:row-start-1 xl:justify-self-end xl:self-center">
+          <div className="absolute right-2 top-2 2xl:static 2xl:col-start-5 2xl:row-start-1 2xl:justify-self-end 2xl:self-center">
             <RowActionMenu resource={platform} actions={actions} />
           </div>
 
-          <div className="col-span-full grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 lg:grid-cols-7 xl:col-span-1 xl:col-start-3 xl:row-start-1">
-            {/* Deployments + stacks */}
-            <StatSection label="Deployments">
-              <LinkedStat
-                icon={Rocket}
-                value={platform.deploymentCount}
-                tooltip="Deployments on this platform"
-                to={`/deployments?platformId=${platform.id}`}
-                className="text-sky-500"
-              />
-            </StatSection>
+          <section
+            aria-label="Platform workloads"
+            className="col-span-full grid min-w-0 grid-cols-3 gap-2 border-t pt-3 2xl:col-span-1 2xl:col-start-3 2xl:row-start-1 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
+            <WorkloadMetric
+              icon={Rocket}
+              label="Deployments"
+              total={platform.deploymentStatusCounts.total}
+              to={`/deployments?platformId=${platform.id}`}
+              iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.deployments}
+              states={getDeploymentStates(platform.deploymentStatusCounts)}
+            />
+            <WorkloadMetric
+              icon={Layers}
+              label="Stacks"
+              total={platform.stackStatusCounts.total}
+              to={`/stacks?platformId=${platform.id}`}
+              iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.stacks}
+              states={getStackStates(platform.stackStatusCounts)}
+            />
+            <WorkloadMetric
+              icon={Box}
+              label="Containers"
+              total={descriptor.containerCount}
+              to={`/platforms/${platform.id}/containers`}
+              iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.containers}
+              states={getContainerStates({
+                running: descriptor.containersRunning,
+                stopped: descriptor.containersStopped,
+                paused: descriptor.containersPaused,
+              })}
+            />
+          </section>
 
-            <StatSection label="Stacks">
-              <LinkedStat
-                icon={Layers}
-                value={platform.stackCount}
-                tooltip="Stacks on this platform"
-                to={`/stacks?platformId=${platform.id}`}
-                className="text-violet-500"
-              />
-            </StatSection>
-
-            {/* Containers breakdown */}
-            <StatSection label="Containers">
-              <div className="flex items-center justify-center gap-3">
-                <ContainerStat
-                  icon={Power}
-                  value={descriptor.containersRunning}
-                  tooltip="Running"
-                  className="text-emerald-500"
-                />
-                <ContainerStat
-                  icon={PowerOff}
-                  value={descriptor.containersStopped}
-                  tooltip="Stopped"
-                  className="text-rose-500"
-                />
-                <ContainerStat
-                  icon={CirclePause}
-                  value={descriptor.containersPaused}
-                  tooltip="Paused"
-                  className="text-amber-500"
-                />
-              </div>
-            </StatSection>
-
-            {/* CPU + Memory + Disk */}
-            <StatSection label="CPU">
-              <UsageMetric value={cpuUsage} online={isOnline} />
-            </StatSection>
-            <StatSection label="RAM">
-              <UsageMetric value={memUsage} online={isOnline} />
-            </StatSection>
-            <StatSection label="Disk">
-              <UsageMetric value={diskUsage} online={isOnline} />
-            </StatSection>
-            <StatSection label="Tags">
-              <CompactTagSummary tags={platform.tags} />
-            </StatSection>
-          </div>
+          <section
+            aria-label="Platform utilization"
+            className="col-span-full grid min-w-0 grid-cols-1 gap-1.5 border-t pt-3 sm:grid-cols-3 2xl:col-span-1 2xl:col-start-4 2xl:row-start-1 2xl:grid-cols-1 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
+            <UsageMetric
+              icon={Cpu}
+              label="CPU"
+              value={cpuUsage}
+              online={isOnline}
+              colorClassName="bg-sky-500"
+              iconClassName="text-sky-500"
+              tooltip={`Container CPU usage normalized across ${platform.cpuCount} platform cores`}
+            />
+            <UsageMetric
+              icon={MemoryStick}
+              label="RAM"
+              value={memUsage}
+              online={isOnline}
+              colorClassName="bg-emerald-500"
+              iconClassName="text-emerald-500"
+              tooltip={`Container working-set memory as a share of ${byteTransform(platform.memTotal, 1)} platform memory`}
+            />
+            <UsageMetric
+              icon={HardDrive}
+              label="Disk"
+              value={diskUsage}
+              online={isOnline}
+              colorClassName="bg-amber-500"
+              iconClassName="text-amber-500"
+              tooltip={diskUsageDetails}
+            />
+          </section>
         </div>
       </TooltipProvider>
     </ContentCard>
   );
 };
 
-const StatSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 text-center">
-    <span className="max-w-full truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-      {label}
-    </span>
-    <div className="min-w-0 text-sm text-foreground">{children}</div>
-  </div>
-);
+const UsageMetric = ({
+  icon: Icon,
+  label,
+  value,
+  online,
+  colorClassName,
+  iconClassName,
+  tooltip,
+}: {
+  icon: React.FC<{ className?: string }>;
+  label: string;
+  value: number | null;
+  online: boolean;
+  colorClassName: string;
+  iconClassName: string;
+  tooltip: string;
+}) => {
+  const available = online && value != null;
+  const displayValue = available ? `${value} %` : 'N/A';
 
-const UsageMetric = ({ value, online }: { value: number | null; online: boolean }) => {
   return (
-    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-      <span className="shrink-0 tabular-nums text-foreground">{online && value != null ? `${value} %` : 'N/A'}</span>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="min-w-0 cursor-default">
+          <div className="mb-0.5 flex min-w-0 items-center justify-between gap-2 text-xs">
+            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+              <Icon className={cn('h-3.5 w-3.5 shrink-0', iconClassName)} />
+              <span className="truncate">{label}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-foreground">{displayValue}</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label={`${label} usage`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={available ? value : undefined}
+            className="h-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn('h-full rounded-full transition-[width] duration-300', colorClassName)}
+              style={{ width: available ? `${value}%` : '0%' }}
+            />
+          </div>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 };
 
-const LinkedStat = ({
+const WorkloadMetric = ({
   icon: Icon,
-  value,
-  tooltip,
+  label,
+  total,
   to,
-  className,
+  iconClassName,
+  states,
 }: {
-  icon: React.FC<{ height?: number; width?: number; className?: string }>;
-  value?: string | number | null;
-  tooltip: string;
+  icon: React.FC<{ className?: string }>;
+  label: string;
+  total?: string | number | null;
   to: string;
-  className?: string;
-}) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Link to={to} className="flex items-center gap-1 hover:underline">
-        <Icon height={12} width={12} className={className} />
-        <span className="tabular-nums text-[13px] text-muted-foreground">{value ?? 0}</span>
+  iconClassName?: string;
+  states: WorkloadState[];
+}) => {
+  return (
+    <div className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-sm px-1 py-1.5">
+      <Link
+        to={to}
+        className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', iconClassName)} />
+        <span className="truncate">{label}</span>
       </Link>
-    </TooltipTrigger>
-    <TooltipContent>{tooltip}</TooltipContent>
-  </Tooltip>
-);
-
-const ContainerStat = ({
-  icon: Icon,
-  value,
-  tooltip,
-  className,
-}: {
-  icon: React.FC<{ height?: number; width?: number; className?: string }>;
-  value?: string | number | null;
-  tooltip: string;
-  className?: string;
-}) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <div className="flex items-center gap-1 cursor-default">
-        <Icon height={12} width={12} className={className} />
-        <span className="tabular-nums text-[13px] text-muted-foreground">{value ?? '-'}</span>
+      <div className="flex min-w-0 items-center justify-center gap-1.5">
+        <Link to={to} className="tabular-nums text-[15px] font-medium text-foreground hover:underline">
+          {total ?? 0}
+        </Link>
+        <WorkloadStatusBreakdown states={states} />
       </div>
-    </TooltipTrigger>
-    <TooltipContent>{tooltip}</TooltipContent>
-  </Tooltip>
-);
+    </div>
+  );
+};
 
 const CompactTagSummary = ({ tags }: { tags?: TagSummaryView[] | null }) => {
   const visibleTags = tags?.slice(0, 1) ?? [];

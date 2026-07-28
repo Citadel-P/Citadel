@@ -32,6 +32,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerConnectorFactoryMock = new();
     private readonly Mock<IPlatformContainerCache> platformCacheMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
+    private readonly ObservableDbWorkQueue dbWorkQueue = new();
 
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -40,7 +41,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
 
         services
             .AddHostedService<DbWriteWorker>()
-            .AddSingleton<IDbWorkQueue, DbWorkQueue>()
+            .AddSingleton<IDbWorkQueue>(dbWorkQueue)
             .AddSingleton(_ => deploymentConnectorMock.Object)
             .AddSingleton(_ => containerConnectorMock.Object)
             .AddSingleton(_ => pullImageServiceMock.Object)
@@ -131,6 +132,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             "/api/v1/deployments/apply",
             content,
@@ -140,8 +142,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         // Assert
         Assert.True(response.IsSuccessStatusCode);
 
-        // Give work queue time to process DeploymentSucceededWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Verify DB state changed to Healthy
         var verifyScope = Services.CreateAsyncScope();
@@ -219,6 +222,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             "/api/v1/deployments/apply",
             content,
@@ -234,8 +238,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
             Times.Once
         );
 
-        // Give work queue time to process DeploymentSucceededWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Verify deployment status is Healthy
         var verifyScope = Services.CreateAsyncScope();
@@ -301,6 +306,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         );
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             $"/api/v1/deployments/apply",
             content,
@@ -316,8 +322,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
             Times.Once
         );
 
-        // Give work queue time to process DeploymentSucceededWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Verify new container was linked to deployment
         var verifyScope = Services.CreateAsyncScope();
@@ -378,6 +385,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             $"/api/v1/deployments/apply",
             content,
@@ -387,8 +395,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         // Assert
         Assert.True(response.IsSuccessStatusCode);
 
-        // Give work queue time to process UpdateDeploymentStatusWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -415,6 +424,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             "/api/v1/deployments/apply",
             content,
@@ -424,8 +434,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         // Assert
         Assert.True(response.IsSuccessStatusCode);
 
-        // Give work queue time to process UpdateDeploymentStatusWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Verify deployment status changed to Failed
         await using var scope = Services.CreateAsyncScope();
@@ -456,6 +467,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             "/api/v1/deployments/apply",
             content,
@@ -465,8 +477,9 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         // Assert
         Assert.True(response.IsSuccessStatusCode);
 
-        // Give work queue time to process UpdateDeploymentStatusWorkItem
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Verify deployment status is Failed
         await using var scope = Services.CreateAsyncScope();

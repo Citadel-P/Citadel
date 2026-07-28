@@ -20,6 +20,7 @@ export const Platforms = ({
   >;
 }) => {
   const navigate = useNavigate();
+
   return (
     <>
       {isLoading && <Loader />}
@@ -39,8 +40,8 @@ export const Platforms = ({
                 className="font-semibold underline hover:no-underline ml-1"
                 onClick={() => navigate('/platforms/add')}>
                 new platform
-              </button>&nbsp;
-              to get started.
+              </button>
+              &nbsp; to get started.
             </span>
           </AlertMessage>
         ))}

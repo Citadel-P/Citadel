@@ -107,6 +107,46 @@ public class AlertRuleCacheTests
         Assert.Single(cache.Current.Get(AlertType.DeploymentAutoUpdated));
     }
 
+    [Fact]
+    public async Task ReloadAsync_RetriesWhenRuleChangesDuringLoad()
+    {
+        var id = Guid.NewGuid();
+        var stale = CreateRule(id, AlertType.PlatformUnreachable, AlertSeverity.Warning);
+        var updated = CreateRule(id, AlertType.PlatformUnreachable, AlertSeverity.Critical);
+        var firstLoad = new TaskCompletionSource<IEnumerable<AlertRule>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var loadCount = 0;
+
+        var repoMock = new Mock<IAlertRuleRepository>();
+        repoMock
+            .Setup(x => x.GetAllAsync(It.IsAny<CancellationToken>()))
+            .Returns(() => Interlocked.Increment(ref loadCount) == 1
+                ? firstLoad.Task
+                : Task.FromResult<IEnumerable<AlertRule>>([updated]));
+        repoMock
+            .Setup(x => x.GetAllChannelsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var uowMock = new Mock<IUnitOfWork>();
+        uowMock.SetupGet(x => x.AlertRules).Returns(repoMock.Object);
+
+        await using var provider = new ServiceCollection()
+            .AddSingleton(uowMock.Object)
+            .BuildServiceProvider();
+        var cache = new AlertRuleCache(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<AlertRuleCache>.Instance);
+
+        var reload = cache.ReloadAsync(TestContext.Current.CancellationToken);
+        cache.Upsert(updated);
+        firstLoad.SetResult([stale]);
+        await reload;
+
+        var rule = Assert.Single(cache.Current.Get(AlertType.PlatformUnreachable));
+        Assert.Equal(AlertSeverity.Critical, rule.Severity);
+        Assert.Equal(2, loadCount);
+    }
+
     private static AlertRuleCache CreateCache()
     {
         var provider = new ServiceCollection().BuildServiceProvider();

@@ -121,21 +121,44 @@ internal sealed class BackupRestoreRunExecutionService(
         BackupRestoreRunExecutionPlan plan,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var channel = Channel.CreateUnbounded<BackupRestoreRunStreamItem>(
-            new UnboundedChannelOptions
+        var channel = Channel.CreateBounded<BackupRestoreRunStreamItem>(
+            new BoundedChannelOptions(256)
             {
                 SingleReader = true,
-                SingleWriter = true
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
             });
+        using var producerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        var producer = Task.Run(
-            () => RunExecutionProducerAsync(plan, channel.Writer, cancellationToken),
-            CancellationToken.None);
+        var producer = RunExecutionProducerAsync(
+            plan,
+            channel.Writer,
+            producerCts.Token);
 
-        await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
-            yield return item;
+        try
+        {
+            await foreach (var item in channel.Reader.ReadAllAsync(producerCts.Token))
+                yield return item;
 
-        await producer;
+            await producer;
+        }
+        finally
+        {
+            await producerCts.CancelAsync();
+            channel.Writer.TryComplete();
+            await ObserveProducerAsync(producer);
+        }
+    }
+
+    private static async Task ObserveProducerAsync(Task producer)
+    {
+        try
+        {
+            await producer;
+        }
+        catch
+        {
+        }
     }
 
     private async Task RunExecutionProducerAsync(

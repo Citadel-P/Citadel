@@ -34,24 +34,7 @@ internal sealed class DeploymentAutoUpdateJob(
         {
             try
             {
-                var deploymentChecks = await imageScanScheduler.LoadDeploymentChecksAsync(cancellationToken);
-                foreach (var deploymentCheck in deploymentChecks)
-                {
-                    try
-                    {
-                        await syncBarrier.WaitForAsync<DeploymentImageScannerJob>(deploymentCheck.Deployment.PlatformId, cancellationToken);
-
-                        var result = await CheckDeploymentAsync(deploymentCheck, cancellationToken);
-                        if (result is not null)
-                        {
-                            await dbWorkQueue.EnqueueAsync(result, cancellationToken);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Auto-update failed for deployment {DeploymentId}", deploymentCheck.Deployment.Id);
-                    }
-                }
+                await RunOnceAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -59,6 +42,31 @@ internal sealed class DeploymentAutoUpdateJob(
             }
 
             await Task.Delay(TimeSpan.FromHours(CheckIntervalInHours), cancellationToken);
+        }
+    }
+
+    internal async Task RunOnceAsync(CancellationToken cancellationToken)
+    {
+        var deploymentChecks = await imageScanScheduler.LoadDeploymentChecksAsync(cancellationToken);
+        foreach (var deploymentCheck in deploymentChecks)
+        {
+            try
+            {
+                await syncBarrier.WaitForAsync<DeploymentImageScannerJob>(
+                    deploymentCheck.Deployment.PlatformId,
+                    cancellationToken);
+
+                var result = await CheckDeploymentAsync(deploymentCheck, cancellationToken);
+                if (result is not null)
+                    await dbWorkQueue.EnqueueAsync(result, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Auto-update failed for deployment {DeploymentId}",
+                    deploymentCheck.Deployment.Id);
+            }
         }
     }
 

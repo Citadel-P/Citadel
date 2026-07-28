@@ -9,15 +9,17 @@ internal interface IDeploymentStreamManager : IStreamGroupManager
     Task SendDeploymentInfo(Deployment deployment, string action = "update");
 }
 
-internal class DeploymentStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IDeploymentStreamManager
+internal class DeploymentStreamManager(
+    IApplicationHubDispatcher dispatcher,
+    IPlatformStreamManager platformStreamManager) : BaseStreamManager<StreamContext>, IDeploymentStreamManager
 {
     public Task SendDeploymentInfo(Deployment deployment, string action = "update")
     {
-        if (streams.IsEmpty)
-        {
-            return Task.CompletedTask;
-        }
+        var deploymentUpdate = streams.IsEmpty
+            ? Task.CompletedTask
+            : dispatcher.SendDeploymentInfo(deployment, action);
+        var platformUpdate = platformStreamManager.RefreshPlatform(deployment.PlatformId);
 
-        return dispatcher.SendDeploymentInfo(deployment, action);
+        return Task.WhenAll(deploymentUpdate, platformUpdate);
     }
 }

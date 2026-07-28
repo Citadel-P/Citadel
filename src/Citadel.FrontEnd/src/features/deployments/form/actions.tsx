@@ -1,12 +1,12 @@
 import { RefreshCw, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import { DeploymentView } from '@/api/generated/api.types';
 import { deployAction, pauseAction, startAction, stopAction, useVariables } from '../actions';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { hasDeploymentUpdateAvailable } from '../update-status';
+import { canCheckDeploymentUpdates, hasDeploymentUpdateAvailable } from '../update-status';
 import { getApiErrorDetail } from '@/lib/api-errors';
 
 export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>()
@@ -25,12 +25,11 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const multiSelect = Array.isArray(resources) && resources.length > 1;
       const { mutateAsync, isPending } = useMutate('checkDeploymentUpdates');
-      const canExecute = !!selected && !multiSelect;
-      const resourcePending = selected?.controlState === ResourceControlState.Processing;
+      const canExecute = canCheckDeploymentUpdates(selected) && !multiSelect;
 
       return {
         canExecute,
-        isPending: isPending || resourcePending,
+        isPending,
         run: async () => {
           if (!selected || !canExecute) return;
 

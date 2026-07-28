@@ -6,4 +6,6 @@ public sealed record PlatformStatsResult(
     int VolumeCount,
     int NetworkCount,
     string AgentVersion,
-    DockerPlatformStat PlatformStat);
+    DockerPlatformStat PlatformStat,
+    long? ImageUsedBytes = null,
+    long? VolumeUsedBytes = null);

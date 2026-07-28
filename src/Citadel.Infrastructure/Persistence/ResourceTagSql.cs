@@ -27,6 +27,16 @@ internal static class ResourceTagSql
             ), '[]'::jsonb)::text AS TagsJson
             """;
 
+    internal const string PlatformTagAggregate = """
+        COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('id', t.Id, 'name', t.Name, 'color', t.Color) ORDER BY t.Name)
+            FROM ResourceTags rt
+            JOIN Tags t ON t.Id = rt.TagId
+            WHERE rt.ResourceType = @TagResourceType
+              AND rt.ResourceId = p.Id
+        ), '[]'::jsonb)::text AS TagsJson
+        """;
+
     internal static string FilterPredicate(string resourceAlias)
         => $"""
             (@TagIdsLength = 0 OR EXISTS (
@@ -37,6 +47,16 @@ internal static class ResourceTagSql
                   AND rtf.TagId = ANY(@TagIds)
             ))
             """;
+
+    internal const string PlatformTagFilterPredicate = """
+        (@TagIdsLength = 0 OR EXISTS (
+            SELECT 1
+            FROM ResourceTags rtf
+            WHERE rtf.ResourceType = @TagResourceType
+              AND rtf.ResourceId = p.Id
+              AND rtf.TagId = ANY(@TagIds)
+        ))
+        """;
 
     internal static string InsertTagsCte(string insertedResourceCte, string resourceAlias)
         => $"""

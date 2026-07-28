@@ -590,6 +590,9 @@ namespace Infrastructure.Migrations.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     cpuusage = table.Column<double>(type: "double precision", nullable: false),
                     created = table.Column<long>(type: "bigint", nullable: false),
+                    disktotalbytes = table.Column<long>(type: "bigint", nullable: true),
+                    diskusage = table.Column<double>(type: "double precision", nullable: true),
+                    diskusedbytes = table.Column<long>(type: "bigint", nullable: true),
                     memoryusage = table.Column<double>(type: "double precision", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     rxbytes = table.Column<double>(type: "double precision", nullable: false),
@@ -1389,6 +1392,41 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "stackwebhookdeployqueue",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    attempts = table.Column<int>(type: "integer", nullable: false),
+                    availableat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    branch = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    dispatchedcommitsha = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    expectedspecfingerprint = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    expectedstackreleaseid = table.Column<Guid>(type: "uuid", nullable: false),
+                    gitrepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    lasterror = table.Column<string>(type: "text", maxLength: 2000, nullable: true),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    stackid = table.Column<Guid>(type: "uuid", nullable: false),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_stackwebhookdeployqueue", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_stackwebhookdeployqueue_gitrepositories_gitrepositoryid",
+                        column: x => x.gitrepositoryid,
+                        principalTable: "gitrepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_stackwebhookdeployqueue_stacks_stackid",
+                        column: x => x.stackid,
+                        principalTable: "stacks",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "containers",
                 columns: table => new
                 {
@@ -1946,7 +1984,12 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.InsertData(
                 table: "alertrules",
                 columns: new[] { "id", "cooldownseconds", "createdat", "createdbyactorid", "description", "limitedto", "name", "quiethours", "requiredmatches", "severity", "threshold", "type" },
-                values: new object[] { new Guid("019d0000-0001-7000-8001-000000000022"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "RAM > 80% - Platform", "[]", 3, "Warning", 80.0, "PlatformRamHigh" });
+                values: new object[,]
+                {
+                    { new Guid("019d0000-0001-7000-8001-000000000022"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "RAM > 80% - Platform", "[]", 3, "Warning", 80.0, "PlatformRamHigh" },
+                    { new Guid("019d0000-0001-7000-8001-000000000023"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Disk > 70% - Platform", "[]", 3, "Warning", 70.0, "PlatformDiskHigh" },
+                    { new Guid("019d0000-0001-7000-8001-000000000024"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Disk > 90% - Platform", "[]", 3, "Critical", 90.0, "PlatformDiskHigh" }
+                });
 
             migrationBuilder.InsertData(
                 table: "permissions",
@@ -2589,6 +2632,11 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_containerstats_created",
+                table: "containerstats",
+                column: "created");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_deployments_controltriggeredby",
                 table: "deployments",
                 column: "controltriggeredby");
@@ -2831,6 +2879,11 @@ namespace Infrastructure.Migrations.Migrations
                 .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_platformstats_created",
+                table: "platformstats",
+                column: "created");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_platformstats_platformid_created",
                 table: "platformstats",
                 columns: new[] { "platformid", "created" },
@@ -2991,6 +3044,21 @@ namespace Infrastructure.Migrations.Migrations
                 .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_stackwebhookdeployqueue_gitrepositoryid",
+                table: "stackwebhookdeployqueue",
+                column: "gitrepositoryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_stackwebhookdeployqueue_ready",
+                table: "stackwebhookdeployqueue",
+                columns: new[] { "status", "availableat", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_stackwebhookdeployqueue_stackid",
+                table: "stackwebhookdeployqueue",
+                column: "stackid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_tags_createdbyactorid",
                 table: "tags",
                 column: "createdbyactorid");
@@ -3141,6 +3209,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "stackreleasevolumebindings");
+
+            migrationBuilder.DropTable(
+                name: "stackwebhookdeployqueue");
 
             migrationBuilder.DropTable(
                 name: "usermfarecoverycodes");

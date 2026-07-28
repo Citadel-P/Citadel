@@ -1208,6 +1208,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .WithName("listBackupPolicies");
 
+        backupPolicies.MapGet("platform-summaries", BackupPolicies.GetPlatformSummaries)
+            .WithSummary("Get backup policy summaries for platforms")
+            .Produces<PlatformBackupSummariesView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("getPlatformBackupSummaries");
+
         backupPolicies.MapGet("{id:guid}", BackupPolicies.Get)
             .WithSummary("Get backup policy")
             .Produces<BackupPolicyView>()

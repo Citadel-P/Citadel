@@ -22,6 +22,7 @@ internal sealed class CheckStackUpdatesHandler(
     IImageCheckBuilder imageCheckBuilder,
     IImageDigestScanner imageDigestScanner,
     ManualStackUpdateEvaluator stackUpdateEvaluator,
+    IManualStackDeployedImageResolver deployedImageResolver,
     IUpdateCheckLeaseManager leaseManager,
     IRepoCacheManager repoCacheManager,
     IGitCliRepository gitCliRepository,
@@ -128,6 +129,15 @@ internal sealed class CheckStackUpdatesHandler(
         {
             await stackStreamManager.SendStackInfo(stack);
 
+            var deployedDigestsResult = await deployedImageResolver.ResolveAsync(
+                stack,
+                checks,
+                cancellationToken);
+            if (deployedDigestsResult.IsFailure(out var deployedDigestsError, out var deployedDigests))
+            {
+                return Result.Failure<Stack>(deployedDigestsError);
+            }
+
             var digests = new Dictionary<ImageKey, string>();
             foreach (var scan in scanTasks)
             {
@@ -144,7 +154,8 @@ internal sealed class CheckStackUpdatesHandler(
                 stack.StackUpdateState,
                 checks,
                 digests,
-                timeProvider.GetUtcNow().UtcDateTime);
+                timeProvider.GetUtcNow().UtcDateTime,
+                deployedDigests);
             return await PersistStackStateAsync(
                 stack,
                 evaluation.State,

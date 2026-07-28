@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Domain.Contracts.Interfaces;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
@@ -28,11 +29,16 @@ internal interface IGrpcClientFactory
     StackServiceClient GetStackClient(string address);
 }
 
-internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClientFactory
+internal sealed class GrpcClientFactory(params Interceptor[] interceptors)
+    : IGrpcClientFactory, IPlatformConnectionCache, IDisposable
 {
     private readonly ConcurrentDictionary<string, GrpcChannel> _channelCache = new();
     private readonly ConcurrentDictionary<(Type, string), object> _clientCache = new();
     private readonly Interceptor[] _interceptors = interceptors ?? [];
+    private readonly Lock _gate = new();
+
+    internal int ChannelCount => _channelCache.Count;
+    internal int ClientCount => _clientCache.Count;
 
     public PlatformServiceClient GetPlatformClient(string address) =>
         GetOrCreateClient(NormalizeAddress(address), invoker => new PlatformServiceClient(invoker));
@@ -57,17 +63,50 @@ internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClien
 
     private TClient GetOrCreateClient<TClient>(string address, Func<CallInvoker, TClient> factory)
     {
-        // Cache channel per address
-        var channel = _channelCache.GetOrAdd(address, CreateChannel);
+        using (_gate.EnterScope())
+        {
+            var channel = _channelCache.GetOrAdd(address, CreateChannel);
 
-        // Wrap channel in CallInvoker with interceptors
-        CallInvoker invoker = channel.CreateCallInvoker();
-        if (_interceptors.Length > 0)
-            invoker = invoker.Intercept(_interceptors);
+            CallInvoker invoker = channel.CreateCallInvoker();
+            if (_interceptors.Length > 0)
+                invoker = invoker.Intercept(_interceptors);
 
-        // Combine client type + address as cache key
-        var key = (typeof(TClient), address);
-        return (TClient)_clientCache.GetOrAdd(key, _ => factory(invoker));
+            var key = (typeof(TClient), address);
+            return (TClient)_clientCache.GetOrAdd(key, _ => factory(invoker));
+        }
+    }
+
+    public void Evict(string address)
+    {
+        GrpcChannel? channel = null;
+        var normalizedAddress = NormalizeAddress(address);
+
+        using (_gate.EnterScope())
+        {
+            foreach (var key in _clientCache.Keys)
+            {
+                if (string.Equals(key.Item2, normalizedAddress, StringComparison.Ordinal))
+                    _clientCache.TryRemove(key, out _);
+            }
+
+            _channelCache.TryRemove(normalizedAddress, out channel);
+        }
+
+        channel?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        GrpcChannel[] channels;
+        using (_gate.EnterScope())
+        {
+            channels = [.. _channelCache.Values];
+            _clientCache.Clear();
+            _channelCache.Clear();
+        }
+
+        foreach (var channel in channels)
+            channel.Dispose();
     }
 
     private static GrpcChannel CreateChannel(string address)

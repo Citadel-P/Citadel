@@ -14,3 +14,14 @@ public sealed record BackupCoverageView(
     DateTimeOffset? NextRunAt);
 
 public sealed record VolumeBackupCoverage(VolumeBackupCoverageKey Resource, BackupCoverageView Coverage);
+
+public sealed record PlatformBackupSummary(
+    Guid PlatformId,
+    int PolicyCount,
+    int EnabledPolicyCount,
+    int DockerVolumePolicyCount,
+    int StackPolicyCount,
+    int DeploymentPolicyCount,
+    int AttentionPolicyCount,
+    BackupRunStatus? LastRunStatus,
+    DateTimeOffset? LastRunAt);

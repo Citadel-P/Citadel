@@ -12,6 +12,7 @@ using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
@@ -26,6 +27,7 @@ internal sealed class StackDriftMonitorJob(
     IActivityStreamManager activityStreamManager,
     IDelayWithJitterService delayWithJitterService,
     ILicenseEntitlementService entitlementService,
+    IContainerEventBroadcaster containerEventBroadcaster,
     ILogger<StackDriftMonitorJob> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(5);
@@ -35,18 +37,49 @@ internal sealed class StackDriftMonitorJob(
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
+        var containerEvents = containerEventBroadcaster.AddSubscriber();
+
         try
         {
             await RunCheckOnce(cancellationToken);
 
             using var timer = new PeriodicTimer(CheckInterval);
-            while (await timer.WaitForNextTickAsync(cancellationToken))
+            var timerTask = timer.WaitForNextTickAsync(cancellationToken).AsTask();
+            var eventTask = containerEvents.WaitToReadAsync(cancellationToken).AsTask();
+
+            while (!cancellationToken.IsCancellationRequested)
             {
-                await RunCheckOnce(cancellationToken);
+                await Task.WhenAny(timerTask, eventTask);
+
+                if (timerTask.IsCompleted)
+                {
+                    if (!await timerTask)
+                        break;
+
+                    await RunCheckOnce(cancellationToken);
+                    timerTask = timer.WaitForNextTickAsync(cancellationToken).AsTask();
+                }
+
+                if (eventTask.IsCompleted)
+                {
+                    if (!await eventTask)
+                        break;
+
+                    while (containerEvents.TryRead(out var containerEvent))
+                    {
+                        await HandleContainerEventSafelyAsync(containerEvent, cancellationToken);
+                    }
+
+                    eventTask = containerEvents.WaitToReadAsync(cancellationToken).AsTask();
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        finally
+        {
+            containerEventBroadcaster.RemoveSubscriber(containerEvents);
         }
     }
 
@@ -77,67 +110,127 @@ internal sealed class StackDriftMonitorJob(
 
         foreach (var stack in stacks)
         {
-            try
+            await CheckStackSafelyAsync(stack, cancellationToken);
+        }
+    }
+
+    private async Task HandleContainerEventSafelyAsync(
+        ContainerEvent containerEvent,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await HandleContainerEventAsync(containerEvent, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Stack drift event check failed for container {ContainerId} on platform {PlatformId}",
+                containerEvent.ContainerId,
+                containerEvent.PlatformId);
+        }
+    }
+
+    internal async Task HandleContainerEventAsync(
+        ContainerEvent containerEvent,
+        CancellationToken cancellationToken)
+    {
+        if (!IsDriftEvent(containerEvent.Action)
+            || !await entitlementService.IsEnabledAsync(
+                LicenseCapability.OperationalGuardrails,
+                cancellationToken))
+        {
+            return;
+        }
+
+        var stack = await GetAutoFixStackAsync(containerEvent, cancellationToken);
+        if (stack is not null)
+        {
+            await CheckStackSafelyAsync(stack, cancellationToken);
+        }
+    }
+
+    private async Task CheckStackSafelyAsync(
+        StackDriftStack stack,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CheckStackAsync(stack, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Stack drift check failed for stack {StackId}", stack.Id);
+        }
+    }
+
+    private async Task CheckStackAsync(
+        StackDriftStack stack,
+        CancellationToken cancellationToken)
+    {
+        var report = await driftChecker.CheckAsync(stack, cancellationToken);
+        var fingerprint = StackDriftHelpers.Fingerprint(report);
+
+        if (!report.HasDrift)
+        {
+            if (stack.Status == StackReleaseStatus.Degraded)
             {
-                var report = await driftChecker.CheckAsync(stack, cancellationToken);
-                var fingerprint = StackDriftHelpers.Fingerprint(report);
-
-                if (report.HasDrift)
-                {
-                    await PersistDriftStateAsync(stack.Id, report, fingerprint, cancellationToken);
-
-                    if (stack.DriftPolicy.Mode == StackDriftMode.AutoFix)
-                    {
-                        var result = await reconciler.ReconcileAsync(stack.Id, cancellationToken);
-
-                        await dbQueue.EnqueueAndWaitAsync(new StackReconciliationResultWorkItem(
-                            stack.Id,
-                            result,
-                            fingerprint,
-                            notificationQueue,
-                            activityStreamManager), cancellationToken);
-
-                        if (result.AfterReport is not null)
-                        {
-                            await PersistDriftStateAsync(
-                                stack.Id,
-                                result.AfterReport,
-                                StackDriftHelpers.Fingerprint(result.AfterReport),
-                                fingerprint,
-                                cancellationToken);
-                        }
-
-                        if (stack.DriftPolicy.AlertOnDrift)
-                        {
-                            if (result.Status == StackReconciliationStatus.Reconciled)
-                            {
-                                await EmitAutoReconciledAlertAsync(stack, report, fingerprint, result, cancellationToken);
-                            }
-                            else
-                            {
-                                await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
-                            }
-                        }
-                    }
-                    else if (stack.DriftPolicy.AlertOnDrift)
-                    {
-                        await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
-                    }
-                }
-                else
-                {
-                    if (stack.Status != StackReleaseStatus.Degraded)
-                    {
-                        continue;
-                    }
-
-                    await PersistDriftStateAsync(stack.Id, report, fingerprint, cancellationToken);
-                }
+                await PersistDriftStateAsync(stack.Id, report, fingerprint, cancellationToken);
             }
-            catch (Exception ex)
+
+            return;
+        }
+
+        await PersistDriftStateAsync(stack.Id, report, fingerprint, cancellationToken);
+
+        if (stack.DriftPolicy.Mode != StackDriftMode.AutoFix)
+        {
+            if (stack.DriftPolicy.AlertOnDrift)
             {
-                logger.LogWarning(ex, "Stack drift check failed for stack {StackId}", stack.Id);
+                await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
             }
+
+            return;
+        }
+
+        var result = await reconciler.ReconcileAsync(stack.Id, cancellationToken);
+
+        await dbQueue.EnqueueAndWaitAsync(new StackReconciliationResultWorkItem(
+            stack.Id,
+            result,
+            fingerprint,
+            notificationQueue,
+            activityStreamManager), cancellationToken);
+
+        if (result.AfterReport is not null)
+        {
+            await PersistDriftStateAsync(
+                stack.Id,
+                result.AfterReport,
+                StackDriftHelpers.Fingerprint(result.AfterReport),
+                fingerprint,
+                cancellationToken);
+        }
+
+        if (!stack.DriftPolicy.AlertOnDrift)
+            return;
+
+        if (result.Status == StackReconciliationStatus.Reconciled)
+        {
+            await EmitAutoReconciledAlertAsync(stack, report, fingerprint, result, cancellationToken);
+        }
+        else
+        {
+            await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
         }
     }
 
@@ -148,6 +241,46 @@ internal sealed class StackDriftMonitorJob(
         var stacks = await unitOfWork.Stacks.GetDriftMonitorStacksAsync(cancellationToken);
         return [.. stacks];
     }
+
+    private async Task<StackDriftStack?> GetAutoFixStackAsync(
+        ContainerEvent containerEvent,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var container = await unitOfWork.Containers.GetContainerInfoAsync(
+            containerEvent.ContainerId,
+            cancellationToken);
+
+        if (container?.StackId is not { } stackId
+            || container.PlatformId != containerEvent.PlatformId
+            || !IsStoppedOrPaused(container.State))
+        {
+            return null;
+        }
+
+        var stack = await unitOfWork.Stacks.GetDriftStackAsync(stackId, cancellationToken);
+        if (stack is null
+            || stack.DriftPolicy.Mode != StackDriftMode.AutoFix
+            || stack.ControlState != ResourceControlState.Idle
+            || stack.Status != StackReleaseStatus.Healthy
+                && stack.Status != StackReleaseStatus.Degraded)
+        {
+            return null;
+        }
+
+        return stack;
+    }
+
+    private static bool IsDriftEvent(string action)
+        => action.Equals("die", StringComparison.OrdinalIgnoreCase)
+            || action.Equals("pause", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsStoppedOrPaused(ContainerStateStatus state)
+        => state is ContainerStateStatus.Exited
+            or ContainerStateStatus.Dead
+            or ContainerStateStatus.Offline
+            or ContainerStateStatus.Paused;
 
     private ValueTask PersistDriftStateAsync(
         Guid stackId,

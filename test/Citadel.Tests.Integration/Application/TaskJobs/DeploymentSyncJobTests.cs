@@ -15,6 +15,7 @@ namespace Tests.Integration.Application.TaskJobs;
 public class DeploymentSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
+    private readonly ObservableDbWorkQueue dbWorkQueue = new();
     private Guid platformId;
     private Guid deploymentId;
 
@@ -25,6 +26,8 @@ public class DeploymentSyncJobTests(PostgresTestFixture fixture) : IntegrationTe
         services.AddHostedService<DeploymentSyncJob>();
         services.AddHostedService<DbWriteWorker>();
         services.AddSingleton<IPlatformHealthBroadCaster>(broadcaster);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(dbWorkQueue);
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -44,11 +47,13 @@ public class DeploymentSyncJobTests(PostgresTestFixture fixture) : IntegrationTe
     [Fact]
     public async Task Platform_Offline_Event_Should_Mark_Deployment_Degraded()
     {
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(
             new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();

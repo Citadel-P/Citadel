@@ -548,7 +548,7 @@ jobs:
               -class Tests.Integration.Application.Features.Permissions.HasPermissionForAllIntegrationTests
               -class Tests.Integration.Application.Features.Lookup.LookupTests
               -class Tests.Integration.Application.Features.Search.GlobalSearchTests
-              -class Tests.Integration.WebApi.Hubs.ApplicationHubAuthorizationTests
+              -class Tests.Integration.WebApi.Hubs.ApplicationHubAuthorizationTests*
 
     steps:
       - name: Checkout repository
@@ -809,6 +809,7 @@ jobs:
           testcontainers/ryuk:0.14.0
           postgres:17.5-alpine
           codeberg.org/forgejo/forgejo:16.0.1-rootless
+          busybox:1.36.1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

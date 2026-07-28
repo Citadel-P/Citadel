@@ -31,6 +31,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     private readonly Mock<IOptions<JobConfiguration>> configMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
     private readonly Mock<IContainerStreamManager> streamManagerMock = new();
+    private readonly ObservableDbWorkQueue dbWorkQueue = new();
 
     private Guid platformId;
     private const int batchSize = 2;
@@ -50,6 +51,8 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         services.AddSingleton(containerConnector.Object);
         services.AddSingleton(containerFactoryMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(broadcaster);
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(dbWorkQueue);
 
         configMock.Setup(x => x.Value).Returns(new JobConfiguration()
         {
@@ -89,10 +92,12 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken); // wait for jobs to process
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -134,9 +139,12 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: Stale container should be removed
         await using var assertScope = Services.CreateAsyncScope();
@@ -167,9 +175,12 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { "new-id", newDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: New container should be added
         await using var scope = Services.CreateAsyncScope();
@@ -212,10 +223,6 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         notificationQueue
             .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
-        var dbWorkQueue = new Mock<IDbWorkQueue>();
-        dbWorkQueue
-            .Setup(queue => queue.EnqueueAsync(It.IsAny<IDbWorkItem>(), It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.CompletedTask);
 
         await using (var syncScope = Services.CreateAsyncScope())
         {
@@ -230,7 +237,6 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
                 },
                 cache,
                 Mock.Of<IContainerStreamManager>(),
-                dbWorkQueue.Object,
                 Mock.Of<IDeploymentStreamManager>(),
                 Mock.Of<IStackStreamManager>(),
                 Mock.Of<ILogger<ContainerSyncJob>>());
@@ -340,9 +346,12 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { containerId, updatedDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: Container should be updated
         await using var scope = Services.CreateAsyncScope();
@@ -357,9 +366,12 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     public async Task SetsAllContainersOffline_WhenPlatformGoesOffline()
     {
         // Act
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             cancellationToken: TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert: All containers should be offline
         await using var scope = Services.CreateAsyncScope();

@@ -18,7 +18,6 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -53,18 +52,17 @@ public sealed record WebhookReceiveResult(bool Accepted, string Status, Guid Req
 internal sealed class ReceiveWebhookHandler(
     IUnitOfWork unitOfWork,
     ChannelWriter<GitRepoSyncRequest> gitSyncWriter,
+    ChannelWriter<StackWebhookDeploySignal> stackDeployWriter,
     INotificationQueue notificationQueue,
     IGitRepositoryStreamManager gitRepositoryStreamManager,
     IActivityStreamManager activityStreamManager,
     IAlertService alertService,
-    IApplyStackService applyStackService,
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
     IRepoCacheManager repoCacheManager,
     IGitCliRepository gitCliRepository,
     IAutomationRunQueueService automationRunQueueService,
-    ILicenseEntitlementService entitlementService,
-    ILoggerFactory loggerFactory) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
+    ILicenseEntitlementService entitlementService) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
     private const int MaxBodyBytes = 1024 * 1024;
     private static readonly TimeSpan GitLabSignedTimestampTolerance = TimeSpan.FromMinutes(5);
@@ -300,9 +298,9 @@ internal sealed class ReceiveWebhookHandler(
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(gitRepositoryStreamManager, repo), cancellationToken);
 
         return WebhookDispatchResult.Queued(
-            new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook),
-            branch.Branch,
-            payload.CommitSha);
+            gitSyncRequest: new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook),
+            dispatchedBranch: branch.Branch,
+            dispatchedCommitSha: payload.CommitSha);
     }
 
     private async Task<WebhookDispatchResult> DispatchStackDeployAsync(
@@ -330,6 +328,9 @@ internal sealed class ReceiveWebhookHandler(
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
         var resolvedBranch = branch.Branch ?? gitStack.Branch;
+        if (!string.Equals(resolvedBranch, gitStack.Branch, StringComparison.Ordinal))
+            return WebhookDispatchResult.NoOp("Branch mismatch");
+
         var relevance = await ResolveStackWebhookChangeRelevanceAsync(stack, gitStack, repo, resolvedBranch, payload, cancellationToken);
         if (!relevance.Relevant)
             return WebhookDispatchResult.NoOp(relevance.Reason ?? "No relevant path changes");
@@ -342,10 +343,10 @@ internal sealed class ReceiveWebhookHandler(
         if (gitStack.UpdateBehavior == StackUpdateBehavior.Notify)
         {
             return WebhookDispatchResult.Queued(
-                new GitRepoSyncRequest(repo.Id, resolvedBranch, GitRepoSyncTrigger.Webhook),
-                resolvedBranch,
-                dispatchedCommit,
-                "Stack update notification queued");
+                gitSyncRequest: new GitRepoSyncRequest(repo.Id, resolvedBranch, GitRepoSyncTrigger.Webhook),
+                dispatchedBranch: resolvedBranch,
+                dispatchedCommitSha: dispatchedCommit,
+                reason: "Stack update notification queued");
         }
 
         var entitlementNoOp = await GetEntitlementNoOpAsync(
@@ -354,37 +355,19 @@ internal sealed class ReceiveWebhookHandler(
         if (entitlementNoOp is not null)
             return entitlementNoOp;
 
-        var logger = loggerFactory.CreateLogger("WebhookStackDeploy");
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var item in applyStackService.ApplyAsync(
-                    stack.Id,
-                    Constants.SystemId,
-                    serviceNames: null,
-                    pullImages: true,
-                    recreate: false,
-                    waitForCompletion: true,
-                    operation: StackApplyOperation.Apply,
-                    previousStackSnapshot: null,
-                    CancellationToken.None))
-                {
-                    if (!string.IsNullOrWhiteSpace(item.Message))
-                    {
-                        await ProcessStackWebhookDeployFailureAlertAsync(stack, repo, resolvedBranch, item.Message, CancellationToken.None);
-                        return;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Webhook stack deploy failed for stack {StackId}", stack.Id);
-                await ProcessStackWebhookDeployFailureAlertAsync(stack, repo, resolvedBranch, ex.Message, CancellationToken.None);
-            }
-        }, CancellationToken.None);
-
-        return WebhookDispatchResult.Queued(null, resolvedBranch, dispatchedCommit);
+        var release = stack.CurrentStackRelease!;
+        return WebhookDispatchResult.Queued(
+            gitSyncRequest: null,
+            stackDeployQueueItem: StackWebhookDeployQueueItem.Create(
+                stack.Id,
+                repo.Id,
+                release.Id,
+                resolvedBranch,
+                StackWebhookDeployFingerprint.Compute(gitStack),
+                dispatchedCommit,
+                DateTime.UtcNow),
+            dispatchedBranch: resolvedBranch,
+            dispatchedCommitSha: dispatchedCommit);
     }
 
     private async Task<WebhookDispatchResult> DispatchAutomationActionRunAsync(
@@ -578,7 +561,10 @@ internal sealed class ReceiveWebhookHandler(
             await buildProjectStreamManager.SendBuildProjectInfo(updatedProject, latestRun: run);
         await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
 
-        return WebhookDispatchResult.Queued(null, resolvedBranch, dispatchedCommit);
+        return WebhookDispatchResult.Queued(
+            gitSyncRequest: null,
+            dispatchedBranch: resolvedBranch,
+            dispatchedCommitSha: dispatchedCommit);
     }
 
     private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveBuildWebhookChangeRelevanceAsync(
@@ -676,7 +662,8 @@ internal sealed class ReceiveWebhookHandler(
         ActivityStatus activityStatus,
         CancellationToken cancellationToken)
     {
-        if (!TryResolveActivityEvent(
+        ActivityEvent? activity = null;
+        TryResolveActivityEvent(
                 command,
                 target,
                 requestId,
@@ -686,14 +673,31 @@ internal sealed class ReceiveWebhookHandler(
                 activityStatus,
                 dispatch.DispatchedBranch,
                 dispatch.DispatchedCommitSha,
-                out var activity))
+                out activity);
+
+        if (activity is null && dispatch.StackDeployQueueItem is null)
             return;
 
-        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        if (activity is not null)
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
+        if (status.Equals("queued", StringComparison.OrdinalIgnoreCase)
+            && dispatch.StackDeployQueueItem is { } queueItem)
+        {
+            await unitOfWork.StackWebhookDeployQueue.AddAsync(queueItem, cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
-        await notificationQueue.EnqueueAsync(
-            new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(unitOfWork, cancellationToken)),
-            cancellationToken);
+
+        if (dispatch.StackDeployQueueItem is { } persistedQueueItem)
+            stackDeployWriter.TryWrite(new StackWebhookDeploySignal(persistedQueueItem.Id));
+
+        if (activity is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(unitOfWork, cancellationToken)),
+                cancellationToken);
+        }
 
         if (status.Equals("queued", StringComparison.OrdinalIgnoreCase)
             && dispatch.GitSyncRequest is { } syncRequest)
@@ -723,31 +727,6 @@ internal sealed class ReceiveWebhookHandler(
             Webhooks: [snapshot]);
 
         return alertService.ProcessAsync(alertType, context, cancellationToken);
-    }
-
-    private Task ProcessStackWebhookDeployFailureAlertAsync(
-        Stack stack,
-        GitRepository repository,
-        string branch,
-        string reason,
-        CancellationToken cancellationToken)
-    {
-        var context = new AlertEvaluationContext(
-            UtcNow: DateTime.UtcNow,
-            Platforms: [],
-            Deployments: [],
-            Stacks: [],
-            StackGitWebhookDeployFailures:
-            [
-                new StackGitWebhookDeployFailureAlertSnapshot(
-                    stack.Id,
-                    stack.Name,
-                    repository.Name,
-                    branch,
-                    reason)
-            ]);
-
-        return alertService.ProcessAsync(AlertType.WebhookStackGitDeployFailed, context, cancellationToken);
     }
 
     private static WebhookAlertSnapshot? CreateWebhookAlertSnapshot(
@@ -1286,15 +1265,17 @@ internal sealed class ReceiveWebhookHandler(
         string Status,
         string? Reason,
         GitRepoSyncRequest? GitSyncRequest = null,
+        StackWebhookDeployQueueItem? StackDeployQueueItem = null,
         string? DispatchedBranch = null,
         string? DispatchedCommitSha = null)
     {
         public static WebhookDispatchResult Queued(
             GitRepoSyncRequest? gitSyncRequest = null,
+            StackWebhookDeployQueueItem? stackDeployQueueItem = null,
             string? dispatchedBranch = null,
             string? dispatchedCommitSha = null,
             string? reason = null)
-            => new("queued", reason, gitSyncRequest, dispatchedBranch, dispatchedCommitSha);
+            => new("queued", reason, gitSyncRequest, stackDeployQueueItem, dispatchedBranch, dispatchedCommitSha);
 
         public static WebhookDispatchResult NoOp(string reason) => new("noop", reason);
     }

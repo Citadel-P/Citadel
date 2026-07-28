@@ -53,6 +53,10 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         Assert.Equal(1, target.GetProperty("deploymentCount").GetInt64());
         Assert.Equal(1, target.GetProperty("stackCount").GetInt64());
+        Assert.Equal(1, target.GetProperty("deploymentStatusCounts").GetProperty("total").GetInt64());
+        Assert.Equal(1, target.GetProperty("deploymentStatusCounts").GetProperty("inProgress").GetInt64());
+        Assert.Equal(1, target.GetProperty("stackStatusCounts").GetProperty("total").GetInt64());
+        Assert.Equal(1, target.GetProperty("stackStatusCounts").GetProperty("inProgress").GetInt64());
     }
 
     [Fact]
@@ -73,6 +77,8 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
         Assert.Equal(platformId, platform.Id);
         Assert.Equal(1, platform.DeploymentCount);
         Assert.Equal(1, platform.StackCount);
+        Assert.Equal(1, platform.DeploymentStatusCounts.InProgress);
+        Assert.Equal(1, platform.StackStatusCounts.InProgress);
         Assert.Contains(platform.Tags, tag => tag.Id == platformTag.Id);
     }
 

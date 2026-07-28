@@ -4,6 +4,8 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace Infrastructure.Persistence;
 
@@ -67,35 +69,50 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
             transaction: tx());
     }
 
-    public Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken)
+    public async Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken)
     {
-        const string sql = """  
-            INSERT INTO ContainerStats
-            (Id, ContainerId, Created, MemoryActive, MemoryCache, CpuUsage, MemoryLimit, RxBytes, TxBytes)
-            VALUES
-            {0}   
-         """;
+        _ = tx();
+        if (db is not NpgsqlConnection connection)
+            throw new InvalidOperationException("Container statistics require a PostgreSQL connection.");
 
-        var parameters = new DynamicParameters();
-        var valueRows = new List<string>();
-        int i = 0;
+        await using var importer = await connection.BeginBinaryImportAsync(
+            """
+            COPY ContainerStats
+                (Id, ContainerId, Created, MemoryActive, MemoryCache, CpuUsage, MemoryLimit, RxBytes, TxBytes)
+            FROM STDIN (FORMAT BINARY)
+            """,
+            cancellationToken);
 
+        var count = 0;
         foreach (var stat in stats)
         {
-            valueRows.Add($"(@Id{i}, @ContainerId{i}, @Created{i}, @MemoryActive{i}, @MemoryCache{i}, @CpuUsage{i}, @MemoryLimit{i}, @RxBytes{i}, @TxBytes{i})");
-            parameters.Add($"Id{i}", stat.Id);
-            parameters.Add($"ContainerId{i}", stat.ContainerId);
-            parameters.Add($"Created{i}", stat.Created);
-            parameters.Add($"MemoryActive{i}", stat.MemoryActive);
-            parameters.Add($"MemoryCache{i}", stat.MemoryCache);
-            parameters.Add($"CpuUsage{i}", stat.CpuUsage);
-            parameters.Add($"MemoryLimit{i}", stat.MemoryLimit);
-            parameters.Add($"RxBytes{i}", stat.RxBytes);
-            parameters.Add($"TxBytes{i}", stat.TxBytes);
-            i++;
+            await importer.StartRowAsync(cancellationToken);
+            await importer.WriteAsync(stat.Id, NpgsqlDbType.Uuid, cancellationToken);
+            await importer.WriteAsync(stat.ContainerId, NpgsqlDbType.Uuid, cancellationToken);
+            await WriteNullableAsync(importer, stat.Created, NpgsqlDbType.Bigint, cancellationToken);
+            await WriteNullableAsync(importer, stat.MemoryActive, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.MemoryCache, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.CpuUsage, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.MemoryLimit, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.RxBytes, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.TxBytes, NpgsqlDbType.Double, cancellationToken);
+            count++;
         }
 
-        var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(finalSql, parameters, transaction: tx());
+        await importer.CompleteAsync(cancellationToken);
+        return count;
+    }
+
+    private static async ValueTask WriteNullableAsync<T>(
+        NpgsqlBinaryImporter importer,
+        T? value,
+        NpgsqlDbType type,
+        CancellationToken cancellationToken)
+        where T : struct
+    {
+        if (value.HasValue)
+            await importer.WriteAsync(value.Value, type, cancellationToken);
+        else
+            await importer.WriteNullAsync(cancellationToken);
     }
 }

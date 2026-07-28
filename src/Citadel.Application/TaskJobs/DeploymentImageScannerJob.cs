@@ -26,35 +26,7 @@ internal sealed class DeploymentImageScannerJob(
         {
             try
             {
-                var syncedPlatformIds = await LoadPlatformIdsAsync(cancellationToken);
-                var scanTasks = await imageScanScheduler.LoadScanTasksAsync(cancellationToken);
-
-                foreach (var scanTask in scanTasks)
-                {
-                    try
-                    {
-                        var result = await imageDigestScanner.ScanAsync(scanTask, cancellationToken);
-                        if (result.IsFailure(out var error, out var digest))
-                        {
-                            logger.LogWarning(
-                                "Image scan failed for {ImageKey}: {Error}",
-                                scanTask.Key,
-                                error.Message);
-                            continue;
-                        }
-
-                        imageDigestCache.Set(scanTask.Key, digest);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Scan failed for image {ImageKey}", scanTask.Key);
-                    }
-                }
-
-                foreach (var platformId in syncedPlatformIds)
-                {
-                    syncBarrier.MarkSynced<DeploymentImageScannerJob>(platformId);
-                }
+                await ScanOnceAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -63,6 +35,37 @@ internal sealed class DeploymentImageScannerJob(
 
             await Task.Delay(TimeSpan.FromMinutes(CheckIntervalInMinutes), cancellationToken);
         }
+    }
+
+    internal async Task ScanOnceAsync(CancellationToken cancellationToken)
+    {
+        var syncedPlatformIds = await LoadPlatformIdsAsync(cancellationToken);
+        var scanTasks = await imageScanScheduler.LoadScanTasksAsync(cancellationToken);
+
+        foreach (var scanTask in scanTasks)
+        {
+            try
+            {
+                var result = await imageDigestScanner.ScanAsync(scanTask, cancellationToken);
+                if (result.IsFailure(out var error, out var digest))
+                {
+                    logger.LogWarning(
+                        "Image scan failed for {ImageKey}: {Error}",
+                        scanTask.Key,
+                        error.Message);
+                    continue;
+                }
+
+                imageDigestCache.Set(scanTask.Key, digest);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Scan failed for image {ImageKey}", scanTask.Key);
+            }
+        }
+
+        foreach (var platformId in syncedPlatformIds)
+            syncBarrier.MarkSynced<DeploymentImageScannerJob>(platformId);
     }
 
     private async Task<Guid[]> LoadPlatformIdsAsync(CancellationToken cancellationToken)

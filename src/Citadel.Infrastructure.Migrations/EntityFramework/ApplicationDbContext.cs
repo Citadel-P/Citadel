@@ -66,6 +66,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AlertChannelConfiguration()
             .StackConfiguration()
             .StackReleaseConfiguration()
+            .StackWebhookDeployQueueConfiguration()
             .StackReleaseVolumeBindingConfiguration()
             .AlertRuleChannelConfiguration();
 
@@ -2469,6 +2470,47 @@ internal static class Configuration
                 .HasForeignKey("ControlTriggeredBy")
                 .OnDelete(DeleteBehavior.Restrict);
         }
+
+        return builder;
+    }
+
+    public static ModelBuilder StackWebhookDeployQueueConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "StackWebhookDeployQueue";
+        var item = builder.Entity("StackWebhookDeployQueueItem");
+
+        item.ToTable(tableName);
+        item.Property<Guid>("Id").IsRequired();
+        item.HasKey("Id");
+        item.Property<Guid>("StackId").IsRequired();
+        item.Property<Guid>("GitRepositoryId").IsRequired();
+        item.Property<Guid>("ExpectedStackReleaseId").IsRequired();
+        item.Property<string>("Branch").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        item.Property<string>("ExpectedSpecFingerprint").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        item.Property<string>("DispatchedCommitSha").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        item.Property<string>("Status").HasColumnType(Text).HasMaxLength(32).IsRequired();
+        item.Property<int>("Attempts").HasColumnType(Integer).IsRequired();
+        item.Property<DateTime>("QueuedAt").HasColumnType(Timestamp).IsRequired();
+        item.Property<DateTime>("AvailableAt").HasColumnType(Timestamp).IsRequired();
+        item.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        item.Property<string>("LastError").HasColumnType(Text).HasMaxLength(2000).IsRequired(false);
+
+        item
+            .HasOne("Stack")
+            .WithMany()
+            .HasForeignKey("StackId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        item
+            .HasOne("GitRepository")
+            .WithMany()
+            .HasForeignKey("GitRepositoryId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        item.HasIndex("Status", "AvailableAt", "QueuedAt")
+            .HasDatabaseName($"IX_{tableName}_Ready");
+        item.HasIndex("StackId").HasDatabaseName($"IX_{tableName}_StackId");
+        item.HasIndex("GitRepositoryId").HasDatabaseName($"IX_{tableName}_GitRepositoryId");
 
         return builder;
     }

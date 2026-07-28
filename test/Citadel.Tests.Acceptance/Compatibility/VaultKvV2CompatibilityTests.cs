@@ -488,7 +488,11 @@ public sealed class VaultKvV2CompatibilityTests(
                 completion.GetProperty("stackStatus").GetString(),
                 "Healthy",
                 StringComparison.Ordinal),
-            $"Applying Vault stack {stackId:D} did not finish healthy.");
+            $"""
+            Applying Vault stack {stackId:D} did not finish healthy.
+            Apply response: {body}
+            {candidate.Output}
+            """);
         return body;
     }
 
@@ -859,6 +863,7 @@ public sealed class VaultKvV2CompatibilityTests(
         services:
           consumer:
             image: busybox:1.36.1
+            network_mode: none
             environment:
               CITADEL_VAULT_SECRET: ${CITADEL_VAULT_SECRET}
             command:

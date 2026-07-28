@@ -80,9 +80,39 @@ public interface IUnitOfWork : IAsyncDisposable
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
     IGlobalSearchRepository GlobalSearch { get; }
+    IStackWebhookDeployQueueRepository StackWebhookDeployQueue { get; }
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
+}
+
+public interface IStackWebhookDeployQueueRepository
+{
+    Task<int> AddAsync(
+        StackWebhookDeployQueueItem item,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Guid>> GetReadyIdsAsync(
+        int limit,
+        DateTime availableAt,
+        CancellationToken cancellationToken);
+
+    Task<StackWebhookDeployQueueItem?> TryClaimAsync(
+        Guid id,
+        DateTime startedAt,
+        CancellationToken cancellationToken);
+
+    Task<int> RetryAsync(
+        Guid id,
+        string error,
+        DateTime availableAt,
+        CancellationToken cancellationToken);
+
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<int> RequeueInterruptedAsync(
+        DateTime availableAt,
+        CancellationToken cancellationToken);
 }
 
 public interface IAutomationActionRepository
@@ -213,6 +243,13 @@ public interface IBackupPolicyRepository
     Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<IReadOnlyList<VolumeBackupCoverage>> GetVolumeCoverageAsync(
         IReadOnlyCollection<VolumeBackupCoverageKey> volumes,
+        Guid? userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<PlatformBackupSummary>> GetPlatformSummariesAsync(
+        IReadOnlyCollection<Guid> platformIds,
         Guid? userId,
         ResourceType resourceType,
         PermissionLevel permissionLevel,

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 export const invalidateBackupPolicyQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
   await queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
   await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
+  await queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
 
   if (id) {
     await queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });

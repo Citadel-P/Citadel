@@ -4,6 +4,8 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace Infrastructure.Persistence;
 
@@ -46,34 +48,52 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
-    public Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken)
+    public async Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken)
     {
-        const string sql = """
-            INSERT INTO PlatformStats
-            (Id, PlatformId, Created, CpuUsage, MemoryUsage, RxBytes, TxBytes, DiskUsedBytes, DiskTotalBytes, DiskUsage)
-            VALUES
-            {0}
-        """;
-        var parameters = new DynamicParameters();
-        var valueRows = new List<string>();
-        int i = 0;
+        _ = tx();
+        if (db is not NpgsqlConnection connection)
+            throw new InvalidOperationException("Platform statistics require a PostgreSQL connection.");
+
+        await using var importer = await connection.BeginBinaryImportAsync(
+            """
+            COPY PlatformStats
+                (Id, PlatformId, Created, CpuUsage, MemoryUsage, RxBytes, TxBytes, DiskUsedBytes, DiskTotalBytes, DiskUsage)
+            FROM STDIN (FORMAT BINARY)
+            """,
+            cancellationToken);
+
+        var count = 0;
         foreach (var stat in stats)
         {
-            valueRows.Add($"(@Id{i}, @PlatformId{i}, @Created{i}, @CpuUsage{i}, @MemoryUsage{i}, @RxBytes{i}, @TxBytes{i}, @DiskUsedBytes{i}, @DiskTotalBytes{i}, @DiskUsage{i})");
-            parameters.Add($"Id{i}", stat.Id);
-            parameters.Add($"PlatformId{i}", stat.PlatformId);
-            parameters.Add($"Created{i}", stat.Created);
-            parameters.Add($"CpuUsage{i}", stat.CpuUsage);
-            parameters.Add($"MemoryUsage{i}", stat.MemoryUsage);
-            parameters.Add($"RxBytes{i}", stat.RxBytes);
-            parameters.Add($"TxBytes{i}", stat.TxBytes);
-            parameters.Add($"DiskUsedBytes{i}", stat.DiskUsedBytes);
-            parameters.Add($"DiskTotalBytes{i}", stat.DiskTotalBytes);
-            parameters.Add($"DiskUsage{i}", stat.DiskUsage);
-            i++;
+            await importer.StartRowAsync(cancellationToken);
+            await importer.WriteAsync(stat.Id, NpgsqlDbType.Uuid, cancellationToken);
+            await WriteNullableAsync(importer, stat.PlatformId, NpgsqlDbType.Uuid, cancellationToken);
+            await importer.WriteAsync(stat.Created, NpgsqlDbType.Bigint, cancellationToken);
+            await importer.WriteAsync(stat.CpuUsage, NpgsqlDbType.Double, cancellationToken);
+            await importer.WriteAsync(stat.MemoryUsage, NpgsqlDbType.Double, cancellationToken);
+            await importer.WriteAsync(stat.RxBytes, NpgsqlDbType.Double, cancellationToken);
+            await importer.WriteAsync(stat.TxBytes, NpgsqlDbType.Double, cancellationToken);
+            await WriteNullableAsync(importer, stat.DiskUsedBytes, NpgsqlDbType.Bigint, cancellationToken);
+            await WriteNullableAsync(importer, stat.DiskTotalBytes, NpgsqlDbType.Bigint, cancellationToken);
+            await WriteNullableAsync(importer, stat.DiskUsage, NpgsqlDbType.Double, cancellationToken);
+            count++;
         }
-        var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(finalSql, parameters, transaction: tx());
+
+        await importer.CompleteAsync(cancellationToken);
+        return count;
+    }
+
+    private static async ValueTask WriteNullableAsync<T>(
+        NpgsqlBinaryImporter importer,
+        T? value,
+        NpgsqlDbType type,
+        CancellationToken cancellationToken)
+        where T : struct
+    {
+        if (value.HasValue)
+            await importer.WriteAsync(value.Value, type, cancellationToken);
+        else
+            await importer.WriteNullAsync(cancellationToken);
     }
 
 

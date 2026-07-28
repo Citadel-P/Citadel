@@ -43,6 +43,7 @@ import { ResourceTagSelector } from '@/features/tags/components';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { getDriftModePreset } from './drift-policy';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -1458,7 +1459,9 @@ export const StackForm = ({
                           collection={licensedDriftModes}
                           value={value ?? StackDriftMode.Disabled}
                           disabled={disabled}
-                          onChange={(mode: StackDriftMode) => set((prev) => patchDriftPolicy(prev, { mode }))}
+                          onChange={(mode: StackDriftMode) =>
+                            set((prev) => patchDriftPolicy(prev, getDriftModePreset(mode)))
+                          }
                         />
                       ),
                     }),

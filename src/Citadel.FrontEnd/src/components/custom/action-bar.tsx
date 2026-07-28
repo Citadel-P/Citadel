@@ -6,6 +6,9 @@ import { ButtonActionComponent, ButtonGroupComponent } from '@/pages/types';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { LucideIcon } from 'lucide-react';
 
+const RESPONSIVE_BUTTON_GROUP_CLASS =
+  'grid w-full grid-cols-2 gap-2 [&>*]:w-full [&>*]:max-w-none [&>*]:rounded-sm! [&>*]:border-l! sm:flex sm:w-fit sm:gap-0 sm:[&>*]:w-auto sm:[&>*]:max-w-47.5 sm:[&>*:not(:first-child)]:rounded-l-none! sm:[&>*:not(:first-child)]:border-l-0! sm:[&>*:not(:last-child)]:rounded-r-none!';
+
 export interface ActionButtonConfig {
   id: string;
   icon: LucideIcon;
@@ -33,23 +36,21 @@ export const ActionBar = <T,>({
   return <GenericActionBar selectedItems={selectedRows} allItems={items} resource={type} actions={actions} />;
 };
 
-const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps<T>) => {
+export const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
   if (!selectedItems?.length) return null;
 
   return (
     <div
-      className={`fixed left-5 sm:-translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
-        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
-      }`}
-      style={{
-        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
-      }}>
-      <div className="flex-1 text-xs text-muted-foreground mt-2">
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-20 flex min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-2 bg-background p-2 shadow-lg transition-[left] duration-200 ease-in-out sm:justify-between',
+        sidebarMinimized ? 'lg:left-[var(--sidebar-width-icon)]' : 'lg:left-[var(--sidebar-width)]',
+      )}>
+      <div className="w-full text-center text-xs text-muted-foreground sm:mt-2 sm:w-auto sm:flex-1 sm:text-left">
         {selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
       </div>
-      <div className="overflow-x-auto">
-        <ButtonGroup>
+      <div className="w-full min-w-0 sm:w-auto">
+        <ButtonGroup className={RESPONSIVE_BUTTON_GROUP_CLASS}>
           {actions.map((Action, id) => (
             <Action resources={selectedItems} key={id} />
           ))}
@@ -75,7 +76,7 @@ export const GenericActionBarButtons = <T,>({
           <Action resource={resource} />
         </div>
       ))}
-      <ButtonGroup className="col-span-2 grid w-full grid-cols-2 gap-2 [&>*]:rounded-sm! [&>*]:border-l! sm:flex sm:w-fit sm:gap-0 sm:[&>*:not(:first-child)]:rounded-l-none! sm:[&>*:not(:first-child)]:border-l-0! sm:[&>*:not(:last-child)]:rounded-r-none!">
+      <ButtonGroup className={cn('col-span-2', RESPONSIVE_BUTTON_GROUP_CLASS)}>
         {actions.map((Action, id) => (
           <Action resource={resource} key={id} />
         ))}

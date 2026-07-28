@@ -1,5 +1,17 @@
 import { render, screen } from '@testing-library/react';
-import { GenericActionBarButtons } from './action-bar';
+import { LayoutContext } from '@/lib/context/layout-context';
+import { GenericActionBar, GenericActionBarButtons } from './action-bar';
+
+const layoutContext = {
+  theme: { mode: 'light' as const },
+  sidebarMinimized: false,
+  mobileMenuVisible: false,
+  toggleSidebar: vi.fn(),
+  setSidebarOpen: vi.fn(),
+  toggleMobileMenu: vi.fn(),
+  toggleThemeColor: vi.fn(),
+  setThemeMode: vi.fn(),
+};
 
 describe('GenericActionBarButtons', () => {
   it('uses the responsive grid for grouped actions without standalone actions', () => {
@@ -30,5 +42,33 @@ describe('GenericActionBarButtons', () => {
     expect(groupedActions).toHaveClass('grid', 'w-full', 'grid-cols-2');
     expect(checkUpdates.closest('[role="group"]')).toBeNull();
     expect(checkUpdates.compareDocumentPosition(apply) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+});
+
+describe('GenericActionBar', () => {
+  it.each([
+    [false, 'lg:left-[var(--sidebar-width)]'],
+    [true, 'lg:left-[var(--sidebar-width-icon)]'],
+  ])('uses the available content width when sidebar minimized is %s', (sidebarMinimized, expectedLeftClass) => {
+    const DeleteAction = () => <button type="button">Delete</button>;
+
+    render(
+      <LayoutContext.Provider value={{ ...layoutContext, sidebarMinimized }}>
+        <GenericActionBar
+          selectedItems={[{ id: '1' }]}
+          allItems={[{ id: '1' }, { id: '2' }]}
+          resource="Container"
+          actions={[DeleteAction]}
+        />
+      </LayoutContext.Provider>,
+    );
+
+    const actionBar = screen.getByText('1 of 2 container(s) selected.').parentElement;
+    const actionGroup = screen.getByRole('group');
+
+    expect(actionBar).toHaveClass('inset-x-0', expectedLeftClass);
+    expect(actionBar).not.toHaveAttribute('style');
+    expect(actionGroup).toHaveClass('grid', 'w-full', 'grid-cols-2', 'gap-2', 'sm:flex', 'sm:w-fit');
+    expect(actionGroup.parentElement).toHaveClass('w-full', 'sm:w-auto');
   });
 });

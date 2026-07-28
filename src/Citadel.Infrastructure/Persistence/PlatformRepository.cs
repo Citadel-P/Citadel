@@ -15,6 +15,53 @@ namespace Infrastructure.Persistence;
 
 internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : IPlatformRepository 
 {
+    private const string WorkloadStatusColumns = """
+        deployment_counts.DeploymentCount,
+        deployment_counts.DeploymentHealthyCount,
+        deployment_counts.DeploymentDegradedCount,
+        deployment_counts.DeploymentFailedCount,
+        deployment_counts.DeploymentStoppedCount,
+        deployment_counts.DeploymentInProgressCount,
+        deployment_counts.DeploymentUnknownCount,
+        stack_counts.StackCount,
+        stack_counts.StackHealthyCount,
+        stack_counts.StackDegradedCount,
+        stack_counts.StackFailedCount,
+        stack_counts.StackStoppedCount,
+        stack_counts.StackPausedCount,
+        stack_counts.StackInProgressCount,
+        stack_counts.StackUnknownCount
+        """;
+
+    private const string WorkloadStatusJoins = """
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*) AS DeploymentCount,
+                COUNT(*) FILTER (WHERE d.Status = @DeploymentHealthyStatus) AS DeploymentHealthyCount,
+                COUNT(*) FILTER (WHERE d.Status = @DeploymentDegradedStatus) AS DeploymentDegradedCount,
+                COUNT(*) FILTER (WHERE d.Status = @DeploymentFailedStatus) AS DeploymentFailedCount,
+                COUNT(*) FILTER (WHERE d.Status = @DeploymentStoppedStatus) AS DeploymentStoppedCount,
+                COUNT(*) FILTER (WHERE d.Status = ANY(@DeploymentInProgressStatuses)) AS DeploymentInProgressCount,
+                COUNT(*) FILTER (WHERE d.Status = @DeploymentUnknownStatus) AS DeploymentUnknownCount
+            FROM Deployments d
+            WHERE d.PlatformId = p.Id
+        ) deployment_counts ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*) AS StackCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackHealthyStatus) AS StackHealthyCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackDegradedStatus) AS StackDegradedCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackFailedStatus) AS StackFailedCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackStoppedStatus) AS StackStoppedCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackPausedStatus) AS StackPausedCount,
+                COUNT(*) FILTER (WHERE sr.Status = ANY(@StackInProgressStatuses)) AS StackInProgressCount,
+                COUNT(*) FILTER (WHERE sr.Status = @StackUnknownStatus) AS StackUnknownCount
+            FROM Stacks st
+            JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
+            WHERE sr.PlatformId = p.Id
+        ) stack_counts ON TRUE
+        """;
+
     public async Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Platforms WHERE Id = @PlatformId";
@@ -271,15 +318,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public async Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
     {
-        string sql = $$"""
+        const string sql = $$"""
             SELECT p.*,
-                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
-                (
-                    SELECT COUNT(*)
-                    FROM Stacks st
-                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
-                    WHERE sr.PlatformId = p.Id
-                ) AS StackCount,
+                {{WorkloadStatusColumns}},
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -289,8 +330,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.DiskUsedBytes as Stat_DiskUsedBytes,
                 s.DiskTotalBytes as Stat_DiskTotalBytes,
                 s.DiskUsage as Stat_DiskUsage,
-                {{ResourceTagSql.TagAggregate("p")}}
+                {{ResourceTagSql.PlatformTagAggregate}}
             FROM Platforms p
+            {{WorkloadStatusJoins}}
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
                 WHERE PlatformId = p.Id
@@ -301,7 +343,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             LIMIT 1;
         """;
 
-        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new
+        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new PlatformWorkloadQueryParameters
         {
             Id = platformId,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform)
@@ -316,15 +358,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             return [];
         }
 
-        string sql = $$"""
+        const string sql = $$"""
             SELECT p.*,
-                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
-                (
-                    SELECT COUNT(*)
-                    FROM Stacks st
-                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
-                    WHERE sr.PlatformId = p.Id
-                ) AS StackCount,
+                {{WorkloadStatusColumns}},
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -334,8 +370,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.DiskUsedBytes as Stat_DiskUsedBytes,
                 s.DiskTotalBytes as Stat_DiskTotalBytes,
                 s.DiskUsage as Stat_DiskUsage,
-                {{ResourceTagSql.TagAggregate("p")}}
+                {{ResourceTagSql.PlatformTagAggregate}}
             FROM Platforms p
+            {{WorkloadStatusJoins}}
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
                 WHERE PlatformId = p.Id
@@ -347,7 +384,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         """;
 
         var idArray = platformIds as Guid[] ?? [.. platformIds];
-        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new PlatformWorkloadQueryParameters
         {
             Ids = idArray,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform)
@@ -357,15 +394,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public async Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        string sql = $$"""
+        const string sql = $$"""
             SELECT p.*,
-                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
-                (
-                    SELECT COUNT(*)
-                    FROM Stacks st
-                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
-                    WHERE sr.PlatformId = p.Id
-                ) AS StackCount,
+                {{WorkloadStatusColumns}},
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -375,20 +406,21 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.DiskUsedBytes as Stat_DiskUsedBytes,
                 s.DiskTotalBytes as Stat_DiskTotalBytes,
                 s.DiskUsage as Stat_DiskUsage,
-                {{ResourceTagSql.TagAggregate("p")}}
+                {{ResourceTagSql.PlatformTagAggregate}}
             FROM Platforms p
+            {{WorkloadStatusJoins}}
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
                 WHERE PlatformId = p.Id
                 ORDER BY Created DESC
                 LIMIT 1
             )
-            WHERE {{ResourceTagSql.FilterPredicate("p")}}
+            WHERE {{ResourceTagSql.PlatformTagFilterPredicate}}
             ORDER BY p.Name;
         """;
 
         var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
-        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new PlatformWorkloadQueryParameters
         {
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
             TagIds = tagIdArray,
@@ -399,17 +431,11 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public async Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        string sql = $$"""
+        const string sql = $$"""
             WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             
             SELECT p.*,
-                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
-                (
-                    SELECT COUNT(*)
-                    FROM Stacks st
-                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
-                    WHERE sr.PlatformId = p.Id
-                ) AS StackCount,
+                {{WorkloadStatusColumns}},
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -419,8 +445,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.DiskUsedBytes as Stat_DiskUsedBytes,
                 s.DiskTotalBytes as Stat_DiskTotalBytes,
                 s.DiskUsage as Stat_DiskUsage,
-                {{ResourceTagSql.TagAggregate("p")}}
+                {{ResourceTagSql.PlatformTagAggregate}}
             FROM Platforms p
+            {{WorkloadStatusJoins}}
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
                 WHERE PlatformId = p.Id
@@ -428,13 +455,13 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 LIMIT 1
             )
             WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id {{AuthorizationSql.ResourcePredicateSuffix}}
-              AND {{ResourceTagSql.FilterPredicate("p")}}
+              AND {{ResourceTagSql.PlatformTagFilterPredicate}}
             ORDER BY p.Name
          """;
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
-        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new PlatformWorkloadQueryParameters
         {
             UserId = userId,
             ResourceType = (int)resourceType,
@@ -446,6 +473,53 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         }, transaction: tx());
 
         return result.ToDomain();
+    }
+
+    internal sealed class PlatformWorkloadQueryParameters
+    {
+        public Guid Id { get; init; }
+        public Guid[] Ids { get; init; } = [];
+        public Guid UserId { get; init; }
+        public int ResourceType { get; init; }
+        public int GrantedPermissionMask { get; init; }
+        public int SpecificPermission { get; init; }
+        public string TagResourceType { get; init; } = string.Empty;
+        public Guid[] TagIds { get; init; } = [];
+        public int TagIdsLength { get; init; }
+        public string DeploymentHealthyStatus { get; } =
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Healthy);
+        public string DeploymentDegradedStatus { get; } =
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Degraded);
+        public string DeploymentFailedStatus { get; } =
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Failed);
+        public string DeploymentStoppedStatus { get; } =
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Stopped);
+        public string DeploymentUnknownStatus { get; } =
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Unknown);
+        public string[] DeploymentInProgressStatuses { get; } =
+        {
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Created),
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Pending),
+            EnumFormatter<DeploymentStatus>.GetValue(DeploymentStatus.Applying)
+        };
+        public string StackHealthyStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Healthy);
+        public string StackDegradedStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Degraded);
+        public string StackFailedStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Failed);
+        public string StackStoppedStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Stopped);
+        public string StackPausedStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Paused);
+        public string StackUnknownStatus { get; } =
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Unknown);
+        public string[] StackInProgressStatuses { get; } =
+        {
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Created),
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Pending),
+            EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Applying)
+        };
     }
 
     public async Task<IEnumerable<Platform>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)

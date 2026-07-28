@@ -6,6 +6,7 @@ import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { PlatformInfoActions } from '../actions';
+import { usePlatformBackupSummaries } from '../platform-backups';
 import { PlatformForm } from './form';
 import { usePlatformGroup } from './hooks/usePlatformGroup';
 import { PlatformResourceSummary, PlatformStatsTab } from './platform-stats';
@@ -17,6 +18,19 @@ const toFormResource = (platform: PlatformView): PlatformFormResource =>
     ...platform,
     description: platform.description ?? null,
   }) as PlatformFormResource;
+
+const PlatformSubHeader = ({ resource }: { resource: PlatformFormResource }) => {
+  const { summaries, isLoading, isError } = usePlatformBackupSummaries([resource.id]);
+
+  return (
+    <PlatformResourceSummary
+      platform={resource}
+      backupSummary={summaries.get(resource.id)}
+      isBackupSummaryLoading={isLoading}
+      isBackupSummaryError={isError}
+    />
+  );
+};
 
 export const PlatformFormComponents: RequiredFormComponents<PlatformFormResource> = {
   AddForm: {
@@ -37,7 +51,7 @@ export const PlatformFormComponents: RequiredFormComponents<PlatformFormResource
         />
       ),
     },
-    SubHeader: ({ resource }) => <PlatformResourceSummary platform={resource} />,
+    SubHeader: PlatformSubHeader,
     Tabs: [
       {
         label: 'Config',

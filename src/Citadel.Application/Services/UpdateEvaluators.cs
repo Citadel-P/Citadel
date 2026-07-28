@@ -43,7 +43,8 @@ internal sealed class ManualStackUpdateEvaluator
         StackUpdateState previousState,
         IReadOnlyList<ManualStackImageCheck> checks,
         IReadOnlyDictionary<ImageKey, string> digests,
-        DateTime checkedAt)
+        DateTime checkedAt,
+        IReadOnlyDictionary<string, string>? deployedDigests = null)
     {
         var previousStates = (previousState as ManualStackUpdateState)?
             .RecreateStackOnNewImageState.AutoUpdateStates
@@ -71,8 +72,16 @@ internal sealed class ManualStackUpdateEvaluator
 
             var key = StateKey(check.ServiceName, check.ImageName);
             previousStates.TryGetValue(key, out var previous);
-            var hasBaseline = !string.IsNullOrWhiteSpace(previous?.CurrentDigest);
-            var currentDigest = hasBaseline ? previous!.CurrentDigest : remoteDigest;
+            string? deployedDigest = null;
+            var hasDeployedDigest = deployedDigests is not null
+                                    && deployedDigests.TryGetValue(key, out deployedDigest)
+                                    && !string.IsNullOrWhiteSpace(deployedDigest);
+            var hasBaseline = hasDeployedDigest || !string.IsNullOrWhiteSpace(previous?.CurrentDigest);
+            var currentDigest = hasDeployedDigest
+                ? deployedDigest!
+                : hasBaseline
+                    ? previous!.CurrentDigest
+                    : remoteDigest;
             if (!hasBaseline)
             {
                 baselinesCreated++;

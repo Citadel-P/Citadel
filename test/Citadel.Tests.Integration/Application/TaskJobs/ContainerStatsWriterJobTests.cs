@@ -27,6 +27,7 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     private readonly Mock<IContainerConnector> _containerConnectorMock = new();
     private readonly Mock<IOptions<JobConfiguration>> _configMock = new();
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
+    private readonly ObservableDbWorkQueue _dbWorkQueue = new();
 
     private Guid _platformId;
     private Guid _containerId;
@@ -44,6 +45,8 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(_containerStreamManagerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_broadcaster);
         services.AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>();
+        services.RemoveAll<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue>(_dbWorkQueue);
         services.AddSingleton(_channel);
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer);
@@ -104,8 +107,11 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var batch = new ContainersStatBatch(_platformId, stats, (e) => { });
 
         // Act
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
@@ -120,7 +126,7 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     public async Task ExecuteAsync_ShouldFlushWhenFlushIntervalIsReached()
     {
         // Arrange
-        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 0 });
+        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 1 });
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var stats = new List<ContainerStat>();
         stats.AddRange(
@@ -133,8 +139,11 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var batch = new ContainersStatBatch(_platformId, stats, (e) => { });
 
         // Act
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         // Assert
         _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
@@ -168,8 +177,11 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             ],
             _ => { });
 
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(3000, TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();

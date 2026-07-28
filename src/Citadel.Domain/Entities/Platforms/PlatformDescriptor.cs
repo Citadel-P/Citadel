@@ -20,7 +20,9 @@ public record DockerPlatformDescriptor(
         string? OperatingSystem = null,
         string? OsVersion = null,
         string? OsType = null,
-        string? Architecture = null) : PlatformDescriptor
+        string? Architecture = null,
+        long? ImageUsedBytes = null,
+        long? VolumeUsedBytes = null) : PlatformDescriptor
 {
     public DockerPlatformDescriptor Create(
         string? daemonId = null,
@@ -67,6 +69,8 @@ public sealed record DockerSwarmPlatformDescriptor(
     string? OsVersion = null,
     string? OsType = null,
     string? Architecture = null,
+    long? ImageUsedBytes = null,
+    long? VolumeUsedBytes = null,
     string? Error = null,
     IEnumerable<SwarmPeer>? RemoteManagers = null
     ) : DockerPlatformDescriptor(
@@ -79,7 +83,9 @@ public sealed record DockerSwarmPlatformDescriptor(
         OperatingSystem: OperatingSystem,
         OsVersion: OsVersion,
         OsType: OsType,
-        Architecture: Architecture)
+        Architecture: Architecture,
+        ImageUsedBytes: ImageUsedBytes,
+        VolumeUsedBytes: VolumeUsedBytes)
 {
     public DockerSwarmPlatformDescriptor PartialUpdate(
         string? nodeID = null,

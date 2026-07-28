@@ -30,7 +30,9 @@ internal static class PlatformMappers
                 ContainerCount: platformInfo?.PlatformStat?.ContainerCount ?? 0,
                 ContainersPaused: platformInfo?.PlatformStat?.ContainersPaused ?? 0,
                 ContainersRunning: platformInfo?.PlatformStat?.ContainersRunning ?? 0,
-                ContainersStopped: platformInfo?.PlatformStat?.ContainersStopped ?? 0
+                ContainersStopped: platformInfo?.PlatformStat?.ContainersStopped ?? 0,
+                ImageUsedBytes: platformInfo.HasImageUsedBytes ? platformInfo.ImageUsedBytes : null,
+                VolumeUsedBytes: platformInfo.HasVolumeUsedBytes ? platformInfo.VolumeUsedBytes : null
             );
         }
         else
@@ -70,7 +72,9 @@ internal static class PlatformMappers
                 ContainerCount: platformInfo.PlatformStatistics?.ContainerCount ?? 0,
                 ContainersPaused: platformInfo.PlatformStatistics?.ContainersPaused ?? 0,
                 ContainersRunning: platformInfo.PlatformStatistics?.ContainersRunning ?? 0,
-                ContainersStopped: platformInfo.PlatformStatistics?.ContainersStopped ?? 0
+                ContainersStopped: platformInfo.PlatformStatistics?.ContainersStopped ?? 0,
+                ImageUsedBytes: platformInfo.ImageUsedBytes,
+                VolumeUsedBytes: platformInfo.VolumeUsedBytes
             );
         }
         else
@@ -134,7 +138,9 @@ internal static class PlatformMappers
             VolumeCount: source.VolumeCount,
             NetworkCount: source.NetworkCount,
             AgentVersion: source.AgentVersion,
-            PlatformStat: platformStat);
+            PlatformStat: platformStat,
+            ImageUsedBytes: source.HasImageUsedBytes ? source.ImageUsedBytes : null,
+            VolumeUsedBytes: source.HasVolumeUsedBytes ? source.VolumeUsedBytes : null);
     }
 
     internal static DockerPlatformStat Map(this PlatformStatMessage stat)
@@ -177,7 +183,9 @@ internal static class PlatformMappers
             VolumeCount: source.VolumeCount, 
             NetworkCount: source.NetworkCount,
             AgentVersion: string.Empty,
-            PlatformStat: platformStat);
+            PlatformStat: platformStat,
+            ImageUsedBytes: source.ImageUsedBytes,
+            VolumeUsedBytes: source.VolumeUsedBytes);
     }
 
     internal static DockerPruneResource Map(this DomainPruneResource resource)

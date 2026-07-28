@@ -174,7 +174,6 @@ internal sealed class ContainerSyncJob(
                 freshContainers,
                 platformContainerCache,
                 containerStreamManager,
-                dbWorkQueue,
                 deploymentStreamManager,
                 stackStreamManager,
                 logger);
@@ -192,7 +191,6 @@ internal sealed class ContainerSyncJob(
                 notificationQueue,
                 platformContainerCache,
                 containerStreamManager,
-                dbWorkQueue,
                 deploymentStreamManager,
                 stackStreamManager,
                 logger);
@@ -208,7 +206,6 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
     IReadOnlyDictionary<string, DockerContainer> freshContainers,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
-    IDbWorkQueue dbWorkQueue,
     IDeploymentStreamManager deploymentStreamManager,
     IStackStreamManager stackStreamManager,
     ILogger logger) : IDbWorkItem
@@ -219,6 +216,10 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
         {
             var images = await uow.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
             var containers = await uow.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
+            var imageIds = images.ToDictionary(
+                image => image.DockerImageId,
+                image => image.Id,
+                StringComparer.OrdinalIgnoreCase);
 
             var existingContainersInDb = containers.ToDictionary(
                 c => c.DockerContainerId,
@@ -230,7 +231,9 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
             // Map fresh containers
             foreach (var freshContainer in freshContainers.Values)
             {
-                var imageId = images.FirstOrDefault(i => i.DockerImageId == freshContainer.ImageId)?.Id;
+                Guid? imageId = imageIds.TryGetValue(freshContainer.ImageId, out var resolvedImageId)
+                    ? resolvedImageId
+                    : null;
 
                 if (existingContainersInDb.TryGetValue(freshContainer.Id, out var existingDbContainer))
                 {
@@ -294,12 +297,23 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 platformEvent.Id);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
-            await ScheduleDeploymentSync(platformEvent.Id, true, cancellationToken);
-            await ScheduleStackSync(platformEvent.Id, true, cancellationToken);
+            await ContainerDependentResourceSynchronizer.SynchronizeAsync(
+                uow,
+                deploymentStreamManager,
+                stackStreamManager,
+                notificationQueue,
+                platformEvent.Id,
+                true,
+                logger,
+                cancellationToken);
 
             logger.LogInformation(
                 "Synchronized {Count} containers for platform {PlatformId}.",
                 currentActiveContainers.Count, platformEvent.Id);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -310,23 +324,6 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
         }
     }
 
-    internal ValueTask ScheduleDeploymentSync(Guid platformId, bool isOnline, CancellationToken ct)
-        => dbWorkQueue.EnqueueAsync(
-                new DeploymentSyncWorkItem(
-                    deploymentStreamManager,
-                    notificationQueue,
-                    platformId,
-                    isOnline),
-                ct);
-
-    internal ValueTask ScheduleStackSync(Guid platformId, bool isOnline, CancellationToken ct)
-        => dbWorkQueue.EnqueueAsync(
-                new StackSyncWorkItem(
-                    stackStreamManager,
-                    notificationQueue,
-                    platformId,
-                    isOnline),
-                ct);
 }
 
 internal sealed class SyncOfflinePlatformContainersWorkItem(
@@ -334,7 +331,6 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
-    IDbWorkQueue dbWorkQueue,
     IDeploymentStreamManager deploymentStreamManager,
     IStackStreamManager stackStreamManager,
     ILogger logger) : IDbWorkItem
@@ -343,7 +339,7 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
     {
         try
         {
-            var offlineContainers = await uow.Containers.GetByPlatformIdAsync(platformId, cancellationToken);
+            var offlineContainers = (await uow.Containers.GetByPlatformIdAsync(platformId, cancellationToken)).ToArray();
 
             await uow.Containers.UpdateContainersStateAsync(
                 offlineContainers.Select(c => c.Id),
@@ -367,12 +363,23 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
                 platformId);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
-            await ScheduleDeploymentSync(platformId, false, cancellationToken);
-            await ScheduleStackSync(platformId, false, cancellationToken);
+            await ContainerDependentResourceSynchronizer.SynchronizeAsync(
+                uow,
+                deploymentStreamManager,
+                stackStreamManager,
+                notificationQueue,
+                platformId,
+                false,
+                logger,
+                cancellationToken);
 
             logger.LogInformation(
                 "Marked {Count} containers as offline for platform {PlatformId}.",
-                offlineContainers.Count(), platformId);
+                offlineContainers.Length, platformId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -383,23 +390,59 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
         }
     }
 
-    internal ValueTask ScheduleDeploymentSync(Guid platformId, bool isOnline, CancellationToken ct)
-        => dbWorkQueue.EnqueueAsync(
-                new DeploymentSyncWorkItem(
+}
+
+internal static class ContainerDependentResourceSynchronizer
+{
+    internal static async Task SynchronizeAsync(
+        IUnitOfWork uow,
+        IDeploymentStreamManager deploymentStreamManager,
+        IStackStreamManager stackStreamManager,
+        INotificationQueue notificationQueue,
+        Guid platformId,
+        bool isOnline,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteSafelyAsync(
+            "deployments",
+            () => new DeploymentSyncWorkItem(
                     deploymentStreamManager,
                     notificationQueue,
                     platformId,
-                    isOnline),
-                ct);
+                    isOnline)
+                .ExecuteAsync(uow, cancellationToken));
 
-    internal ValueTask ScheduleStackSync(Guid platformId, bool isOnline, CancellationToken ct)
-        => dbWorkQueue.EnqueueAsync(
-                new StackSyncWorkItem(
+        await ExecuteSafelyAsync(
+            "stacks",
+            () => new StackSyncWorkItem(
                     stackStreamManager,
                     notificationQueue,
                     platformId,
-                    isOnline),
-                ct);
+                    isOnline)
+                .ExecuteAsync(uow, cancellationToken));
+
+        async Task ExecuteSafelyAsync(string resourceType, Func<Task> synchronize)
+        {
+            try
+            {
+                await synchronize();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await uow.RollbackAsync();
+                logger.LogError(
+                    ex,
+                    "Failed to synchronize dependent {ResourceType} for platform {PlatformId}.",
+                    resourceType,
+                    platformId);
+            }
+        }
+    }
 }
 
 internal class SendContainersInfoNotificationWorkItem(IContainerStreamManager containerStreamManager, IEnumerable<Container> containers, Guid platformId) : INotificationWorkItem

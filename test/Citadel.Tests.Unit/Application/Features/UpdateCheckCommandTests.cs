@@ -112,7 +112,7 @@ public sealed class UpdateCheckCommandTests
     }
 
     [Fact]
-    public async Task CheckManualStackUpdates_ScansDuplicateImageOnceAndRecordsServiceBaselines()
+    public async Task CheckManualStackUpdates_ComparesDeployedDigestsAndScansDuplicateImageOnce()
     {
         var registry = CreateRegistry();
         var stack = Stack.Create(
@@ -138,7 +138,7 @@ public sealed class UpdateCheckCommandTests
             .ReturnsAsync(registry);
         dependencies.Scanner
             .Setup(x => x.ScanAsync(It.IsAny<ImageScanTask>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success("sha256:baseline"));
+            .ReturnsAsync(Result.Success("sha256:remote"));
         dependencies.Stacks
             .Setup(x => x.TryCompleteUpdateCheckAsync(
                 stack.Id,
@@ -162,8 +162,9 @@ public sealed class UpdateCheckCommandTests
             state.RecreateStackOnNewImageState.AutoUpdateStates,
             item =>
             {
-                Assert.Equal("sha256:baseline", item.CurrentDigest);
-                Assert.False(item.UpdateAvailable);
+                Assert.Equal("sha256:deployed", item.CurrentDigest);
+                Assert.Equal("sha256:remote", item.RemoteDigest);
+                Assert.True(item.UpdateAvailable);
             });
         Assert.Equal(ResourceControlState.Idle, updated.ControlState);
         dependencies.Stacks.Verify(
@@ -185,6 +186,55 @@ public sealed class UpdateCheckCommandTests
             Times.Once);
         dependencies.Notifications.Verify(
             x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckManualStackUpdates_MissingDeployedDigestFailsWithoutScanningRegistry()
+    {
+        var registry = CreateRegistry();
+        var stack = Stack.Create(
+            "manual-stack",
+            Guid.CreateVersion7(),
+            StackSource.WebEditor,
+            Guid.CreateVersion7(),
+            new ManualStack(
+                """
+                services:
+                  api:
+                    image: example/app:latest
+                """,
+                StackUpdateBehavior.Disabled,
+                RegistryId: registry.Id));
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+
+        var dependencies = CreateStackDependencies(stack);
+        dependencies.Registries
+            .Setup(x => x.GetAsync(registry.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registry);
+        dependencies.DeployedImageResolver
+            .Setup(x => x.ResolveAsync(
+                stack,
+                It.IsAny<IReadOnlyList<ManualStackImageCheck>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<IReadOnlyDictionary<string, string>>(
+                new ConflictError("The deployed image digest is unavailable.")));
+
+        var result = await dependencies.Handler.Handle(
+            new CheckStackUpdates(stack.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error, out _));
+        Assert.IsType<ConflictError>(error);
+        dependencies.Scanner.Verify(
+            x => x.ScanAsync(It.IsAny<ImageScanTask>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        dependencies.Stacks.Verify(
+            x => x.TryReleaseUpdateCheckAsync(
+                stack.Id,
+                It.IsAny<long>(),
+                Constants.SystemId,
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -464,6 +514,7 @@ public sealed class UpdateCheckCommandTests
         var registries = new Mock<IRegistryRepository>();
         var gitRepositories = new Mock<IGitReposRepository>();
         var scanner = new Mock<IImageDigestScanner>();
+        var deployedImageResolver = new Mock<IManualStackDeployedImageResolver>();
         var repoCache = new Mock<IRepoCacheManager>();
         var gitCli = new Mock<IGitCliRepository>();
         var notifications = new Mock<INotificationQueue>();
@@ -513,12 +564,29 @@ public sealed class UpdateCheckCommandTests
         stream
             .Setup(x => x.SendStackInfo(It.IsAny<Stack>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
+        deployedImageResolver
+            .Setup(x => x.ResolveAsync(
+                It.IsAny<Stack>(),
+                It.IsAny<IReadOnlyList<ManualStackImageCheck>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((
+                Stack _,
+                IReadOnlyList<ManualStackImageCheck> checks,
+                CancellationToken _) =>
+            {
+                IReadOnlyDictionary<string, string> digests = checks.ToDictionary(
+                    check => ManualStackUpdateEvaluator.StateKey(check.ServiceName, check.ImageName),
+                    _ => "sha256:deployed",
+                    StringComparer.OrdinalIgnoreCase);
+                return Task.FromResult(Result.Success(digests));
+            });
 
         var handler = new CheckStackUpdatesHandler(
             unitOfWork.Object,
             new ImageCheckBuilder(),
             scanner.Object,
             new ManualStackUpdateEvaluator(),
+            deployedImageResolver.Object,
             new UpdateCheckLeaseManager(),
             repoCache.Object,
             gitCli.Object,
@@ -534,6 +602,7 @@ public sealed class UpdateCheckCommandTests
             registries,
             gitRepositories,
             scanner,
+            deployedImageResolver,
             repoCache,
             gitCli,
             notifications,
@@ -577,6 +646,7 @@ public sealed class UpdateCheckCommandTests
         Mock<IRegistryRepository> Registries,
         Mock<IGitReposRepository> GitRepositories,
         Mock<IImageDigestScanner> Scanner,
+        Mock<IManualStackDeployedImageResolver> DeployedImageResolver,
         Mock<IRepoCacheManager> RepoCache,
         Mock<IGitCliRepository> GitCli,
         Mock<INotificationQueue> Notifications,

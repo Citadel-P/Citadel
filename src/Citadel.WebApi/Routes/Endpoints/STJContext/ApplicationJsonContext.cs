@@ -253,6 +253,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(RestoreVolumeInput))]
 [JsonSerializable(typeof(BackupPolicyView))]
 [JsonSerializable(typeof(BackupPoliciesView))]
+[JsonSerializable(typeof(PlatformBackupSummaryView))]
+[JsonSerializable(typeof(PlatformBackupSummariesView))]
 [JsonSerializable(typeof(BackupRunView))]
 [JsonSerializable(typeof(BackupRunsView))]
 [JsonSerializable(typeof(BackupRestoreRunView))]

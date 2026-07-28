@@ -9,15 +9,21 @@ internal interface IStackStreamManager : IStreamGroupManager
     Task SendStackInfo(Stack stack, string action = "update");
 }
 
-internal class StackStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IStackStreamManager
+internal class StackStreamManager(
+    IApplicationHubDispatcher dispatcher,
+    IPlatformStreamManager platformStreamManager) : BaseStreamManager<StreamContext>, IStackStreamManager
 {
     public Task SendStackInfo(Stack stack, string action = "update")
     {
-        if (streams.IsEmpty)
+        var stackUpdate = streams.IsEmpty
+            ? Task.CompletedTask
+            : dispatcher.SendStackInfo(stack, action);
+        var platformId = stack.CurrentStackRelease?.PlatformId;
+        if (platformId is null)
         {
-            return Task.CompletedTask;
+            return stackUpdate;
         }
 
-        return dispatcher.SendStackInfo(stack, action);
+        return Task.WhenAll(stackUpdate, platformStreamManager.RefreshPlatform(platformId.Value));
     }
 }

@@ -277,11 +277,6 @@
   --sidebar-width-icon: 58px;
 }
 
-.action-bar-left {
-  left: var(--sidebar-width);
-  transition: left 0.2s ease-in-out;
-}
-
 .table-link {
   @apply hover:underline;
 }

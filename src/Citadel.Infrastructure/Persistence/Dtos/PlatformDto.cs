@@ -17,6 +17,19 @@ internal record PlatformDto(
     string? Description,
     long DeploymentCount = 0,
     long StackCount = 0,
+    long DeploymentHealthyCount = 0,
+    long DeploymentDegradedCount = 0,
+    long DeploymentFailedCount = 0,
+    long DeploymentStoppedCount = 0,
+    long DeploymentInProgressCount = 0,
+    long DeploymentUnknownCount = 0,
+    long StackHealthyCount = 0,
+    long StackDegradedCount = 0,
+    long StackFailedCount = 0,
+    long StackStoppedCount = 0,
+    long StackPausedCount = 0,
+    long StackInProgressCount = 0,
+    long StackUnknownCount = 0,
     string? TagsJson = null)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];

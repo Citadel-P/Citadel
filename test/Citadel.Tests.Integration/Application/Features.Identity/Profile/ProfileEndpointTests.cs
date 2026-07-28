@@ -14,6 +14,8 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
 {
     private static readonly Guid SeededAdminUserId = Guid.Parse("10000000-0000-0000-0000-000000000001");
 
+    protected override bool ReuseApplicationFactory => false;
+
     [Fact]
     public async Task GetCurrentProfile_ReturnsAuthenticatedUser()
     {
