@@ -127,6 +127,22 @@ Supported sources:
 - **Stack**: backs up all resolved Docker named volumes used by a stack.
 - **Deployment**: backs up all resolved Docker named volumes used by a deployment.
 
+### Backup Counts
+
+The main **Backups** page lists every backup policy in the Citadel instance.
+An individual platform's **Backups** summary only counts policies whose source
+belongs to that platform:
+
+- Docker volume policies created for the platform
+- Stack policies whose stack runs on the platform
+- Deployment policies whose deployment runs on the platform
+
+Citadel control-plane backups are instance-wide and do not belong to a Docker
+platform. They appear on the main **Backups** page but are not included in any
+platform's backup count. For example, one Citadel backup and one volume backup
+produce a total of two policies on the main page and one policy on the volume's
+platform.
+
 Only Docker named volumes are backed up. Bind mounts such as `./data:/app/data` or `/host/path:/data` are host paths, not Docker volumes, and are not included in Docker volume, stack, or deployment backups.
 
 A Citadel backup does not archive all of `/app/data`. Git caches, stack

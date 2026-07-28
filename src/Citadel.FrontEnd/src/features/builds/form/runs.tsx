@@ -1,6 +1,7 @@
 import { ActorType, BuildProjectView, BuildRunLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { LogViewer, type LogEntry } from '@/components/custom/common';
+import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -261,21 +262,16 @@ const runColumns = (
   formatDateTime: ReturnType<typeof useProfileDateTimeFormatter>,
 ): ColumnDef<BuildRunView>[] => [
   {
-    accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => (
-      <span className="inline-flex items-center gap-2 text-sm">
-        <StateIndicator value={row.original.status} isProcessing={isActiveBuildRun(row.original)} kind="buildRun" />
-        {row.original.status}
-      </span>
-    ),
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
-  },
-  {
     accessorKey: 'trigger',
     header: ({ column }) => <SortableCell cellName="Trigger" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.trigger}</span>,
     sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
+  },
+  {
+    accessorKey: 'status',
+    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
+    cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
+    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'resolvedCommitSha',

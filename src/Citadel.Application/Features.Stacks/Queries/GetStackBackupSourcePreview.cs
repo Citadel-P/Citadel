@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Stacks.Queries;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Read, ResourceIdProperty = nameof(GetStackBackupSourcePreview.StackId))]
 public sealed record GetStackBackupSourcePreview(Guid StackId)
     : IQuery<Result<StackBackupSourcePreviewResult>>;
 

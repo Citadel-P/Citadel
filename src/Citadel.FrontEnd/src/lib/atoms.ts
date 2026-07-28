@@ -219,8 +219,8 @@ export function useResourceFilter<T extends object = any>(key: ResourceType) {
 export function useTaskSheet(type: ResourceType) {
   const [state, setState] = useAtom(taskSheetAtom(type));
 
-  const open = (task: TaskSpec) => setState({ open: true, task });
-  const close = () => setState((s) => ({ ...s, open: false }));
+  const open = useCallback((task: TaskSpec) => setState({ open: true, task }), [setState]);
+  const close = useCallback(() => setState((s) => ({ ...s, open: false })), [setState]);
 
   return { state, open, close } as const;
 }

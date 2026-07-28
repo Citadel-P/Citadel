@@ -9,6 +9,7 @@ import { toThemeMode } from '@/lib/theme-preferences';
 import { LicenseReminder } from './license-reminder';
 import { Header } from './header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { ActivityTaskSheet, AlertTaskSheet } from '@/features/alerters/alert-events/alert-task-sheet';
 
 const LayoutPage = () => {
   const { sidebarMinimized, setSidebarOpen, setThemeMode } = useLayoutContext();
@@ -29,6 +30,8 @@ const LayoutPage = () => {
       <Sidebar />
       <SidebarInset className="overflow-hidden bg-card">
         <Header />
+        <AlertTaskSheet />
+        <ActivityTaskSheet />
         <div id="main-scroll-container" className="grow overflow-auto">
           <LicenseReminder />
           <Outlet />

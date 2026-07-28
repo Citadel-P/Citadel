@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.GitRepositories.Queries;
 
-[RequirePermission(ResourceType.GitRepository, PermissionLevel.Read)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Read, ResourceIdProperty = nameof(DiscoverGitRepositoryComposeProjects.RepositoryId))]
 public sealed record DiscoverGitRepositoryComposeProjects(Guid RepositoryId, string? Branch)
     : IQuery<Result<GitRepositoryComposeDiscovery>>;
 

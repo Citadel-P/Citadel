@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write, ResourceIdProperty = nameof(CheckStackUpdates.StackId))]
 public sealed record CheckStackUpdates(Guid StackId) : ICommand<Result<Stack>>;
 
 internal sealed class CheckStackUpdatesHandler(

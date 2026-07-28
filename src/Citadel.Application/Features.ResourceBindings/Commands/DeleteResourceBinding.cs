@@ -12,10 +12,10 @@ namespace Application.Features.ResourceBindings.Commands;
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record DeleteGlobalResourceBinding(Guid Id) : ICommand<Result<ResourceBindingsResult>>;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings, ResourceIdProperty = nameof(DeleteStackResourceBinding.ResourceId))]
 public sealed record DeleteStackResourceBinding(Guid ResourceId, Guid Id) : ICommand<Result<ResourceBindingsResult>>;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.ResourceBindings, ResourceIdProperty = nameof(DeleteDeploymentResourceBinding.ResourceId))]
 public sealed record DeleteDeploymentResourceBinding(Guid ResourceId, Guid Id) : ICommand<Result<ResourceBindingsResult>>;
 
 internal sealed class DeleteGlobalResourceBindingHandler(IUnitOfWork unitOfWork)

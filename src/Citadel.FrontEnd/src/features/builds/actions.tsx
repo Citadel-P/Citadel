@@ -5,7 +5,7 @@ import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Play, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { isBuildProjectActive } from './build-run-state';
 
@@ -97,6 +97,9 @@ const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
       const queryClient = useQueryClient();
       const archive = useMutate('archiveBuildProject');
       const [, setSelectedResources] = useSelectedResources<BuildProjectView>('Build');
+      const location = useLocation();
+      const navigate = useNavigate();
+      const isCurrentBuildArchived = selected.some((project) => location.pathname === `/builds/edit/${project.id}`);
 
       return {
         canExecute: selected.length > 0,
@@ -109,6 +112,7 @@ const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
             await invalidateBuildQueries(queryClient);
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'build' : 'builds'} archived`);
+            if (isCurrentBuildArchived) navigate('/builds', { replace: true });
           } catch {
             /** Nope */
           }

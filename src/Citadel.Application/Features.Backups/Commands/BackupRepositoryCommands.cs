@@ -28,26 +28,26 @@ public sealed record CreateBackupRepository(BackupRepositoryInputModel Repositor
     }
 }
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Write, ResourceIdProperty = nameof(UpdateBackupRepository.RepositoryId))]
 public sealed record UpdateBackupRepository(Guid RepositoryId, UpdateBackupRepositoryInputModel Repository, bool UpdateDescription, bool UpdateSpec)
     : ICommand<Result<BackupRepositoryResult>>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Write, ResourceIdProperty = nameof(ArchiveBackupRepository.RepositoryId))]
 public sealed record ArchiveBackupRepository(Guid RepositoryId) : ICommand<Result>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute, ResourceIdProperty = nameof(ValidateBackupRepository.RepositoryId))]
 public sealed record ValidateBackupRepository(Guid RepositoryId, ValidateBackupRepositoryInputModel Input)
     : ICommand<Result<BackupRepositoryValidation>>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute, ResourceIdProperty = nameof(InitializeBackupRepository.RepositoryId))]
 public sealed record InitializeBackupRepository(Guid RepositoryId, ValidateBackupRepositoryInputModel Input)
     : ICommand<Result>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute, ResourceIdProperty = nameof(CheckBackupRepository.RepositoryId))]
 public sealed record CheckBackupRepository(Guid RepositoryId, ValidateBackupRepositoryInputModel Input)
     : ICommand<Result>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Execute, ResourceIdProperty = nameof(PruneBackupRepository.RepositoryId))]
 public sealed record PruneBackupRepository(Guid RepositoryId, ValidateBackupRepositoryInputModel Input)
     : ICommand<Result>;
 

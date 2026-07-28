@@ -1,4 +1,5 @@
 using Application.Features.Builds.Models;
+using Application.Permissions;
 using Application.Features.Tags.Queries;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Builds;
@@ -14,16 +15,14 @@ namespace Application.Features.Builds.Queries;
 [RequirePermission(ResourceType.Build, PermissionLevel.Read)]
 public sealed record GetBuildProjects(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<BuildProjectListResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Read, ResourceIdProperty = nameof(GetBuildProject.ProjectId))]
 public sealed record GetBuildProject(Guid ProjectId) : IQuery<Result<BuildProjectResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Read, ResourceIdProperty = nameof(GetBuildRuns.ProjectId))]
 public sealed record GetBuildRuns(Guid? ProjectId = null, int Limit = 50) : IQuery<Result<BuildRunListResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read)]
 public sealed record GetBuildRun(Guid RunId) : IQuery<Result<BuildRunResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read)]
 public sealed record GetBuildRunLogs(Guid RunId) : IQuery<Result<BuildRunLogResult>>;
 
 internal sealed class GetBuildProjectsHandler(
@@ -83,19 +82,30 @@ internal sealed class GetBuildRunsHandler(IUnitOfWork unitOfWork)
     }
 }
 
-internal sealed class GetBuildRunHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBuildRunHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBuildRun, Result<BuildRunResult>>
 {
     public async ValueTask<Result<BuildRunResult>> Handle(GetBuildRun query, CancellationToken cancellationToken)
     {
         var run = await unitOfWork.BuildRuns.GetAsync(query.RunId, cancellationToken);
-        return run is null
-            ? Result.Failure<BuildRunResult>(new NotFoundError("Build run not found."))
-            : Result.Success(new BuildRunResult(run));
+        if (run is null)
+            return Result.Failure<BuildRunResult>(new NotFoundError("Build run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            run.BuildProjectId,
+            ResourceType.Build,
+            cancellationToken);
+        return permission.Has(PermissionLevel.Read, SpecificPermission.None)
+            ? Result.Success(new BuildRunResult(run))
+            : Result.Failure<BuildRunResult>(new ForbiddenError("Missing permission [Read] on [Build]"));
     }
 }
 
-internal sealed class GetBuildRunLogsHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBuildRunLogsHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBuildRunLogs, Result<BuildRunLogResult>>
 {
     public async ValueTask<Result<BuildRunLogResult>> Handle(GetBuildRunLogs query, CancellationToken cancellationToken)
@@ -103,6 +113,13 @@ internal sealed class GetBuildRunLogsHandler(IUnitOfWork unitOfWork)
         var run = await unitOfWork.BuildRuns.GetAsync(query.RunId, cancellationToken);
         if (run is null)
             return Result.Failure<BuildRunLogResult>(new NotFoundError("Build run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            run.BuildProjectId,
+            ResourceType.Build,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.None))
+            return Result.Failure<BuildRunLogResult>(new ForbiddenError("Missing permission [Read] on [Build]"));
 
         var logs = await unitOfWork.BuildRunLogs.GetByRunAsync(query.RunId, cancellationToken);
         return Result.Success(new BuildRunLogResult(query.RunId, logs));

@@ -13,6 +13,14 @@ Citadel shows current used and total capacity in the Platform summary and
 historical percentage usage in the Platform Stats tab. Missing readings appear
 as unavailable rather than zero.
 
+## Backup Summary
+
+The platform summary counts backup policies attached to that platform through a
+Docker volume, stack, or deployment. Citadel control-plane backups are
+instance-wide, so they are shown on the main **Backups** page and are not
+included in a platform's total. See
+[`backups.md`](backups.md#backup-counts) for details.
+
 Citadel includes these system rules:
 
 | Rule | Severity | Required matches | Cooldown |

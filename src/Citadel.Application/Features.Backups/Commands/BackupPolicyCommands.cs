@@ -17,6 +17,7 @@ using Application.TaskJobs.WorkItems;
 using System.Runtime.CompilerServices;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Activities;
+using Application.Permissions;
 
 namespace Application.Features.Backups.Commands;
 
@@ -39,7 +40,7 @@ public sealed record CreateBackupPolicy(BackupPolicyInputModel Policy) : IComman
     }
 }
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write, ResourceIdProperty = nameof(UpdateBackupPolicy.PolicyId))]
 public sealed record UpdateBackupPolicy(
     Guid PolicyId,
     UpdateBackupPolicyInputModel Policy,
@@ -51,7 +52,7 @@ public sealed record UpdateBackupPolicy(
     bool UpdateWebhook)
     : ICommand<Result<BackupPolicyResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write, ResourceIdProperty = nameof(RenameBackupPolicy.PolicyId))]
 public sealed record RenameBackupPolicy(Guid PolicyId, string Name) : ICommand<Result<BackupPolicyResult>>
 {
     internal sealed class Validator : AbstractValidator<RenameBackupPolicy>
@@ -64,7 +65,7 @@ public sealed record RenameBackupPolicy(Guid PolicyId, string Name) : ICommand<R
     }
 }
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write, ResourceIdProperty = nameof(PatchBackupPolicyMetadata.PolicyId))]
 public sealed record PatchBackupPolicyMetadata(Guid PolicyId, string? Description) : ICommand<Result<BackupPolicyResult>>
 {
     internal sealed class Validator : AbstractValidator<PatchBackupPolicyMetadata>
@@ -77,25 +78,21 @@ public sealed record PatchBackupPolicyMetadata(Guid PolicyId, string? Descriptio
     }
 }
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write, ResourceIdProperty = nameof(ArchiveBackupPolicy.PolicyId))]
 public sealed record ArchiveBackupPolicy(Guid PolicyId) : ICommand<Result>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute, ResourceIdProperty = nameof(QueueBackupRun.PolicyId))]
 public sealed record QueueBackupRun(Guid PolicyId, QueueBackupRunInputModel Input) : ICommand<Result<BackupRunResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute, ResourceIdProperty = nameof(RunBackupPolicy.PolicyId))]
 public sealed record RunBackupPolicy(Guid PolicyId, QueueBackupRunInputModel Input) : IStreamCommand<BackupRunStreamItem>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
 public sealed record CancelBackupRun(Guid RunId) : ICommand<Result>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record QueueBackupRestoreRun(Guid RunId, RestoreVolumeInputModel Input) : ICommand<Result<BackupRestoreRunResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record RunBackupRestoreVolume(Guid RunId, RestoreVolumeInputModel Input) : IStreamCommand<BackupRestoreRunStreamItem>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record CancelBackupRestoreRun(Guid RestoreRunId) : ICommand<Result>;
 
 file static class BackupPolicySourceValidator
@@ -671,6 +668,7 @@ internal sealed class RunBackupPolicyHandler(
 
 internal sealed class CancelBackupRunHandler(
     IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator,
     IBackupRunCoordinator runCoordinator,
     IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue)
@@ -678,6 +676,17 @@ internal sealed class CancelBackupRunHandler(
 {
     public async ValueTask<Result> Handle(CancelBackupRun command, CancellationToken cancellationToken)
     {
+        var existingRun = await unitOfWork.BackupRuns.GetAsync(command.RunId, cancellationToken);
+        if (existingRun is null)
+            return Result.Failure(new NotFoundError("Active backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            existingRun.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Execute, SpecificPermission.None))
+            return Result.Failure(new ForbiddenError("Missing permission [Execute] on [BackupPolicy]"));
+
         runCoordinator.Cancel(command.RunId);
         var run = await unitOfWork.BackupRuns.CancelQueuedOrRunningAsync(
             command.RunId,
@@ -700,6 +709,7 @@ internal sealed class CancelBackupRunHandler(
 
 internal sealed class QueueBackupRestoreRunHandler(
     IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator,
     IUserContextAccessor userContextAccessor,
     IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
     INotificationQueue notificationQueue)
@@ -709,6 +719,7 @@ internal sealed class QueueBackupRestoreRunHandler(
     {
         var result = await BackupRestoreRunQueuer.QueueAsync(
             unitOfWork,
+            permissionEvaluator,
             userContextAccessor,
             command.RunId,
             command.Input,
@@ -727,6 +738,7 @@ internal sealed class QueueBackupRestoreRunHandler(
 
 internal sealed class RunBackupRestoreVolumeHandler(
     IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator,
     IBackupRestoreRunExecutionService executionService,
     IUserContextAccessor userContextAccessor,
     IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
@@ -739,6 +751,7 @@ internal sealed class RunBackupRestoreVolumeHandler(
     {
         var result = await BackupRestoreRunQueuer.QueueAsync(
             unitOfWork,
+            permissionEvaluator,
             userContextAccessor,
             command.RunId,
             command.Input,
@@ -773,6 +786,7 @@ file static class BackupRestoreRunQueuer
 {
     public static async ValueTask<Result<BackupRestoreRunResult>> QueueAsync(
         IUnitOfWork unitOfWork,
+        IPermissionEvaluator permissionEvaluator,
         IUserContextAccessor userContextAccessor,
         Guid runId,
         RestoreVolumeInputModel input,
@@ -781,6 +795,16 @@ file static class BackupRestoreRunQueuer
         var backupRun = await unitOfWork.BackupRuns.GetAsync(runId, cancellationToken);
         if (backupRun is null)
             return Result.Failure<BackupRestoreRunResult>(new NotFoundError("Backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            backupRun.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.Restore))
+        {
+            return Result.Failure<BackupRestoreRunResult>(
+                new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
+        }
 
         if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available)
             return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Only available backup snapshots can be restored."));
@@ -810,6 +834,7 @@ file static class BackupRestoreRunQueuer
 
 internal sealed class CancelBackupRestoreRunHandler(
     IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator,
     IBackupRestoreRunCoordinator runCoordinator,
     IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
     INotificationQueue notificationQueue)
@@ -817,6 +842,24 @@ internal sealed class CancelBackupRestoreRunHandler(
 {
     public async ValueTask<Result> Handle(CancelBackupRestoreRun command, CancellationToken cancellationToken)
     {
+        var existingRestoreRun = await unitOfWork.BackupRestoreRuns.GetAsync(command.RestoreRunId, cancellationToken);
+        if (existingRestoreRun is null)
+            return Result.Failure(new NotFoundError("Active backup restore run not found."));
+
+        var backupRun = await unitOfWork.BackupRuns.GetAsync(existingRestoreRun.BackupRunId, cancellationToken);
+        if (backupRun is null)
+            return Result.Failure(new NotFoundError("Backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            backupRun.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.Restore))
+        {
+            return Result.Failure(
+                new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
+        }
+
         runCoordinator.Cancel(command.RestoreRunId);
         var cancelled = await unitOfWork.BackupRestoreRuns.CancelQueuedOrRunningAsync(
             command.RestoreRunId,

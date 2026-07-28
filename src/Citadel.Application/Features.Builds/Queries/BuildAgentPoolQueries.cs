@@ -14,7 +14,7 @@ namespace Application.Features.Builds.Queries;
 [RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read)]
 public sealed record GetBuildAgentPools(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<BuildAgentPoolListResult>>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read, ResourceIdProperty = nameof(GetBuildAgentPool.PoolId))]
 public sealed record GetBuildAgentPool(Guid PoolId) : IQuery<Result<BuildAgentPoolResult>>;
 
 internal sealed class GetBuildAgentPoolsHandler(

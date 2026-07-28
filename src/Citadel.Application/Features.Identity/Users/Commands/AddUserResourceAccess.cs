@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Users.Commands;
 
-[RequirePermission(ResourceType.User, PermissionLevel.Write)]
+[RequirePermission(ResourceType.User, PermissionLevel.Write, ResourceIdProperty = nameof(AddUserResourceAccess.UserId))]
 public sealed record AddUserResourceAccess(
     Guid UserId,
     ResourceType ResourceType,

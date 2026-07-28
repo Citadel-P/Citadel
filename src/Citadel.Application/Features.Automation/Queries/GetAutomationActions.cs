@@ -17,10 +17,10 @@ public sealed record GetAutomationActions(IReadOnlyCollection<string>? Tags = nu
 [RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
 public sealed record GetAutomationAction(Guid Id) : IQuery<Result<AutomationAction>>;
 
-[RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
+[RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read, ResourceIdProperty = nameof(GetAutomationActionRuns.ActionId))]
 public sealed record GetAutomationActionRuns(Guid ActionId, int Limit = 50) : IQuery<Result<ActionRunListResult>>;
 
-[RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
+[RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read, ResourceIdProperty = nameof(GetAutomationActionRun.ActionId))]
 public sealed record GetAutomationActionRun(Guid ActionId, Guid RunId) : IQuery<Result<ActionRun>>;
 
 internal sealed class GetAutomationActionsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor)

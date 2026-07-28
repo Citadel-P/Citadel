@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Write, ResourceIdProperty = nameof(RemoveTeamResourceAccess.TeamId))]
 public sealed record RemoveTeamResourceAccess(
     Guid TeamId,
     ResourceType ResourceType,

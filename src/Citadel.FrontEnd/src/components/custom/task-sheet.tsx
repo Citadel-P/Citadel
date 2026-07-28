@@ -6,6 +6,7 @@ import {
   Clock,
   GitBranch,
   GitCommitHorizontal,
+  Link2,
   LoaderCircle,
   NotepadText,
   Route,
@@ -70,6 +71,8 @@ import { CitadelIcons } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { StateIndicator } from './state-indicator';
 import { byteTransform } from '@/lib/bytes.helper';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PullImageParams {
   imageTag: string;
@@ -108,8 +111,8 @@ type BackupRestoreRunStreamItem = {
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
   | { kind: 'deploy'; payload: DeployParams }
-  | { kind: 'activity'; payload: ActivityView }
-  | { kind: 'alertEvent'; payload: AlertEventView }
+  | { kind: 'activity'; payload: Pick<ActivityView, 'id'> }
+  | { kind: 'alertEvent'; payload: Pick<AlertEventView, 'id'> }
   | { kind: 'build'; payload: Record<string, unknown> }
   | { kind: 'stack'; payload: Record<string, unknown> }
   | { kind: 'stackRollback'; payload: StackRollbackParams }
@@ -182,7 +185,12 @@ function TaskActivityLayout({ activityId }: { activityId: string }) {
   return (
     <div className="p-2">
       <SheetHeader>
-        <SheetTitle>{formatActivityEvent(activity.eventType)}</SheetTitle>
+        <EventSheetTitle
+          title={formatActivityEvent(activity.eventType)}
+          eventId={activity.id}
+          routePrefix="activities"
+          eventLabel="activity"
+        />
         <SheetDescription asChild>
           <div className={releaseSource ? 'flex flex-between items-start gap-x-8 gap-y-4' : 'flex flex-col gap-3'}>
             <div className="flex flex-col gap-3">
@@ -237,7 +245,7 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
   return (
     <div className="p-2">
       <SheetHeader>
-        <SheetTitle>{event.type}</SheetTitle>
+        <EventSheetTitle title={event.type} eventId={event.id} routePrefix="alerts" eventLabel="alert" />
         <SheetDescription asChild>
           <div className="flex flex-col gap-3">
             <TargetCell
@@ -288,6 +296,41 @@ function SpecViewer({ spec, title, resourceId }: { spec: unknown; title: string;
       readOnly
       folding
     />
+  );
+}
+
+function EventSheetTitle({
+  title,
+  eventId,
+  routePrefix,
+  eventLabel,
+}: {
+  title: string;
+  eventId: string;
+  routePrefix: 'alerts' | 'activities';
+  eventLabel: 'alert' | 'activity';
+}) {
+  const [copiedLink, copyLink] = useCopyToClipboard(3000);
+  const shareUrl = `${window.location.origin}/${routePrefix}/${encodeURIComponent(eventId)}`;
+  const isCopied = copiedLink === shareUrl;
+
+  return (
+    <div className="flex min-w-0 items-center gap-3 pr-8">
+      <SheetTitle className="truncate">{title}</SheetTitle>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-xs"
+            aria-label={isCopied ? `${eventLabel} link copied` : `Copy ${eventLabel} link`}
+            onClick={() => copyLink(shareUrl)}>
+            {isCopied ? <Check className="text-success" /> : <Link2 />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{isCopied ? 'Link copied' : `Copy ${eventLabel} link`}</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -729,10 +772,7 @@ export function ActivityAlertZone({
   if (!activity || !info) return null;
   if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return null;
   return (
-    <AlertMessage
-      title={title}
-      date={date}
-      type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
+    <AlertMessage title={title} date={date} type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
       {info.result?.message}
     </AlertMessage>
   );
@@ -802,7 +842,10 @@ function formatDurationMs(value: unknown) {
 function WebhookActivityDetails({
   info,
 }: {
-  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived | ActivityEventInfoBuildWebhookReceived;
+  info:
+    | ActivityEventInfoGitRepoWebhookReceived
+    | ActivityEventInfoStackWebhookReceived
+    | ActivityEventInfoBuildWebhookReceived;
 }) {
   const displayReason = formatWebhookReason(info.reason);
   const title =
@@ -822,7 +865,10 @@ function WebhookActivityDetails({
 }
 
 function compactWebhookDetails(
-  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived | ActivityEventInfoBuildWebhookReceived,
+  info:
+    | ActivityEventInfoGitRepoWebhookReceived
+    | ActivityEventInfoStackWebhookReceived
+    | ActivityEventInfoBuildWebhookReceived,
   message: string,
   reason: string | null | undefined,
 ) {
@@ -869,7 +915,9 @@ function stripStackReleaseSource(stack: StackSnapshot | null | undefined): Stack
   };
 }
 
-function stripBuildProjectSecrets(build: BuildProjectSnapshot | null | undefined): BuildProjectSnapshot | null | undefined {
+function stripBuildProjectSecrets(
+  build: BuildProjectSnapshot | null | undefined,
+): BuildProjectSnapshot | null | undefined {
   if (!build?.webhook?.secret) return build;
 
   return {
@@ -1084,11 +1132,11 @@ function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActio
   return <TaskStreamLayout title={title} refName={payload.name} type="AutomationAction" state={state as any} />;
 }
 
-function ActivityTaskRenderer({ payload }: { payload: ActivityView; type: ResourceType }) {
+function ActivityTaskRenderer({ payload }: { payload: Pick<ActivityView, 'id'>; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
 }
 
-function AlertEventTaskRenderer({ payload }: { payload: AlertEventView; type: ResourceType }) {
+function AlertEventTaskRenderer({ payload }: { payload: Pick<AlertEventView, 'id'>; type: ResourceType }) {
   return <TaskAlertEventLayout alertEventId={payload.id} />;
 }
 
@@ -1106,14 +1154,17 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   alertEvent: AlertEventTaskRenderer,
 };
 
-export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType }) {
+export const TaskSheet = memo(function TaskSheet({ type, onClose }: { type: ResourceType; onClose?: () => void }) {
   const { state, close } = useTaskSheet(type);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open) close();
+      if (!open) {
+        onClose?.();
+        close();
+      }
     },
-    [close],
+    [close, onClose],
   );
 
   if (!state.open || !state.task) return null;

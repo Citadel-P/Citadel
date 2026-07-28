@@ -4,7 +4,7 @@ import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Play, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
 export const invalidateBackupPolicyQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
@@ -85,6 +85,11 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
       const queryClient = useQueryClient();
       const archive = useMutate('archiveBackupPolicy');
       const [, setSelectedResources] = useSelectedResources<BackupPolicyView>('BackupPolicy');
+      const location = useLocation();
+      const navigate = useNavigate();
+      const isCurrentPolicyArchived = selected.some(
+        (policy) => location.pathname === `/backup-policies/edit/${policy.id}`,
+      );
 
       return {
         canExecute: selected.length > 0,
@@ -97,6 +102,7 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
             await invalidateBackupPolicyQueries(queryClient);
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
+            if (isCurrentPolicyArchived) navigate('/backup-policies', { replace: true });
           } catch (_error) {
             toast.error(archive.validationErrors ?? 'Failed to archive selected policies');
           }

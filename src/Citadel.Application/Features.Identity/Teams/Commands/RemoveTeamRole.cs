@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Write, ResourceIdProperty = nameof(RemoveTeamRole.TeamId))]
 public sealed record RemoveTeamRole(Guid TeamId, Guid RoleId) : ICommand<Result<TeamDetails>>
 {
     internal sealed class Validator : AbstractValidator<RemoveTeamRole>

@@ -158,7 +158,7 @@ export const SidebarMenu = () => {
         <SidebarGroup key={menu.group || i}>
           <SidebarGroupLabel>{menu.group}</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenuList>
+            <SidebarMenuList className="pl-1 group-data-[collapsible=icon]:pl-0">
               {menu.items.map((item) => (
                 <SidebarMenuItem key={item.label}>
                   <SidebarRow

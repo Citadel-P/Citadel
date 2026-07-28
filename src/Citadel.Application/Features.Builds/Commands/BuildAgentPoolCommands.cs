@@ -33,7 +33,7 @@ public sealed record CreateBuildAgentPool(BuildAgentPoolInputModel Pool) : IComm
     }
 }
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(UpdateBuildAgentPool.PoolId))]
 public sealed record UpdateBuildAgentPool(
     Guid PoolId,
     UpdateBuildAgentPoolInputModel Pool,
@@ -49,19 +49,19 @@ public sealed record UpdateBuildAgentPool(
     }
 }
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(RenameBuildAgentPool.PoolId))]
 public sealed record RenameBuildAgentPool(Guid PoolId, string Name) : ICommand<Result<BuildAgentPoolResult>>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(PatchBuildAgentPoolMetadata.PoolId))]
 public sealed record PatchBuildAgentPoolMetadata(Guid PoolId, string? Description) : ICommand<Result<BuildAgentPoolResult>>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(TestBuildAgentPool.PoolId))]
 public sealed record TestBuildAgentPool(Guid PoolId) : ICommand<Result<BuildAgentPoolResult>>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(ArchiveBuildAgentPool.PoolId))]
 public sealed record ArchiveBuildAgentPool(Guid PoolId) : ICommand<Result>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write, ResourceIdProperty = nameof(CreateBuildAgentPoolEdgeEnrollment.PoolId))]
 public sealed record CreateBuildAgentPoolEdgeEnrollment(Guid PoolId, string CoreUrl) : ICommand<Result<EdgeAgentEnrollmentResult>>
 {
     internal sealed class Validator : AbstractValidator<CreateBuildAgentPoolEdgeEnrollment>
@@ -78,10 +78,10 @@ public sealed record CreateBuildAgentPoolEdgeEnrollment(Guid PoolId, string Core
     }
 }
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read, ResourceIdProperty = nameof(GetBuildAgentPoolEdgeStatus.PoolId))]
 public sealed record GetBuildAgentPoolEdgeStatus(Guid PoolId) : IQuery<Result<EdgeAgentStatusResult>>;
 
-[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Execute)]
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Execute, ResourceIdProperty = nameof(RevokeBuildAgentPoolEdgeAgent.PoolId))]
 public sealed record RevokeBuildAgentPoolEdgeAgent(Guid PoolId) : ICommand<Result>;
 
 internal sealed class CreateBuildAgentPoolHandler(

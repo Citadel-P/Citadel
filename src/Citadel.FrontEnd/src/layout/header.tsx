@@ -1,4 +1,5 @@
-import type { AlertEventView } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertResourceType, AlertSeverity, type AlertEventView } from '@/api/generated/api.types';
+import type { ResourceType } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,17 +15,20 @@ import { useAuthContext } from '@/features/auth/auth-context';
 import { getInitials } from '@/features/profile/utils';
 import { useRead, useMutate } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
-import { useTaskSheet } from '@/lib/atoms';
 import { useLayoutContext, type ThemeMode } from '@/lib/context/layout-context';
 import { toUserTheme } from '@/lib/theme-preferences';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useQueryClient } from '@tanstack/react-query';
 import { jwtDecode } from 'jwt-decode';
-import { Bell, LogOut, Moon, Sun, User } from 'lucide-react';
+import { ArrowRight, Bell, BellOff, LogOut, Moon, Sun, User } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { BreadcrumbTrail } from './breadcrumb';
 import { GlobalSearch } from '@/features/search/global-search';
+import { useOpenAlertEventSheet } from '@/features/alerters/alert-events/alert-task-sheet';
+import { CitadelIcons } from '@/lib/icons';
+import { fromNow } from '@/lib/dayjs.helper';
+import { cn, formatActivityEvent } from '@/lib/utils';
 
 const themeColors = [
   { name: 'base', code: '#e11d48' },
@@ -156,14 +160,15 @@ function HeaderAccountMenu() {
   );
 }
 
-function AlertBell() {
+export function AlertBell() {
   const navigate = useNavigate();
-  const { open: openAlertSheet } = useTaskSheet('Alert');
+  const openAlertSheet = useOpenAlertEventSheet();
   const formatDateTime = useProfileDateTimeFormatter();
   const { unresolvedAlertCount, liveAlertEvents } = useAppContext();
   const latestEvents = useMemo(
     () =>
       Object.values(liveAlertEvents)
+        .filter((event) => event.status !== AlertEventStatus.Resolved)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 5),
     [liveAlertEvents],
@@ -182,34 +187,45 @@ function AlertBell() {
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-2 bg-background">
-        <DropdownMenuLabel className="flex items-center justify-between">
-          <span>Alerts</span>
+      <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-1rem)] overflow-hidden bg-background p-0">
+        <DropdownMenuLabel className="flex items-center justify-between gap-3 px-4 py-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Alerts</span>
+            <span className="block text-xs font-normal text-muted-foreground">Recent unresolved events</span>
+          </span>
           {unresolvedAlertCount > 0 ? (
-            <span className="text-xs font-normal text-muted-foreground">{unresolvedAlertCount} unresolved</span>
+            <span className="shrink-0 rounded-full border bg-muted/50 px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+              {unresolvedAlertCount} unresolved
+            </span>
           ) : null}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="m-0" />
         {latestEvents.length > 0 ? (
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-96 divide-y divide-border/60 overflow-y-auto">
             {latestEvents.map((event) => (
               <AlertEventPreview
                 key={event.id}
                 event={event}
                 formatDateTime={formatDateTime}
-                onOpen={() => {
-                  openAlertSheet({ kind: 'alertEvent', payload: event });
-                  navigate('/alerts');
-                }}
+                onOpen={() => openAlertSheet(event.id)}
               />
             ))}
           </div>
         ) : (
-          <div className="px-2 py-6 text-center text-sm text-muted-foreground">No live alerts</div>
+          <div className="flex flex-col items-center px-6 py-8 text-center">
+            <span className="mb-3 flex size-9 items-center justify-center rounded-full border bg-muted/40 text-muted-foreground">
+              <BellOff className="size-4" />
+            </span>
+            <span className="text-sm font-medium">No unresolved alerts</span>
+            <span className="mt-1 text-xs text-muted-foreground">New operational alerts will appear here.</span>
+          </div>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate('/alerts')} className="justify-center text-xs font-medium">
-          View all alerts
+        <DropdownMenuSeparator className="m-0" />
+        <DropdownMenuItem
+          onClick={() => navigate('/alerts')}
+          className="h-10 justify-between rounded-none px-4 text-xs font-medium">
+          <span>View all alerts</span>
+          <ArrowRight className="size-3.5" />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -225,16 +241,76 @@ function AlertEventPreview({
   formatDateTime: (value: unknown) => string;
   onOpen: () => void;
 }) {
+  const Icon = CitadelIcons[event.resourceType as ResourceType] ?? CitadelIcons.Alert;
+  const resourceIconClassName = alertResourceIconStyles[event.resourceType] ?? 'bg-muted/60 text-muted-foreground';
+  const severityStyle = alertSeverityStyles[event.severity] ?? alertSeverityStyles[AlertSeverity.Info];
+
   return (
-    <DropdownMenuItem onSelect={onOpen} className="block h-auto cursor-pointer rounded-sm px-2 py-2 hover:bg-card">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate text-xs font-semibold">{event.resourceName || event.resourceType}</span>
-        <span className="shrink-0 text-[10px] text-muted-foreground">{formatDateTime(event.createdAt)}</span>
+    <DropdownMenuItem
+      onSelect={onOpen}
+      className="h-auto cursor-pointer items-center gap-3 rounded-none px-4 py-3 focus:bg-accent/60">
+      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full', resourceIconClassName)}>
+        <Icon className="size-3.5" />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[13px] font-medium text-foreground">{formatActivityEvent(event.type)}</span>
+          <span
+            className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground"
+            title={formatDateTime(event.createdAt)}>
+            {fromNow(event.createdAt)}
+          </span>
+        </div>
+
+        <p className="mt-1 line-clamp-2 text-xs font-normal leading-4 text-muted-foreground">{event.message}</p>
+
+        <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] font-normal">
+          <span className={cn('inline-flex shrink-0 items-center gap-1.5 font-medium', severityStyle.text)}>
+            <span className={cn('size-1.5 rounded-full', severityStyle.dot)} />
+            {event.severity}
+          </span>
+          <span className="size-0.5 shrink-0 rounded-full bg-border" />
+          <span className="truncate text-muted-foreground">
+            {event.resourceName || formatActivityEvent(event.resourceType)}
+          </span>
+          {event.status === AlertEventStatus.Acknowledged ? (
+            <>
+              <span className="size-0.5 shrink-0 rounded-full bg-border" />
+              <span className="shrink-0 text-muted-foreground">Acknowledged</span>
+            </>
+          ) : null}
+        </div>
       </div>
-      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{event.message}</p>
     </DropdownMenuItem>
   );
 }
+
+const alertResourceIconStyles: Record<AlertResourceType, string> = {
+  [AlertResourceType.Platform]: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  [AlertResourceType.Deployment]: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  [AlertResourceType.Stack]: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  [AlertResourceType.GitRepository]: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  [AlertResourceType.Webhook]: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+  [AlertResourceType.AutomationAction]: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  [AlertResourceType.Build]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+  [AlertResourceType.License]: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+};
+
+const alertSeverityStyles: Record<AlertSeverity, { dot: string; text: string }> = {
+  [AlertSeverity.Info]: {
+    dot: 'bg-blue-500',
+    text: 'text-blue-600 dark:text-blue-400',
+  },
+  [AlertSeverity.Warning]: {
+    dot: 'bg-amber-500',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  [AlertSeverity.Critical]: {
+    dot: 'bg-red-500',
+    text: 'text-red-600 dark:text-red-400',
+  },
+};
 
 function getTokenProfile(accessToken: string | undefined) {
   if (!accessToken) return undefined;

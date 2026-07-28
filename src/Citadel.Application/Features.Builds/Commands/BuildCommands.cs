@@ -1,4 +1,5 @@
 using Application.Features.Builds.Models;
+using Application.Permissions;
 using Application.Services.Builds;
 using Application.Services.Licensing;
 using Application.Services.SignalR;
@@ -42,7 +43,7 @@ public sealed record CreateBuildProject(BuildProjectInputModel Project) : IComma
     }
 }
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Write, ResourceIdProperty = nameof(UpdateBuildProject.ProjectId))]
 public sealed record UpdateBuildProject(
     Guid ProjectId,
     UpdateBuildProjectInputModel Project,
@@ -69,19 +70,18 @@ public sealed record UpdateBuildProject(
     }
 }
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Write, ResourceIdProperty = nameof(RenameBuildProject.ProjectId))]
 public sealed record RenameBuildProject(Guid ProjectId, string Name) : ICommand<Result<BuildProjectResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Write, ResourceIdProperty = nameof(PatchBuildProjectMetadata.ProjectId))]
 public sealed record PatchBuildProjectMetadata(Guid ProjectId, string? Description) : ICommand<Result<BuildProjectResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Write, ResourceIdProperty = nameof(ArchiveBuildProject.ProjectId))]
 public sealed record ArchiveBuildProject(Guid ProjectId) : ICommand<Result>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply)]
+[RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply, ResourceIdProperty = nameof(QueueBuildRun.ProjectId))]
 public sealed record QueueBuildRun(Guid ProjectId, QueueBuildRunInputModel Input) : ICommand<Result<BuildRunResult>>;
 
-[RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply)]
 public sealed record CancelBuildRun(Guid RunId) : ICommand<Result>;
 
 internal sealed class BuildSecretSpecValidator : AbstractValidator<BuildSecretSpec>
@@ -659,6 +659,7 @@ internal sealed class QueueBuildRunHandler(
 
 internal sealed class CancelBuildRunHandler(
     IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator,
     IBuildRunCoordinator buildRunCoordinator,
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
@@ -667,6 +668,17 @@ internal sealed class CancelBuildRunHandler(
 {
     public async ValueTask<Result> Handle(CancelBuildRun command, CancellationToken cancellationToken)
     {
+        var existingRun = await unitOfWork.BuildRuns.GetAsync(command.RunId, cancellationToken);
+        if (existingRun is null)
+            return Result.Failure(new ConflictError("Build run is not active or was not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            existingRun.BuildProjectId,
+            ResourceType.Build,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.Apply))
+            return Result.Failure(new ForbiddenError("Missing permission [Read] with specific [Apply] on [Build]"));
+
         var wasRegistered = buildRunCoordinator.Cancel(command.RunId);
 
         var run = await unitOfWork.BuildRuns.CancelQueuedOrRunningAsync(

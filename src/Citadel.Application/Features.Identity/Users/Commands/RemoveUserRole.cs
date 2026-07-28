@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Users.Commands;
 
-[RequirePermission(ResourceType.User, PermissionLevel.Write)]
+[RequirePermission(ResourceType.User, PermissionLevel.Write, ResourceIdProperty = nameof(RemoveUserRole.UserId))]
 public sealed record RemoveUserRole(Guid UserId, Guid RoleId) : ICommand<Result<UserDetails>>
 {
     internal sealed class Validator : AbstractValidator<RemoveUserRole>

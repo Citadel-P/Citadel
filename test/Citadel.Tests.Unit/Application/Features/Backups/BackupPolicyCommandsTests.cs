@@ -1,5 +1,6 @@
 using Application.Features.Backups.Commands;
 using Application.Features.Backups.Models;
+using Application.Permissions;
 using Application.Services.Backups;
 using Application.Services.Licensing;
 using Application.Services.SignalR;
@@ -10,7 +11,9 @@ using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Activities;
 using Domain.Entities.Backups;
+using Hosting.Common;
 using Hosting.Common.Abstraction;
+using Hosting.Common.Attributes;
 using LightResults;
 using Moq;
 using System.Text.Json;
@@ -115,6 +118,9 @@ public sealed class BackupPolicyCommandsTests
         run.Cancel(DateTimeOffset.UtcNow);
         var backupRuns = new Mock<IBackupRunRepository>();
         backupRuns
+            .Setup(x => x.GetAsync(run.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(run);
+        backupRuns
             .Setup(x => x.CancelQueuedOrRunningAsync(
                 run.Id,
                 It.IsAny<DateTimeOffset>(),
@@ -128,6 +134,7 @@ public sealed class BackupPolicyCommandsTests
         var notificationQueue = CreateNotificationQueue(notifications);
         var handler = new CancelBackupRunHandler(
             unitOfWork.Object,
+            CreatePermissionEvaluator(),
             coordinator.Object,
             streamManager.Object,
             notificationQueue.Object);
@@ -142,6 +149,37 @@ public sealed class BackupPolicyCommandsTests
 
         coordinator.Verify(x => x.Cancel(run.Id), Times.Once);
         streamManager.Verify(x => x.SendBackupRunInfo(run, "update"), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelBackupRun_ShouldRejectBeforeCancellationWhenPolicyAccessIsMissing()
+    {
+        var run = CreateQueuedBackupRun();
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.GetAsync(run.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(run);
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object);
+        var coordinator = new Mock<IBackupRunCoordinator>();
+        var handler = new CancelBackupRunHandler(
+            unitOfWork.Object,
+            CreatePermissionEvaluator(PermissionMetadata.Empty),
+            coordinator.Object,
+            Mock.Of<IBackupRunStreamManager>(),
+            CreateNotificationQueue([]).Object);
+
+        var result = await handler.Handle(new CancelBackupRun(run.Id), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure());
+        coordinator.Verify(x => x.Cancel(It.IsAny<Guid>()), Times.Never);
+        backupRuns.Verify(
+            x => x.CancelQueuedOrRunningAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -367,6 +405,7 @@ public sealed class BackupPolicyCommandsTests
         var restoreRunStreamManager = new Mock<IBackupRestoreRunStreamManager>();
         var handler = new RunBackupRestoreVolumeHandler(
             unitOfWork.Object,
+            CreatePermissionEvaluator(),
             executionService.Object,
             CreateUserContextAccessor(),
             restoreRunStreamManager.Object,
@@ -403,6 +442,7 @@ public sealed class BackupPolicyCommandsTests
         var notificationQueue = CreateNotificationQueue([]);
         var handler = new RunBackupRestoreVolumeHandler(
             unitOfWork.Object,
+            CreatePermissionEvaluator(),
             executionService.Object,
             CreateUserContextAccessor(),
             Mock.Of<IBackupRestoreRunStreamManager>(),
@@ -440,6 +480,7 @@ public sealed class BackupPolicyCommandsTests
         var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
         var handler = new RunBackupRestoreVolumeHandler(
             unitOfWork.Object,
+            CreatePermissionEvaluator(),
             Mock.Of<IBackupRestoreRunExecutionService>(),
             CreateUserContextAccessor(),
             Mock.Of<IBackupRestoreRunStreamManager>(),
@@ -487,6 +528,7 @@ public sealed class BackupPolicyCommandsTests
         var restoreRunStreamManager = new Mock<IBackupRestoreRunStreamManager>();
         var handler = new RunBackupRestoreVolumeHandler(
             unitOfWork.Object,
+            CreatePermissionEvaluator(),
             executionService.Object,
             CreateUserContextAccessor(),
             restoreRunStreamManager.Object,
@@ -717,5 +759,22 @@ public sealed class BackupPolicyCommandsTests
         var accessor = new Mock<IUserContextAccessor>();
         accessor.SetupGet(x => x.Current).Returns(user.Object);
         return accessor.Object;
+    }
+
+    private static IPermissionEvaluator CreatePermissionEvaluator(PermissionMetadata? permission = null)
+    {
+        var evaluator = new Mock<IPermissionEvaluator>();
+        evaluator
+            .Setup(x => x.EvaluateAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<ResourceType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(permission ?? Helpers.AdminPermissions);
+        evaluator
+            .Setup(x => x.EvaluateAsync(
+                It.IsAny<ResourceType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(permission ?? Helpers.AdminPermissions);
+        return evaluator.Object;
     }
 }

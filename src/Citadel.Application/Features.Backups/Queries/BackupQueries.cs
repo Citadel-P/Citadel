@@ -1,4 +1,5 @@
 using Application.Features.Backups.Models;
+using Application.Permissions;
 using Application.Features.Tags.Queries;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -16,31 +17,26 @@ namespace Application.Features.Backups.Queries;
 [RequirePermission(ResourceType.BackupRepository, PermissionLevel.Read)]
 public sealed record GetBackupRepositories : IQuery<Result<BackupRepositoryListResult>>;
 
-[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Read)]
+[RequirePermission(ResourceType.BackupRepository, PermissionLevel.Read, ResourceIdProperty = nameof(GetBackupRepository.RepositoryId))]
 public sealed record GetBackupRepository(Guid RepositoryId) : IQuery<Result<BackupRepository>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
 public sealed record GetBackupPolicies(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<BackupPolicyListResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, ResourceIdProperty = nameof(GetBackupPolicy.PolicyId))]
 public sealed record GetBackupPolicy(Guid PolicyId) : IQuery<Result<BackupPolicyResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, ResourceIdProperty = nameof(GetBackupRuns.PolicyId))]
 public sealed record GetBackupRuns(Guid? PolicyId = null, int Limit = 50) : IQuery<Result<BackupRunListResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
 public sealed record GetBackupRun(Guid RunId) : IQuery<Result<BackupRun>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
 public sealed record GetBackupRunLogs(Guid RunId) : IQuery<Result<BackupRunLogResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record GetBackupRestoreRuns(Guid? BackupRunId = null, Guid? PolicyId = null, int Limit = 50) : IQuery<Result<BackupRestoreRunListResult>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record GetBackupRestoreRun(Guid RestoreRunId) : IQuery<Result<BackupRestoreRun>>;
 
-[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record GetBackupRestoreRunLogs(Guid RestoreRunId) : IQuery<Result<BackupRestoreRunLogResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
@@ -154,19 +150,30 @@ internal sealed class GetBackupRunsHandler(IUnitOfWork unitOfWork)
     }
 }
 
-internal sealed class GetBackupRunHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBackupRunHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBackupRun, Result<BackupRun>>
 {
     public async ValueTask<Result<BackupRun>> Handle(GetBackupRun query, CancellationToken cancellationToken)
     {
         var run = await unitOfWork.BackupRuns.GetAsync(query.RunId, cancellationToken);
-        return run is null
-            ? Result.Failure<BackupRun>(new NotFoundError("Backup run not found."))
-            : Result.Success(run);
+        if (run is null)
+            return Result.Failure<BackupRun>(new NotFoundError("Backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            run.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        return permission.Has(PermissionLevel.Read, SpecificPermission.None)
+            ? Result.Success(run)
+            : Result.Failure<BackupRun>(new ForbiddenError("Missing permission [Read] on [BackupPolicy]"));
     }
 }
 
-internal sealed class GetBackupRunLogsHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBackupRunLogsHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBackupRunLogs, Result<BackupRunLogResult>>
 {
     public async ValueTask<Result<BackupRunLogResult>> Handle(GetBackupRunLogs query, CancellationToken cancellationToken)
@@ -175,16 +182,48 @@ internal sealed class GetBackupRunLogsHandler(IUnitOfWork unitOfWork)
         if (run is null)
             return Result.Failure<BackupRunLogResult>(new NotFoundError("Backup run not found."));
 
+        var permission = await permissionEvaluator.EvaluateAsync(
+            run.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.None))
+            return Result.Failure<BackupRunLogResult>(new ForbiddenError("Missing permission [Read] on [BackupPolicy]"));
+
         var logs = await unitOfWork.BackupRunLogs.GetByRunAsync(query.RunId, cancellationToken);
         return Result.Success(new BackupRunLogResult(query.RunId, logs));
     }
 }
 
-internal sealed class GetBackupRestoreRunsHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBackupRestoreRunsHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBackupRestoreRuns, Result<BackupRestoreRunListResult>>
 {
     public async ValueTask<Result<BackupRestoreRunListResult>> Handle(GetBackupRestoreRuns query, CancellationToken cancellationToken)
     {
+        Guid? policyId = query.PolicyId;
+        if (query.BackupRunId.HasValue)
+        {
+            var backupRun = await unitOfWork.BackupRuns.GetAsync(query.BackupRunId.Value, cancellationToken);
+            if (backupRun is null)
+                return Result.Failure<BackupRestoreRunListResult>(new NotFoundError("Backup run not found."));
+
+            if (policyId.HasValue && policyId.Value != backupRun.BackupPolicyId)
+            {
+                return Result.Failure<BackupRestoreRunListResult>(
+                    new BadRequestError("Backup run does not belong to the requested backup policy."));
+            }
+
+            policyId = backupRun.BackupPolicyId;
+        }
+
+        var permission = policyId.HasValue
+            ? await permissionEvaluator.EvaluateAsync(policyId.Value, ResourceType.BackupPolicy, cancellationToken)
+            : await permissionEvaluator.EvaluateAsync(ResourceType.BackupPolicy, cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.Restore))
+            return Result.Failure<BackupRestoreRunListResult>(
+                new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
+
         var runs = query.BackupRunId.HasValue
             ? await unitOfWork.BackupRestoreRuns.GetByBackupRunAsync(query.BackupRunId.Value, query.Limit, cancellationToken)
             : query.PolicyId.HasValue
@@ -195,23 +234,55 @@ internal sealed class GetBackupRestoreRunsHandler(IUnitOfWork unitOfWork)
     }
 }
 
-internal sealed class GetBackupRestoreRunHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBackupRestoreRunHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBackupRestoreRun, Result<BackupRestoreRun>>
 {
     public async ValueTask<Result<BackupRestoreRun>> Handle(GetBackupRestoreRun query, CancellationToken cancellationToken)
     {
         var run = await unitOfWork.BackupRestoreRuns.GetAsync(query.RestoreRunId, cancellationToken);
-        return run is null
-            ? Result.Failure<BackupRestoreRun>(new NotFoundError("Backup restore run not found."))
-            : Result.Success(run);
+        if (run is null)
+            return Result.Failure<BackupRestoreRun>(new NotFoundError("Backup restore run not found."));
+
+        var backupRun = await unitOfWork.BackupRuns.GetAsync(run.BackupRunId, cancellationToken);
+        if (backupRun is null)
+            return Result.Failure<BackupRestoreRun>(new NotFoundError("Backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            backupRun.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        return permission.Has(PermissionLevel.Read, SpecificPermission.Restore)
+            ? Result.Success(run)
+            : Result.Failure<BackupRestoreRun>(
+                new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
     }
 }
 
-internal sealed class GetBackupRestoreRunLogsHandler(IUnitOfWork unitOfWork)
+internal sealed class GetBackupRestoreRunLogsHandler(
+    IUnitOfWork unitOfWork,
+    IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetBackupRestoreRunLogs, Result<BackupRestoreRunLogResult>>
 {
     public async ValueTask<Result<BackupRestoreRunLogResult>> Handle(GetBackupRestoreRunLogs query, CancellationToken cancellationToken)
     {
+        var restoreRun = await unitOfWork.BackupRestoreRuns.GetAsync(query.RestoreRunId, cancellationToken);
+        if (restoreRun is null)
+            return Result.Failure<BackupRestoreRunLogResult>(new NotFoundError("Backup restore run not found."));
+
+        var backupRun = await unitOfWork.BackupRuns.GetAsync(restoreRun.BackupRunId, cancellationToken);
+        if (backupRun is null)
+            return Result.Failure<BackupRestoreRunLogResult>(new NotFoundError("Backup run not found."));
+
+        var permission = await permissionEvaluator.EvaluateAsync(
+            backupRun.BackupPolicyId,
+            ResourceType.BackupPolicy,
+            cancellationToken);
+        if (!permission.Has(PermissionLevel.Read, SpecificPermission.Restore))
+            return Result.Failure<BackupRestoreRunLogResult>(
+                new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
+
         var result = await unitOfWork.BackupRestoreRunLogs.GetByRunWithRunStateAsync(query.RestoreRunId, cancellationToken);
         if (!result.RunExists)
             return Result.Failure<BackupRestoreRunLogResult>(new NotFoundError("Backup restore run not found."));

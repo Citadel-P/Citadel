@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.GitRepositories.Queries;
 
-[RequirePermission(ResourceType.GitRepository, PermissionLevel.Read)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Read, ResourceIdProperty = nameof(DiscoverGitRepositoryBranches.RepositoryId))]
 public sealed record DiscoverGitRepositoryBranches(Guid RepositoryId)
     : IQuery<Result<IReadOnlyList<GitRemoteBranchRef>>>;
 

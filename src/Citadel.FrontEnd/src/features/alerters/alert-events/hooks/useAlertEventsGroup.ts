@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { AlertEventView, UnresolvedAlertsCountView } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertEventView, UnresolvedAlertsCountView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { HubConnection } from '@microsoft/signalr';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function useAlertEventsGroup() {
+  const queryClient = useQueryClient();
   const { data: unresolvedEventsData } = useRead('listAlertEvents', {
     query: { UnresolvedOnly: true, Page: 1, PageSize: 5 },
   });
@@ -36,17 +38,24 @@ export function useAlertEventsGroup() {
     setReceivedAlertEventIds((prev) => [alertEvent.id, ...prev.filter((id) => id !== alertEvent.id)].slice(0, 200));
   }, []);
 
-  const handleAlertEventsUpdated = useCallback((alertEvents: AlertEventView[]) => {
-    if (!alertEvents.length) return;
+  const handleAlertEventsUpdated = useCallback(
+    (alertEvents: AlertEventView[]) => {
+      if (!alertEvents.length) return;
 
-    setLiveAlertEvents((prev) => {
-      const next = { ...prev };
-      alertEvents.forEach((alertEvent) => {
-        next[alertEvent.id] = alertEvent;
+      setLiveAlertEvents((prev) => {
+        const next = { ...prev };
+        alertEvents.forEach((alertEvent) => {
+          next[alertEvent.id] = alertEvent;
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+
+      if (alertEvents.some((alertEvent) => alertEvent.status === AlertEventStatus.Resolved)) {
+        void queryClient.invalidateQueries({ queryKey: ['listAlertEvents'] });
+      }
+    },
+    [queryClient],
+  );
 
   const handleUnresolvedAlertCount = useCallback((unresolvedCounts: UnresolvedAlertsCountView) => {
     setLiveUnresolvedAlertCount(Number(unresolvedCounts.count ?? 0));

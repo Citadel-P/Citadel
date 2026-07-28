@@ -1,5 +1,6 @@
 using Application.Features.Builds.Commands;
 using Application.Features.Builds.Models;
+using Application.Permissions;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Builds;
@@ -15,6 +16,7 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -1066,9 +1068,17 @@ public sealed class BuildRunStartTests : IDisposable
                 return cancelled;
             });
         CaptureLogs(context.BuildRunLogs, persistedLogs);
+        var permissionEvaluator = new Mock<IPermissionEvaluator>();
+        permissionEvaluator
+            .Setup(x => x.EvaluateAsync(
+                project.Id,
+                ResourceType.Build,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Helpers.AdminPermissions);
 
         var cancelHandler = new CancelBuildRunHandler(
             context.UnitOfWork.Object,
+            permissionEvaluator.Object,
             coordinator,
             context.ProjectStream.Object,
             context.BuildRunStream.Object,

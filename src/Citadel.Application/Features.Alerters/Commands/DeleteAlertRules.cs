@@ -14,9 +14,9 @@ using Mediator;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.Alert, PermissionLevel.Execute)]
 public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>;
 
-[RequirePermission(ResourceType.Alert, PermissionLevel.Execute)]
 internal sealed class DeleteAlertRulesHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,

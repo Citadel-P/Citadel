@@ -4,12 +4,13 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { AlertEventStatusCell, PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
 import type { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
-import { useAlertEventQuery, useSelectedResources, useTaskSheet } from '@/lib/atoms';
+import { useAlertEventQuery, useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { useOpenAlertEventSheet } from './alert-task-sheet';
 
 const EMPTY_ROWS: AlertEventView[] = [];
 
@@ -112,12 +113,12 @@ const columns = (
 ];
 
 function AlertTypeCell({ event }: { event: AlertEventView }) {
-  const { open } = useTaskSheet('Alert');
+  const openAlertSheet = useOpenAlertEventSheet();
 
   return (
     <button
       type="button"
-      onClick={() => open({ kind: 'alertEvent', payload: event })}
+      onClick={() => openAlertSheet(event.id)}
       className="cursor-pointer table-link">
       <span>{event.type}</span>
     </button>

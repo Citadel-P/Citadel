@@ -13,7 +13,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, ResourceIdProperty = nameof(CheckDeploymentUpdates.DeploymentId))]
 public sealed record CheckDeploymentUpdates(Guid DeploymentId) : ICommand<Result<Deployment>>;
 
 internal sealed class CheckDeploymentUpdatesHandler(

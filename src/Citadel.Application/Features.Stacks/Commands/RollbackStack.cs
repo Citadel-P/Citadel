@@ -11,7 +11,7 @@ using System.Runtime.CompilerServices;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.Apply)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.Apply, ResourceIdProperty = nameof(RollbackStack.StackId))]
 public sealed record RollbackStack(Guid StackId, Guid ReleaseId) : IStreamCommand<StackStreamItem>;
 
 internal sealed class RollbackStackHandler(

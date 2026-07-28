@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Queries;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, ResourceIdProperty = nameof(GetDeploymentBackupSourcePreview.DeploymentId))]
 public sealed record GetDeploymentBackupSourcePreview(Guid DeploymentId)
     : IQuery<Result<DeploymentBackupSourcePreviewResult>>;
 

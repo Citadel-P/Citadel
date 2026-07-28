@@ -1,5 +1,4 @@
 import {
-  BackupRunItemStatus,
   BackupRunItemView,
   BackupPolicyView,
   BackupRestoreRunView,
@@ -14,8 +13,8 @@ import {
 import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ContentCard } from '@/components/custom/content-card';
+import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
-import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -258,25 +257,20 @@ const runColumns = (
   formatDateTime: DateTimeFormatter,
 ): ColumnDef<BackupRunView>[] => [
   {
-    accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => (
-      <span className="inline-flex items-center gap-2 text-sm">
-        <StateIndicator value={row.original.status} isProcessing={isActiveRun(row.original)} kind="backupRun" />
-        {row.original.status}
-      </span>
-    ),
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
-  },
-  {
     accessorKey: 'trigger',
     header: ({ column }) => <SortableCell cellName="Trigger" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.trigger}</span>,
     sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
   },
   {
+    accessorKey: 'status',
+    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
+    cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
+    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+  },
+  {
     accessorKey: 'items',
-    header: ({ column }) => <SortableCell cellName="Items" column={column} />,
+    header: ({ column }) => <SortableCell cellName="Volumes" column={column} />,
     cell: ({ row }) => <BackupRunItemsSummary items={row.original.items} />,
     sortingFn: (rowA, rowB) => Number(rowA.original.items?.length ?? 0) - Number(rowB.original.items?.length ?? 0),
   },
@@ -343,21 +337,16 @@ const restoreRunColumns = (
   formatDateTime: DateTimeFormatter,
 ): ColumnDef<BackupRestoreRunView>[] => [
   {
-    accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => (
-      <span className="inline-flex items-center gap-2 text-sm">
-        <StateIndicator value={row.original.status} isProcessing={isActiveRestoreRun(row.original)} kind="backupRestore" />
-        {row.original.status}
-      </span>
-    ),
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
-  },
-  {
     accessorKey: 'targetVolumeName',
     header: ({ column }) => <SortableCell cellName="Target Volume" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.targetVolumeName}</span>,
     sortingFn: (rowA, rowB) => rowA.original.targetVolumeName.localeCompare(rowB.original.targetVolumeName),
+  },
+  {
+    accessorKey: 'status',
+    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
+    cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
+    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'overwriteExisting',
@@ -524,17 +513,9 @@ function BackupRestoreDialog({
 function BackupRunItemsSummary({ items }: { items: BackupRunItemView[] }) {
   if (!items.length) return <span className="text-muted-foreground text-sm">-</span>;
 
-  const failed = items.some((item) => item.status === BackupRunItemStatus.Failed);
-  const running = items.some((item) => item.status === BackupRunItemStatus.Running || item.status === BackupRunItemStatus.Pending);
-  const status = failed ? BackupRunItemStatus.Failed : running ? BackupRunItemStatus.Running : BackupRunItemStatus.Succeeded;
   const label = items.length === 1 ? items[0].volumeName : `${items.length} volumes`;
 
-  return (
-    <span className="inline-flex min-w-0 items-center gap-2 text-sm">
-      <StateIndicator value={status} isProcessing={running} />
-      <span className="truncate">{label}</span>
-    </span>
-  );
+  return <span className="block min-w-0 truncate text-sm">{label}</span>;
 }
 
 function isActiveRun(run: Pick<BackupRunView, 'status'>) {

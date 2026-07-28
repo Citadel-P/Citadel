@@ -74,7 +74,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
       </div>
 
       {Components.GroupActions && <Components.GroupActions items={items ?? EMPTY_ITEMS} />}
-      <TaskSheet type={type} />
+      {type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type} />}
     </div>
   );
 };

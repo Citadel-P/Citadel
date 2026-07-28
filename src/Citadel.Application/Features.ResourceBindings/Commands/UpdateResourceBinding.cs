@@ -37,7 +37,7 @@ public sealed record UpdateGlobalResourceBinding(UpdateResourceBindingInputModel
     }
 }
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings, ResourceIdProperty = nameof(UpdateStackResourceBinding.ResourceId))]
 public sealed record UpdateStackResourceBinding(Guid ResourceId, UpdateResourceBindingInputModel Entry) : ICommand<Result<ResourceBindingsResult>>
 {
     internal sealed class Validator : AbstractValidator<UpdateStackResourceBinding>
@@ -51,7 +51,7 @@ public sealed record UpdateStackResourceBinding(Guid ResourceId, UpdateResourceB
     }
 }
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.ResourceBindings, ResourceIdProperty = nameof(UpdateDeploymentResourceBinding.ResourceId))]
 public sealed record UpdateDeploymentResourceBinding(Guid ResourceId, UpdateResourceBindingInputModel Entry) : ICommand<Result<ResourceBindingsResult>>
 {
     internal sealed class Validator : AbstractValidator<UpdateDeploymentResourceBinding>
