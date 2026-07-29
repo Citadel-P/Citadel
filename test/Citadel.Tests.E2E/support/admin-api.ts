@@ -2,11 +2,7 @@ import { APIRequestContext } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const adminCredentials = {
-  emailOrName: process.env.CITADEL_E2E_ADMIN_EMAIL ?? 'admin@citadel.local',
-  password: process.env.CITADEL_E2E_ADMIN_PASSWORD ?? 'admin123',
-};
+import { adminCredentials } from './admin-credentials';
 
 const tokenFile = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,7 +20,10 @@ export const getAdminAccessToken = async (request: APIRequestContext) => {
   }
 
   const response = await request.post('/api/v1/authentication/login', {
-    data: adminCredentials,
+    data: {
+      emailOrName: adminCredentials.email,
+      password: adminCredentials.password,
+    },
   });
   if (!response.ok()) {
     throw new Error(`E2E admin API login failed with HTTP ${response.status()}`);
@@ -104,7 +103,7 @@ export const createRestrictedPersona = async (
   const accessToken = await getAdminAccessToken(request);
   const headers = { Authorization: `Bearer ${accessToken}` };
   const email = `${prefix}@citadel.local`;
-  const password = 'restricted123';
+  const password = 'restricted-e2e-password';
 
   const userResponse = await request.post('/api/v1/users', {
     headers,

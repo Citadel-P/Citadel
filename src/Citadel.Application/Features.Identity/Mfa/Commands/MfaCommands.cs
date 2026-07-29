@@ -2,6 +2,7 @@ using Application.Configs;
 using Application.Features.Identity.Mfa.Models;
 using Application.Features.Identity.Mfa.Services;
 using Application.Services;
+using Application.Services.Identity;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
@@ -123,6 +124,7 @@ internal sealed class StartProfileMfaSetupHandler(
     IUserContextAccessor userContext,
     ITotpService totpService,
     ISecretValueProtector secretValueProtector,
+    ICitadelPasswordHasher passwordHasher,
     IOptions<MfaOptions> options)
     : ICommandHandler<StartProfileMfaSetup, Result<MfaSetupResult>>
 {
@@ -132,7 +134,7 @@ internal sealed class StartProfileMfaSetupHandler(
         if (!authInfo.IsSuccess(out var user))
             return Result.Failure<MfaSetupResult>(authInfo.Errors);
 
-        if (!User.IsValidPassword(command.Password, user.Password!))
+        if (!passwordHasher.Verify(command.Password, user.Password!))
             return Result.Failure<MfaSetupResult>(new BadRequestError("Current password is incorrect."));
 
         if (await unitOfWork.UserMfa.GetSettingsAsync(user.Id, cancellationToken) is not null)
@@ -208,6 +210,7 @@ internal sealed class DisableProfileMfaHandler(
     IRecoveryCodeService recoveryCodeService,
     IMfaPolicyService policyService,
     ICurrentRefreshSessionResolver currentRefreshSessionResolver,
+    ICitadelPasswordHasher passwordHasher,
     ILogger<DisableProfileMfaHandler> logger)
     : ICommandHandler<DisableProfileMfa, Result>
 {
@@ -220,7 +223,7 @@ internal sealed class DisableProfileMfaHandler(
         if (!policyService.CanDisable(user))
             return Result.Failure(new BadRequestError("Two-factor authentication is required by policy."));
 
-        if (!User.IsValidPassword(command.Password, user.Password!))
+        if (!passwordHasher.Verify(command.Password, user.Password!))
             return Result.Failure(new BadRequestError("Current password is incorrect."));
 
         var settings = await unitOfWork.UserMfa.GetSettingsAsync(user.Id, cancellationToken);
@@ -247,6 +250,7 @@ internal sealed class RegenerateProfileMfaRecoveryCodesHandler(
     ISecretValueProtector secretValueProtector,
     IRecoveryCodeService recoveryCodeService,
     IOptions<MfaOptions> options,
+    ICitadelPasswordHasher passwordHasher,
     ILogger<RegenerateProfileMfaRecoveryCodesHandler> logger)
     : ICommandHandler<RegenerateProfileMfaRecoveryCodes, Result<MfaRecoveryCodesResult>>
 {
@@ -256,7 +260,7 @@ internal sealed class RegenerateProfileMfaRecoveryCodesHandler(
         if (!authInfo.IsSuccess(out var user))
             return Result.Failure<MfaRecoveryCodesResult>(authInfo.Errors);
 
-        if (!User.IsValidPassword(command.Password, user.Password!))
+        if (!passwordHasher.Verify(command.Password, user.Password!))
             return Result.Failure<MfaRecoveryCodesResult>(new BadRequestError("Current password is incorrect."));
 
         var settings = await unitOfWork.UserMfa.GetSettingsAsync(user.Id, cancellationToken);

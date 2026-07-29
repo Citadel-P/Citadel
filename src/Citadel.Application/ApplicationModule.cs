@@ -1,5 +1,6 @@
 using Application.Permissions;
 using Application.Features.Identity.Mfa.Services;
+using Application.Features.Identity.Setup;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Backups;
@@ -60,6 +61,7 @@ public static class ApplicationModule
             .AddMemoryCache()
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IRoleCache, RoleCache>()
+            .AddSingleton<ISetupStateCache, SetupStateCache>()
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
             .AddAlertEvaluators()
@@ -88,6 +90,7 @@ public static class ApplicationModule
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
             .AddScoped<IActorScopeEvictor, ActorScopeEvictor>()
             .AddScoped<IActorScopeProvider, ActorScopeProvider>()
+            .AddSingleton<ICitadelPasswordHasher, CitadelPasswordHasher>()
             .AddScoped<IPermissionCache, PermissionCache>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
@@ -119,6 +122,8 @@ public static class ApplicationModule
             .AddSingleton<IRecoveryCodeService, RecoveryCodeService>()
             .AddSingleton<IMfaPolicyService, MfaPolicyService>()
             .AddScoped<IAuthenticationSessionIssuer, AuthenticationSessionIssuer>()
+            .AddScoped<ILocalAuthenticationCompletionService, LocalAuthenticationCompletionService>()
+            .AddScoped<InitialAdministratorService>()
             .AddSingleton<ISecretRedactor, SecretRedactor>()
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
@@ -217,6 +222,7 @@ public static class ApplicationModule
         services
             .AddSingleton<GitRepoSyncInFlightTracker>()
             .AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>()
+            .AddHostedService<InitialAdministratorBootstrapService>()
             .AddHostedService<DockerDaemonEventJob>()
             .AddHostedService<CleanupJob>()
             .AddHostedService<PlatformSyncJob>()

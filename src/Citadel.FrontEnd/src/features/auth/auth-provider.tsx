@@ -4,6 +4,7 @@ import { AuthContext } from './auth-context';
 import { useHTTPErrorHandler, useMutate } from '@/lib/hooks';
 import { LoginNextStep, LoginRequest, LoginResponse, ProblemDetails } from '@/api/generated/api.types';
 import { useTokenRefresh } from './hooks/use-token-refresh';
+import { useSetupContext } from '@/features/setup/setup-context';
 
 type AuthState = {
   status: 'loading' | 'authenticated' | 'unauthenticated';
@@ -31,6 +32,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
+  const { isSetupReady, requiresSetup, error: setupError } = useSetupContext();
   const { mutate: requestLogout } = useMutate('logout');
   const { mutateAsync: requestLogin, isPending, validationErrors } = useMutate('login');
 
@@ -82,6 +84,11 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   // Bootstrap (silent refresh)
   useEffect(() => {
     if (authState.status !== 'loading') return;
+    if (!isSetupReady || setupError) return;
+    if (requiresSetup) {
+      dispatch({ type: 'INIT_FAILED' });
+      return;
+    }
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -106,7 +113,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
     void init();
     return () => controller.abort();
-  }, [authState.status, triggerManualRefresh, applyToken]);
+  }, [authState.status, triggerManualRefresh, applyToken, isSetupReady, requiresSetup, setupError]);
 
   // Handle expired cookie / refresh 401
   useEffect(() => {

@@ -18,7 +18,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "name": "user-api",
           "email": "user-api@citadel.local",
-          "password": "password123"
+          "password": "password12345678"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -49,7 +49,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "name": "user-with-assignments",
           "email": "user-with-assignments@citadel.local",
-          "password": "password123",
+          "password": "password12345678",
           "teamIds": ["{{teamId}}"],
           "roleIds": ["{{roleId}}"],
           "resourceAccesses": [
@@ -113,7 +113,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "name": "user-dup",
           "email": "user-dup-2@citadel.local",
-          "password": "password123"
+          "password": "password12345678"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -132,7 +132,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "name": "user-mail-2",
           "email": "user-mail@citadel.local",
-          "password": "password123"
+          "password": "password12345678"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -147,7 +147,12 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name), isEnabled);
-        var user = new User(name, email, password, actor.Id, Constants.SystemId);
+        var user = new User(
+            name,
+            email,
+            HashTestPassword(password),
+            actor.Id,
+            Constants.SystemId);
 
         await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(user, TestContext.Current.CancellationToken);

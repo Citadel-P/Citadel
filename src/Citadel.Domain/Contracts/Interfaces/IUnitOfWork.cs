@@ -76,6 +76,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IUserPreferencesRepository UserPreferences { get; }
     IInstanceIdentityRepository InstanceIdentity { get; }
     IInstalledLicenseRepository InstalledLicense { get; }
+    IInstanceSetupStateRepository InstanceSetupState { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
@@ -706,6 +707,13 @@ public interface IActorRepository
         CancellationToken cancellationToken);
     Task<int> AddAsync(Actor actor, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken);
+}
+
+public interface IInstanceSetupStateRepository
+{
+    Task<InstanceSetupState?> GetAsync(CancellationToken cancellationToken);
+    Task<InstanceSetupState?> GetLockedAsync(CancellationToken cancellationToken);
+    Task<int> UpdateAsync(InstanceSetupState state, CancellationToken cancellationToken);
 }
 
 public interface IResourceAccessRepository

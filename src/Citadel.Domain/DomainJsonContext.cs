@@ -222,6 +222,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AutomationActionRunTimedOut))]
 [JsonSerializable(typeof(AutomationActionRunCancelled))]
 [JsonSerializable(typeof(AutomationActionRunRejected))]
+[JsonSerializable(typeof(InitialAdministratorCreated))]
 [JsonSerializable(typeof(UserProfileUpdated))]
 [JsonSerializable(typeof(UserPreferencesUpdated))]
 [JsonSerializable(typeof(UserPasswordChanged))]

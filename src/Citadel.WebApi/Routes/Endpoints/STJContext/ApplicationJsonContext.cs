@@ -47,6 +47,7 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 using WebApi.Routes.Endpoints.Resources.Identity.Mfa;
+using WebApi.Routes.Endpoints.Resources.Identity.Setup;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
@@ -177,6 +178,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ProfileMfaSetupView))]
 [JsonSerializable(typeof(ProfileMfaStatusView))]
 [JsonSerializable(typeof(ProfileMfaRecoveryCodesView))]
+[JsonSerializable(typeof(SetupStatusView))]
+[JsonSerializable(typeof(InitializeCitadelInput))]
 [JsonSerializable(typeof(ApplicationInfoView))]
 [JsonSerializable(typeof(CurrentProfileView))]
 [JsonSerializable(typeof(CurrentProfileAuthenticationView))]

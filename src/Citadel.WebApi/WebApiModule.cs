@@ -112,6 +112,7 @@ internal static class WebApiModule
             });
         }
 
+        app.UseMiddleware<SetupRequiredMiddleware>();
         app.UseAuthentication();
         app.UseMiddleware<AutomationRunTokenSafetyMiddleware>();
         app.UseAuthorization();
@@ -278,6 +279,9 @@ internal static class WebApiModule
             .Validate(options => options.MaxFailedAttempts > 0, "Mfa:MaxFailedAttempts must be greater than zero.")
             .Validate(options => options.RecoveryCodeCount > 0, "Mfa:RecoveryCodeCount must be greater than zero.")
             .ValidateOnStart();
+        builder.Services
+            .AddOptions<BootstrapOptions>()
+            .BindConfiguration(BootstrapOptions.SectionName);
         builder.Services
             .AddOptions<AutomationOptions>()
             .BindConfiguration(AutomationOptions.SectionName)

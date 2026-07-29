@@ -1,6 +1,10 @@
-﻿using Application.Services;
-using Domain.Contracts.Interfaces;
+﻿using System.Collections.Concurrent;
+using Application.Services;
+using Application.Services.Identity;
 using Application.Services.Licensing;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
 using Hosting.Common;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -33,6 +37,10 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
 
     protected static readonly Guid OperatorRoleId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     protected static readonly Guid ViewerRoleId = Guid.Parse("30000000-0000-0000-0000-000000000003");
+    private static readonly Guid SeededAdminUserId = Guid.Parse("10000000-0000-0000-0000-000000000001");
+    private static readonly Guid AdminRoleId = Guid.Parse("30000000-0000-0000-0000-000000000001");
+    private static readonly ConcurrentDictionary<string, string> TestPasswordHashes =
+        new(StringComparer.Ordinal);
 
     protected HttpClient Client = default!;
     protected string ConnectionString = default!;
@@ -63,7 +71,13 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
         Client = Factory.CreateClient();
         await using (var scope = Services.CreateAsyncScope())
         {
-            await SeedDbAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            if (SeedDefaultAdministrator)
+            {
+                await SeedDefaultAdministratorAsync(scope.ServiceProvider, unitOfWork);
+            }
+
+            await SeedDbAsync(unitOfWork);
         }
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
     }
@@ -114,10 +128,53 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
             .DeclaringType == typeof(IntegrationTestBase);
 
     protected virtual bool UseRealLicenseEntitlements => false;
+    protected virtual bool SeedDefaultAdministrator => true;
 
     protected virtual void ConfigureTestServices(IServiceCollection services) { }
 
     protected virtual ValueTask SeedDbAsync(IUnitOfWork uow) => ValueTask.CompletedTask;
+
+    private static async Task SeedDefaultAdministratorAsync(
+        IServiceProvider services,
+        IUnitOfWork unitOfWork)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var setupState = await unitOfWork.InstanceSetupState.GetLockedAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The integration database has no setup state.");
+
+        if (!setupState.RequiresSetup)
+        {
+            services.GetRequiredService<ISetupStateCache>().SetRequiresSetup(false);
+            return;
+        }
+
+        var actor = Actor.FromPersistence(
+            Constants.DefaultAdminId,
+            ActorType.User,
+            new ActorMetadata("admin"),
+            isEnabled: true);
+        var user = User.FromPersistence(
+            SeededAdminUserId,
+            "admin",
+            "admin@citadel.local",
+            HashTestPassword("admin123"),
+            actor.Id,
+            Constants.SystemId,
+            DateTime.UtcNow);
+
+        setupState.TryComplete(actor.Id, DateTimeOffset.UtcNow);
+        await unitOfWork.Actors.AddAsync(actor, cancellationToken);
+        await unitOfWork.Users.AddAsync(user, cancellationToken);
+        await unitOfWork.Roles.AddActorRoleAsync(actor.Id, AdminRoleId, cancellationToken);
+        await unitOfWork.InstanceSetupState.UpdateAsync(setupState, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        services.GetRequiredService<ISetupStateCache>().SetRequiresSetup(false);
+    }
+
+    protected static string HashTestPassword(string password)
+        => TestPasswordHashes.GetOrAdd(
+            password,
+            static value => new CitadelPasswordHasher().Hash(value));
 
     protected string CreateJwtToken(IEnumerable<Claim>? claims = null)
     {

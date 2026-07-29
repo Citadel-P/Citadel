@@ -758,6 +758,7 @@ export enum ActivityEventType {
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
   StackWebhookReceived = "StackWebhookReceived",
+  InitialAdministratorCreated = "InitialAdministratorCreated",
   UserProfileUpdated = "UserProfileUpdated",
   UserPreferencesUpdated = "UserPreferencesUpdated",
   UserPasswordChanged = "UserPasswordChanged",
@@ -1363,6 +1364,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoStackWebhookReceived
       >
     | BaseActivityEventInfoTypeMapping<
+        "InitialAdministratorCreated",
+        ActivityEventInfoInitialAdministratorCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
         "UserProfileUpdated",
         ActivityEventInfoUserProfileUpdated
       >
@@ -1915,6 +1920,14 @@ export interface ActivityEventInfoGitRepoWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoInitialAdministratorCreated {
+  $type?: "InitialAdministratorCreated";
+  /** @format uuid */
+  userId: string;
+  userName: string;
+  mode: string;
 }
 
 export interface ActivityEventInfoLicenseEnteredGracePeriod {
@@ -5373,6 +5386,12 @@ export interface ImagesView {
   capabilities: ImageCapabilities;
 }
 
+export interface InitializeCitadelInput {
+  name: string;
+  email: string;
+  password: string;
+}
+
 export interface InspectImageView {
   id: string;
   name: string;
@@ -6682,6 +6701,10 @@ export interface SecretProvidersView {
   providers: SecretProviderView[];
 }
 
+export interface SetupStatusView {
+  requiresSetup: boolean;
+}
+
 export interface StackBackupSourcePreviewView {
   /** @format uuid */
   stackId: string;
@@ -7888,6 +7911,53 @@ export class Api<
   SecurityDataType extends unknown,
 > extends HttpClient<SecurityDataType> {
   api = {
+    /**
+     * No description
+     *
+     * @tags Setup
+     * @name GetSetupStatus
+     * @summary Get first-run setup status
+     * @request GET:/api/v1/setup/status
+     * @response `200` `SetupStatusView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `503` `ProblemDetails` Service Unavailable
+     */
+    getSetupStatus: (params: RequestParams = {}) =>
+      this.request<SetupStatusView, ProblemDetails>({
+        path: `/api/v1/setup/status`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Setup
+     * @name InitializeCitadel
+     * @summary Create the initial administrator
+     * @request POST:/api/v1/setup/initialize
+     * @response `200` `LoginResponse` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `503` `ProblemDetails` Service Unavailable
+     */
+    initializeCitadel: (
+      data: InitializeCitadelInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<LoginResponse, ProblemDetails>({
+        path: `/api/v1/setup/initialize`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
     /**
      * No description
      *

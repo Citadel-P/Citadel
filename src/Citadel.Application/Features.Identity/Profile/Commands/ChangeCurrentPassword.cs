@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Services.Identity;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
@@ -17,8 +18,13 @@ public sealed record ChangeCurrentPassword(string CurrentPassword, string NewPas
     {
         public Validator()
         {
-            RuleFor(x => x.CurrentPassword).NotNull().MinimumLength(6).MaximumLength(128);
-            RuleFor(x => x.NewPassword).NotNull().MinimumLength(6).MaximumLength(128);
+            RuleFor(x => x.CurrentPassword).NotNull().MaximumLength(LocalPasswordPolicy.MaximumLength);
+            RuleFor(x => x.NewPassword).Custom((password, context) =>
+            {
+                var error = LocalPasswordPolicy.GetValidationError(password);
+                if (error is not null)
+                    context.AddFailure(error);
+            });
         }
     }
 }
@@ -26,7 +32,8 @@ public sealed record ChangeCurrentPassword(string CurrentPassword, string NewPas
 internal sealed class ChangeCurrentPasswordHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContext,
-    ICurrentRefreshSessionResolver currentRefreshSessionResolver)
+    ICurrentRefreshSessionResolver currentRefreshSessionResolver,
+    ICitadelPasswordHasher passwordHasher)
     : ICommandHandler<ChangeCurrentPassword, Result>
 {
     public async ValueTask<Result> Handle(ChangeCurrentPassword command, CancellationToken cancellationToken)
@@ -48,10 +55,15 @@ internal sealed class ChangeCurrentPasswordHandler(
             return Result.Failure(new NotFoundError("Current user does not exist"));
 
         var authInfo = await unitOfWork.Users.GetUserAuthInfoByIdAsync(userId, cancellationToken);
-        if (authInfo?.Password is null || !User.IsValidPassword(command.CurrentPassword, authInfo.Password))
+        if (authInfo?.Password is null
+            || !passwordHasher.Verify(command.CurrentPassword, authInfo.Password))
             return Result.Failure(new BadRequestError("Current password is incorrect."));
 
-        user.SetPassword(command.NewPassword);
+        var passwordError = LocalPasswordPolicy.GetValidationError(command.NewPassword, user.Name, user.Email);
+        if (passwordError is not null)
+            return Result.Failure(new BadRequestError(passwordError));
+
+        user.SetPasswordHash(passwordHasher.Hash(command.NewPassword));
         await unitOfWork.Users.UpdateAsync(user, cancellationToken);
 
         var currentSessionId = await currentRefreshSessionResolver.ResolveAsync(userId, unitOfWork, cancellationToken);

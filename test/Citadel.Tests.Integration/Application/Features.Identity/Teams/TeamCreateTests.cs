@@ -136,7 +136,12 @@ public class TeamCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
-        var user = new User(name, email, "password123", actor.Id, Constants.SystemId);
+        var user = new User(
+            name,
+            email,
+            HashTestPassword("password123"),
+            actor.Id,
+            Constants.SystemId);
 
         await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(user, TestContext.Current.CancellationToken);

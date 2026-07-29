@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Application.Features.Identity.Auth.Models;
 using Application.Services;
@@ -163,8 +162,7 @@ internal sealed class CompleteOidcLoginHandler(
     {
         var name = await CreateUniqueUserNameAsync(identity, cancellationToken);
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
-        var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        var user = new User(name, identity.Email!, password, actor.Id, Constants.SystemId);
+        var user = new User(name, identity.Email!, string.Empty, actor.Id, Constants.SystemId);
 
         await unitOfWork.Actors.AddAsync(actor, cancellationToken);
         await unitOfWork.Users.AddAsync(user, cancellationToken);

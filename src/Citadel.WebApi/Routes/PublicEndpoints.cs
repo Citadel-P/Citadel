@@ -1,5 +1,6 @@
 using Application.Services.Backups;
 using Application.Features.Search.Models;
+using Application.Features.Identity.Auth.Models;
 using Domain;
 using Domain.Entities.Deployments;
 using Hosting.Common;
@@ -20,6 +21,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Identity.Mfa;
+using WebApi.Routes.Endpoints.Resources.Identity.Setup;
 using WebApi.Routes.Endpoints.Resources.Licensing;
 using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -62,6 +64,7 @@ public static class PublicEndpoints
     const string BuildRunsName = "BuildRuns";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
+    const string SetupName = nameof(Setup);
     const string ProfileName = "Profile";
     const string ApplicationName = "Application";
     const string LicenseName = "License";
@@ -72,6 +75,10 @@ public static class PublicEndpoints
     {
         var group = app.MapGroup("/api/v1").WithGroupName("v1");
         {
+            var setup = group.MapGroup("/setup").WithTags(SetupName);
+            {
+                MapSetupEndpoints(setup);
+            }
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {
                 MapAuthEndpoints(auth);
@@ -219,6 +226,24 @@ public static class PublicEndpoints
             .AllowAnonymous()
             .RequireRateLimiting("webhook-listener")
             .WithName("receiveWebhook");
+    }
+
+    private static void MapSetupEndpoints(RouteGroupBuilder setup)
+    {
+        setup.MapGet("status", Setup.GetStatus)
+            .WithSummary("Get first-run setup status")
+            .Produces<SetupStatusView>()
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .WithName("getSetupStatus");
+
+        setup.MapPost("initialize", Setup.Initialize)
+            .WithSummary("Create the initial administrator")
+            .Produces<LoginResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .RequireRateLimiting("strict-auth")
+            .WithName("initializeCitadel");
     }
 
     private static void MapApplicationEndpoints(RouteGroupBuilder application)

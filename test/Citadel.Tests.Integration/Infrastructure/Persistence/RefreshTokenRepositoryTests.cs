@@ -16,7 +16,7 @@ public sealed class RefreshTokenRepositoryTests(PostgresTestFixture fixture) : I
         var user = new User(
             "session-cleanup-user",
             $"session-cleanup-{Guid.CreateVersion7():N}@citadel.test",
-            "password",
+            HashTestPassword("password"),
             actor.Id,
             Constants.SystemId);
 

@@ -6,6 +6,7 @@ import {
   RequireAuth,
   RequireNoAuth,
 } from './features/auth/auth-route-guards';
+import { RequireSetupComplete } from './features/setup/setup-route-guards';
 
 function LocationProbe() {
   const location = useLocation();
@@ -13,6 +14,28 @@ function LocationProbe() {
 }
 
 describe('authentication route guards', () => {
+  it('preserves the requested route and redirects an uninitialized instance to setup', async () => {
+    renderCitadel(
+      <>
+        <LocationProbe />
+        <Routes>
+          <Route element={<RequireSetupComplete />}>
+            <Route path="/builds/:id" element={<span>protected content</span>} />
+          </Route>
+          <Route path="/setup" element={<span>setup page</span>} />
+        </Routes>
+      </>,
+      {
+        route: '/builds/42?tab=logs',
+        setup: { requiresSetup: true },
+      },
+    );
+
+    expect(await screen.findByText('setup page')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/setup');
+    expect(sessionStorage.getItem(REDIRECT_TO_KEY)).toBe('/builds/42?tab=logs');
+  });
+
   it('waits for authentication bootstrap without redirecting', () => {
     renderCitadel(
       <>

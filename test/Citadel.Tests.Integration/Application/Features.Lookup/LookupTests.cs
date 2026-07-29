@@ -199,7 +199,12 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         _hiddenImageId = hiddenImage.Id;
 
         var userActor = Actor.Create(ActorType.User, new ActorMetadata("lookup-source-user"));
-        var lookupUser = new User("lookup-source-user", "lookup-source-user@citadel.local", "password123", userActor.Id, Constants.SystemId);
+        var lookupUser = new User(
+            "lookup-source-user",
+            "lookup-source-user@citadel.local",
+            HashTestPassword("password123"),
+            userActor.Id,
+            Constants.SystemId);
         await uow.Actors.AddAsync(userActor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(lookupUser, TestContext.Current.CancellationToken);
         _userLookupSourceId = lookupUser.Id;

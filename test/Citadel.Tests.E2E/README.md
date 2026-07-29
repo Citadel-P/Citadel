@@ -29,7 +29,10 @@ npm run test:smoke
 ```
 
 Citadel is available at `http://127.0.0.1:18000` while the environment is
-running.
+running. Playwright initializes a fresh Citadel database through the public
+first-run setup endpoint, then reuses that administrator session. Override the
+test administrator with `CITADEL_E2E_ADMIN_NAME`,
+`CITADEL_E2E_ADMIN_EMAIL`, and `CITADEL_E2E_ADMIN_PASSWORD` when needed.
 
 ## Test Suites
 

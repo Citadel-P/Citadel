@@ -1,17 +1,17 @@
 using System.Diagnostics;
 using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
 
 namespace Tests.Acceptance.Infrastructure;
 
 internal sealed record CandidateApplicationOptions(
     string? JwtKey = "citadel-acceptance-signing-key-00000000000000000000000000000000",
     string? SecretEncryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    int HttpTimeoutSeconds = 30)
+    int HttpTimeoutSeconds = 30,
+    string? BootstrapAdminName = null,
+    string? BootstrapAdminEmail = null,
+    string? BootstrapAdminPasswordFile = null)
 {
     public static CandidateApplicationOptions FileBackedRecoveryAssets { get; } =
         new(JwtKey: null, SecretEncryptionKey: null);
@@ -49,6 +49,27 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
 
     public string Output => GetOutput();
 
+    public async Task<int> WaitForExitAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutSource =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+
+        try
+        {
+            await process.WaitForExitAsync(timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Candidate did not exit within {timeout}.{Environment.NewLine}{GetOutput()}");
+        }
+
+        return process.ExitCode;
+    }
+
     public static async Task<CandidateApplicationProcess> StartAsync(
         string connectionString,
         string workingDirectory,
@@ -85,6 +106,18 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
         startInfo.Environment["Jwt__Key"] = options.JwtKey ?? string.Empty;
         startInfo.Environment["Secrets__EncryptionKey"] =
             options.SecretEncryptionKey ?? string.Empty;
+        SetOptionalEnvironment(
+            startInfo,
+            "BOOTSTRAP__ADMINNAME",
+            options.BootstrapAdminName);
+        SetOptionalEnvironment(
+            startInfo,
+            "BOOTSTRAP__ADMINEMAIL",
+            options.BootstrapAdminEmail);
+        SetOptionalEnvironment(
+            startInfo,
+            "BOOTSTRAP__ADMINPASSWORDFILE",
+            options.BootstrapAdminPasswordFile);
 
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start the candidate Citadel process.");
@@ -108,28 +141,10 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
 
     public async Task AuthenticateAsAdminAsync(CancellationToken cancellationToken)
     {
-        var login = await Client.PostAsJsonAsync(
-            "/api/v1/authentication/login",
-            new
-            {
-                emailOrName = "admin@citadel.local",
-                password = "admin123"
-            },
+        await InitialAdministratorSession.AuthenticateAsync(
+            Client,
+            $"Candidate application.{Environment.NewLine}{Output}",
             cancellationToken);
-        Assert.True(
-            login.IsSuccessStatusCode,
-            $"""
-            Candidate login failed with HTTP {(int)login.StatusCode}.
-            {await login.Content.ReadAsStringAsync(cancellationToken)}
-            {Output}
-            """);
-
-        var loginPayload = await login.Content.ReadFromJsonAsync<JsonElement>(
-            cancellationToken: cancellationToken);
-        var accessToken = loginPayload.GetProperty("accessToken").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(accessToken));
-        Client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", accessToken);
     }
 
     public async ValueTask DisposeAsync()
@@ -213,5 +228,14 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
         httpListener.Stop();
         grpcListener.Stop();
         return ports;
+    }
+
+    private static void SetOptionalEnvironment(
+        ProcessStartInfo startInfo,
+        string name,
+        string? value)
+    {
+        if (value is not null)
+            startInfo.Environment[name] = value;
     }
 }

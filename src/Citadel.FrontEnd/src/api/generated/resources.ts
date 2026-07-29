@@ -1,6 +1,8 @@
 // AUTO-GENERATED FILE. DO NOT EDIT.
 
 export const resources = {
+  getSetupStatus: { method: "GET", key: "getSetupStatus", path: "/api/v1/setup/status", tag: "Setup", group: "setup", params: ["params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: false },
+  initializeCitadel: { method: "POST", key: "initializeCitadel", path: "/api/v1/setup/initialize", tag: "Setup", group: "setup", params: ["data","params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: true },
   refreshToken: { method: "GET", key: "refreshToken", path: "/api/v1/authentication/refresh", tag: "Authentication", group: "authentication", params: ["params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: false },
   login: { method: "POST", key: "login", path: "/api/v1/authentication/login", tag: "Authentication", group: "authentication", params: ["data","params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: true },
   verifyAuthenticationMfa: { method: "POST", key: "verifyAuthenticationMfa", path: "/api/v1/authentication/mfa/verify", tag: "Authentication", group: "authentication", params: ["data","params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: true },
@@ -326,6 +328,8 @@ export const resources = {
 } as const;
 
 export const automationResourceKeys = [
+  "getSetupStatus",
+  "initializeCitadel",
   "getApplicationInfo",
   "getCurrentProfile",
   "updateCurrentProfile",
@@ -617,6 +621,8 @@ export const automationResourceKeys = [
 export type AutomationResourceName = (typeof automationResourceKeys)[number];
 
 export const automationResources = {
+  getSetupStatus: resources.getSetupStatus,
+  initializeCitadel: resources.initializeCitadel,
   getApplicationInfo: resources.getApplicationInfo,
   getCurrentProfile: resources.getCurrentProfile,
   updateCurrentProfile: resources.updateCurrentProfile,
@@ -906,6 +912,7 @@ export const automationResources = {
 } as const;
 
 export const automationResourceGroups = {
+  setup: ["getSetupStatus","initializeCitadel"],
   application: ["getApplicationInfo"],
   profile: ["getCurrentProfile","updateCurrentProfile","getProfilePreferences","patchProfilePreferences","changeCurrentPassword","listProfileSessions","revokeOtherProfileSessions","revokeProfileSession","getProfileMfaStatus","startProfileMfaSetup","confirmProfileMfaSetup","disableProfileMfa","regenerateProfileMfaRecoveryCodes"],
   license: ["getLicenseEntitlements","getLicense","installLicense","removeLicense","getLicenseRequest"],

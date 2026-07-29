@@ -216,7 +216,7 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
             JsonContent("""
             {
               "currentPassword": "wrong-password",
-              "newPassword": "newPassword123"
+              "newPassword": "newPassword12345"
             }
             """),
             TestContext.Current.CancellationToken);
@@ -228,7 +228,7 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
             JsonContent("""
             {
               "currentPassword": "admin123",
-              "newPassword": "newPassword123"
+              "newPassword": "newPassword12345"
             }
             """),
             TestContext.Current.CancellationToken);
@@ -239,7 +239,7 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
         Assert.Single(remaining);
         Assert.True(remaining[0].IsCurrent);
 
-        var newLogin = await LoginAsync("CitadelTests/1.0 new-password", "admin@citadel.local", "newPassword123");
+        var newLogin = await LoginAsync("CitadelTests/1.0 new-password", "admin@citadel.local", "newPassword12345");
         Assert.False(string.IsNullOrWhiteSpace(newLogin.AccessToken));
     }
 
@@ -301,7 +301,12 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
-        var user = new User(name, email, password, actor.Id, Constants.SystemId);
+        var user = new User(
+            name,
+            email,
+            HashTestPassword(password),
+            actor.Id,
+            Constants.SystemId);
 
         await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(user, TestContext.Current.CancellationToken);

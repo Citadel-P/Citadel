@@ -9,6 +9,7 @@ import { PropsWithChildren, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { SignalRProvider } from '@/lib/context/signalr-provider';
 import { ComponentProps } from 'react';
+import { SetupContext, SetupContextValue } from '@/features/setup/setup-context';
 
 const defaultAuth: AuthContextValue = {
   accessToken: 'test-access-token',
@@ -21,25 +22,37 @@ const defaultAuth: AuthContextValue = {
   completeLogin: () => {},
 };
 
+const defaultSetup: SetupContextValue = {
+  isSetupReady: true,
+  requiresSetup: false,
+  error: undefined,
+  markSetupComplete: () => {},
+  retry: () => {},
+};
+
 type RenderCitadelOptions = Omit<RenderOptions, 'wrapper'> & {
   route?: string;
   auth?: Partial<AuthContextValue>;
+  setup?: Partial<SetupContextValue>;
   queryClient?: QueryClient;
   signalR?: Omit<ComponentProps<typeof SignalRProvider>, 'children'>;
 };
 
 export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = {}) {
-  const { route = '/', auth, queryClient = createQueryClient(), signalR, ...renderOptions } = options;
+  const { route = '/', auth, setup, queryClient = createQueryClient(), signalR, ...renderOptions } = options;
   const apiClient = createApiClient('http://localhost');
   const authValue = { ...defaultAuth, ...auth };
+  const setupValue = { ...defaultSetup, ...setup };
 
   const Wrapper = ({ children }: PropsWithChildren) => (
     <MemoryRouter initialEntries={[route]}>
       <QueryClientProvider client={queryClient}>
         <ApiClientContext.Provider value={{ apiClient }}>
-          <AuthContext.Provider value={authValue}>
-            {signalR ? <SignalRProvider {...signalR}>{children}</SignalRProvider> : children}
-          </AuthContext.Provider>
+          <SetupContext.Provider value={setupValue}>
+            <AuthContext.Provider value={authValue}>
+              {signalR ? <SignalRProvider {...signalR}>{children}</SignalRProvider> : children}
+            </AuthContext.Provider>
+          </SetupContext.Provider>
         </ApiClientContext.Provider>
       </QueryClientProvider>
     </MemoryRouter>

@@ -30,7 +30,12 @@ public sealed record CreateUser(
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Email).NotEmpty().EmailAddress();
-            RuleFor(x => x.Password).NotNull().MinimumLength(6).MaximumLength(128);
+            RuleFor(x => x).Custom((command, context) =>
+            {
+                var error = LocalPasswordPolicy.GetValidationError(command.Password, command.Name, command.Email);
+                if (error is not null)
+                    context.AddFailure(nameof(command.Password), error);
+            });
 
             RuleForEach(x => x.TeamIds).NotEmpty();
             RuleForEach(x => x.RoleIds).NotEmpty();
@@ -46,7 +51,8 @@ internal sealed class CreateUserHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContext,
     IActorScopeEvictor evictor,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateUser, Result<UserDetails>>
+    ILicenseEntitlementService entitlementService,
+    ICitadelPasswordHasher passwordHasher) : ICommandHandler<CreateUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(CreateUser command, CancellationToken cancellationToken)
     {
@@ -59,7 +65,7 @@ internal sealed class CreateUserHandler(
             return Result.Failure<UserDetails>(new ConflictError("Email already exists"));
 
         var userActor = Actor.Create(ActorType.User, new ActorMetadata(command.Name), command.IsEnabled);
-        var user = new User(command.Name, command.Email, command.Password, userActor.Id, actorId);
+        var user = new User(command.Name, command.Email, passwordHasher.Hash(command.Password), userActor.Id, actorId);
 
         await unitOfWork.Actors.AddAsync(userActor, cancellationToken);
         await unitOfWork.Users.AddAsync(user, cancellationToken);

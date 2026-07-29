@@ -1,5 +1,4 @@
 ﻿using System.Security.Claims;
-using System.Security.Cryptography;
 using Domain.Contracts.Resources.Identity;
 
 namespace Domain.Entities.Identity;
@@ -7,7 +6,7 @@ namespace Domain.Entities.Identity;
 public sealed class User(
     string name,
     string email,
-    string password,
+    string passwordHash,
     Guid actorId,
     Guid createdByActorId,
     DateTime? createdAt = null
@@ -16,7 +15,7 @@ public sealed class User(
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
     public string Email { get; private set; } = email;
-    public string Password { get; private set; } = HashPassword(password);
+    public string Password { get; private set; } = passwordHash;
     public Guid ActorId { get; private set; } = actorId;
 
     #region IAuditedEntity Members
@@ -36,7 +35,7 @@ public sealed class User(
             Email = email;
     }
 
-    public void SetPassword(string password) => Password = HashPassword(password);
+    public void SetPasswordHash(string passwordHash) => Password = passwordHash;
 
     public static User FromPersistence(
         Guid id,
@@ -54,31 +53,6 @@ public sealed class User(
         };
     }
 
-    /// <summary>
-    /// Check user password is valid
-    /// </summary>
-    public static bool IsValidPassword(string plainTextPassword, string originalPassword)
-    {
-        // Extract the bytes
-        byte[] hashBytes = Convert.FromBase64String(originalPassword);
-
-        // Get the salt
-        byte[] salt = new byte[16];
-        Array.Copy(hashBytes, 0, salt, 0, 16);
-        byte[] hash = ComputeHash(plainTextPassword, salt);
-
-        // Compare the results
-        for (int i = 0; i < 20; i++)
-        {
-            if (hashBytes[i + 16] != hash[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     public static IEnumerable<Claim> GetJwtClaims(UserAuthInfo userAuthInfo) 
     {
         yield return new Claim("name", userAuthInfo.Name);
@@ -93,27 +67,4 @@ public sealed class User(
         }
     }
 
-    /// <summary>
-    /// Hash a password
-    /// </summary>
-    /// <param name="plainTextPassword">The plain text password</param>
-    /// <returns>A securely base64-encoded hashed password</returns>
-    private static string HashPassword(string plainTextPassword)
-    {
-        byte[] salt = RandomNumberGenerator.GetBytes(16);
-        byte[] hash = ComputeHash(plainTextPassword, salt);
-
-        // Combine the salt and password bytes
-        byte[] hashBytes = new byte[36];
-        Array.Copy(salt, 0, hashBytes, 0, 16);
-        Array.Copy(hash, 0, hashBytes, 16, hash.Length);
-
-        // return a stringify hash for storage
-        return Convert.ToBase64String(hashBytes);
-    }
-
-    private static byte[] ComputeHash(string plainTextPassword, byte[] salt)
-    {
-        return Rfc2898DeriveBytes.Pbkdf2(plainTextPassword, salt, 10000, HashAlgorithmName.SHA256, 20);
-    }
 }

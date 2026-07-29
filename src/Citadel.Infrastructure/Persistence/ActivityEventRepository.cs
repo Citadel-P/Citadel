@@ -77,6 +77,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             a.CreatedByActorId, 
             a.CreatedAt,
             a.Status,
+            a.Info,
             p.Name AS Platform_Name,
             p.Status AS Platform_Status,
             u.Name AS Actor_Name,

@@ -72,6 +72,9 @@ An administrator can require two-factor authentication by policy.
 
 When policy requires setup, Citadel prompts you after you enter a valid username or email and password. Complete the QR-code setup and save recovery codes before entering the application.
 
+The same policy applies immediately after the first administrator is created.
+See `docs/user/first-run-setup.md` for initial installation instructions.
+
 If the setup session expires, return to the login page and sign in again to start a new setup session.
 
 ## Regenerate Recovery Codes

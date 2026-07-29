@@ -236,12 +236,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("00000000-0000-0000-0000-000000000002"),
-                            IsEnabled = true,
-                            Type = "User"
-                        },
-                        new
-                        {
                             Id = new Guid("00000000-0000-0000-0000-000000000003"),
                             IsEnabled = true,
                             Type = "Team"
@@ -270,11 +264,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("actorroles", (string)null);
 
                     b.HasData(
-                        new
-                        {
-                            ActorId = new Guid("00000000-0000-0000-0000-000000000002"),
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
                         new
                         {
                             ActorId = new Guid("00000000-0000-0000-0000-000000000003"),
@@ -1066,48 +1055,6 @@ namespace Infrastructure.Migrations.Migrations
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Actions_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("actions", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("41000000-0000-0000-0000-000000000001"),
-                            AlertOnFailure = true,
-                            Code = "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  if (platform.status === 'Offline') continue\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);",
-                            ControlState = "Idle",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            DefaultArgsJson = "{}",
-                            Description = "Prunes unused Docker images on every platform.",
-                            Enabled = false,
-                            Name = "Prune images",
-                            RowVersion = 0L,
-                            RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
-                            ScheduleCron = "0 12 * * *",
-                            ScheduleEnabled = true,
-                            ScheduleTimeZone = "UTC",
-                            TimeoutSeconds = 300,
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            Id = new Guid("41000000-0000-0000-0000-000000000002"),
-                            AlertOnFailure = true,
-                            Code = "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}",
-                            ControlState = "Idle",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            DefaultArgsJson = "{}",
-                            Description = "Restarts stacks tagged Prod when their current release is not healthy.",
-                            Enabled = false,
-                            Name = "Restart unhealthy stacks",
-                            RowVersion = 0L,
-                            RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
-                            ScheduleCron = "*/15 * * * *",
-                            ScheduleEnabled = true,
-                            ScheduleTimeZone = "UTC",
-                            TimeoutSeconds = 300,
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
-                        });
                 });
 
             modelBuilder.Entity("BackupPolicy", b =>
@@ -3422,6 +3369,53 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("InstanceSetupState", b =>
+                {
+                    b.Property<short>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<short>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<Guid?>("InitialAdministratorActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("initialadministratoractorid");
+
+                    b.Property<DateTimeOffset?>("InitializedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("initializedat");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat");
+
+                    b.HasKey("Id")
+                        .HasName("pk_instancesetupstates");
+
+                    b.HasIndex("InitialAdministratorActorId")
+                        .HasDatabaseName("ix_instancesetupstates_initialadministratoractorid");
+
+                    b.ToTable("instancesetupstates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InstanceSetupStates_Singleton", "\"id\" = 1");
+
+                            t.HasCheckConstraint("CK_InstanceSetupStates_State", "(initializedat IS NULL AND initialadministratoractorid IS NULL) OR (initializedat IS NOT NULL AND initialadministratoractorid IS NOT NULL)");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = (short)1,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
             modelBuilder.Entity("InternalSecretValue", b =>
                 {
                     b.Property<Guid>("SecretId")
@@ -4623,32 +4617,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_resourcetags_filter");
 
                     b.ToTable("resourcetags", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            ResourceType = "AutomationAction",
-                            ResourceId = new Guid("41000000-0000-0000-0000-000000000001"),
-                            TagId = new Guid("40000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            ResourceType = "AutomationAction",
-                            ResourceId = new Guid("41000000-0000-0000-0000-000000000002"),
-                            TagId = new Guid("40000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            ResourceType = "AutomationAction",
-                            ResourceId = new Guid("41000000-0000-0000-0000-000000000002"),
-                            TagId = new Guid("40000000-0000-0000-0000-000000000002"),
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
-                        });
                 });
 
             modelBuilder.Entity("Role", b =>
@@ -5241,18 +5209,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_users_email");
 
                     b.ToTable("users", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            ActorId = new Guid("00000000-0000-0000-0000-000000000002"),
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            Email = "admin@citadel.local",
-                            Name = "admin",
-                            Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1"
-                        });
                 });
 
             modelBuilder.Entity("UserMfaRecoveryCode", b =>
@@ -5904,6 +5860,15 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("InstalledByActorId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_installedlicenses_actors_installedbyactorid");
+                });
+
+            modelBuilder.Entity("InstanceSetupState", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("InitialAdministratorActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_instancesetupstates_actors_initialadministratoractorid");
                 });
 
             modelBuilder.Entity("InternalSecretValue", b =>

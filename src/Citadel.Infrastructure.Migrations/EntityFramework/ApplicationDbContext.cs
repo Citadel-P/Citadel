@@ -1,4 +1,5 @@
 using Domain;
+using Domain.Entities.Identity;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .MfaChallengeConfiguration()
             .UserPreferencesConfiguration()
             .CitadelInstanceIdentityConfiguration()
+            .InstanceSetupStateConfiguration()
             .InstalledLicenseConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
@@ -79,11 +81,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         var seedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         // Actors
         var systemActorId = Constants.SystemId;
-        var adminActorId = Constants.DefaultAdminId;
         var teamActorId = Constants.TeamActorId;
 
         // Users / Teams
-        var adminUserId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         var teamId = Guid.Parse("20000000-0000-0000-0000-000000000001");
 
         // Roles
@@ -95,27 +95,19 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         var SystemTagId = Guid.Parse("40000000-0000-0000-0000-000000000001");
         var prodTagId = Guid.Parse("40000000-0000-0000-0000-000000000002");
 
-        // Automation actions
-        var pruneImagesActionId = Guid.Parse("41000000-0000-0000-0000-000000000001");
-        var restartProdStacksActionId = Guid.Parse("41000000-0000-0000-0000-000000000002");
-
         // Actors
         modelBuilder.Entity("Actor").HasData(
             new { Id = systemActorId, Type = "System", IsEnabled = true },
-            new { Id = adminActorId, Type = "User", IsEnabled = true },
             new { Id = teamActorId, Type = "Team", IsEnabled = true }
         );
 
-        // User
-        modelBuilder.Entity("User").HasData(new
+        modelBuilder.Entity("InstanceSetupState").HasData(new
         {
-            Id = adminUserId,
-            Name = "admin",
-            Email = "admin@citadel.local",
-            Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
-            ActorId = adminActorId,
-            CreatedAt = seedDate,
-            CreatedByActorId = systemActorId
+            Id = InstanceSetupState.SingletonId,
+            InitializedAt = (DateTimeOffset?)null,
+            InitialAdministratorActorId = (Guid?)null,
+            CreatedAt = new DateTimeOffset(seedDate),
+            UpdatedAt = new DateTimeOffset(seedDate)
         });
 
         // Team
@@ -135,9 +127,6 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
         // ActorRoles
         modelBuilder.Entity("ActorRole").HasData(
-            // Admin user -> Admin role
-            new { ActorId = adminActorId, RoleId = adminRoleId },
-
             // Team -> Operator role
             new { ActorId = teamActorId, RoleId = operatorRoleId }
         );
@@ -228,120 +217,6 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                 CreatedByActorId = systemActorId,
                 CreatedAt = seedDate,
                 UpdatedAt = seedDate
-            });
-
-        // Automation actions
-        modelBuilder.Entity("AutomationAction").HasData(
-            new
-            {
-                Id = pruneImagesActionId,
-                Name = "Prune images",
-                Description = "Prunes unused Docker images on every platform.",
-                Code = """
-                    const platformsResponse = await citadel.platforms.listPlatforms();
-                    const platforms = platformsResponse?.platforms ?? [];
-                    let pruned = 0;
-                    let reclaimedBytes = 0;
-
-                    for (const platform of platforms) {
-                      if (platform.status === 'Offline') continue
-                      const result = await citadel.platforms.prunePlatform(platform.id, { resource: "Image" });
-                      const imagesDeleted = result?.imagesDeleted ?? [];
-                      const reclaimed = Number(result?.spaceReclaimed ?? 0);
-                      reclaimedBytes += reclaimed;
-                      pruned += imagesDeleted.length;
-
-                      if (imagesDeleted.length === 0) {
-                        console.log(`No unused images on ${platform.name}.`);
-                        continue;
-                      }
-
-                      console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);
-                    }
-
-                    console.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);
-                    """.Replace("\r\n", "\n"),
-                DefaultArgsJson = "{}",
-                Enabled = false,
-                ScheduleEnabled = true,
-                ScheduleCron = "0 12 * * *",
-                ScheduleTimeZone = "UTC",
-                Webhook = (string?)null,
-                TimeoutSeconds = 300,
-                AlertOnFailure = true,
-                RunAsActorId = adminActorId,
-                LastScheduledRunAt = (DateTime?)null,
-                ControlState = ResourceControlState.Idle.ToString(),
-                CurrentRunId = (Guid?)null,
-                ControlStartedAt = (long?)null,
-                RowVersion = 0L,
-                CreatedByActorId = systemActorId,
-                CreatedAt = seedDate,
-                UpdatedAt = seedDate
-            },
-            new
-            {
-                Id = restartProdStacksActionId,
-                Name = "Restart unhealthy stacks",
-                Description = "Restarts stacks tagged Prod when their current release is not healthy.",
-                Code = """
-                    const stacksResponse = await citadel.stacks.listStacks({ tags: ["Prod"] });
-                    const stacks = stacksResponse?.stacks ?? [];
-                    const unhealthyStacks = stacks.filter(
-                      (stack) => stack.status !== "Healthy" && stack.controlState !== "Processing"
-                    );
-
-                    if (unhealthyStacks.length === 0) {
-                      console.log("No unhealthy Prod stacks found.");
-                    } else {
-                      const stackIds = unhealthyStacks.map((stack) => stack.id);
-                      await citadel.stacks.restartStacks(stackIds);
-                      console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);
-                    }
-                    """.Replace("\r\n", "\n"),
-                DefaultArgsJson = "{}",
-                Enabled = false,
-                ScheduleEnabled = true,
-                ScheduleCron = "*/15 * * * *",
-                ScheduleTimeZone = "UTC",
-                Webhook = (string?)null,
-                TimeoutSeconds = 300,
-                AlertOnFailure = true,
-                RunAsActorId = adminActorId,
-                LastScheduledRunAt = (DateTime?)null,
-                ControlState = ResourceControlState.Idle.ToString(),
-                CurrentRunId = (Guid?)null,
-                ControlStartedAt = (long?)null,
-                RowVersion = 0L,
-                CreatedByActorId = systemActorId,
-                CreatedAt = seedDate,
-                UpdatedAt = seedDate
-            });
-
-        modelBuilder.Entity("ResourceTag").HasData(
-            new
-            {
-                ResourceType = TaggableResourceType.AutomationAction.ToString(),
-                ResourceId = pruneImagesActionId,
-                TagId = SystemTagId,
-                CreatedAt = seedDate,
-                CreatedByActorId = systemActorId
-            },
-            new
-            {
-                ResourceType = TaggableResourceType.AutomationAction.ToString(),
-                ResourceId = restartProdStacksActionId,
-                TagId = SystemTagId,
-                CreatedAt = seedDate,
-                CreatedByActorId = systemActorId
-            },
-            new
-            {
-                ResourceType = TaggableResourceType.AutomationAction.ToString(),
-                ResourceId = restartProdStacksActionId,
-                TagId = prodTagId,
-                CreatedAt = seedDate,
-                CreatedByActorId = systemActorId
             });
 
         // --- Alert Rules ---
@@ -491,6 +366,36 @@ internal static class Configuration
         identity.Property<DateTimeOffset>("CreatedAt").HasColumnType(Timestamp).IsRequired();
 
         identity.HasIndex("InstanceId").IsUnique().HasDatabaseName($"IX_{tableName}_InstanceId");
+
+        return builder;
+    }
+
+    public static ModelBuilder InstanceSetupStateConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "InstanceSetupStates";
+        var setup = builder.Entity("InstanceSetupState");
+
+        setup.ToTable(tableName);
+
+        setup.Property<short>("Id").HasColumnType("smallint").IsRequired();
+        setup.HasKey("Id");
+        setup.HasCheckConstraint($"CK_{tableName}_Singleton", "\"id\" = 1");
+
+        setup.Property<DateTimeOffset?>("InitializedAt").HasColumnType(Timestamp).IsRequired(false);
+        setup.Property<Guid?>("InitialAdministratorActorId").IsRequired(false);
+        setup.Property<DateTimeOffset>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        setup.Property<DateTimeOffset>("UpdatedAt").HasColumnType(Timestamp).IsRequired();
+
+        setup.HasCheckConstraint(
+            $"CK_{tableName}_State",
+            "(initializedat IS NULL AND initialadministratoractorid IS NULL) OR "
+            + "(initializedat IS NOT NULL AND initialadministratoractorid IS NOT NULL)");
+
+        setup
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("InitialAdministratorActorId")
+            .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
     }

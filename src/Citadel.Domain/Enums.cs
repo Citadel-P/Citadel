@@ -747,6 +747,7 @@ public enum ActivityEventType
     #endregion
 
     #region User Events
+    InitialAdministratorCreated,
     UserProfileUpdated,
     UserPreferencesUpdated,
     UserPasswordChanged,

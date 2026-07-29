@@ -5,6 +5,138 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/v1/setup/status": {
+      "get": {
+        "tags": [
+          "Setup"
+        ],
+        "summary": "Get first-run setup status",
+        "operationId": "getSetupStatus",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/setup/initialize": {
+      "post": {
+        "tags": [
+          "Setup"
+        ],
+        "summary": "Create the initial administrator",
+        "operationId": "initializeCitadel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitializeCitadelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/authentication/refresh": {
       "get": {
         "tags": [
@@ -30993,6 +31125,9 @@
             "$ref": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoInitialAdministratorCreated"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoUserProfileUpdated"
           },
           {
@@ -31173,6 +31308,7 @@
             "ActionRunCancelled": "#/components/schemas/ActivityEventInfoAutomationActionRunCancelled",
             "ActionRunRejected": "#/components/schemas/ActivityEventInfoAutomationActionRunRejected",
             "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived",
+            "InitialAdministratorCreated": "#/components/schemas/ActivityEventInfoInitialAdministratorCreated",
             "UserProfileUpdated": "#/components/schemas/ActivityEventInfoUserProfileUpdated",
             "UserPreferencesUpdated": "#/components/schemas/ActivityEventInfoUserPreferencesUpdated",
             "UserPasswordChanged": "#/components/schemas/ActivityEventInfoUserPasswordChanged",
@@ -32487,6 +32623,31 @@
           }
         }
       },
+      "ActivityEventInfoInitialAdministratorCreated": {
+        "required": [
+          "userId",
+          "userName",
+          "mode"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "InitialAdministratorCreated"
+            ],
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoLicenseEnteredGracePeriod": {
         "required": [
           "license"
@@ -33547,6 +33708,7 @@
           "StackGitAutoUpdated",
           "StackGitAutoDeployFailed",
           "StackWebhookReceived",
+          "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
           "UserPasswordChanged",
@@ -45664,6 +45826,25 @@
           }
         }
       },
+      "InitializeCitadelInput": {
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
       "InspectImageView": {
         "required": [
           "id",
@@ -50224,6 +50405,17 @@
           }
         }
       },
+      "SetupStatusView": {
+        "required": [
+          "requiresSetup"
+        ],
+        "type": "object",
+        "properties": {
+          "requiresSetup": {
+            "type": "boolean"
+          }
+        }
+      },
       "SpecificPermission": {
         "enum": [
           "None",
@@ -53552,6 +53744,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Setup"
+    },
     {
       "name": "Authentication"
     },

@@ -19,7 +19,12 @@ public class ActorRoleServiceIntegrationTests(PostgresTestFixture fixture) : Int
 
         // Insert actor, user and a role using repositories
         var actor = Actor.Create(ActorType.User, new ActorMetadata("test-user"));
-        var user = new User("test-user", "test-user@citadel.test", "password", actor.Id, Constants.SystemId);
+        var user = new User(
+            "test-user",
+            "test-user@citadel.test",
+            HashTestPassword("password"),
+            actor.Id,
+            Constants.SystemId);
         var role = Role.Create("integration-role", RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, PermissionLevel.Read)]);
 
         await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);

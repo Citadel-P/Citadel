@@ -1,4 +1,5 @@
 using Application.Services.Alerts;
+using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Caching.Memory;
@@ -41,6 +42,8 @@ internal sealed class ReusableIntegrationTestHost(
 
     private async Task ResetInMemoryStateAsync()
     {
+        Services.GetRequiredService<ISetupStateCache>().Reset();
+
         if (Services.GetService<IMemoryCache>() is MemoryCache memoryCache)
         {
             memoryCache.Compact(1);

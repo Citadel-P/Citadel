@@ -218,7 +218,10 @@ export const UserForm = ({
               defineField<UserInput, 'password'>({
                 key: 'password',
                 label: 'Password',
-                description: mode === 'edit' ? 'Leave blank to keep the current password.' : undefined,
+                description:
+                  mode === 'edit'
+                    ? 'Leave blank to keep the current password. New passwords require 15 to 128 characters.'
+                    : 'Use 15 to 128 characters.',
                 required: mode === 'add',
                 validate: (value) => {
                   const password = String(value ?? '');
@@ -226,7 +229,10 @@ export const UserForm = ({
                   if (mode === 'add' && !password) return 'Required';
                   if (mode === 'edit' && !password) return null;
 
-                  return password.length < 6 ? 'Password must be at least 6 characters long' : null;
+                  const length = [...password].length;
+                  if (length < 15) return 'Password must be at least 15 characters long';
+                  if (length > 128) return 'Password must be no more than 128 characters long';
+                  return null;
                 },
                 render: (value, set) => (
                   <FieldInput

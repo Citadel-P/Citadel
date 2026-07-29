@@ -95,7 +95,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
     }
 
     [Fact]
-    public async Task SeededDefaultAutomationActions_ShouldBeDisabledAndTagged()
+    public async Task Baseline_ShouldNotSeedAutomationActionsOwnedByPlaceholderAdmin()
     {
         var response = await Client.GetAsync(
             $"/api/v1/automation/actions?tags={Uri.EscapeDataString("System")}",
@@ -106,22 +106,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
 
         using var document = JsonDocument.Parse(body);
         var actions = document.RootElement.GetProperty("actions").EnumerateArray().ToArray();
-        var prune = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Prune images");
-        var restart = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Restart unhealthy stacks");
-
-        Assert.False(prune.GetProperty("enabled").GetBoolean());
-        Assert.Equal("Prunes unused Docker images on every platform.", prune.GetProperty("description").GetString());
-        Assert.True(prune.GetProperty("scheduleEnabled").GetBoolean());
-        Assert.Equal("0 12 * * *", prune.GetProperty("scheduleCron").GetString());
-        Assert.Contains("citadel.platforms.prunePlatform", prune.GetProperty("code").GetString());
-        Assert.DoesNotContain("citadel.images.deleteImages", prune.GetProperty("code").GetString());
-        AssertContainsTag(prune.GetProperty("tags"), "System");
-
-        Assert.False(restart.GetProperty("enabled").GetBoolean());
-        Assert.True(restart.GetProperty("scheduleEnabled").GetBoolean());
-        Assert.Equal("*/15 * * * *", restart.GetProperty("scheduleCron").GetString());
-        AssertContainsTag(restart.GetProperty("tags"), "System");
-        AssertContainsTag(restart.GetProperty("tags"), "Prod");
+        Assert.Empty(actions);
     }
 
     [Fact]

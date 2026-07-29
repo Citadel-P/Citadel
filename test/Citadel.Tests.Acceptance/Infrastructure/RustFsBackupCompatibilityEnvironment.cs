@@ -5,7 +5,6 @@ using Minio;
 using Minio.DataModel.Args;
 using System.Diagnostics;
 using System.Formats.Tar;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -127,26 +126,10 @@ internal sealed class RustFsBackupCompatibilityEnvironment : IAsyncDisposable
     public async Task AuthenticateAsAdminAsync(
         CancellationToken cancellationToken)
     {
-        using var response = await Client.PostAsJsonAsync(
-            "/api/v1/authentication/login",
-            new
-            {
-                emailOrName = "admin@citadel.local",
-                password = "admin123"
-            },
+        await InitialAdministratorSession.AuthenticateAsync(
+            Client,
+            "Core image",
             cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        Assert.True(
-            response.IsSuccessStatusCode,
-            $"Core image login failed with HTTP {(int)response.StatusCode}: {body}");
-
-        using var json = JsonDocument.Parse(body);
-        var accessToken = json.RootElement
-            .GetProperty("accessToken")
-            .GetString();
-        Assert.False(string.IsNullOrWhiteSpace(accessToken));
-        Client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", accessToken);
     }
 
     public async Task CreateBucketAsync(

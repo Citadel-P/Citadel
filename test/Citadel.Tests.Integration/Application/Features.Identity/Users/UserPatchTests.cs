@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Application.Services.Identity;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
@@ -19,7 +20,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var patchJson = """
         {
           "email": "user-patched@citadel.local",
-          "password": "newPassword123",
+          "password": "newPassword12345",
           "isEnabled": false
         }
         """;
@@ -35,7 +36,8 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
         Assert.NotNull(user);
         Assert.Equal("user-patched@citadel.local", user!.Email);
-        Assert.True(User.IsValidPassword("newPassword123", user.Password));
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<ICitadelPasswordHasher>();
+        Assert.True(passwordHasher.Verify("newPassword12345", user.Password));
         Assert.NotNull(actor);
         Assert.False(actor!.IsEnabled);
     }
@@ -363,7 +365,12 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name), isEnabled);
-        var user = new User(name, email, password, actor.Id, Constants.SystemId);
+        var user = new User(
+            name,
+            email,
+            HashTestPassword(password),
+            actor.Id,
+            Constants.SystemId);
 
         await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(user, TestContext.Current.CancellationToken);

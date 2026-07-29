@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { useAuthContext } from './auth-context';
 import { AuthProvider } from './auth-provider';
+import { SetupContext, SetupContextValue } from '@/features/setup/setup-context';
 
 const refreshUrl = 'http://localhost/api/v1/authentication/refresh';
 const loginUrl = 'http://localhost/api/v1/authentication/login';
@@ -48,7 +49,14 @@ function AuthProbe() {
   );
 }
 
-const renderAuthProvider = () => {
+const completeSetup: SetupContextValue = {
+  isSetupReady: true,
+  requiresSetup: false,
+  markSetupComplete: () => {},
+  retry: () => {},
+};
+
+const renderAuthProvider = (setup: SetupContextValue = completeSetup) => {
   const queryClient = createQueryClient();
   const apiClient = createApiClient('http://localhost');
   const user = userEvent.setup();
@@ -56,9 +64,11 @@ const renderAuthProvider = () => {
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientContext.Provider value={{ apiClient }}>
-        <AuthProvider>
-          <AuthProbe />
-        </AuthProvider>
+        <SetupContext.Provider value={setup}>
+          <AuthProvider>
+            <AuthProbe />
+          </AuthProvider>
+        </SetupContext.Provider>
       </ApiClientContext.Provider>
     </QueryClientProvider>,
   );
@@ -67,6 +77,23 @@ const renderAuthProvider = () => {
 };
 
 describe('AuthProvider', () => {
+  it('does not refresh a session while initial setup is pending', async () => {
+    let refreshRequests = 0;
+    server.use(
+      http.get(refreshUrl, () => {
+        refreshRequests += 1;
+        return HttpResponse.json({ accessToken: createValidToken('unexpected') });
+      }),
+    );
+
+    renderAuthProvider({ ...completeSetup, requiresSetup: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-status')).toHaveTextContent('unauthenticated');
+    });
+    expect(refreshRequests).toBe(0);
+  });
+
   it('restores the authenticated session through the refresh cookie on page bootstrap', async () => {
     let refreshRequests = 0;
     const restoredToken = createValidToken('restored');

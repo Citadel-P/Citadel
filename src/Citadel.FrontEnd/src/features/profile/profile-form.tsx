@@ -370,6 +370,9 @@ function PasswordCommand() {
 
   const validationError = useMemo(() => {
     if (!newPassword || !confirmPassword) return undefined;
+    const length = [...newPassword].length;
+    if (length < 15) return 'New password must be at least 15 characters.';
+    if (length > 128) return 'New password must be no more than 128 characters.';
     return newPassword === confirmPassword ? undefined : 'New password and confirmation do not match.';
   }, [newPassword, confirmPassword]);
 
@@ -416,6 +419,7 @@ function PasswordCommand() {
         autoComplete="new-password"
         onChange={(event) => setConfirmPassword(event.target.value)}
       />
+      {!validationError && <p className="text-xs text-muted-foreground">Use 15 to 128 characters.</p>}
 
       {(validationError || changePassword.validationErrors) && (
         <p className="text-sm text-destructive">{validationError ?? changePassword.validationErrors}</p>

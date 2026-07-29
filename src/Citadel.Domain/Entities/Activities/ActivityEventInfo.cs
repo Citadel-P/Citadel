@@ -78,6 +78,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(AutomationActionRunCancelled), nameof(ActivityEventType.ActionRunCancelled))]
 [JsonDerivedType(typeof(AutomationActionRunRejected), nameof(ActivityEventType.ActionRunRejected))]
 [JsonDerivedType(typeof(StackWebhookReceived), nameof(ActivityEventType.StackWebhookReceived))]
+[JsonDerivedType(typeof(InitialAdministratorCreated), nameof(ActivityEventType.InitialAdministratorCreated))]
 [JsonDerivedType(typeof(UserProfileUpdated), nameof(ActivityEventType.UserProfileUpdated))]
 [JsonDerivedType(typeof(UserPreferencesUpdated), nameof(ActivityEventType.UserPreferencesUpdated))]
 [JsonDerivedType(typeof(UserPasswordChanged), nameof(ActivityEventType.UserPasswordChanged))]
@@ -373,6 +374,7 @@ public sealed record BackupPolicyUpdated(
 public sealed record BackupPolicyRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record BackupPolicyArchived(BackupPolicyActivitySnapshot Policy) : ActivityEventInfo;
 
+public sealed record InitialAdministratorCreated(Guid UserId, string UserName, string Mode) : ActivityEventInfo;
 public sealed record UserProfileUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
 public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
 public sealed record UserPasswordChanged() : ActivityEventInfo;

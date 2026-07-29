@@ -377,6 +377,30 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "instancesetupstates",
+                columns: table => new
+                {
+                    id = table.Column<short>(type: "smallint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    createdat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    initialadministratoractorid = table.Column<Guid>(type: "uuid", nullable: true),
+                    initializedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updatedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_instancesetupstates", x => x.id);
+                    table.CheckConstraint("CK_InstanceSetupStates_Singleton", "\"id\" = 1");
+                    table.CheckConstraint("CK_InstanceSetupStates_State", "(initializedat IS NULL AND initialadministratoractorid IS NULL) OR (initializedat IS NOT NULL AND initialadministratoractorid IS NOT NULL)");
+                    table.ForeignKey(
+                        name: "fk_instancesetupstates_actors_initialadministratoractorid",
+                        column: x => x.initialadministratoractorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "registries",
                 columns: table => new
                 {
@@ -1908,9 +1932,13 @@ namespace Infrastructure.Migrations.Migrations
                 values: new object[,]
                 {
                     { new Guid("00000000-0000-0000-0000-000000000001"), true, "System" },
-                    { new Guid("00000000-0000-0000-0000-000000000002"), true, "User" },
                     { new Guid("00000000-0000-0000-0000-000000000003"), true, "Team" }
                 });
+
+            migrationBuilder.InsertData(
+                table: "instancesetupstates",
+                columns: new[] { "id", "createdat", "initialadministratoractorid", "initializedat", "updatedat" },
+                values: new object[] { (short)1, new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, new DateTimeOffset(new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)) });
 
             migrationBuilder.InsertData(
                 table: "roles",
@@ -1923,22 +1951,9 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.InsertData(
-                table: "actions",
-                columns: new[] { "id", "alertonfailure", "code", "controlstartedat", "controlstate", "createdat", "createdbyactorid", "currentrunid", "defaultargsjson", "description", "enabled", "lastscheduledrunat", "name", "runasactorid", "schedulecron", "scheduleenabled", "scheduletimezone", "timeoutseconds", "updatedat", "webhook" },
-                values: new object[,]
-                {
-                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  if (platform.status === 'Offline') continue\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Prunes unused Docker images on every platform.", false, null, "Prune images", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
-                    { new Guid("41000000-0000-0000-0000-000000000002"), true, "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Restarts stacks tagged Prod when their current release is not healthy.", false, null, "Restart unhealthy stacks", new Guid("00000000-0000-0000-0000-000000000002"), "*/15 * * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null }
-                });
-
-            migrationBuilder.InsertData(
                 table: "actorroles",
                 columns: new[] { "actorid", "roleid" },
-                values: new object[,]
-                {
-                    { new Guid("00000000-0000-0000-0000-000000000002"), new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("00000000-0000-0000-0000-000000000003"), new Guid("30000000-0000-0000-0000-000000000002") }
-                });
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000003"), new Guid("30000000-0000-0000-0000-000000000002") });
 
             migrationBuilder.InsertData(
                 table: "alertrules",
@@ -2062,21 +2077,6 @@ namespace Infrastructure.Migrations.Migrations
                 table: "teams",
                 columns: new[] { "id", "actorid", "name" },
                 values: new object[] { new Guid("20000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000003"), "Operators" });
-
-            migrationBuilder.InsertData(
-                table: "users",
-                columns: new[] { "id", "actorid", "createdat", "createdbyactorid", "email", "name", "password" },
-                values: new object[] { new Guid("10000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000002"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "admin@citadel.local", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
-
-            migrationBuilder.InsertData(
-                table: "resourcetags",
-                columns: new[] { "resourceid", "resourcetype", "tagid", "createdat", "createdbyactorid" },
-                values: new object[,]
-                {
-                    { new Guid("41000000-0000-0000-0000-000000000001"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000001"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") },
-                    { new Guid("41000000-0000-0000-0000-000000000002"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000001"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") },
-                    { new Guid("41000000-0000-0000-0000-000000000002"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000002"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") }
-                });
 
             migrationBuilder.CreateIndex(
                 name: "ix_actionruns_actionid_queuedat",
@@ -2780,6 +2780,11 @@ namespace Infrastructure.Migrations.Migrations
                 column: "installedbyactorid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_instancesetupstates_initialadministratoractorid",
+                table: "instancesetupstates",
+                column: "initialadministratoractorid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_mfachallenges_expiresat",
                 table: "mfachallenges",
                 column: "expiresat");
@@ -3173,6 +3178,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "installedlicenses");
+
+            migrationBuilder.DropTable(
+                name: "instancesetupstates");
 
             migrationBuilder.DropTable(
                 name: "internalsecretvalues");

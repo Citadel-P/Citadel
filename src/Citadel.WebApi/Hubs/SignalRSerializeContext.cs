@@ -215,6 +215,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<AutomationActionRunTimedOut>]
 [GenerateShapeFor<AutomationActionRunCancelled>]
 [GenerateShapeFor<AutomationActionRunRejected>]
+[GenerateShapeFor<InitialAdministratorCreated>]
 [GenerateShapeFor<UserProfileUpdated>]
 [GenerateShapeFor<UserPreferencesUpdated>]
 [GenerateShapeFor<UserPasswordChanged>]
@@ -354,6 +355,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.BackupPolicyUpdated)] = typeof(BackupPolicyUpdated),
         [nameof(ActivityEventType.BackupPolicyRenamed)] = typeof(BackupPolicyRenamed),
         [nameof(ActivityEventType.BackupPolicyArchived)] = typeof(BackupPolicyArchived),
+        [nameof(ActivityEventType.InitialAdministratorCreated)] = typeof(InitialAdministratorCreated),
         [nameof(ActivityEventType.UserProfileUpdated)] = typeof(UserProfileUpdated),
         [nameof(ActivityEventType.UserPreferencesUpdated)] = typeof(UserPreferencesUpdated),
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),

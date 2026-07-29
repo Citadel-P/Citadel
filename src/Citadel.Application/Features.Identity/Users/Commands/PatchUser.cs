@@ -33,7 +33,13 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
         public PatchUserModelValidator()
         {
             When(x => x.Email is not null, () => RuleFor(x => x.Email!).EmailAddress());
-            When(x => x.Password is not null, () => RuleFor(x => x.Password!).MinimumLength(6).MaximumLength(128));
+            When(x => x.Password is not null, () =>
+                RuleFor(x => x.Password!).Custom((password, context) =>
+                {
+                    var error = LocalPasswordPolicy.GetValidationError(password);
+                    if (error is not null)
+                        context.AddFailure(error);
+                }));
 
             RuleForEach(x => x.TeamIds).NotEmpty();
             RuleForEach(x => x.RoleIds).NotEmpty();
@@ -48,7 +54,8 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
 internal sealed class PatchUserHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchUser, Result<UserDetails>>
+    ILicenseEntitlementService entitlementService,
+    ICitadelPasswordHasher passwordHasher) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(PatchUser command, CancellationToken cancellationToken)
     {
@@ -160,7 +167,16 @@ internal sealed class PatchUserHandler(
 
         state.User.UpdateMetadata(email: patched.Email);
         if (patched.Password is not null)
-            state.User.SetPassword(patched.Password);
+        {
+            var passwordError = LocalPasswordPolicy.GetValidationError(
+                patched.Password,
+                state.User.Name,
+                patched.Email ?? state.User.Email);
+            if (passwordError is not null)
+                return Result.Failure<UserDetails>(new BadRequestError(passwordError));
+
+            state.User.SetPasswordHash(passwordHasher.Hash(patched.Password));
+        }
 
         if (patched.IsEnabled.HasValue && patched.IsEnabled.Value != actor.IsEnabled)
         {
