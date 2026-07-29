@@ -786,6 +786,7 @@ CREATE TABLE containers (
     dockercontainerid text NOT NULL,
     dockerimageid text NOT NULL,
     imageid uuid,
+    issystem boolean NOT NULL DEFAULT FALSE,
     name text NOT NULL,
     platformid uuid NOT NULL,
     ports json NOT NULL,
@@ -793,6 +794,7 @@ CREATE TABLE containers (
     stack text,
     stackid uuid,
     state text NOT NULL,
+    systemrole text,
     updated bigint NOT NULL,
     CONSTRAINT pk_containers PRIMARY KEY (id),
     CONSTRAINT fk_containers_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
@@ -1606,7 +1608,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260729103325_migration0001', '10.0.10');
+VALUES ('20260729141540_migration0001', '10.0.10');
 
 COMMIT;
 

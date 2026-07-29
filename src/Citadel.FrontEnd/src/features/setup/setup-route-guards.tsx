@@ -3,14 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
 import { useAuthContext } from '@/features/auth/auth-context';
-import { useSetupContext } from './setup-context';
+import { SetupError, useSetupContext } from './setup-context';
 
-function SetupUnavailable({ message, retry }: { message: string; retry: () => void }) {
+function SetupUnavailable({ error, retry }: { error: SetupError; retry: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-card px-6">
       <div className="w-full max-w-sm space-y-4 text-center">
-        <h1 className="text-xl font-semibold">Setup unavailable</h1>
-        <p className="text-sm text-muted-foreground">{message}</p>
+        <h1 className="text-xl font-semibold">{error.title}</h1>
+        <p className="text-sm text-muted-foreground">{error.message}</p>
         <Button type="button" variant="outline" onClick={retry}>
           Try again
         </Button>
@@ -24,7 +24,7 @@ export function RequireSetup() {
   const { isAuthenticated, isAuthReady } = useAuthContext();
 
   if (!isSetupReady) return <Loader />;
-  if (error) return <SetupUnavailable message={error} retry={retry} />;
+  if (error) return <SetupUnavailable error={error} retry={retry} />;
   if (requiresSetup) return <Outlet />;
   if (!isAuthReady) return <Loader />;
 
@@ -36,7 +36,7 @@ export function RequireSetupComplete() {
   const location = useLocation();
 
   if (!isSetupReady) return <Loader />;
-  if (error) return <SetupUnavailable message={error} retry={retry} />;
+  if (error) return <SetupUnavailable error={error} retry={retry} />;
 
   if (requiresSetup) {
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;

@@ -74,9 +74,12 @@ internal sealed class ContainerCreatedWorkItem(
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
 
-            await unmanagedContainerAlertWriter.WriteAsync(
-                    new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
-                    cancellationToken);
+            if (!container.IsSystem)
+            {
+                await unmanagedContainerAlertWriter.WriteAsync(
+                        new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
+                        cancellationToken);
+            }
         }
         catch (Exception ex)
         {

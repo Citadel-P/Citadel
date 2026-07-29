@@ -112,6 +112,9 @@ export const DockerPlatform = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
+                {descriptor.containerCount ?? '-'} containers
+              </Link>
               <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
                 {platform.imageCount ?? '-'} images
               </Link>

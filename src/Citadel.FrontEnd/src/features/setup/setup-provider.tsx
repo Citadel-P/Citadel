@@ -1,17 +1,17 @@
 import { useApiClientContext } from '@/api/api-client-context';
 import { useCallback, useEffect, useReducer } from 'react';
-import { SetupContext } from './setup-context';
+import { SetupContext, SetupError } from './setup-context';
 
 type SetupState =
   | { status: 'loading'; attempt: number }
   | { status: 'pending'; attempt: number }
   | { status: 'complete'; attempt: number }
-  | { status: 'error'; attempt: number; message: string };
+  | { status: 'error'; attempt: number; error: SetupError };
 
 type SetupAction =
   | { type: 'PENDING' }
   | { type: 'COMPLETE' }
-  | { type: 'ERROR'; message: string }
+  | { type: 'ERROR'; error: SetupError }
   | { type: 'RETRY' };
 
 function reducer(state: SetupState, action: SetupAction): SetupState {
@@ -21,7 +21,7 @@ function reducer(state: SetupState, action: SetupAction): SetupState {
     case 'COMPLETE':
       return { status: 'complete', attempt: state.attempt };
     case 'ERROR':
-      return { status: 'error', attempt: state.attempt, message: action.message };
+      return { status: 'error', attempt: state.attempt, error: action.error };
     case 'RETRY':
       return { status: 'loading', attempt: state.attempt + 1 };
   }
@@ -41,11 +41,11 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
         if (controller.signal.aborted) return;
         dispatch({ type: response.data.requiresSetup ? 'PENDING' : 'COMPLETE' });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           dispatch({
             type: 'ERROR',
-            message: 'Citadel could not determine whether initial setup is required.',
+            error: getSetupError(error),
           });
         }
       });
@@ -61,11 +61,29 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       value={{
         isSetupReady: state.status !== 'loading',
         requiresSetup: state.status === 'pending',
-        error: state.status === 'error' ? state.message : undefined,
+        error: state.status === 'error' ? state.error : undefined,
         markSetupComplete,
         retry,
       }}>
       {children}
     </SetupContext.Provider>
   );
+}
+
+function getSetupError(error: unknown): SetupError {
+  if (isHttpResponse(error)) {
+    return {
+      title: 'Citadel unavailable',
+      message: 'Citadel could not load its startup status. Check the server logs and try again.',
+    };
+  }
+
+  return {
+    title: 'Cannot connect to Citadel',
+    message: 'The Citadel server is not reachable. Check that it is running and try again.',
+  };
+}
+
+function isHttpResponse(error: unknown): error is { status: number } {
+  return typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number';
 }

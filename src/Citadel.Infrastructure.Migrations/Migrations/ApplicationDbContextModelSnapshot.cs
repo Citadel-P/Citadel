@@ -2602,6 +2602,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("imageid");
 
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("issystem");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2634,6 +2640,10 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("state");
+
+                    b.Property<string>("SystemRole")
+                        .HasColumnType("text")
+                        .HasColumnName("systemrole");
 
                     b.Property<long>("Updated")
                         .HasColumnType("bigint")

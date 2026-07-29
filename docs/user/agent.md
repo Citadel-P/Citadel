@@ -156,6 +156,8 @@ It will look similar to:
 docker run -d \
   --name citadel-agent \
   --restart=always \
+  --label com.citadel.system=true \
+  --label com.citadel.system-role=agent \
   -p 9000:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /:/host:ro \
@@ -201,6 +203,9 @@ services:
     image: ghcr.io/citadel-p/citadel.agent:1.2.3
     container_name: citadel-agent
     restart: always
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "agent"
     ports:
       - "9000:9000"
     environment:
@@ -222,6 +227,12 @@ Start the Agent:
 ```bash
 docker compose up -d
 ```
+
+Citadel displays the Agent container as **System** on the remote Platform. It
+remains available for inspection, logs, terminal access, and resource
+statistics, but Citadel blocks lifecycle and delete actions that could sever
+the Platform connection. Manage the Agent from its Docker host and recreate
+older Agent containers once to apply the labels.
 
 Then configure the address that Citadel Core can use to reach it:
 

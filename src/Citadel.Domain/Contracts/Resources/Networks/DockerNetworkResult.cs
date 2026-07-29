@@ -19,6 +19,7 @@ public record DockerNetworkResult(
     IReadOnlyDictionary<string, string> Labels)
 {
     public Guid PlatformId { get; set; }
+    public bool IsSystem => DockerNetworkSystemClassifier.IsSystem(Name, Ingress);
 }
 
 public record IpamSubnetConfiguration(

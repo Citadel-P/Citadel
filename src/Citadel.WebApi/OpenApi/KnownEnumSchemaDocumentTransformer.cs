@@ -10,6 +10,7 @@ internal sealed class KnownEnumSchemaDocumentTransformer : IOpenApiDocumentTrans
     public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
     {
         SetEnumSchema<BackupRunStatus>(document);
+        SetEnumSchema<ContainerSystemRole>(document);
         return Task.CompletedTask;
     }
 

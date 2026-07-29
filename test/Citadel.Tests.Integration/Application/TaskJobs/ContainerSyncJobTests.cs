@@ -312,6 +312,108 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     }
 
     [Fact]
+    public async Task CreatedEvent_ShouldPersistSystemClassificationAndSkipUnmanagedAlert()
+    {
+        var dockerContainer = new DockerContainer(
+            Name: "/citadel-server-1",
+            Image: "citadel:latest",
+            ImageId: "sha256:citadel",
+            Id: "citadel-system-container-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: "citadel",
+            IsSystem: true,
+            SystemRole: ContainerSystemRole.Core);
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        var unmanagedAlerts = Channel.CreateUnbounded<UnmanagedContainerAlertRequest>();
+
+        await using (var syncScope = Services.CreateAsyncScope())
+        {
+            var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new ContainerCreatedWorkItem(
+                new DaemonContainerEventInfo("create", dockerContainer.Id, dockerContainer),
+                platformId,
+                notificationQueue.Object,
+                unmanagedAlerts.Writer,
+                Mock.Of<IDockerDaemonStreamManager>(),
+                cache,
+                Mock.Of<IContainerEventBroadcaster>(),
+                Mock.Of<ILogger<ContainerCreatedWorkItem>>());
+
+            await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var uow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = Assert.Single(
+            await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken),
+            container => container.DockerContainerId == dockerContainer.Id);
+        Assert.True(persisted.IsSystem);
+        Assert.Equal(ContainerSystemRole.Core, persisted.SystemRole);
+        Assert.False(unmanagedAlerts.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task UpdatedEvent_ShouldRefreshSystemClassification()
+    {
+        const string containerId = "system-classification-update-id";
+        var container = new Container(
+            name: "citadel-server",
+            dockerImageId: "sha256:citadel",
+            platformId: platformId,
+            dockerContainerId: containerId,
+            state: ContainerStateStatus.Running);
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var uow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var eventContainer = new DockerContainer(
+            Name: "/citadel-server",
+            Image: "citadel:latest",
+            ImageId: "sha256:citadel",
+            Id: containerId,
+            State: ContainerStateStatus.Running,
+            IsSystem: true,
+            SystemRole: ContainerSystemRole.Core);
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        await using (var updateScope = Services.CreateAsyncScope())
+        {
+            var uow = updateScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var workItem = new ContainerUpdatedWorkItem(
+                new DaemonContainerEventInfo("update", containerId, eventContainer),
+                notificationQueue.Object,
+                Mock.Of<IActivityStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IDockerDaemonStreamManager>(),
+                Mock.Of<IContainerEventBroadcaster>(),
+                Mock.Of<IStackStreamManager>(),
+                Mock.Of<ILogger<ContainerUpdatedWorkItem>>());
+
+            await workItem.ExecuteAsync(uow, TestContext.Current.CancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = await assertUow.Containers.GetByIdAsync(containerId, TestContext.Current.CancellationToken);
+        Assert.NotNull(persisted);
+        Assert.True(persisted.IsSystem);
+        Assert.Equal(ContainerSystemRole.Core, persisted.SystemRole);
+    }
+
+    [Fact]
     public async Task UpdatesExistingContainers_WhenPropertiesChange()
     {
         // Arrange: Seed DB with a container, then fresh list has same container with different properties

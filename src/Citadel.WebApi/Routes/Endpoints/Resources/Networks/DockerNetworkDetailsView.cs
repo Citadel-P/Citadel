@@ -21,6 +21,7 @@ public sealed record DockerNetworkDetailsView(
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyDictionary<string, NetworkConnectedContainer> Containers,
     IReadOnlyList<NetworkPeerInfo> Peers,
+    bool IsSystem,
     NetworkCapabilities? Capabilities = null
     )
 {
@@ -51,5 +52,6 @@ public sealed record DockerNetworkDetailsView(
             Options: network.Options ?? new Dictionary<string, string>(),
             Labels: network.Labels ?? new Dictionary<string, string>(),
             Containers: network.Containers ?? new Dictionary<string, NetworkConnectedContainer>(),
-            Peers: network.Peers ?? []);
+            Peers: network.Peers ?? [],
+            IsSystem: network.IsSystem);
 }

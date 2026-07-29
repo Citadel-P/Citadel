@@ -26,6 +26,7 @@ import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
 import { ChevronDown, ChevronRight, Unlink } from 'lucide-react';
 import { ContainerActionResource, ContainerStackGroupResource, isContainerStackGroup } from './actions';
 import { useAppContext } from '@/lib/context/app-context';
+import { SystemContainerBadge } from './system-container-badge';
 
 type ContainerTableRow = ContainerActionResource;
 type PlatformResourceLimits = {
@@ -61,10 +62,7 @@ export const ContainersTable = ({
   const handleSelectionChange = useCallback(
     (selectedRows: ContainerTableRow[]) => {
       const selectedResources = getSelectedContainers(selectedRows);
-      const selectionKey = selectedResources
-        .map(getSelectionSignature)
-        .sort()
-        .join('|');
+      const selectionKey = selectedResources.map(getSelectionSignature).sort().join('|');
 
       if (selectionKey === lastSelectionKeyRef.current) return;
 
@@ -106,6 +104,7 @@ const getSelectionSignature = (container: ContainerView) =>
     container.containerId,
     container.state,
     container.controlState,
+    container.isSystem,
     container.capabilities?.canRead,
     container.capabilities?.canWrite,
     container.capabilities?.canExecute,
@@ -233,13 +232,17 @@ const ContainerNameCell = ({
           title={row.name}>
           {truncate(row.name, 28)}
         </button>
-        {!row.stackId && (
-          <span
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
-            title="Unmanaged stack">
-            <Unlink className="h-3 w-3" />
-            <span className="sr-only">Unmanaged stack</span>
-          </span>
+        {row.isSystem ? (
+          <SystemContainerBadge stack />
+        ) : (
+          !row.stackId && (
+            <span
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
+              title="Unmanaged stack">
+              <Unlink className="h-3 w-3" />
+              <span className="sr-only">Unmanaged stack</span>
+            </span>
+          )
         )}
       </div>
     );
@@ -255,13 +258,17 @@ const ContainerNameCell = ({
       <Link to={`./${formatId(row.containerId)}`} className="table-link truncate" title={row.name}>
         {row.name ? truncate(row.name?.slice(1), 24) : ''}
       </Link>
-      {isUnmanagedContainer(row) && (
-        <span
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
-          title="Unmanaged container">
-          <Unlink className="h-3 w-3" />
-          <span className="sr-only">Unmanaged container</span>
-        </span>
+      {row.isSystem ? (
+        <SystemContainerBadge role={row.systemRole} />
+      ) : (
+        isUnmanagedContainer(row) && (
+          <span
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
+            title="Unmanaged container">
+            <Unlink className="h-3 w-3" />
+            <span className="sr-only">Unmanaged container</span>
+          </span>
+        )
       )}
     </div>
   );
@@ -323,6 +330,8 @@ const createStackGroup = (
     lastStats: aggregateStats(containers, platformLimits),
     ports: {},
     deploymentId: null,
+    isSystem: containers.some((container) => container.isSystem),
+    systemRole: null,
     imageView: null,
     displayStatus: getStackDisplayStatus(containers),
     capabilities: firstContainer.capabilities,

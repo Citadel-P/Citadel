@@ -101,6 +101,7 @@ internal sealed class EdgeAgentManagementService(
             agentImage,
             environment,
             includeHostRootMount: target.ResourceType == EdgeAgentResourceType.Platform,
+            systemRole: target.ResourceType == EdgeAgentResourceType.Platform ? "edge-agent" : null,
             containerName: target.ContainerName,
             dataVolumeName: target.ContainerName.Replace("-", "_", StringComparison.Ordinal) + "_data");
 

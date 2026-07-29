@@ -419,6 +419,13 @@ export enum CpuArchitecture {
   Arm64 = "Arm64",
 }
 
+export enum ContainerSystemRole {
+  Core = "Core",
+  Database = "Database",
+  Agent = "Agent",
+  EdgeAgent = "EdgeAgent",
+}
+
 export enum ContainerStateStatus {
   Unknown = "Unknown",
   Created = "Created",
@@ -3995,6 +4002,8 @@ export interface ContainerDataView {
   imageId: string;
   state: ContainerStateStatus;
   controlState: ResourceControlState;
+  isSystem: boolean;
+  systemRole: null | ContainerSystemRole;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4173,6 +4182,8 @@ export interface ContainerView {
    */
   updated: number | string;
   stack: null | string;
+  isSystem: boolean;
+  systemRole: null | ContainerSystemRole;
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
   /** @format uuid */
@@ -4699,6 +4710,7 @@ export interface DockerNetworkDetailsView {
   labels: Record<string, string>;
   containers: Record<string, NetworkConnectedContainer>;
   peers: NetworkPeerInfo[];
+  isSystem: boolean;
   capabilities?: null | NetworkCapabilities;
 }
 
@@ -4719,6 +4731,7 @@ export interface DockerNetworkResultView {
   ipam: null | IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
+  isSystem: boolean;
   capabilities?: null | NetworkCapabilities;
 }
 

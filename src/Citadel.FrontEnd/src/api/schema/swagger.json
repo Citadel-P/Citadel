@@ -40232,7 +40232,9 @@
           "id",
           "imageId",
           "state",
-          "controlState"
+          "controlState",
+          "isSystem",
+          "systemRole"
         ],
         "type": "object",
         "properties": {
@@ -40253,6 +40255,19 @@
           },
           "controlState": {
             "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "systemRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerSystemRole"
+              }
+            ]
           },
           "created": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -40884,6 +40899,15 @@
           }
         }
       },
+      "ContainerSystemRole": {
+        "enum": [
+          "Core",
+          "Database",
+          "Agent",
+          "EdgeAgent"
+        ],
+        "type": "string"
+      },
       "ContainerView": {
         "required": [
           "id",
@@ -40896,6 +40920,8 @@
           "controlState",
           "updated",
           "stack",
+          "isSystem",
+          "systemRole",
           "lastStats",
           "ports",
           "deploymentId",
@@ -40946,6 +40972,19 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "systemRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerSystemRole"
+              }
             ]
           },
           "lastStats": {
@@ -43033,7 +43072,8 @@
           "options",
           "labels",
           "containers",
-          "peers"
+          "peers",
+          "isSystem"
         ],
         "type": "object",
         "properties": {
@@ -43110,6 +43150,9 @@
               "$ref": "#/components/schemas/NetworkPeerInfo"
             }
           },
+          "isSystem": {
+            "type": "boolean"
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -43139,7 +43182,8 @@
           "configFrom",
           "ipam",
           "options",
-          "labels"
+          "labels",
+          "isSystem"
         ],
         "type": "object",
         "properties": {
@@ -43206,6 +43250,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "isSystem": {
+            "type": "boolean"
           },
           "capabilities": {
             "oneOf": [

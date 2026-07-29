@@ -1,4 +1,4 @@
-import { DockerNetworkDetailsView, DockerNetworkResultView } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView } from '@/api/generated/api.types';
 import { Box, Info, Share2 } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { NetworkInfoTable } from './network-info-table';
@@ -10,26 +10,16 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { NetworkInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { SystemBadge } from '@/components/custom/system-badge';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetailsView> = {
   Header: {
     Indicator: ({ resource }) => {
       return <StateIndicator value={Object.keys(resource.containers ?? {}).length > 0} />;
     },
+    NameSuffix: ({ resource }) => (resource.isSystem ? <SystemBadge description="Docker system network" /> : null),
     ActionButtons: ({ resource }) => {
-      return (
-        <GenericActionBarButtons
-          resource={
-            {
-              id: resource.id,
-              name: resource.name,
-              inUse: Object.keys(resource.containers ?? {}).length > 0,
-              capabilities: resource.capabilities,
-            } as DockerNetworkResultView
-          }
-          actions={Object.values(NetworkInfoActions)}
-        />
-      );
+      return <GenericActionBarButtons resource={resource} actions={Object.values(NetworkInfoActions)} />;
     },
   },
 

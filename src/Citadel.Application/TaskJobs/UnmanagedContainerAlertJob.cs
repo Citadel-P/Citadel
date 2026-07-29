@@ -151,7 +151,7 @@ internal sealed class UnmanagedContainerAlertJob(
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var container = await uow.Containers.GetByIdAsync(request.DockerContainerId, cancellationToken);
-        if (container is null || container.DeploymentId is not null || container.StackId is not null) 
+        if (container is null || container.IsSystem || container.DeploymentId is not null || container.StackId is not null)
             return;
 
         var platform = await uow.Platforms.GetByIdAsync(request.PlatformId, cancellationToken);

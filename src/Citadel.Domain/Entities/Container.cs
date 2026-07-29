@@ -15,7 +15,9 @@ public class Container(
     Guid? deploymentId = null,
     Guid? stackId = null,
     Guid? imageId = null,
-    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null) : IReconcilableResource
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
+    bool isSystem = false,
+    ContainerSystemRole? systemRole = null) : IReconcilableResource
 {
     private readonly List<ContainerStat> stats = [];
     private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
@@ -33,6 +35,8 @@ public class Container(
     public long Updated { get; private set; }
     public ContainerStateStatus State { get; set; } = state;
     public string? DockerStack { get; private set; } = dockerStack;
+    public bool IsSystem { get; private set; } = isSystem;
+    public ContainerSystemRole? SystemRole { get; private set; } = isSystem ? systemRole : null;
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
@@ -58,7 +62,9 @@ public class Container(
         Guid? imageId = null,
         Guid? deploymentId = null,
         Guid? stackId = null,
-        IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
+        IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
+        bool? isSystem = null,
+        ContainerSystemRole? systemRole = null)
     {
         if (name != null) Name = name;
         if (dockerImageId != null) DockerImageId = dockerImageId;
@@ -69,6 +75,11 @@ public class Container(
         if (imageId is not null) ImageId = imageId;
         if (deploymentId is not null) DeploymentId = deploymentId;
         if (stackId is not null) StackId = stackId;
+        if (isSystem is not null)
+        {
+            IsSystem = isSystem.Value;
+            SystemRole = isSystem.Value ? systemRole : null;
+        }
         if (ports != null)
         {
             this.ports.Clear();
@@ -120,7 +131,9 @@ public class Container(
         Image? image = null,
         Stack? stack = null,
         Deployment? deployment = null,
-        IReadOnlyCollection<ContainerStat>? stats = null
+        IReadOnlyCollection<ContainerStat>? stats = null,
+        bool isSystem = false,
+        ContainerSystemRole? systemRole = null
         )
     {
         var container = new Container(
@@ -134,7 +147,9 @@ public class Container(
             ports: ports,
             imageId: imageId,
             stackId: stackId,
-            deploymentId: deploymentId)
+            deploymentId: deploymentId,
+            isSystem: isSystem,
+            systemRole: systemRole)
         {
             Id = id,
             Image = image,

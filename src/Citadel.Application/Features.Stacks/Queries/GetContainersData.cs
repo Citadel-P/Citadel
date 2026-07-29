@@ -28,7 +28,9 @@ internal sealed class GetDockerContainersDataHandler(IUnitOfWork unitOfWork) : I
                 Created: container.Created,
                 Stack: container.DockerStack,
                 ContainerStat: null,
-                Ports: container.Ports);
+                Ports: container.Ports,
+                IsSystem: container.IsSystem,
+                SystemRole: container.SystemRole);
             dockerContainers.Add(dockerContainer);
         }
         return Result.Success<IEnumerable<DockerContainer>>(dockerContainers);

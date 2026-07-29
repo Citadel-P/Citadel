@@ -12,6 +12,8 @@ public sealed class AgentDockerCommandBuilderTests
             new Dictionary<string, string>());
 
         Assert.Equal(1, CountOccurrences(command, "-v /:/host:ro"));
+        Assert.Contains("--label com.citadel.system=true", command);
+        Assert.Contains("--label com.citadel.system-role=agent", command);
     }
 
     [Fact]
@@ -20,9 +22,12 @@ public sealed class AgentDockerCommandBuilderTests
         var command = AgentDockerCommandBuilder.BuildEdgeAgentCommand(
             "citadel-agent:1.0.0",
             new Dictionary<string, string>(),
-            includeHostRootMount: true);
+            includeHostRootMount: true,
+            systemRole: "edge-agent");
 
         Assert.Equal(1, CountOccurrences(command, "-v /:/host:ro"));
+        Assert.Contains("--label com.citadel.system=true", command);
+        Assert.Contains("--label com.citadel.system-role=edge-agent", command);
     }
 
     [Fact]
@@ -31,11 +36,13 @@ public sealed class AgentDockerCommandBuilderTests
         var command = AgentDockerCommandBuilder.BuildEdgeAgentCommand(
             "citadel-agent:1.0.0",
             new Dictionary<string, string>(),
-            includeHostRootMount: false);
+            includeHostRootMount: false,
+            systemRole: null);
 
         Assert.DoesNotContain("-v /:/host:ro", command);
         Assert.Contains("-v /var/run/docker.sock:/var/run/docker.sock", command);
         Assert.Contains("-v citadel_edge_agent_data:/app/data", command);
+        Assert.DoesNotContain("com.citadel.system", command);
     }
 
     private static int CountOccurrences(string value, string search)

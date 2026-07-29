@@ -8,6 +8,7 @@
   state: Created,
   controlState: Idle,
   updated: 0,
+  isSystem: false,
   deploymentId: Guid_3,
   imageView: {
     id: Guid_4,

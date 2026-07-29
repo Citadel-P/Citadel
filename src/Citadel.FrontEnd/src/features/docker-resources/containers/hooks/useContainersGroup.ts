@@ -4,6 +4,7 @@ import { ContainersView, ContainerStatView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
+import { reconcileContainerOrder } from './container-order';
 
 export const useContainersGroup = (platformId?: string) => {
   const { data, isLoading, } = useRead('listContainers', { id: platformId });
@@ -66,7 +67,10 @@ export const useContainersGroup = (platformId?: string) => {
   useDockerDaemonGroup(platformId, { onContainerEvent });
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
-    setContainersInfo(containers);
+    setContainersInfo((currentInfo) => ({
+      ...containers,
+      containers: reconcileContainerOrder(currentInfo?.containers, containers.containers),
+    }));
   }, []);
 
   const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {

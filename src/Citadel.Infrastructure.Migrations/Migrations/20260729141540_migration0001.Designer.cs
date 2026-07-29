@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260729103325_migration0001")]
+    [Migration("20260729141540_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -2605,6 +2605,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("imageid");
 
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("issystem");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2637,6 +2643,10 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("state");
+
+                    b.Property<string>("SystemRole")
+                        .HasColumnType("text")
+                        .HasColumnName("systemrole");
 
                     b.Property<long>("Updated")
                         .HasColumnType("bigint")

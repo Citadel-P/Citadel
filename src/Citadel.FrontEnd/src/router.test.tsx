@@ -1,11 +1,7 @@
 import { screen } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
-import {
-  REDIRECT_TO_KEY,
-  RequireAuth,
-  RequireNoAuth,
-} from './features/auth/auth-route-guards';
+import { REDIRECT_TO_KEY, RequireAuth, RequireNoAuth } from './features/auth/auth-route-guards';
 import { RequireSetupComplete } from './features/setup/setup-route-guards';
 
 function LocationProbe() {
@@ -34,6 +30,32 @@ describe('authentication route guards', () => {
     expect(await screen.findByText('setup page')).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/setup');
     expect(sessionStorage.getItem(REDIRECT_TO_KEY)).toBe('/builds/42?tab=logs');
+  });
+
+  it('shows a connection error instead of a setup error when Core is unreachable', async () => {
+    const retry = vi.fn();
+    const { user } = renderCitadel(
+      <Routes>
+        <Route element={<RequireSetupComplete />}>
+          <Route path="/" element={<span>protected content</span>} />
+        </Route>
+      </Routes>,
+      {
+        setup: {
+          error: {
+            title: 'Cannot connect to Citadel',
+            message: 'The Citadel server is not reachable. Check that it is running and try again.',
+          },
+          retry,
+        },
+      },
+    );
+
+    expect(screen.getByRole('heading', { name: 'Cannot connect to Citadel' })).toBeVisible();
+    expect(screen.queryByText('Setup unavailable')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it('waits for authentication bootstrap without redirecting', () => {

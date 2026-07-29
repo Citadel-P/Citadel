@@ -104,7 +104,9 @@ internal sealed class StackInfoStreamManager(
                     Stack: container.DockerStack,
                     ContainerStat: null,
                     ControlState: container.ControlState,
-                    Ports: container.Ports)))
+                    Ports: container.Ports,
+                    IsSystem: container.IsSystem,
+                    SystemRole: container.SystemRole)))
             .ToList();
     }
 

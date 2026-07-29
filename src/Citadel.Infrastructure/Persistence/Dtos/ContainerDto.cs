@@ -17,7 +17,9 @@ internal record ContainerDto(
     Guid? ControlTriggeredBy,
     Guid? ImageId = null,
     Guid? StackId = null,
-    Guid? DeploymentId = null)
+    Guid? DeploymentId = null,
+    bool IsSystem = false,
+    string? SystemRole = null)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 

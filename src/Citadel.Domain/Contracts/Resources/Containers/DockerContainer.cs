@@ -14,7 +14,9 @@ public sealed record DockerContainer(
     ResourceControlState? ControlState = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null,
     Guid? DeploymentId = null,
-    Guid? StackId = null
+    Guid? StackId = null,
+    bool IsSystem = false,
+    ContainerSystemRole? SystemRole = null
     );
 
 public record struct DockerContainerStat(

@@ -18,6 +18,7 @@ public sealed record DockerNetworkResultView(
     IpAddressManagementConfig? Ipam,
     IReadOnlyDictionary<string, string> Options,
     IReadOnlyDictionary<string, string> Labels,
+    bool IsSystem,
     NetworkCapabilities? Capabilities = null)
 {
     internal static DockerNetworkResultView Map(DockerNetworkResult dockerNetworkResult)
@@ -38,6 +39,7 @@ public sealed record DockerNetworkResultView(
             dockerNetworkResult.ConfigFrom,
             dockerNetworkResult.Ipam,
             dockerNetworkResult.Options,
-            dockerNetworkResult.Labels);
+            dockerNetworkResult.Labels,
+            dockerNetworkResult.IsSystem);
     }
 }

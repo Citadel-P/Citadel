@@ -449,6 +449,8 @@ internal static class Configuration
         container.Property<long>("Updated").HasColumnType(BigInt).IsRequired();
         container.Property<string>("State").HasColumnType(Text).IsRequired();
         container.Property<string>("Stack").HasColumnType(Text);
+        container.Property<bool>("IsSystem").IsRequired().HasDefaultValue(false);
+        container.Property<string>("SystemRole").HasColumnType(Text).IsRequired(false);
         container.Property<string>("Ports").HasColumnType(Json).IsRequired();
 
         container.AddReconcilableMember();

@@ -99,6 +99,20 @@ The container should mount:
 citadel_edge_agent_data:/app/data
 ```
 
+The generated Platform Edge Agent command also includes:
+
+```text
+--label com.citadel.system=true
+--label com.citadel.system-role=edge-agent
+```
+
+These labels make the Edge Agent a **System** container on the Platform it
+manages. Citadel keeps its diagnostics visible but blocks lifecycle and delete
+actions that could disconnect the Platform. Manage the container from its
+Docker host and recreate older Platform Edge Agent containers once to apply
+the labels. Build-pool-only Edge Agents are not Platform system containers and
+do not receive these labels.
+
 The Docker socket lets the agent inspect and manage local Docker resources. The
 read-only `/host` bind lets a Platform Edge Agent report the capacity of the
 filesystem containing Docker's configured data root. It exposes host paths to

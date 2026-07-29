@@ -572,7 +572,9 @@ internal static class ContainerMappers
             State: container.State.Map(),
             ContainerStat: container.ContainerStatMessage?.Map(),
             Ports: container.Ports?.Map(),
-            StackId: ParseStackId(container.StackId)
+            StackId: ParseStackId(container.StackId),
+            IsSystem: container.IsSystem,
+            SystemRole: MapSystemRole(container.IsSystem, container.SystemRole)
         );
 
     internal static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -683,8 +685,23 @@ internal static class ContainerMappers
             ContainerStat: container?.ContainerStat?.Map(),
             Ports: container?.Ports?.Map(),
             State: container?.State?.Map() ?? ContainerStateStatus.Unknown,
-            StackId: container?.StackId
+            StackId: container?.StackId,
+            IsSystem: container?.IsSystem ?? false,
+            SystemRole: MapSystemRole(container?.IsSystem ?? false, container?.SystemRole)
         );
+
+    private static ContainerSystemRole? MapSystemRole(bool isSystem, string? role)
+    {
+        if (!isSystem)
+            return null;
+
+        if (string.Equals(role, "edge-agent", StringComparison.OrdinalIgnoreCase))
+            return ContainerSystemRole.EdgeAgent;
+
+        return Enum.TryParse<ContainerSystemRole>(role, ignoreCase: true, out var parsed)
+            ? parsed
+            : null;
+    }
 
     internal static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
     {

@@ -5,6 +5,7 @@ using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Domain.Contracts.Interfaces;
 
 namespace Application.Features.Containers.Commands;
 
@@ -22,6 +23,7 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
 
 internal sealed class DeleteContainersHandler(
     IUserContextAccessor userContext,
+    IUnitOfWork unitOfWork,
     IContainerProcessingService containerService,
     IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<DeleteContainers, Result>
@@ -32,6 +34,11 @@ internal sealed class DeleteContainersHandler(
         if (!hasAccess)
         {
             return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
+        }
+
+        if (await SystemContainerProtection.ContainsSystemContainerAsync(unitOfWork, request.ContainerIds, ct))
+        {
+            return Result.Failure(new ConflictError(SystemContainerProtection.ErrorMessage));
         }
 
         var actorId = userContext.Current.ActorId;

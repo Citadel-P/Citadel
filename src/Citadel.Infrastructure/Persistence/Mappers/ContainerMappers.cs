@@ -33,7 +33,9 @@ internal static class ContainerMappers
             controlStartedAt: container.ControlStartedAt,
             controlTriggeredBy: container.ControlTriggeredBy,
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
-            stats: container.Stats?.Select(ToDomain).ToList()); 
+            stats: container.Stats?.Select(ToDomain).ToList(),
+            isSystem: container.IsSystem,
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
     }
 
     internal static Container? ToDomain(this ContainerWithImageDto? container)
@@ -84,7 +86,9 @@ internal static class ContainerMappers
                 rowVersion: 0,
                 controlStartedAt: null,
                 controlState: ResourceControlState.Idle
-                ) : null);
+                ) : null,
+            isSystem: container.IsSystem,
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
     }
 
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerWithLastStatDto> containers)
@@ -165,7 +169,9 @@ internal static class ContainerMappers
                 RxBytes: container.Stat_RxBytes,
                 TxBytes: container.Stat_TxBytes,
                 Created: container.Stat_Created
-                )]);
+                )],
+            isSystem: container.IsSystem,
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
     }
 
     internal static IEnumerable<ContainerStat> ToDomain(this IEnumerable<ContainerStatDto> stats)
@@ -181,6 +187,11 @@ internal static class ContainerMappers
             MemoryLimit: stat.MemoryLimit,
             RxBytes: stat.RxBytes,
             TxBytes: stat.TxBytes);
+
+    private static ContainerSystemRole? ParseSystemRole(bool isSystem, string? role)
+        => isSystem && Enum.TryParse<ContainerSystemRole>(role, ignoreCase: true, out var parsed)
+            ? parsed
+            : null;
 
 }
 

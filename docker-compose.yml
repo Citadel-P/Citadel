@@ -25,6 +25,9 @@ services:
   pg_db:
     image: postgres:alpine
     restart: unless-stopped
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "database"
     environment:
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PASSWORD}

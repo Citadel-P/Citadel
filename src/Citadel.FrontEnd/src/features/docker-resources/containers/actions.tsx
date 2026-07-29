@@ -16,6 +16,7 @@ interface BaseContainerResource {
   name: string;
   state: ContainerStateStatus;
   controlState: ResourceControlState;
+  isSystem: boolean;
 }
 
 export type ContainerStackGroupResource = {
@@ -30,6 +31,8 @@ export type ContainerStackGroupResource = {
   lastStats: ContainerView['lastStats'];
   ports: ContainerView['ports'];
   deploymentId: null;
+  isSystem: boolean;
+  systemRole: null;
   imageView?: null;
   displayStatus: StackReleaseStatus;
   capabilities?: ContainerView['capabilities'];
@@ -51,20 +54,27 @@ type ContainerVariablesFactory<T extends BaseContainerResource> = (
 const isProcessing = (r: BaseContainerResource) => r.controlState === ResourceControlState.Processing;
 
 const canStart = (x: BaseContainerResource) =>
+  !x.isSystem &&
   x.state !== ContainerStateStatus.Running &&
   x.state !== ContainerStateStatus.Offline &&
   x.state !== ContainerStateStatus.Paused &&
   !isProcessing(x);
 
 const canStop = (x: BaseContainerResource) =>
-  (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
+  !x.isSystem &&
+  (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
+  !isProcessing(x);
 
-const canPause = (x: BaseContainerResource) => x.state === ContainerStateStatus.Running && !isProcessing(x);
+const canPause = (x: BaseContainerResource) =>
+  !x.isSystem && x.state === ContainerStateStatus.Running && !isProcessing(x);
 
-const canUnpause = (x: BaseContainerResource) => x.state === ContainerStateStatus.Paused && !isProcessing(x);
+const canUnpause = (x: BaseContainerResource) =>
+  !x.isSystem && x.state === ContainerStateStatus.Paused && !isProcessing(x);
 
 const canRestart = (x: BaseContainerResource) =>
-  (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
+  !x.isSystem &&
+  (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
+  !isProcessing(x);
 
 export const createContainerActions = <T extends BaseContainerResource>(
   useVariables: ContainerVariablesFactory<T>,
@@ -76,6 +86,9 @@ export const createContainerActions = <T extends BaseContainerResource>(
     predicate: (resource: BaseContainerResource) => boolean,
   ) => {
     const selected = Array.isArray(resources) ? resources : [resources];
+    if (selected.some((resource) => getActionTargets(resource, action).some((target) => target.isSystem))) {
+      return false;
+    }
     return selected.every((resource) => getActionTargets(resource, action).some(predicate));
   };
 
@@ -131,6 +144,11 @@ export const createContainerActions = <T extends BaseContainerResource>(
 const getContainers = (resources: ContainerActionResource | ContainerActionResource[]) => {
   const selected = Array.isArray(resources) ? resources : [resources];
   return selected.flatMap((resource) => (isContainerStackGroup(resource) ? resource.containers : [resource]));
+};
+
+export const containsSystemContainer = (resources: { isSystem: boolean } | { isSystem: boolean }[]) => {
+  const selected = Array.isArray(resources) ? resources : [resources];
+  return selected.some((resource) => resource.isSystem);
 };
 
 const eligibleFor = (action: ContainerActionKey) =>
@@ -202,6 +220,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       canExecute: (r) => {
         const can = (x: ContainerView) => x.state !== ContainerStateStatus.Offline && !isProcessing(x);
         const containers = getContainers(r);
+        if (containsSystemContainer(containers)) return false;
         return containers.some(can);
       },
       separatorBefore: true,

@@ -2,7 +2,7 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { createContainerActions } from '../actions';
+import { containsSystemContainer, createContainerActions } from '../actions';
 import { ContainerDataView } from '@/api/generated/api.types';
 
 const useVariables = (resources: ContainerDataView | ContainerDataView[]) =>
@@ -23,7 +23,10 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerData
     confirm: true,
     destructive: true,
     resourceType: 'Container',
-    canExecute: () => true,
+    canExecute: (resource) => {
+      const selected = Array.isArray(resource) ? resource : [resource];
+      return !containsSystemContainer(selected);
+    },
     useVariables: (resource) => {
       const selected = Array.isArray(resource) ? resource : [resource];
       return { force: true, containerIds: selected.map((r) => r.id) };

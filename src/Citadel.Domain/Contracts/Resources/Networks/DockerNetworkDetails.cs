@@ -20,4 +20,5 @@ public record DockerNetworkDetails(
     IReadOnlyList<NetworkPeerInfo> Peers)
 {
     public Guid PlatformId{ get; set; }
+    public bool IsSystem => DockerNetworkSystemClassifier.IsSystem(Name, Ingress);
 }

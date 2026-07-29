@@ -23,6 +23,7 @@ public sealed record PatchContainer(string[] ContainerIds, ContainerAction Actio
 
 internal sealed class PatchContainerHandler(
     IUserContextAccessor userContext,
+    IUnitOfWork unitOfWork,
     IContainerProcessingService containerService,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
@@ -35,6 +36,11 @@ internal sealed class PatchContainerHandler(
         if (!hasAccess)
         {
             return Result.Failure(new ForbiddenError("Missing permission [Write] on [Platform]"));
+        }
+
+        if (await SystemContainerProtection.ContainsSystemContainerAsync(unitOfWork, request.ContainerIds, ct))
+        {
+            return Result.Failure(new ConflictError(SystemContainerProtection.ErrorMessage));
         }
 
         var actorId = userContext.Current.ActorId;

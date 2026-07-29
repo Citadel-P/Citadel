@@ -1463,6 +1463,7 @@ namespace Infrastructure.Migrations.Migrations
                     dockercontainerid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     dockerimageid = table.Column<string>(type: "text", nullable: false),
                     imageid = table.Column<Guid>(type: "uuid", nullable: true),
+                    issystem = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     ports = table.Column<string>(type: "json", nullable: false),
@@ -1470,6 +1471,7 @@ namespace Infrastructure.Migrations.Migrations
                     stack = table.Column<string>(type: "text", nullable: true),
                     stackid = table.Column<Guid>(type: "uuid", nullable: true),
                     state = table.Column<string>(type: "text", nullable: false),
+                    systemrole = table.Column<string>(type: "text", nullable: true),
                     updated = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>

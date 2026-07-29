@@ -86,6 +86,9 @@ COPY --from=frontend-build /src/Citadel.FrontEnd/dist /app/publish/wwwroot
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine
 WORKDIR /app
 
+LABEL com.citadel.system="true" \
+      com.citadel.system-role="core"
+
 # Copy and run deps
 COPY src/Citadel.Contracts/install-deps.sh .
 COPY install-server-deps.sh .

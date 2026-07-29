@@ -14,10 +14,9 @@ export const { info: NetworkInfoActions } = createActionsBuilder<DockerNetworkDe
     destructive: true,
     resourceType: 'Network',
     canExecute: (r) => {
-      const containersCount = Array.isArray(r)
-        ? r.some((x) => Object.keys(x?.containers ?? {}).length === 0)
-        : Object.keys(r?.containers ?? {}).length === 0;
-      return containersCount;
+      const canDelete = (network: DockerNetworkDetailsView) =>
+        !network.isSystem && Object.keys(network.containers ?? {}).length === 0;
+      return Array.isArray(r) ? r.every(canDelete) : canDelete(r);
     },
     useVariables: (resource) => {
       const { currentPlatform } = useAppContext();

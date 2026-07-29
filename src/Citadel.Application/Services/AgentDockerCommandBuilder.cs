@@ -9,6 +9,8 @@ internal static class AgentDockerCommandBuilder
             [
                 "--name citadel-agent",
                 "--restart=always",
+                "--label com.citadel.system=true",
+                "--label com.citadel.system-role=agent",
                 "-p 9000:9000",
                 "-v /var/run/docker.sock:/var/run/docker.sock",
                 "-v /:/host:ro"
@@ -18,6 +20,7 @@ internal static class AgentDockerCommandBuilder
         string agentImage,
         IReadOnlyDictionary<string, string> environment,
         bool includeHostRootMount,
+        string? systemRole,
         string containerName = "citadel-agent",
         string dataVolumeName = "citadel_edge_agent_data")
     {
@@ -27,6 +30,11 @@ internal static class AgentDockerCommandBuilder
             "--restart=always",
             "-v /var/run/docker.sock:/var/run/docker.sock"
         };
+        if (!string.IsNullOrWhiteSpace(systemRole))
+        {
+            options.Add("--label com.citadel.system=true");
+            options.Add($"--label com.citadel.system-role={systemRole}");
+        }
         if (includeHostRootMount)
             options.Add("-v /:/host:ro");
         options.Add($"-v {dataVolumeName}:/app/data");

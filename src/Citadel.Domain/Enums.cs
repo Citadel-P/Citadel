@@ -44,6 +44,14 @@ public enum ContainerStateStatus
     Offline,
 }
 
+public enum ContainerSystemRole
+{
+    Core,
+    Database,
+    Agent,
+    EdgeAgent,
+}
+
 public enum AppPermission
 {
     None = 0,

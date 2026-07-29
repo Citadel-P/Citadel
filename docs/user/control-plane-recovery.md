@@ -16,6 +16,44 @@ secret-encryption key makes stored local secrets and provider credentials
 undecryptable. Losing the Core Ed25519 private key prevents existing Agents
 from trusting Core requests.
 
+## System Containers
+
+On the local Docker Platform, Citadel marks its Core and PostgreSQL containers
+as **System**. On remote Platforms, generated regular Agent and Platform Edge
+Agent installation commands apply the same classification to the container
+that maintains the Platform connection. System containers remain visible so
+operators can inspect their state, resource usage, logs, and configuration
+under the normal Platform permissions. They are also included in Platform
+container totals and usage statistics.
+
+Citadel does not expose start, stop, pause, resume, restart, or delete controls
+for System containers. This prevents a bulk action or direct API request from
+disabling the control plane or remote connection that must report and recover
+the operation. Manage local Core and PostgreSQL containers from the Docker host
+with the Compose file used to install Citadel:
+
+```powershell
+docker compose ps
+docker compose restart
+docker compose up -d
+docker compose down
+```
+
+Manage regular and Edge Agent containers directly from their remote Docker
+host, using the installation method shown by Citadel. For example:
+
+```powershell
+docker restart citadel-agent
+docker restart edge-agent
+```
+
+Existing Agent containers must be recreated once with a current generated
+installation command before Citadel can classify and protect them.
+
+Use `docker compose down` only when intentionally stopping the complete
+installation. The System label is a safety boundary in Citadel, not a
+replacement for restricting access to the Docker host.
+
 ## Current Availability
 
 Citadel creates complete control-plane backup bundles from the **Citadel

@@ -43,7 +43,9 @@ internal sealed class GetDockerContainerHandler(
             ContainerStat: null,
             Ports: container.Ports,
             DeploymentId: container.DeploymentId,
-            StackId: container.StackId) : null;
+            StackId: container.StackId,
+            IsSystem: container.IsSystem,
+            SystemRole: container.SystemRole) : null;
         return dockerContainer is not null ? Result.Success((dockerContainer, container?.PlatformId ?? Guid.Empty)) : Result.Failure<(DockerContainer, Guid)>(new NotFoundError("Container does not exist"));
     }
 }

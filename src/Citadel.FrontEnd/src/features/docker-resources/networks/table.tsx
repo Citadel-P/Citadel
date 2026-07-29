@@ -12,6 +12,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ActionData } from '@/pages/types';
 import { ContentCard } from '@/components/custom/content-card';
+import { SystemBadge } from '@/components/custom/system-badge';
 
 export const NetworksTable = ({
   items,
@@ -144,7 +145,7 @@ const columns = (
   },
 ];
 
-const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
+export const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {
@@ -152,7 +153,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
   }
 
   return (
-    <div className="flex items-center whitespace-nowrap">
+    <div className="flex items-center gap-2 whitespace-nowrap">
       <div className="flex items-center">
         <StateIndicator value={network.inUse} />
       </div>
@@ -170,6 +171,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
         aria-label="Show network details">
         {truncate(network.name ?? '', 32, 'right')}
       </span>
+      {network.isSystem && <SystemBadge description="Docker system network" />}
     </div>
   );
 };
