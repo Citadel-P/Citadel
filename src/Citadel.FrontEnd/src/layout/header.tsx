@@ -29,6 +29,7 @@ import { useOpenAlertEventSheet } from '@/features/alerters/alert-events/alert-t
 import { CitadelIcons } from '@/lib/icons';
 import { fromNow } from '@/lib/dayjs.helper';
 import { cn, formatActivityEvent } from '@/lib/utils';
+import { LiveConnectionIndicator } from './live-connection-indicator';
 
 const themeColors = [
   { name: 'base', code: '#e11d48' },
@@ -52,6 +53,9 @@ export function Header() {
       <Separator orientation="vertical" className="mr-2 h-4" />
       <div className="flex min-w-0 flex-1 items-center">
         <BreadcrumbTrail compact className="min-w-0" />
+      </div>
+      <div className="flex shrink-0 items-center px-2 empty:hidden sm:px-4">
+        <LiveConnectionIndicator />
       </div>
       <div className="ml-auto flex items-center gap-4">
         <GlobalSearch />

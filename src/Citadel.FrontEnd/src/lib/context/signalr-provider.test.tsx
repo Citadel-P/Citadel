@@ -1,11 +1,12 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { HubConnection } from '@microsoft/signalr';
-import { PropsWithChildren, StrictMode, useCallback, useState } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { ComponentProps, PropsWithChildren, StrictMode, useCallback, useEffect, useState } from 'react';
 import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
 import { SignalRProvider } from './signalr-provider';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { SignalRContextType, useSignalRContext } from './signalr-context';
 
 const authValue: AuthContextValue = {
   accessToken: 'access-token',
@@ -53,7 +54,14 @@ function SignalRTestRoot({
   children,
   fake,
   queryClient,
-}: PropsWithChildren<{ fake: FakeHubConnection; queryClient?: QueryClient }>) {
+  connectionFactory,
+  startConnection,
+}: PropsWithChildren<{
+  fake: FakeHubConnection;
+  queryClient?: QueryClient;
+  connectionFactory?: ComponentProps<typeof SignalRProvider>['connectionFactory'];
+  startConnection?: ComponentProps<typeof SignalRProvider>['startConnection'];
+}>) {
   const [defaultQueryClient] = useState(
     () =>
       new QueryClient({
@@ -68,8 +76,8 @@ function SignalRTestRoot({
     <QueryClientProvider client={queryClient ?? defaultQueryClient}>
       <AuthContext.Provider value={authValue}>
         <SignalRProvider
-          connectionFactory={() => fake.asHubConnection()}
-          startConnection={(connection) => connection.start()}>
+          connectionFactory={connectionFactory ?? (() => fake.asHubConnection())}
+          startConnection={startConnection ?? ((connection) => connection.start())}>
           {children}
         </SignalRProvider>
       </AuthContext.Provider>
@@ -77,9 +85,15 @@ function SignalRTestRoot({
   );
 }
 
-function StatsQuerySubscriber({ queryFn }: { queryFn: () => Promise<string> }) {
+function LiveQuerySubscriber({
+  queryFn,
+  queryKey = 'getContainerStats',
+}: {
+  queryFn: () => Promise<string>;
+  queryKey?: string;
+}) {
   const { data } = useQuery({
-    queryKey: ['getContainerStats', { id: 'container-1', query: { hours: 24 } }],
+    queryKey: [queryKey, { id: 'resource-1' }],
     queryFn,
     staleTime: Infinity,
   });
@@ -87,7 +101,216 @@ function StatsQuerySubscriber({ queryFn }: { queryFn: () => Promise<string> }) {
   return <span>{data ?? 'loading'}</span>;
 }
 
+function ConnectionStatusProbe({ onContext }: { onContext?: (context: SignalRContextType) => void }) {
+  const context = useSignalRContext();
+
+  useEffect(() => {
+    onContext?.(context);
+  }, [context, onContext]);
+
+  return (
+    <>
+      <span data-testid="live-state">{context.liveConnectionState}</span>
+      <span data-testid="interrupted-at">{context.interruptedAt ?? 'none'}</span>
+    </>
+  );
+}
+
 describe('SignalRProvider', () => {
+  beforeEach(() => {
+    Object.defineProperty(window.navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    });
+  });
+
+  it('reports the initial connection and established reconnect lifecycle', async () => {
+    const fake = new FakeHubConnection();
+    const startGate = deferred<void>();
+    fake.start.mockImplementation(async () => {
+      await startGate.promise;
+      fake.state = HubConnectionState.Connected;
+    });
+
+    render(
+      <SignalRTestRoot fake={fake}>
+        <ConnectionStatusProbe />
+      </SignalRTestRoot>,
+    );
+
+    expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
+    startGate.resolve();
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+
+    act(() => {
+      fake.reconnecting();
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('reconnecting');
+    expect(screen.getByTestId('interrupted-at')).not.toHaveTextContent('none');
+
+    act(() => {
+      fake.closed();
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('disconnected');
+  });
+
+  it('distinguishes browser offline and waits for SignalR before reporting recovery', async () => {
+    const fake = new FakeHubConnection();
+    render(
+      <SignalRTestRoot fake={fake}>
+        <ConnectionStatusProbe />
+      </SignalRTestRoot>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+
+    Object.defineProperty(window.navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    });
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+      fake.reconnecting();
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('offline');
+
+    Object.defineProperty(window.navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    });
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('reconnecting');
+
+    act(() => {
+      fake.reconnected();
+    });
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+  });
+
+  it('uses one fresh connection for concurrent manual retries', async () => {
+    const first = new FakeHubConnection();
+    const second = new FakeHubConnection();
+    const retryGate = deferred<void>();
+    second.start.mockImplementation(async () => {
+      await retryGate.promise;
+      second.state = HubConnectionState.Connected;
+    });
+
+    const factory = vi.fn().mockReturnValueOnce(first.asHubConnection()).mockReturnValueOnce(second.asHubConnection());
+    let context: SignalRContextType | undefined;
+
+    render(
+      <SignalRTestRoot fake={first} connectionFactory={factory} queryClient={new QueryClient()}>
+        <ConnectionStatusProbe onContext={(value) => (context = value)} />
+      </SignalRTestRoot>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+    act(() => {
+      first.closed();
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('disconnected');
+
+    let firstRetry!: Promise<void>;
+    let secondRetry!: Promise<void>;
+    act(() => {
+      firstRetry = context!.retryConnection();
+      secondRetry = context!.retryConnection();
+    });
+
+    expect(firstRetry).toBe(secondRetry);
+    await waitFor(() => expect(second.start).toHaveBeenCalledOnce());
+    expect(factory).toHaveBeenCalledTimes(2);
+
+    retryGate.resolve();
+    await act(async () => {
+      await firstRetry;
+    });
+    expect(screen.getByTestId('live-state')).toHaveTextContent('connected');
+  });
+
+  it('keeps the disconnected state when a manual retry fails', async () => {
+    const first = new FakeHubConnection();
+    const second = new FakeHubConnection();
+    second.start.mockRejectedValue(new Error('Core unavailable'));
+
+    const factory = vi.fn().mockReturnValueOnce(first.asHubConnection()).mockReturnValueOnce(second.asHubConnection());
+    let context: SignalRContextType | undefined;
+
+    render(
+      <SignalRTestRoot fake={first} connectionFactory={factory}>
+        <ConnectionStatusProbe onContext={(value) => (context = value)} />
+      </SignalRTestRoot>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+    act(() => {
+      first.closed();
+    });
+
+    await act(async () => {
+      await expect(context!.retryConnection()).rejects.toThrow('Core unavailable');
+    });
+
+    expect(second.start).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('live-state')).toHaveTextContent('disconnected');
+  });
+
+  it('does not publish an outage while replacing a connection after token rotation', async () => {
+    const first = new FakeHubConnection();
+    const second = new FakeHubConnection();
+    const factory = vi.fn().mockReturnValueOnce(first.asHubConnection()).mockReturnValueOnce(second.asHubConnection());
+    const observedStates: string[] = [];
+
+    function TokenRotationRoot() {
+      const [token, setToken] = useState('token-1');
+      return (
+        <QueryClientProvider client={new QueryClient()}>
+          <AuthContext.Provider value={{ ...authValue, accessToken: token }}>
+            <SignalRProvider connectionFactory={factory} startConnection={(candidate) => candidate.start()}>
+              <ConnectionStatusProbe onContext={(value) => observedStates.push(value.liveConnectionState)} />
+              <button onClick={() => setToken('token-2')}>rotate token</button>
+            </SignalRProvider>
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      );
+    }
+
+    render(<TokenRotationRoot />);
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+    observedStates.length = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: 'rotate token' }));
+    await waitFor(() => expect(second.start).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+
+    expect(observedStates).not.toContain('disconnected');
+    expect(observedStates).not.toContain('reconnecting');
+    expect(observedStates).not.toContain('offline');
+  });
+
+  it('removes browser lifecycle listeners when disposed', async () => {
+    const fake = new FakeHubConnection();
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const view = render(
+      <SignalRTestRoot fake={fake}>
+        <ConnectionStatusProbe />
+      </SignalRTestRoot>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+    const offlineHandler = addListener.mock.calls.find(([eventName]) => eventName === 'offline')?.[1];
+    const onlineHandler = addListener.mock.calls.find(([eventName]) => eventName === 'online')?.[1];
+
+    view.unmount();
+
+    expect(removeListener).toHaveBeenCalledWith('offline', offlineHandler);
+    expect(removeListener).toHaveBeenCalledWith('online', onlineHandler);
+  });
+
   it('joins a shared group once and leaves it after the last subscriber unmounts', async () => {
     const fake = new FakeHubConnection();
 
@@ -192,7 +415,7 @@ describe('SignalRProvider', () => {
     consoleError.mockRestore();
   });
 
-  it('refreshes active streamed statistics once after reconnecting', async () => {
+  it('refreshes an active live-backed query once after reconnecting', async () => {
     const fake = new FakeHubConnection();
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -204,7 +427,7 @@ describe('SignalRProvider', () => {
 
     render(
       <SignalRTestRoot fake={fake} queryClient={queryClient}>
-        <StatsQuerySubscriber queryFn={queryFn} />
+        <LiveQuerySubscriber queryFn={queryFn} queryKey="listStacks" />
       </SignalRTestRoot>,
     );
 
@@ -218,6 +441,34 @@ describe('SignalRProvider', () => {
 
     expect(await screen.findByText('caught-up')).toBeInTheDocument();
     expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refetch an inactive live-backed query after reconnecting', async () => {
+    const fake = new FakeHubConnection();
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const queryKey = ['listStacks', { query: { tags: ['Prod'] } }];
+    const queryFn = vi.fn().mockResolvedValue('cached');
+    await queryClient.fetchQuery({ queryKey, queryFn, staleTime: Infinity });
+
+    render(
+      <SignalRTestRoot fake={fake} queryClient={queryClient}>
+        <ConnectionStatusProbe />
+      </SignalRTestRoot>,
+    );
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+
+    await waitFor(() => expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true));
+    expect(queryFn).toHaveBeenCalledOnce();
   });
 
   it('does not report a failed group join as connected', async () => {
@@ -270,4 +521,15 @@ function setupUser() {
   };
 
   return { user };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
 }

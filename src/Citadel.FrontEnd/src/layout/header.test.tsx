@@ -11,13 +11,30 @@ import {
 } from '@/api/generated/api.types';
 import { AlertTaskSheet } from '@/features/alerters/alert-events/alert-task-sheet';
 import { AppContext } from '@/lib/context/app-context';
+import { LayoutContext } from '@/lib/context/layout-context';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { AlertBell } from './header';
+import { AlertBell, Header } from './header';
 
 vi.mock('@/lib/monaco', () => ({
   MonacoEditor: () => null,
   MonacoDiff: () => null,
+}));
+
+vi.mock('@/components/ui/sidebar', () => ({
+  SidebarTrigger: () => <button aria-label="Toggle sidebar" />,
+}));
+
+vi.mock('@/features/search/global-search', () => ({
+  GlobalSearch: () => <span data-testid="global-search" />,
+}));
+
+vi.mock('./breadcrumb', () => ({
+  BreadcrumbTrail: () => <span data-testid="breadcrumb" />,
+}));
+
+vi.mock('./live-connection-indicator', () => ({
+  LiveConnectionIndicator: () => <span data-testid="live-connection-indicator" />,
 }));
 
 const alertEvent: AlertEventView = {
@@ -86,6 +103,47 @@ describe('AlertBell', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/alerts'));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('Header', () => {
+  it('places live connection status between the breadcrumb and search controls', () => {
+    server.use(http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})));
+
+    renderCitadel(
+      <Provider>
+        <AppContext.Provider
+          value={{
+            isLoading: false,
+            currentPlatform: undefined,
+            platforms: undefined,
+            unresolvedAlertCount: 0,
+            liveAlertEvents: {},
+            receivedAlertEventIds: [],
+          }}>
+          <LayoutContext.Provider
+            value={{
+              theme: { mode: 'light', color: 'base' },
+              sidebarMinimized: false,
+              mobileMenuVisible: false,
+              toggleSidebar: vi.fn(),
+              setSidebarOpen: vi.fn(),
+              toggleMobileMenu: vi.fn(),
+              toggleThemeColor: vi.fn(),
+              setThemeMode: vi.fn(),
+            }}>
+            <Header />
+          </LayoutContext.Provider>
+        </AppContext.Provider>
+      </Provider>,
+    );
+
+    const search = screen.getByTestId('global-search');
+    const indicator = screen.getByTestId('live-connection-indicator');
+    const breadcrumb = screen.getByTestId('breadcrumb');
+
+    expect(breadcrumb.parentElement?.nextElementSibling).toContainElement(indicator);
+    expect(indicator.parentElement?.nextElementSibling).toContainElement(search);
   });
 });
 

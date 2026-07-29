@@ -15,6 +15,7 @@ export class FakeHubConnection {
 
   readonly stop = vi.fn(async () => {
     this.state = HubConnectionState.Disconnected;
+    this.closeHandlers.forEach((handler) => handler());
   });
 
   readonly send = vi.fn(async (_methodName: string, ..._args: unknown[]) => {});

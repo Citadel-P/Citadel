@@ -1,9 +1,4 @@
-import {
-  HubConnection,
-  HubConnectionBuilder,
-  HttpTransportType,
-  IHttpConnectionOptions,
-} from '@microsoft/signalr';
+import { HubConnection, HubConnectionBuilder, HttpTransportType, IHttpConnectionOptions } from '@microsoft/signalr';
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 
 export type SignalRConnectionFactoryOptions = {
@@ -19,6 +14,6 @@ export const createSignalRConnection: SignalRConnectionFactory = ({ baseUrl, acc
       accessTokenFactory,
       transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
     } as IHttpConnectionOptions)
-    .withAutomaticReconnect()
+    .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
     .withHubProtocol(new MessagePackHubProtocol())
     .build();
