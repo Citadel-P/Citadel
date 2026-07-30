@@ -15,18 +15,18 @@ using Mediator;
 namespace Application.Features.Licensing;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Read)]
-public sealed record GetLicense : IQuery<Result<LicenseState>>;
+public sealed record GetLicense : IQuery<Result<LicenseState>>, IAdministratorRequest;
 
 public sealed record GetLicenseEntitlements : IQuery<Result<LicenseState>>;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Read)]
-public sealed record GetLicenseRequest : IQuery<Result<LicenseRequest>>;
+public sealed record GetLicenseRequest : IQuery<Result<LicenseRequest>>, IAdministratorRequest;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Write)]
-public sealed record InstallLicense(string License) : ICommand<Result<LicenseState>>;
+public sealed record InstallLicense(string License) : ICommand<Result<LicenseState>>, IAdministratorRequest;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Execute)]
-public sealed record RemoveLicense : ICommand<Result<LicenseState>>;
+public sealed record RemoveLicense : ICommand<Result<LicenseState>>, IAdministratorRequest;
 
 public sealed record LicenseRequest(
     string Product,

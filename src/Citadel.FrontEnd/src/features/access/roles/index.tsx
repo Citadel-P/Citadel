@@ -58,6 +58,10 @@ const ROLE_PERMISSION_RESOURCES = [
   ResourceType.Registry,
   ResourceType.GitRepository,
   ResourceType.GitAccount,
+  ResourceType.Alert,
+  ResourceType.AlertChannel,
+  ResourceType.Binding,
+  ResourceType.Tag,
   ResourceType.BackupPolicy,
   ResourceType.BackupRepository,
   ResourceType.AutomationAction,
@@ -107,6 +111,10 @@ export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = 
   [ResourceType.Registry]: CitadelIcons.Registry,
   [ResourceType.GitRepository]: CitadelIcons.GitRepository,
   [ResourceType.GitAccount]: CitadelIcons.GitAccount,
+  [ResourceType.Alert]: CitadelIcons.AlertRule,
+  [ResourceType.AlertChannel]: CitadelIcons.AlertChannel,
+  [ResourceType.Binding]: CitadelIcons.Binding,
+  [ResourceType.Tag]: CitadelIcons.Tag,
   [ResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
   [ResourceType.BackupRepository]: CitadelIcons.BackupRepository,
   [ResourceType.AutomationAction]: CitadelIcons.AutomationAction,
@@ -459,10 +467,7 @@ const PermissionMatrixRow = ({
   allowExpansion: boolean;
 }) => {
   const currentLevel = currentState?.permissionLevel ?? null;
-  const currentSpecific = useMemo(
-    () => currentState?.specificPermissions ?? [],
-    [currentState?.specificPermissions],
-  );
+  const currentSpecific = useMemo(() => currentState?.specificPermissions ?? [], [currentState?.specificPermissions]);
 
   const maxLevelIndex = useMemo(
     () => PERMISSION_LEVELS.indexOf(matrixData.maximumLevel as PermissionLevel),
@@ -470,9 +475,7 @@ const PermissionMatrixRow = ({
   );
   const availableLevels = useMemo(() => {
     const currentLevelIndex = currentLevel ? PERMISSION_LEVELS.indexOf(currentLevel) : -1;
-    return PERMISSION_LEVELS.filter(
-      (_, i) => i <= maxLevelIndex && (allowExpansion || i <= currentLevelIndex),
-    );
+    return PERMISSION_LEVELS.filter((_, i) => i <= maxLevelIndex && (allowExpansion || i <= currentLevelIndex));
   }, [allowExpansion, currentLevel, maxLevelIndex]);
 
   const availableSpecific = useMemo(() => {

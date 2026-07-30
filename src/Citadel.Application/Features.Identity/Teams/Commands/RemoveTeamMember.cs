@@ -11,7 +11,7 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Commands;
 
 [RequirePermission(ResourceType.Team, PermissionLevel.Write, ResourceIdProperty = nameof(RemoveTeamMember.TeamId))]
-public sealed record RemoveTeamMember(Guid TeamId, Guid UserId) : ICommand<Result<TeamDetails>>
+public sealed record RemoveTeamMember(Guid TeamId, Guid UserId) : ICommand<Result<TeamDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<RemoveTeamMember>
     {
@@ -23,7 +23,10 @@ public sealed record RemoveTeamMember(Guid TeamId, Guid UserId) : ICommand<Resul
     }
 }
 
-internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<RemoveTeamMember, Result<TeamDetails>>
+internal sealed class RemoveTeamMemberHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    IAdministratorGuard administratorGuard) : ICommandHandler<RemoveTeamMember, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(RemoveTeamMember command, CancellationToken cancellationToken)
     {
@@ -38,6 +41,11 @@ internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork, IActorScop
             return Result.Failure<TeamDetails>(new NotFoundError("The provided user is not a member of the team"));
 
         await unitOfWork.Teams.RemoveMemberAsync(command.TeamId, command.UserId, cancellationToken);
+
+        var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
+        if (guardResult.IsFailure(out var guardError))
+            return Result.Failure<TeamDetails>(guardError);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         await evictor.EvictUsers(new[] { command.UserId }, cancellationToken);

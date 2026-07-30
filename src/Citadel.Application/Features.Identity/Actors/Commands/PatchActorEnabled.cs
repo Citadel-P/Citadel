@@ -25,7 +25,8 @@ public sealed record PatchActorEnabled(Guid Id, bool IsEnabled) : ICommand<Resul
 internal sealed class PatchActorEnabledHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    IActorScopeEvictor evictor)
+    IActorScopeEvictor evictor,
+    IAdministratorGuard administratorGuard)
     : ICommandHandler<PatchActorEnabled, Result<Actor>>
 {
     public async ValueTask<Result<Actor>> Handle(PatchActorEnabled command, CancellationToken cancellationToken)
@@ -54,6 +55,14 @@ internal sealed class PatchActorEnabledHandler(
         }
 
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
+
+        if (!command.IsEnabled)
+        {
+            var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
+            if (guardResult.IsFailure(out var guardError))
+                return Result.Failure<Actor>(guardError);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         await evictor.EvictPermissionsForActorAsync(actor.Id, cancellationToken);

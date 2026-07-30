@@ -9,7 +9,7 @@ using Domain.Contracts.Resources.Role;
 namespace Application.Features.Identity.Roles.Queries;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Read)]
-public sealed record GetRole(Guid Id) : IQuery<Result<RoleDetails>>;
+public sealed record GetRole(Guid Id) : IQuery<Result<RoleDetails>>, IAdministratorRequest;
 
 internal sealed class GetRoleHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetRole, Result<RoleDetails>>
 {

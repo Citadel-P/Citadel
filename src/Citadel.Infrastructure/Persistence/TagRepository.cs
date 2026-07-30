@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Tags;
+using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
@@ -30,6 +31,46 @@ internal sealed class TagRepository(IDbConnection db, Func<IDbTransaction> tx) :
         """;
 
         var result = await db.QueryAsync<TagWithUsageDto>(sql, transaction: tx());
+        return [.. result.Select(x => x.ToDomain())];
+    }
+
+    public async Task<IReadOnlyList<TagWithUsage>> ListAuthorizedAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT
+                t.Id,
+                t.Name,
+                t.NormalizedName,
+                t.Color,
+                t.CreatedByActorId,
+                t.CreatedAt,
+                t.UpdatedAt,
+                COUNT(rt.TagId)::int AS UsageCount
+            FROM Tags t
+            LEFT JOIN ResourceTags rt ON rt.TagId = t.Id
+            WHERE {{AuthorizationSql.ResourcePredicatePrefix}}t.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+            GROUP BY t.Id, t.Name, t.NormalizedName, t.Color, t.CreatedByActorId, t.CreatedAt, t.UpdatedAt
+            ORDER BY t.Name ASC
+            """;
+
+        var result = await db.QueryAsync<TagWithUsageDto>(
+            sql,
+            new
+            {
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission,
+                cancellationToken
+            },
+            transaction: tx());
+
         return [.. result.Select(x => x.ToDomain())];
     }
 

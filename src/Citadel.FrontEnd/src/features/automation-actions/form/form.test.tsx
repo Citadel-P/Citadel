@@ -1,5 +1,6 @@
 import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
+import { screen } from '@testing-library/react';
 import { AutomationActionForm } from './form';
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
@@ -65,6 +66,11 @@ const action: AutomationActionView = {
   createdAt: '2026-07-30T00:00:00Z',
   updatedAt: '2026-07-30T00:00:00Z',
   tags: [],
+  capabilities: {
+    canRead: true,
+    canWrite: true,
+    canExecute: false,
+  },
 };
 
 describe('AutomationActionForm licensing', () => {
@@ -78,5 +84,13 @@ describe('AutomationActionForm licensing', () => {
     expect(scheduleSwitch).toBeInstanceOf(HTMLButtonElement);
     expect(scheduleSwitch).toBeDisabled();
     expect(scheduleSwitch).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('disables draft testing without execute permission', () => {
+    renderCitadel(<AutomationActionForm mode="edit" resource={action} />, {
+      route: `/automation/${action.id}`,
+    });
+
+    expect(screen.getByRole('button', { name: 'Test Draft' })).toBeDisabled();
   });
 });

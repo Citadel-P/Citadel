@@ -40,6 +40,9 @@ type OverrideResourceType =
   | ResourceType.Stack
   | ResourceType.Registry
   | ResourceType.GitRepository
+  | ResourceType.Alert
+  | ResourceType.AlertChannel
+  | ResourceType.Tag
   | ResourceType.BackupPolicy
   | ResourceType.BackupRepository
   | ResourceType.AutomationAction
@@ -73,6 +76,9 @@ const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Stack,
   ResourceType.Registry,
   ResourceType.GitRepository,
+  ResourceType.Alert,
+  ResourceType.AlertChannel,
+  ResourceType.Tag,
   ResourceType.BackupPolicy,
   ResourceType.BackupRepository,
   ResourceType.AutomationAction,
@@ -80,10 +86,12 @@ const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.BuildAgentPool,
 ];
 
-const readItemsFrom = (propertyName: string) => (data: unknown): ResourceItem[] => {
-  const raw = (data as Record<string, unknown> | null | undefined)?.[propertyName];
-  return (Array.isArray(raw) ? raw : []) as ResourceItem[];
-};
+const readItemsFrom =
+  (propertyName: string) =>
+  (data: unknown): ResourceItem[] => {
+    const raw = (data as Record<string, unknown> | null | undefined)?.[propertyName];
+    return (Array.isArray(raw) ? raw : []) as ResourceItem[];
+  };
 
 const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceConfig> = {
   [ResourceType.Platform]: {
@@ -115,6 +123,24 @@ const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceCon
     listQuery: 'listGitRepositories',
     readItems: readItemsFrom('gitRepositories'),
     getEditPath: (resourceId) => `/git-repos/edit/${resourceId}`,
+  },
+  [ResourceType.Alert]: {
+    icon: CitadelIcons.AlertRule,
+    listQuery: 'listAlertRules',
+    readItems: readItemsFrom('alertRules'),
+    getEditPath: (resourceId) => `/alert-rules/edit/${resourceId}`,
+  },
+  [ResourceType.AlertChannel]: {
+    icon: CitadelIcons.AlertChannel,
+    listQuery: 'listAlertChannels',
+    readItems: readItemsFrom('channels'),
+    getEditPath: () => '/alert-rules',
+  },
+  [ResourceType.Tag]: {
+    icon: CitadelIcons.Tag,
+    listQuery: 'listTags',
+    readItems: readItemsFrom('tags'),
+    getEditPath: () => '/tags',
   },
   [ResourceType.BackupRepository]: {
     icon: CitadelIcons.BackupRepository,

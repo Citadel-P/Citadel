@@ -16,7 +16,7 @@ public sealed record RemoveTeamResourceAccess(
     ResourceType ResourceType,
     Guid ResourceId,
     PermissionLevel PermissionLevel,
-    IEnumerable<SpecificPermission>? SpecificPermissions) : ICommand<Result<TeamDetails>>
+    IEnumerable<SpecificPermission>? SpecificPermissions) : ICommand<Result<TeamDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<RemoveTeamResourceAccess>
     {

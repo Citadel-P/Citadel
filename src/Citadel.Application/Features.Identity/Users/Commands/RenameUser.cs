@@ -10,7 +10,7 @@ using Mediator;
 namespace Application.Features.Identity.Users.Commands;
 
 [RequirePermission(ResourceType.User, PermissionLevel.Write)]
-public sealed record RenameUser(Guid Id, string Name) : ICommand<Result<UserDetails>>
+public sealed record RenameUser(Guid Id, string Name) : ICommand<Result<UserDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<RenameUser>
     {

@@ -118,6 +118,7 @@ internal static class WebApiModule
 
         app.UseMiddleware<SetupRequiredMiddleware>();
         app.UseAuthentication();
+        app.UseMiddleware<UserAuthorizationContextMiddleware>();
         app.UseMiddleware<AutomationRunTokenSafetyMiddleware>();
         app.UseAuthorization();
 

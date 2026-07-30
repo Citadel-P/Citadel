@@ -462,6 +462,7 @@ function RepositoryDialog({
             <SecretSelector
               value={input.passwordSecretId}
               disabled={!!editing || formDisabled}
+              targetResourceId={editing?.id}
               onChange={(passwordSecretId) =>
                 setInput((current) => ({
                   ...current,
@@ -608,6 +609,7 @@ function RepositoryDialog({
                   <SecretSelector
                     value={s3Spec.accessKeySecretId}
                     disabled={specDisabled}
+                    targetResourceId={editing?.id}
                     onChange={(accessKeySecretId) => setSpec({ accessKeySecretId: accessKeySecretId ?? '' })}
                   />
                 </div>
@@ -616,6 +618,7 @@ function RepositoryDialog({
                   <SecretSelector
                     value={s3Spec.secretKeySecretId}
                     disabled={specDisabled}
+                    targetResourceId={editing?.id}
                     onChange={(secretKeySecretId) => setSpec({ secretKeySecretId: secretKeySecretId ?? '' })}
                   />
                 </div>
@@ -627,6 +630,7 @@ function RepositoryDialog({
                   value={s3Spec.sessionTokenSecretId}
                   allowNone
                   disabled={specDisabled}
+                  targetResourceId={editing?.id}
                   onChange={(sessionTokenSecretId) => setSpec({ sessionTokenSecretId })}
                 />
               </div>

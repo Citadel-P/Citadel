@@ -637,6 +637,12 @@ public interface ISecretProviderRepository
 public interface ITagRepository
 {
     Task<IReadOnlyList<TagWithUsage>> ListAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<TagWithUsage>> ListAuthorizedAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken);
     Task<Tag?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Tag?> GetByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
@@ -746,6 +752,7 @@ public interface IUserRepository
         CancellationToken ct = default);
 
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
+    Task<bool> HasEnabledAdministratorAsync(CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
@@ -925,8 +932,11 @@ public interface IActivityEventRepository
 {
     Task<int> AddAsync(ActivityEvent activityEvent, CancellationToken cancellationToken);
     Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<ActivityEvent?> GetAuthorizedByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken);
     Task<PagedResult<ActivityEvent>> GetPagedAsync(Guid? resourceId, ActivityResourceType? resourceType, ActivityEventType? eventType, int page,
         int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<ActivityEvent>> GetAuthorizedPagedAsync(Guid userId, Guid? resourceId, ActivityResourceType? resourceType,
+        ActivityEventType? eventType, int page, int pageSize, CancellationToken cancellationToken);
 
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }

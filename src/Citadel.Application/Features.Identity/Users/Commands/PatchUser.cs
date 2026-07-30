@@ -15,7 +15,7 @@ using Application.Services.Licensing;
 namespace Application.Features.Identity.Users.Commands;
 
 [RequirePermission(ResourceType.User, PermissionLevel.Write)]
-public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> Patch) : ICommand<Result<UserDetails>>
+public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> Patch) : ICommand<Result<UserDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : PatchCommandValidator<PatchUser, PatchUserModel>
     {
@@ -54,6 +54,7 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
 internal sealed class PatchUserHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
+    IAdministratorGuard administratorGuard,
     ILicenseEntitlementService entitlementService,
     ICitadelPasswordHasher passwordHasher) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
@@ -107,7 +108,6 @@ internal sealed class PatchUserHandler(
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(state.User.Id, teamIds, cancellationToken);
-            await evictor.EvictUsers(new[] { state.User.Id }, cancellationToken);
         }
 
         if (patched.RoleIds is not null)
@@ -133,7 +133,6 @@ internal sealed class PatchUserHandler(
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(state.User.ActorId, roleIds, cancellationToken);
-            await evictor.EvictPermissionsForActorAsync(state.User.ActorId, cancellationToken);
         }
 
         if (patched.ResourceAccesses is not null)
@@ -187,7 +186,24 @@ internal sealed class PatchUserHandler(
 
         await unitOfWork.Users.UpdateAsync(state.User, cancellationToken);
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
+
+        if (patched.TeamIds is not null
+            || patched.RoleIds is not null
+            || patched.IsEnabled == false)
+        {
+            var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
+            if (guardResult.IsFailure(out var guardError))
+                return Result.Failure<UserDetails>(guardError);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
+        if (patched.TeamIds is not null
+            || patched.RoleIds is not null
+            || patched.ResourceAccesses is not null
+            || patched.IsEnabled.HasValue)
+        {
+            await evictor.EvictUsers([state.User.Id], cancellationToken);
+        }
 
         var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(state.User.ActorId, cancellationToken);
         return new UserDetails(

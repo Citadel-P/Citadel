@@ -35,6 +35,12 @@ internal sealed class GetResourceLookupQueryHandler(
             return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("Invalid user ID."));
         }
 
+        if (!user.IsAdmin && RequiresAdministrator(query.SourceResourceType, query.TargetResourceType))
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(
+                new ForbiddenError("Administrator access is required for this resource lookup."));
+        }
+
         var hasSourceType = query.SourceResourceType.HasValue;
         var hasSourceId = query.SourceResourceId.HasValue;
         if (!hasSourceType && hasSourceId)
@@ -48,21 +54,35 @@ internal sealed class GetResourceLookupQueryHandler(
             query.SourceResourceId,
             query.TargetResourceType,
             user.UserId,
+            user.IsAdmin,
             query.Context,
             cancellationToken);
     }
+
+    private static bool RequiresAdministrator(
+        LookupResourceType? sourceResourceType,
+        LookupResourceType targetResourceType)
+        => sourceResourceType == LookupResourceType.User
+           || targetResourceType is LookupResourceType.User
+               or LookupResourceType.Team
+               or LookupResourceType.Role
+               or LookupResourceType.OidcProvider
+               or LookupResourceType.License;
 
     private async Task<Result<IEnumerable<ResourceInfo>>> ResolveAsync(
         LookupResourceType? sourceType,
         Guid? sourceId,
         LookupResourceType targetType,
         Guid userId,
+        bool isAdministrator,
         LookupContext context,
         CancellationToken cancellationToken)
     {
         if (sourceType.HasValue && sourceId.HasValue)
         {
-            var accessResult = await ValidateSourceAccessAsync(sourceType.Value, sourceId.Value, userId, cancellationToken);
+            var accessResult = isAdministrator && sourceType.Value == LookupResourceType.User
+                ? await ValidateAdministratorUserSourceAsync(sourceId.Value, cancellationToken)
+                : await ValidateSourceAccessAsync(sourceType.Value, sourceId.Value, userId, cancellationToken);
             if (accessResult.IsFailure(out var accessError))
             {
                 return Result.Failure<IEnumerable<ResourceInfo>>(accessError);
@@ -80,8 +100,8 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Stack, LookupResourceType.Registry) => await GetStackRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.GitRepository) => await GetStackGitRepositoryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.ResourceBinding) => await GetResourceBindingLookupAsync(ResourceBindingScope.Stack, sourceId, cancellationToken),
-            (LookupResourceType.User, LookupResourceType.Team) => await GetUserTeamLookupAsync(sourceId, userId, cancellationToken),
-            (LookupResourceType.User, LookupResourceType.Role) => await GetUserRoleLookupAsync(sourceId, userId, cancellationToken),
+            (LookupResourceType.User, LookupResourceType.Team) => await GetTeamLookupAsync(cancellationToken),
+            (LookupResourceType.User, LookupResourceType.Role) => await GetRoleLookupAsync(cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Deployment) => await GetPlatformDeploymentLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Stack) => await GetPlatformStackLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Registry) => await GetPlatformRegistryLookupAsync(sourceId, userId, cancellationToken),
@@ -98,13 +118,16 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Image, LookupResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Alert) => await GetAlertLookupAsync(userId, cancellationToken),
-            (null, LookupResourceType.User) => await GetUserLookupAsync(userId, cancellationToken),
-            (null, LookupResourceType.UserActor) => await GetUserActorLookupAsync(userId, cancellationToken),
-            (null, LookupResourceType.Team) => await GetTeamLookupAsync(userId, cancellationToken),
-            (null, LookupResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.User) => await GetUserLookupAsync(cancellationToken),
+            (null, LookupResourceType.UserActor) => await GetUserActorLookupAsync(
+                userId,
+                isAdministrator,
+                cancellationToken),
+            (null, LookupResourceType.Team) => await GetTeamLookupAsync(cancellationToken),
+            (null, LookupResourceType.Role) => await GetRoleLookupAsync(cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.GitRepository) => await GetGitRepositoryLookupAsync(userId, cancellationToken),
-            (null, LookupResourceType.OidcProvider) => await GetOidcProviderLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.OidcProvider) => await GetOidcProviderLookupAsync(cancellationToken),
             (null, LookupResourceType.AutomationAction) => await GetAutomationActionLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.BackupRepository) => await GetBackupRepositoryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.BackupPolicy) => await GetBackupPolicyLookupAsync(userId, cancellationToken),
@@ -118,6 +141,13 @@ internal sealed class GetResourceLookupQueryHandler(
             _ => Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError(GetUnsupportedLookupMessage(sourceType, targetType)))
         };
     }
+
+    private async Task<Result> ValidateAdministratorUserSourceAsync(
+        Guid sourceId,
+        CancellationToken cancellationToken)
+        => await unitOfWork.Users.GetAsync(sourceId, cancellationToken) is not null
+            ? Result.Success()
+            : Result.Failure(GetSourceNotFoundError(LookupResourceType.User));
 
     private async Task<Result> ValidateSourceAccessAsync(LookupResourceType sourceType, Guid sourceId, Guid userId, CancellationToken cancellationToken)
     {
@@ -222,18 +252,6 @@ internal sealed class GetResourceLookupQueryHandler(
             .OrderBy(static entry => entry.Name)
             .Select(static entry => new ResourceInfo(entry.Id, entry.Name));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserTeamLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
-        => sourceId.HasValue
-            ? Result.Success(await unitOfWork.Users.GetTeamsLookupAsync(sourceId.Value, userId, cancellationToken))
-            : Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
-                .Select(static item => new ResourceInfo(item.Id, item.Name)));
-
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserRoleLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
-        => sourceId.HasValue
-            ? Result.Success(await unitOfWork.Roles.GetUserRoleLookupAsync(sourceId.Value, userId, cancellationToken))
-            : Result.Success((await unitOfWork.Roles.GetAuthorizedAsync(userId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
-                .Select(static item => new ResourceInfo(item.Id, item.Name)));
-
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformDeploymentLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
         => sourceId.HasValue
             ? Result.Success(await unitOfWork.Platforms.GetDeploymentLookupAsync(sourceId.Value, userId, cancellationToken))
@@ -336,19 +354,32 @@ internal sealed class GetResourceLookupQueryHandler(
         => Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetTeamLookupAsync(Guid userId, CancellationToken cancellationToken)
-        => Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetTeamLookupAsync(CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Teams.SearchAsync(string.Empty, 50, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserLookupAsync(Guid userId, CancellationToken cancellationToken)
-        => Result.Success((await unitOfWork.Users.GetAuthorizedPagedAsync(userId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, 1, 50, null, cancellationToken))
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserLookupAsync(CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Users.GetPagedAsync(1, 50, null, cancellationToken))
             .Items
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserActorLookupAsync(Guid userId, CancellationToken cancellationToken)
-        => Result.Success((await unitOfWork.Users.GetAuthorizedPagedAsync(userId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, 1, 50, null, cancellationToken))
-            .Items
-            .Select(static item => new ResourceInfo(item.ActorId, item.Name)));
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserActorLookupAsync(
+        Guid userId,
+        bool isAdministrator,
+        CancellationToken cancellationToken)
+    {
+        if (isAdministrator)
+        {
+            return Result.Success((await unitOfWork.Users.GetPagedAsync(1, 50, null, cancellationToken))
+                .Items
+                .Select(static item => new ResourceInfo(item.ActorId, item.Name)));
+        }
+
+        var user = await unitOfWork.Users.GetDetailsAsync(userId, cancellationToken);
+        return user is null
+            ? Result.Success<IEnumerable<ResourceInfo>>([])
+            : Result.Success<IEnumerable<ResourceInfo>>([new ResourceInfo(user.ActorId, user.Name)]);
+    }
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(userId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
@@ -358,8 +389,8 @@ internal sealed class GetResourceLookupQueryHandler(
         => Result.Success((await unitOfWork.AlertRules.GetAuthorizedAsync(userId, ResourceType.Alert, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetRoleLookupAsync(Guid userId, CancellationToken cancellationToken)
-        => Result.Success((await unitOfWork.Roles.GetAuthorizedAsync(userId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetRoleLookupAsync(CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Roles.GetAllAsync(cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetRegistryLookupAsync(Guid userId, CancellationToken cancellationToken)
@@ -370,8 +401,8 @@ internal sealed class GetResourceLookupQueryHandler(
         => Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
-    private async Task<Result<IEnumerable<ResourceInfo>>> GetOidcProviderLookupAsync(Guid userId, CancellationToken cancellationToken)
-        => Result.Success((await unitOfWork.OidcProviders.GetAuthorizedAsync(userId, ResourceType.Binding, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetOidcProviderLookupAsync(CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.OidcProviders.GetAllAsync(cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.DisplayName)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetAutomationActionLookupAsync(Guid userId, CancellationToken cancellationToken)

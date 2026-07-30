@@ -688,6 +688,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       let isEscaped = false;
       const activeKeysToDelete = new Set<string>();
       const activePrefixesToDelete = new Set<string>();
+      let clearComposeActiveItems = false;
       const addText = (value: string | undefined | null, severity?: StreamLogSeverity | null) => {
         if (!value) return false;
         if (!compactDockerComposeOutput) {
@@ -706,7 +707,9 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
           }
 
           if (compacted.kind === 'active' && compacted.key && compacted.line) {
-            updatedActive.set(compacted.key, compacted.line);
+            if (!clearComposeActiveItems) {
+              updatedActive.set(compacted.key, compacted.line);
+            }
             activeKeysToDelete.delete(compacted.key);
             continue;
           }
@@ -756,6 +759,9 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
           if (braceCount === 0 && startIndex !== -1) {
             const rawObject = bufferRef.current.substring(startIndex, i + 1);
             processedIndex = i + 1;
+            startIndex = -1;
+            inString = false;
+            isEscaped = false;
 
             try {
               const item = JSON.parse(rawObject) as TItem & {
@@ -777,6 +783,13 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
               const messageSeverity = normalizeStreamLogSeverity(item.severity) ?? getMessageSeverity?.(item);
 
               if (errorMessage) {
+                if (compactDockerComposeOutput) {
+                  clearComposeActiveItems = true;
+                  activePrefixesToDelete.add('compose:');
+                  for (const key of updatedActive.keys()) {
+                    if (key.startsWith('compose:')) updatedActive.delete(key);
+                  }
+                }
                 newHistory.push({ message: errorMessage, severity: 'error' });
                 setInternalError(errorMessage);
                 continue;
@@ -836,9 +849,6 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
             } catch {
               // If parse fails, we just skip this object
             }
-            startIndex = -1;
-            inString = false;
-            isEscaped = false;
           }
         }
       }

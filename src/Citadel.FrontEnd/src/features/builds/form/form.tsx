@@ -11,6 +11,7 @@ import {
   LookupResourceType,
   LicenseCapability,
   PlatformConnectorType,
+  ResourceType,
   SecretDefinitionView,
   UpdateBuildProjectInput,
 } from '@/api/generated/api.types';
@@ -449,7 +450,12 @@ export const BuildForm = ({
   );
   const { data: platformsData, isLoading: isLoadingPlatforms } = useRead('listPlatforms');
   const { data: buildPoolsData, isLoading: isLoadingBuildPools } = useRead('listBuildAgentPools');
-  const { data: secretsData, isLoading: isLoadingSecrets } = useRead('listSecretDefinitions');
+  const { data: secretsData, isLoading: isLoadingSecrets } = useRead('listSecretDefinitions', {
+    query: {
+      targetResourceType: ResourceType.Build,
+      targetResourceId: id,
+    },
+  });
   const gitRefs = useMemo(() => gitRefsData?.data.refs ?? [], [gitRefsData?.data.refs]);
   const gitBranches = useMemo(
     () => mapBranchOptions(gitBranchesData?.data.branches ?? [], gitRefs),

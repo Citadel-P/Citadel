@@ -13,7 +13,7 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Commands;
 
 [RequirePermission(ResourceType.Team, PermissionLevel.Write, ResourceIdProperty = nameof(AddTeamMember.TeamId))]
-public sealed record AddTeamMember(Guid TeamId, Guid UserId) : ICommand<Result<TeamDetails>>
+public sealed record AddTeamMember(Guid TeamId, Guid UserId) : ICommand<Result<TeamDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<AddTeamMember>
     {

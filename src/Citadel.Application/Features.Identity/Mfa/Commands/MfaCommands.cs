@@ -92,7 +92,7 @@ public sealed record VerifyMfaChallenge(string? Code, string? RecoveryCode) : IC
 }
 
 [RequirePermission(ResourceType.User, PermissionLevel.Write, ResourceIdProperty = nameof(ResetUserMfa.UserId))]
-public sealed record ResetUserMfa(Guid UserId) : ICommand<Result>;
+public sealed record ResetUserMfa(Guid UserId) : ICommand<Result>, IAdministratorRequest;
 
 internal sealed class GetMfaStatusHandler(
     IUnitOfWork unitOfWork,

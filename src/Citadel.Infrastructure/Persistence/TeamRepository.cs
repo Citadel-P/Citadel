@@ -14,60 +14,45 @@ namespace Infrastructure.Persistence;
 
 internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) : ITeamRepository
 {
-    private const string TeamAggregateCtes = """
-        TeamMembers AS (
-            SELECT ut.TeamId, COUNT(*)::int AS TotalMembers
-            FROM UsersTeams ut
-            GROUP BY ut.TeamId
-        ),
-        TeamUsers AS (
+    private const string TeamAggregateJoins = """
+        LEFT JOIN LATERAL (
             SELECT
-                ut.TeamId,
+                COUNT(*)::int AS TotalMembers,
                 JSONB_AGG(
-                    DISTINCT JSONB_BUILD_OBJECT(
-                        'id', u.Id,
-                        'name', u.Name
-                    )
-                    ORDER BY JSONB_BUILD_OBJECT(
-                        'id', u.Id,
-                        'name', u.Name
-                    )
+                    JSONB_BUILD_OBJECT('id', u.Id, 'name', u.Name)
+                    ORDER BY u.Name, u.Id
                 )::text AS Users
             FROM UsersTeams ut
             JOIN Users u ON u.Id = ut.UserId
-            GROUP BY ut.TeamId
-        ),
-        TeamRoles AS (
-            SELECT
-                ar.ActorId,
-                JSONB_AGG(
-                    DISTINCT JSONB_BUILD_OBJECT(
-                        'id', r.Id,
-                        'name', r.Name
-                    )
-                    ORDER BY JSONB_BUILD_OBJECT(
-                        'id', r.Id,
-                        'name', r.Name
-                    )
-                )::text AS Roles
+            WHERE ut.TeamId = t.Id
+        ) members ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT('id', r.Id, 'name', r.Name)
+                ORDER BY r.Name, r.Id
+            )::text AS Roles
             FROM ActorRoles ar
             JOIN Roles r ON r.Id = ar.RoleId
-            GROUP BY ar.ActorId
-        )
-        """;
-
-    private const string TeamAggregateJoins = """
-
-        LEFT JOIN TeamMembers members ON members.TeamId = t.Id
-        LEFT JOIN TeamRoles roles ON roles.ActorId = t.ActorId
-        LEFT JOIN TeamUsers users ON users.TeamId = t.Id
+            WHERE ar.ActorId = t.ActorId
+        ) roles ON TRUE
         """;
 
     private const string TargetTeamAggregateJoins = """
 
-        LEFT JOIN TeamMembers members ON members.TeamId = tt.Id
-        LEFT JOIN TeamRoles roles ON roles.ActorId = tt.ActorId
-
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*)::int AS TotalMembers
+            FROM UsersTeams ut
+            WHERE ut.TeamId = tt.Id
+        ) members ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT('id', r.Id, 'name', r.Name)
+                ORDER BY r.Name, r.Id
+            )::text AS Roles
+            FROM ActorRoles ar
+            JOIN Roles r ON r.Id = ar.RoleId
+            WHERE ar.ActorId = tt.ActorId
+        ) roles ON TRUE
         """;
 
     public async Task<Team?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -87,14 +72,13 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<TeamDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = $$"""
-            WITH {{TeamAggregateCtes}}
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(users.Users, '[]') AS Users,
+                COALESCE(members.Users, '[]') AS Users,
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
@@ -110,14 +94,13 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""
-            WITH {{TeamAggregateCtes}}
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(users.Users, '[]') AS Users,
+                COALESCE(members.Users, '[]') AS Users,
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
@@ -143,14 +126,14 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""
-            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}, {{TeamAggregateCtes}}
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(users.Users, '[]') AS Users,
+                COALESCE(members.Users, '[]') AS Users,
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
@@ -335,7 +318,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 FROM UsersTeams ut
                 WHERE ut.TeamId = @TeamId
                   AND ut.UserId = @UserId
-            ), {{TeamAggregateCtes}}
+            )
             SELECT
                 tt.Id,
                 tt.Name,

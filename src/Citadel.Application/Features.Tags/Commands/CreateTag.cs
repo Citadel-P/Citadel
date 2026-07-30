@@ -36,8 +36,8 @@ internal sealed class CreateTagHandler(IUnitOfWork unitOfWork, IUserContextAcces
     public async ValueTask<Result<Tag>> Handle(CreateTag command, CancellationToken cancellationToken)
     {
         var user = userContext.Current;
-        if (user is null || !user.IsAdmin)
-            return Result.Failure<Tag>(new ForbiddenError("Only admins can create tags."));
+        if (user is null || user.ActorId == Guid.Empty)
+            return Result.Failure<Tag>(new UnauthorizedError("Missing user context."));
 
         var normalizedName = TagValidation.NormalizeName(command.Name);
         if (await unitOfWork.Tags.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))

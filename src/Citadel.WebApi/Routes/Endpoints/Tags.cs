@@ -1,5 +1,6 @@
 using Application.Features.Tags.Commands;
 using Application.Features.Tags.Queries;
+using Application.Permissions;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -13,10 +14,11 @@ public static class Tags
 {
     public static async Task<Results<Ok<TagsView>, ProblemHttpResult>> List(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetTags(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, TagsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, TagsView.Map);
     }
 
     public static async Task<Results<Ok<TagView>, ProblemHttpResult>> Create(

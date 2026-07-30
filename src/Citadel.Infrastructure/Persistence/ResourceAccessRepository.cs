@@ -27,6 +27,12 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 UNION ALL
                 SELECT Id, @GitRepositoryResourceType, Name FROM GitRepositories
                 UNION ALL
+                SELECT Id, @AlertResourceType, Name FROM AlertRules
+                UNION ALL
+                SELECT Id, @AlertChannelResourceType, Name FROM AlertChannels
+                UNION ALL
+                SELECT Id, @TagResourceType, Name FROM Tags
+                UNION ALL
                 SELECT Id, @BackupRepositoryResourceType, Name FROM BackupRepositories
                 UNION ALL
                 SELECT Id, @AutomationActionResourceType, Name FROM Actions
@@ -61,6 +67,9 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 StackResourceType = (int)ResourceType.Stack,
                 RegistryResourceType = (int)ResourceType.Registry,
                 GitRepositoryResourceType = (int)ResourceType.GitRepository,
+                AlertResourceType = (int)ResourceType.Alert,
+                AlertChannelResourceType = (int)ResourceType.AlertChannel,
+                TagResourceType = (int)ResourceType.Tag,
                 BackupRepositoryResourceType = (int)ResourceType.BackupRepository,
                 AutomationActionResourceType = (int)ResourceType.AutomationAction,
                 BuildResourceType = (int)ResourceType.Build,

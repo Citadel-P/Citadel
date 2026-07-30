@@ -72,6 +72,8 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             nameof(ResourceType.Registry),
             nameof(ResourceType.Alert),
             nameof(ResourceType.AlertChannel),
+            nameof(ResourceType.Binding),
+            nameof(ResourceType.Tag),
         })
         {
             Assert.True(root.TryGetProperty(resourceType, out _), $"Missing resource type: {resourceType}");

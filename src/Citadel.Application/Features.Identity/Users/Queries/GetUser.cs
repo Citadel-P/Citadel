@@ -9,7 +9,7 @@ using Mediator;
 namespace Application.Features.Identity.Users.Queries;
 
 [RequirePermission(ResourceType.User, PermissionLevel.Read)]
-public sealed record GetUser(Guid Id) : IQuery<Result<UserDetails>>;
+public sealed record GetUser(Guid Id) : IQuery<Result<UserDetails>>, IAdministratorRequest;
 
 internal sealed class GetUserHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetUser, Result<UserDetails>>
 {

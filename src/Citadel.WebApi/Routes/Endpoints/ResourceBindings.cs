@@ -79,27 +79,77 @@ public static class ResourceBindings
         IPermissionEvaluator permissionEvaluator,
         [FromQuery][Description("Optional resource binding scope")] ResourceBindingScope? scope,
         [FromQuery][Description("Optional resource ID")] Guid? resourceId,
+        [FromQuery][Description("Resource type that will consume the secret")] Hosting.Common.ResourceType? targetResourceType,
+        [FromQuery][Description("Optional consuming resource ID")] Guid? targetResourceId,
         CancellationToken cancellationToken)
     {
-        var result = (scope, resourceId) switch
+        Result<IReadOnlyList<SecretDefinition>> result;
+        if (targetResourceType is not null)
         {
-            (null, null) => await mediator.Send(new GetSecretDefinitions(), cancellationToken),
-            (ResourceBindingScope.Stack, { } id) => await mediator.Send(new GetStackSecretDefinitions(id), cancellationToken),
-            (ResourceBindingScope.Deployment, { } id) => await mediator.Send(new GetDeploymentSecretDefinitions(id), cancellationToken),
-            (ResourceBindingScope.Global, _) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("Global resource bindings do not target a resource.")),
-            ({ }, null) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("resourceId must be provided when scope is provided.")),
-            _ => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
-        };
+            if (scope is not null || resourceId is not null)
+            {
+                result = Result.Failure<IReadOnlyList<SecretDefinition>>(
+                    new BadRequestError("scope/resourceId cannot be combined with targetResourceType."));
+            }
+            else
+            {
+                result = targetResourceType switch
+                {
+                    Hosting.Common.ResourceType.Build =>
+                        await mediator.Send(new GetBuildSecretDefinitions(targetResourceId), cancellationToken),
+                    Hosting.Common.ResourceType.BackupRepository =>
+                        await mediator.Send(new GetBackupRepositorySecretDefinitions(targetResourceId), cancellationToken),
+                    _ => Result.Failure<IReadOnlyList<SecretDefinition>>(
+                        new BadRequestError($"Secret definitions cannot be requested for resource type '{targetResourceType}'."))
+                };
+            }
+        }
+        else if (targetResourceId is not null)
+        {
+            result = Result.Failure<IReadOnlyList<SecretDefinition>>(
+                new BadRequestError("targetResourceType must be provided when targetResourceId is provided."));
+        }
+        else
+        {
+            result = (scope, resourceId) switch
+            {
+                (null, null) => await mediator.Send(new GetSecretDefinitions(), cancellationToken),
+                (ResourceBindingScope.Stack, { } id) => await mediator.Send(new GetStackSecretDefinitions(id), cancellationToken),
+                (ResourceBindingScope.Deployment, { } id) => await mediator.Send(new GetDeploymentSecretDefinitions(id), cancellationToken),
+                (ResourceBindingScope.Global, _) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("Global resource bindings do not target a resource.")),
+                ({ }, null) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("resourceId must be provided when scope is provided.")),
+                _ => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
+            };
+        }
+
         var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
         return EndpointHandlers.HandleResult(result, data => SecretDefinitionsView.Map(data, permissions));
     }
 
     public static async Task<Results<Ok<SecretDefinitionView>, ProblemHttpResult>> CreateInternalSecret(
         IMediator mediator,
+        [FromQuery][Description("Optional resource binding scope")] ResourceBindingScope? scope,
+        [FromQuery][Description("Optional resource ID")] Guid? resourceId,
         [FromBody] CreateInternalSecretInput input,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new CreateInternalSecret(input.Name, input.Value), cancellationToken);
+        var result = (scope, resourceId) switch
+        {
+            (null, null) => await mediator.Send(new CreateInternalSecret(input.Name, input.Value), cancellationToken),
+            (ResourceBindingScope.Stack, { } id) =>
+                await mediator.Send(new CreateStackInternalSecret(id, input.Name, input.Value), cancellationToken),
+            (ResourceBindingScope.Deployment, { } id) =>
+                await mediator.Send(new CreateDeploymentInternalSecret(id, input.Name, input.Value), cancellationToken),
+            (ResourceBindingScope.Global, _) => Result.Failure<SecretDefinition>(
+                new BadRequestError("Global resource bindings do not target a resource.")),
+            ({ }, null) => Result.Failure<SecretDefinition>(
+                new BadRequestError("resourceId must be provided when scope is provided.")),
+            (null, { }) => Result.Failure<SecretDefinition>(
+                new BadRequestError("scope must be provided when resourceId is provided.")),
+            _ => Result.Failure<SecretDefinition>(
+                new BadRequestError($"Unsupported resource binding scope '{scope}'."))
+        };
+
         return EndpointHandlers.HandleResult(result, SecretDefinitionView.Map);
     }
 

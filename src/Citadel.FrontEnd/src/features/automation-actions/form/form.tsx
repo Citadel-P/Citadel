@@ -21,6 +21,7 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { TimezoneSelectField } from '@/components/custom/timezone-select';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { configureAutomationActionEditor, MonacoEditor } from '@/lib/monaco';
 import { useMutate, useSaveResource } from '@/lib/hooks';
@@ -85,7 +86,12 @@ export function AutomationActionForm({
   const original = useMemo(() => toFormValue(resource), [resource]);
   const current = useMemo(() => ({ ...original, ...update }), [original, update]);
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
-  const testDisabled = disabled || resource?.controlState === ResourceControlState.Processing;
+  const testDisabledReason =
+    resource?.capabilities?.canExecute !== true
+      ? 'Execute permission is required to test draft code.'
+      : resource.controlState === ResourceControlState.Processing
+        ? 'Wait for the current run to finish.'
+        : undefined;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`automation-action:${id ?? 'new'}`);
@@ -244,10 +250,7 @@ export function AutomationActionForm({
                     />
                     {mode === 'edit' && (
                       <div className="flex justify-end">
-                        <Button type="button" variant="outline" disabled={testDisabled} onClick={handleTestDraft}>
-                          <TestTube2 className="size-3.5" />
-                          Test Draft
-                        </Button>
+                        <TestDraftButton disabledReason={testDisabledReason} onClick={handleTestDraft} />
                       </div>
                     )}
                   </div>
@@ -413,7 +416,7 @@ export function AutomationActionForm({
         ],
       }),
     }),
-    [automatedOperationsEnabled, currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabled],
+    [automatedOperationsEnabled, currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabledReason],
   );
 
   return (
@@ -429,6 +432,32 @@ export function AutomationActionForm({
       draftKey={`automation-action:${id ?? 'new'}`}
       draftVersion={metadataChanged ? 2 : 1}
     />
+  );
+}
+
+function TestDraftButton({
+  disabledReason,
+  onClick,
+}: {
+  disabledReason?: string;
+  onClick: () => void;
+}) {
+  const button = (
+    <Button type="button" variant="outline" disabled={disabledReason !== undefined} onClick={onClick}>
+      <TestTube2 className="size-3.5" />
+      Test Draft
+    </Button>
+  );
+
+  if (!disabledReason) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{button}</span>
+      </TooltipTrigger>
+      <TooltipContent>{disabledReason}</TooltipContent>
+    </Tooltip>
   );
 }
 

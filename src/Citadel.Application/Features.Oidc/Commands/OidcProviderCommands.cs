@@ -14,8 +14,7 @@ using Mediator;
 
 namespace Application.Features.Oidc.Commands;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
-public sealed record CreateOidcProvider(OidcProviderInputModel Provider) : ICommand<Result<OidcProvider>>
+public sealed record CreateOidcProvider(OidcProviderInputModel Provider) : ICommand<Result<OidcProvider>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<CreateOidcProvider>
     {
@@ -26,7 +25,6 @@ public sealed record CreateOidcProvider(OidcProviderInputModel Provider) : IComm
     }
 }
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record UpdateOidcProvider(
     Guid Id,
     UpdateOidcProviderInputModel Provider,
@@ -34,7 +32,7 @@ public sealed record UpdateOidcProvider(
     bool UpdateAllowedEmailDomains,
     bool UpdateRequiredClaimName,
     bool UpdateRequiredClaimValues,
-    bool UpdateDefaultRoleId) : ICommand<Result<OidcProvider>>
+    bool UpdateDefaultRoleId) : ICommand<Result<OidcProvider>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<UpdateOidcProvider>
     {
@@ -46,11 +44,9 @@ public sealed record UpdateOidcProvider(
     }
 }
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
-public sealed record DeleteOidcProvider(Guid Id) : ICommand<Result>;
+public sealed record DeleteOidcProvider(Guid Id) : ICommand<Result>, IAdministratorRequest;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
-public sealed record TestOidcProviderDiscovery(Guid? ProviderId, string? Issuer) : ICommand<Result<OidcDiscoveryResult>>;
+public sealed record TestOidcProviderDiscovery(Guid? ProviderId, string? Issuer) : ICommand<Result<OidcDiscoveryResult>>, IAdministratorRequest;
 
 internal sealed class CreateOidcProviderHandler(
     IUnitOfWork unitOfWork,

@@ -127,7 +127,8 @@ export const ResourceBindingsTab = ({
   const { data: secretsData } = useRead('listSecretDefinitions', secretQueryArgs);
   const serverEntries = data?.data.entries ?? EMPTY_RESOURCE_BINDINGS;
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRET_DEFINITIONS, [secretsData?.data.secrets]);
-  const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
+  const canCreateSecret = !disabled;
+  const canManageGlobalSecrets = Boolean(secretsData?.data.capabilities.canWrite);
   const originalInputs = useMemo(() => serverEntries.map(toInputFromView), [serverEntries]);
   const resetKey = useMemo(() => JSON.stringify(originalInputs), [originalInputs]);
 
@@ -143,6 +144,7 @@ export const ResourceBindingsTab = ({
       originalInputs={originalInputs}
       secrets={secrets}
       canCreateSecret={canCreateSecret}
+      canManageGlobalSecrets={canManageGlobalSecrets}
       allowMountedFile={scope === ResourceBindingScope.Stack}
     />
   );
@@ -158,6 +160,7 @@ const ResourceBindingsTabEditor = ({
   originalInputs,
   secrets,
   canCreateSecret,
+  canManageGlobalSecrets,
   allowMountedFile,
 }: {
   scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
@@ -169,6 +172,7 @@ const ResourceBindingsTabEditor = ({
   originalInputs: ResourceBindingInput[];
   secrets: SecretDefinitionView[];
   canCreateSecret: boolean;
+  canManageGlobalSecrets: boolean;
   allowMountedFile?: boolean;
 }) => {
   const queryClient = useQueryClient();
@@ -262,7 +266,11 @@ const ResourceBindingsTabEditor = ({
     },
     [createEntry, originalInputs],
   );
-  const secretCreation = useSecretCreation(addSecretBinding, secrets);
+  const secretCreation = useSecretCreation(addSecretBinding, secrets, {
+    scope,
+    resourceId,
+    allowExternalSecrets: canManageGlobalSecrets,
+  });
 
   const saveDialogEntry = async () => {
     const normalized = normalizeEntryInput(entryInput);
@@ -854,6 +862,11 @@ export const ResourceBindingAddDropdown = ({
 export const useSecretCreation = (
   addSecretBinding: (secret?: SecretDefinitionView) => boolean | Promise<boolean>,
   existingSecrets: SecretDefinitionView[] = EMPTY_SECRET_DEFINITIONS,
+  options?: {
+    scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+    resourceId: string;
+    allowExternalSecrets: boolean;
+  },
 ) => {
   const queryClient = useQueryClient();
   const createInternalSecret = useMutate('createInternalSecret');
@@ -863,8 +876,15 @@ export const useSecretCreation = (
   const [source, setSource] = useState<SecretSource>('internal');
   const [internalInput, setInternalInput] = useState<CreateInternalSecretInput>(INTERNAL_SECRET_INPUT);
   const [externalInput, setExternalInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
-  const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: open && source === 'vault' });
+  const allowExternalSecrets = options?.allowExternalSecrets ?? true;
+  const { data: providersData } = useRead('listSecretProviders', undefined, {
+    enabled: allowExternalSecrets && open && source === 'vault',
+  });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
+
+  useEffect(() => {
+    if (!allowExternalSecrets && source !== 'internal') setSource('internal');
+  }, [allowExternalSecrets, source]);
 
   useEffect(() => {
     if (externalInput.providerId || providers.length === 0) return;
@@ -890,7 +910,10 @@ export const useSecretCreation = (
     try {
       const result =
         source === 'internal'
-          ? await createInternalSecret.mutateAsync({ data: internalInput } as any)
+          ? await createInternalSecret.mutateAsync({
+              query: options ? { scope: options.scope, resourceId: options.resourceId } : undefined,
+              data: internalInput,
+            } as any)
           : await createExternalSecret.mutateAsync({
               data: normalizeExternalSecretInput(externalInput),
             } as any);
@@ -930,6 +953,7 @@ export const useSecretCreation = (
     dialogProps: {
       open,
       source,
+      allowExternalSecrets,
       providers,
       internalInput,
       externalInput,
@@ -973,6 +997,7 @@ export const toExternalSecretTestInput = (input: CreateExternalSecretInput): Tes
 export const CreateSecretDialog = ({
   open,
   source,
+  allowExternalSecrets,
   providers,
   internalInput,
   externalInput,
@@ -987,6 +1012,7 @@ export const CreateSecretDialog = ({
 }: {
   open: boolean;
   source: SecretSource;
+  allowExternalSecrets: boolean;
   providers: SecretProviderView[];
   internalInput: CreateInternalSecretInput;
   externalInput: CreateExternalSecretInput;
@@ -1019,23 +1045,26 @@ export const CreateSecretDialog = ({
         <DialogHeader>
           <DialogTitle>Create Stored Secret</DialogTitle>
           <DialogDescription>
-            Internal secrets are stored encrypted by Citadel. Vault secrets store only the provider reference and are
-            resolved during deploy.
+            {allowExternalSecrets
+              ? 'Internal secrets are stored encrypted by Citadel. Vault secrets store only the provider reference and are resolved during deploy.'
+              : 'Internal secrets are stored encrypted by Citadel and redacted from logs.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <label className="grid gap-1.5 text-sm">
-            <span className="text-xs text-muted-foreground">Source</span>
-            <Select value={source} onValueChange={(value) => onSourceChange(value as SecretSource)}>
-              <SelectTrigger className="w-55">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="internal">Internal encrypted</SelectItem>
-                <SelectItem value="vault">Vault-compatible KV v2</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
+          {allowExternalSecrets && (
+            <label className="grid gap-1.5 text-sm">
+              <span className="text-xs text-muted-foreground">Source</span>
+              <Select value={source} onValueChange={(value) => onSourceChange(value as SecretSource)}>
+                <SelectTrigger className="w-55">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="internal">Internal encrypted</SelectItem>
+                  <SelectItem value="vault">Vault-compatible KV v2</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+          )}
 
           {source === 'internal' ? (
             <>

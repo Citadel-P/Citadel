@@ -34,4 +34,21 @@ public class PermissionCacheTests
         Assert.Null(cache.Get(key1));
         Assert.Null(cache.Get(key2));
     }
+
+    [Fact]
+    public void Parallel_Set_Should_Not_Lose_Index_Entries()
+    {
+        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var cache = new PermissionCache(memoryCache);
+        var userId = Guid.NewGuid();
+        var keys = Enumerable.Range(0, 100)
+            .Select(_ => new PermissionCacheKey(userId, ResourceType.Deployment, Guid.NewGuid()))
+            .ToArray();
+
+        Parallel.ForEach(
+            keys,
+            key => cache.Set(key, new PermissionMetadata(PermissionLevel.Read, SpecificPermission.None)));
+
+        Assert.Equal(keys.Length, cache.GetIndex(userId).Count);
+    }
 }

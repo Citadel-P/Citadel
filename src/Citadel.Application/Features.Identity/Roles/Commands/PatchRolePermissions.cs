@@ -14,7 +14,7 @@ using Application.Services.Licensing;
 namespace Application.Features.Identity.Roles.Commands;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Write)]
-public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchRolePermissionsModel> Patch) : ICommand<Result<RoleDetails>>
+public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchRolePermissionsModel> Patch) : ICommand<Result<RoleDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : PatchCommandValidator<PatchRolePermissions, PatchRolePermissionsModel>
     {

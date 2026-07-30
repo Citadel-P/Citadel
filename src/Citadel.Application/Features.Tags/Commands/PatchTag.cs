@@ -38,15 +38,11 @@ public sealed record PatchTag(Guid Id, string? Name, string? Color) : ICommand<R
     }
 }
 
-internal sealed class PatchTagHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext)
+internal sealed class PatchTagHandler(IUnitOfWork unitOfWork)
     : ICommandHandler<PatchTag, Result<Tag>>
 {
     public async ValueTask<Result<Tag>> Handle(PatchTag command, CancellationToken cancellationToken)
     {
-        var user = userContext.Current;
-        if (user is null || !user.IsAdmin)
-            return Result.Failure<Tag>(new ForbiddenError("Only admins can update tags."));
-
         var existing = await unitOfWork.Tags.GetAsync(command.Id, cancellationToken);
         if (existing is null)
             return Result.Failure<Tag>(new NotFoundError("Tag not found."));

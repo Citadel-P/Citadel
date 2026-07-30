@@ -1,4 +1,4 @@
-import { ResourceCapabilities, TagView } from '@/api/generated/api.types';
+import { TagView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
@@ -7,7 +7,6 @@ import { TagDropdownActions, TagGroupActions } from './actions';
 import { TagCreateDialog } from './dialogs';
 import { TagsTable } from './table';
 
-const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: false };
 const EMPTY_TAGS: never[] = [];
 
 export const TagComponents: RequiredComponents<TagView> = {
@@ -25,7 +24,11 @@ export const TagComponents: RequiredComponents<TagView> = {
   },
   useData(): ResourceDataHookResult<TagView> {
     const { data, isLoading } = useRead('listTags');
-    return { items: data?.data.tags ?? EMPTY_TAGS, isLoading, capabilities: EMPTY_CAPABILITIES };
+    return {
+      items: data?.data.tags ?? EMPTY_TAGS,
+      isLoading,
+      capabilities: data?.data.capabilities,
+    };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

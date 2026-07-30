@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Queries;
 
-public sealed record GetTeams(string? Name = null, int Page = 1, int PageSize = 50) : IQuery<Result<PagedResult<TeamDetails>>>
+public sealed record GetTeams(string? Name = null, int Page = 1, int PageSize = 50) : IQuery<Result<PagedResult<TeamDetails>>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<GetTeams>
     {

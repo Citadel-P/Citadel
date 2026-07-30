@@ -141,12 +141,14 @@ function ChannelCard({
   channel,
   onEdit,
   onDelete,
-  disabled = false,
+  canEdit,
+  canDelete,
 }: {
   channel: AlertChannelView;
   onEdit: () => void;
   onDelete: (id: string) => Promise<void>;
-  disabled?: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const color = getDestinationColor(channel.alertDestination);
   const letter = channel.alertDestination.charAt(0).toUpperCase();
@@ -155,7 +157,7 @@ function ChannelCard({
     <IntegrationCard
       title={channel.name}
       subtitle={channel.alertDestination}
-      disabled={disabled}
+      disabled={!canEdit}
       onEdit={onEdit}
       icon={
         <div
@@ -183,7 +185,7 @@ function ChannelCard({
           title="Delete"
           icon={<Trash2 className="h-3.5 w-3.5" />}
           variant="outline"
-          disabled={disabled}
+          disabled={!canDelete}
           onClick={() => onDelete(channel.id)}
         />
       }
@@ -259,7 +261,8 @@ function AlertNotificationChannels() {
             channel={c}
             onEdit={() => openEdit(c)}
             onDelete={handleDelete}
-            disabled={!capabilities?.canWrite}
+            canEdit={c.capabilities?.canWrite ?? capabilities?.canWrite ?? false}
+            canDelete={c.capabilities?.canExecute ?? capabilities?.canExecute ?? false}
           />
         ))}
 

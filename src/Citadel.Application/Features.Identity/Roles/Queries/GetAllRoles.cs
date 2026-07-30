@@ -9,7 +9,7 @@ using Mediator;
 namespace Application.Features.Identity.Roles.Queries;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Read)]
-public sealed record GetAllRoles() : IQuery<Result<IEnumerable<RoleDetails>>>;
+public sealed record GetAllRoles() : IQuery<Result<IEnumerable<RoleDetails>>>, IAdministratorRequest;
 
 internal sealed class GetAllRolesHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAllRoles, Result<IEnumerable<RoleDetails>>>
 {

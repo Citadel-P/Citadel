@@ -15,7 +15,7 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Commands;
 
 [RequirePermission(ResourceType.Team, PermissionLevel.Write)]
-public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> Patch) : ICommand<Result<TeamDetails>>
+public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> Patch) : ICommand<Result<TeamDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : PatchCommandValidator<PatchTeam, PatchTeamModel>
     {
@@ -44,6 +44,7 @@ public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> P
 internal sealed class PatchTeamHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
+    IAdministratorGuard administratorGuard,
     ILicenseEntitlementService entitlementService) : ICommandHandler<PatchTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(PatchTeam command, CancellationToken cancellationToken)
@@ -60,6 +61,7 @@ internal sealed class PatchTeamHandler(
         var currentRoleIds = (await unitOfWork.Roles.GetActorRoleIdsAsync(team.ActorId, cancellationToken)).ToArray();
         var current = new PatchTeamModel(team.IsEnabled, currentUserIds, currentRoleIds, null);
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchTeamModel);
+        var userIds = patched.UserIds?.Distinct().ToArray();
         var roleIds = patched.RoleIds?.Distinct().ToArray();
         var roles = Array.Empty<Role>();
 
@@ -72,9 +74,8 @@ internal sealed class PatchTeamHandler(
                 return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
         }
 
-        if (patched.UserIds is not null)
+        if (userIds is not null)
         {
-            var userIds = patched.UserIds.Distinct().ToArray();
             var addsMembers = userIds.Except(currentUserIds).Any();
             if (userIds.Length > 0)
             {
@@ -106,9 +107,6 @@ internal sealed class PatchTeamHandler(
             }
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
-            await evictor.EvictUsers(
-                currentUserIds.Union(userIds),
-                cancellationToken);
         }
 
         if (roleIds is not null)
@@ -124,7 +122,6 @@ internal sealed class PatchTeamHandler(
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
-            await evictor.EvictPermissionsForActorAsync(team.ActorId, cancellationToken);
         }
 
         if (patched.ResourceAccesses is not null)
@@ -164,7 +161,24 @@ internal sealed class PatchTeamHandler(
         }
 
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
+
+        if (userIds is not null || roleIds is not null || patched.IsEnabled == false)
+        {
+            var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
+            if (guardResult.IsFailure(out var guardError))
+                return Result.Failure<TeamDetails>(guardError);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
+        if (patched.UserIds is not null
+            || patched.RoleIds is not null
+            || patched.ResourceAccesses is not null
+            || patched.IsEnabled.HasValue)
+        {
+            await evictor.EvictUsers(
+                currentUserIds.Union(userIds ?? currentUserIds),
+                cancellationToken);
+        }
 
         return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled, team.TotalMembers, team.Roles);
     }

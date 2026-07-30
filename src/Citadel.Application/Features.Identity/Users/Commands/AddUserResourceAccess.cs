@@ -16,7 +16,7 @@ public sealed record AddUserResourceAccess(
     ResourceType ResourceType,
     Guid ResourceId,
     PermissionLevel PermissionLevel,
-    IEnumerable<SpecificPermission>? SpecificPermissions) : ICommand<Result<UserDetails>>
+    IEnumerable<SpecificPermission>? SpecificPermissions) : ICommand<Result<UserDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<AddUserResourceAccess>
     {

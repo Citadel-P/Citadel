@@ -31,6 +31,8 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
         Assert.Equal("admin", root.GetProperty("displayName").GetString());
         Assert.Equal("admin@citadel.local", root.GetProperty("email").GetString());
         Assert.True(root.GetProperty("authentication").GetProperty("canChangePassword").GetBoolean());
+        Assert.True(root.GetProperty("authorization").GetProperty("isAdministrator").GetBoolean());
+        Assert.True(root.GetProperty("authorization").GetProperty("alertRules").GetProperty("canRead").GetBoolean());
         Assert.True(root.GetProperty("directRoles").GetArrayLength() > 0);
     }
 

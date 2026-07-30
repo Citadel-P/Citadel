@@ -779,7 +779,14 @@ public class ApplyStackServiceTests
             items.Add(item);
         }
 
-        Assert.Contains(items, item => item.ExitCode == 1);
+        var failure = Assert.Single(items, item => item.ExitCode == 1);
+        Assert.Equal(StackApplyEventType.StdErr, failure.Type);
+        Assert.Equal(
+            "Error response from daemon: Conflict. The container name is already in use.",
+            failure.Message);
+        Assert.DoesNotContain(
+            items,
+            item => item.Type == StackApplyEventType.CommandCompleted && item.ExitCode != 0);
         gitStackMaterializer.Verify(x => x.DiscardSnapshotAsync(stack.Id, releaseId, It.IsAny<CancellationToken>()), Times.Once);
         gitStackMaterializer.Verify(x => x.ActivateCurrentAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -2055,7 +2062,10 @@ public class ApplyStackServiceTests
 
     private static async IAsyncEnumerable<StackApplyResult> FailingStackApplyStream()
     {
-        yield return StackApplyResult.StdErr("compose failed");
+        yield return StackApplyResult.StdErr(
+            "service:web:1 Error response from daemon: Conflict. The container name is already in use.");
+        yield return StackApplyResult.StdErr(
+            "Error response from daemon: Conflict. The container name is already in use.");
         yield return StackApplyResult.Finished(1);
         await Task.CompletedTask;
     }

@@ -1,5 +1,6 @@
 using Application.Features.Identity.Profile.Commands;
 using Application.Features.Identity.Profile.Queries;
+using Application.Permissions;
 using Domain.Contracts.Resources.Identity;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -14,19 +15,21 @@ public static class Profile
 {
     public static async Task<Results<Ok<CurrentProfileView>, ProblemHttpResult>> Get(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetCurrentProfile(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, CurrentProfileView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, CurrentProfileView.Map);
     }
 
     public static async Task<Results<Ok<CurrentProfileView>, ProblemHttpResult>> Update(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromBody] UpdateCurrentProfileInput input,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(input.ToCommand(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, CurrentProfileView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, CurrentProfileView.Map);
     }
 
     public static async Task<Results<Ok<UserPreferencesView>, ProblemHttpResult>> GetPreferences(

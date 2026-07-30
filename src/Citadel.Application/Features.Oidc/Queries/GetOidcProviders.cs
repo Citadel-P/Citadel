@@ -9,11 +9,9 @@ using Mediator;
 
 namespace Application.Features.Oidc.Queries;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
-public sealed record GetOidcProviders : IQuery<Result<OidcProviderListResult>>;
+public sealed record GetOidcProviders : IQuery<Result<OidcProviderListResult>>, IAdministratorRequest;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
-public sealed record GetOidcProvider(Guid Id) : IQuery<Result<Domain.Entities.Oidc.OidcProvider>>;
+public sealed record GetOidcProvider(Guid Id) : IQuery<Result<Domain.Entities.Oidc.OidcProvider>>, IAdministratorRequest;
 
 public sealed record GetEnabledOidcLoginProviders : IQuery<Result<OidcProviderListResult>>;
 

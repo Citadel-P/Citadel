@@ -14,46 +14,25 @@ namespace Infrastructure.Persistence;
 
 internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
-    private const string UserAggregateCtes = """
-        UserTeams AS (
-            SELECT
-                ut.UserId,
-                JSONB_AGG(
-                    DISTINCT JSONB_BUILD_OBJECT(
-                        'id', t.Id,
-                        'name', t.Name
-                    )
-                    ORDER BY JSONB_BUILD_OBJECT(
-                        'id', t.Id,
-                        'name', t.Name
-                    )
-                )::text AS Teams
+    private const string UserAggregateJoins = """
+        LEFT JOIN LATERAL (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT('id', t.Id, 'name', t.Name)
+                ORDER BY t.Name, t.Id
+            )::text AS Teams
             FROM UsersTeams ut
             JOIN Teams t ON t.Id = ut.TeamId
-            GROUP BY ut.UserId
-        ),
-        UserRoles AS (
-            SELECT
-                ar.ActorId,
-                JSONB_AGG(
-                    DISTINCT JSONB_BUILD_OBJECT(
-                        'id', r.Id,
-                        'name', r.Name
-                    )
-                    ORDER BY JSONB_BUILD_OBJECT(
-                        'id', r.Id,
-                        'name', r.Name
-                    )
-                )::text AS Roles
+            WHERE ut.UserId = u.Id
+        ) teams ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT('id', r.Id, 'name', r.Name)
+                ORDER BY r.Name, r.Id
+            )::text AS Roles
             FROM ActorRoles ar
             JOIN Roles r ON r.Id = ar.RoleId
-            GROUP BY ar.ActorId
-        )
-        """;
-
-    private const string UserAggregateJoins = """
-        LEFT JOIN UserTeams teams ON teams.UserId = u.Id
-        LEFT JOIN UserRoles roles ON roles.ActorId = u.ActorId
+            WHERE ar.ActorId = u.ActorId
+        ) roles ON TRUE
         """;
 
 
@@ -128,7 +107,6 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""
-            WITH {{UserAggregateCtes}}
             SELECT
                 u.Id,
                 u.Name,
@@ -152,8 +130,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<CurrentProfileDetails?> GetCurrentProfileAsync(Guid userId, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""
-            WITH {{UserAggregateCtes}},
-            OidcLinks AS (
+            WITH OidcLinks AS (
                 SELECT DISTINCT ON (externalLogins.UserId)
                     externalLogins.UserId,
                     providers.Id AS ProviderId,
@@ -202,7 +179,6 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
 
         const string selectSql = $$"""
-            WITH {{UserAggregateCtes}}
             SELECT
                 u.Id,
                 u.Name,
@@ -240,7 +216,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""
-            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}, {{UserAggregateCtes}}
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             SELECT
                 u.Id,
                 u.Name,
@@ -595,6 +571,49 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         var result = await db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken = ct }, transaction: tx());
         return [.. result];
+    }
+
+    public async Task<bool> HasEnabledAdministratorAsync(CancellationToken cancellationToken)
+    {
+        const long administratorMutationLockId = 4_859_382_590_227_736_942;
+        const string lockSql = "SELECT pg_advisory_xact_lock(@AdministratorMutationLockId)";
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM Users u
+                JOIN Actors userActor ON userActor.Id = u.ActorId
+                WHERE userActor.IsEnabled
+                  AND EXISTS (
+                      SELECT 1
+                      FROM ActorRoles actorRole
+                      JOIN Roles role ON role.Id = actorRole.RoleId
+                      WHERE role.Name = 'Admin'
+                        AND role.RoleType = 'System'
+                        AND (
+                            actorRole.ActorId = u.ActorId
+                            OR EXISTS (
+                                SELECT 1
+                                FROM UsersTeams userTeam
+                                JOIN Teams team ON team.Id = userTeam.TeamId
+                                JOIN Actors teamActor ON teamActor.Id = team.ActorId
+                                WHERE userTeam.UserId = u.Id
+                                  AND team.ActorId = actorRole.ActorId
+                                  AND teamActor.IsEnabled
+                            )
+                        )
+                  )
+            )
+            """;
+
+        await db.ExecuteAsync(
+            lockSql,
+            new { AdministratorMutationLockId = administratorMutationLockId, cancellationToken },
+            transaction: tx());
+
+        return await db.ExecuteScalarAsync<bool>(
+            sql,
+            new { cancellationToken },
+            transaction: tx());
     }
 
    internal static int GetGrantedPermissionMask(PermissionLevel requiredPermissionLevel)

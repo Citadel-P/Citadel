@@ -10,8 +10,7 @@ using Mediator;
 
 namespace Application.Features.Oidc.Commands;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
-public sealed record PatchOidcProviderMetadata(Guid Id, string? Description) : ICommand<Result<OidcProvider>>
+public sealed record PatchOidcProviderMetadata(Guid Id, string? Description) : ICommand<Result<OidcProvider>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<PatchOidcProviderMetadata>
     {

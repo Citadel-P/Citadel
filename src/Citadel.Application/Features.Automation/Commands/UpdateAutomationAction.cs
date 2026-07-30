@@ -83,6 +83,13 @@ internal sealed class UpdateAutomationActionHandler(
                 return Result.Failure<AutomationActionResult>(entitlement.Errors);
         }
 
+        var runAsActorId = input.RunAsActorId ?? action.RunAsActorId;
+        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
+            userContextAccessor.Current,
+            runAsActorId);
+        if (runAsAuthorization.IsFailure(out var runAsError))
+            return Result.Failure<AutomationActionResult>(runAsError);
+
         var oldAction = AutomationActionActivity.ToSnapshot(action);
 
         action.Update(

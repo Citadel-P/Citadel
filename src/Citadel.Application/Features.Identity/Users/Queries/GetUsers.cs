@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Users.Queries;
 
-public sealed record GetUsers(int Page = 1, int PageSize = 50, string? Name = null) : IQuery<Result<PagedResult<UserDetails>>>
+public sealed record GetUsers(int Page = 1, int PageSize = 50, string? Name = null) : IQuery<Result<PagedResult<UserDetails>>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<GetUsers>
     {

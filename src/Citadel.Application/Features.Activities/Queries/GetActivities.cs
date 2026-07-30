@@ -2,6 +2,7 @@
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using FluentValidation;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Models;
 using LightResults;
 using Mediator;
@@ -25,17 +26,30 @@ public sealed record GetActivities(
     }
 }
 
-internal sealed class GetActivitiesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetActivities, Result<PagedResult<ActivityEvent>>>
+internal sealed class GetActivitiesHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor) : IQueryHandler<GetActivities, Result<PagedResult<ActivityEvent>>>
 {
     public async ValueTask<Result<PagedResult<ActivityEvent>>> Handle(GetActivities query, CancellationToken cancellationToken)
     {
-        var activities = await unitOfWork.ActivityEventRepository.GetPagedAsync(
-            resourceId: query.ResourceId,
-            resourceType: query.ResourceType,
-            eventType: query.EventType,
-            page: query.Page,
-            pageSize: query.PageSize,
-            cancellationToken);
+        var user = userContextAccessor.Current;
+        var activities = user.IsAdmin
+            ? await unitOfWork.ActivityEventRepository.GetPagedAsync(
+                resourceId: query.ResourceId,
+                resourceType: query.ResourceType,
+                eventType: query.EventType,
+                page: query.Page,
+                pageSize: query.PageSize,
+                cancellationToken)
+            : await unitOfWork.ActivityEventRepository.GetAuthorizedPagedAsync(
+                userId: user.UserId,
+                resourceId: query.ResourceId,
+                resourceType: query.ResourceType,
+                eventType: query.EventType,
+                page: query.Page,
+                pageSize: query.PageSize,
+                cancellationToken);
+
         return Result.Success(activities);
     }
 }

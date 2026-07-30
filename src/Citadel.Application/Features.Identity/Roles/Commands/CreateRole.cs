@@ -13,7 +13,7 @@ using Mediator;
 namespace Application.Features.Identity.Roles.Commands;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Write)]
-public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> Permissions) : ICommand<Result<RoleDetails>>
+public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> Permissions) : ICommand<Result<RoleDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<CreateRole>
     {

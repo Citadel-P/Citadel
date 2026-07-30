@@ -36,6 +36,7 @@ public interface IActorResourceAccessService
 internal sealed class ActorRoleService(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
+    IAdministratorGuard administratorGuard,
     ILicenseEntitlementService entitlementService) : IActorRoleService
 {
     public async Task<Result> AssignRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
@@ -72,6 +73,10 @@ internal sealed class ActorRoleService(
         if (rows == 0)
             return Result.Failure(new NotFoundError("The role is not assigned to the actor"));
 
+        var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
+        if (guardResult.IsFailure(out var guardError))
+            return Result.Failure(guardError);
+
         await unitOfWork.CommitAsync(cancellationToken);
         await evictor.EvictPermissionsForActorAsync(actorId, cancellationToken);
         return Result.Success();
@@ -80,6 +85,7 @@ internal sealed class ActorRoleService(
 
 internal sealed class ActorResourceAccessService(
     IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
     ILicenseEntitlementService entitlementService) : IActorResourceAccessService
 {
     public async Task<Result> AddResourceAccessAsync(
@@ -109,6 +115,7 @@ internal sealed class ActorResourceAccessService(
             return Result.Failure(new ConflictError("The resource access is already assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictPermissionsForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 
@@ -132,6 +139,7 @@ internal sealed class ActorResourceAccessService(
             return Result.Failure(new NotFoundError("The resource access is not assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictPermissionsForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 }

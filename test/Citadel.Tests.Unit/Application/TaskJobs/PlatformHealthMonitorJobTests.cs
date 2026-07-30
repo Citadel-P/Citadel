@@ -121,6 +121,44 @@ public sealed class PlatformHealthMonitorJobTests
         Assert.False(result);
     }
 
+    [Theory]
+    [InlineData(PlatformConnectorType.Local, "unix:///var/run/docker.sock")]
+    [InlineData(PlatformConnectorType.EdgeAgent, "edge://10000000-0000-0000-0000-000000000001")]
+    public async Task UntrackPlatform_ShouldNotEvictDirectAgentCacheForNonAgentPlatforms(
+        PlatformConnectorType connectorType,
+        string address)
+    {
+        var connectionCache = new Mock<IPlatformConnectionCache>(MockBehavior.Strict);
+        await using var provider = new ServiceCollection().BuildServiceProvider();
+        var job = CreateJob(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            connectionCache: connectionCache.Object);
+
+        Assert.True(job.TrackPlatform(address, Guid.CreateVersion7(), connectorType));
+        Assert.True(await job.UntrackPlatform(address, TestContext.Current.CancellationToken));
+
+        connectionCache.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UntrackPlatform_ShouldEvictDirectAgentCacheForAgentPlatform()
+    {
+        const string address = "https://agent.example";
+        var connectionCache = new Mock<IPlatformConnectionCache>(MockBehavior.Strict);
+        connectionCache.Setup(x => x.Evict(address));
+
+        await using var provider = new ServiceCollection().BuildServiceProvider();
+        var job = CreateJob(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            connectionCache: connectionCache.Object);
+
+        Assert.True(job.TrackPlatform(address, Guid.CreateVersion7(), PlatformConnectorType.Agent));
+        Assert.True(await job.UntrackPlatform(address, TestContext.Current.CancellationToken));
+
+        connectionCache.Verify(x => x.Evict(address), Times.Once);
+        connectionCache.VerifyNoOtherCalls();
+    }
+
     private static ServiceProvider CreateProvider(IEdgeAgentRepository edgeAgents)
     {
         var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
@@ -134,13 +172,15 @@ public sealed class PlatformHealthMonitorJobTests
 
     private static PlatformHealthMonitorJob CreateJob(
         IServiceScopeFactory scopeFactory,
-        IConnectorFactory<IPlatformConnector>? connectorFactory = null)
+        IConnectorFactory<IPlatformConnector>? connectorFactory = null,
+        IPlatformConnectionCache? connectionCache = null)
         => new(
             Mock.Of<IAlertService>(),
             scopeFactory,
             Mock.Of<IPlatformHealthBroadCaster>(),
             connectorFactory ?? Mock.Of<IConnectorFactory<IPlatformConnector>>(),
-            Mock.Of<ILogger<PlatformHealthMonitorJob>>());
+            Mock.Of<ILogger<PlatformHealthMonitorJob>>(),
+            connectionCache);
 
     private static EdgeAgentBinding CreateBinding(
         Guid platformId,

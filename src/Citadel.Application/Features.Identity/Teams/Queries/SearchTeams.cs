@@ -10,7 +10,7 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Queries;
 
 [RequirePermission(ResourceType.Team, PermissionLevel.Read)]
-public sealed record SearchTeams(string Query, int Limit = 20) : IQuery<Result<IEnumerable<TeamSearchItem>>>
+public sealed record SearchTeams(string Query, int Limit = 20) : IQuery<Result<IEnumerable<TeamSearchItem>>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<SearchTeams>
     {

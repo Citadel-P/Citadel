@@ -34,12 +34,9 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     private Guid _visibleImageId;
     private Guid _hiddenImageId;
     private Guid _userLookupSourceId;
-    private Guid _userLookupSourceActorId;
     private Guid _visibleTeamId;
-    private Guid _hiddenTeamId;
     private Guid _extraTeamId;
     private Guid _visibleRoleId;
-    private Guid _hiddenRoleId;
     private Guid _extraRoleId;
     private Guid _globalResourceBindingId;
     private Guid _deploymentResourceBindingId;
@@ -208,7 +205,6 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         await uow.Actors.AddAsync(userActor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(lookupUser, TestContext.Current.CancellationToken);
         _userLookupSourceId = lookupUser.Id;
-        _userLookupSourceActorId = lookupUser.ActorId;
 
         var visibleTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-visible"));
         var hiddenTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-hidden"));
@@ -225,7 +221,6 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         await uow.Teams.AddMemberAsync(visibleTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
         await uow.Teams.AddMemberAsync(hiddenTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
         _visibleTeamId = visibleTeam.Id;
-        _hiddenTeamId = hiddenTeam.Id;
         _extraTeamId = extraTeam.Id;
 
         var visibleRole = Role.Create("role-visible", RoleType.Custom);
@@ -237,7 +232,6 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         await uow.Roles.AddActorRoleAsync(lookupUser.ActorId, visibleRole.Id, TestContext.Current.CancellationToken);
         await uow.Roles.AddActorRoleAsync(lookupUser.ActorId, hiddenRole.Id, TestContext.Current.CancellationToken);
         _visibleRoleId = visibleRole.Id;
-        _hiddenRoleId = hiddenRole.Id;
         _extraRoleId = extraRole.Id;
 
         var globalResourceBinding = new ResourceBinding(
@@ -795,7 +789,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
-    public async Task Lookup_User_To_Team_Should_Preserve_Linked_Teams_When_Source_Is_Accessible()
+    public async Task Lookup_User_To_Team_Should_Require_Administrator()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
@@ -809,26 +803,15 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Team", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement;
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleTeamId);
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenTeamId);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Lookup_User_To_Team_Should_Return_Authorized_Teams_And_Linked_Teams_Without_Duplicates()
+    public async Task Lookup_Team_Should_Require_Administrator()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
             [
-                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read),
                 new ResourceGrant(ResourceType.Team, _extraTeamId, PermissionLevel.Read)
             ]);
 
@@ -836,51 +819,14 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             "Bearer",
             CreateJwtToken(subject.UserId, subject.ActorId));
 
-        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Team", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement.EnumerateArray().ToArray();
-        Assert.Equal(3, items.Length);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleTeamId);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenTeamId);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _extraTeamId);
-        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+        var response = await Client.GetAsync(
+            "/api/v1/lookup?targetResourceType=Team",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Lookup_User_To_Team_Should_Preserve_Referenced_Team_Without_Direct_Target_Access()
-    {
-        var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants:
-            [
-                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read)
-            ]);
-
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            CreateJwtToken(subject.UserId, subject.ActorId));
-
-        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Team", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement;
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleTeamId);
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenTeamId);
-    }
-
-    [Fact]
-    public async Task Lookup_User_To_Role_Should_Preserve_Linked_Roles_When_Source_Is_Accessible()
+    public async Task Lookup_User_To_Role_Should_Require_Administrator()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
@@ -894,26 +840,15 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Role", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement;
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleRoleId);
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Lookup_User_To_Role_Should_Return_Authorized_Roles_And_Linked_Roles_Without_Duplicates()
+    public async Task Lookup_Role_Should_Require_Administrator()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
             [
-                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read),
                 new ResourceGrant(ResourceType.Role, _extraRoleId, PermissionLevel.Read)
             ]);
 
@@ -921,20 +856,10 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             "Bearer",
             CreateJwtToken(subject.UserId, subject.ActorId));
 
-        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Role", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement.EnumerateArray().ToArray();
-        Assert.Equal(3, items.Length);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRoleId);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
-        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _extraRoleId);
-        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+        var response = await Client.GetAsync(
+            "/api/v1/lookup?targetResourceType=Role",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
@@ -997,7 +922,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
-    public async Task Lookup_User_To_Role_Should_Preserve_Referenced_Roles_Without_Direct_Target_Access()
+    public async Task Lookup_User_Source_Should_Require_Administrator()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
@@ -1010,21 +935,14 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Role", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement;
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleRoleId);
-        Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Lookup_User_Add_Mode_Should_Return_UserId_And_UserActor_Should_Return_ActorId()
+    [Theory]
+    [InlineData("User")]
+    [InlineData("OidcProvider")]
+    [InlineData("License")]
+    public async Task Lookup_Sensitive_Target_Should_Require_Administrator(string targetResourceType)
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
@@ -1036,29 +954,50 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             "Bearer",
             CreateJwtToken(subject.UserId, subject.ActorId));
 
-        var userResponse = await Client.GetAsync("/api/v1/lookup?targetResourceType=User", TestContext.Current.CancellationToken);
-        var userBody = await userResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(userResponse.IsSuccessStatusCode, userBody);
+        var response = await Client.GetAsync(
+            $"/api/v1/lookup?targetResourceType={targetResourceType}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 
-        using (var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(userBody)),
-            cancellationToken: TestContext.Current.CancellationToken))
-        {
-            var item = Assert.Single(document.RootElement.EnumerateArray());
-            Assert.Equal(_userLookupSourceId, item.GetProperty("id").GetGuid());
-        }
+    [Fact]
+    public async Task Lookup_UserActor_Should_Return_Only_Current_User_For_NonAdministrator()
+    {
+        var subject = await CreateAuthorizationSubjectAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
 
-        var actorResponse = await Client.GetAsync("/api/v1/lookup?targetResourceType=UserActor", TestContext.Current.CancellationToken);
-        var actorBody = await actorResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(actorResponse.IsSuccessStatusCode, actorBody);
+        var response = await Client.GetAsync(
+            "/api/v1/lookup?targetResourceType=UserActor",
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
 
-        using (var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(actorBody)),
-            cancellationToken: TestContext.Current.CancellationToken))
-        {
-            var item = Assert.Single(document.RootElement.EnumerateArray());
-            Assert.Equal(_userLookupSourceActorId, item.GetProperty("id").GetGuid());
-        }
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+        var item = Assert.Single(document.RootElement.EnumerateArray());
+
+        Assert.Equal(subject.ActorId, item.GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Lookup_User_Target_Should_Remain_Available_To_Administrator()
+    {
+        var response = await Client.GetAsync(
+            "/api/v1/lookup?targetResourceType=User",
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            document.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == _userLookupSourceId);
     }
 
     [Fact]
@@ -1075,7 +1014,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
-    public async Task Lookup_Should_Return_BadRequest_For_Unsupported_Pair()
+    public async Task Lookup_AdministratorOnly_Target_Takes_Precedence_Over_Unsupported_Pair()
     {
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants: [new ResourceGrant(ResourceType.Platform, _platformId, PermissionLevel.Read)]);
@@ -1085,30 +1024,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
 
         var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Platform&sourceResourceId={_platformId}&targetResourceType=User", TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Lookup_Team_Add_Mode_Should_Return_Only_Visible_Teams()
-    {
-        var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Team, _visibleTeamId, PermissionLevel.Read)]);
-
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            CreateJwtToken(subject.UserId, subject.ActorId));
-
-        var response = await Client.GetAsync("/api/v1/lookup?targetResourceType=Team", TestContext.Current.CancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, responseBody);
-
-        using var document = await JsonDocument.ParseAsync(
-            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var items = document.RootElement;
-        Assert.Equal(1, items.GetArrayLength());
-        Assert.Equal(_visibleTeamId, items[0].GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

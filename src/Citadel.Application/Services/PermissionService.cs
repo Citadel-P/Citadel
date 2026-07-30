@@ -94,8 +94,6 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
         var toFetchArray = toFetch.ToArray();
         var fetched = await uow.Users.GetEffectivePermissionsBatchAsync(actorIds, resourceType, toFetchArray, ct);
 
-        var indexSet = new List<PermissionCacheKey>();
-
         foreach (var rid in toFetchArray)
         {
             if (!fetched.TryGetValue(rid, out var permissions))
@@ -106,10 +104,7 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
             requestCache[cacheKey] = permissions;
             result[rid] = permissions;
 
-            indexSet.Add(cacheKey);
         }
-        // Persist permission index once
-        permissionCache.AddManyToIndex(userId, indexSet);
 
         return result;
     }

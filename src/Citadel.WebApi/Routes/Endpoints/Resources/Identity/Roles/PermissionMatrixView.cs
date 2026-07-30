@@ -29,6 +29,8 @@ public static class PermissionMatrixView
         => resourceType switch
         {
             ResourceType.Binding => "Bindings",
+            ResourceType.Tag => "Tags",
+            ResourceType.Alert => "Alert Rules",
             ResourceType.GitRepository => "Git Repository",
             ResourceType.GitAccount => "Git Account",
             ResourceType.AlertChannel => "Alert Channel",

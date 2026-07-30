@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ namespace Tests.Integration.Application.Features.ResourceBindings;
 public sealed class ResourceBindingsTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid _stackId;
+    private Guid _deploymentId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -25,12 +27,18 @@ public sealed class ResourceBindingsTests(PostgresTestFixture fixture) : Integra
             StackSource.WebEditor,
             platform.Id,
             new ManualStack("services:\n  app:\n    image: nginx", StackUpdateBehavior.Notify));
+        var deployment = new Deployment(
+            "deployment-config",
+            Constants.SystemId,
+            platform.Id);
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+        await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _stackId = stack.Id;
+        _deploymentId = deployment.Id;
     }
 
     [Fact]
@@ -193,6 +201,79 @@ public sealed class ResourceBindingsTests(PostgresTestFixture fixture) : Integra
 
         Assert.Contains("STACK_ONLY_SECRET", stackList);
         Assert.DoesNotContain("GLOBAL_ONLY_SECRET", stackList);
+    }
+
+    [Fact]
+    public async Task SecretDefinitions_ForConsumer_ShouldUseConsumerPermissionWithoutGrantingBindingAccess()
+    {
+        var secretId = await CreateInternalSecretAsync("CONSUMER_SECRET");
+        var bindingResponse = await Client.PostAsJsonAsync(
+            "/api/v1/resourceBindings/global",
+            new
+            {
+                name = "CONSUMER_SECRET",
+                kind = "Secret",
+                value = (string?)null,
+                secretId,
+                secretDeliveryMode = "EnvironmentVariable",
+                targetPath = (string?)null
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+        bindingResponse.EnsureSuccessStatusCode();
+
+        var subject = await CreateAuthorizationSubjectAsync(directRoleId: OperatorRoleId);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var globalResponse = await Client.GetAsync(
+            "/api/v1/resourceBindings/secrets",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, globalResponse.StatusCode);
+
+        foreach (var targetResourceType in new[] { ResourceType.Build, ResourceType.BackupRepository })
+        {
+            var response = await Client.GetAsync(
+                $"/api/v1/resourceBindings/secrets?targetResourceType={targetResourceType}",
+                TestContext.Current.CancellationToken);
+            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(response.IsSuccessStatusCode, body);
+            Assert.Contains("CONSUMER_SECRET", body);
+            Assert.Contains("\"canRead\":false", body);
+            Assert.Contains("\"canWrite\":false", body);
+        }
+    }
+
+    [Fact]
+    public async Task Operator_Should_Create_Internal_Secrets_For_Stack_And_Deployment_Bindings()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(directRoleId: OperatorRoleId);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var globalResponse = await Client.PostAsJsonAsync(
+            "/api/v1/resourceBindings/secrets",
+            new { name = "OPERATOR_GLOBAL_SECRET", value = "secret" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, globalResponse.StatusCode);
+
+        foreach (var (scope, resourceId, name) in new[]
+        {
+            (ResourceBindingScope.Stack, _stackId, "OPERATOR_STACK_SECRET"),
+            (ResourceBindingScope.Deployment, _deploymentId, "OPERATOR_DEPLOYMENT_SECRET")
+        })
+        {
+            var response = await Client.PostAsJsonAsync(
+                $"/api/v1/resourceBindings/secrets?scope={scope}&resourceId={resourceId}",
+                new { name, value = "secret" },
+                cancellationToken: TestContext.Current.CancellationToken);
+            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(response.IsSuccessStatusCode, body);
+            Assert.Contains($"\"name\":\"{name}\"", body);
+        }
     }
 
     [Fact]
@@ -418,6 +499,13 @@ public sealed class ResourceBindingsTests(PostgresTestFixture fixture) : Integra
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var createSecretResponse = await Client.PostAsJsonAsync(
+            $"/api/v1/resourceBindings/secrets?scope=Stack&resourceId={_stackId}",
+            new { name = "UNAUTHORIZED_STACK_SECRET", value = "secret" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, createSecretResponse.StatusCode);
     }
 
     [Fact]

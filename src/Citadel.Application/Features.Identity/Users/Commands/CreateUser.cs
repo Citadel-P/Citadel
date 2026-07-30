@@ -22,7 +22,7 @@ public sealed record CreateUser(
     bool IsEnabled = true,
     IEnumerable<Guid>? TeamIds = null,
     IEnumerable<Guid>? RoleIds = null,
-    IEnumerable<ResourceAccessView>? ResourceAccesses = null) : ICommand<Result<UserDetails>>
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null) : ICommand<Result<UserDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<CreateUser>
     {
@@ -103,7 +103,6 @@ internal sealed class CreateUserHandler(
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(user.Id, teamIds, cancellationToken);
-            await evictor.EvictUsers(new[] { user.Id }, cancellationToken);
         }
 
         if (roleIds.Length > 0)
@@ -124,7 +123,6 @@ internal sealed class CreateUserHandler(
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(user.ActorId, roleIds, cancellationToken);
-            await evictor.EvictPermissionsForActorAsync(user.ActorId, cancellationToken);
         }
 
         if (resourceAccesses.Length > 0)
@@ -137,6 +135,8 @@ internal sealed class CreateUserHandler(
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
+        if (teamIds.Length > 0 || roleIds.Length > 0 || resourceAccesses.Length > 0)
+            await evictor.EvictUsers([user.Id], cancellationToken);
 
         var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(user.ActorId, cancellationToken);
         return new UserDetails(

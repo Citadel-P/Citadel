@@ -163,6 +163,17 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             TestContext.Current.CancellationToken);
         addResponse.EnsureSuccessStatusCode();
 
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(seeded.UserId, seeded.ActorId));
+
+        var warmCacheResponse = await Client.GetAsync("/api/v1/deployments", TestContext.Current.CancellationToken);
+        warmCacheResponse.EnsureSuccessStatusCode();
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken());
+
         var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/users/{seeded.UserId}/resource-accesses")
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")

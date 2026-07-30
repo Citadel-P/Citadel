@@ -34,18 +34,11 @@ public class ActorScopeEvictorRoleTests
         uow.SetupGet(x => x.Roles).Returns(roles.Object);
         uow.SetupGet(x => x.Teams).Returns(teams.Object);
 
-        // Minimal users repo to satisfy EvictUsers path.
-        var usersRepo = new Mock<IUserRepository>();
-        usersRepo.Setup(r => r.GetAllAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
-            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<User>?)Array.Empty<User>()));
-        uow.SetupGet(x => x.Users).Returns(usersRepo.Object);
-
-        var memoryCache = new Mock<IMemoryCache>();
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
         var permissionCache = new Mock<IPermissionCache>();
 
-        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
+        var evictor = new ActorScopeEvictor(uow.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
 
         await evictor.EvictPermissionsForRoleAsync(roleId, TestContext.Current.CancellationToken);
 
@@ -54,9 +47,10 @@ public class ActorScopeEvictorRoleTests
         permissionCache.Verify(p => p.InvalidateUser(userB), Times.Once);
         permissionCache.Verify(p => p.InvalidateUser(userC), Times.Once);
 
-        // Ensure actor-scope memory keys were removed
-        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userA)), Times.Once);
-        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userB)), Times.Once);
-        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userC)), Times.Once);
+        actorScopeProvider.Verify(
+            provider => provider.InvalidateManyAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.Order().SequenceEqual(new[] { userA, userB, userC }.Order())),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

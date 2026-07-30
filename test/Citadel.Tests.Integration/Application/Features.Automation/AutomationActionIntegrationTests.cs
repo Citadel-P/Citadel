@@ -422,6 +422,38 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
     }
 
     [Fact]
+    public async Task TestAutomationAction_WithoutExecutePermission_ShouldReturnForbiddenWithoutCreatingRun()
+    {
+        var createResponse = await CreateActionAsync("action-test-forbidden", "console.log('persisted');");
+        var actionId = ReadId(await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        createResponse.EnsureSuccessStatusCode();
+
+        var subject = await CreateAuthorizationSubjectAsync(directRoleId: OperatorRoleId);
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.PostAsync(
+            $"/api/v1/automation/actions/{actionId}/test",
+            JsonContent("""
+            {
+              "code": "console.log('draft');",
+              "argsJson": "{}",
+              "defaultArgsJson": "{}",
+              "timeoutSeconds": 30
+            }
+            """),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(processRunner.Calls);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Assert.Null(await uow.ActionRuns.GetLatestByActionAsync(actionId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task RunAutomationAction_WhenDisabled_ShouldReturnStreamErrorWithoutCreatingRun()
     {
         var createResponse = await CreateActionAsync("action-disabled", "console.log('disabled');", enabled: false);

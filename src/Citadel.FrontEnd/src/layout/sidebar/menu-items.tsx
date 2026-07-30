@@ -15,6 +15,7 @@ interface ISubMenuItem {
   expanded?: boolean;
   active?: boolean;
   isPlatform?: boolean;
+  access?: 'administrator' | 'alertRules' | 'bindings' | 'tags';
   children?: ISubMenuItem[];
 }
 
@@ -116,31 +117,37 @@ const MenuItems: IMenuItem[] = [
             icon: renderIcon(CitadelIcons.AlertRule),
             label: 'Alert Rules',
             route: '/alert-rules',
+            access: 'alertRules',
           },
           {
             icon: renderIcon(CitadelIcons.Binding),
             label: 'Bindings',
             route: '/bindings',
+            access: 'bindings',
           },
           {
             icon: renderIcon(CitadelIcons.Tag),
             label: 'Tags',
             route: '/tags',
+            access: 'tags',
           },
           {
             icon: renderIcon(CitadelIcons.OidcProvider),
             label: 'OIDC Providers',
             route: '/oidc-providers',
+            access: 'administrator',
           },
           {
             icon: renderIcon(CitadelIcons.Access),
             label: 'Access',
             route: '/access',
+            access: 'administrator',
           },
           {
             icon: <KeyRound className="w-3.5 h-3.5" />,
             label: 'License',
             route: '/license',
+            access: 'administrator',
           },
         ],
       },

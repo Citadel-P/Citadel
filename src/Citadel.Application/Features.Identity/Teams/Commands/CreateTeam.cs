@@ -18,7 +18,7 @@ public sealed record CreateTeam(
     string Name,
     IEnumerable<Guid>? UserIds = null,
     IEnumerable<Guid>? RoleIds = null,
-    IEnumerable<TeamResourceAccessModel>? ResourceAccesses = null) : ICommand<Result<TeamDetails>>
+    IEnumerable<TeamResourceAccessModel>? ResourceAccesses = null) : ICommand<Result<TeamDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<CreateTeam>
     {
@@ -73,7 +73,6 @@ internal sealed class CreateTeamHandler(
                 return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
-            await evictor.EvictUsers(userIds, cancellationToken);
         }
 
         if (roleIds.Length > 0)
@@ -94,7 +93,6 @@ internal sealed class CreateTeamHandler(
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
-            await evictor.EvictPermissionsForActorAsync(team.ActorId, cancellationToken);
         }
 
         if (resourceAccesses.Length > 0)
@@ -107,6 +105,7 @@ internal sealed class CreateTeamHandler(
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictUsers(userIds, cancellationToken);
 
         return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled);
     }

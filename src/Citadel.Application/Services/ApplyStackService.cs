@@ -359,7 +359,7 @@ internal class ApplyStackService(
 
         int? exitCode = null;
         StackReleaseStatus? composeStatus = null;
-        var errorLogs = new List<string>(); 
+        string? lastErrorLog = null;
         var enumerator = connector.StackApplyAsync(command, ct).GetAsyncEnumerator(ct);
 
         try
@@ -401,7 +401,7 @@ internal class ApplyStackService(
                         if (safeMessage.Contains("error", StringComparison.OrdinalIgnoreCase) ||
                             safeMessage.Contains("failed", StringComparison.OrdinalIgnoreCase))
                         {
-                            errorLogs.Add(safeMessage);
+                            lastErrorLog = safeMessage.Trim();
                         }
                         else
                         {
@@ -413,19 +413,19 @@ internal class ApplyStackService(
                 if (result.ExitCode.HasValue)
                 {
                     exitCode = result.ExitCode;
-                    yield return StackStreamItem.Finished(result.ExitCode.Value);
 
                     if (result.ExitCode != 0)
                     {
-                        var explicitFailure = errorLogs.Count > 0
-                            ? string.Join(Environment.NewLine, errorLogs)
-                            : $"Pipeline command failed with exit code {result.ExitCode}.";
+                        var explicitFailure = lastErrorLog
+                            ?? $"Pipeline command failed with exit code {result.ExitCode}.";
 
                         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);
                         yield return StackStreamItem.FromStdErr(explicitFailure, result.ExitCode.Value);
                         yield break;
                     }
+
+                    yield return StackStreamItem.Finished(result.ExitCode.Value);
                 }
             }
         }
@@ -519,9 +519,8 @@ internal class ApplyStackService(
             yield break;
         }
 
-        var finalFailureMessage = errorLogs.Count > 0
-            ? string.Join(Environment.NewLine, errorLogs)
-            : (exitCode is int code ? $"docker compose exited with code {code}." : "Stack apply did not report a completion exit code.");
+        var finalFailureMessage = lastErrorLog
+            ?? (exitCode is int code ? $"docker compose exited with code {code}." : "Stack apply did not report a completion exit code.");
 
         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);

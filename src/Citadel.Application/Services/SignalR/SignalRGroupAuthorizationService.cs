@@ -303,11 +303,11 @@ internal sealed class SignalRGroupAuthorizationService(
             ActivityResourceType.GitRepository => Permission(ResourceType.GitRepository, resourceId),
             ActivityResourceType.OidcProvider => new AuthorizationTarget(TargetKind.AdminOnly),
             ActivityResourceType.AutomationAction => Permission(ResourceType.AutomationAction, resourceId),
-            ActivityResourceType.User => Permission(ResourceType.User, resourceId),
-            ActivityResourceType.License => Permission(ResourceType.License, resourceId),
+            ActivityResourceType.User => new AuthorizationTarget(TargetKind.AdminOnly),
+            ActivityResourceType.License => new AuthorizationTarget(TargetKind.AdminOnly),
             ActivityResourceType.Build => Permission(ResourceType.Build, resourceId),
             ActivityResourceType.BuildAgentPool => Permission(ResourceType.BuildAgentPool, resourceId),
-            ActivityResourceType.Volume => Permission(ResourceType.Volume, resourceId),
+            ActivityResourceType.Volume => Permission(ResourceType.Platform, resourceId),
             ActivityResourceType.BackupPolicy => Permission(ResourceType.BackupPolicy, resourceId),
             _ => default
         };

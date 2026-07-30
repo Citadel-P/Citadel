@@ -12,8 +12,7 @@ using Mediator;
 
 namespace Application.Features.Oidc.Commands;
 
-[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
-public sealed record RenameOidcProvider(Guid Id, string Name) : ICommand<Result<OidcProvider>>
+public sealed record RenameOidcProvider(Guid Id, string Name) : ICommand<Result<OidcProvider>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<RenameOidcProvider>
     {

@@ -18,10 +18,43 @@ public sealed record GetStackSecretDefinitions(Guid Id) : IQuery<Result<IReadOnl
 [RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.ResourceBindings)]
 public sealed record GetDeploymentSecretDefinitions(Guid Id) : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
 
+[RequirePermission(ResourceType.Build, PermissionLevel.Write, ResourceIdProperty = nameof(GetBuildSecretDefinitions.Id))]
+public sealed record GetBuildSecretDefinitions(Guid? Id) : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
+
+[RequirePermission(
+    ResourceType.BackupRepository,
+    PermissionLevel.Write,
+    ResourceIdProperty = nameof(GetBackupRepositorySecretDefinitions.Id))]
+public sealed record GetBackupRepositorySecretDefinitions(Guid? Id) : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
+
 internal sealed class GetSecretDefinitionsHandler(IUnitOfWork unitOfWork)
     : IQueryHandler<GetSecretDefinitions, Result<IReadOnlyList<SecretDefinition>>>
 {
     public async ValueTask<Result<IReadOnlyList<SecretDefinition>>> Handle(GetSecretDefinitions query, CancellationToken cancellationToken)
+    {
+        var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Global, null, cancellationToken);
+        return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);
+    }
+}
+
+internal sealed class GetBuildSecretDefinitionsHandler(IUnitOfWork unitOfWork)
+    : IQueryHandler<GetBuildSecretDefinitions, Result<IReadOnlyList<SecretDefinition>>>
+{
+    public async ValueTask<Result<IReadOnlyList<SecretDefinition>>> Handle(
+        GetBuildSecretDefinitions query,
+        CancellationToken cancellationToken)
+    {
+        var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Global, null, cancellationToken);
+        return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);
+    }
+}
+
+internal sealed class GetBackupRepositorySecretDefinitionsHandler(IUnitOfWork unitOfWork)
+    : IQueryHandler<GetBackupRepositorySecretDefinitions, Result<IReadOnlyList<SecretDefinition>>>
+{
+    public async ValueTask<Result<IReadOnlyList<SecretDefinition>>> Handle(
+        GetBackupRepositorySecretDefinitions query,
+        CancellationToken cancellationToken)
     {
         var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Global, null, cancellationToken);
         return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);

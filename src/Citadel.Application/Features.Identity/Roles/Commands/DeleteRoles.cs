@@ -1,3 +1,4 @@
+using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -8,9 +9,11 @@ using Mediator;
 namespace Application.Features.Identity.Roles.Commands;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Execute)]
-public sealed record DeleteRoles(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteRoles(IEnumerable<Guid> Ids) : ICommand<Result>, IAdministratorRequest;
 
-internal sealed class DeleteRolesHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteRoles, Result>
+internal sealed class DeleteRolesHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor) : ICommandHandler<DeleteRoles, Result>
 {
     public async ValueTask<Result> Handle(DeleteRoles command, CancellationToken cancellationToken)
     {
@@ -18,11 +21,24 @@ internal sealed class DeleteRolesHandler(IUnitOfWork unitOfWork) : ICommandHandl
         if (roles is null || !roles.Any())
             return Result.Failure(new NotFoundError("No roles found matching the provided IDs."));
 
-        if (roles.Any(role => role.RoleType == Domain.RoleType.System))
+        var roleArray = roles.ToArray();
+        if (roleArray.Any(role => role.RoleType == Domain.RoleType.System))
             return Result.Failure(new ConflictError("System roles cannot be deleted."));
 
-        await unitOfWork.Roles.RemoveRangeAsync(command.Ids, cancellationToken);
+        var affectedUserIds = new HashSet<Guid>();
+        foreach (var role in roleArray)
+        {
+            var actorIds = await unitOfWork.Roles.GetActorIdsByRoleIdAsync(role.Id, cancellationToken);
+            foreach (var actorId in actorIds)
+            {
+                var userIds = await unitOfWork.Teams.GetUserIdsByActorIdAsync(actorId, cancellationToken);
+                affectedUserIds.UnionWith(userIds);
+            }
+        }
+
+        await unitOfWork.Roles.RemoveRangeAsync(roleArray.Select(static role => role.Id), cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictUsers(affectedUserIds, cancellationToken);
         return Result.Success();
     }
 }

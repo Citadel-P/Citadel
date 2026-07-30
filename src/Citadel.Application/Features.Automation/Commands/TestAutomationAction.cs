@@ -39,6 +39,18 @@ internal sealed class TestAutomationActionHandler(
         TestAutomationAction command,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        if (command.Input.RunAsActorId.HasValue)
+        {
+            var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
+                userContextAccessor.Current,
+                command.Input.RunAsActorId.Value);
+            if (runAsAuthorization.IsFailure(out var runAsError))
+            {
+                yield return Error(runAsError);
+                yield break;
+            }
+        }
+
         var result = await queueService.QueueDraftTestAsync(
             command.Id,
             command.Input.Code,

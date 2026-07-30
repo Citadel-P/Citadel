@@ -36,7 +36,7 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     }
 
     [Fact]
-    public async Task Get_Role_Should_Return_Role_When_User_Has_View_Access()
+    public async Task Get_Role_Should_Return_Forbidden_For_NonAdministrator_With_Resource_Access()
     {
         var roleId = await CreateRoleAsync("role-readable", [(ResourceType.Role, PermissionLevel.Read)]);
         var subject = await CreateAuthorizationSubjectAsync(
@@ -47,14 +47,8 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync($"/api/v1/roles/{roleId}", TestContext.Current.CancellationToken);
-        response.EnsureSuccessStatusCode();
 
-        using var document = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.Equal(roleId, document.RootElement.GetProperty("id").GetGuid());
-        Assert.Equal("role-readable", document.RootElement.GetProperty("name").GetString());
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

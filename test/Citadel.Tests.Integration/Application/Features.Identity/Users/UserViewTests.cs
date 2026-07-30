@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
@@ -66,6 +67,31 @@ public class UserViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
         Assert.Equal("user-view", document.RootElement.GetProperty("name").GetString());
         Assert.Equal("user-view@citadel.local", document.RootElement.GetProperty("email").GetString());
         Assert.False(document.RootElement.GetProperty("isEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task List_Users_Should_Return_Forbidden_For_NonAdministrator_With_User_Permission()
+    {
+        var role = Role.Create(
+            "user-manager",
+            RoleType.Custom,
+            [Permission.Create(Guid.Empty, ResourceType.User, PermissionLevel.Execute)]);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var subject = await CreateAuthorizationSubjectAsync(directRoleId: role.Id);
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync("/api/v1/users?page=1&pageSize=10", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     private async Task<(Guid UserId, Guid ActorId)> SeedUserAsync(string name, string email, string password = "password123", bool isEnabled = true)

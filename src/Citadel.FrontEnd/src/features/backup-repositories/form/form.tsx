@@ -9,6 +9,7 @@ import {
   BackupRepositoryView,
   LookupResourceType,
   PlatformView,
+  ResourceType,
   S3BucketLookup,
   SecretDefinitionView,
   UpdateBackupRepositoryInput,
@@ -197,6 +198,7 @@ export function BackupRepositoryForm({
                   <SecretSelector
                     value={value}
                     disabled={mode === 'edit'}
+                    targetResourceId={id}
                     onChange={(passwordSecretId) => set({ passwordSecretId })}
                   />
                 ),
@@ -359,6 +361,7 @@ export function BackupRepositoryForm({
                         <SecretSelector
                           value={value}
                           disabled={specDisabled}
+                          targetResourceId={id}
                           onChange={(accessKeySecretId) => set({ spec: { accessKeySecretId } as any })}
                         />
                       ),
@@ -372,6 +375,7 @@ export function BackupRepositoryForm({
                         <SecretSelector
                           value={value}
                           disabled={specDisabled}
+                          targetResourceId={id}
                           onChange={(secretKeySecretId) => set({ spec: { secretKeySecretId } as any })}
                         />
                       ),
@@ -386,6 +390,7 @@ export function BackupRepositoryForm({
                           value={value}
                           allowNone
                           disabled={specDisabled}
+                          targetResourceId={id}
                           onChange={(sessionTokenSecretId) => set({ spec: { sessionTokenSecretId } as any })}
                         />
                       ),
@@ -411,7 +416,7 @@ export function BackupRepositoryForm({
         ],
       }),
     }),
-    [fileSystemSpec.platformId, mode, resource?.status, selectedLocation, selectedType, specDisabled],
+    [fileSystemSpec.platformId, id, mode, resource?.status, selectedLocation, selectedType, specDisabled],
   );
 
   return (
@@ -477,13 +482,20 @@ export function SecretSelector({
   onChange,
   disabled,
   allowNone = false,
+  targetResourceId,
 }: {
   value?: string | null;
   onChange: (value: string | null) => void;
   disabled?: boolean;
   allowNone?: boolean;
+  targetResourceId?: string;
 }) {
-  const { data, isLoading } = useRead('listSecretDefinitions');
+  const { data, isLoading } = useRead('listSecretDefinitions', {
+    query: {
+      targetResourceType: ResourceType.BackupRepository,
+      targetResourceId,
+    },
+  });
   const secrets = data?.data.secrets ?? [];
   const noneValue = '__none';
   const selectValue = value || (allowNone ? noneValue : undefined);

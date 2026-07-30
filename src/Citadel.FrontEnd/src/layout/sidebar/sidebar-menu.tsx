@@ -16,12 +16,15 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { useRead } from '@/lib/hooks';
 
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentPlatform, platforms, unresolvedAlertCount } = useAppContext();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
+  const { data: profileResponse } = useRead('getCurrentProfile');
+  const authorization = profileResponse?.data.authorization;
 
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
   const addedPlatformIdsRef = useRef<Set<string>>(new Set());
@@ -72,25 +75,46 @@ export const SidebarMenu = () => {
   }, [menuItems]);
 
   const displayedMenuItems = useMemo(() => {
+    const canDisplay = (item: ISubMenuItem) => {
+      switch (item.access) {
+        case 'administrator':
+          return authorization?.isAdministrator === true;
+        case 'alertRules':
+          return authorization?.alertRules.canRead === true;
+        case 'bindings':
+          return authorization?.bindings.canRead === true;
+        case 'tags':
+          return authorization?.tags.canRead === true;
+        default:
+          return true;
+      }
+    };
+
     const withRouteState = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((item) => {
+      items.flatMap((item) => {
+        if (!canDisplay(item)) return [];
+
         const children = item.children ? withRouteState(item.children) : undefined;
+        if (item.children && children?.length === 0) return [];
+
         const hasActiveChild = children ? children.some((c) => c.active) : false;
         const isActive = isRouteActive(item.route ?? '');
 
-        return {
-          ...item,
-          active: isActive,
-          expanded: item.children ? (item.expanded ?? hasActiveChild) : isActive,
-          children,
-        };
+        return [
+          {
+            ...item,
+            active: isActive,
+            expanded: item.children ? (item.expanded ?? hasActiveChild) : isActive,
+            children,
+          },
+        ];
       });
 
     return menuItems.map((menu) => ({
       ...menu,
       items: withRouteState(menu.items),
     }));
-  }, [menuItems, isRouteActive]);
+  }, [authorization, menuItems, isRouteActive]);
 
   useEffect(() => {
     if (currentPlatform?.id) {

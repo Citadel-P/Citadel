@@ -10,7 +10,7 @@ using Mediator;
 namespace Application.Features.Identity.Users.Queries;
 
 [RequirePermission(ResourceType.User, PermissionLevel.Read)]
-public sealed record SearchUsers(string Query, int Limit = 20) : IQuery<Result<IEnumerable<UserSearchItem>>>
+public sealed record SearchUsers(string Query, int Limit = 20) : IQuery<Result<IEnumerable<UserSearchItem>>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<SearchUsers>
     {

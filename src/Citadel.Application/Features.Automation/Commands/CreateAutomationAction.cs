@@ -72,6 +72,13 @@ internal sealed class CreateAutomationActionHandler(
                 new BadRequestError($"Timeout must be between 1 and {options.MaxTimeoutSeconds} seconds."));
         }
 
+        var runAsActorId = input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId);
+        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
+            userContextAccessor.Current,
+            runAsActorId);
+        if (runAsAuthorization.IsFailure(out var runAsError))
+            return Result.Failure<AutomationActionResult>(runAsError);
+
         var action = new AutomationAction(
             input.Name,
             input.Description,
@@ -84,7 +91,7 @@ internal sealed class CreateAutomationActionHandler(
             input.Webhook,
             timeoutSeconds,
             input.AlertOnFailure,
-            input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId),
+            runAsActorId,
             userContextAccessor.Current.ActorId);
 
         try

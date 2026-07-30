@@ -197,7 +197,9 @@ internal sealed class PlatformHealthMonitorJob(
         if (!platforms.TryRemove(address, out var state))
             return false;
 
-        connectionCache?.Evict(address);
+        if (state.Type == PlatformConnectorType.Agent)
+            connectionCache?.Evict(address);
+
         await broadcaster.PublishAsync(
             new PlatformHealth(state.Id, address, state.Type, false), cancellationToken);
 

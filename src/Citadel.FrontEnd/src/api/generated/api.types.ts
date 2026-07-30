@@ -2367,6 +2367,7 @@ export interface AlertChannelView {
   createdByActorId: string;
   /** @format date-time */
   createdAt: any;
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface AlertChannelsView {
@@ -4526,12 +4527,20 @@ export interface CurrentProfileAuthenticationView {
   oidcProviderName?: null | string;
 }
 
+export interface CurrentProfileAuthorizationView {
+  isAdministrator: boolean;
+  alertRules: ResourceCapabilities;
+  bindings: ResourceCapabilities;
+  tags: ResourceCapabilities;
+}
+
 export interface CurrentProfileView {
   /** @format uuid */
   id: string;
   displayName: string;
   email: string;
   authentication: CurrentProfileAuthenticationView;
+  authorization: CurrentProfileAuthorizationView;
   /** @format date-time */
   createdAt: any;
   directRoles: ProfileResourceInfoView[];
@@ -7257,10 +7266,12 @@ export interface TagView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   usageCount: number | string;
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface TagsView {
   tags: TagView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface TeamResourceAccessInput {
@@ -14065,6 +14076,13 @@ export class Api<
          * @format uuid
          */
         resourceId?: string;
+        /** Resource type that will consume the secret */
+        targetResourceType?: ResourceType;
+        /**
+         * Optional consuming resource ID
+         * @format uuid
+         */
+        targetResourceId?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -14089,11 +14107,21 @@ export class Api<
      */
     createInternalSecret: (
       data: CreateInternalSecretInput,
+      query?: {
+        /** Optional resource binding scope */
+        scope?: ResourceBindingScope;
+        /**
+         * Optional resource ID
+         * @format uuid
+         */
+        resourceId?: string;
+      },
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets`,
         method: "POST",
+        query: query,
         body: data,
         type: ContentType.Json,
         format: "json",

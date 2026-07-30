@@ -25,7 +25,6 @@ import {
   getStackImageUpdateCheckMessage,
   hasStackUpdateAvailable,
 } from './update-status';
-import { getApiErrorDetail } from '@/lib/api-errors';
 
 export const useVariables = (resources: StackView | StackView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];

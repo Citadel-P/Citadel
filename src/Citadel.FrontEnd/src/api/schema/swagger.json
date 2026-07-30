@@ -19885,6 +19885,23 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "targetResourceType",
+            "in": "query",
+            "description": "Resource type that will consume the secret",
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType"
+            }
+          },
+          {
+            "name": "targetResourceId",
+            "in": "query",
+            "description": "Optional consuming resource ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -19926,6 +19943,25 @@
         ],
         "summary": "Create an internal encrypted secret",
         "operationId": "createInternalSecret",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Optional resource binding scope",
+            "schema": {
+              "$ref": "#/components/schemas/ResourceBindingScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "description": "Optional resource ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -34814,6 +34850,16 @@
           },
           "createdAt": {
             "format": "date-time"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
@@ -42917,12 +42963,36 @@
           }
         }
       },
+      "CurrentProfileAuthorizationView": {
+        "required": [
+          "isAdministrator",
+          "alertRules",
+          "bindings",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "isAdministrator": {
+            "type": "boolean"
+          },
+          "alertRules": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "tags": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
       "CurrentProfileView": {
         "required": [
           "id",
           "displayName",
           "email",
           "authentication",
+          "authorization",
           "createdAt",
           "directRoles",
           "teams"
@@ -42941,6 +43011,9 @@
           },
           "authentication": {
             "$ref": "#/components/schemas/CurrentProfileAuthenticationView"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/CurrentProfileAuthorizationView"
           },
           "createdAt": {
             "format": "date-time"
@@ -53234,12 +53307,23 @@
               "string"
             ],
             "format": "int32"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
       "TagsView": {
         "required": [
-          "tags"
+          "tags",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -53248,6 +53332,9 @@
             "items": {
               "$ref": "#/components/schemas/TagView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },

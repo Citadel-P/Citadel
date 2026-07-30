@@ -7,6 +7,7 @@ namespace Application.Permissions;
 
 public interface IPermissionEvaluator
 {
+    bool IsAdministrator { get; }
     Task<PermissionMetadata> EvaluateAsync(ResourceType resourceType, CancellationToken ct = default);
     Task<PermissionMetadata> EvaluateAsync(Guid resourceId, ResourceType resourceType, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, PermissionMetadata>> EvaluateAsync(Guid[] resourceIds, ResourceType resourceType, CancellationToken ct = default);
@@ -14,6 +15,8 @@ public interface IPermissionEvaluator
 
 internal sealed class PermissionEvaluator(IPermissionService permissionService, IUserContextAccessor userContextAccessor) : IPermissionEvaluator
 {
+    public bool IsAdministrator => userContextAccessor.Current.IsAdmin;
+
     public async Task<PermissionMetadata> EvaluateAsync(ResourceType resourceType, CancellationToken ct = default)
     {
         var user = userContextAccessor.Current;

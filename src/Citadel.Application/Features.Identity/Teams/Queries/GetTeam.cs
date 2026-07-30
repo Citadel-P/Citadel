@@ -9,7 +9,7 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Queries;
 
 [RequirePermission(ResourceType.Team, PermissionLevel.Read)]
-public sealed record GetTeam(Guid Id) : IQuery<Result<TeamDetails>>;
+public sealed record GetTeam(Guid Id) : IQuery<Result<TeamDetails>>, IAdministratorRequest;
 
 internal sealed class GetTeamHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetTeam, Result<TeamDetails>>
 {

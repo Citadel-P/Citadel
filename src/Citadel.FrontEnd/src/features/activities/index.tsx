@@ -10,6 +10,7 @@ import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 import { CitadelIcons } from '@/lib/icons';
+import { useRead } from '@/lib/hooks';
 
 const activityResourceIcons = {
   [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
@@ -98,14 +99,24 @@ export const ActivityComponents: RequiredComponents = {
 
 function SearchSection() {
   const [query, setQuery] = useActivityQuery();
+  const { data: profileResponse } = useRead('getCurrentProfile');
+  const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;
 
   const resourceOptions = useMemo(() => {
-    return Object.values(ActivityResourceType).map((t) => ({
-      value: t,
-      label: activityResourceLabels[t] ?? t,
-      icon: activityResourceIcons[t],
-    }));
-  }, []);
+    return Object.values(ActivityResourceType)
+      .filter(
+        (type) =>
+          isAdministrator ||
+          (type !== ActivityResourceType.OidcProvider &&
+            type !== ActivityResourceType.User &&
+            type !== ActivityResourceType.License),
+      )
+      .map((type) => ({
+        value: type,
+        label: activityResourceLabels[type] ?? type,
+        icon: activityResourceIcons[type],
+      }));
+  }, [isAdministrator]);
 
   const eventOptions = useMemo(() => {
     const all = Object.values(ActivityEventType);

@@ -18,6 +18,7 @@ using System.Runtime.CompilerServices;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Activities;
 using Application.Permissions;
+using Application.Services;
 
 namespace Application.Features.Backups.Commands;
 
@@ -251,6 +252,13 @@ internal sealed class CreateBackupPolicyHandler(
         if (sourceValidation.IsFailure(out var sourceError))
             return Result.Failure<BackupPolicyResult>(sourceError);
 
+        var runAsActorId = input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId);
+        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
+            userContextAccessor.Current,
+            runAsActorId);
+        if (runAsAuthorization.IsFailure(out var runAsError))
+            return Result.Failure<BackupPolicyResult>(runAsError);
+
         var policy = new BackupPolicy(
             input.Name,
             input.Description,
@@ -263,7 +271,7 @@ internal sealed class CreateBackupPolicyHandler(
             input.KeepLastSuccessful ?? BackupPolicy.DefaultKeepLastSuccessful,
             input.TimeoutSeconds ?? BackupPolicy.DefaultTimeoutSeconds,
             input.AlertOnFailure,
-            input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId),
+            runAsActorId,
             userContextAccessor.Current.ActorId);
 
         try
@@ -356,6 +364,13 @@ internal sealed class UpdateBackupPolicyHandler(
             if (sourceValidation.IsFailure(out var sourceError))
                 return Result.Failure<BackupPolicyResult>(sourceError);
         }
+
+        var runAsActorId = command.Policy.RunAsActorId ?? policy.RunAsActorId;
+        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
+            userContextAccessor.Current,
+            runAsActorId);
+        if (runAsAuthorization.IsFailure(out var runAsError))
+            return Result.Failure<BackupPolicyResult>(runAsError);
 
         try
         {
