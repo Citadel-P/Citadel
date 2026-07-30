@@ -36,7 +36,8 @@ public sealed record EdgeAgentEnrollmentRequest(
     string Hostname,
     string AgentVersion,
     string CapabilitiesJson,
-    int ProtocolVersion);
+    int ProtocolVersion,
+    string DaemonId);
 
 public sealed record EdgeAgentEnrollmentCompleteResult(
     Guid PlatformId,

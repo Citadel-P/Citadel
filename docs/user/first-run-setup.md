@@ -2,6 +2,9 @@
 
 Citadel does not ship with a default administrator username or password.
 
+For a Docker Compose installation, prepare the production environment before
+starting Core. See [Docker Compose configuration](docker-compose-configuration.md).
+
 ## Interactive Setup
 
 Start Citadel and open its normal browser URL. A new installation redirects to

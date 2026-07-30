@@ -188,13 +188,25 @@ export const PlatformForm = ({
                       key: 'address',
                       label: 'Agent Address',
                       required: true,
-                      description: 'HTTP or HTTPS address where Citadel Core can reach the inbound agent.',
-                      validate: (value) => (!value ? 'Required' : null),
+                      description: agentSetup?.requiresTls
+                        ? 'HTTPS address where Citadel Core can reach the inbound agent.'
+                        : 'HTTP or HTTPS address where Citadel Core can reach the inbound agent.',
+                      validate: (value) => {
+                        if (!value) return 'Required';
+                        if (agentSetup?.requiresTls && !value.toLowerCase().startsWith('https://')) {
+                          return 'HTTPS is required by the Core Agent transport policy.';
+                        }
+                        return null;
+                      },
                       render: (value, set) => (
                         <FieldInput
                           value={value ?? ''}
                           onChange={(address) => set({ address })}
-                          placeholder="https://192.168.1.25:9000"
+                          placeholder={
+                            agentSetup?.requiresTls
+                              ? 'https://192.168.1.25:9000'
+                              : 'http://192.168.1.25:9000'
+                          }
                           disabled={formDisabled}
                         />
                       ),
@@ -231,7 +243,9 @@ export const PlatformForm = ({
                     defineField<PlatformFormInput, 'agentDockerCommand'>({
                       key: 'agentDockerCommand',
                       label: 'Docker Command',
-                      description: 'Run this command on the Docker host, then enter the host address above.',
+                      description: agentSetup?.requiresTls
+                        ? 'Replace the TLS host path in this command template, then run it on the Docker host.'
+                        : 'Run this command on the Docker host, then enter the host address above.',
                       disabled: false,
                       ignoreFormDisabled: true,
                       hideValidationMessage: true,
@@ -296,6 +310,7 @@ export const PlatformForm = ({
     [
       agentSetup?.dockerRunCommand,
       agentSetup?.hubPublicKey,
+      agentSetup?.requiresTls,
       canGenerateEnrollment,
       defaultConnectorType,
       disabled,

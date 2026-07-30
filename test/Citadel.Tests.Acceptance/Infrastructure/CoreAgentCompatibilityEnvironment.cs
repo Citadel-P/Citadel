@@ -55,6 +55,11 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
         core = new ContainerBuilder(coreImage)
             .WithPortBinding(CoreHttpPort, assignRandomHostPort: true)
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
+            .WithEnvironment("Transport__Mode", "Disabled")
+            .WithEnvironment(
+                "Transport__PublicUrl",
+                $"http://{CoreNetworkAlias}:8000")
+            .WithEnvironment("AgentTransport__AllowInsecure", "true")
             .WithEnvironment(
                 "ConnectionStrings__Postgres",
                 postgresConnectionString)

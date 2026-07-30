@@ -95,11 +95,16 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
         // real startup migration path is not mistaken for an MSBuild process.
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "IntegrationTests";
         startInfo.Environment["ASPNETCORE_CONTENTROOT"] = AppContext.BaseDirectory;
-        startInfo.Environment["Kestrel__Endpoints__Http__Url"] = baseAddress.ToString();
-        startInfo.Environment["Kestrel__Endpoints__Http__Protocols"] = "Http1";
-        startInfo.Environment["Kestrel__Endpoints__Grpc__Url"] =
+        startInfo.Environment["Transport__Mode"] = "Disabled";
+        startInfo.Environment["Transport__PublicUrl"] =
+            baseAddress.ToString();
+        startInfo.Environment["Transport__ApiPort"] =
+            httpPort.ToString();
+        startInfo.Environment["Transport__EdgeGrpcPort"] =
+            grpcPort.ToString();
+        startInfo.Environment["EdgeAgent__PublicGrpcUrl"] =
             grpcAddress.ToString();
-        startInfo.Environment["Kestrel__Endpoints__Grpc__Protocols"] = "Http2";
+        startInfo.Environment["AgentTransport__AllowInsecure"] = "true";
         startInfo.Environment["ConnectionStrings__Postgres"] = connectionString;
         startInfo.Environment["Jwt__Issuer"] = baseAddress.ToString();
         startInfo.Environment["Jwt__Audience"] = baseAddress.ToString();

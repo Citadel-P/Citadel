@@ -34732,7 +34732,8 @@
           "hubPublicKey",
           "environment",
           "agentImage",
-          "dockerRunCommand"
+          "dockerRunCommand",
+          "requiresTls"
         ],
         "type": "object",
         "properties": {
@@ -34750,6 +34751,9 @@
           },
           "dockerRunCommand": {
             "type": "string"
+          },
+          "requiresTls": {
+            "type": "boolean"
           }
         }
       },

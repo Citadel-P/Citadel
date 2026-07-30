@@ -11,6 +11,8 @@
       <DependentUpon>docker-compose.yml</DependentUpon>
     </None>
     <None Include="docker-compose.yml" />
+    <None Include="docker-compose.direct-tls.yml" />
+    <None Include=".env.example" />
     <None Include=".dockerignore" />
     <None Include="src\Citadel.Application.Features.Alerters.Queries\GetAlertRules.cs" />
     <None Include="src\Citadel.Application.Features.Identity.Auth.Commands\LoginCommand.cs" />

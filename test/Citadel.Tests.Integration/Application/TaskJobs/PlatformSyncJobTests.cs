@@ -104,6 +104,58 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
     }
 
     [Fact]
+    public async Task DockerPlatformSync_ShouldRejectChangedDaemonIdentity()
+    {
+        connectorMock
+            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Success(
+                    Fakes.GetDummyPlatformResult() with
+                    {
+                        NetworkCount = 99,
+                        Descriptor = new DockerPlatformDescriptor(
+                            DaemonId: "different-daemon",
+                            ContainerCount: 99,
+                            ContainersRunning: 99,
+                            ContainersPaused: 0,
+                            ContainersStopped: 0)
+                    }));
+
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                platformId,
+                "https://original.address",
+                PlatformConnectorType.Agent,
+                IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(
+            checkpoint,
+            TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = Assert.IsType<Platform>(
+            await uow.Platforms.GetByIdAsync(
+                platformId,
+                TestContext.Current.CancellationToken));
+        var descriptor = Assert.IsType<DockerPlatformDescriptor>(
+            platform.PlatformDescriptor);
+
+        Assert.Equal("123456", descriptor.DaemonId);
+        Assert.Equal(1, platform.NetworkCount);
+        Assert.Equal(5, descriptor.ContainerCount);
+        hubManagerMock.Verify(
+            x => x.PushPlatformUpdate(It.IsAny<Platform>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task DockerPlatform_Goes_Offline_Should_Update_Platform_Info()
     {
         // Arrange

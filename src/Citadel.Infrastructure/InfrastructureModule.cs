@@ -1,10 +1,12 @@
 ﻿using Dapper;
 using Domain;
+using Domain.Configs;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Hosting.Common;
+using Hosting.Common.Security;
 using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
@@ -22,6 +24,7 @@ using Infrastructure.TypeHandlers;
 using Infrastructure.Vault;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Refit;
 using System.Data.Common;
@@ -53,10 +56,16 @@ public static class InfrastructureModule
         Helpers.GetOrCreatePublicKey();
         services
             .AddSingleton<HubSigningInterceptor>()
+            .AddSingleton<CertificateTrust>(sp => CertificateTrust.Load(
+                sp.GetRequiredService<IOptions<AgentTransportOptions>>()
+                    .Value.CaCertificatePath))
             .AddSingleton<GrpcClientFactory>(sp =>
             {
                 var interceptor = sp.GetRequiredService<HubSigningInterceptor>();
-                return new GrpcClientFactory(interceptor);
+                return new GrpcClientFactory(
+                    sp.GetRequiredService<IOptions<AgentTransportOptions>>(),
+                    sp.GetRequiredService<CertificateTrust>(),
+                    interceptor);
             })
             .AddSingleton<IGrpcClientFactory>(sp => sp.GetRequiredService<GrpcClientFactory>())
             .AddSingleton<IPlatformConnectionCache>(sp => sp.GetRequiredService<GrpcClientFactory>())

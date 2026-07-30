@@ -233,7 +233,8 @@ public sealed class EdgeAgentManagementServiceTests
                 Hostname: "builder",
                 AgentVersion: "edge-agent-test",
                 CapabilitiesJson: """{"commands":["platform.checkHealth","containers.list","containers.logs"]}""",
-                ProtocolVersion: 1),
+                ProtocolVersion: 2,
+                DaemonId: "builder-daemon"),
             utcNow,
             TestContext.Current.CancellationToken);
 

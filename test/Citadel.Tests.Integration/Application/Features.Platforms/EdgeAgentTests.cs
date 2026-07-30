@@ -79,12 +79,34 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
                     "edge-host",
                     "edge-agent-test",
                     "{}",
-                    1),
+                    2,
+                    "edge-daemon"),
                 DateTime.UtcNow,
                 TestContext.Current.CancellationToken);
 
             Assert.True(completed.IsSuccess(out var result, out var error), error?.Message);
             Assert.Equal(platformId, result.PlatformId);
+
+            var reconnect = await service.GetReconnectBindingAsync(
+                platformId,
+                result.AgentId,
+                fingerprint,
+                "edge-daemon",
+                TestContext.Current.CancellationToken);
+            Assert.True(
+                reconnect.IsSuccess(out _, out var reconnectError),
+                reconnectError?.Message);
+
+            var movedAgent = await service.GetReconnectBindingAsync(
+                platformId,
+                result.AgentId,
+                fingerprint,
+                "different-daemon",
+                TestContext.Current.CancellationToken);
+            Assert.True(movedAgent.IsFailure(out var movedAgentError));
+            Assert.Contains(
+                "different Docker engine",
+                movedAgentError.Message);
 
             var reused = await service.CompleteEnrollmentAsync(
                 new EdgeAgentEnrollmentRequest(
@@ -94,7 +116,8 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
                     "edge-host",
                     "edge-agent-test",
                     "{}",
-                    1),
+                    2,
+                    "edge-daemon"),
                 DateTime.UtcNow,
                 TestContext.Current.CancellationToken);
 
@@ -152,6 +175,10 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
             Assert.Equal(PlatformStatus.Online, platform?.Status);
+            Assert.Equal(
+                "edge-daemon",
+                Assert.IsType<DockerPlatformDescriptor>(
+                    platform?.PlatformDescriptor).DaemonId);
 
             var activities = await uow.ActivityEventRepository.GetPagedAsync(
                 platformId,
@@ -254,6 +281,75 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
+    }
+
+    [Fact]
+    public async Task CompleteEdgeEnrollment_ShouldRejectDockerDaemonAlreadyRegisteredByAnotherPlatform()
+    {
+        const string daemonId = "shared-docker-daemon";
+        var edgePlatformId = await CreateEdgePlatformAsync(
+            "duplicate-edge-platform");
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var existingPlatform = new Platform(
+            name: "existing-platform",
+            address: "unix:///existing-docker.sock",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1,
+            serverVersion: null,
+            agentVersion: null,
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Local,
+            platformDescriptor: new DockerPlatformDescriptor(
+                daemonId,
+                0,
+                0,
+                0,
+                0));
+        await uow.Platforms.AddAsync(
+            existingPlatform,
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var service =
+            scope.ServiceProvider.GetRequiredService<
+                IEdgeAgentManagementService>();
+        var enrollment = await service.CreateEnrollmentAsync(
+            edgePlatformId,
+            "http://localhost:8001",
+            Constants.SystemId,
+            TimeSpan.FromHours(1),
+            TestContext.Current.CancellationToken);
+        Assert.True(
+            enrollment.IsSuccess(
+                out var enrollmentResult,
+                out var enrollmentError),
+            enrollmentError?.Message);
+
+        var publicKey = RandomNumberGenerator.GetBytes(32);
+        var result = await service.CompleteEnrollmentAsync(
+            new EdgeAgentEnrollmentRequest(
+                enrollmentResult.Token,
+                Convert.ToBase64String(publicKey),
+                GetFingerprint(publicKey),
+                "edge-host",
+                "edge-agent-test",
+                "{}",
+                2,
+                daemonId),
+            DateTime.UtcNow,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("existing-platform", error.Message);
+        Assert.Null(
+            await uow.EdgeAgents.GetBindingByPlatformIdAsync(
+                edgePlatformId,
+                TestContext.Current.CancellationToken));
     }
 
     private async Task<Guid> CreateEdgePlatformAsync(string name)

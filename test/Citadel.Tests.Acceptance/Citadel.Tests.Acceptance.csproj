@@ -23,6 +23,18 @@
     <Content Include="..\Citadel.Tests.E2E\fixtures\keycloak\citadel-e2e-realm.json"
              Link="Fixtures\Keycloak\citadel-e2e-realm.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\.env.example"
+             Link="Fixtures\Compose\.env.example"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docker-compose.yml"
+             Link="Fixtures\Compose\docker-compose.yml"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docker-compose.override.yml"
+             Link="Fixtures\Compose\docker-compose.override.yml"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docker-compose.direct-tls.yml"
+             Link="Fixtures\Compose\docker-compose.direct-tls.yml"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

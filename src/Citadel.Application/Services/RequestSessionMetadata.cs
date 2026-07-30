@@ -7,6 +7,8 @@ public interface IRequestSessionMetadataAccessor
 
 public sealed record RequestSessionMetadata(string? UserAgent, string? IpAddress);
 
+public sealed record AuthenticationCookiePolicy(bool Secure);
+
 public interface IRefreshTokenCookieService
 {
     string? GetCurrent();

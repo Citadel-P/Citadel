@@ -11,7 +11,8 @@ namespace Tests.Acceptance.Infrastructure;
 
 internal sealed class EdgeAgentProtocolClient : IAsyncDisposable
 {
-    private const int ProtocolVersion = 1;
+    private const int ProtocolVersion = 2;
+    private const string DaemonId = "acceptance-edge-daemon";
     private const string CapabilitiesJson =
         """{"commands":["platform.checkHealth","platform.prune","containers.list","containers.logs"]}""";
     private static readonly SignatureAlgorithm SignatureAlgorithm =
@@ -81,7 +82,8 @@ internal sealed class EdgeAgentProtocolClient : IAsyncDisposable
                     Hostname = "acceptance-edge-agent",
                     AgentVersion = "acceptance",
                     ProtocolVersion = ProtocolVersion,
-                    CapabilitiesJson = CapabilitiesJson
+                    CapabilitiesJson = CapabilitiesJson,
+                    DaemonId = DaemonId
                 }
             },
             cancellationToken);
@@ -114,7 +116,8 @@ internal sealed class EdgeAgentProtocolClient : IAsyncDisposable
                     Hostname = "acceptance-edge-agent",
                     AgentVersion = "acceptance",
                     ProtocolVersion = ProtocolVersion,
-                    CapabilitiesJson = CapabilitiesJson
+                    CapabilitiesJson = CapabilitiesJson,
+                    DaemonId = DaemonId
                 }
             },
             cancellationToken);

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Oidc;
+using WebApi.Transport;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -15,15 +16,19 @@ public static class Oidc
 {
     public static async Task<IResult> BeginLogin(
         IMediator mediator,
-        HttpContext httpContext,
         IConfiguration configuration,
+        ICitadelPublicEndpoints publicEndpoints,
         [FromRoute][Description("OIDC provider ID")] Guid id,
         [FromQuery] string? returnUrl,
         CancellationToken cancellationToken)
     {
-        var redirectUri = BuildCallbackUri(httpContext, id);
+        var redirectUri = publicEndpoints.BuildOidcCallback(id);
         var result = await mediator.Send(
-            new BeginOidcLogin(id, redirectUri, NormalizeReturnUrl(httpContext, returnUrl), GetAllowedReturnOrigins(configuration)),
+            new BeginOidcLogin(
+                id,
+                redirectUri,
+                NormalizeReturnUrl(publicEndpoints, returnUrl),
+                GetAllowedReturnOrigins(configuration)),
             cancellationToken);
 
         return result.IsSuccess(out var loginStart)
@@ -33,7 +38,7 @@ public static class Oidc
 
     public static async Task<IResult> CompleteLogin(
         IMediator mediator,
-        HttpContext httpContext,
+        ICitadelPublicEndpoints publicEndpoints,
         [FromRoute][Description("OIDC provider ID")] Guid id,
         [FromQuery] string? code,
         [FromQuery] string? state,
@@ -47,7 +52,7 @@ public static class Oidc
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
             return TypedResults.Problem("Missing OIDC callback parameters.", statusCode: StatusCodes.Status400BadRequest);
 
-        var redirectUri = BuildCallbackUri(httpContext, id);
+        var redirectUri = publicEndpoints.BuildOidcCallback(id);
         var result = await mediator.Send(new CompleteOidcLogin(id, code, state, redirectUri), cancellationToken);
         if (!result.IsSuccess(out var loginComplete))
             return EndpointHandlers.HandleResult(result);
@@ -158,12 +163,11 @@ public static class Oidc
         return EndpointHandlers.HandleResult(result, OidcDiscoveryResultView.Map);
     }
 
-    private static string BuildCallbackUri(HttpContext httpContext, Guid providerId)
-        => $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.PathBase}/api/v1/authentication/oidc/{providerId}/callback";
-
-    private static string NormalizeReturnUrl(HttpContext httpContext, string? returnUrl)
+    private static string NormalizeReturnUrl(
+        ICitadelPublicEndpoints publicEndpoints,
+        string? returnUrl)
         => string.IsNullOrWhiteSpace(returnUrl)
-            ? $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.PathBase}/"
+            ? publicEndpoints.BuildApplicationRoot()
             : returnUrl;
 
     private static IReadOnlyCollection<string> GetAllowedReturnOrigins(IConfiguration configuration)

@@ -178,7 +178,8 @@ internal sealed class EdgeAgentGrpcService(
                 request.Hostname,
                 request.AgentVersion,
                 capabilitiesJson,
-                protocolVersion),
+                protocolVersion,
+                request.DaemonId),
             DateTime.UtcNow,
             cancellationToken);
 
@@ -239,6 +240,7 @@ internal sealed class EdgeAgentGrpcService(
             resourceId,
             agentId,
             hello.AgentFingerprint,
+            hello.DaemonId,
             cancellationToken);
 
         if (!bindingResult.IsSuccess(out var binding, out var error))

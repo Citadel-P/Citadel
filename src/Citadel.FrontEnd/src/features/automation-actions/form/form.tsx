@@ -349,7 +349,7 @@ export function AutomationActionForm({
                     checked={value ?? false}
                     id="automation-action-schedule-enabled"
                     onChange={(scheduleEnabled) => set({ scheduleEnabled })}
-                    disabled={disabled || (!value && !automatedOperationsEnabled)}
+                    disabled={disabled || !automatedOperationsEnabled}
                   />
                 ),
               }),

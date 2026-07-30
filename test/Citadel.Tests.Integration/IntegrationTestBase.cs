@@ -93,7 +93,11 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                     config.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:Postgres"] = connectionString,
-                        ["Secrets:EncryptionKey"] = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+                        ["Secrets:EncryptionKey"] = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+                        ["Transport:Mode"] = "Disabled",
+                        ["Transport:PublicUrl"] = "http://localhost:8000",
+                        ["EdgeAgent:PublicGrpcUrl"] = "http://localhost:8001",
+                        ["AgentTransport:AllowInsecure"] = "true"
                     });
                 });
 

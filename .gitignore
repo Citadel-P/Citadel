@@ -176,6 +176,8 @@ ClientBin/
 *.dbmdl
 *.dbproj.schemaview
 *.pfx
+*.p12
+*.key
 *.publishsettings
 orleans.codegen.cs
 
@@ -230,9 +232,16 @@ _Pvt_Extensions
 # FAKE - F# Make
 .fake/
 
+# Local deployment configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 # Verify
 *.received.*
 *.received/
 
 # Data folder
 src/Citadel.WebApi/data/
+/tls/

@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services;
+using Domain.Configs;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -14,23 +15,29 @@ public sealed record GetAgentSetup : IQuery<Result<AgentSetupInstructions>>;
 
 internal sealed class GetAgentSetupHandler(
     IOptions<EdgeAgentOptions> edgeAgentOptions,
+    IOptions<AgentTransportOptions> agentTransportOptions,
     IAgentHubPublicKeyProvider hubPublicKeyProvider)
     : IQueryHandler<GetAgentSetup, Result<AgentSetupInstructions>>
 {
     public ValueTask<Result<AgentSetupInstructions>> Handle(GetAgentSetup query, CancellationToken cancellationToken)
     {
         var hubPublicKey = hubPublicKeyProvider.GetPublicKey();
-        var environment = new Dictionary<string, string>
-        {
-            ["HUB_PUBLIC_KEY"] = hubPublicKey
-        };
+        var requiresTls = !agentTransportOptions.Value.AllowInsecure;
+        var environment =
+            AgentDockerCommandBuilder.BuildRegularAgentEnvironment(
+                hubPublicKey,
+                requiresTls);
         var agentImage = edgeAgentOptions.Value.GetAgentImage();
-        var dockerRunCommand = AgentDockerCommandBuilder.BuildRegularAgentCommand(agentImage, environment);
+        var dockerRunCommand = AgentDockerCommandBuilder.BuildRegularAgentCommand(
+            agentImage,
+            environment,
+            requiresTls);
 
         return ValueTask.FromResult(Result.Success(new AgentSetupInstructions(
             hubPublicKey,
             environment,
             agentImage,
-            dockerRunCommand)));
+            dockerRunCommand,
+            RequiresTls: requiresTls)));
     }
 }

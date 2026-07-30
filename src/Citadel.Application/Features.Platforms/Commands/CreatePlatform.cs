@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using Application.Configs;
 using Application.Features.Images.Queries;
+using Domain.Configs;
 using Application.Features.Deployments.Notifications;
 using Application.Features.Platforms;
 using Application.Mappers;
@@ -21,6 +23,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -54,6 +57,7 @@ internal sealed class CreatePlatformHandler(
     IUserContextAccessor userContext,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
+    IOptions<AgentTransportOptions> agentTransportOptions,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
@@ -61,6 +65,14 @@ internal sealed class CreatePlatformHandler(
         if (command.ConnectorType == PlatformConnectorType.Local)
         {
             command = command with { Address = Constants.LocalDockerHostUrl };
+        }
+
+        if (command.ConnectorType == PlatformConnectorType.Agent
+            && AgentTransportAddressPolicy.GetValidationError(
+                command.Address,
+                agentTransportOptions.Value) is { } addressError)
+        {
+            return Result.Failure<Platform>(new BadRequestError(addressError));
         }
 
         if (command.Type == PlatformType.Docker)
@@ -148,7 +160,29 @@ internal sealed class CreatePlatformHandler(
         }
 
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
-        platform.PartialUpdate(description: command.Description);
+        if (platform.PlatformDescriptor is not DockerPlatformDescriptor descriptor
+            || string.IsNullOrWhiteSpace(descriptor.DaemonId))
+        {
+            return Result.Failure<Platform>(
+                new InternalServerError(
+                    "Docker engine did not report a daemon id."));
+        }
+
+        var daemonId = descriptor.DaemonId.Trim();
+        var existingPlatform = await unitOfWork.Platforms.GetByDaemonIdAsync(
+            daemonId,
+            excludePlatformId: null,
+            cancellationToken);
+        if (existingPlatform is not null)
+        {
+            return Result.Failure<Platform>(
+                new ConflictError(
+                    $"This Docker engine is already registered as platform '{existingPlatform.Name}'."));
+        }
+
+        platform.PartialUpdate(
+            description: command.Description,
+            descriptor: descriptor with { DaemonId = daemonId });
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)

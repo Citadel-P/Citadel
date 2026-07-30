@@ -104,7 +104,7 @@ public sealed class SetupEndpointTests(PostgresTestFixture fixture) : Integratio
                 Assert.Equal(user.ActorId, action.RunAsActorId);
                 Assert.Equal(Constants.SystemId, action.CreatedByActorId);
                 Assert.False(action.Enabled);
-                Assert.True(action.ScheduleEnabled);
+                Assert.False(action.ScheduleEnabled);
                 Assert.Equal("0 12 * * *", action.ScheduleCron);
                 Assert.Collection(
                     action.Tags,
@@ -116,7 +116,7 @@ public sealed class SetupEndpointTests(PostgresTestFixture fixture) : Integratio
                 Assert.Equal(user.ActorId, action.RunAsActorId);
                 Assert.Equal(Constants.SystemId, action.CreatedByActorId);
                 Assert.False(action.Enabled);
-                Assert.True(action.ScheduleEnabled);
+                Assert.False(action.ScheduleEnabled);
                 Assert.Equal("*/15 * * * *", action.ScheduleCron);
                 Assert.Equal(
                     ["Prod", "System"],

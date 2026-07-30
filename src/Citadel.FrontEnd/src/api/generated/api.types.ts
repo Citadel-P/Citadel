@@ -2346,6 +2346,7 @@ export interface AgentSetupView {
   environment: Record<string, string>;
   agentImage: string;
   dockerRunCommand: string;
+  requiresTls: boolean;
 }
 
 export interface AlertChannelInput {

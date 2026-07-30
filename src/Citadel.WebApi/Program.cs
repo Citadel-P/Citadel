@@ -1,11 +1,13 @@
 using Application;
 using Application.Models;
+using Application.Services;
 using Hosting;
 using Hosting.Common;
 using Hosting.OpenApi;
 using Infrastructure;
 using Microsoft.AspNetCore.Http.Json;
 using WebApi;
+using WebApi.Transport;
 
 public partial class Program
 {
@@ -21,6 +23,12 @@ public partial class Program
         // Add services to the container.
         void WithServices(WebApplicationBuilder builder)
         {
+            var transportSettings = CoreTransportSettings.Load(
+                builder.Configuration);
+            builder.ConfigureServices(transportSettings);
+            builder.Services.AddSingleton(
+                new AuthenticationCookiePolicy(transportSettings.SecureCookies));
+
             builder.Services
                 .RegisterInfrastructureModule(builder.Configuration)
                 .RegisterWebApiModule(builder.Configuration)
@@ -35,6 +43,9 @@ public partial class Program
         // Configures the HTTP request pipeline.
         void Configure(WebApplication app)
         {
+            app.ConfigurePipeline(
+                app.Services.GetRequiredService<CoreTransportSettings>());
+
             //var pubKey = Helpers.GetOrCreatePublicKey();
             if (app.Configuration.GetValue<bool>("EnableSwagger"))
             {

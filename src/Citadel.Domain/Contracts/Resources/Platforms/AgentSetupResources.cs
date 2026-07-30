@@ -4,4 +4,5 @@ public sealed record AgentSetupInstructions(
     string HubPublicKey,
     IReadOnlyDictionary<string, string> Environment,
     string AgentImage,
-    string DockerRunCommand);
+    string DockerRunCommand,
+    bool RequiresTls);

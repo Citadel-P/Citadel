@@ -1,8 +1,10 @@
 ﻿using Application.Configs;
 using Application.Services;
 using Application.Services.Abstractions;
+using Domain.Configs;
 using Hosting.Common;
 using Hosting.Common.Extensions;
+using Hosting.Common.Security;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +23,7 @@ using WebApi.OpenApi;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
+using WebApi.Transport;
 using static Nerdbank.MessagePack.OptionalConverters;
 
 namespace WebApi;
@@ -93,6 +96,7 @@ internal static class WebApiModule
 
         services.AddAuthorization();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultHandler>();
+        services.AddSingleton<ICitadelPublicEndpoints, CitadelPublicEndpoints>();
         services.AddSignalRDependencies();
         return services;
     }
@@ -266,6 +270,14 @@ internal static class WebApiModule
         }
 
         builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
+        builder.Services
+            .AddOptions<AgentTransportOptions>()
+            .BindConfiguration(AgentTransportOptions.SectionName)
+            .Validate(
+                options => CertificateTrust.IsValid(
+                    options.CaCertificatePath),
+                "AgentTransport:CaCertificatePath must reference a readable PEM CA bundle.")
+            .ValidateOnStart();
         builder.Services
             .AddOptions<EdgeAgentOptions>()
             .BindConfiguration(EdgeAgentOptions.SectionName)

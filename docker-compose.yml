@@ -4,23 +4,23 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      ConnectionStrings__Postgres: "Host=pg_db;Database=citadel_db;Username=admin;Password=admin"
+      ConnectionStrings__Postgres: "Host=${PG_HOST:-pg_db};Database=${PG_DATABASE};Username=${PG_USER};Password=${PG_PASSWORD}"
     depends_on:
       pg_db:
-          condition: service_healthy
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /:/host:ro
       - citadel_data:/app/data
-    ports:
-      - "8000:8000" # API
-      - "8001:8001" # Grpc
+    expose:
+      - "${Transport__ApiPort:-8000}" # private API/reverse-proxy upstream
+      - "${Transport__EdgeGrpcPort:-8001}" # private Edge gRPC/reverse-proxy upstream
     healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-        interval: 30s
-        timeout: 5s
-        retries: 3
-        start_period: 5s
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${Transport__ApiPort:-8000}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   pg_db:
     image: postgres:alpine
@@ -35,9 +35,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DATABASE}"]
-        interval: 5s
-        retries: 5
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DATABASE}"]
+      interval: 5s
+      retries: 5
 
 volumes:
   citadel_data:

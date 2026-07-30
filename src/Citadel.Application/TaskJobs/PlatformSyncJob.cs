@@ -208,6 +208,54 @@ internal sealed class PlatformOnlineSyncWorkItem(
             }
 
             var previousStatus = platform.Status;
+            var updatedDescriptor = platformInfo.Descriptor;
+            if (platform.PlatformDescriptor is DockerPlatformDescriptor currentDescriptor)
+            {
+                if (platformInfo.Descriptor is not DockerPlatformDescriptor reportedDescriptor
+                    || string.IsNullOrWhiteSpace(reportedDescriptor.DaemonId))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because Docker did not report a daemon id",
+                        platformId);
+                    return;
+                }
+
+                var currentDaemonId =
+                    currentDescriptor.DaemonId?.Trim() ?? string.Empty;
+                var reportedDaemonId = reportedDescriptor.DaemonId.Trim();
+                if (currentDaemonId.Length > 0
+                    && !string.Equals(
+                        currentDaemonId,
+                        reportedDaemonId,
+                        StringComparison.Ordinal))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because its Docker daemon identity changed",
+                        platformId);
+                    return;
+                }
+
+                if (currentDaemonId.Length == 0)
+                {
+                    var existingPlatform =
+                        await uow.Platforms.GetByDaemonIdAsync(
+                            reportedDaemonId,
+                            platformId,
+                            cancellationToken);
+                    if (existingPlatform is not null)
+                    {
+                        logger.LogError(
+                            "Platform {PlatformId} synchronization was rejected because Docker daemon {DaemonId} belongs to platform {ExistingPlatformId}",
+                            platformId,
+                            reportedDaemonId,
+                            existingPlatform.Id);
+                        return;
+                    }
+                }
+
+                updatedDescriptor =
+                    reportedDescriptor with { DaemonId = reportedDaemonId };
+            }
 
             // Apply updates from platformInfo
             platform.PartialUpdate(
@@ -219,7 +267,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 serverVersion: platformInfo.ServerVersion,
                 agentVersion: platformInfo.AgentVersion,
                 cpuCount: platformInfo.CpuCount,
-                descriptor: platformInfo.Descriptor
+                descriptor: updatedDescriptor
             );
 
             var activity = previousStatus == PlatformStatus.Online

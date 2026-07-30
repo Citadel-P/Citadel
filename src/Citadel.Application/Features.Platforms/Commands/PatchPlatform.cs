@@ -1,4 +1,6 @@
 ﻿using Domain;
+using Application.Configs;
+using Domain.Configs;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
@@ -12,6 +14,7 @@ using Application.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -47,6 +50,7 @@ internal class PatchPlatformHandler(
     IUnitOfWork unitOfWork,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
+    IOptions<AgentTransportOptions> agentTransportOptions,
     ILogger<PatchPlatformHandler> logger): ICommandHandler<PatchPlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(PatchPlatform command, CancellationToken cancellationToken)
@@ -60,6 +64,14 @@ internal class PatchPlatformHandler(
             }
 
             var patchedPlatform = command.Patch.ApplyTo(platform, PlatformJsonContext.Default.Platform);
+
+            if (patchedPlatform.ConnectorType == PlatformConnectorType.Agent
+                && AgentTransportAddressPolicy.GetValidationError(
+                    patchedPlatform.Address,
+                    agentTransportOptions.Value) is { } addressError)
+            {
+                return Result.Failure<Platform>(new BadRequestError(addressError));
+            }
 
             if (patchedPlatform.Name != null)
             {
@@ -85,6 +97,26 @@ internal class PatchPlatformHandler(
                 {
                     return Result.Failure<Platform>(new InternalServerError($"Failed to get platform info for {patchedPlatform.Address}: {error?.Message}"));
                 }
+
+                if (platformInfo.Descriptor is not DockerPlatformDescriptor descriptor
+                    || string.IsNullOrWhiteSpace(descriptor.DaemonId))
+                {
+                    return Result.Failure<Platform>(
+                        new InternalServerError(
+                            "Docker engine did not report a daemon id."));
+                }
+
+                var daemonId = descriptor.DaemonId.Trim();
+                var existingPlatform = await unitOfWork.Platforms.GetByDaemonIdAsync(
+                    daemonId,
+                    platform.Id,
+                    cancellationToken);
+                if (existingPlatform is not null)
+                {
+                    return Result.Failure<Platform>(
+                        new ConflictError(
+                            $"This Docker engine is already registered as platform '{existingPlatform.Name}'."));
+                }
                 
                 platform.PartialUpdate(
                     name: patchedPlatform.Name,
@@ -97,7 +129,7 @@ internal class PatchPlatformHandler(
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
                     description: patchedPlatform.Description,
-                    descriptor: platformInfo.Descriptor);
+                    descriptor: descriptor with { DaemonId = daemonId });
 
                 await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);

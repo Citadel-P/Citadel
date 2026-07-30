@@ -7,12 +7,12 @@ using Domain.Contracts.Interfaces;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Builds;
 using WebApi.Routes.Endpoints.Resources.Platforms;
+using WebApi.Transport;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -159,10 +159,6 @@ public static class BuildRuns
 
 public static class BuildAgentPools
 {
-    private const string EdgeAgentPublicGrpcUrlKey = "EdgeAgent:PublicGrpcUrl";
-    private const string KestrelHttpEndpointUrlKey = "Kestrel:Endpoints:Http:Url";
-    private const string KestrelGrpcEndpointUrlKey = "Kestrel:Endpoints:Grpc:Url";
-
     public static async Task<Results<Ok<BuildAgentPoolsView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
@@ -248,13 +244,15 @@ public static class BuildAgentPools
 
     public static async Task<Results<Ok<EdgeAgentEnrollmentView>, ProblemHttpResult>> CreateEdgeEnrollment(
         IMediator mediator,
-        HttpContext httpContext,
-        [FromServices] IConfiguration configuration,
+        ICitadelPublicEndpoints publicEndpoints,
         [FromRoute][Description("Build pool ID")] Guid id,
         CancellationToken cancellationToken)
     {
-        var coreUrl = GetEdgeAgentGrpcUrl(httpContext, configuration);
-        var result = await mediator.Send(new CreateBuildAgentPoolEdgeEnrollment(id, coreUrl), cancellationToken);
+        var result = await mediator.Send(
+            new CreateBuildAgentPoolEdgeEnrollment(
+                id,
+                publicEndpoints.EdgeAgentGrpcUrl.AbsoluteUri.TrimEnd('/')),
+            cancellationToken);
         return EndpointHandlers.HandleResult(result, EdgeAgentEnrollmentView.Map);
     }
 
@@ -291,53 +289,4 @@ public static class BuildAgentPools
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    private static string GetEdgeAgentGrpcUrl(HttpContext httpContext, IConfiguration configuration)
-    {
-        var configuredUrl = configuration[EdgeAgentPublicGrpcUrlKey];
-        if (!string.IsNullOrWhiteSpace(configuredUrl))
-        {
-            return configuredUrl.TrimEnd('/');
-        }
-
-        var requestHost = httpContext.Request.Host;
-        var edgeAgentHost = TryInferEdgeAgentGrpcHost(requestHost, configuration) ?? requestHost;
-
-        return UriHelper.BuildAbsolute(httpContext.Request.Scheme, edgeAgentHost).TrimEnd('/');
-    }
-
-    private static HostString? TryInferEdgeAgentGrpcHost(HostString requestHost, IConfiguration configuration)
-    {
-        var httpPort = GetConfiguredEndpointPort(configuration, KestrelHttpEndpointUrlKey);
-        var grpcPort = GetConfiguredEndpointPort(configuration, KestrelGrpcEndpointUrlKey);
-
-        if (httpPort is null || grpcPort is null || requestHost.Port != httpPort || requestHost.Port == grpcPort)
-        {
-            return null;
-        }
-
-        return new HostString(requestHost.Host, grpcPort.Value);
-    }
-
-    private static int? GetConfiguredEndpointPort(IConfiguration configuration, string key)
-    {
-        var endpointUrl = configuration[key];
-        if (string.IsNullOrWhiteSpace(endpointUrl))
-        {
-            return null;
-        }
-
-        foreach (var candidate in endpointUrl.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var normalized = candidate
-                .Replace("://+:", "://localhost:", StringComparison.Ordinal)
-                .Replace("://*:", "://localhost:", StringComparison.Ordinal);
-
-            if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri) && !uri.IsDefaultPort)
-            {
-                return uri.Port;
-            }
-        }
-
-        return null;
-    }
 }

@@ -1,6 +1,7 @@
 using Application.Configs;
 using Application.Services;
 using Domain;
+using Domain.Configs;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -15,23 +16,29 @@ public sealed record RotateAgentHubKey : ICommand<Result<AgentSetupInstructions>
 
 internal sealed class RotateAgentHubKeyHandler(
     IOptions<EdgeAgentOptions> edgeAgentOptions,
+    IOptions<AgentTransportOptions> agentTransportOptions,
     IAgentHubPublicKeyProvider hubPublicKeyProvider)
     : ICommandHandler<RotateAgentHubKey, Result<AgentSetupInstructions>>
 {
     public ValueTask<Result<AgentSetupInstructions>> Handle(RotateAgentHubKey command, CancellationToken cancellationToken)
     {
         var hubPublicKey = hubPublicKeyProvider.RotateKeyPair();
-        var environment = new Dictionary<string, string>
-        {
-            ["HUB_PUBLIC_KEY"] = hubPublicKey
-        };
+        var requiresTls = !agentTransportOptions.Value.AllowInsecure;
+        var environment =
+            AgentDockerCommandBuilder.BuildRegularAgentEnvironment(
+                hubPublicKey,
+                requiresTls);
         var agentImage = edgeAgentOptions.Value.GetAgentImage();
-        var dockerRunCommand = AgentDockerCommandBuilder.BuildRegularAgentCommand(agentImage, environment);
+        var dockerRunCommand = AgentDockerCommandBuilder.BuildRegularAgentCommand(
+            agentImage,
+            environment,
+            requiresTls);
 
         return ValueTask.FromResult(Result.Success(new AgentSetupInstructions(
             hubPublicKey,
             environment,
             agentImage,
-            dockerRunCommand)));
+            dockerRunCommand,
+            RequiresTls: requiresTls)));
     }
 }

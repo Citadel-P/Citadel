@@ -711,7 +711,7 @@ function selfManagedVmFields(
                   value={vmSpec.endpoint ?? ''}
                   disabled={disabled}
                   onChange={(endpoint) => setVmSpec({ endpoint })}
-                  placeholder="https://builder-01.example.com"
+                  placeholder="https://builder-01.example.com:9000"
                 />
               ),
             }),

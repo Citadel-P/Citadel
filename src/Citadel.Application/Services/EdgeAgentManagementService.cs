@@ -96,6 +96,7 @@ internal sealed class EdgeAgentManagementService(
             ["CITADEL_EDGE_AGENT_KEY_PATH"] = target.KeyPath,
             ["CITADEL_EDGE_IDENTITY_PATH"] = target.IdentityPath
         };
+
         var agentImage = edgeAgentOptions.Value.GetAgentImage();
         var dockerRunCommand = AgentDockerCommandBuilder.BuildEdgeAgentCommand(
             agentImage,
@@ -200,6 +201,23 @@ internal sealed class EdgeAgentManagementService(
                 new BadRequestError($"Build pool Edge Agent must advertise capability '{missingCommand}'."));
         }
 
+        Platform? edgePlatform = null;
+        if (target.ResourceType == EdgeAgentResourceType.Platform)
+        {
+            var daemonValidation = await ValidatePlatformDaemonAsync(
+                unitOfWork,
+                target.ResourceId,
+                request.DaemonId,
+                cancellationToken);
+            if (!daemonValidation.IsSuccess(
+                    out edgePlatform,
+                    out var daemonError))
+            {
+                return Result.Failure<EdgeAgentEnrollmentCompleteResult>(
+                    daemonError!);
+            }
+        }
+
         var existingBinding = await unitOfWork.EdgeAgents.GetBindingByResourceAsync(enrollment.NormalizedResourceType, enrollment.NormalizedResourceId, cancellationToken);
         if (existingBinding is not null && !existingBinding.IsRevoked)
         {
@@ -238,6 +256,15 @@ internal sealed class EdgeAgentManagementService(
 
         await unitOfWork.EdgeAgents.AddBindingAsync(binding, cancellationToken);
         await unitOfWork.EdgeAgents.MarkEnrollmentUsedAsync(enrollment.Id, now, cancellationToken);
+        if (edgePlatform?.PlatformDescriptor is DockerPlatformDescriptor descriptor)
+        {
+            edgePlatform.PartialUpdate(
+                descriptor: descriptor with { DaemonId = request.DaemonId.Trim() });
+            await unitOfWork.Platforms.UpdateAsync(
+                edgePlatform,
+                cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new EdgeAgentEnrollmentCompleteResult(
@@ -247,14 +274,15 @@ internal sealed class EdgeAgentManagementService(
             enrollment.NormalizedResourceId));
     }
 
-    public async Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(Guid platformId, Guid agentId, string agentFingerprint, CancellationToken cancellationToken)
-        => await GetReconnectBindingAsync(EdgeAgentResourceType.Platform, platformId, agentId, agentFingerprint, cancellationToken);
+    public async Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(Guid platformId, Guid agentId, string agentFingerprint, string daemonId, CancellationToken cancellationToken)
+        => await GetReconnectBindingAsync(EdgeAgentResourceType.Platform, platformId, agentId, agentFingerprint, daemonId, cancellationToken);
 
     public async Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(
         EdgeAgentResourceType resourceType,
         Guid resourceId,
         Guid agentId,
         string agentFingerprint,
+        string daemonId,
         CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
@@ -273,6 +301,19 @@ internal sealed class EdgeAgentManagementService(
         if (!string.Equals(binding.AgentFingerprint, agentFingerprint, StringComparison.Ordinal))
         {
             return Result.Failure<EdgeAgentBinding>(new UnauthorizedError("Edge Agent fingerprint does not match."));
+        }
+
+        if (resourceType == EdgeAgentResourceType.Platform)
+        {
+            var daemonValidation = await ValidatePlatformDaemonAsync(
+                unitOfWork,
+                resourceId,
+                daemonId,
+                cancellationToken);
+            if (daemonValidation.IsFailure(out var daemonError))
+            {
+                return Result.Failure<EdgeAgentBinding>(daemonError!);
+            }
         }
 
         return Result.Success(binding);
@@ -447,6 +488,63 @@ internal sealed class EdgeAgentManagementService(
         }
 
         return Result.Failure(new BadRequestError("Edge Agent target type is invalid."));
+    }
+
+    private static async Task<Result<Platform>> ValidatePlatformDaemonAsync(
+        IUnitOfWork unitOfWork,
+        Guid platformId,
+        string daemonId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(daemonId))
+        {
+            return Result.Failure<Platform>(
+                new BadRequestError(
+                    "Edge Agent did not report a Docker daemon id."));
+        }
+
+        var platform = await unitOfWork.Platforms.GetByIdAsync(
+            platformId,
+            cancellationToken);
+        if (platform is null)
+        {
+            return Result.Failure<Platform>(
+                new NotFoundError("Platform not found."));
+        }
+
+        if (platform.PlatformDescriptor is not DockerPlatformDescriptor descriptor)
+        {
+            return Result.Failure<Platform>(
+                new BadRequestError(
+                    "Platform does not have a Docker daemon identity."));
+        }
+
+        var normalizedDaemonId = daemonId.Trim();
+        var storedDaemonId = descriptor.DaemonId?.Trim() ?? string.Empty;
+        if (storedDaemonId.Length > 0
+            && !string.Equals(
+                storedDaemonId,
+                normalizedDaemonId,
+                StringComparison.Ordinal))
+        {
+            return Result.Failure<Platform>(
+                new ConflictError(
+                    "This Edge Agent is connected to a different Docker engine than the platform."));
+        }
+
+        var existingPlatform =
+            await unitOfWork.Platforms.GetByDaemonIdAsync(
+                normalizedDaemonId,
+                platformId,
+                cancellationToken);
+        if (existingPlatform is not null)
+        {
+            return Result.Failure<Platform>(
+                new ConflictError(
+                    $"This Docker engine is already registered as platform '{existingPlatform.Name}'."));
+        }
+
+        return Result.Success(platform);
     }
 
     public static string HashToken(string token)

@@ -56,6 +56,14 @@ internal sealed class RustFsBackupCompatibilityEnvironment : IAsyncDisposable
         core = new ContainerBuilder(coreImage)
             .WithPortBinding(CoreHttpPort, assignRandomHostPort: true)
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
+            .WithEnvironment("Transport__Mode", "Disabled")
+            .WithEnvironment(
+                "Transport__PublicUrl",
+                "http://localhost:8000")
+            .WithEnvironment(
+                "EdgeAgent__PublicGrpcUrl",
+                "http://localhost:8001")
+            .WithEnvironment("AgentTransport__AllowInsecure", "true")
             .WithEnvironment(
                 "ConnectionStrings__Postgres",
                 postgresConnectionString)

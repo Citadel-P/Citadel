@@ -1,0 +1,9 @@
+services:
+  server:
+    ports:
+      - "${Transport__ApiPort:-8000}:${Transport__ApiPort:-8000}"
+      - "${Transport__EdgeGrpcPort:-8001}:${Transport__EdgeGrpcPort:-8001}"
+    volumes:
+      - ${CITADEL_TLS_HOST_DIRECTORY:-./tls}:/etc/citadel/tls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl --insecure --fail --silent --show-error https://localhost:$${Transport__ApiPort:-8000}/health"]

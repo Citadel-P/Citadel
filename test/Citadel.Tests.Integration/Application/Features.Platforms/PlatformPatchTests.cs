@@ -257,6 +257,120 @@ public class PlatformPatchTests(PostgresTestFixture fixture) : IntegrationTestBa
     }
 
     [Fact]
+    public async Task PatchPlatform_ShouldRejectDockerDaemonAlreadyRegisteredByAnotherPlatform()
+    {
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Platforms.AddAsync(
+                new Platform(
+                    name: "existing-daemon-platform",
+                    address: "https://existing-agent:9000",
+                    networkCount: 0,
+                    volumeCount: 0,
+                    imageCount: 0,
+                    cpuCount: 1,
+                    memTotal: 1,
+                    serverVersion: null,
+                    agentVersion: null,
+                    status: PlatformStatus.Online,
+                    connectorType: PlatformConnectorType.Agent,
+                    platformDescriptor: new DockerPlatformDescriptor(
+                        DaemonId: "duplicate-daemon",
+                        ContainerCount: 0,
+                        ContainersRunning: 0,
+                        ContainersPaused: 0,
+                        ContainersStopped: 0)),
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        platformFactoryMock
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Success(
+                    Fakes.GetDummyPlatformResult() with
+                    {
+                        Descriptor = new DockerPlatformDescriptor(
+                            DaemonId: "duplicate-daemon",
+                            ContainerCount: 0,
+                            ContainersRunning: 0,
+                            ContainersPaused: 0,
+                            ContainersStopped: 0)
+                    }));
+
+        var content = new StringContent(
+            """
+            {
+              "address": "https://duplicate-agent:9000"
+            }
+            """,
+            Encoding.UTF8,
+            "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}",
+            content,
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("existing-daemon-platform", responseBody);
+    }
+
+    [Fact]
+    public async Task PatchPlatform_ShouldRejectMissingDockerDaemonId()
+    {
+        platformFactoryMock
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Success(
+                    Fakes.GetDummyPlatformResult() with
+                    {
+                        Descriptor = new DockerPlatformDescriptor(
+                            DaemonId: string.Empty,
+                            ContainerCount: 0,
+                            ContainersRunning: 0,
+                            ContainersPaused: 0,
+                            ContainersStopped: 0)
+                    }));
+
+        var content = new StringContent(
+            """
+            {
+              "address": "https://missing-daemon-id:9000"
+            }
+            """,
+            Encoding.UTF8,
+            "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}",
+            content,
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            System.Net.HttpStatusCode.InternalServerError,
+            response.StatusCode);
+        Assert.Contains(
+            "Docker engine did not report a daemon id",
+            responseBody);
+    }
+
+    [Fact]
     public async Task Patch_Platform_Should_Return_BadRequest_If_Payload_Is_Invalid()
     {
         // Arrange

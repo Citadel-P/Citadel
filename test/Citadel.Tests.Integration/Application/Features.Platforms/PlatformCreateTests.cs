@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Text;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -213,6 +214,122 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
         await VerifyJson(responseBody);
+    }
+
+    [Theory]
+    [InlineData(PlatformConnectorType.Local)]
+    [InlineData(PlatformConnectorType.Agent)]
+    public async Task CreatePlatform_ShouldRejectDockerDaemonAlreadyRegisteredByAnotherPlatform(
+        PlatformConnectorType connectorType)
+    {
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow =
+                scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Platforms.AddAsync(
+                new Platform(
+                    name: "existing-daemon-platform",
+                    address: "https://existing-agent:9000",
+                    networkCount: 0,
+                    volumeCount: 0,
+                    imageCount: 0,
+                    cpuCount: 1,
+                    memTotal: 1,
+                    serverVersion: null,
+                    agentVersion: null,
+                    status: PlatformStatus.Online,
+                    connectorType: PlatformConnectorType.Agent,
+                    platformDescriptor: new DockerPlatformDescriptor(
+                        DaemonId: "123456",
+                        ContainerCount: 0,
+                        ContainersRunning: 0,
+                        ContainersPaused: 0,
+                        ContainersStopped: 0)),
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(
+                TestContext.Current.CancellationToken);
+        }
+
+        platformFactoryMock
+            .Setup(x => x.GetConnector(connectorType))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Success(Fakes.GetDummyPlatformResult()));
+
+        var content = new StringContent(
+            $$"""
+            {
+              "name": "duplicate-daemon-platform",
+              "address": "https://new-agent:9000",
+              "type": "Docker",
+              "connectorType": "{{connectorType}}"
+            }
+            """,
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            content,
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("existing-daemon-platform", responseBody);
+    }
+
+    [Fact]
+    public async Task CreatePlatform_ShouldRejectMissingDockerDaemonId()
+    {
+        platformFactoryMock
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Success(
+                    Fakes.GetDummyPlatformResult() with
+                    {
+                        Descriptor = new DockerPlatformDescriptor(
+                            DaemonId: " ",
+                            ContainerCount: 0,
+                            ContainersRunning: 0,
+                            ContainersPaused: 0,
+                            ContainersStopped: 0)
+                    }));
+
+        var content = new StringContent(
+            """
+            {
+              "name": "missing-daemon-id",
+              "address": "https://missing-daemon-id:9000",
+              "type": "Docker",
+              "connectorType": "Agent"
+            }
+            """,
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            content,
+            TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            HttpStatusCode.InternalServerError,
+            response.StatusCode);
+        Assert.Contains(
+            "Docker engine did not report a daemon id",
+            responseBody);
     }
 
     [Fact]

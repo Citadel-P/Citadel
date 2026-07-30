@@ -1,10 +1,13 @@
 ﻿using System.Collections.Concurrent;
+using Domain.Configs;
 using Domain.Contracts.Interfaces;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
+using Hosting.Common.Security;
 using Infrastructure.EdgeAgents;
+using Microsoft.Extensions.Options;
 using static Citadel.Containers.V1.ContainerService;
 using static Citadel.Images.V1.ImageService;
 using static Citadel.Networks.V1.NetworkService;
@@ -29,12 +32,17 @@ internal interface IGrpcClientFactory
     StackServiceClient GetStackClient(string address);
 }
 
-internal sealed class GrpcClientFactory(params Interceptor[] interceptors)
+internal sealed class GrpcClientFactory(
+    IOptions<AgentTransportOptions> transportOptions,
+    CertificateTrust certificateTrust,
+    params Interceptor[] interceptors)
     : IGrpcClientFactory, IPlatformConnectionCache, IDisposable
 {
     private readonly ConcurrentDictionary<string, GrpcChannel> _channelCache = new();
     private readonly ConcurrentDictionary<(Type, string), object> _clientCache = new();
     private readonly Interceptor[] _interceptors = interceptors ?? [];
+    private readonly AgentTransportOptions _transportOptions = transportOptions.Value;
+    private readonly CertificateTrust _certificateTrust = certificateTrust;
     private readonly Lock _gate = new();
 
     internal int ChannelCount => _channelCache.Count;
@@ -63,16 +71,28 @@ internal sealed class GrpcClientFactory(params Interceptor[] interceptors)
 
     private TClient GetOrCreateClient<TClient>(string address, Func<CallInvoker, TClient> factory)
     {
+        var key = (typeof(TClient), address);
+        if (_clientCache.TryGetValue(key, out var cachedClient))
+        {
+            return (TClient)cachedClient;
+        }
+
         using (_gate.EnterScope())
         {
+            if (_clientCache.TryGetValue(key, out cachedClient))
+            {
+                return (TClient)cachedClient;
+            }
+
             var channel = _channelCache.GetOrAdd(address, CreateChannel);
 
             CallInvoker invoker = channel.CreateCallInvoker();
             if (_interceptors.Length > 0)
                 invoker = invoker.Intercept(_interceptors);
 
-            var key = (typeof(TClient), address);
-            return (TClient)_clientCache.GetOrAdd(key, _ => factory(invoker));
+            var client = factory(invoker);
+            _clientCache[key] = client!;
+            return client;
         }
     }
 
@@ -109,10 +129,23 @@ internal sealed class GrpcClientFactory(params Interceptor[] interceptors)
             channel.Dispose();
     }
 
-    private static GrpcChannel CreateChannel(string address)
+    private GrpcChannel CreateChannel(string address)
     {
+        var uri = new Uri(address, UriKind.Absolute);
+        var handler = uri.Scheme == Uri.UriSchemeHttps
+            ? new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true
+            }
+            : null;
+        if (handler is not null)
+        {
+            _certificateTrust.Configure(handler);
+        }
+
         return GrpcChannel.ForAddress(address, new GrpcChannelOptions
         {
+            HttpHandler = handler,
             MaxReceiveMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes,
             MaxSendMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes,
             ServiceConfig = new ServiceConfig
@@ -136,15 +169,38 @@ internal sealed class GrpcClientFactory(params Interceptor[] interceptors)
         });
     }
 
-    private static string NormalizeAddress(string address)
+    private string NormalizeAddress(string address)
     {
         if (string.IsNullOrWhiteSpace(address))
             throw new ArgumentException("gRPC address must not be null or empty.", nameof(address));
 
-        if (address.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return address;
+        var candidate = address.Trim();
+        if (_channelCache.ContainsKey(candidate))
+        {
+            return candidate;
+        }
 
-        return $"http://{address}";
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+            || string.IsNullOrWhiteSpace(uri.Host)
+            || (uri.Scheme != Uri.UriSchemeHttp
+                && uri.Scheme != Uri.UriSchemeHttps)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || uri.AbsolutePath != "/")
+        {
+            throw new ArgumentException(
+                "gRPC address must be an absolute HTTP or HTTPS origin without credentials, path, query, or fragment.",
+                nameof(address));
+        }
+
+        if (!_transportOptions.AllowInsecure
+            && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                "The Agent endpoint must use HTTPS because insecure Agent transport is disabled.");
+        }
+
+        return uri.AbsoluteUri.TrimEnd('/');
     }
 }

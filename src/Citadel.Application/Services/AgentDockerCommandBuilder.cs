@@ -2,19 +2,50 @@ namespace Application.Services;
 
 internal static class AgentDockerCommandBuilder
 {
-    public static string BuildRegularAgentCommand(string agentImage, IReadOnlyDictionary<string, string> environment)
-        => Build(
-            agentImage,
-            environment,
-            [
-                "--name citadel-agent",
-                "--restart=always",
-                "--label com.citadel.system=true",
-                "--label com.citadel.system-role=agent",
-                "-p 9000:9000",
-                "-v /var/run/docker.sock:/var/run/docker.sock",
-                "-v /:/host:ro"
-            ]);
+    public static IReadOnlyDictionary<string, string>
+        BuildRegularAgentEnvironment(
+            string hubPublicKey,
+            bool requiresTls)
+    {
+        var environment = new Dictionary<string, string>
+        {
+            ["HUB_PUBLIC_KEY"] = hubPublicKey
+        };
+        if (requiresTls)
+        {
+            environment["CITADEL_AGENT_TLS_MODE"] = "Direct";
+            environment["CITADEL_AGENT_TLS_CERTIFICATE_PATH"] =
+                "/etc/citadel/tls/agent-fullchain.pem";
+            environment["CITADEL_AGENT_TLS_PRIVATE_KEY_PATH"] =
+                "/etc/citadel/tls/agent-key.pem";
+        }
+
+        return environment;
+    }
+
+    public static string BuildRegularAgentCommand(
+        string agentImage,
+        IReadOnlyDictionary<string, string> environment,
+        bool requiresTls)
+    {
+        var options = new List<string>
+        {
+            "--name citadel-agent",
+            "--restart=always",
+            "--label com.citadel.system=true",
+            "--label com.citadel.system-role=agent",
+            "-p 9000:9000",
+            "-v /var/run/docker.sock:/var/run/docker.sock",
+            "-v /:/host:ro"
+        };
+        if (requiresTls)
+        {
+            options.Add(
+                "-v /path/to/agent-tls:/etc/citadel/tls:ro");
+        }
+
+        return Build(agentImage, environment, options);
+    }
 
     public static string BuildEdgeAgentCommand(
         string agentImage,

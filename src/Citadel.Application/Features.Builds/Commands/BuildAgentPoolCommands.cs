@@ -1,4 +1,6 @@
+using Application.Configs;
 using Application.Features.Builds.Models;
+using Domain.Configs;
 using Application.Features.Deployments.Notifications;
 using Application.Services;
 using Application.Services.Builds;
@@ -16,6 +18,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Microsoft.Extensions.Options;
 
 namespace Application.Features.Builds.Commands;
 
@@ -89,12 +92,21 @@ internal sealed class CreateBuildAgentPoolHandler(
     IUserContextAccessor userContextAccessor,
     IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
-    INotificationQueue notificationQueue)
+    INotificationQueue notificationQueue,
+    IOptions<AgentTransportOptions> agentTransportOptions)
     : ICommandHandler<CreateBuildAgentPool, Result<BuildAgentPoolResult>>
 {
     public async ValueTask<Result<BuildAgentPoolResult>> Handle(CreateBuildAgentPool command, CancellationToken cancellationToken)
     {
         var input = command.Pool;
+        if (GetEndpointValidationError(
+                input.ProviderSpec,
+                agentTransportOptions.Value) is { } endpointError)
+        {
+            return Result.Failure<BuildAgentPoolResult>(
+                new BadRequestError(endpointError));
+        }
+
         var actorId = userContextAccessor.Current.ActorId;
         var normalizedName = BuildProject.ToNormalizedName(input.Name);
         if (await unitOfWork.BuildAgentPools.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
@@ -136,6 +148,16 @@ internal sealed class CreateBuildAgentPoolHandler(
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
     }
+
+    private static string? GetEndpointValidationError(
+        BuildAgentPoolProviderSpec providerSpec,
+        AgentTransportOptions options)
+        => providerSpec is SelfManagedVmBuildAgentPoolProviderSpec
+        {
+            ConnectionMode: BuildAgentPoolConnectionMode.InboundAgent
+        } vm
+            ? AgentTransportAddressPolicy.GetValidationError(vm.Endpoint, options)
+            : null;
 }
 
 internal sealed class UpdateBuildAgentPoolHandler(
@@ -143,7 +165,8 @@ internal sealed class UpdateBuildAgentPoolHandler(
     IUserContextAccessor userContextAccessor,
     IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
-    INotificationQueue notificationQueue)
+    INotificationQueue notificationQueue,
+    IOptions<AgentTransportOptions> agentTransportOptions)
     : ICommandHandler<UpdateBuildAgentPool, Result<BuildAgentPoolResult>>
 {
     public async ValueTask<Result<BuildAgentPoolResult>> Handle(UpdateBuildAgentPool command, CancellationToken cancellationToken)
@@ -154,6 +177,18 @@ internal sealed class UpdateBuildAgentPoolHandler(
 
         var oldSnapshot = pool.ToSnapshot();
         var input = command.Pool;
+        if (input.ProviderSpec is SelfManagedVmBuildAgentPoolProviderSpec
+            {
+                ConnectionMode: BuildAgentPoolConnectionMode.InboundAgent
+            } vm
+            && AgentTransportAddressPolicy.GetValidationError(
+                vm.Endpoint,
+                agentTransportOptions.Value) is { } endpointError)
+        {
+            return Result.Failure<BuildAgentPoolResult>(
+                new BadRequestError(endpointError));
+        }
+
         try
         {
             pool.Update(

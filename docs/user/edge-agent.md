@@ -23,7 +23,16 @@ Edge Agent still requires:
 - the agent data directory is persisted
 - Citadel Core is reachable at the URL used during enrollment
 
+Citadel permits only one Platform record for each Docker daemon. If the same
+Docker engine is already registered through Local or regular Agent access,
+Edge enrollment is rejected with the existing platform name. Remove the
+duplicate platform or keep the existing connection method; do not manage one
+Docker engine through two Platform records.
+
 For production, run Citadel Core over HTTPS.
+
+For reverse-proxy, direct Core TLS, and private-CA configuration, see
+`docs/user/tls-and-secure-agent-transport.md`.
 
 ## Builds
 
@@ -49,6 +58,10 @@ In production:
 - allow long-lived streaming requests
 - keep request and response buffering disabled for the gRPC route
 - use idle timeouts longer than the agent keepalive interval
+
+The public Edge Agent gRPC URL may differ from the browser URL because Citadel
+keeps separate API and Edge gRPC listeners. Configure
+`EdgeAgent__PublicGrpcUrl` with the address that the Agent can reach.
 
 If the proxy does not support gRPC over HTTP/2, the agent may connect and then fail with HTTP/2 protocol errors.
 

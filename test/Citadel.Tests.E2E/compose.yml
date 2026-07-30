@@ -37,6 +37,10 @@ services:
     init: true
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Transport__Mode: Disabled
+      Transport__PublicUrl: http://127.0.0.1:18000
+      EdgeAgent__PublicGrpcUrl: http://citadel:8001
+      AgentTransport__AllowInsecure: 'true'
       ConnectionStrings__Postgres: Host=postgres;Database=citadel;Username=citadel;Password=citadel-e2e
       Jwt__Issuer: http://127.0.0.1:18000
       Jwt__Audience: http://127.0.0.1:18000

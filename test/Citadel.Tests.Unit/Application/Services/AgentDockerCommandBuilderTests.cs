@@ -9,11 +9,26 @@ public sealed class AgentDockerCommandBuilderTests
     {
         var command = AgentDockerCommandBuilder.BuildRegularAgentCommand(
             "citadel-agent:1.0.0",
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            requiresTls: true);
 
         Assert.Equal(1, CountOccurrences(command, "-v /:/host:ro"));
         Assert.Contains("--label com.citadel.system=true", command);
         Assert.Contains("--label com.citadel.system-role=agent", command);
+        Assert.Contains(
+            "-v /path/to/agent-tls:/etc/citadel/tls:ro",
+            command);
+    }
+
+    [Fact]
+    public void BuildRegularAgentCommand_ShouldNotMountTlsForExplicitInsecureMode()
+    {
+        var command = AgentDockerCommandBuilder.BuildRegularAgentCommand(
+            "citadel-agent:1.0.0",
+            new Dictionary<string, string>(),
+            requiresTls: false);
+
+        Assert.DoesNotContain("/etc/citadel/tls", command);
     }
 
     [Fact]

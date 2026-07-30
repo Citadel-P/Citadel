@@ -78,6 +78,30 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result?.ToDomain();
     }
 
+    public async Task<Platform?> GetByDaemonIdAsync(
+        string daemonId,
+        Guid? excludePlatformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT p.*
+            FROM Platforms p
+            WHERE BTRIM(p.PlatformDescriptor->>'DaemonId') = @DaemonId
+              AND (@ExcludePlatformId IS NULL OR p.Id <> @ExcludePlatformId)
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(
+            sql,
+            new
+            {
+                DaemonId = daemonId,
+                ExcludePlatformId = excludePlatformId
+            },
+            transaction: tx());
+
+        return result?.ToDomain();
+    }
+
     public Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken)
     {
         const string sql = """
