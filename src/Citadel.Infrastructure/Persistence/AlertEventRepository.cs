@@ -193,6 +193,47 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return alertEvents;
     }
 
+    public async Task<IEnumerable<AlertEvent>> GetUnresolvedUnmanagedContainerAlertsAsync(
+        IReadOnlyCollection<string> dockerContainerIds,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT
+            a.Id,
+            a.AlertRuleId,
+            a.Type,
+            a.Severity,
+            a.Info,
+            a.ResourceId,
+            a.ResourceName,
+            a.ResourceType,
+            a.DeduplicationKey,
+            a.OpenIncidentKey,
+            a.AcknowledgedByActorId,
+            a.AcknowledgedAt,
+            a.ResolvedByActorId,
+            a.ResolvedAt,
+            a.ResolutionNote,
+            a.CreatedAt,
+            a.UpdatedAt
+        FROM AlertEvents a
+        WHERE a.Type = @Type
+          AND a.ResolvedAt IS NULL
+          AND a.UnmanagedContainerId = ANY(@DockerContainerIds)
+        """;
+
+        var rows = await db.QueryAsync<AlertEventDto>(
+            sql,
+            new
+            {
+                Type = EnumFormatter<AlertType>.GetValue(AlertType.UnmanagedContainerCreated),
+                DockerContainerIds = dockerContainerIds.ToArray()
+            },
+            transaction: tx());
+
+        return rows.Select(row => row.ToDomain()).ToArray();
+    }
+
     public Task<IEnumerable<Guid>> GetAuthorizedUserIdsAsync(
         Guid alertEventId,
         ResourceType permissionResourceType,

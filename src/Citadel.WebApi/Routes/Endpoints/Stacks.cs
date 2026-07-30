@@ -55,6 +55,44 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, draft => StackDuplicateDraftView.Map(draft, stackId));
     }
 
+    public static async Task<Results<Ok<ComposeProjectImportDraftView>, ProblemHttpResult>> GetComposeImportDraft(
+        IMediator mediator,
+        [Description("Platform id")] Guid platformId,
+        [Description("Docker Compose project name")] string projectName,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetComposeProjectImportDraft(platformId, projectName),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, ComposeProjectImportDraftView.Map);
+    }
+
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> ImportComposeProject(
+        IMediator mediator,
+        [Description("Platform id")] Guid platformId,
+        [Description("Docker Compose project name")] string projectName,
+        [FromBody] ImportComposeProjectInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            input.ToCommand(platformId, projectName),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<ComposeProjectImportValidation>, ProblemHttpResult>> ValidateComposeImportDraft(
+        IMediator mediator,
+        [Description("Platform id")] Guid platformId,
+        [Description("Docker Compose project name")] string projectName,
+        [FromBody] ValidateComposeProjectImportInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            input.ToQuery(platformId, projectName),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result);
+    }
+
     public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,

@@ -75,7 +75,7 @@ internal sealed partial class ApplyDeploymentService(
 
         if (deployment.Spec.Image is LocalImage local)
         {
-            imageId = local.ImageId;
+            imageId = await ResolveLocalImageIdAsync(local.ImageId, deployment.PlatformId, ct);
         }
         else if (deployment.Spec.Image is ExternalImage external)
         {
@@ -436,6 +436,20 @@ internal sealed partial class ApplyDeploymentService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         return await uow.Deployments.GetAsync(id, ct);
+    }
+
+    private async Task<string?> ResolveLocalImageIdAsync(
+        string imageId,
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(imageId, out var localImageId))
+            return imageId;
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var image = await uow.Images.GetByIdAsync(localImageId, platformId, cancellationToken);
+        return image?.DockerImageId;
     }
 
     private async Task<(string? ContainerId, string? error)> DeleteContainer(Guid deploymentId, PlatformCacheEntry platform, CancellationToken ct)

@@ -25,6 +25,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
 [JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
+[JsonDerivedType(typeof(DeploymentAdopted), nameof(ActivityEventType.DeploymentAdopted))]
 [JsonDerivedType(typeof(StackCreated), nameof(ActivityEventType.StackCreated))]
 [JsonDerivedType(typeof(StackDuplicated), nameof(ActivityEventType.StackDuplicated))]
 [JsonDerivedType(typeof(StackUpdated), nameof(ActivityEventType.StackUpdated))]
@@ -42,6 +43,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(StackGitUpdateAvailable), nameof(ActivityEventType.StackGitUpdateAvailable))]
 [JsonDerivedType(typeof(StackGitAutoUpdated), nameof(ActivityEventType.StackGitAutoUpdated))]
 [JsonDerivedType(typeof(StackGitAutoDeployFailed), nameof(ActivityEventType.StackGitAutoDeployFailed))]
+[JsonDerivedType(typeof(StackImported), nameof(ActivityEventType.StackImported))]
 [JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
@@ -137,6 +139,10 @@ public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : Activ
 public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
 public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, DeploymentResultSnapshot Result) : ActivityEventInfo;
+public sealed record DeploymentAdopted(
+    DeploymentSnapshot Deployment,
+    string ContainerId,
+    string ContainerName) : ActivityEventInfo;
 
 public sealed record StackCreated(StackSnapshot Stack) : ActivityEventInfo;
 public sealed record StackDuplicated(StackSnapshot Stack, ActivitySourceResource Source) : ActivityEventInfo;
@@ -171,6 +177,10 @@ public sealed record StackGitAutoDeployFailed(
     string CurrentCommitSha,
     string RemoteCommitSha,
     string Reason) : ActivityEventInfo;
+public sealed record StackImported(
+    StackSnapshot Stack,
+    string ComposeProject,
+    IReadOnlyList<string> ServiceNames) : ActivityEventInfo;
 public sealed record StackWebhookReceived(
     Guid RequestId,
     string AuthType,

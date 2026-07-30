@@ -4,6 +4,10 @@ Deployments let Citadel run and manage a single Docker container on a selected p
 
 Use a stack instead when the workload needs multiple services, Compose networks, Compose volumes, or Git-backed Compose configuration.
 
+To bring an existing standalone Docker container under Citadel management
+without recreating it first, see
+`docs/user/adopting-existing-workloads.md`.
+
 ## Basic Setup
 
 Create a deployment and choose:
@@ -231,6 +235,20 @@ The duplicate flow:
 Runtime state, container IDs, history, generated credentials, and resolved secret values are not copied.
 
 Resource bindings are not copied. If the source deployment used deployment-scoped bindings, recreate those bindings on the new deployment before deploying it.
+
+## Adopt An Existing Container
+
+Use **Adopt as Deployment** from an unmanaged standalone container to create a
+Deployment without restarting or recreating the current container. Citadel
+opens the normal add form with a configuration draft and keeps the source
+Platform fixed.
+
+Adoption does not deploy anything. A later Redeploy can recreate the container
+from the reviewed definition. Containers that belong to Docker Compose must be
+imported as complete Stacks instead.
+
+See `docs/user/adopting-existing-workloads.md` for eligibility, secret
+handling, unsupported runtime settings, and first Redeploy guidance.
 
 ## Backups
 

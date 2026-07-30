@@ -118,6 +118,7 @@ public static class ApplicationModule
             .AddSingleton<IStackStoragePathProvider, StackStoragePathProvider>()
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<ISecretValueProtector, SecretValueProtector>()
+            .AddSingleton<IAdoptionFingerprintService, AdoptionFingerprintService>()
             .AddSingleton<ITotpService, TotpService>()
             .AddSingleton<IRecoveryCodeService, RecoveryCodeService>()
             .AddSingleton<IMfaPolicyService, MfaPolicyService>()

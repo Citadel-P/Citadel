@@ -101,10 +101,12 @@ function FormHarness({
   onSave,
   draftKey,
   formSchema = schema,
+  confirmSave,
 }: {
   onSave: (payload: TestConfiguration) => Promise<void>;
   draftKey?: string;
   formSchema?: FormSchema<TestConfiguration>;
+  confirmSave?: (payload: TestConfiguration) => Promise<boolean>;
 }) {
   const [update, setUpdate] = useState<Partial<TestConfiguration>>({});
 
@@ -116,6 +118,7 @@ function FormHarness({
       update={update}
       setUpdate={setUpdate}
       onSave={onSave}
+      confirmSave={confirmSave}
       draftKey={draftKey}
       draftVersion={1}
     />
@@ -171,6 +174,32 @@ describe('FormShell', () => {
       expect(onSave).toHaveBeenCalledOnce();
     });
     expect(JSON.parse(localStorage.getItem('form-draft')!)).toMatchObject({
+      version: storedDraft.version,
+      update: storedDraft.update,
+    });
+    expect(descriptionInput).toHaveValue('Updated description');
+    expect(enabledSaveButton()).toBeDefined();
+  });
+
+  it('preserves the current draft when save confirmation fails', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const confirmSave = vi.fn().mockRejectedValue(new Error('confirmation failed'));
+    const { user } = renderCitadel(
+      <FormHarness onSave={onSave} confirmSave={confirmSave} draftKey="form-confirmation-draft" />,
+    );
+
+    const descriptionInput = screen.getByRole('textbox', { name: 'Description input' });
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, 'Updated description');
+    const storedDraft = JSON.parse(localStorage.getItem('form-confirmation-draft')!);
+
+    await user.click(enabledSaveButton()!);
+
+    await waitFor(() => {
+      expect(confirmSave).toHaveBeenCalledOnce();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('form-confirmation-draft')!)).toMatchObject({
       version: storedDraft.version,
       update: storedDraft.update,
     });

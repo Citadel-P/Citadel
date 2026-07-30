@@ -56,7 +56,11 @@ internal static class ImageMappers
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels ?? [],
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
-            Layers: image.Layers?.Select(Map)?.ToList() ?? []
+            Layers: image.Layers?.Select(Map)?.ToList() ?? [],
+            User: image.User,
+            WorkingDir: image.WorkingDir,
+            EntryPoint: image.EntryPoint?.ToList() ?? [],
+            StopSignal: image.StopSignal
         );
 
     private static IEnumerable<Domain.Contracts.Resources.Images.ContainerImageResult> Map(this RepeatedField<global::Citadel.Images.V1.ContainerImageResult> containers)
@@ -256,7 +260,11 @@ internal static class ImageMappers
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels,
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
-            Layers: image.Layers?.Select(Map) ?? []
+            Layers: image.Layers?.Select(Map) ?? [],
+            User: image.User,
+            WorkingDir: image.WorkingDir,
+            EntryPoint: image.EntryPoint?.ToList() ?? [],
+            StopSignal: image.StopSignal
 
         );
 

@@ -460,6 +460,7 @@ CREATE TABLE alertevents (
     resourcetype text NOT NULL,
     severity text NOT NULL,
     type text NOT NULL,
+    unmanagedcontainerid text GENERATED ALWAYS AS (CASE WHEN type = 'UnmanagedContainerCreated' THEN info->>'ContainerId' ELSE NULL END) STORED,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     CONSTRAINT pk_alertevents PRIMARY KEY (id),
     CONSTRAINT fk_alertevents_alertrules_alertruleid FOREIGN KEY (alertruleid) REFERENCES alertrules (id) ON DELETE CASCADE
@@ -1256,6 +1257,8 @@ CREATE INDEX ix_alertchannels_createdbyactorid ON alertchannels (createdbyactori
 
 CREATE INDEX ix_alertevents_alertruleid ON alertevents (alertruleid);
 
+CREATE INDEX ix_alertevents_open_unmanagedcontainerid ON alertevents (unmanagedcontainerid) WHERE resolvedat IS NULL AND unmanagedcontainerid IS NOT NULL;
+
 CREATE UNIQUE INDEX ix_alertevents_openincidentkey ON alertevents (openincidentkey);
 
 CREATE INDEX ix_alertevents_resource_createdat ON alertevents (resourceid, createdat);
@@ -1608,7 +1611,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260729141540_migration0001', '10.0.10');
+VALUES ('20260729204645_migration0001', '10.0.10');
 
 COMMIT;
 

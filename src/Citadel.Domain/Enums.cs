@@ -496,6 +496,7 @@ public enum StopSignal {
     SIGTERM,
     SIGKILL,
     SIGINT,
+    SIGQUIT,
 }
 public enum ActorType
 {
@@ -678,6 +679,7 @@ public enum ActivityEventType
     DeploymentPaused,
     DeploymentApplied,
     DeploymentDegraded,
+    DeploymentAdopted,
     #endregion
 
     #region Platform Events
@@ -751,6 +753,7 @@ public enum ActivityEventType
     StackGitUpdateAvailable,
     StackGitAutoUpdated,
     StackGitAutoDeployFailed,
+    StackImported,
     StackWebhookReceived,
     #endregion
 

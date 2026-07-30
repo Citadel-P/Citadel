@@ -6,6 +6,9 @@ Use deployments instead when the workload is a single Docker container and does 
 
 Use Git stacks instead when the Compose files should be reviewed, versioned, and deployed from a repository. See `docs/user/git-stacks.md`.
 
+To import a Docker Compose project that is already running without applying it
+again during onboarding, see `docs/user/adopting-existing-workloads.md`.
+
 ## Basic Setup
 
 Create a stack and choose:
@@ -134,6 +137,11 @@ By default, Citadel derives the Compose project name from the stack name. Set **
 - importing or taking over an existing Compose project
 - keeping the runtime project name stable while renaming the Citadel stack
 - avoiding a collision with another Compose project on the same platform
+
+Use the dedicated Compose import flow for an existing running project. It
+preserves the detected project name, compares the supplied Compose source with
+the running services, and associates the project without running Docker
+Compose.
 
 Project names must start with a lowercase letter or digit and contain only lowercase letters, digits, dashes, or underscores.
 

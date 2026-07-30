@@ -63,7 +63,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 i.ControlState,
                 i.ControlStartedAt,
-                i.RowVersion,
+                i.RowVersion
             FROM Images i
             WHERE PlatformId = @PlatformId AND i.Id = @Id
             LIMIT 1

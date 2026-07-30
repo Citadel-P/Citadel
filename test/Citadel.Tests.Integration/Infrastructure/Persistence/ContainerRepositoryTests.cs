@@ -1,6 +1,7 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -10,6 +11,84 @@ namespace Tests.Integration.Infrastructure.Persistence;
 
 public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    [Fact]
+    public async Task TryAssignToDeploymentAsync_ShouldAllowExactlyOneOwnershipClaim()
+    {
+        var platform = CreatePlatform();
+        var deployment = new Deployment(
+            $"adopted-deployment-{Guid.CreateVersion7():N}",
+            Constants.SystemId,
+            platform.Id);
+        var container = CreateContainer(platform.Id, dockerStack: null);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+
+        var first = await uow.Containers.TryAssignToDeploymentAsync(
+            container.Id,
+            platform.Id,
+            container.DockerContainerId,
+            deployment.Id,
+            TestContext.Current.CancellationToken);
+        var second = await uow.Containers.TryAssignToDeploymentAsync(
+            container.Id,
+            platform.Id,
+            container.DockerContainerId,
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var persisted = await uow.Containers.GetByIdAsync(container.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(1, first);
+        Assert.Equal(0, second);
+        Assert.Equal(deployment.Id, persisted?.DeploymentId);
+    }
+
+    [Fact]
+    public async Task TryAssignComposeProjectToStackAsync_ShouldClaimTheExactProjectSet()
+    {
+        var platform = CreatePlatform();
+        const string projectName = "existing-project";
+        var stack = Stack.Create(
+            $"imported-stack-{Guid.CreateVersion7():N}",
+            Constants.SystemId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                "services:\n  api:\n    image: nginx\n",
+                StackUpdateBehavior.Disabled,
+                ProjectName: projectName,
+                DestroyBeforeDeploy: false));
+        var first = CreateContainer(platform.Id, projectName);
+        var second = CreateContainer(platform.Id, projectName);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(first, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(second, TestContext.Current.CancellationToken);
+
+        var affected = await uow.Containers.TryAssignComposeProjectToStackAsync(
+            platform.Id,
+            projectName,
+            [first.Id, second.Id],
+            [first.DockerContainerId, second.DockerContainerId],
+            stack.Id,
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var persisted = (await uow.Containers.GetByIdAsync(
+                [first.Id, second.Id],
+                TestContext.Current.CancellationToken))
+            .ToArray();
+        Assert.Equal(2, affected);
+        Assert.All(persisted, container => Assert.Equal(stack.Id, container.StackId));
+    }
+
     [Fact]
     public async Task UpdateContainersStateAsync_ShouldPersistEnumAsString()
     {
@@ -133,4 +212,14 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
             status: PlatformStatus.Offline,
             connectorType: PlatformConnectorType.EdgeAgent,
             platformDescriptor: new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
+
+    private static Container CreateContainer(Guid platformId, string? dockerStack)
+        => new(
+            name: $"container-{Guid.CreateVersion7():N}",
+            dockerImageId: $"image-{Guid.CreateVersion7():N}",
+            platformId: platformId,
+            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            dockerContainerId: $"container-{Guid.CreateVersion7():N}",
+            state: ContainerStateStatus.Running,
+            dockerStack: dockerStack);
 }

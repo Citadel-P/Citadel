@@ -6,8 +6,7 @@ import { deployAction, pauseAction, startAction, stopAction, useVariables } from
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { canCheckDeploymentUpdates, hasDeploymentUpdateAvailable } from '../update-status';
-import { getApiErrorDetail } from '@/lib/api-errors';
+import { getDeploymentUpdateCheckDisabledReason, hasDeploymentUpdateAvailable } from '../update-status';
 
 export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>()
   .addAction(deployAction)
@@ -25,10 +24,14 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const multiSelect = Array.isArray(resources) && resources.length > 1;
       const { mutateAsync, isPending } = useMutate('checkDeploymentUpdates');
-      const canExecute = canCheckDeploymentUpdates(selected) && !multiSelect;
+      const disabledReason = multiSelect
+        ? 'Select one deployment to check for updates.'
+        : getDeploymentUpdateCheckDisabledReason(selected);
+      const canExecute = disabledReason === undefined;
 
       return {
         canExecute,
+        disabledReason,
         isPending,
         run: async () => {
           if (!selected || !canExecute) return;
@@ -47,10 +50,8 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
               queryClient.invalidateQueries({ queryKey: ['getDeployment'] }),
               queryClient.invalidateQueries({ queryKey: ['listDeployments'] }),
             ]);
-          } catch (error) {
-            toast.error('Update check failed', {
-              description: getApiErrorDetail(error, 'Citadel could not check the image registry.'),
-            });
+          } catch {
+            // Nope
           }
         },
       };

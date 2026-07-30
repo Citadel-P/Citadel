@@ -140,7 +140,9 @@ internal static class ContainerMappers
             OnBuild: config.OnBuild?.ToList() ?? [],
             Entrypoint: config.Entrypoint?.ToList() ?? [],
             ExposedPorts: config.ExposedPorts?.Select(s => s.Key).ToList(),
-            Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+            Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
+            StopSignal: config.StopSignal,
+            StopTimeout: config.StopTimeout
         );
 
     private static MountPointInfo Map(this Hosting.DockerClient.MountPoint mount)
@@ -179,7 +181,9 @@ internal static class ContainerMappers
                 ShmSize: config.ShmSize ?? 0,
                 Tmpfs: config.Tmpfs?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
                 Sysctls: config.Sysctls?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
-                LogConfig: new LogConfiguration(config.LogConfig?.Type?.ToString(), config.LogConfig?.Config?.ToDictionary() ?? []),
+                LogConfig: new LogConfiguration(
+                    MapLogConfigType(config.LogConfig?.Type),
+                    config.LogConfig?.Config?.ToDictionary() ?? []),
                 Binds: config.Binds?.ToList() ?? [],
                 ContainerIDFile: config.ContainerIDFile,
                 PortBindings: config.PortBindings?.Map() ?? [],
@@ -213,6 +217,23 @@ internal static class ContainerMappers
                 Ulimits: config.Ulimits?.Map() ?? []
             );
     }
+
+    internal static string? MapLogConfigType(Hosting.DockerClient.LogConfigType? type)
+        => type switch
+        {
+            null => null,
+            Hosting.DockerClient.LogConfigType.Local => "local",
+            Hosting.DockerClient.LogConfigType.JsonFile => "json-file",
+            Hosting.DockerClient.LogConfigType.Syslog => "syslog",
+            Hosting.DockerClient.LogConfigType.Journald => "journald",
+            Hosting.DockerClient.LogConfigType.Gelf => "gelf",
+            Hosting.DockerClient.LogConfigType.Fluentd => "fluentd",
+            Hosting.DockerClient.LogConfigType.Awslogs => "awslogs",
+            Hosting.DockerClient.LogConfigType.Splunk => "splunk",
+            Hosting.DockerClient.LogConfigType.Etwlogs => "etwlogs",
+            Hosting.DockerClient.LogConfigType.None => "none",
+            _ => null
+        };
     
     private static IReadOnlyList<HostMount> Map(this ICollection<Hosting.DockerClient.Mount> mounts)
         => [.. mounts.Select(Map)];
@@ -473,7 +494,9 @@ internal static class ContainerMappers
             WorkingDir: config.WorkingDir,
             Entrypoint: config.Entrypoint?.ToList() ?? [],
             OnBuild: config.OnBuild?.ToList() ?? [],
-            Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+            Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
+            StopSignal: config.StopSignal,
+            StopTimeout: config.StopTimeout
         );
 
     private static NetworkSettingsInfo Map(this NetworkSettings settings)

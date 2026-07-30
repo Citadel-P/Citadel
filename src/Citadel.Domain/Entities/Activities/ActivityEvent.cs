@@ -73,6 +73,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.DeploymentPaused
             or ActivityEventType.DeploymentApplied
             or ActivityEventType.DeploymentDegraded
+            or ActivityEventType.DeploymentAdopted
                 => ActivityResourceType.Deployment,
 
             ActivityEventType.StackCreated
@@ -93,6 +94,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackGitAutoUpdated
             or ActivityEventType.StackGitAutoDeployFailed
             or ActivityEventType.StackWebhookReceived
+            or ActivityEventType.StackImported
                 => ActivityResourceType.Stack,
 
             ActivityEventType.PlatformCreated
@@ -255,6 +257,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentApplied, DeploymentApplied) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
+            (ActivityEventType.DeploymentAdopted, DeploymentAdopted) => true,
 
             (ActivityEventType.StackCreated, StackCreated) => true,
             (ActivityEventType.StackDuplicated, StackDuplicated) => true,
@@ -274,6 +277,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.StackGitAutoUpdated, StackGitAutoUpdated) => true,
             (ActivityEventType.StackGitAutoDeployFailed, StackGitAutoDeployFailed) => true,
             (ActivityEventType.StackWebhookReceived, StackWebhookReceived) => true,
+            (ActivityEventType.StackImported, StackImported) => true,
 
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,

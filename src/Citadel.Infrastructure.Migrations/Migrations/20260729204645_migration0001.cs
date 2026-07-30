@@ -810,6 +810,7 @@ namespace Infrastructure.Migrations.Migrations
                     resourcetype = table.Column<string>(type: "text", nullable: false),
                     severity = table.Column<string>(type: "text", nullable: false),
                     type = table.Column<string>(type: "text", nullable: false),
+                    unmanagedcontainerid = table.Column<string>(type: "text", nullable: true, computedColumnSql: "CASE WHEN type = 'UnmanagedContainerCreated' THEN info->>'ContainerId' ELSE NULL END", stored: true),
                     updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
@@ -2179,6 +2180,12 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_alertevents_alertruleid",
                 table: "alertevents",
                 column: "alertruleid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_alertevents_open_unmanagedcontainerid",
+                table: "alertevents",
+                column: "unmanagedcontainerid",
+                filter: "resolvedat IS NULL AND unmanagedcontainerid IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_alertevents_openincidentkey",

@@ -49,6 +49,7 @@ internal static class DeploymentMappers
              Domain.StopSignal.SIGTERM => Citadel.Deployments.V1.StopSignal.Sigterm,
              Domain.StopSignal.SIGINT => Citadel.Deployments.V1.StopSignal.Sigint,
              Domain.StopSignal.SIGKILL => Citadel.Deployments.V1.StopSignal.Sigkill,
+             Domain.StopSignal.SIGQUIT => Citadel.Deployments.V1.StopSignal.Sigquit,
              _ => Citadel.Deployments.V1.StopSignal.Sigterm,
          };
 

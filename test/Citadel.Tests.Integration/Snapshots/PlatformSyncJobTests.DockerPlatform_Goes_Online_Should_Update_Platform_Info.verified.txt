@@ -14,6 +14,26 @@
   Description: null,
   DeploymentCount: 0,
   StackCount: 0,
+  DeploymentStatusCounts: {
+    Total: 0,
+    Healthy: 0,
+    Degraded: 0,
+    Failed: 0,
+    Stopped: 0,
+    Paused: 0,
+    InProgress: 0,
+    Unknown: 0
+  },
+  StackStatusCounts: {
+    Total: 0,
+    Healthy: 0,
+    Degraded: 0,
+    Failed: 0,
+    Stopped: 0,
+    Paused: 0,
+    InProgress: 0,
+    Unknown: 0
+  },
   PlatformDescriptor: {
     DaemonId: 123456,
     ContainerCount: 5,
@@ -24,7 +44,9 @@
     OperatingSystem: Linux,
     OsVersion: 5.15,
     OsType: linux,
-    Architecture: x86_64
+    Architecture: x86_64,
+    ImageUsedBytes: null,
+    VolumeUsedBytes: null
   },
   Stats: null,
   Tags: null

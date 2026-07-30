@@ -26,12 +26,20 @@ public sealed class ApplyDeploymentServiceTests
     {
         var actorId = Guid.CreateVersion7();
         var platformId = Guid.CreateVersion7();
+        var localImage = new Image(
+            "api:local",
+            ["api:local"],
+            "sha256:local-image",
+            1024,
+            0,
+            platformId,
+            DateTime.UtcNow);
         var deployment = new Deployment(
             name: "api",
             createdByActorId: actorId,
             platformId: platformId,
             spec: new DeploymentSpec(
-                Image: new LocalImage("image-id"),
+                Image: new LocalImage(localImage.Id.ToString()),
                 UpdateBehavior: UpdateBehavior.Disabled,
                 EnvironmentVariables:
                 [
@@ -62,10 +70,16 @@ public sealed class ApplyDeploymentServiceTests
             .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Actor?)null);
 
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(x => x.GetByIdAsync(localImage.Id, platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(localImage);
+
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Deployments).Returns(deployments.Object);
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
         unitOfWork
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -151,9 +165,10 @@ public sealed class ApplyDeploymentServiceTests
         }
 
         Assert.NotNull(capturedCommand);
+        Assert.Equal(localImage.DockerImageId, capturedCommand!.ImageId);
         Assert.Equal(
             ["APP_MODE=prod", "CONNECTION=used-secret", "STATIC=value"],
-            capturedCommand!.EnvironmentVariables);
+            capturedCommand.EnvironmentVariables);
         Assert.DoesNotContain(capturedCommand.EnvironmentVariables ?? [], value => value.Contains("orphan-token", StringComparison.Ordinal));
 
         var applied = Assert.IsType<DeploymentApplied>(capturedActivity?.Info);

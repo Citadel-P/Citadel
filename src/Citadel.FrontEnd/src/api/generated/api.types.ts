@@ -70,6 +70,7 @@ export enum StopSignal {
   SIGTERM = "SIGTERM",
   SIGKILL = "SIGKILL",
   SIGINT = "SIGINT",
+  SIGQUIT = "SIGQUIT",
 }
 
 export enum StackVolumeKind {
@@ -669,6 +670,11 @@ export enum AlertDestination {
   ZulipChat = "Zulip_Chat",
 }
 
+export enum AdoptionIssueSeverity {
+  Warning = "Warning",
+  Blocker = "Blocker",
+}
+
 export enum ActorType {
   User = "User",
   System = "System",
@@ -712,6 +718,7 @@ export enum ActivityEventType {
   DeploymentPaused = "DeploymentPaused",
   DeploymentApplied = "DeploymentApplied",
   DeploymentDegraded = "DeploymentDegraded",
+  DeploymentAdopted = "DeploymentAdopted",
   PlatformCreated = "PlatformCreated",
   PlatformDeleted = "PlatformDeleted",
   PlatformConnected = "PlatformConnected",
@@ -764,6 +771,7 @@ export enum ActivityEventType {
   StackGitUpdateAvailable = "StackGitUpdateAvailable",
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
   InitialAdministratorCreated = "InitialAdministratorCreated",
   UserProfileUpdated = "UserProfileUpdated",
@@ -1159,6 +1167,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoDeploymentDegraded
       >
     | BaseActivityEventInfoTypeMapping<
+        "DeploymentAdopted",
+        ActivityEventInfoDeploymentAdopted
+      >
+    | BaseActivityEventInfoTypeMapping<
         "StackCreated",
         ActivityEventInfoStackCreated
       >
@@ -1225,6 +1237,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "StackGitAutoDeployFailed",
         ActivityEventInfoStackGitAutoDeployFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackImported",
+        ActivityEventInfoStackImported
       >
     | BaseActivityEventInfoTypeMapping<
         "AlertRuleCreated",
@@ -1824,6 +1840,13 @@ export interface ActivityEventInfoBuildWebhookReceived {
   dispatchedCommitSha?: null | string;
 }
 
+export interface ActivityEventInfoDeploymentAdopted {
+  $type?: "DeploymentAdopted";
+  deployment: DeploymentSnapshot;
+  containerId: string;
+  containerName: string;
+}
+
 export interface ActivityEventInfoDeploymentApplied {
   $type?: "DeploymentApplied";
   deployment: null | DeploymentSnapshot;
@@ -2105,6 +2128,13 @@ export interface ActivityEventInfoStackGitUpdateAvailable {
   remoteCommitSha: string;
 }
 
+export interface ActivityEventInfoStackImported {
+  $type?: "StackImported";
+  stack: StackSnapshot;
+  composeProject: string;
+  serviceNames: string[];
+}
+
 export interface ActivityEventInfoStackPaused {
   $type?: "StackPaused";
   containerIds: string[];
@@ -2292,6 +2322,23 @@ export interface AddUserResourceAccessInput {
 export interface AddUserRoleInput {
   /** @format uuid */
   roleId: string;
+}
+
+export interface AdoptContainerInput {
+  name: string;
+  description: null | string;
+  spec: DeploymentSpec;
+  previewFingerprint: string;
+  tagIds?: null | string[];
+  /** @default false */
+  importSensitiveEnvironmentAsSecrets?: boolean;
+}
+
+export interface AdoptionIssue {
+  code: string;
+  message: string;
+  severity: AdoptionIssueSeverity;
+  fieldPath?: null | string;
 }
 
 export interface AgentSetupView {
@@ -3960,6 +4007,61 @@ export interface ClusterVolumeInfo {
   accessibleTopology: TopologyEntry[];
 }
 
+export interface ComposeProjectImportDraftView {
+  source: ComposeProjectImportSourceView;
+  draft: ComposeProjectStackDraftView;
+  issues: ContainerAdoptionIssueView[];
+  runtimeFingerprint: string;
+}
+
+export interface ComposeProjectImportSourceView {
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  projectName: string;
+  containerIds: string[];
+  containerNames: string[];
+  services: ComposeProjectRuntimeService[];
+}
+
+export interface ComposeProjectImportValidation {
+  services: ComposeProjectServiceComparison[];
+  issues: AdoptionIssue[];
+  previewFingerprint: string;
+}
+
+export interface ComposeProjectRuntimeService {
+  name: string;
+  image: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containerCount: number | string;
+  states: ContainerStateStatus[];
+}
+
+export interface ComposeProjectServiceComparison {
+  name: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  runtimeContainerCount: number | string;
+  runtimeImage: null | string;
+  definedInSource: boolean;
+  sourceImage: null | string;
+}
+
+export interface ComposeProjectStackDraftView {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  driftPolicy: StackDriftPolicy;
+  tagIds: string[];
+}
+
 export interface ConfigFromInput {
   network: string;
 }
@@ -3970,6 +4072,32 @@ export interface ConfirmMandatoryMfaSetupInput {
 
 export interface ConfirmProfileMfaSetupInput {
   code: string;
+}
+
+export interface ContainerAdoptionDraftView {
+  source: ContainerAdoptionSourceView;
+  draft: CreateDeploymentInput;
+  issues: ContainerAdoptionIssueView[];
+  previewFingerprint: string;
+  canImportSensitiveEnvironmentValues: boolean;
+}
+
+export interface ContainerAdoptionIssueView {
+  code: string;
+  message: string;
+  severity: AdoptionIssueSeverity;
+  fieldPath: null | string;
+}
+
+export interface ContainerAdoptionSourceView {
+  /** @format uuid */
+  id: string;
+  dockerContainerId: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  state: ContainerStateStatus;
 }
 
 export interface ContainerConfiguration {
@@ -3993,6 +4121,12 @@ export interface ContainerConfiguration {
   macAddress: null | string;
   onBuild: string[];
   labels: Record<string, string>;
+  stopSignal?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopTimeout?: null | number | string;
 }
 
 export interface ContainerDataView {
@@ -5397,6 +5531,15 @@ export interface ImageView {
 export interface ImagesView {
   images: ImageView[];
   capabilities: ImageCapabilities;
+}
+
+export interface ImportComposeProjectInput {
+  name: string;
+  description: null | string;
+  stackSource: StackSource;
+  spec: StackSpec;
+  previewFingerprint: string;
+  tagIds?: null | string[];
 }
 
 export interface InitializeCitadelInput {
@@ -7467,6 +7610,12 @@ export interface ValidateBackupRepositoryInput {
   location: BackupExecutionLocation;
   /** @format uuid */
   platformId: null | string;
+}
+
+export interface ValidateComposeProjectImportInput {
+  name: string;
+  stackSource: StackSource;
+  spec: StackSpec;
 }
 
 export interface VerifyAlertChannelInput {
@@ -9845,6 +9994,70 @@ export class Api<
      * No description
      *
      * @tags Containers
+     * @name GetContainerAdoptionDraft
+     * @summary Build an adoption draft for an unmanaged container
+     * @request GET:/api/v1/containers/{id}/adoption-draft
+     * @secure
+     * @response `200` `ContainerAdoptionDraftView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getContainerAdoptionDraft: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ContainerAdoptionDraftView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/containers/${id}/adoption-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name AdoptContainer
+     * @summary Adopt an unmanaged container as a deployment
+     * @request POST:/api/v1/containers/{id}/adopt
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    adoptContainer: (
+      id: string,
+      data: AdoptContainerInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/containers/${id}/adopt`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
      * @name StartContainers
      * @summary Starts the given container(s)
      * @request PATCH:/api/v1/containers/start
@@ -9997,6 +10210,108 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetComposeProjectImportDraft
+     * @summary Get an unmanaged Docker Compose project import draft
+     * @request GET:/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}
+     * @secure
+     * @response `200` `ComposeProjectImportDraftView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getComposeProjectImportDraft: (
+      platformId: string,
+      projectName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ComposeProjectImportDraftView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms/${platformId}/unmanaged-compose-projects/${projectName}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ValidateComposeProjectImportDraft
+     * @summary Validate a source for an unmanaged Docker Compose project
+     * @request POST:/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft
+     * @secure
+     * @response `200` `ComposeProjectImportValidation` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    validateComposeProjectImportDraft: (
+      platformId: string,
+      projectName: string,
+      data: ValidateComposeProjectImportInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ComposeProjectImportValidation,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms/${platformId}/unmanaged-compose-projects/${projectName}/import-draft`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ImportComposeProject
+     * @summary Import an unmanaged Docker Compose project as a stack
+     * @request POST:/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    importComposeProject: (
+      platformId: string,
+      projectName: string,
+      data: ImportComposeProjectInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/unmanaged-compose-projects/${projectName}/import`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 

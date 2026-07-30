@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Hosting.Common;
@@ -9,6 +10,72 @@ namespace Tests.Integration.Infrastructure.Persistence;
 
 public sealed class DeploymentRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    [Fact]
+    public async Task GetInfoAsync_ShouldUseConfiguredLocalImageWhenRuntimeImageIsUnavailable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreatePlatform($"deployment-image-platform-{suffix}");
+        var image = new Image(
+            $"nginx-{suffix}",
+            ["nginx:latest"],
+            $"sha256:{Guid.NewGuid():N}",
+            1024,
+            0,
+            platform.Id,
+            DateTime.UtcNow);
+        var deployment = new Deployment(
+            $"deployment-image-{suffix}",
+            Constants.SystemId,
+            platform.Id,
+            new DeploymentSpec(new LocalImage(image.Id.ToString()), UpdateBehavior.Disabled));
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.Images.AddOrUpdateAsync(image, cancellationToken);
+        await uow.Deployments.AddAsync(deployment, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var detail = await uow.Deployments.GetInfoAsync(deployment.Id, cancellationToken);
+        var listed = (await uow.Deployments.GetInfoAsync(cancellationToken))
+            .Single(item => item.Id == deployment.Id);
+
+        Assert.NotNull(detail);
+        Assert.NotNull(detail.Image);
+        Assert.Equal(image.Id, detail.Image.Id);
+        Assert.Equal(image.Name, detail.Image.Name);
+        Assert.NotNull(listed.Image);
+        Assert.Equal(image.Id, listed.Image.Id);
+        Assert.Equal(image.Name, listed.Image.Name);
+    }
+
+    [Fact]
+    public async Task GetInfoAsync_ShouldIgnoreNonUuidLocalImageReference()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreatePlatform($"deployment-raw-image-platform-{suffix}");
+        var deployment = new Deployment(
+            $"deployment-raw-image-{suffix}",
+            Constants.SystemId,
+            platform.Id,
+            new DeploymentSpec(new LocalImage("sha256:unresolved"), UpdateBehavior.Disabled));
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.Deployments.AddAsync(deployment, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var stored = (await uow.Deployments.GetInfoAsync(cancellationToken))
+            .Single(item => item.Id == deployment.Id);
+
+        Assert.Null(stored.Image);
+    }
+
     [Fact]
     public async Task TryCompleteUpdateCheckAsync_ShouldReleaseProcessingAndRejectStaleConfigurationOrStatus()
     {

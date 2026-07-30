@@ -3,6 +3,7 @@ using Application.Features.Search.Models;
 using Application.Features.Images.Queries;
 using Application.Features.ResourceBindings.Models;
 using Application.Features.GitRepositories.Queries;
+using Application.Features.Stacks.Queries;
 using Application.Services.Backups;
 using Domain;
 using Domain.Contracts.Resources;
@@ -433,6 +434,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(ExposedPortsResult))]
 [JsonSerializable(typeof(CreateContainerView))]
+[JsonSerializable(typeof(ContainerAdoptionDraftView))]
+[JsonSerializable(typeof(ContainerAdoptionSourceView))]
+[JsonSerializable(typeof(ContainerAdoptionIssueView))]
+[JsonSerializable(typeof(AdoptContainerInput))]
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
 [JsonSerializable(typeof(RegistryConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
@@ -461,6 +466,14 @@ namespace Application.Models;
 [JsonSerializable(typeof(StackInput))]
 [JsonSerializable(typeof(CreateStackInput))]
 [JsonSerializable(typeof(StackDuplicateDraftView))]
+[JsonSerializable(typeof(ComposeProjectImportDraftView))]
+[JsonSerializable(typeof(ComposeProjectImportSourceView))]
+[JsonSerializable(typeof(ComposeProjectStackDraftView))]
+[JsonSerializable(typeof(ComposeProjectRuntimeService))]
+[JsonSerializable(typeof(ComposeProjectImportValidation))]
+[JsonSerializable(typeof(ComposeProjectServiceComparison))]
+[JsonSerializable(typeof(ValidateComposeProjectImportInput))]
+[JsonSerializable(typeof(ImportComposeProjectInput))]
 [JsonSerializable(typeof(PatchStackInput))]
 [JsonSerializable(typeof(StackInputPatchDocument))]
 [JsonSerializable(typeof(StackDriftPolicyInput))]

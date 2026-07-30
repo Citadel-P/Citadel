@@ -15,6 +15,9 @@ import {
   LookupResourceType,
   BuildRunStatus,
   LicenseCapability,
+  AdoptionIssueSeverity,
+  AdoptContainerInput,
+  type ContainerAdoptionIssueView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -31,7 +34,7 @@ import {
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
+import { useConfirmByName, useDialogHotkeys, useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams, useSearchParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
@@ -39,6 +42,21 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { ConfirmButton } from '@/components/custom/action-with-dialog';
+import { KeyRound, PackagePlus } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import { getDeploymentConfigurationNames } from './adoption-configuration-names';
+import { shouldApplyLocalImagePortDefaults } from './image-port-defaults';
 
 const enum ImageSource {
   local = 'Local',
@@ -147,11 +165,16 @@ const stop_signals = {
     label: StopSignal.SIGKILL,
     description: 'Forcefully stop the process immediately.',
   },
+  [StopSignal.SIGQUIT]: {
+    label: StopSignal.SIGQUIT,
+    description: 'Request a graceful shutdown when supported by the application.',
+  },
 };
 
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
+const EMPTY_ADOPTION_ISSUES: ContainerAdoptionIssueView[] = [];
 const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const environmentReferencePattern = /\$\{([^}]+)\}/g;
 
@@ -195,7 +218,17 @@ export const DeploymentForm = ({
   const id = useParams().id;
   const [searchParams] = useSearchParams();
   const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const adoptFrom = mode === 'add' ? searchParams.get('adoptFrom') : null;
   const duplicateDraftLoadedRef = useRef<string | null>(null);
+  const adoptionDraftLoadedRef = useRef<string | null>(null);
+  const adoptionPreviewFingerprintRef = useRef<string | null>(null);
+  const adoptionConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const adoptionConfirmButtonRef = useRef<HTMLButtonElement>(null);
+  const [adoptionConfirmationOpen, setAdoptionConfirmationOpen] = useState(false);
+  const [sensitiveImportPreference, setSensitiveImportPreference] = useState<{
+    containerId: string;
+    enabled: boolean;
+  } | null>(null);
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const queryClient = useQueryClient();
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
@@ -203,6 +236,7 @@ export const DeploymentForm = ({
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
+  const { mutateAsync: adoptContainer } = useMutate('adoptContainer');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
   const { data: buildProjectsData, isFetching: buildProjectsLoading } = useRead('listBuildProjects');
@@ -210,6 +244,11 @@ export const DeploymentForm = ({
     'getDeploymentDuplicateDraft',
     { deploymentId: duplicateFrom ?? '' },
     { enabled: mode === 'add' && !!duplicateFrom },
+  );
+  const { data: adoptionDraftData, isFetching: isAdoptionDraftLoading } = useRead(
+    'getContainerAdoptionDraft',
+    { id: adoptFrom ?? '' },
+    { enabled: mode === 'add' && !!adoptFrom },
   );
   const { data: resourceBindingLookupData } = useRead('lookup', {
     query: {
@@ -221,8 +260,61 @@ export const DeploymentForm = ({
 
   const resource: DeploymentConfigView | undefined = deploymentCfg?.data;
   const duplicateDraft = duplicateDraftData?.data;
+  const adoptionDraft = adoptionDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
-  const formDraftKey = duplicateFrom ? `deployment:duplicate:${duplicateFrom}` : `deployment:${id ?? 'new'}`;
+  const adoptionIssues = adoptionDraft?.issues ?? EMPTY_ADOPTION_ISSUES;
+  const sensitiveAdoptionIssues = adoptionIssues.filter(
+    (issue) => issue.code === 'SENSITIVE_ENVIRONMENT_VALUE_REQUIRED',
+  );
+  const importSensitiveEnvironmentAsSecrets =
+    adoptionDraft?.canImportSensitiveEnvironmentValues === true &&
+    (sensitiveImportPreference?.containerId === adoptFrom ? sensitiveImportPreference.enabled : true);
+  const visibleAdoptionIssues = importSensitiveEnvironmentAsSecrets
+    ? adoptionIssues.filter((issue) => issue.code !== 'SENSITIVE_ENVIRONMENT_VALUE_REQUIRED')
+    : adoptionIssues;
+  const adoptionContainerName = adoptionDraft?.source.name?.replace(/^\/+/, '') ?? '';
+  const hasAdoptionBlocker = adoptionIssues.some((issue) => issue.severity === AdoptionIssueSeverity.Blocker);
+  const resolveAdoptionConfirmation = useCallback((confirmed: boolean) => {
+    const resolver = adoptionConfirmationResolver.current;
+    adoptionConfirmationResolver.current = null;
+    setAdoptionConfirmationOpen(false);
+    resolver?.(confirmed);
+  }, []);
+  const {
+    input: adoptionConfirmationInput,
+    setInput: setAdoptionConfirmationInput,
+    isLoading: adoptionConfirmationLoading,
+    isConfirmDisabled: adoptionConfirmationDisabled,
+    handleConfirm: handleAdoptionConfirmation,
+    reset: resetAdoptionConfirmation,
+  } = useConfirmByName({
+    name: adoptionContainerName,
+    disabled: !adoptionContainerName,
+    onConfirm: () => resolveAdoptionConfirmation(true),
+    onClose: () => setAdoptionConfirmationOpen(false),
+    hotkeysEnabled: adoptionConfirmationOpen,
+  });
+  useDialogHotkeys({
+    enabled: adoptionConfirmationOpen,
+    onConfirm: handleAdoptionConfirmation,
+    onCancel: () => resolveAdoptionConfirmation(false),
+    confirmDisabled: adoptionConfirmationDisabled,
+    confirmButtonRef: adoptionConfirmButtonRef,
+  });
+  const confirmAdoption = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        resetAdoptionConfirmation();
+        adoptionConfirmationResolver.current = resolve;
+        setAdoptionConfirmationOpen(true);
+      }),
+    [resetAdoptionConfirmation],
+  );
+  const formDraftKey = adoptFrom
+    ? `deployment:adopt:${adoptFrom}`
+    : duplicateFrom
+      ? `deployment:duplicate:${duplicateFrom}`
+      : `deployment:${id ?? 'new'}`;
 
   const original = resource ?? ({} as DeploymentConfigView);
 
@@ -261,35 +353,39 @@ export const DeploymentForm = ({
   );
   const effectiveResourceBindings = resourceBindingLookupData?.data ?? EMPTY_RESOURCE_BINDING_LOOKUP;
   const effectiveConfigurationNames = useMemo(
-    () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
-    [effectiveResourceBindings],
+    () =>
+      getDeploymentConfigurationNames(
+        effectiveResourceBindings.map((entry) => entry.name),
+        adoptionIssues,
+        importSensitiveEnvironmentAsSecrets,
+      ),
+    [effectiveResourceBindings, adoptionIssues, importSensitiveEnvironmentAsSecrets],
   );
 
-  const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
-    platformId: currentPlatformId,
-    imageId: (currentImage as DeploymentImageInfoLocalImage)?.imageId,
-  });
-  const lastAppliedServerPortsRef = useRef<string[] | null>(null);
+  const localImageId = (currentImage as DeploymentImageInfoLocalImage | undefined)?.imageId;
+  const requestedImagePortDefaultsRef = useRef<string | null>(null);
+  const shouldLoadImagePorts =
+    !adoptFrom && currentImage?.$type === ImageSource.local && !!currentPlatformId && !!localImageId;
+  const { data, isSuccess: imageInfoIsSuccess } = useRead(
+    'getExposedPorts',
+    {
+      platformId: currentPlatformId,
+      imageId: localImageId,
+    },
+    { enabled: shouldLoadImagePorts },
+  );
 
   useEffect(() => {
-    const shouldAutoFill =
+    const requestedImageId = requestedImagePortDefaultsRef.current;
+    const hasResponse =
       imageInfoIsSuccess && data?.data?.ports !== undefined && currentImage?.$type === ImageSource.local;
-
-    if (!shouldAutoFill) return;
+    if (!hasResponse || requestedImageId !== localImageId) return;
 
     const serverPorts = data.data.ports ?? [];
     const userPorts = update.spec?.ports;
-    const lastApplied = lastAppliedServerPortsRef.current;
-    if (userPorts !== undefined && lastApplied && JSON.stringify(userPorts) !== JSON.stringify(lastApplied)) {
-      return;
-    }
+    requestedImagePortDefaultsRef.current = null;
+    if (!shouldApplyLocalImagePortDefaults(requestedImageId, localImageId, userPorts)) return;
 
-    // No update needed if server ports match what we already applied
-    if (lastApplied && JSON.stringify(serverPorts) === JSON.stringify(lastApplied)) {
-      return;
-    }
-
-    lastAppliedServerPortsRef.current = serverPorts;
     setUpdate(
       (prev) =>
         ({
@@ -300,7 +396,7 @@ export const DeploymentForm = ({
           },
         }) as Partial<DeploymentInput>,
     );
-  }, [imageInfoIsSuccess, data?.data?.ports, currentImage?.$type, update.spec?.ports, original.spec?.ports]);
+  }, [imageInfoIsSuccess, data?.data?.ports, currentImage?.$type, localImageId, update.spec?.ports]);
 
   useEffect(() => {
     if (!duplicateFrom || !duplicateDraft?.draft || duplicateDraftLoadedRef.current === duplicateFrom) return;
@@ -308,6 +404,14 @@ export const DeploymentForm = ({
     duplicateDraftLoadedRef.current = duplicateFrom;
     setUpdate(duplicateDraft.draft as Partial<DeploymentInput>);
   }, [duplicateFrom, duplicateDraft?.draft]);
+
+  useEffect(() => {
+    if (!adoptFrom || !adoptionDraft?.draft || adoptionDraftLoadedRef.current === adoptFrom) return;
+
+    adoptionDraftLoadedRef.current = adoptFrom;
+    adoptionPreviewFingerprintRef.current = adoptionDraft.previewFingerprint;
+    setUpdate(adoptionDraft.draft as Partial<DeploymentInput>);
+  }, [adoptFrom, adoptionDraft?.draft, adoptionDraft?.previewFingerprint]);
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(formDraftKey);
@@ -323,7 +427,33 @@ export const DeploymentForm = ({
     mode,
     basePath: 'deployments',
     entityName: 'Deployment',
-    onCreate: (payload) => createDeployment({ data: payload as CreateDeploymentInput }),
+    onCreate: (payload) => {
+      if (adoptFrom && adoptionDraft) {
+        const createPayload = payload as CreateDeploymentInput;
+        const previewFingerprint = adoptionPreviewFingerprintRef.current;
+        if (!previewFingerprint) {
+          return Promise.reject(new Error('Reload the container adoption draft before continuing.'));
+        }
+
+        const adoptionPayload: AdoptContainerInput = {
+          name: createPayload.name,
+          description: createPayload.description,
+          spec: createPayload.spec,
+          previewFingerprint,
+          tagIds: createPayload.tagIds,
+          importSensitiveEnvironmentAsSecrets,
+        };
+        return adoptContainer({ id: adoptFrom, data: adoptionPayload }).then(async (response) => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['listContainers'] }),
+            queryClient.invalidateQueries({ queryKey: ['getContainerData'] }),
+          ]);
+          return response;
+        });
+      }
+
+      return createDeployment({ data: payload as CreateDeploymentInput });
+    },
     onUpdate: (payload) => updateDeployment({ id, data: payload }),
     onRefresh: refreshData,
   });
@@ -377,7 +507,7 @@ export const DeploymentForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: false,
+            disabled: !!adoptFrom,
             description: 'Select the platform to deploy on.',
             render: (value, set) => {
               return (
@@ -605,16 +735,17 @@ export const DeploymentForm = ({
                             queryEnabled={!!currentPlatformId}
                             selected={val}
                             onSelect={(v: ImageView | undefined) => {
-                              lastAppliedServerPortsRef.current = null;
+                              const selectedImageId = v?.id ?? '';
+                              requestedImagePortDefaultsRef.current = adoptFrom ? null : selectedImageId || null;
                               set((prev) => ({
                                 spec: {
                                   ...prev.spec!,
                                   image: {
                                     $type: 'Local',
                                     ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
-                                    imageId: v?.id ?? '',
+                                    imageId: selectedImageId,
                                   } satisfies DeploymentImageInfoLocalImage,
-                                  ports: [],
+                                  ports: adoptFrom ? prev.spec?.ports : [],
                                 },
                               }));
                             }}
@@ -954,6 +1085,7 @@ export const DeploymentForm = ({
       id,
       effectiveConfigurationNames,
       disabled,
+      adoptFrom,
       buildProjects,
       buildProjectOptions,
       buildProjectsLoading,
@@ -972,6 +1104,47 @@ export const DeploymentForm = ({
           {warning.message}
         </AlertMessage>
       ))}
+      {adoptFrom && (
+        <AlertMessage type="info" title={isAdoptionDraftLoading ? 'Inspecting container' : 'Adopt container'}>
+          Citadel will attach the existing container to this deployment without recreating or restarting it. Review the
+          generated configuration before confirming.
+        </AlertMessage>
+      )}
+      {adoptFrom && adoptionDraft?.canImportSensitiveEnvironmentValues && sensitiveAdoptionIssues.length > 0 && (
+        <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-3">
+          <div className="flex min-w-0 gap-3">
+            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Import detected values as Citadel secrets</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Encrypt {sensitiveAdoptionIssues.length} detected sensitive{' '}
+                {sensitiveAdoptionIssues.length === 1 ? 'value' : 'values'} and bind{' '}
+                {sensitiveAdoptionIssues.length === 1 ? 'it' : 'them'} to this deployment. The values never leave the
+                server.
+              </div>
+            </div>
+          </div>
+          <Switch
+            checked={importSensitiveEnvironmentAsSecrets}
+            onCheckedChange={(checked) =>
+              adoptFrom &&
+              setSensitiveImportPreference({
+                containerId: adoptFrom,
+                enabled: checked,
+              })
+            }
+            aria-label="Import detected values as Citadel secrets"
+          />
+        </div>
+      )}
+      {visibleAdoptionIssues.map((issue) => (
+        <AlertMessage
+          key={`${issue.code}:${issue.fieldPath ?? ''}`}
+          type={issue.severity === AdoptionIssueSeverity.Blocker ? 'error' : 'warning'}
+          title={issue.severity === AdoptionIssueSeverity.Blocker ? 'Adoption blocked' : 'Review required'}>
+          {issue.message}
+        </AlertMessage>
+      ))}
       <FormShell
         mode={mode}
         schema={schema}
@@ -981,9 +1154,65 @@ export const DeploymentForm = ({
         onSave={handleSave}
         pending={isPending}
         disabled={disabled}
+        saveDisabled={!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft || hasAdoptionBlocker)}
+        saveLabel={adoptFrom ? 'Adopt Container' : 'Save'}
+        confirmSave={adoptFrom ? confirmAdoption : undefined}
         draftKey={formDraftKey}
         draftVersion={1}
       />
+      <Dialog
+        open={adoptionConfirmationOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            resetAdoptionConfirmation();
+            resolveAdoptionConfirmation(false);
+          }
+        }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adopt {adoptionDraft?.source.name ?? 'container'}?</DialogTitle>
+            <DialogDescription>
+              Citadel will start managing this existing container as a deployment. Docker will not be changed now.
+              Future Apply operations will recreate it from the reviewed configuration.
+              {importSensitiveEnvironmentAsSecrets &&
+                ' Detected sensitive values will be stored as encrypted Citadel secrets.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 my-4">
+            <p className="break-all">
+              Please enter{' '}
+              <button
+                type="button"
+                className="cursor-pointer font-bold"
+                onClick={() => {
+                  navigator.clipboard.writeText(adoptionContainerName);
+                  toast(`Copied "${adoptionContainerName}" to clipboard!`);
+                }}>
+                {adoptionContainerName}
+              </button>{' '}
+              below to confirm this action.
+              <br />
+              <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
+            </p>
+            <Input
+              aria-label={`Enter ${adoptionContainerName} to confirm`}
+              value={adoptionConfirmationInput}
+              onChange={(event) => setAdoptionConfirmationInput(event.target.value)}
+              className="focus-visible:ring-1"
+            />
+          </div>
+          <DialogFooter>
+            <ConfirmButton
+              ref={adoptionConfirmButtonRef}
+              title="Adopt"
+              icon={<PackagePlus className="h-4 w-4" />}
+              disabled={adoptionConfirmationDisabled}
+              onClick={handleAdoptionConfirmation}
+              loading={adoptionConfirmationLoading}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -15,6 +15,18 @@ namespace Infrastructure.Persistence;
 
 internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) : IDeploymentRepository
 {
+    private const string ImageJoin = """
+    LEFT JOIN Images i
+        ON i.Id = COALESCE(
+            c.ImageId,
+            CASE
+                WHEN d.Spec -> 'Image' ->> '$type' = 'Local'
+                    AND d.Spec -> 'Image' ->> 'ImageId' ~*
+                        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                THEN CAST(d.Spec -> 'Image' ->> 'ImageId' AS uuid)
+            END)
+    """;
+
     private static readonly string BaseSelect = $$"""
     SELECT
         d.Id,
@@ -44,8 +56,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     FROM Deployments d 
     LEFT JOIN Containers c
         ON d.Id = c.DeploymentId
-    LEFT JOIN Images i 
-        ON c.ImageId = i.Id
+    {{ImageJoin}}
     LEFT JOIN Platforms p 
         ON d.PlatformId = p.Id
     """;
@@ -278,8 +289,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 ON d.PlatformId = p.Id
             LEFT JOIN Containers c 
                 ON d.Id = c.DeploymentId
-            LEFT JOIN Images i 
-                ON c.ImageId = i.Id
+            {{ImageJoin}}
             WHERE {{ResourceTagSql.FilterPredicate("d")}}
               AND (@PlatformId IS NULL OR d.PlatformId = @PlatformId)
             ORDER BY 

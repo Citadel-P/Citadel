@@ -2333,6 +2333,12 @@ internal static class Configuration
         alertEvent.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
         alertEvent.Property<string>("DeduplicationKey").HasColumnType(Text).IsRequired();
         alertEvent.Property<string>("OpenIncidentKey").HasColumnType(Text).IsRequired(false);
+        alertEvent.Property<string>("UnmanagedContainerId")
+            .HasColumnType(Text)
+            .HasComputedColumnSql(
+                "CASE WHEN type = 'UnmanagedContainerCreated' THEN info->>'ContainerId' ELSE NULL END",
+                stored: true)
+            .IsRequired(false);
         alertEvent.Property<Guid?>("AcknowledgedByActorId").IsRequired(false);
         alertEvent.Property<DateTime?>("AcknowledgedAt").HasColumnType(Timestamp).IsRequired(false);
         alertEvent.Property<Guid?>("ResolvedByActorId").IsRequired(false);
@@ -2352,6 +2358,9 @@ internal static class Configuration
         alertEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");
         alertEvent.HasIndex("ResourceType").HasDatabaseName($"IX_{tableName}_ResourceType");
         alertEvent.HasIndex("OpenIncidentKey").IsUnique().HasDatabaseName($"IX_{tableName}_OpenIncidentKey");
+        alertEvent.HasIndex("UnmanagedContainerId")
+            .HasFilter("resolvedat IS NULL AND unmanagedcontainerid IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_Open_UnmanagedContainerId");
 
         return builder;
     }

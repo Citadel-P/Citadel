@@ -106,6 +106,38 @@ public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
+    public async Task GetUnresolvedUnmanagedContainerAlertsAsync_ShouldMatchContainerAndExcludeResolvedEvents()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platformId = Guid.NewGuid();
+        var matching = CreateUnmanagedContainerAlertEvent(
+            platformId,
+            "platform-adoption",
+            "https://platform-adoption",
+            "container-a",
+            "docker-a");
+        var resolved = CreateUnmanagedContainerAlertEvent(
+            platformId,
+            "platform-adoption",
+            "https://platform-adoption",
+            "container-b",
+            "docker-b");
+        resolved.Resolve(Constants.SystemId, DateTime.UtcNow, "already handled");
+
+        await uow.AlertEvents.AddAsync(matching, TestContext.Current.CancellationToken);
+        await uow.AlertEvents.AddAsync(resolved, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var events = (await uow.AlertEvents.GetUnresolvedUnmanagedContainerAlertsAsync(
+                ["docker-a", "docker-b", "docker-missing"],
+                TestContext.Current.CancellationToken))
+            .ToArray();
+
+        Assert.Equal(matching.Id, Assert.Single(events).Id);
+    }
+
+    [Fact]
     public async Task GetByIdAsync_With_Multiple_Ids_Should_Return_All_Matching_AlertEvents()
     {
         await using var scope = Services.CreateAsyncScope();

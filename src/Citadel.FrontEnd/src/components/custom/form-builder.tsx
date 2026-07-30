@@ -892,6 +892,9 @@ export function FormShell<T>({
   draftKey,
   draftVersion,
   onReset,
+  saveLabel = 'Save',
+  saveDisabled = false,
+  confirmSave,
 }: {
   title?: string;
   schema: FormSchema<T>;
@@ -905,6 +908,9 @@ export function FormShell<T>({
   draftKey?: string;
   draftVersion?: string | number;
   onReset?: () => void;
+  saveLabel?: string;
+  saveDisabled?: boolean;
+  confirmSave?: (payload: T) => Promise<boolean>;
 }) {
   const updateRef = React.useRef(update);
   updateRef.current = update;
@@ -1068,12 +1074,14 @@ export function FormShell<T>({
     if (!valid) return;
 
     let backupDraft: StoredDraft<Partial<T>> | null = null;
-    if (draftKey && typeof window !== 'undefined') {
-      backupDraft = loadDraft<Partial<T>>(draftKey, draftVersion);
-      clearDraft(draftKey);
-    }
-
     try {
+      if (confirmSave && !(await confirmSave(merged as T))) return;
+
+      if (draftKey && typeof window !== 'undefined') {
+        backupDraft = loadDraft<Partial<T>>(draftKey, draftVersion);
+        clearDraft(draftKey);
+      }
+
       const savedValue = merged as T;
       await onSave(savedValue);
       setOptimisticOriginal(savedValue);
@@ -1089,7 +1097,7 @@ export function FormShell<T>({
         persistDraft<Partial<T>>(draftKey, backupDraft.version, backupDraft.update);
       }
     }
-  }, [validateAll, merged, onSave, draftKey, draftVersion, setUpdate]);
+  }, [validateAll, merged, confirmSave, onSave, draftKey, draftVersion, setUpdate]);
 
   /* -------------------------------------------------------------------------- */
   /*                                    UI                                     */
@@ -1201,9 +1209,9 @@ export function FormShell<T>({
                 )}
                 <Button
                   className="w-full text-xs"
-                  disabled={disabled || !isValid || !canSave || pending}
+                  disabled={disabled || saveDisabled || !isValid || !canSave || pending}
                   onClick={confirm}>
-                  {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-3 h-3" />} Save
+                  {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-3 h-3" />} {saveLabel}
                 </Button>
               </div>
             )}
@@ -1432,8 +1440,12 @@ export function FormShell<T>({
               </Button>
             </>
           )}
-          <Button size="sm" onClick={confirm} disabled={disabled || !isValid || !canSave || pending}>
-            {pending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
+          <Button
+            size="sm"
+            onClick={confirm}
+            disabled={disabled || saveDisabled || !isValid || !canSave || pending}>
+            {pending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}{' '}
+            {saveLabel}
           </Button>
         </div>
       </div>

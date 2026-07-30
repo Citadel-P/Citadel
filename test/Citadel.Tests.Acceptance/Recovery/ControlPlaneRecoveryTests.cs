@@ -49,6 +49,9 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 sourceConnectionString,
                 sourceWorkingDirectory,
                 cancellationToken);
+            var administratorActorId = await GetInitialAdministratorActorIdAsync(
+                sourceConnectionString,
+                cancellationToken);
             await SeedInfrastructureStateAsync(
                 sourceConnectionString,
                 cancellationToken);
@@ -82,6 +85,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
             await SeedBackupStateAsync(
                 sourceConnectionString,
                 secretId,
+                administratorActorId,
                 cancellationToken);
 
             var sourceDataDirectory =
@@ -160,6 +164,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 targetConnectionString,
                 secretId,
                 stackId,
+                administratorActorId,
                 targetDataDirectory,
                 cancellationToken);
         }
@@ -339,6 +344,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
     private static async Task SeedBackupStateAsync(
         string connectionString,
         Guid secretId,
+        Guid administratorActorId,
         CancellationToken cancellationToken)
     {
         var repositorySpec = SerializeWithType(
@@ -381,7 +387,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 '00000000-0000-0000-0000-000000000001',
                 'Recovery acceptance policy', FALSE, 3, 'Recovery policy',
                 'recovery policy', 0,
-                '00000000-0000-0000-0000-000000000002',
+                @administratorActorId,
                 @source::jsonb, 300, CURRENT_TIMESTAMP);
 
             INSERT INTO backupruns (
@@ -397,7 +403,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 'FileSystem', 'recovery-snapshot-001', 'Available',
                 @source::jsonb, CURRENT_TIMESTAMP - INTERVAL '4 minutes',
                 'Succeeded', 'Manual',
-                '00000000-0000-0000-0000-000000000002', '[]'::jsonb);
+                @administratorActorId, '[]'::jsonb);
             """,
             connection);
         command.Parameters.AddWithValue(
@@ -406,6 +412,9 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
         command.Parameters.AddWithValue("backupPolicyId", BackupPolicyId);
         command.Parameters.AddWithValue("backupRunId", BackupRunId);
         command.Parameters.AddWithValue("secretId", secretId);
+        command.Parameters.AddWithValue(
+            "administratorActorId",
+            administratorActorId);
         command.Parameters.AddWithValue("repositorySpec", repositorySpec);
         command.Parameters.AddWithValue("source", source);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -509,6 +518,7 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
         string connectionString,
         Guid secretId,
         Guid stackId,
+        Guid administratorActorId,
         string dataDirectory,
         CancellationToken cancellationToken)
     {
@@ -541,9 +551,12 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 SELECT COUNT(*)
                 FROM actorroles AS ar
                 JOIN permissions AS p ON p.roleid = ar.roleid
-                WHERE ar.actorid = '00000000-0000-0000-0000-000000000002';
+                WHERE ar.actorid = @administratorActorId;
                 """,
-                cancellationToken) > 0);
+                cancellationToken,
+                new NpgsqlParameter(
+                    "administratorActorId",
+                    administratorActorId)) > 0);
         Assert.Equal(
             1L,
             await CountAsync(
@@ -612,11 +625,29 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
     private static async Task<long> CountAsync(
         NpgsqlConnection connection,
         string sql,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        params NpgsqlParameter[] parameters)
         => await ScalarAsync<long>(
             connection,
             sql,
+            cancellationToken,
+            parameters);
+
+    private static async Task<Guid> GetInitialAdministratorActorIdAsync(
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return await ScalarAsync<Guid>(
+            connection,
+            """
+            SELECT initialadministratoractorid
+            FROM instancesetupstates
+            WHERE id = 1;
+            """,
             cancellationToken);
+    }
 
     private static async Task<T> ScalarAsync<T>(
         NpgsqlConnection connection,

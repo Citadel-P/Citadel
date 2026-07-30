@@ -165,7 +165,9 @@ public record ContainerConfiguration(
     bool? NetworkDisabled,
     string? MacAddress,
     IReadOnlyList<string> OnBuild,
-    IReadOnlyDictionary<string, string> Labels);
+    IReadOnlyDictionary<string, string> Labels,
+    string? StopSignal = null,
+    int? StopTimeout = null);
 
 public record IpAddressInfo(string? Addr, long? PrefixLen);
 

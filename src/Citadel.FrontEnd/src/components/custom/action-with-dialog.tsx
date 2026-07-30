@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
 import { useConfirmByName, useDialogHotkeys } from '@/lib/hooks';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 export const ActionButton = forwardRef<
   HTMLButtonElement,
@@ -22,28 +23,59 @@ export const ActionButton = forwardRef<
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     onBlur?: React.FocusEventHandler<HTMLButtonElement>;
     loading?: boolean;
+    disabledReason?: string;
   }
->(({ variant, size, title, icon, iconPosition = 'right', disabled, className, loading, onClick, onBlur }, ref) => {
-  const renderIcon = loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon;
+>(
+  (
+    {
+      variant,
+      size,
+      title,
+      icon,
+      iconPosition = 'right',
+      disabled,
+      disabledReason,
+      className,
+      loading,
+      onClick,
+      onBlur,
+    },
+    ref,
+  ) => {
+    const renderIcon = loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon;
 
-  return (
-    <Button
-      size={size}
-      variant={variant || 'secondary'}
-      className={cn(
-        'flex flex-1 shrink-0 items-center justify-between gap-2 rounded-sm text-xs max-w-47.5',
-        className,
-      )}
-      onClick={onClick}
-      onBlur={onBlur}
-      disabled={disabled || loading}
-      ref={ref}>
-      {iconPosition === 'left' && renderIcon}
-      <span>{title}</span>
-      {iconPosition === 'right' && renderIcon}
-    </Button>
-  );
-});
+    const button = (
+      <Button
+        size={size}
+        variant={variant || 'secondary'}
+        className={cn(
+          'flex flex-1 shrink-0 items-center justify-between gap-2 rounded-sm text-xs max-w-47.5',
+          className,
+        )}
+        onClick={onClick}
+        onBlur={onBlur}
+        disabled={disabled || loading}
+        ref={ref}>
+        {iconPosition === 'left' && renderIcon}
+        <span>{title}</span>
+        {iconPosition === 'right' && renderIcon}
+      </Button>
+    );
+
+    if (!disabled || !disabledReason) return button;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex min-w-0 flex-1 cursor-not-allowed" tabIndex={0}>
+            {button}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{disabledReason}</TooltipContent>
+      </Tooltip>
+    );
+  },
+);
 
 export const ConfirmButton = forwardRef<
   HTMLButtonElement,

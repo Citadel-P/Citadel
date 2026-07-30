@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -81,6 +82,25 @@ public static class Containers
     {
         var result = await mediator.Send(new InspectContainer(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainerAdoptionDraftView>, ProblemHttpResult>> GetAdoptionDraft(
+        IMediator mediator,
+        [Description("The persisted container id")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetContainerAdoptionDraft(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerAdoptionDraftView.Map);
+    }
+
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Adopt(
+        IMediator mediator,
+        [Description("The persisted container id")] Guid id,
+        [FromBody] AdoptContainerInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 
 }

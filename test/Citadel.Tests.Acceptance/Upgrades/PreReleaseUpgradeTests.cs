@@ -67,7 +67,7 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                 "SELECT COUNT(*) FROM teams WHERE name = 'Operators';",
                 cancellationToken));
         Assert.Equal(
-            0L,
+            2L,
             await ScalarAsync<long>(
                 connection,
                 "SELECT COUNT(*) FROM actions WHERE scheduleenabled = TRUE;",

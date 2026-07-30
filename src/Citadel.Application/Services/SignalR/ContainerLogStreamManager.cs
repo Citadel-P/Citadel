@@ -28,7 +28,7 @@ internal sealed class ContainerLogStreamManager(
             return;
 
         var normalized = NormalizeDockerId(containerId);
-        var groupId = Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId);
+        var groupId = Constants.WellKnownSignalRGroups.ContainerLogGroup(normalized);
         TryUseStream(groupId, context =>
         {
             if (!context.TryStartStream(resources => StreamLogsAsync(resources, normalized)))

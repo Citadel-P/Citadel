@@ -5,7 +5,7 @@ namespace Application.Services;
 
 internal static partial class ContainerInspectionRedactor
 {
-    private const string RedactedValue = "********";
+    internal const string RedactedValue = "********";
 
     public static ContainerInspectionInfo RedactEnvironment(
         ContainerInspectionInfo inspection)
@@ -33,11 +33,14 @@ internal static partial class ContainerInspectionRedactor
             return value;
 
         var name = value[..separatorIndex];
-        if (!SensitiveEnvironmentName().IsMatch(name))
+        if (!IsSensitiveEnvironmentName(name))
             return value;
 
         return $"{name}={RedactedValue}";
     }
+
+    internal static bool IsSensitiveEnvironmentName(string name)
+        => SensitiveEnvironmentName().IsMatch(name);
 
     [GeneratedRegex(
         @"(?:^|[_.-])(?:PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIALS?|API[_.-]?KEY|ACCESS[_.-]?KEY|PRIVATE[_.-]?KEY|ENCRYPTION[_.-]?KEY|SIGNING[_.-]?KEY|CONNECTION[_.-]?STRINGS?|DATABASE[_.-]?(?:URL|DSN))(?:$|[_.-])",

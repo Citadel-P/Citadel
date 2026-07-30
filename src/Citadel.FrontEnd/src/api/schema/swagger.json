@@ -6062,6 +6062,232 @@
         ]
       }
     },
+    "/api/v1/containers/{id}/adoption-draft": {
+      "get": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Build an adoption draft for an unmanaged container",
+        "operationId": "getContainerAdoptionDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The persisted container id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerAdoptionDraftView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/containers/{id}/adopt": {
+      "post": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Adopt an unmanaged container as a deployment",
+        "operationId": "adoptContainer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The persisted container id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdoptContainerInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/containers/start": {
       "patch": {
         "tags": [
@@ -6565,6 +6791,377 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get an unmanaged Docker Compose project import draft",
+        "operationId": "getComposeProjectImportDraft",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "description": "Platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "description": "Docker Compose project name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComposeProjectImportDraftView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Validate a source for an unmanaged Docker Compose project",
+        "operationId": "validateComposeProjectImportDraft",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "description": "Platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "description": "Docker Compose project name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateComposeProjectImportInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComposeProjectImportValidation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Import an unmanaged Docker Compose project as a stack",
+        "operationId": "importComposeProject",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "description": "Platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "description": "Docker Compose project name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportComposeProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12772,7 +13369,8 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -30966,6 +31564,9 @@
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentAdopted"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoStackCreated"
           },
           {
@@ -31015,6 +31616,9 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoStackGitAutoDeployFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackImported"
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleCreated"
@@ -31255,6 +31859,7 @@
             "DeploymentPaused": "#/components/schemas/ActivityEventInfoDeploymentPaused",
             "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
             "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
+            "DeploymentAdopted": "#/components/schemas/ActivityEventInfoDeploymentAdopted",
             "StackCreated": "#/components/schemas/ActivityEventInfoStackCreated",
             "StackDuplicated": "#/components/schemas/ActivityEventInfoStackDuplicated",
             "StackUpdated": "#/components/schemas/ActivityEventInfoStackUpdated",
@@ -31272,6 +31877,7 @@
             "StackGitUpdateAvailable": "#/components/schemas/ActivityEventInfoStackGitUpdateAvailable",
             "StackGitAutoUpdated": "#/components/schemas/ActivityEventInfoStackGitAutoUpdated",
             "StackGitAutoDeployFailed": "#/components/schemas/ActivityEventInfoStackGitAutoDeployFailed",
+            "StackImported": "#/components/schemas/ActivityEventInfoStackImported",
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
@@ -32233,6 +32839,30 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentAdopted": {
+        "required": [
+          "deployment",
+          "containerId",
+          "containerName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentAdopted"
+            ],
+            "type": "string"
+          },
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "containerName": {
+            "type": "string"
           }
         }
       },
@@ -33217,6 +33847,33 @@
           }
         }
       },
+      "ActivityEventInfoStackImported": {
+        "required": [
+          "stack",
+          "composeProject",
+          "serviceNames"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackImported"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          },
+          "composeProject": {
+            "type": "string"
+          },
+          "serviceNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "ActivityEventInfoStackPaused": {
         "required": [
           "containerIds"
@@ -33655,6 +34312,7 @@
           "DeploymentPaused",
           "DeploymentApplied",
           "DeploymentDegraded",
+          "DeploymentAdopted",
           "PlatformCreated",
           "PlatformDeleted",
           "PlatformConnected",
@@ -33707,6 +34365,7 @@
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
           "StackGitAutoDeployFailed",
+          "StackImported",
           "StackWebhookReceived",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
@@ -33996,6 +34655,77 @@
             "format": "uuid"
           }
         }
+      },
+      "AdoptContainerInput": {
+        "required": [
+          "name",
+          "description",
+          "spec",
+          "previewFingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "previewFingerprint": {
+            "type": "string"
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "importSensitiveEnvironmentAsSecrets": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "AdoptionIssue": {
+        "required": [
+          "code",
+          "message",
+          "severity"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AdoptionIssueSeverity"
+          },
+          "fieldPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AdoptionIssueSeverity": {
+        "enum": [
+          "Warning",
+          "Blocker"
+        ]
       },
       "AgentSetupView": {
         "required": [
@@ -40039,6 +40769,205 @@
           }
         }
       },
+      "ComposeProjectImportDraftView": {
+        "required": [
+          "source",
+          "draft",
+          "issues",
+          "runtimeFingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ComposeProjectImportSourceView"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ComposeProjectStackDraftView"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerAdoptionIssueView"
+            }
+          },
+          "runtimeFingerprint": {
+            "type": "string"
+          }
+        }
+      },
+      "ComposeProjectImportSourceView": {
+        "required": [
+          "platformId",
+          "platformName",
+          "projectName",
+          "containerIds",
+          "containerNames",
+          "services"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "containerNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComposeProjectRuntimeService"
+            }
+          }
+        }
+      },
+      "ComposeProjectImportValidation": {
+        "required": [
+          "services",
+          "issues",
+          "previewFingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComposeProjectServiceComparison"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdoptionIssue"
+            }
+          },
+          "previewFingerprint": {
+            "type": "string"
+          }
+        }
+      },
+      "ComposeProjectRuntimeService": {
+        "required": [
+          "name",
+          "image",
+          "containerCount",
+          "states"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "containerCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStateStatus"
+            }
+          }
+        }
+      },
+      "ComposeProjectServiceComparison": {
+        "required": [
+          "name",
+          "runtimeContainerCount",
+          "runtimeImage",
+          "definedInSource",
+          "sourceImage"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "runtimeContainerCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "runtimeImage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definedInSource": {
+            "type": "boolean"
+          },
+          "sourceImage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ComposeProjectStackDraftView": {
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "driftPolicy",
+          "tagIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "driftPolicy": {
+            "$ref": "#/components/schemas/StackDriftPolicy"
+          },
+          "tagIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "ConfigFromInput": {
         "required": [
           "network"
@@ -40069,6 +40998,95 @@
         "properties": {
           "code": {
             "type": "string"
+          }
+        }
+      },
+      "ContainerAdoptionDraftView": {
+        "required": [
+          "source",
+          "draft",
+          "issues",
+          "previewFingerprint",
+          "canImportSensitiveEnvironmentValues"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ContainerAdoptionSourceView"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/CreateDeploymentInput"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerAdoptionIssueView"
+            }
+          },
+          "previewFingerprint": {
+            "type": "string"
+          },
+          "canImportSensitiveEnvironmentValues": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContainerAdoptionIssueView": {
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "fieldPath"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AdoptionIssueSeverity"
+          },
+          "fieldPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ContainerAdoptionSourceView": {
+        "required": [
+          "id",
+          "dockerContainerId",
+          "name",
+          "platformId",
+          "platformName",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dockerContainerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
           }
         }
       },
@@ -40222,6 +41240,21 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "stopSignal": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stopTimeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -45870,6 +46903,46 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ImageCapabilities"
+          }
+        }
+      },
+      "ImportComposeProjectInput": {
+        "required": [
+          "name",
+          "description",
+          "stackSource",
+          "spec",
+          "previewFingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          },
+          "previewFingerprint": {
+            "type": "string"
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -52069,6 +53142,7 @@
           "SIGTERM",
           "SIGKILL",
           "SIGINT",
+          "SIGQUIT",
           null
         ]
       },
@@ -53386,6 +54460,25 @@
               "string"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "ValidateComposeProjectImportInput": {
+        "required": [
+          "name",
+          "stackSource",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
           }
         }
       },

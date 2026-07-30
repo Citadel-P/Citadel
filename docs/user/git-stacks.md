@@ -8,6 +8,10 @@ Use deployments instead when the workload is a single Docker container and does 
 
 Use web editor stacks instead when the Compose YAML should be stored and edited directly in Citadel. See `docs/user/web-editor-stacks.md`.
 
+To import a Compose project that is already running and use a Git repository
+as its authoritative source, see
+`docs/user/adopting-existing-workloads.md`.
+
 ## Simple Repository
 
 Use this setup when the repository contains one compose project.

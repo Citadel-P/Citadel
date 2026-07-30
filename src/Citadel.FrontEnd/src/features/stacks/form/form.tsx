@@ -14,6 +14,10 @@ import {
   StackBuildImageBinding,
   BuildRunStatus,
   LicenseCapability,
+  AdoptionIssueSeverity,
+  ImportComposeProjectInput,
+  StackSpec,
+  ComposeProjectImportValidation,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -44,6 +48,14 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { getDriftModePreset } from './drift-policy';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -734,7 +746,15 @@ export const StackForm = ({
   const id = useParams().id;
   const [searchParams] = useSearchParams();
   const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const importPlatform = mode === 'add' ? searchParams.get('importPlatform') : null;
+  const importProject = mode === 'add' ? searchParams.get('importProject') : null;
+  const isComposeImport = !!importPlatform && !!importProject;
   const duplicateDraftLoadedRef = useRef<string | null>(null);
+  const importDraftLoadedRef = useRef<string | null>(null);
+  const validatedImportFingerprintRef = useRef<string | null>(null);
+  const importConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const [importConfirmationOpen, setImportConfirmationOpen] = useState(false);
+  const [importValidation, setImportValidation] = useState<ComposeProjectImportValidation | null>(null);
   const [update, setUpdate] = useState<Partial<StackInput>>({});
   const queryClient = useQueryClient();
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
@@ -742,6 +762,10 @@ export const StackForm = ({
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
 
   const { mutateAsync: createStack } = useMutate('createStack');
+  const { mutateAsync: importComposeProject } = useMutate('importComposeProject');
+  const { mutateAsync: validateComposeProjectImportDraft, isPending: isImportValidationPending } = useMutate(
+    'validateComposeProjectImportDraft',
+  );
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
   const { data: buildProjectsData, isFetching: buildProjectsLoading } = useRead('listBuildProjects');
@@ -749,6 +773,14 @@ export const StackForm = ({
     'getStackDuplicateDraft',
     { stackId: duplicateFrom ?? '' },
     { enabled: mode === 'add' && !!duplicateFrom },
+  );
+  const { data: importDraftData, isFetching: isImportDraftLoading } = useRead(
+    'getComposeProjectImportDraft',
+    {
+      platformId: importPlatform ?? '',
+      projectName: importProject ?? '',
+    },
+    { enabled: mode === 'add' && isComposeImport },
   );
   const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
   const { data: resourceBindingLookupData } = useRead('lookup', {
@@ -761,8 +793,17 @@ export const StackForm = ({
 
   const resource: StackConfigView | undefined = stackCfg?.data;
   const duplicateDraft = duplicateDraftData?.data;
+  const importDraft = importDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
-  const formDraftKey = duplicateFrom ? `stack:duplicate:${duplicateFrom}` : `stack:${id ?? 'new'}`;
+  const importIssues = [...(importDraft?.issues ?? []), ...(importValidation?.issues ?? [])];
+  const hasRuntimeImportBlocker = (importDraft?.issues ?? []).some(
+    (issue) => issue.severity === AdoptionIssueSeverity.Blocker,
+  );
+  const formDraftKey = isComposeImport
+    ? `stack:import:${importPlatform}:${importProject}`
+    : duplicateFrom
+      ? `stack:duplicate:${duplicateFrom}`
+      : `stack:${id ?? 'new'}`;
   const stackView = stackViewData?.data;
   const original = resource ?? EMPTY_STACK_CONFIG;
   const formOriginal = useMemo(() => normalizeDisabledWebhook(original), [original]);
@@ -869,6 +910,44 @@ export const StackForm = ({
     setUpdate(duplicateDraft.draft as Partial<StackInput>);
   }, [duplicateFrom, duplicateDraft?.draft]);
 
+  useEffect(() => {
+    if (!isComposeImport || !importDraft?.draft) return;
+
+    const draftId = `${importPlatform}:${importProject}`;
+    if (importDraftLoadedRef.current === draftId) return;
+
+    importDraftLoadedRef.current = draftId;
+    setUpdate(importDraft.draft as Partial<StackInput>);
+  }, [isComposeImport, importDraft?.draft, importPlatform, importProject]);
+
+  const setFormUpdate = useCallback(
+    (value: Parameters<typeof setUpdate>[0]) => {
+      setUpdate((previous) => {
+        const next = typeof value === 'function' ? value(previous) : value;
+        if (!isComposeImport || !importProject) return next;
+
+        const source = (next as Partial<CreateStackInput>).stackSource;
+        if (!source) return next;
+
+        const spec = (next as Partial<CreateStackInput>).spec as Partial<StackSpec> | undefined;
+        return {
+          ...next,
+          stackSource: source,
+          spec: {
+            ...(spec ?? {}),
+            $type: specTypeForSource(source),
+            projectName: importProject,
+            updateBehavior: StackUpdateBehavior.Disabled,
+            destroyBeforeDeploy: false,
+            ...(source === StackSource.Git ? { webhook: null } : {}),
+          } as StackSpec,
+          driftPolicy: DEFAULT_DRIFT_POLICY,
+        };
+      });
+    },
+    [importProject, isComposeImport],
+  );
+
   const refreshData = useCallback(() => {
     localStorage.removeItem(formDraftKey);
     queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: id }] });
@@ -889,7 +968,31 @@ export const StackForm = ({
     mode,
     basePath: 'stacks',
     entityName: 'Stack',
-    onCreate: (payload) => createStack({ data: payload as CreateStackInput }),
+    onCreate: (payload) => {
+      if (isComposeImport && importDraft && importPlatform && importProject) {
+        const createPayload = payload as CreateStackInput;
+        const previewFingerprint = validatedImportFingerprintRef.current;
+        if (!previewFingerprint) {
+          return Promise.reject(new Error('Validate the Compose source before importing it.'));
+        }
+
+        const importPayload: ImportComposeProjectInput = {
+          name: createPayload.name,
+          description: createPayload.description,
+          stackSource: createPayload.stackSource,
+          spec: createPayload.spec,
+          previewFingerprint,
+          tagIds: createPayload.tagIds,
+        };
+        return importComposeProject({
+          platformId: importPlatform,
+          projectName: importProject,
+          data: importPayload,
+        });
+      }
+
+      return createStack({ data: payload as CreateStackInput });
+    },
     onUpdate: () =>
       updateStack({
         id,
@@ -897,6 +1000,44 @@ export const StackForm = ({
       }),
     onRefresh: refreshData,
   });
+
+  const confirmComposeImport = useCallback(
+    async (payload: StackInput) => {
+      if (!importPlatform || !importProject) return false;
+
+      const createPayload = payload as CreateStackInput;
+      const response = await validateComposeProjectImportDraft({
+        platformId: importPlatform,
+        projectName: importProject,
+        data: {
+          name: createPayload.name,
+          stackSource: createPayload.stackSource,
+          spec: createPayload.spec,
+        },
+      });
+      const validation = response.data;
+      setImportValidation(validation);
+      validatedImportFingerprintRef.current = null;
+      if (validation.issues.some((issue) => issue.severity === AdoptionIssueSeverity.Blocker)) {
+        toast.error('The selected source does not match the running Compose project.');
+        return false;
+      }
+
+      validatedImportFingerprintRef.current = validation.previewFingerprint;
+      return new Promise<boolean>((resolve) => {
+        importConfirmationResolver.current = resolve;
+        setImportConfirmationOpen(true);
+      });
+    },
+    [importPlatform, importProject, validateComposeProjectImportDraft],
+  );
+
+  const resolveImportConfirmation = useCallback((confirmed: boolean) => {
+    const resolver = importConfirmationResolver.current;
+    importConfirmationResolver.current = null;
+    setImportConfirmationOpen(false);
+    resolver?.(confirmed);
+  }, []);
 
   const patchDriftPolicy = useCallback(
     (prev: Partial<StackInput>, patch: Partial<StackDriftPolicy>): Partial<StackInput> => ({
@@ -954,7 +1095,7 @@ export const StackForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: false,
+            disabled: isComposeImport,
             description: 'Select the platform to deploy on.',
             render: (value, set) => {
               return (
@@ -1356,6 +1497,7 @@ export const StackForm = ({
                   key: 'spec.projectName',
                   label: 'Project Name',
                   description: 'Optional Docker Compose project name override.',
+                  disabled: isComposeImport,
                   render: (value, set) => (
                     <FieldInput
                       value={value}
@@ -1685,6 +1827,7 @@ export const StackForm = ({
                   label: 'Destroy',
                   description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
                   required: false,
+                  disabled: isComposeImport,
                   render: (value, set) => (
                     <FieldSwitch
                       checked={value ?? true}
@@ -1732,6 +1875,7 @@ export const StackForm = ({
       selectedBranchRef?.resolvedCommitSha,
       stackView?.source?.resolvedCommitSha,
       effectiveConfigurationNames,
+      isComposeImport,
     ],
   );
 
@@ -1747,18 +1891,70 @@ export const StackForm = ({
           {warning.message}
         </AlertMessage>
       ))}
+      {isComposeImport && (
+        <AlertMessage type="info" title={isImportDraftLoading ? 'Inspecting Compose project' : 'Import Compose project'}>
+          Select the Web Editor or Git source that defines this project. Citadel will compare it with the running
+          services, then attach the containers without applying or restarting them.
+        </AlertMessage>
+      )}
+      {importIssues.map((issue) => (
+        <AlertMessage
+          key={`${issue.code}:${issue.fieldPath ?? ''}`}
+          type={issue.severity === AdoptionIssueSeverity.Blocker ? 'error' : 'warning'}
+          title={issue.severity === AdoptionIssueSeverity.Blocker ? 'Import blocked' : 'Review required'}>
+          {issue.message}
+        </AlertMessage>
+      ))}
+      {importValidation && (
+        <AlertMessage type="info" title="Source comparison">
+          {importValidation.services.filter(
+            (service) => Number(service.runtimeContainerCount) > 0 && service.definedInSource,
+          )
+            .length}{' '}
+          of {importDraft?.source.services.length ?? 0} running services match the selected source.
+        </AlertMessage>
+      )}
       <FormShell
         mode={mode}
         schema={schema}
         original={formOriginal}
         update={formUpdate}
-        setUpdate={setUpdate}
+        setUpdate={setFormUpdate}
         onSave={handleSave}
         pending={isPending}
         disabled={disabled}
+        saveDisabled={
+          isComposeImport &&
+          (isImportDraftLoading || isImportValidationPending || !importDraft || hasRuntimeImportBlocker)
+        }
+        saveLabel={isComposeImport ? 'Import Project' : 'Save'}
+        confirmSave={isComposeImport ? confirmComposeImport : undefined}
         draftKey={formDraftKey}
         draftVersion={1}
       />
+      <Dialog
+        open={importConfirmationOpen}
+        onOpenChange={(open) => {
+          if (!open) resolveImportConfirmation(false);
+        }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import {importProject ?? 'Compose project'}?</DialogTitle>
+            <DialogDescription>
+              Citadel will start managing all current project containers as one stack. Docker will not be changed now.
+              Future Apply operations will use the reviewed {currentStackSource === StackSource.Git ? 'Git' : 'Web Editor'} source.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => resolveImportConfirmation(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => resolveImportConfirmation(true)}>
+              Import Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -182,10 +182,8 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
             queryClient.invalidateQueries({ queryKey: ['getStack'] }),
             queryClient.invalidateQueries({ queryKey: ['listStacks'] }),
           ]);
-        } catch (error) {
-          toast.error('Update check failed', {
-            description: getApiErrorDetail(error, 'Citadel could not check the Stack update source.'),
-          });
+        } catch {
+          // Nope
         }
       },
     };

@@ -16,7 +16,11 @@ public record InspectImageResult(
     IEnumerable<string> ExposedPorts,
     IEnumerable<HistoryImageResult> Layers,
     IDictionary<string, string> Labels,
-    IEnumerable<ContainerImageResult> Containers
+    IEnumerable<ContainerImageResult> Containers,
+    string? User = null,
+    string? WorkingDir = null,
+    IReadOnlyList<string>? EntryPoint = null,
+    string? StopSignal = null
     )
 {
     public Guid PlatformId { get; set; }

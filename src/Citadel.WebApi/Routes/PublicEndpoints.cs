@@ -1772,6 +1772,24 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("inspectContainer");
 
+        containers.MapGet("{id:guid}/adoption-draft", Containers.GetAdoptionDraft)
+            .WithSummary("Build an adoption draft for an unmanaged container")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getContainerAdoptionDraft");
+
+        containers.MapPost("{id:guid}/adopt", Containers.Adopt)
+            .WithSummary("Adopt an unmanaged container as a deployment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("adoptContainer");
+
         containers.MapPatch("start", Containers.StartContainers)
             .WithSummary("Starts the given container(s)")
             .ProducesValidationProblem()
@@ -1823,6 +1841,33 @@ public static class PublicEndpoints
 
     private static void MapPlatformEndpoints(RouteGroupBuilder platforms)
     {
+        platforms.MapGet("{platformId:guid}/unmanaged-compose-projects/{projectName}", Stacks.GetComposeImportDraft)
+            .WithSummary("Get an unmanaged Docker Compose project import draft")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getComposeProjectImportDraft");
+
+        platforms.MapPost("{platformId:guid}/unmanaged-compose-projects/{projectName}/import-draft", Stacks.ValidateComposeImportDraft)
+            .WithSummary("Validate a source for an unmanaged Docker Compose project")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("validateComposeProjectImportDraft");
+
+        platforms.MapPost("{platformId:guid}/unmanaged-compose-projects/{projectName}/import", Stacks.ImportComposeProject)
+            .WithSummary("Import an unmanaged Docker Compose project as a stack")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("importComposeProject");
+
         platforms.MapGet("/", Platforms.List)
             .WithSummary("List all platforms")
             .ProducesValidationProblem()

@@ -7,6 +7,22 @@ import { ContainerDataView, PlatformStatus, ProblemDetails } from '@/api/generat
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 
+export const mergeContainerRuntimeUpdate = (
+  current: Partial<ContainerDataView> | undefined,
+  container: ContainerDataView,
+): Partial<ContainerDataView> => ({
+  ...current,
+  id: container.id,
+  name: container.name,
+  image: container.image,
+  imageId: container.imageId,
+  state: container.state,
+  created: container.created,
+  stack: container.stack,
+  containerStat: container.containerStat,
+  ports: container.ports,
+});
+
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
   const nid = normalizeDockerId(containerId);
 
@@ -77,10 +93,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   useDockerDaemonGroup(platformId, { onContainerEvent });
 
   const handleContainerInfoUpdated = useCallback((container: ContainerDataView) => {
-    setLiveContainerInfo((current) => ({
-      ...current,
-      ...container,
-    }));
+    setLiveContainerInfo((current) => mergeContainerRuntimeUpdate(current, container));
   }, []);
 
   const setupEventListeners = useCallback(

@@ -33,6 +33,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
     run: () => void | Promise<void>;
     canExecute?: boolean;
     isPending?: boolean;
+    disabledReason?: string;
   };
   useSuccessHandler?: (ctx: { resources: R | R[] }) => (() => void) | void;
 }
@@ -133,7 +134,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
   };
 
   const Group: ButtonGroupComponent<R> = ({ resources }) => {
-    const { run, isPending, canExecute } = useUnifiedExecutor(act, resources, title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(act, resources, title, showToast);
     const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
@@ -158,13 +159,14 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
       />
     );
   };
 
   const Info: ButtonActionComponent<R> = ({ resource }) => {
-    const { run, isPending, canExecute } = useUnifiedExecutor(act, resource, title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(act, resource, title, showToast);
     const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
@@ -188,6 +190,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
       />
     );
@@ -325,10 +328,16 @@ function useUnifiedExecutor<R>(
 
   if (act.useHandler) {
     const handler = act.useHandler({ resources });
+    const canExecute = (handler.canExecute ?? true) && capabilitiesAllow;
     return {
       run: async () => await handler.run(),
-      canExecute: (handler.canExecute ?? true) && capabilitiesAllow,
+      canExecute,
       isPending: handler.isPending ?? false,
+      disabledReason: canExecute
+        ? undefined
+        : capabilitiesAllow
+          ? handler.disabledReason
+          : 'You do not have permission to perform this action.',
     };
   }
 
@@ -378,5 +387,5 @@ function useMutationLogic<R, K extends KnownResourceName>(
     }
   };
 
-  return { run, isPending, canExecute };
+  return { run, isPending, canExecute, disabledReason: undefined };
 }

@@ -878,6 +878,7 @@ public interface IGitAccountRepository
 
 public interface IContainerRepository
 {
+    Task<Container?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByIdsAsync(string[] dockerContainerIds, CancellationToken cancellationToken);
@@ -893,6 +894,19 @@ public interface IContainerRepository
     Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken);
 
     Task<int> UpdateAsync(Container container, CancellationToken cancellationToken);
+    Task<int> TryAssignToDeploymentAsync(
+        Guid id,
+        Guid platformId,
+        string dockerContainerId,
+        Guid deploymentId,
+        CancellationToken cancellationToken);
+    Task<int> TryAssignComposeProjectToStackAsync(
+        Guid platformId,
+        string projectName,
+        IReadOnlyCollection<Guid> containerIds,
+        IReadOnlyCollection<string> dockerContainerIds,
+        Guid stackId,
+        CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 
@@ -1212,6 +1226,9 @@ public interface IAlertEventRepository
     Task<AlertEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<AlertEvent?> GetAuthorizedByIdAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertEvent>> GetUnresolvedUnmanagedContainerAlertsAsync(
+        IReadOnlyCollection<string> dockerContainerIds,
+        CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetAuthorizedUserIdsAsync(Guid alertEventId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
         int page, int pageSize, CancellationToken cancellationToken, bool? unresolvedOnly = null);

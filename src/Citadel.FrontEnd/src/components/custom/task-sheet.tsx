@@ -361,6 +361,13 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     </div>
   ),
 
+  DeploymentAdopted: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Adopted configuration" />
+      <KeyValueBlock label="Existing container" value={`${info.containerName} (${info.containerId})`} />
+    </div>
+  ),
+
   DeploymentDeleted: (info, activity) => (
     <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
@@ -403,6 +410,18 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
         resourceId={activity.resourceId}
         title="Duplicated configuration"
       />
+    </div>
+  ),
+
+  StackImported: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <SpecViewer
+        spec={stripStackReleaseSource(info.stack)}
+        resourceId={activity.resourceId}
+        title="Imported configuration"
+      />
+      <KeyValueBlock label="Compose project" value={info.composeProject} />
+      <KeyValueBlock label="Imported services" value={info.serviceNames} />
     </div>
   ),
 

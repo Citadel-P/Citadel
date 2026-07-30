@@ -12,6 +12,19 @@ namespace Infrastructure.Persistence;
 
 internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerRepository 
 {
+    public async Task<Container?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT * FROM Containers
+            WHERE Id = @Id
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(
+            sql,
+            new { Id = id },
+            tx());
+        return result?.ToDomain();
+    }
+
     public async Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -290,6 +303,75 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Stack = container.DockerStack,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
+    }
+
+    public Task<int> TryAssignToDeploymentAsync(
+        Guid id,
+        Guid platformId,
+        string dockerContainerId,
+        Guid deploymentId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Containers
+            SET DeploymentId = @DeploymentId,
+                Updated = @Updated
+            WHERE Id = @Id
+              AND PlatformId = @PlatformId
+              AND DockerContainerId = @DockerContainerId
+              AND DeploymentId IS NULL
+              AND StackId IS NULL
+              AND IsSystem = FALSE
+              AND ControlState <> 'Processing'
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                PlatformId = platformId,
+                DockerContainerId = dockerContainerId,
+                DeploymentId = deploymentId,
+                Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            },
+            tx());
+    }
+
+    public Task<int> TryAssignComposeProjectToStackAsync(
+        Guid platformId,
+        string projectName,
+        IReadOnlyCollection<Guid> containerIds,
+        IReadOnlyCollection<string> dockerContainerIds,
+        Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Containers
+            SET StackId = @StackId,
+                Updated = @Updated
+            WHERE Id = ANY(@ContainerIds)
+              AND DockerContainerId = ANY(@DockerContainerIds)
+              AND PlatformId = @PlatformId
+              AND Stack = @ProjectName
+              AND DeploymentId IS NULL
+              AND StackId IS NULL
+              AND IsSystem = FALSE
+              AND ControlState <> 'Processing'
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                PlatformId = platformId,
+                ProjectName = projectName,
+                ContainerIds = containerIds.ToArray(),
+                DockerContainerIds = dockerContainerIds.ToArray(),
+                StackId = stackId,
+                Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            },
+            tx());
     }
 
     public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)

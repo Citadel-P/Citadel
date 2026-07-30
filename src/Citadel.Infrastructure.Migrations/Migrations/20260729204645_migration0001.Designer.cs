@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260729141540_migration0001")]
+    [Migration("20260729204645_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -396,6 +396,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("type");
 
+                    b.Property<string>("UnmanagedContainerId")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("text")
+                        .HasColumnName("unmanagedcontainerid")
+                        .HasComputedColumnSql("CASE WHEN type = 'UnmanagedContainerCreated' THEN info->>'ContainerId' ELSE NULL END", true);
+
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -417,6 +423,10 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_alertevents_type");
+
+                    b.HasIndex("UnmanagedContainerId")
+                        .HasDatabaseName("ix_alertevents_open_unmanagedcontainerid")
+                        .HasFilter("resolvedat IS NULL AND unmanagedcontainerid IS NOT NULL");
 
                     b.HasIndex("ResourceId", "CreatedAt")
                         .HasDatabaseName("ix_alertevents_resource_createdat");

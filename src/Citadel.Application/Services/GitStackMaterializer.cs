@@ -205,13 +205,23 @@ internal sealed class GitStackMaterializer(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var releaseRoot = Path.Combine(GetStackRoot(stackId), "releases", releaseId.ToString("D"));
+        var stackRoot = GetStackRoot(stackId);
+        var releasesRoot = Path.Combine(stackRoot, "releases");
+        var releaseRoot = Path.Combine(releasesRoot, releaseId.ToString("D"));
         if (Directory.Exists(releaseRoot))
         {
             Directory.Delete(releaseRoot, recursive: true);
         }
 
+        DeleteDirectoryIfEmpty(releasesRoot);
+        DeleteDirectoryIfEmpty(stackRoot);
         return Task.CompletedTask;
+    }
+
+    private static void DeleteDirectoryIfEmpty(string path)
+    {
+        if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any())
+            Directory.Delete(path);
     }
 
     private string CreateReleaseDirectory(Guid stackId, Guid releaseId)

@@ -1,16 +1,71 @@
-import { AutoUpdateStatus, DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
-import { canCheckDeploymentUpdates, hasDeploymentUpdateAvailable } from './update-status';
+import {
+  AutoUpdateStatus,
+  DeploymentStatus,
+  DeploymentView,
+  ResourceControlState,
+  UpdateBehavior,
+} from '@/api/generated/api.types';
+import {
+  canCheckDeploymentUpdates,
+  getDeploymentUpdateCheckDisabledReason,
+  hasDeploymentUpdateAvailable,
+} from './update-status';
 
-describe('hasDeploymentUpdateAvailable', () => {
+describe('deployment update status', () => {
   it('does not allow update checks before the deployment is applied', () => {
     expect(canCheckDeploymentUpdates({ status: DeploymentStatus.Created } as DeploymentView)).toBe(false);
-    expect(canCheckDeploymentUpdates({ status: DeploymentStatus.Healthy } as DeploymentView)).toBe(true);
+    expect(canCheckDeploymentUpdates(checkableDeployment())).toBe(true);
     expect(
       canCheckDeploymentUpdates({
-        status: DeploymentStatus.Healthy,
+        ...checkableDeployment(),
         controlState: ResourceControlState.Processing,
-      } as DeploymentView),
+      }),
     ).toBe(false);
+  });
+
+  it('explains why local and build images cannot be checked', () => {
+    expect(
+      getDeploymentUpdateCheckDisabledReason({
+        ...checkableDeployment(),
+        spec: {
+          image: { $type: 'Local', imageId: 'image-id' },
+          updateBehavior: UpdateBehavior.Disabled,
+        },
+      } as DeploymentView),
+    ).toBe('Update checks are only available for external tagged images.');
+    expect(
+      getDeploymentUpdateCheckDisabledReason({
+        ...checkableDeployment(),
+        spec: {
+          image: { $type: 'Build', buildProjectId: 'build-id' },
+          updateBehavior: UpdateBehavior.Disabled,
+        },
+      } as DeploymentView),
+    ).toBe('Update checks are only available for external tagged images.');
+  });
+
+  it('requires a tagged external reference and an applied digest', () => {
+    expect(
+      getDeploymentUpdateCheckDisabledReason(
+        checkableDeployment({
+          registryId: '00000000-0000-0000-0000-000000000000',
+        }),
+      ),
+    ).toContain('registry');
+    expect(
+      getDeploymentUpdateCheckDisabledReason(
+        checkableDeployment({
+          imageTag: 'nginx@sha256:abc',
+        }),
+      ),
+    ).toContain('Digest-pinned images');
+    expect(
+      getDeploymentUpdateCheckDisabledReason(
+        checkableDeployment({
+          resolvedDigest: null,
+        }),
+      ),
+    ).toContain('applied digest');
   });
 
   it.each([
@@ -30,3 +85,25 @@ describe('hasDeploymentUpdateAvailable', () => {
     expect(hasDeploymentUpdateAvailable(undefined)).toBe(false);
   });
 });
+
+const checkableDeployment = (
+  image: Partial<{
+    registryId: string;
+    imageTag: string;
+    resolvedDigest: string | null;
+  }> = {},
+): DeploymentView =>
+  ({
+    status: DeploymentStatus.Healthy,
+    controlState: ResourceControlState.Idle,
+    spec: {
+      image: {
+        $type: 'External',
+        registryId: '019fb000-0000-7000-8000-000000000001',
+        imageTag: 'nginx:latest',
+        resolvedDigest: 'sha256:current',
+        ...image,
+      },
+      updateBehavior: UpdateBehavior.Disabled,
+    },
+  }) as DeploymentView;

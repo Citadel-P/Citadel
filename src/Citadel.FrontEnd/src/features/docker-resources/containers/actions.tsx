@@ -1,4 +1,4 @@
-import { Eye, Trash } from 'lucide-react';
+import { Eye, FolderInput, PackagePlus, Trash } from 'lucide-react';
 import {
   ContainerView,
   ContainerStateStatus,
@@ -184,9 +184,83 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
     .addAction(pauseAction)
     .addAction(restartAction)
     .addAction({
-      key: 'details',
+      key: 'adopt',
+      title: 'Adopt as Deployment',
       type: 'command',
       separatorBefore: true,
+      icon: PackagePlus,
+      requiredCapabilities: ['canInspect'],
+      useHandler: ({ resources }) => {
+        const navigate = useNavigate();
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+        const canExecute =
+          !!selected &&
+          (!Array.isArray(resources) || resources.length === 1) &&
+          !isContainerStackGroup(selected) &&
+          !selected.isSystem &&
+          !selected.deploymentId &&
+          !selected.stackId &&
+          !selected.stack &&
+          !isProcessing(selected);
+
+        return {
+          canExecute,
+          isPending: false,
+          run: () => {
+            if (!canExecute || !selected || isContainerStackGroup(selected)) return;
+            navigate(`/deployments/add?adoptFrom=${selected.id}`);
+          },
+        };
+      },
+    })
+    .addAction({
+      key: 'importStack',
+      title: 'Import Compose project as Stack',
+      type: 'command',
+      icon: FolderInput,
+      requiredCapabilities: ['canInspect'],
+      useHandler: ({ resources }) => {
+        const navigate = useNavigate();
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+        const projectName = selected?.stack;
+        const projectContainers =
+          selected && isContainerStackGroup(selected)
+            ? selected.containers
+            : selected && !isContainerStackGroup(selected)
+              ? [selected]
+              : [];
+        const canExecute =
+          !!selected &&
+          (!Array.isArray(resources) || resources.length === 1) &&
+          !!projectName &&
+          !selected.stackId &&
+          !isProcessing(selected) &&
+          projectContainers.length > 0 &&
+          projectContainers.every(
+            (container) =>
+              !container.isSystem &&
+              !container.deploymentId &&
+              !container.stackId &&
+              !isProcessing(container),
+          );
+
+        return {
+          canExecute,
+          isPending: false,
+          run: () => {
+            if (!canExecute || !selected || !projectName) return;
+            const query = new URLSearchParams({
+              importPlatform: selected.platformId,
+              importProject: projectName,
+            });
+            navigate(`/stacks/add?${query.toString()}`);
+          },
+        };
+      },
+    })
+    .addAction({
+      key: 'details',
+      type: 'command',
       icon: Eye,
       requiredCapabilities: ['canInspect'],
       useHandler: ({ resources }) => {
