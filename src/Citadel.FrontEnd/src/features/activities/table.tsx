@@ -99,10 +99,14 @@ function EventTypeCell({ activity }: { activity: ActivityView }) {
     <button
       type="button"
       onClick={() => open({ kind: 'activity', payload: activity })}
-      className="cursor-pointer table-link text-left">
-      <span className="flex flex-col gap-0.5">
-        <span>{formatActivityEvent(activity.eventType)}</span>
-        {summary && <span className="text-xs text-muted-foreground font-normal normal-case">{summary}</span>}
+      className="table-link block min-w-0 max-w-96 cursor-pointer overflow-hidden text-left">
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate">{formatActivityEvent(activity.eventType)}</span>
+        {summary && (
+          <span className="block truncate text-xs font-normal normal-case text-muted-foreground" title={summary}>
+            {summary}
+          </span>
+        )}
       </span>
     </button>
   );
