@@ -10,6 +10,8 @@ using Domain.Entities.Stacks;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 using Application.Features.Deployments.Notifications;
 using Domain;
@@ -23,9 +25,18 @@ namespace Application.Services;
 /// </summary>
 internal interface IContainerProcessingService
 {
-    Task<ProcessedResources> MarkProcessingAsync(Guid[] containerIds, Guid controlTriggeredBy, CancellationToken ct);
+    Task<ProcessedResources> MarkProcessingAsync(
+        Guid[] containerIds,
+        Guid controlTriggeredBy,
+        CancellationToken ct,
+        bool claimParentResources = true);
+    Task CompleteProcessingAsync(ProcessedResources resources, IReadOnlyCollection<PlatformCacheEntry> platforms, Guid controlTriggeredBy);
     Task RollbackProcessingAsync(ProcessedResources resources, Guid controlTriggeredBy, CancellationToken ct);
-    Task<Result> DeleteContainers(DeleteContainers request, Guid controlTriggeredBy, CancellationToken ct);
+    Task<Result> DeleteContainers(
+        DeleteContainers request,
+        Guid controlTriggeredBy,
+        CancellationToken ct,
+        bool claimParentResources = true);
     Task NotifyProcessingAsync(ProcessedResources resources, CancellationToken ct);
 }
 internal sealed class ContainerProcessingService(
@@ -37,10 +48,23 @@ internal sealed class ContainerProcessingService(
     IPlatformContainerCache platformContainerCache,
     IDeploymentStreamManager deploymentStreamManager,
     IContainerEventBroadcaster containerEventBroadcaster,
-    IConnectorFactory<IContainerConnector> connectorFactory) : IContainerProcessingService
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IDbWorkQueue dbWorkQueue,
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<ContainerProcessingService> logger) : IContainerProcessingService
 {
-    public async Task<ProcessedResources> MarkProcessingAsync(Guid[] containerIds, Guid controlTriggeredBy, CancellationToken ct)
+    private static readonly TimeSpan CommandCompletionTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan RollbackTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan NotificationTimeout = TimeSpan.FromSeconds(5);
+
+    public async Task<ProcessedResources> MarkProcessingAsync(
+        Guid[] containerIds,
+        Guid controlTriggeredBy,
+        CancellationToken ct,
+        bool claimParentResources = true)
     {
+        var requestedIds = containerIds.Distinct().Order().ToArray();
         var updatedContainers = new List<Container>();
         var candidateDeployments = new Dictionary<Guid, Deployment>();
         var candidateStacks = new Dictionary<Guid, Stack>();
@@ -49,34 +73,39 @@ internal sealed class ContainerProcessingService(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var containers = await uow.Containers.GetByIdAsync(containerIds, ct);
+        var containers = (await uow.Containers.GetByIdAsync(requestedIds, ct))
+            .OrderBy(container => container.Id)
+            .ToArray();
+
+        if (containers.Length != requestedIds.Length ||
+            containers.Any(container => container.ControlState == ResourceControlState.Processing))
+        {
+            return ProcessedResources.Conflict;
+        }
 
         foreach (var container in containers)
         {
-            Deployment? deployment = null;
-            Stack? stack = null;
-
-            // Deployments
-            if (container.DeploymentId != null)
+            if (claimParentResources && container.DeploymentId != null)
             {
-                deployment = await uow.Deployments.GetAsync(container.DeploymentId.Value, ct);
-                if (deployment != null)
-                {
-                    deployment.MarkProcessing(controlTriggeredBy);
-                }
+                var deployment = await uow.Deployments.GetAsync(container.DeploymentId.Value, ct);
+                if (deployment is null || deployment.ControlState == ResourceControlState.Processing)
+                    return ProcessedResources.Conflict;
+
+                candidateDeployments.TryAdd(deployment.Id, deployment);
             }
 
-            // Stacks
-            if (container.StackId != null)
+            if (claimParentResources && container.StackId != null)
             {
-                stack = await uow.Stacks.GetAsync(container.StackId.Value, ct);
-                if (stack != null)
-                {
-                    stack.MarkProcessing(controlTriggeredBy);
-                }
-            }
+                var stack = await uow.Stacks.GetAsync(container.StackId.Value, ct);
+                if (stack?.CurrentStackRelease is null || stack.ControlState == ResourceControlState.Processing)
+                    return ProcessedResources.Conflict;
 
-            // Containers
+                candidateStacks.TryAdd(stack.Id, stack);
+            }
+        }
+
+        foreach (var container in containers)
+        {
             container.MarkProcessing(controlTriggeredBy);
 
             var affected = await uow.Containers.UpdateProcessingAsync(
@@ -88,20 +117,15 @@ internal sealed class ContainerProcessingService(
                 controlTriggeredBy,
                 ct);
 
-            if (affected != 0)
-            {
-                updatedContainers.Add(container);
+            if (affected == 0)
+                return ProcessedResources.Conflict;
 
-                if (deployment is not null)
-                    candidateDeployments.TryAdd(deployment.Id, deployment);
-
-                if (stack is not null)
-                    candidateStacks.TryAdd(stack.Id, stack);
-            }
+            updatedContainers.Add(container);
         }
 
-        foreach (var deployment in candidateDeployments.Values)
+        foreach (var deployment in candidateDeployments.Values.OrderBy(deployment => deployment.Id))
         {
+            deployment.MarkProcessing(controlTriggeredBy);
             var affected = await uow.Deployments.UpdateProcessingAsync(
                 deployment.Id,
                 deployment.Status,
@@ -112,12 +136,17 @@ internal sealed class ContainerProcessingService(
                 controlTriggeredBy,
                 ct);
 
-            if (affected != 0)
-                updatedDeployments.Add(deployment);
+            if (affected == 0)
+                return ProcessedResources.Conflict;
+
+            updatedDeployments.Add(deployment);
         }
 
-        foreach (var stack in candidateStacks.Values)
+        foreach (var stack in candidateStacks.Values.OrderBy(stack => stack.Id))
         {
+            if (!stack.MarkProcessing(controlTriggeredBy))
+                return ProcessedResources.Conflict;
+
             var status = stack.CurrentStackRelease?.Status ?? Domain.StackReleaseStatus.Unknown;
             var affected = await uow.Stacks.UpdateProcessingAsync(
                 stack.Id,
@@ -129,96 +158,178 @@ internal sealed class ContainerProcessingService(
                 controlTriggeredBy,
                 ct);
 
-            if (affected)
-                updatedStacks.Add(stack);
+            if (!affected)
+                return ProcessedResources.Conflict;
+
+            updatedStacks.Add(stack);
         }
 
         await uow.CommitAsync(ct);
         return new ProcessedResources(updatedContainers, updatedDeployments, updatedStacks);
     }
 
+    public async Task CompleteProcessingAsync(
+        ProcessedResources resources,
+        IReadOnlyCollection<PlatformCacheEntry> platforms,
+        Guid controlTriggeredBy)
+    {
+        using var completionCts = CancellationTokenSource.CreateLinkedTokenSource(applicationLifetime.ApplicationStopping);
+        completionCts.CancelAfter(CommandCompletionTimeout);
+        var completionToken = completionCts.Token;
+
+        try
+        {
+            var runtimeStates = new Dictionary<string, ContainerStateStatus>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var platform in platforms)
+            {
+                var connector = connectorFactory.GetConnector(platform.ConnectorType);
+                foreach (var containerId in platform.Containers.Keys)
+                {
+                    var result = await connector.InspectAsync(
+                        new InspectContainerCommand(platform.Address, containerId),
+                        completionToken);
+
+                    if (!result.IsSuccess(out var inspection) || inspection.State is null)
+                        return;
+
+                    runtimeStates[containerId] = inspection.State.Status;
+                }
+            }
+
+            if (runtimeStates.Count == 0)
+                return;
+
+            await dbWorkQueue.EnqueueAndWaitAsync(
+                new CompleteContainerCommandWorkItem(
+                    resources,
+                    runtimeStates,
+                    controlTriggeredBy,
+                    notificationQueue,
+                    dockerDaemonHub,
+                    containerEventBroadcaster,
+                    deploymentStreamManager,
+                    stackStreamManager,
+                    logger),
+                completionToken);
+        }
+        catch (OperationCanceledException) when (!applicationLifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            // The daemon event remains the normal fallback if the bounded authoritative refresh times out.
+        }
+    }
+
     public async Task RollbackProcessingAsync(ProcessedResources resources, Guid controlTriggeredBy, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var releasedContainers = new List<Container>();
+        var releasedDeployments = new List<Deployment>();
+        var releasedStacks = new List<Stack>();
 
         foreach (var container in resources.Containers)
         {
             container.ReleaseProcessing();
 
-            await uow.Containers.UpdateProcessingAsync(
+            var affected = await uow.Containers.UpdateProcessingAsync(
                 container.Id,
                 container.ControlState,
                 container.ControlStartedAt,
-                container.RowVersion,
+                container.RowVersion + 1,
                 checkRowVersion: true,
-                controlTriggeredBy,
-                ct);        
+                controlTriggeredBy: null,
+                ct);
+            if (affected != 0)
+                releasedContainers.Add(container);
         }
 
         foreach (var deployment in resources.Deployments)
         {
             deployment.ReleaseProcessing(deployment.Status);
-            await uow.Deployments.UpdateProcessingAsync(
+            var affected = await uow.Deployments.UpdateProcessingAsync(
                 deployment.Id,
                 deployment.Status,
                 deployment.ControlState,
                 deployment.ControlStartedAt,
-                deployment.RowVersion,
+                deployment.RowVersion + 1,
                 checkRowVersion: true,
-                controlTriggeredBy,
+                controlTriggeredBy: null,
                 ct);
+            if (affected != 0)
+                releasedDeployments.Add(deployment);
         }
 
         foreach (var stack in resources.Stacks)
         {
             var status = stack.CurrentStackRelease?.Status ?? Domain.StackReleaseStatus.Unknown;
             stack.ReleaseProcessing(status);
-            await uow.Stacks.UpdateProcessingAsync(
+            var affected = await uow.Stacks.UpdateProcessingAsync(
                 stack.Id,
                 status,
                 stack.ControlState,
                 stack.ControlStartedAt,
-                stack.RowVersion,
+                stack.RowVersion + 1,
                 checkRowVersion: true,
-                controlTriggeredBy,
+                controlTriggeredBy: null,
                 ct);
+            if (affected)
+                releasedStacks.Add(stack);
         }
 
         await uow.CommitAsync(ct);
-        await NotifyProcessingAsync(resources, ct);
+        await NotifyProcessingAsync(
+            new ProcessedResources(releasedContainers, releasedDeployments, releasedStacks),
+            ct);
     }
 
     public async Task NotifyProcessingAsync(ProcessedResources resources, CancellationToken ct)
     {
-        foreach (var container in resources.Containers)
-        {
-            await notificationQueue.EnqueueAsync(
-                new ContainerNotificationWorkItem(
-                    container,
-                    new DaemonContainerEventInfo(
-                        "processing",
-                        container.DockerContainerId,
-                        null),
-                    dockerDaemonHub,
-                    containerEventBroadcaster),
-                ct);
-        }
+        using var notificationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping,
+            ct);
+        notificationCancellation.CancelAfter(NotificationTimeout);
 
-        foreach (var deployment in resources.Deployments)
+        try
         {
-            await notificationQueue.EnqueueAsync(
-                new DeploymentNotificationWorkItem(deploymentStreamManager, deployment, "update"), ct);
-        }
+            foreach (var container in resources.Containers)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new ContainerNotificationWorkItem(
+                        container,
+                        new DaemonContainerEventInfo(
+                            "processing",
+                            container.DockerContainerId,
+                            null),
+                        dockerDaemonHub,
+                        containerEventBroadcaster),
+                    notificationCancellation.Token);
+            }
 
-        foreach (var stack in resources.Stacks)
+            foreach (var deployment in resources.Deployments)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new DeploymentNotificationWorkItem(deploymentStreamManager, deployment, "update"),
+                    notificationCancellation.Token);
+            }
+
+            foreach (var stack in resources.Stacks)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new StackNotificationWorkItem(stackStreamManager, stack, "update"),
+                    notificationCancellation.Token);
+            }
+        }
+        catch (Exception ex)
         {
-            await notificationQueue.EnqueueAsync(
-                new StackNotificationWorkItem(stackStreamManager, stack, "update"),ct);
+            logger.LogWarning(ex, "Failed to enqueue container processing notifications");
         }
     }
 
-    public async Task<Result> DeleteContainers(DeleteContainers request, Guid controlTriggeredBy, CancellationToken ct)
+    public async Task<Result> DeleteContainers(
+        DeleteContainers request,
+        Guid controlTriggeredBy,
+        CancellationToken ct,
+        bool claimParentResources = true)
     {
         var hasCachedContainers = platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platforms);
         platforms ??= [];
@@ -236,32 +347,75 @@ internal sealed class ContainerProcessingService(
 
         var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
         var processingResult = containerIds.Length > 0
-            ? await MarkProcessingAsync(containerIds, controlTriggeredBy, ct)
+            ? await MarkProcessingAsync(containerIds, controlTriggeredBy, ct, claimParentResources)
             : new ProcessedResources([], [], []);
+
+        if (processingResult.HasConflict)
+        {
+            return Result.Failure(new ConflictError(
+                "One or more containers, deployments, or stacks are already processing another operation."));
+        }
 
         if (processingResult.Containers.Count == 0 && staleContainers.Count == 0)
         {
             return Result.Failure(new NotFoundError("No containers found for the provided ID(s)."));
         }
 
-        await NotifyProcessingAsync(processingResult, ct);
-
-        foreach (var platform in platforms)
+        using var completionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping);
+        completionCancellation.CancelAfter(OperationTimeout);
+        var completionToken = completionCancellation.Token;
+        try
         {
-            var result = await DeleteFromPlatformAsync(platform, request, ct);
-            if (result.IsFailure())
+            await NotifyProcessingAsync(processingResult, completionToken);
+
+            foreach (var platform in platforms)
             {
-                await RollbackProcessingAsync(processingResult, controlTriggeredBy, ct);
-                return result;
+                var result = await DeleteFromPlatformAsync(platform, request, completionToken);
+                if (result.IsFailure())
+                {
+                    await TryRollbackProcessingAsync(processingResult, controlTriggeredBy);
+                    return result;
+                }
             }
-        }
 
-        if (staleContainers.Count > 0)
+            if (staleContainers.Count > 0)
+            {
+                await DeleteStalePersistedContainersAsync(staleContainers, completionToken);
+            }
+
+            return Result.Success();
+        }
+        catch
         {
-            await DeleteStalePersistedContainersAsync(staleContainers, ct);
+            await TryRollbackProcessingAsync(processingResult, controlTriggeredBy);
+            throw;
+        }
+    }
+
+    private async Task TryRollbackProcessingAsync(
+        ProcessedResources resources,
+        Guid controlTriggeredBy)
+    {
+        if (resources.Containers.Count == 0 &&
+            resources.Deployments.Count == 0 &&
+            resources.Stacks.Count == 0)
+        {
+            return;
         }
 
-        return Result.Success();
+        using var rollbackCancellation = new CancellationTokenSource(RollbackTimeout);
+        try
+        {
+            await RollbackProcessingAsync(
+                resources,
+                controlTriggeredBy,
+                rollbackCancellation.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to roll back container deletion claims");
+        }
     }
 
     private async Task<List<Container>> GetStalePersistedContainersAsync(
@@ -292,8 +446,6 @@ internal sealed class ContainerProcessingService(
 
         foreach (var container in containers)
         {
-            platformContainerCache.TryRemoveContainer(container.PlatformId, container.DockerContainerId);
-
             var image = await UpdateImageContainerCountAsync(uow, container, ct);
             if (image is not null)
             {
@@ -350,6 +502,8 @@ internal sealed class ContainerProcessingService(
 
         foreach (var container in deletedContainers)
         {
+            platformContainerCache.TryRemoveContainer(container.PlatformId, container.DockerContainerId);
+
             await notificationQueue.EnqueueAsync(
                 new ContainerNotificationWorkItem(
                     container,
@@ -405,9 +559,216 @@ internal sealed class ContainerProcessingService(
             Link: request.Link);
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        await connector.DeleteAsync(command, ct);
-        return Result.Success();
+        return await connector.DeleteAsync(command, ct);
     }
 }
 
-internal sealed record ProcessedResources(List<Container> Containers, List<Deployment> Deployments, List<Stack> Stacks);
+internal sealed class CompleteContainerCommandWorkItem(
+    ProcessedResources resources,
+    IReadOnlyDictionary<string, ContainerStateStatus> runtimeStates,
+    Guid controlTriggeredBy,
+    INotificationQueue notificationQueue,
+    IDockerDaemonStreamManager dockerDaemonHub,
+    IContainerEventBroadcaster containerEventBroadcaster,
+    IDeploymentStreamManager deploymentStreamManager,
+    IStackStreamManager stackStreamManager,
+    ILogger<ContainerProcessingService> logger) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
+    {
+        var claimedContainers = resources.Containers.ToDictionary(container => container.Id);
+        var ownedDeploymentIds = new HashSet<Guid>();
+        var ownedStackIds = new HashSet<Guid>();
+        var updatedContainers = new List<Container>();
+        var updatedDeployments = new List<Deployment>();
+        var updatedStacks = new List<Stack>();
+
+        foreach (var claimed in resources.Deployments)
+        {
+            var deployment = await uow.Deployments.GetAsync(claimed.Id, ct);
+            if (deployment is not null &&
+                IsOwnedClaim(
+                    deployment.ControlState,
+                    deployment.ControlTriggeredBy,
+                    deployment.RowVersion,
+                    claimed.RowVersion + 1))
+            {
+                ownedDeploymentIds.Add(deployment.Id);
+            }
+        }
+
+        foreach (var claimed in resources.Stacks)
+        {
+            var stack = await uow.Stacks.GetAsync(claimed.Id, ct);
+            if (stack is not null &&
+                IsOwnedClaim(
+                    stack.ControlState,
+                    stack.ControlTriggeredBy,
+                    stack.RowVersion,
+                    claimed.RowVersion + 1))
+            {
+                ownedStackIds.Add(stack.Id);
+            }
+        }
+
+        foreach (var (dockerContainerId, state) in runtimeStates)
+        {
+            var container = await uow.Containers.GetContainerInfoAsync(dockerContainerId, ct);
+            if (container is null)
+                continue;
+
+            var ownsContainerClaim = claimedContainers.TryGetValue(container.Id, out var claimed) &&
+                                     IsOwnedClaim(
+                                         container.ControlState,
+                                         container.ControlTriggeredBy,
+                                         container.RowVersion,
+                                         claimed.RowVersion + 1);
+            var ownsParentClaim = container.DeploymentId is { } deploymentId &&
+                                  ownedDeploymentIds.Contains(deploymentId) ||
+                                  container.StackId is { } stackId &&
+                                  ownedStackIds.Contains(stackId);
+
+            // A daemon event may have completed this operation after the inspection was
+            // captured but before this work item ran. Never overwrite that newer event.
+            if (!ownsContainerClaim && !ownsParentClaim)
+                continue;
+
+            if (ownsContainerClaim)
+            {
+                container.ReleaseProcessing();
+                var released = await uow.Containers.UpdateProcessingAsync(
+                    container.Id,
+                    container.ControlState,
+                    container.ControlStartedAt,
+                    claimed!.RowVersion + 1,
+                    checkRowVersion: true,
+                    controlTriggeredBy: null,
+                    ct);
+                if (released == 0)
+                    continue;
+            }
+
+            container.PartialUpdate(state: state);
+            await uow.Containers.UpdateAsync(container, ct);
+            updatedContainers.Add(container);
+        }
+
+        if (resources.Deployments.Count > 0)
+        {
+            var deploymentContainers = (await uow.Containers.GetByDeploymentIdsAsync(
+                    resources.Deployments.Select(deployment => deployment.Id),
+                    ct))
+                .Where(container => container.DeploymentId.HasValue)
+                .ToDictionary(container => container.DeploymentId!.Value);
+
+            foreach (var claimed in resources.Deployments)
+            {
+                var deployment = await uow.Deployments.GetAsync(claimed.Id, ct);
+                if (deployment is null ||
+                    !deploymentContainers.TryGetValue(deployment.Id, out var container) ||
+                    !IsOwnedClaim(deployment.ControlState, deployment.ControlTriggeredBy, deployment.RowVersion, claimed.RowVersion + 1))
+                {
+                    continue;
+                }
+
+                deployment.ReleaseProcessing(Deployment.ToDeploymentStatus(container.State));
+                var affected = await uow.Deployments.UpdateProcessingAsync(
+                    deployment.Id,
+                    deployment.Status,
+                    deployment.ControlState,
+                    deployment.ControlStartedAt,
+                    claimed.RowVersion + 1,
+                    checkRowVersion: true,
+                    controlTriggeredBy: null,
+                    ct);
+
+                if (affected != 0)
+                    updatedDeployments.Add(deployment);
+            }
+        }
+
+        foreach (var claimed in resources.Stacks)
+        {
+            var stack = await uow.Stacks.GetAsync(claimed.Id, ct);
+            if (stack?.CurrentStackRelease is null ||
+                !IsOwnedClaim(stack.ControlState, stack.ControlTriggeredBy, stack.RowVersion, claimed.RowVersion + 1))
+            {
+                continue;
+            }
+
+            var containers = (await uow.Stacks.GetContainersAsync(stack.Id, ct)).ToArray();
+            if (containers.Length == 0)
+                continue;
+
+            var status = Stack.ToStackStatus(containers.Select(container => container.State));
+            stack.ReleaseProcessing(status);
+            var affected = await uow.Stacks.UpdateProcessingAsync(
+                stack.Id,
+                status,
+                stack.ControlState,
+                stack.ControlStartedAt,
+                claimed.RowVersion + 1,
+                checkRowVersion: true,
+                controlTriggeredBy: null,
+                ct);
+
+            if (affected)
+                updatedStacks.Add(stack);
+        }
+
+        await uow.CommitAsync(ct);
+
+        foreach (var container in updatedContainers)
+        {
+            await TryNotifyAsync(
+                new ContainerNotificationWorkItem(
+                    container,
+                    new DaemonContainerEventInfo("reconcile", container.DockerContainerId, null),
+                    dockerDaemonHub,
+                    containerEventBroadcaster),
+                ct);
+        }
+
+        foreach (var deployment in updatedDeployments)
+        {
+            await TryNotifyAsync(
+                new DeploymentNotificationWorkItem(deploymentStreamManager, deployment),
+                ct);
+        }
+
+        foreach (var stack in updatedStacks)
+        {
+            await TryNotifyAsync(new StackNotificationWorkItem(stackStreamManager, stack), ct);
+        }
+    }
+
+    private async Task TryNotifyAsync(INotificationWorkItem notification, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await notificationQueue.EnqueueAsync(notification, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to enqueue container command completion notification");
+        }
+    }
+
+    private bool IsOwnedClaim(
+        ResourceControlState state,
+        Guid? owner,
+        long rowVersion,
+        long expectedRowVersion)
+        => state == ResourceControlState.Processing &&
+           owner == controlTriggeredBy &&
+           rowVersion == expectedRowVersion;
+}
+
+internal sealed record ProcessedResources(
+    List<Container> Containers,
+    List<Deployment> Deployments,
+    List<Stack> Stacks,
+    bool HasConflict = false)
+{
+    internal static ProcessedResources Conflict { get; } = new([], [], [], HasConflict: true);
+}

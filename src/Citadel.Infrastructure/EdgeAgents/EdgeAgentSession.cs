@@ -17,6 +17,12 @@ internal sealed class EdgeAgentSession(
     string sessionId)
 {
     private readonly ConcurrentDictionary<string, EdgePendingCommand> pendingCommands = new();
+    private readonly SemaphoreSlim commandSlots = new(
+        EdgeAgentDefaults.MaxConcurrentCommandsPerSession,
+        EdgeAgentDefaults.MaxConcurrentCommandsPerSession);
+    private readonly SemaphoreSlim streamSlots = new(
+        EdgeAgentDefaults.MaxActiveStreamsPerSession,
+        EdgeAgentDefaults.MaxActiveStreamsPerSession);
     private readonly Channel<CoreEnvelope> outbound =
         Channel.CreateBounded<CoreEnvelope>(Helpers.ChannelDefaultOptions(
             capacity: EdgeAgentDefaults.OutboundQueueCapacity,
@@ -44,20 +50,24 @@ internal sealed class EdgeAgentSession(
             throw new InvalidOperationException("Edge Agent command payload exceeded the maximum payload size.");
         }
 
-        if (pendingCommands.Count >= EdgeAgentDefaults.MaxConcurrentCommandsPerSession)
+        if (!commandSlots.Wait(0))
         {
             throw new InvalidOperationException("Edge Agent session has reached the maximum number of concurrent commands.");
         }
 
-        if (expectsStream && pendingCommands.Values.Count(command => command.ExpectsStream) >= EdgeAgentDefaults.MaxActiveStreamsPerSession)
+        var streamSlotAcquired = false;
+        if (expectsStream && !streamSlots.Wait(0))
         {
+            commandSlots.Release();
             throw new InvalidOperationException("Edge Agent session has reached the maximum number of active streams.");
         }
+        streamSlotAcquired = expectsStream;
 
         var commandId = Guid.CreateVersion7().ToString("D");
         var pending = new EdgePendingCommand(commandId, expectsStream);
         if (!pendingCommands.TryAdd(commandId, pending))
         {
+            ReleaseSlots(streamSlotAcquired);
             throw new InvalidOperationException("Failed to register Edge Agent command.");
         }
 
@@ -88,8 +98,7 @@ internal sealed class EdgeAgentSession(
         }
         catch
         {
-            pendingCommands.TryRemove(commandId, out _);
-            pending.Fail("Failed to send command to the Edge Agent session.");
+            RemovePending(commandId, "Failed to send command to the Edge Agent session.");
             throw;
         }
     }
@@ -98,6 +107,7 @@ internal sealed class EdgeAgentSession(
     {
         if (pendingCommands.TryRemove(commandId, out var pending))
         {
+            ReleaseSlots(pending.ExpectsStream);
             if (failureReason is not null)
             {
                 pending.Fail(failureReason);
@@ -126,24 +136,35 @@ internal sealed class EdgeAgentSession(
         }, cancellationToken);
     }
 
-    public async Task CancelCommandAsync(string commandId, string reason, CancellationToken cancellationToken)
+    public Task CancelCommandAsync(
+        string commandId,
+        string reason,
+        CancellationToken cancellationToken)
     {
-        await outbound.Writer.WriteAsync(new CoreEnvelope
+        cancellationToken.ThrowIfCancellationRequested();
+        RemovePending(commandId, reason);
+        if (!outbound.Writer.TryWrite(new CoreEnvelope
         {
             EnvelopeId = Guid.CreateVersion7().ToString("D"),
             SessionId = SessionId,
             CommandId = commandId,
             CancelCommand = new CancelCommand { Reason = reason }
-        }, cancellationToken);
-
-        RemovePending(commandId, reason);
+        }))
+        {
+            // Releasing the local slot while leaving the remote operation alive would let
+            // orphaned commands accumulate. Closing the session is the only reliable
+            // cancellation signal when the outbound queue cannot accept the envelope.
+            Disconnect("Edge Agent cancellation could not be delivered.");
+        }
+        return Task.CompletedTask;
     }
 
     public void HandleOutput(string commandId, byte[] payload)
     {
         if (pendingCommands.TryGetValue(commandId, out var pending) && !pending.Output(payload))
         {
-            pendingCommands.TryRemove(commandId, out _);
+            if (pendingCommands.TryRemove(commandId, out var removed))
+                ReleaseSlots(removed.ExpectsStream);
         }
     }
 
@@ -151,6 +172,7 @@ internal sealed class EdgeAgentSession(
     {
         if (pendingCommands.TryRemove(commandId, out var pending))
         {
+            ReleaseSlots(pending.ExpectsStream);
             pending.Complete();
         }
     }
@@ -159,6 +181,7 @@ internal sealed class EdgeAgentSession(
     {
         if (pendingCommands.TryRemove(commandId, out var pending))
         {
+            ReleaseSlots(pending.ExpectsStream);
             pending.Fail(message);
         }
     }
@@ -190,9 +213,17 @@ internal sealed class EdgeAgentSession(
         {
             if (pendingCommands.TryRemove(commandId, out var pending))
             {
+                ReleaseSlots(pending.ExpectsStream);
                 pending.Fail(reason);
             }
         }
+    }
+
+    private void ReleaseSlots(bool streamSlotAcquired)
+    {
+        if (streamSlotAcquired)
+            streamSlots.Release();
+        commandSlots.Release();
     }
 
     private static Citadel.Edge.V1.EdgeAgentResourceType MapResourceType(Domain.EdgeAgentResourceType resourceType)

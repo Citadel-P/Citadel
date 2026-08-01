@@ -63,8 +63,16 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 i.ControlState,
                 i.ControlStartedAt,
-                i.RowVersion
+                i.RowVersion,
+                r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
+                r.RegistryHost AS RegistryHost,
+                r.CreatedAt AS RegistryCreatedAt,
+                r.Configuration AS RegistryConfiguration,
+                r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
+            LEFT JOIN Registries r
+                ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId AND i.Id = @Id
             LIMIT 1
             """;
@@ -88,9 +96,17 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 i.ControlState,
                 i.ControlStartedAt,
-                i.RowVersion
+                i.RowVersion,
+                r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
+                r.RegistryHost AS RegistryHost,
+                r.CreatedAt AS RegistryCreatedAt,
+                r.Configuration AS RegistryConfiguration,
+                r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
-            WHERE DockerImageId = ANY(@Ids) AND PlatformId = @PlatformId
+            LEFT JOIN Registries r
+                ON i.RegistryId = r.Id
+            WHERE i.DockerImageId = ANY(@Ids) AND i.PlatformId = @PlatformId
             """;
         var result = await db.QueryAsync<ImageDto>(sql, new
         {
@@ -110,6 +126,9 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         if (checkRowVersion == true)
             conditions.Add("RowVersion = @RowVersion");
 
+        if (state == ResourceControlState.Processing)
+            conditions.Add("ControlState <> @ProcessingState");
+
         var sql = $"""
             UPDATE Images
             SET
@@ -125,6 +144,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             {
                 Id = id,
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
+                ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
                 RowVersion = rowVersion,
                 StartedAt = startedAt
             },
@@ -202,10 +222,32 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     public async Task<IEnumerable<Image>> GetStuckImagesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
     {
         var sql = """
-            SELECT * FROM Images c
-            WHERE ControlState = 'Processing'
-              AND ControlStartedAt IS NOT NULL
-              AND ControlStartedAt < @TimeoutThreshold
+            SELECT
+                i.Id,
+                i.Name AS Name,
+                i.Tags,
+                i.DockerImageId,
+                i.Size,
+                i.Containers,
+                i.PlatformId,
+                i.CreatedAt,
+                i.UpdatedAt,
+                i.RegistryId,
+                i.ControlState,
+                i.ControlStartedAt,
+                i.RowVersion,
+                r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
+                r.RegistryHost AS RegistryHost,
+                r.CreatedAt AS RegistryCreatedAt,
+                r.Configuration AS RegistryConfiguration,
+                r.CreatedByActorId AS RegistryCreatedByActorId
+            FROM Images i
+            LEFT JOIN Registries r
+                ON i.RegistryId = r.Id
+            WHERE i.ControlState = 'Processing'
+              AND i.ControlStartedAt IS NOT NULL
+              AND i.ControlStartedAt < @TimeoutThreshold
             """;
         var timeoutThreshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s;
         var result = await db.QueryAsync<ImageDto>(sql, new

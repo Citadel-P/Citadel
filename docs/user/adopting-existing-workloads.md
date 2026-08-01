@@ -72,9 +72,13 @@ intentional and remains available on the Docker host.
 
 If Docker has pruned the container's original image, Citadel leaves the
 **Local Image** field empty and asks you to select a synchronized replacement.
-Adoption does not restart the container, but future Apply operations use the
-replacement. Citadel inspects the selected image before adoption and blocks
-incompatible process defaults.
+You can select a synchronized local image or an external image from the same
+repository as the container's original image. Adoption does not pull an external
+image or restart the container, but future Apply operations use the replacement.
+Citadel inspects local replacements before adoption and blocks incompatible
+process defaults. A build image cannot replace a missing original image during
+adoption because selecting a build project does not guarantee that an inspectable
+artifact exists on the target Platform.
 
 ## Environment Values And Secrets
 
@@ -126,16 +130,16 @@ of containers.
 
 ## Safe Initial Settings
 
-Newly imported resources start without automatic runtime changes:
+Import drafts default to no automatic runtime changes:
 
 - image update behavior is disabled
 - Stack drift monitoring and automatic correction are disabled
-- Stack webhooks do not deploy automatically
+- Stack webhooks are disabled
 - imported Stacks do not destroy the project before the first Apply
 - Citadel does not Apply automatically
 
-You can enable update, webhook, and drift behavior later after reviewing the
-resource.
+You can enable update and webhook behavior while reviewing the import or later.
+Stack drift behavior can be enabled after import.
 
 ## The First Redeploy Or Apply
 
@@ -170,9 +174,14 @@ Citadel offers adoption only when:
 Citadel Core, PostgreSQL, Agent, and Edge Agent containers are System
 containers and cannot be adopted.
 
-An existing Citadel ownership label with a missing database relationship is
-reported as an ownership conflict rather than treated as a new unmanaged
-workload.
+Compose projects whose containers consistently reference the same Citadel
+Stack ID can be recovered when that Stack no longer exists in the current
+database. Citadel rejects the import when the referenced Stack still exists,
+the labels are malformed, the project mixes labeled and unlabeled containers,
+or its containers reference different Stack IDs.
+
+Standalone containers with Citadel ownership labels remain ownership
+conflicts and cannot be adopted as new Deployments.
 
 ## External Container Recreation
 
@@ -183,8 +192,8 @@ If another tool deletes and recreates that container, Docker assigns a new ID.
 Citadel cannot safely assume that the new container is the same workload. The
 replacement appears unmanaged and must be reviewed again.
 
-Compose Stacks regain Citadel ownership labels through the normal Stack Apply
-process after import.
+Compose Stacks receive current Citadel ownership labels through the normal
+Stack Apply process after import or orphan recovery.
 
 ## Permissions
 

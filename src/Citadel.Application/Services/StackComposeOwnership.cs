@@ -84,6 +84,18 @@ internal static class StackContainerOwnership
         => TryGetLabelValue(labels, CitadelLabels.Managed, CitadelLabels.LegacyExtensionPrefix + "managed", out var managed)
            && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase);
 
+    public static bool TryGetStackId(IReadOnlyDictionary<string, string> labels, out Guid stackId)
+    {
+        stackId = Guid.Empty;
+        return IsCitadelManaged(labels)
+               && TryGetLabelValue(
+                   labels,
+                   CitadelLabels.StackId,
+                   CitadelLabels.LegacyExtensionPrefix + "stack-id",
+                   out var value)
+               && Guid.TryParse(value, out stackId);
+    }
+
     public static string FormatStackId(Guid stackId) => stackId.ToString("D");
 
     private static bool TryGetLabelValue(

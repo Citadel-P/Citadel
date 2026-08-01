@@ -14,9 +14,26 @@ namespace WebApi.Hubs;
 internal sealed class ApplicationHub(
     IStreamSubscriptionResolver resolver,
     ISignalRGroupAuthorizationService groupAuthorizationService,
+    IUserConnectionRevoker connectionRevoker,
     IMediator mediator) : Hub
 {
     #region Overrides
+    public override async Task OnConnectedAsync()
+    {
+        var userId = Context.User!.GetUserId();
+        Context.Items["UserId"] = userId;
+        connectionRevoker.Register(userId, Context.ConnectionId, Context.Abort);
+        try
+        {
+            await base.OnConnectedAsync();
+        }
+        catch
+        {
+            connectionRevoker.Unregister(userId, Context.ConnectionId);
+            throw;
+        }
+    }
+
     public override Task OnDisconnectedAsync(Exception? exception)
     {
         if (Context.Items.TryGetValue("GroupIds", out var obj) && obj is HashSet<string> groups)
@@ -26,6 +43,10 @@ internal sealed class ApplicationHub(
                 resolver.Resolve(group).RemoveConnection(Context.ConnectionId);
             }
         }
+
+        if (Context.Items.TryGetValue("UserId", out var userIdValue) && userIdValue is Guid userId)
+            connectionRevoker.Unregister(userId, Context.ConnectionId);
+
         return base.OnDisconnectedAsync(exception);
     }
 

@@ -51,11 +51,19 @@ internal sealed class ManualStackAutoUpdateJob(
                             await dbWorkQueue.EnqueueAsync(result, cancellationToken);
                         }
                     }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         logger.LogError(ex, "Auto-update failed for stack {StackId}", stackChecks.Key);
                     }
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

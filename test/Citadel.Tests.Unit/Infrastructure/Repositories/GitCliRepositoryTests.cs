@@ -1,6 +1,8 @@
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories;
+using Domain;
 using Domain.Contracts.Resources.Git;
+using Domain.Entities.Git;
 using System.Diagnostics;
 
 namespace Tests.Unit.Infrastructure.Repositories;
@@ -60,6 +62,45 @@ public sealed class GitCliRepositoryTests
         Assert.True(result.IsFailure(out var error));
         Assert.Equal("ExitCode=1. Error=checkout failed", error.Message);
         Assert.Single(executor.Calls);
+    }
+
+    [Fact]
+    public async Task RemoveCredentialFile_ShouldDeleteMaterializedSshKey()
+    {
+        var executor = new CapturingCommandExecutor(
+            _ => new ProcessExecutionResult(0, "", ""));
+        var repository = new GitCliRepository(executor);
+        var account = new GitAccount(
+            "test ssh",
+            "example.invalid",
+            GitTransport.Ssh,
+            GitAuthType.SshKey,
+            Guid.CreateVersion7(),
+            new SshKeyAuth("git", "private-key-material", Passphrase: null));
+
+        try
+        {
+            var result = await repository.TestConnectionAsync(
+                "git@example.invalid:owner/repository.git",
+                account,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsSuccess());
+            var sshCommand = Assert.IsType<string>(
+                executor.LastEnvironment?["GIT_SSH_COMMAND"]);
+            var pathStart = sshCommand.IndexOf("-i ", StringComparison.Ordinal) + 3;
+            var pathEnd = sshCommand.IndexOf(" -o ", pathStart, StringComparison.Ordinal);
+            var keyPath = sshCommand[pathStart..pathEnd];
+            Assert.True(File.Exists(keyPath));
+
+            repository.RemoveCredentialFile(account.Id);
+
+            Assert.False(File.Exists(keyPath));
+        }
+        finally
+        {
+            repository.RemoveCredentialFile(account.Id);
+        }
     }
 
     [Fact]
@@ -147,6 +188,7 @@ public sealed class GitCliRepositoryTests
         : ICommandExecutor
     {
         public List<IReadOnlyList<string>> Calls { get; } = [];
+        public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
 
         public Task<ProcessExecutionResult> ExecuteAsync(
             string fileName,
@@ -157,6 +199,9 @@ public sealed class GitCliRepositoryTests
         {
             var args = arguments.ToArray();
             Calls.Add(args);
+            LastEnvironment = environmentVariables is null
+                ? null
+                : new Dictionary<string, string>(environmentVariables);
             return Task.FromResult(handler(args));
         }
 

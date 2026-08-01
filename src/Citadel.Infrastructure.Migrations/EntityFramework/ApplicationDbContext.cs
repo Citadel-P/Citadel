@@ -451,6 +451,7 @@ internal static class Configuration
         container.Property<string>("Stack").HasColumnType(Text);
         container.Property<bool>("IsSystem").IsRequired().HasDefaultValue(false);
         container.Property<string>("SystemRole").HasColumnType(Text).IsRequired(false);
+        container.Property<bool>("HasCitadelOwnershipLabels").IsRequired().HasDefaultValue(false);
         container.Property<string>("Ports").HasColumnType(Json).IsRequired();
 
         container.AddReconcilableMember();
@@ -1627,6 +1628,10 @@ internal static class Configuration
             .IsDescending(false, true, true)
             .IncludeProperties("Status")
             .HasDatabaseName($"IX_{tableName}_ActionId_QueuedAt");
+        run.HasIndex("ActionId")
+            .IsUnique()
+            .HasFilter("status IN ('Queued', 'Running')")
+            .HasDatabaseName($"IX_{tableName}_Active_Action");
         run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{tableName}_Status_QueuedAt");
         run.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
         run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{tableName}_TriggeredByActorId");

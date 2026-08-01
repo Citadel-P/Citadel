@@ -22,6 +22,7 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
                 @Id, @ActionId, @ActionName, @Trigger, @Status, @RunAsActorId, @TriggeredByActorId,
                 @ArgsJson::jsonb, @CodeSnapshot, @CodeHash, @TimeoutSeconds, @QueuedAt, @StartedAt, @FinishedAt,
                 @DurationMs, @ExitCode, @Logs, @ErrorMessage)
+            ON CONFLICT (ActionId) WHERE Status IN ('Queued', 'Running') DO NOTHING
             """;
 
         return db.ExecuteAsync(
@@ -215,6 +216,35 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
                     EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
                     EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
                 }
+            },
+            transaction: tx());
+    }
+
+    public Task<int> InterruptInProgressAsync(
+        DateTime interruptedAt,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE ActionRuns
+            SET Status = @FailedStatus,
+                FinishedAt = @InterruptedAt,
+                DurationMs = CASE
+                    WHEN StartedAt IS NULL THEN NULL
+                    ELSE GREATEST(0, (EXTRACT(EPOCH FROM (@InterruptedAt - StartedAt)) * 1000)::bigint)
+                END,
+                ErrorMessage = @Reason
+            WHERE Status = @RunningStatus
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                InterruptedAt = interruptedAt,
+                Reason = reason,
+                FailedStatus = EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Failed),
+                RunningStatus = EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
             },
             transaction: tx());
     }

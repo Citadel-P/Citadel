@@ -52,26 +52,30 @@ internal class GitRepoSyncJob(
                         ? repo.DefaultBranch ?? "main"
                         : request.Branch;
 
+                    string remoteUrl;
+                    try
+                    {
+                        remoteUrl = repoCacheManager.GetRemoteUrl(repo, repo.GitAccount);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        await CompleteConnectionFailureAsync(repo, branch, ex.Message, request.Trigger, stoppingToken);
+                        continue;
+                    }
+
                     var connectionResult = await gitCliRepository.TestConnectionAsync(
-                        repoCacheManager.GetRemoteUrl(repo, repo.GitAccount),
+                        remoteUrl,
                         repo.GitAccount,
                         stoppingToken);
 
                     if (connectionResult.IsFailure(out var error))
                     {
-                        var failureWorkItem = new GitRepoSyncFailedWorkItem(
-                            gitRepoStreamManager,
-                            notificationQueue,
-                            activityHub,
-                            alertService,
-                            GitOperation.Authenticate,
+                        await CompleteConnectionFailureAsync(
                             repo,
                             branch,
                             error.Message,
                             request.Trigger,
-                            BranchScopedFailure: false);
-                        await dbWorkQueue.EnqueueAndWaitAsync(failureWorkItem, stoppingToken);
-                        await failureWorkItem.CompleteAsync(stoppingToken);
+                            stoppingToken);
                     }
                     else
                     {
@@ -131,6 +135,28 @@ internal class GitRepoSyncJob(
             }
         }
         catch (OperationCanceledException) { /** Nope */ }
+    }
+
+    private async Task CompleteConnectionFailureAsync(
+        GitRepository repo,
+        string branch,
+        string error,
+        GitRepoSyncTrigger trigger,
+        CancellationToken cancellationToken)
+    {
+        var failureWorkItem = new GitRepoSyncFailedWorkItem(
+            gitRepoStreamManager,
+            notificationQueue,
+            activityHub,
+            alertService,
+            GitOperation.Authenticate,
+            repo,
+            branch,
+            error,
+            trigger,
+            BranchScopedFailure: false);
+        await dbWorkQueue.EnqueueAndWaitAsync(failureWorkItem, cancellationToken);
+        await failureWorkItem.CompleteAsync(cancellationToken);
     }
 
     private async Task<GitRepository?> GetGitRepo(Guid repoId, CancellationToken stoppingToken)

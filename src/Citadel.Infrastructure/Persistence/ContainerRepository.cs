@@ -237,12 +237,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
             INSERT INTO Containers (
                 Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId,
-                deploymentId, StackId, IsSystem, SystemRole
+                deploymentId, StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels
             ) VALUES (
                 @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
                 CASE WHEN @DeploymentId IS NULL OR EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId) THEN @DeploymentId ELSE NULL END,
                 CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
-                @IsSystem, @SystemRole
+                @IsSystem, @SystemRole, @HasCitadelOwnershipLabels
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -261,6 +261,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             StackId = container.StackId,
             IsSystem = container.IsSystem,
             SystemRole = container.SystemRole?.ToString(),
+            HasCitadelOwnershipLabels = container.HasCitadelOwnershipLabels,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -281,7 +282,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 PlatformId = @PlatformId,
                 StackId = CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
                 IsSystem = @IsSystem,
-                SystemRole = @SystemRole
+                SystemRole = @SystemRole,
+                HasCitadelOwnershipLabels = @HasCitadelOwnershipLabels
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -294,6 +296,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             StackId = container.StackId,
             IsSystem = container.IsSystem,
             SystemRole = container.SystemRole?.ToString(),
+            HasCitadelOwnershipLabels = container.HasCitadelOwnershipLabels,
             Name = container.Name,
             Image = container.Image,
             DockerImageId = container.DockerImageId,
@@ -322,6 +325,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
               AND DeploymentId IS NULL
               AND StackId IS NULL
               AND IsSystem = FALSE
+              AND HasCitadelOwnershipLabels = FALSE
               AND ControlState <> 'Processing'
             """;
 
@@ -344,6 +348,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         IReadOnlyCollection<Guid> containerIds,
         IReadOnlyCollection<string> dockerContainerIds,
         Guid stackId,
+        Guid? orphanedOwnerStackId,
         CancellationToken cancellationToken)
     {
         const string sql = """
@@ -357,6 +362,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
               AND DeploymentId IS NULL
               AND StackId IS NULL
               AND IsSystem = FALSE
+              AND (
+                  HasCitadelOwnershipLabels = FALSE
+                  OR (
+                      @OrphanedOwnerStackId IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM Stacks WHERE Id = @OrphanedOwnerStackId)
+                  )
+              )
               AND ControlState <> 'Processing'
             """;
 
@@ -369,6 +381,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 ContainerIds = containerIds.ToArray(),
                 DockerContainerIds = dockerContainerIds.ToArray(),
                 StackId = stackId,
+                OrphanedOwnerStackId = orphanedOwnerStackId,
                 Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             },
             tx());
@@ -379,11 +392,11 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
         INSERT INTO Containers (
             Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId,
-            StackId, IsSystem, SystemRole)
+            StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels)
         VALUES (
             @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
             CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
-            @IsSystem, @SystemRole
+            @IsSystem, @SystemRole, @HasCitadelOwnershipLabels
         )
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
@@ -396,7 +409,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Ports = excluded.Ports,
             StackId = excluded.StackId,
             IsSystem = excluded.IsSystem,
-            SystemRole = excluded.SystemRole;
+            SystemRole = excluded.SystemRole,
+            HasCitadelOwnershipLabels = excluded.HasCitadelOwnershipLabels;
     """;
 
         return db.ExecuteAsync(sql, containers.Select(c => new
@@ -414,6 +428,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             StackId = c.StackId,
             IsSystem = c.IsSystem,
             SystemRole = c.SystemRole?.ToString(),
+            HasCitadelOwnershipLabels = c.HasCitadelOwnershipLabels,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )
@@ -451,6 +466,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         if (checkRowVersion == true)
             conditions.Add("RowVersion = @RowVersion");
 
+        if (state == ResourceControlState.Processing)
+            conditions.Add("ControlState <> @ProcessingState");
+
         var sql = $"""
             UPDATE Containers
             SET
@@ -468,6 +486,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 Id = id,
                 ControlTriggeredBy = controlTriggeredBy,
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
+                ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
                 RowVersion = rowVersion,
                 StartedAt = startedAt
             },

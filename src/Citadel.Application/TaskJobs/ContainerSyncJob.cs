@@ -115,7 +115,7 @@ internal sealed class ContainerSyncJob(
                 break;
 
             // Wait until ImageSyncJob has synced images at least once
-            await syncBarrier.WaitForAsync<ImageSyncJob>(platform.Id);
+            await syncBarrier.WaitForAsync<ImageSyncJob>(platform.Id, cancellationToken);
 
             try
             {
@@ -148,6 +148,8 @@ internal sealed class ContainerSyncJob(
     {
         if (platformEvent.IsOnLine)
         {
+            var snapshotStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var cacheMutationVersion = platformContainerCache.GetMutationVersion(platformEvent.Id);
             logger.LogInformation(
                 "Platform {PlatformId} is online. Scheduling container sync from {Address}...",
                 platformEvent.Id, platformEvent.Address);
@@ -176,6 +178,8 @@ internal sealed class ContainerSyncJob(
                 containerStreamManager,
                 deploymentStreamManager,
                 stackStreamManager,
+                snapshotStartedAt,
+                cacheMutationVersion,
                 logger);
 
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -208,12 +212,20 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
     IContainerStreamManager containerStreamManager,
     IDeploymentStreamManager deploymentStreamManager,
     IStackStreamManager stackStreamManager,
+    long snapshotStartedAt,
+    long cacheMutationVersion,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         try
         {
+            // Container daemon events and other syncs mutate this version only after their
+            // database transaction commits. Discard a list captured before such a mutation;
+            // otherwise a stale list can recreate a container that a newer event deleted.
+            if (platformContainerCache.GetMutationVersion(platformEvent.Id) != cacheMutationVersion)
+                return;
+
             var images = await uow.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
             var containers = await uow.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
             var imageIds = images.ToDictionary(
@@ -227,6 +239,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 StringComparer.OrdinalIgnoreCase);
 
             var currentActiveContainers = new List<Container>();
+            var containersToUpsert = new List<Container>();
 
             // Map fresh containers
             foreach (var freshContainer in freshContainers.Values)
@@ -237,6 +250,12 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
 
                 if (existingContainersInDb.TryGetValue(freshContainer.Id, out var existingDbContainer))
                 {
+                    if (existingDbContainer.Updated >= snapshotStartedAt)
+                    {
+                        currentActiveContainers.Add(existingDbContainer);
+                        continue;
+                    }
+
                     existingDbContainer.PartialUpdate(
                         name: freshContainer.Name,
                         imageId: imageId,
@@ -245,27 +264,35 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                         dockerStack: freshContainer.Stack,
                         created: freshContainer.Created,
                         ports: freshContainer.Ports,
-                        stackId: freshContainer.StackId,
+                        stackId: existingDbContainer.StackId ?? freshContainer.StackId,
                         isSystem: freshContainer.IsSystem,
-                        systemRole: freshContainer.SystemRole);
+                        systemRole: freshContainer.SystemRole,
+                        hasCitadelOwnershipLabels: freshContainer.HasCitadelOwnershipLabels);
 
                     currentActiveContainers.Add(existingDbContainer);
+                    containersToUpsert.Add(existingDbContainer);
                 }
                 else
                 {
                     var container = freshContainer.Map(platformEvent.Id, imageId);
                     currentActiveContainers.Add(container);
+                    containersToUpsert.Add(container);
                 }
             }
 
             // Upsert current active containers
-            await uow.Containers.BulkUpsertAsync(currentActiveContainers, cancellationToken);
+            if (containersToUpsert.Count > 0)
+                await uow.Containers.BulkUpsertAsync(containersToUpsert, cancellationToken);
 
             // Remove stale
             var freshIds = freshContainers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var staleContainers = existingContainersInDb.Values
-                .Where(c => !freshIds.Contains(c.DockerContainerId))
+                .Where(c => !freshIds.Contains(c.DockerContainerId) && c.Updated < snapshotStartedAt)
                 .ToArray();
+
+            currentActiveContainers.AddRange(existingContainersInDb.Values.Where(
+                container => !freshIds.Contains(container.DockerContainerId) &&
+                             container.Updated >= snapshotStartedAt));
 
             if (staleContainers.Length > 0)
             {

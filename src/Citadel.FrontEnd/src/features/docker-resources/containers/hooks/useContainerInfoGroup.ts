@@ -3,9 +3,39 @@ import { HubConnection } from '@microsoft/signalr';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { normalizeDockerId } from '@/lib/utils';
-import { ContainerDataView, PlatformStatus, ProblemDetails } from '@/api/generated/api.types';
+import {
+  type ContainerDataView,
+  type ContainerView,
+  PlatformStatus,
+  type ProblemDetails,
+} from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
+
+export type ContainerDetailsView = ContainerDataView & {
+  resourceId: string;
+  platformId: string;
+};
+
+export const toContainerDetailsView = (container: ContainerView): ContainerDetailsView => ({
+  name: container.name,
+  image: container.imageView?.name ?? '',
+  id: container.containerId,
+  imageId: container.dockerImageId,
+  state: container.state,
+  controlState: container.controlState,
+  isSystem: container.isSystem,
+  systemRole: container.systemRole,
+  created: container.created,
+  stack: container.stack,
+  containerStat: container.lastStats,
+  ports: container.ports,
+  deploymentId: container.deploymentId,
+  stackId: container.stackId,
+  capabilities: container.capabilities,
+  resourceId: container.id,
+  platformId: container.platformId,
+});
 
 export const mergeContainerRuntimeUpdate = (
   current: Partial<ContainerDataView> | undefined,
@@ -26,10 +56,10 @@ export const mergeContainerRuntimeUpdate = (
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
   const nid = normalizeDockerId(containerId);
 
-  const { data, isLoading } = useRead('getContainerData', { id: nid });
+  const { data, isLoading } = useRead('getContainer', { id: nid });
   const { currentPlatform } = useAppContext();
 
-  const containerData = data?.data;
+  const containerData = useMemo(() => (data?.data ? toContainerDetailsView(data.data) : undefined), [data]);
 
   const [liveContainerInfo, setLiveContainerInfo] = useState<Partial<ContainerDataView>>();
 
@@ -39,7 +69,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         ? ({
             ...containerData,
             ...liveContainerInfo,
-          } as ContainerDataView)
+          } as ContainerDetailsView)
         : undefined,
     [containerData, liveContainerInfo],
   );

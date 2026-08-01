@@ -10,6 +10,8 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Images.Commands;
 
@@ -31,7 +33,9 @@ internal sealed class DeleteImagesHandler(
     INotificationQueue notificationQueue,
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache, 
-    IConnectorFactory<IImageConnector> connectorFactory 
+    IConnectorFactory<IImageConnector> connectorFactory,
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<DeleteImagesHandler> logger
 ) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
@@ -44,64 +48,59 @@ internal sealed class DeleteImagesHandler(
         var images = await MarkProcessingAsync(command.Ids, command.PlatformId, cancellationToken);
         if (images.Count == 0)
         {
-            return Result.Failure<DeleteImageResult>(new NotFoundError("No mages found for the provided ID(s)."));
+            return Result.Failure<DeleteImageResult>(new NotFoundError("One or more images were not found or are already processing."));
         }
-        await NotifyProcessingAsync(images, "update", cancellationToken);
+        await NotifyProcessingSafelyAsync(images, "update", cancellationToken);
+
+        var connector = connectorFactory.GetConnector(platform.ConnectorType);
+        var claimedIds = images.Select(static image => image.DockerImageId).ToArray();
 
         var args = new DeleteImageCommand
         (
-            Ids: command.Ids,
+            Ids: claimedIds,
             Force: command.Force,
             NoPrune: command.NoPrune,
             PlatformAddress: platform.Address
         );
-        var result = await connectorFactory
-            .GetConnector(platform.ConnectorType)
-            .DeleteImageAsync(args, cancellationToken: cancellationToken);
-
-        var failedUpdates = new List<Image>();
-        if (result.IsFailure(out var errorResult))
+        Result<DeleteImageResult> result;
+        try
         {
-            var action = "update";
-            // Handle the case where the image is not on the platform but still in db - no sync
-            if (errorResult is NotFoundError)
-            {
-                action = "delete";
-                failedUpdates.AddRange(await DeleteImages(command.Ids, command.PlatformId, cancellationToken));
-            }
-            else
-            {
-                failedUpdates.AddRange(await RollbackProcessingAsync(command.Ids, command.PlatformId, cancellationToken));
-            }
-
-            await NotifyProcessingAsync(failedUpdates, action, cancellationToken);
+            result = await connector.DeleteImageAsync(args, cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            await TryReconcileAfterDeleteAsync(connector, platform.Address, images);
+            throw;
         }
 
+        if (result.IsSuccess())
+        {
+            using var completionCancellation = CreateCompletionCancellation();
+            try
+            {
+                await DeletePersistedImagesAsync(images, completionCancellation.Token);
+            }
+            catch
+            {
+                await TryReconcileAfterDeleteAsync(connector, platform.Address, images);
+                throw;
+            }
+            await NotifyProcessingSafelyAsync(images, "delete", completionCancellation.Token);
+            return result;
+        }
+
+        // A multi-image daemon request can partially succeed before reporting an error.
+        // Reconcile against the daemon rather than blindly releasing every claim.
+        await TryReconcileAfterDeleteAsync(connector, platform.Address, images);
         return result;
     }
 
-    private async Task<IEnumerable<Image>> DeleteImages(IEnumerable<string> ids, Guid platformId, CancellationToken ct)
+    private async Task DeletePersistedImagesAsync(IEnumerable<Image> images, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var failedUpdates = new List<Image>();
-        var imageIdsToDelete = new List<Guid>();
-        foreach (var id in ids)
-        {
-            var existing = await uow.Images.GetByDockerImageIdAsync(id, platformId, ct);
-            if (existing == null) continue;
-            failedUpdates.Add(existing);
-            imageIdsToDelete.Add(existing.Id);
-        }
-
-        if (imageIdsToDelete.Count > 0)
-        {
-            await uow.Images.DeleteAsync(imageIdsToDelete, ct);
-            await uow.CommitAsync(ct);
-        }
-
-        return failedUpdates;
+        await uow.Images.DeleteAsync(images.Select(static image => image.Id), ct);
+        await uow.CommitAsync(ct);
     }
 
     public async Task<List<Image>> MarkProcessingAsync(string[] ids, Guid platformId, CancellationToken ct)
@@ -110,11 +109,15 @@ internal sealed class DeleteImagesHandler(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var images = await uow.Images.GetByIdAsync(ids, platformId, ct);
+        var requestedIds = ids.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var images = (await uow.Images.GetByIdAsync(requestedIds, platformId, ct)).ToArray();
+        if (requestedIds.Length == 0 || images.Length != requestedIds.Length)
+            return [];
 
         foreach (var image in images)
         {
-            image.MarkProcessing();
+            if (!image.MarkProcessing())
+                return [];
 
             var affected = await uow.Images.UpdateProcessingAsync(
                 image.Id,
@@ -124,34 +127,31 @@ internal sealed class DeleteImagesHandler(
                 checkRowVersion: true,
                 ct);
 
-            if (affected != 0)
-            {
-                updated.Add(image);
-            }
+            if (affected == 0)
+                return [];
+
+            updated.Add(image);
         }
 
         await uow.CommitAsync(ct);
         return updated;
     }
 
-    public async Task<IEnumerable<Image>> RollbackProcessingAsync(IEnumerable<string> ids, Guid platformId, CancellationToken ct)
+    public async Task<IEnumerable<Image>> RollbackProcessingAsync(IEnumerable<Image> images, CancellationToken ct)
     {
         var failedUpdates = new List<Image>();
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        foreach (var id in ids)
+        foreach (var image in images)
         {
-            var image = await uow.Images.GetByDockerImageIdAsync(id, platformId, ct);
-            if (image == null) continue;
-
             image.ReleaseProcessing();
 
             var affected = await uow.Images.UpdateProcessingAsync(
                 image.Id,
                 image.ControlState,
                 image.ControlStartedAt,
-                image.RowVersion,
+                image.RowVersion + 1,
                 checkRowVersion: true,
                 ct);
 
@@ -164,6 +164,96 @@ internal sealed class DeleteImagesHandler(
         await uow.CommitAsync(ct);
         return failedUpdates;
     }
+
+    private async Task ReconcileAfterDeleteAsync(
+        IImageConnector connector,
+        string platformAddress,
+        IReadOnlyCollection<Image> claimedImages)
+    {
+        using var completionCancellation = CreateCompletionCancellation();
+        var completionToken = completionCancellation.Token;
+        var listed = await connector.ListImagesAsync(platformAddress, completionToken);
+        if (!listed.IsSuccess(out var daemonImages))
+        {
+            var rolledBack = await RollbackProcessingAsync(claimedImages, completionToken);
+            await NotifyProcessingSafelyAsync(rolledBack, "update", completionToken);
+            return;
+        }
+
+        var daemonIds = daemonImages.Select(static image => NormalizeImageId(image.Id)).ToArray();
+        var deleted = claimedImages
+            .Where(image => !ContainsImageId(daemonIds, image.DockerImageId))
+            .ToArray();
+        var remaining = claimedImages
+            .Where(image => ContainsImageId(daemonIds, image.DockerImageId))
+            .ToArray();
+
+        if (deleted.Length > 0)
+        {
+            await DeletePersistedImagesAsync(deleted, completionToken);
+            await NotifyProcessingSafelyAsync(deleted, "delete", completionToken);
+        }
+
+        if (remaining.Length > 0)
+        {
+            var rolledBack = await RollbackProcessingAsync(remaining, completionToken);
+            await NotifyProcessingSafelyAsync(rolledBack, "update", completionToken);
+        }
+    }
+
+    private async Task TryReconcileAfterDeleteAsync(
+        IImageConnector connector,
+        string platformAddress,
+        IReadOnlyCollection<Image> claimedImages)
+    {
+        try
+        {
+            await ReconcileAfterDeleteAsync(connector, platformAddress, claimedImages);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to reconcile image deletion after the daemon operation ended unexpectedly");
+        }
+    }
+
+    private async Task NotifyProcessingSafelyAsync(
+        IEnumerable<Image> images,
+        string action,
+        CancellationToken cancellationToken)
+    {
+        using var notificationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            applicationLifetime.ApplicationStopping);
+        notificationCancellation.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await NotifyProcessingAsync(images, action, notificationCancellation.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to enqueue image {Action} notifications", action);
+        }
+    }
+
+    private CancellationTokenSource CreateCompletionCancellation()
+    {
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(10));
+        return cancellation;
+    }
+
+    private static bool ContainsImageId(IEnumerable<string> daemonIds, string requestedId)
+    {
+        var normalized = NormalizeImageId(requestedId);
+        return daemonIds.Any(id =>
+            string.Equals(id, normalized, StringComparison.OrdinalIgnoreCase)
+            || (normalized.Length >= 12 && id.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+            || (id.Length >= 12 && normalized.StartsWith(id, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string NormalizeImageId(string id)
+        => id.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? id[7..] : id;
 
     public async Task NotifyProcessingAsync(IEnumerable<Image> images, string action, CancellationToken ct)
     {

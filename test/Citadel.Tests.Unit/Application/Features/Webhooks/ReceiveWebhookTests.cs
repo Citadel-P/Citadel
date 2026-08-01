@@ -15,6 +15,8 @@ using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Moq;
 using System.Security.Cryptography;
 using System.Text;
@@ -63,7 +65,7 @@ public sealed class ReceiveWebhookTests
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
-        gitRepos.Setup(x => x.UpdateAsync(repo, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        SetupGitRepositoryClaim(gitRepos);
         List<ActivityEvent> activities = [];
 
         var notificationQueue = new TestNotificationQueue();
@@ -90,7 +92,152 @@ public sealed class ReceiveWebhookTests
         Assert.Equal("main", info.Branch);
         Assert.Equal("main", info.DispatchedBranch);
         Assert.Equal("2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d", info.DispatchedCommitSha);
-        gitRepos.Verify(x => x.UpdateAsync(repo, It.IsAny<CancellationToken>()), Times.Once);
+        gitRepos.Verify(x => x.UpdateProcessingAsync(
+            repo.Id,
+            GitReposStatus.Pending,
+            ResourceControlState.Processing,
+            It.IsAny<long?>(),
+            repo.RowVersion,
+            true,
+            Constants.SystemId,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RepoPull_WhenCommitFails_DoesNotPublishUncommittedStateOrQueueSync()
+    {
+        var repo = CreateRepository();
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        SetupGitRepositoryClaim(gitRepos);
+        var notificationQueue = new TestNotificationQueue();
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            gitSyncWriter: channel.Writer,
+            notificationQueue: notificationQueue,
+            commit: _ => Task.FromException(new InvalidOperationException("commit failed")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await handler.Handle(
+                CreateRepoPullCommand(
+                    repo.Id,
+                    branch: "main",
+                    repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Empty(notificationQueue.Items);
+        Assert.False(channel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task RepoPull_WhenNotificationFails_StillQueuesCommittedGitSync()
+    {
+        var repo = CreateRepository();
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        SetupGitRepositoryClaim(gitRepos);
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(
+                It.IsAny<INotificationWorkItem>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.FromException(new InvalidOperationException("notification queue unavailable")));
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            gitSyncWriter: channel.Writer,
+            notificationQueue: notificationQueue.Object);
+
+        var result = await handler.Handle(
+            CreateRepoPullCommand(
+                repo.Id,
+                branch: "main",
+                repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.True(channel.Reader.TryRead(out var request));
+        Assert.Equal(repo.Id, request.RepoId);
+    }
+
+    [Fact]
+    public async Task RepoPull_WhenGitSyncDispatchFails_ReleasesCommittedClaim()
+    {
+        var repo = CreateRepository();
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        channel.Writer.Complete();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        SetupGitRepositoryClaim(gitRepos);
+        gitRepos
+            .Setup(x => x.UpdateProcessingAsync(
+                repo.Id,
+                It.IsAny<GitReposStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var handler = CreateHandler(gitRepos: gitRepos.Object, gitSyncWriter: channel.Writer);
+
+        await Assert.ThrowsAsync<ChannelClosedException>(async () =>
+            await handler.Handle(
+                CreateRepoPullCommand(
+                    repo.Id,
+                    branch: "main",
+                    repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(GitReposStatus.Degraded, repo.Status);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        gitRepos.Verify(x => x.UpdateProcessingAsync(
+            repo.Id,
+            GitReposStatus.Degraded,
+            ResourceControlState.Idle,
+            null,
+            It.IsAny<long>(),
+            true,
+            null,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RepoPull_WhenRepositoryClaimLosesRace_DoesNotQueueSync()
+    {
+        var repo = CreateRepository();
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        gitRepos
+            .Setup(value => value.UpdateProcessingAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<GitReposStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        var handler = CreateHandler(gitRepos: gitRepos.Object, gitSyncWriter: channel.Writer);
+
+        var result = await handler.Handle(
+            CreateRepoPullCommand(
+                repo.Id,
+                branch: "main",
+                repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Repository is already processing another operation", response.Reason);
+        Assert.Equal(GitReposStatus.Created, repo.Status);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        Assert.False(channel.Reader.TryRead(out _));
     }
 
     [Fact]
@@ -413,7 +560,7 @@ public sealed class ReceiveWebhookTests
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
-        gitRepos.Setup(x => x.UpdateAsync(repo, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        SetupGitRepositoryClaim(gitRepos);
 
         var handler = CreateHandler(gitRepos: gitRepos.Object, gitSyncWriter: channel.Writer);
 
@@ -740,7 +887,7 @@ public sealed class ReceiveWebhookTests
     }
 
     [Fact]
-    public async Task BuildRun_WithoutPayloadPaths_UsesRepositoryDiffAndQueuesRelevantChanges()
+    public async Task BuildRun_WhenWebhookActivityCommitFails_ReturnsQueuedBecauseRunAlreadyCommitted()
     {
         var repo = CreateRepository();
         var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
@@ -778,6 +925,7 @@ public sealed class ReceiveWebhookTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["services/api/Program.cs"]));
         List<ActivityEvent> activities = [];
+        var commitCount = 0;
 
         var handler = CreateHandler(
             gitRepos: gitRepos.Object,
@@ -787,7 +935,10 @@ public sealed class ReceiveWebhookTests
             registries: registries.Object,
             repoCacheManager: repoCacheManager.Object,
             gitCliRepository: gitCliRepository.Object,
-            activities: activities);
+            activities: activities,
+            commit: _ => ++commitCount == 2
+                ? Task.FromException(new InvalidOperationException("webhook activity commit failed"))
+                : Task.CompletedTask);
 
         var result = await handler.Handle(
             CreateBuildRunCommand(project.Id, branch: "main", repositoryUrl: repo.Url),
@@ -795,6 +946,7 @@ public sealed class ReceiveWebhookTests
 
         Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
         Assert.Equal("queued", response.Status);
+        Assert.Equal(2, commitCount);
         Assert.Equal("main", Assert.IsType<BuildWebhookReceived>(activities.Last().Info).DispatchedBranch);
         Assert.Equal("new-commit", Assert.IsType<BuildWebhookReceived>(activities.Last().Info).DispatchedCommitSha);
         var run = Assert.Single(queuedRuns);
@@ -972,7 +1124,8 @@ public sealed class ReceiveWebhookTests
         IRepoCacheManager? repoCacheManager = null,
         IGitCliRepository? gitCliRepository = null,
         List<ActivityEvent>? activities = null,
-        List<StackWebhookDeployQueueItem>? stackDeployItems = null)
+        List<StackWebhookDeployQueueItem>? stackDeployItems = null,
+        Func<CancellationToken, Task>? commit = null)
     {
         activities ??= [];
         var activityEvents = new Mock<IActivityEventRepository>();
@@ -1015,7 +1168,10 @@ public sealed class ReceiveWebhookTests
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.StackWebhookDeployQueue).Returns(stackDeployQueue.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
-        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns((CancellationToken cancellationToken) => commit?.Invoke(cancellationToken) ?? Task.CompletedTask);
+        unitOfWork.Setup(x => x.RollbackAsync()).Returns(Task.CompletedTask);
 
         return new ReceiveWebhookHandler(
             unitOfWork.Object,
@@ -1030,7 +1186,31 @@ public sealed class ReceiveWebhookTests
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             Mock.Of<IAutomationRunQueueService>(),
-            new PermissiveLicenseEntitlementService());
+            new PermissiveLicenseEntitlementService(),
+            CreateApplicationLifetime(),
+            Mock.Of<ILogger<ReceiveWebhookHandler>>());
+    }
+
+    private static void SetupGitRepositoryClaim(Mock<IGitReposRepository> repositories)
+    {
+        repositories
+            .Setup(value => value.UpdateProcessingAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<GitReposStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+    }
+
+    private static IHostApplicationLifetime CreateApplicationLifetime()
+    {
+        var lifetime = new Mock<IHostApplicationLifetime>();
+        lifetime.SetupGet(value => value.ApplicationStopping).Returns(CancellationToken.None);
+        return lifetime.Object;
     }
 
     private static GitRepository CreateRepository(RepoWebhookConfig? webhook = null)

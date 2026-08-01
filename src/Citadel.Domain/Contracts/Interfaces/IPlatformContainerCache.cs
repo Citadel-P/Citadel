@@ -30,6 +30,11 @@ public interface IPlatformContainerCache
     bool EvictPlatform(Guid platformId);
 
     /// <summary>
+    /// Returns the current cache mutation version for a connected platform.
+    /// </summary>
+    long GetMutationVersion(Guid platformId);
+
+    /// <summary>
     /// Tries to get the container list for a specific platform.
     /// </summary>
     bool TryGetContainers(Guid platformId, [MaybeNullWhen(false)] out IReadOnlyDictionary<string, Guid> containers);

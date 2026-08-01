@@ -34,4 +34,16 @@ public class ContainerSystemMappingTests
         Assert.Equal(expectedSystem, result.IsSystem);
         Assert.Equal(expectedRole, result.SystemRole);
     }
+
+    [Fact]
+    public void ContainerMessage_Map_PreservesCitadelOwnershipLabelState()
+    {
+        var result = new ContainerMessage
+        {
+            Id = "container-id",
+            HasCitadelOwnershipLabels = true
+        }.Map();
+
+        Assert.True(result.HasCitadelOwnershipLabels);
+    }
 }

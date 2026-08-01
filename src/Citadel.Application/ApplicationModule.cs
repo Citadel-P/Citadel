@@ -103,6 +103,7 @@ public static class ApplicationModule
             .AddScoped<IPermissionService, PermissionService>()
             .AddScoped<IContainerAuthorizationService, ContainerAuthorizationService>()
             .AddScoped<ISignalRGroupAuthorizationService, SignalRGroupAuthorizationService>()
+            .AddSingleton<IUserConnectionRevoker, UserConnectionRevoker>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
             .AddSingleton<INetworkService, NetworkService>()

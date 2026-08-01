@@ -36,7 +36,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
             options.DenoPath = Environment.ProcessPath ?? "dotnet";
             options.WorkDir = Path.Combine(workDir, "runs");
             options.DenoCacheDir = Path.Combine(workDir, "deno-cache");
-            options.InternalBaseUrl = "http://127.0.0.1:8000";
+            options.InternalBaseUrl = "http://localhost:8000";
             options.AllowNet = "127.0.0.1:8000";
             options.DefaultTimeoutSeconds = 30;
             options.MaxTimeoutSeconds = 300;
@@ -501,6 +501,117 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         Assert.Contains(runs, run => run.Status == ActionRunStatus.Queued);
         Assert.Contains(runs, run => run.Status == ActionRunStatus.Rejected);
         Assert.Single(activities);
+    }
+
+    [Fact]
+    public async Task ActionRunRepository_ShouldAllowOnlyOneConcurrentActiveRunPerAction()
+    {
+        var createResponse = await CreateActionAsync(
+            "action-concurrent-run",
+            "console.log('concurrent');");
+        var actionId = ReadId(
+            await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        createResponse.EnsureSuccessStatusCode();
+
+        AutomationAction action;
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            action = Assert.IsType<AutomationAction>(
+                await uow.AutomationActions.GetAsync(
+                    actionId,
+                    TestContext.Current.CancellationToken));
+        }
+
+        async Task<int> AddRunAsync()
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var run = new ActionRun(
+                action.Id,
+                action.Name,
+                ActionRunTrigger.Manual,
+                action.RunAsActorId,
+                Constants.SystemId,
+                "{}",
+                action.Code,
+                action.TimeoutSeconds);
+            var added = await uow.ActionRuns.AddAsync(
+                run,
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+            return added;
+        }
+
+        var addedCounts = await Task.WhenAll(AddRunAsync(), AddRunAsync());
+
+        Assert.Equal(1, addedCounts.Sum());
+        await using var verifyScope = Services.CreateAsyncScope();
+        var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var runs = (await verifyUow.ActionRuns.GetByActionAsync(
+                actionId,
+                10,
+                TestContext.Current.CancellationToken))
+            .ToArray();
+        Assert.Single(runs, run => run.Status is ActionRunStatus.Queued or ActionRunStatus.Running);
+    }
+
+    [Fact]
+    public async Task InterruptedRunReconciliation_ShouldFailRunAndResetAction()
+    {
+        var createResponse = await CreateActionAsync(
+            "action-interrupted-run",
+            "console.log('interrupted');");
+        var actionId = ReadId(
+            await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        createResponse.EnsureSuccessStatusCode();
+        var runId = await SeedQueuedRunAsync(actionId);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Assert.NotNull(await uow.ActionRuns.TryMarkRunningAsync(
+                runId,
+                DateTime.UtcNow,
+                TestContext.Current.CancellationToken));
+            Assert.Equal(
+                1,
+                await uow.AutomationActions.MarkProcessingAsync(
+                    actionId,
+                    runId,
+                    TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Assert.Equal(
+                1,
+                await uow.ActionRuns.InterruptInProgressAsync(
+                    DateTime.UtcNow,
+                    "interrupted by test",
+                    TestContext.Current.CancellationToken));
+            Assert.Equal(
+                1,
+                await uow.AutomationActions.ResetActionsWithTerminalRunsAsync(
+                    TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var verifyScope = Services.CreateAsyncScope();
+        var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var run = await verifyUow.ActionRuns.GetAsync(
+            runId,
+            TestContext.Current.CancellationToken);
+        var action = await verifyUow.AutomationActions.GetAsync(
+            actionId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ActionRunStatus.Failed, run?.Status);
+        Assert.Equal("interrupted by test", run?.ErrorMessage);
+        Assert.Equal(ResourceControlState.Idle, action?.ControlState);
+        Assert.Null(action?.CurrentRunId);
     }
 
     [Fact]

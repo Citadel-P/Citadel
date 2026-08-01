@@ -4140,6 +4140,7 @@ export interface ContainerDataView {
   controlState: ResourceControlState;
   isSystem: boolean;
   systemRole: null | ContainerSystemRole;
+  hasCitadelOwnershipLabels: boolean;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4320,6 +4321,7 @@ export interface ContainerView {
   stack: null | string;
   isSystem: boolean;
   systemRole: null | ContainerSystemRole;
+  hasCitadelOwnershipLabels: boolean;
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
   /** @format uuid */

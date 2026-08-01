@@ -2334,6 +2334,8 @@ public class ApplyStackServiceTests
 
     private sealed class TestPlatformContainerCache(PlatformCacheEntry platform) : IPlatformContainerCache
     {
+        public long GetMutationVersion(Guid platformId) => platform.Id == platformId ? 1 : -1;
+
         public void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry cacheEntry)
         {
         }

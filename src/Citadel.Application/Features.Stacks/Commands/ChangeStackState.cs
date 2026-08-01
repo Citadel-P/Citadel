@@ -12,6 +12,8 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Stacks.Commands;
 
@@ -33,8 +35,14 @@ internal sealed class ChangeStackStateHandler(
     INotificationQueue notificationQueue,
     IStackStreamManager stackHub,
     IPlatformContainerCache platformCache,
-    IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<ChangeStackState, Result>
+    IContainerProcessingService containerProcessingService,
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<ChangeStackStateHandler> logger) : ICommandHandler<ChangeStackState, Result>
 {
+    private static readonly TimeSpan CompletionTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan RollbackTimeout = TimeSpan.FromSeconds(5);
+
     public async ValueTask<Result> Handle(ChangeStackState command, CancellationToken cancellationToken)
     {
         var actorId = userContext.Current.ActorId;
@@ -45,50 +53,79 @@ internal sealed class ChangeStackStateHandler(
             return Result.Failure(new NotFoundError("No stacks found for the provided stack ID(s)."));
         }
 
-        var containers = await GetContainersAsync(processedStacks, cancellationToken);
-        if (containers.Length == 0)
+        using var completionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping);
+        completionCancellation.CancelAfter(CompletionTimeout);
+        var completionToken = completionCancellation.Token;
+        try
         {
-            await RollbackProcessingAsync(processedStacks, actorId, cancellationToken);
-            return Result.Failure(new NotFoundError("No containers found for the provided stack ID(s)."));
-        }
-
-        var eligibleContainers = containers
-            .Where(container => CanApply(command.Action, container.State))
-            .ToArray();
-
-        if (eligibleContainers.Length == 0)
-        {
-            await RollbackProcessingAsync(processedStacks, actorId, cancellationToken);
-            return Result.Failure(new BadRequestError(GetNoEligibleContainersMessage(command.Action)));
-        }
-
-        if (!CanComplete(command.Action, containers))
-        {
-            await RollbackProcessingAsync(processedStacks, actorId, cancellationToken);
-            return Result.Failure(new BadRequestError(GetUnsupportedStateCombinationMessage(command.Action)));
-        }
-
-        if (!platformCache.TryGetPlatformsWithContainers([.. eligibleContainers.Select(container => container.ContainerId)], out var platformContainers))
-        {
-            await RollbackProcessingAsync(processedStacks, actorId, cancellationToken);
-            return Result.Failure(new NotFoundError("Platform resolution failed for stack container ID(s). Platform may be disconnected."));
-        }
-
-        await NotifyProcessingAsync(processedStacks, cancellationToken);
-
-        var containerAction = ActionMap.GetValueOrDefault(command.Action, ContainerAction.START);
-        foreach (var platform in platformContainers)
-        {
-            var result = await PatchPlatformAsync(platform, containerAction, cancellationToken);
-
-            if (result.IsFailure())
+            var containers = await GetContainersAsync(processedStacks, completionToken);
+            if (containers.Length == 0)
             {
-                await RollbackProcessingAsync(processedStacks, actorId, cancellationToken);
-                return result;
+                await TryRollbackProcessingAsync(processedStacks);
+                return Result.Failure(new NotFoundError("No containers found for the provided stack ID(s)."));
             }
-        }
 
-        return Result.Success();
+            var eligibleContainers = containers
+                .Where(container => CanApply(command.Action, container.State))
+                .ToArray();
+
+            if (eligibleContainers.Length == 0)
+            {
+                await TryRollbackProcessingAsync(processedStacks);
+                return Result.Failure(new BadRequestError(GetNoEligibleContainersMessage(command.Action)));
+            }
+
+            if (!CanComplete(command.Action, containers))
+            {
+                await TryRollbackProcessingAsync(processedStacks);
+                return Result.Failure(new BadRequestError(GetUnsupportedStateCombinationMessage(command.Action)));
+            }
+
+            if (!platformCache.TryGetPlatformsWithContainers([.. eligibleContainers.Select(container => container.ContainerId)], out var platformContainers))
+            {
+                await TryRollbackProcessingAsync(processedStacks);
+                return Result.Failure(new NotFoundError("Platform resolution failed for stack container ID(s). Platform may be disconnected."));
+            }
+
+            await NotifyProcessingAsync(processedStacks, completionToken);
+
+            var containerAction = ActionMap.GetValueOrDefault(command.Action, ContainerAction.START);
+            foreach (var platform in platformContainers)
+            {
+                var result = await PatchPlatformAsync(platform, containerAction, completionToken);
+
+                if (result.IsFailure())
+                {
+                    await TryRollbackProcessingAsync(processedStacks);
+                    return result;
+                }
+            }
+
+            await containerProcessingService.CompleteProcessingAsync(
+                new ProcessedResources([], [], processedStacks.Select(processed => processed.Stack).ToList()),
+                platformContainers,
+                actorId);
+            return Result.Success();
+        }
+        catch
+        {
+            await TryRollbackProcessingAsync(processedStacks);
+            throw;
+        }
+    }
+
+    private async Task TryRollbackProcessingAsync(IReadOnlyCollection<ProcessedStack> processedStacks)
+    {
+        using var rollbackCancellation = new CancellationTokenSource(RollbackTimeout);
+        try
+        {
+            await RollbackProcessingAsync(processedStacks, rollbackCancellation.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to roll back stack command claims");
+        }
     }
 
     private Task<Result> PatchPlatformAsync(PlatformCacheEntry platform, ContainerAction containerAction, CancellationToken ct)
@@ -105,23 +142,26 @@ internal sealed class ChangeStackStateHandler(
     private async Task<List<ProcessedStack>> MarkProcessingAsync(IEnumerable<Guid> stackIds, Guid actorId, CancellationToken ct)
     {
         var successfullyUpdated = new List<ProcessedStack>();
+        var requestedIds = stackIds.Distinct().Order().ToArray();
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        foreach (var stackId in stackIds.Distinct())
+        var stacks = new List<Stack>(requestedIds.Length);
+        foreach (var stackId in requestedIds)
         {
             var stack = await uow.Stacks.GetAsync(stackId, ct);
-            if (stack?.CurrentStackRelease is null)
-            {
-                continue;
-            }
+            if (stack?.CurrentStackRelease is null || stack.ControlState == ResourceControlState.Processing)
+                return [];
 
-            var previousStatus = stack.CurrentStackRelease.Status;
+            stacks.Add(stack);
+        }
+
+        foreach (var stack in stacks)
+        {
+            var previousStatus = stack.CurrentStackRelease!.Status;
             if (!stack.MarkProcessing(actorId))
-            {
-                continue;
-            }
+                return [];
 
             var affectedRow = await uow.Stacks.UpdateProcessingAsync(
                 stack.Id,
@@ -133,10 +173,10 @@ internal sealed class ChangeStackStateHandler(
                 actorId,
                 ct);
 
-            if (affectedRow)
-            {
-                successfullyUpdated.Add(new ProcessedStack(stack, previousStatus));
-            }
+            if (!affectedRow)
+                return [];
+
+            successfullyUpdated.Add(new ProcessedStack(stack, previousStatus));
         }
 
         await uow.CommitAsync(ct);
@@ -216,35 +256,51 @@ internal sealed class ChangeStackStateHandler(
         return $"The current stack container states cannot complete a stable {actionLabel} operation.";
     }
 
-    private async Task RollbackProcessingAsync(IEnumerable<ProcessedStack> processedStacks, Guid actorId, CancellationToken ct)
+    private async Task RollbackProcessingAsync(IEnumerable<ProcessedStack> processedStacks, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var released = new List<ProcessedStack>();
 
         foreach (var processedStack in processedStacks)
         {
             processedStack.Stack.ReleaseProcessing(processedStack.PreviousStatus);
 
-            await uow.Stacks.UpdateProcessingAsync(
+            var affected = await uow.Stacks.UpdateProcessingAsync(
                 processedStack.Stack.Id,
                 processedStack.PreviousStatus,
                 processedStack.Stack.ControlState,
                 processedStack.Stack.ControlStartedAt,
-                processedStack.Stack.RowVersion,
-                checkRowVersion: false,
-                actorId,
+                processedStack.Stack.RowVersion + 1,
+                checkRowVersion: true,
+                controlTriggeredBy: null,
                 ct);
+            if (affected)
+                released.Add(processedStack);
         }
 
         await uow.CommitAsync(ct);
-        await NotifyProcessingAsync(processedStacks, ct);
+        await NotifyProcessingAsync(released, ct);
     }
 
     private async Task NotifyProcessingAsync(IEnumerable<ProcessedStack> processedStacks, CancellationToken ct)
     {
-        foreach (var processedStack in processedStacks)
+        using var notificationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping,
+            ct);
+        notificationCancellation.CancelAfter(TimeSpan.FromSeconds(5));
+        try
         {
-            await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, processedStack.Stack), ct);
+            foreach (var processedStack in processedStacks)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new StackNotificationWorkItem(stackHub, processedStack.Stack),
+                    notificationCancellation.Token);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to enqueue stack processing notifications");
         }
     }
 

@@ -20,7 +20,7 @@ import {
   StackView,
 } from '@/api/generated/api.types';
 import {
-  canCheckStackUpdates,
+  getStackUpdateCheckDisabledReason,
   getStackGitUpdateState,
   getStackImageUpdateCheckMessage,
   hasStackUpdateAvailable,
@@ -150,10 +150,14 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
     const { mutateAsync, isPending } = useMutate('checkStackUpdates');
-    const canExecute = canCheckStackUpdates(selected) && !multiSelect;
+    const disabledReason = multiSelect
+      ? 'Select one stack to check for updates.'
+      : getStackUpdateCheckDisabledReason(selected);
+    const canExecute = disabledReason === undefined;
 
     return {
       canExecute,
+      disabledReason,
       isPending,
       run: async () => {
         if (!selected || !canExecute) return;

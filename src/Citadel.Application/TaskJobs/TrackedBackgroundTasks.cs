@@ -44,7 +44,7 @@ internal sealed class TrackedBackgroundTasks
         }
     }
 
-    public async Task DrainAsync()
+    public async Task DrainAsync(CancellationToken cancellationToken = default)
     {
         while (true)
         {
@@ -55,7 +55,7 @@ internal sealed class TrackedBackgroundTasks
             if (snapshot.Length == 0)
                 return;
 
-            await Task.WhenAll(snapshot);
+            await Task.WhenAll(snapshot).WaitAsync(cancellationToken);
         }
     }
 }

@@ -127,23 +127,32 @@ internal sealed class PlatformStatsWriterJob(
         if (_bufferedCount == 0) return;
 
         var dataToFlush = _buffer;
-        var workItem = new PersistPlatformStatsWorkItem(dataToFlush, logger);
+        var workItem = new PersistPlatformStatsWorkItem(dataToFlush);
+        var retryDelay = TimeSpan.FromSeconds(1);
 
-        try
+        while (true)
         {
-            await dbQueue.EnqueueAndWaitAsync(workItem, ct);
-            _buffer = [];
-            _bufferedCount = 0;
-            _lastFlush = DateTime.UtcNow;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to enqueue platform stats persist work item.");
-            return;
+            try
+            {
+                await dbQueue.EnqueueAndWaitAsync(workItem, ct);
+                _buffer = [];
+                _bufferedCount = 0;
+                _lastFlush = DateTime.UtcNow;
+                break;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Failed to persist platform stats batch. Retrying in {Delay}.",
+                    retryDelay);
+                await Task.Delay(retryDelay, ct);
+                retryDelay = TimeSpan.FromSeconds(Math.Min(30, retryDelay.TotalSeconds * 2));
+            }
         }
 
         if (workItem.AlertContext is { } alertContext)
@@ -162,8 +171,7 @@ internal sealed class PlatformStatsWriterJob(
 }
 
 internal sealed class PersistPlatformStatsWorkItem(
-    Dictionary<Guid, List<PlatformStatsResult>> buffer,
-    ILogger logger) : IDbWorkItem
+    Dictionary<Guid, List<PlatformStatsResult>> buffer) : IDbWorkItem
 {
     public AlertEvaluationContext? AlertContext { get; private set; }
 
@@ -212,19 +220,11 @@ internal sealed class PersistPlatformStatsWorkItem(
             await uow.Platforms.UpdateAsync(existing, cancellationToken);
         }
 
-        // Bulk Insert Historical Stats
-        try
+        var mapped = filteredBuffer.Map();
+        if (mapped.Count != 0)
         {
-            var mapped = filteredBuffer.Map();
-            if (mapped.Count != 0)
-            {
-                await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);
-                await uow.CommitAsync(cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error bulk inserting PlatformStats");
+            await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
         }
 
         if (platformSnapshots.Count != 0)

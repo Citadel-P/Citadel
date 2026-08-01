@@ -6,6 +6,7 @@ namespace Infrastructure.EdgeAgents;
 
 internal sealed class EdgePendingCommand(string commandId, bool expectsStream)
 {
+    private string? failureReason;
     private readonly Channel<EdgeAgentStreamItem> channel =
         Channel.CreateBounded<EdgeAgentStreamItem>(Helpers.ChannelDefaultOptions(
             capacity: EdgeAgentDefaults.PendingOutputQueueCapacity,
@@ -14,6 +15,7 @@ internal sealed class EdgePendingCommand(string commandId, bool expectsStream)
     public ChannelReader<EdgeAgentStreamItem> Reader => channel.Reader;
     public string CommandId { get; } = commandId;
     public bool ExpectsStream { get; } = expectsStream;
+    public string? FailureReason => Volatile.Read(ref failureReason);
 
     public bool Output(byte[] payload)
     {
@@ -40,6 +42,7 @@ internal sealed class EdgePendingCommand(string commandId, bool expectsStream)
 
     public void Fail(string message)
     {
+        Interlocked.CompareExchange(ref failureReason, message, null);
         channel.Writer.TryWrite(EdgeAgentStreamItem.Failure(message));
         channel.Writer.TryComplete();
     }

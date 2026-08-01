@@ -141,11 +141,12 @@ internal sealed class ImageSyncWorkItem(
 
         await uow.CommitAsync(ct);
 
+        // This barrier represents persisted image state, not best-effort client delivery.
+        // Do not strand dependent synchronization if the notification queue is unavailable.
+        syncBarrier.MarkSynced<ImageSyncJob>(platform.Id);
+
         // Notify clients
         await notificationQueue.EnqueueAsync(new SendImagesNotificationWorkItem(imageStreamManager, upserts, platform.Id), ct);
-
-        // Mark first successful sync
-        syncBarrier.MarkSynced<ImageSyncJob>(platform.Id);
     }
 }
 

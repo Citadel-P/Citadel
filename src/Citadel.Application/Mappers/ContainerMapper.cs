@@ -28,7 +28,8 @@ internal static class ContainerMapper
             imageId: imageId,
             stackId: container.StackId,
             isSystem: container.IsSystem,
-            systemRole: container.SystemRole
+            systemRole: container.SystemRole,
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels
         );
 
     internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

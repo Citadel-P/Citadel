@@ -131,6 +131,7 @@ public interface IAutomationActionRepository
     Task<bool> TryMarkScheduledAsync(Guid id, DateTime scheduledMinuteUtc, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> ResetActionsWithTerminalRunsAsync(CancellationToken cancellationToken);
     Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(CancellationToken cancellationToken = default);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
@@ -146,6 +147,7 @@ public interface IActionRunRepository
     Task<bool> HasActiveRunAsync(Guid actionId, CancellationToken cancellationToken);
     Task<ActionRun?> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken);
     Task<int> CancelQueuedOrRunningAsync(Guid id, DateTime cancelledAt, string reason, CancellationToken cancellationToken);
+    Task<int> InterruptInProgressAsync(DateTime interruptedAt, string reason, CancellationToken cancellationToken);
     Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken);
 }
 
@@ -913,6 +915,7 @@ public interface IContainerRepository
         IReadOnlyCollection<Guid> containerIds,
         IReadOnlyCollection<string> dockerContainerIds,
         Guid stackId,
+        Guid? orphanedOwnerStackId,
         CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);

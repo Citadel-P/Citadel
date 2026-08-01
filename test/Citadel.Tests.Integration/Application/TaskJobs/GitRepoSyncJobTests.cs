@@ -396,6 +396,30 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenRemoteUrlCannotBeResolved_MarksRepositoryAsDegraded()
+    {
+        const string error = "Repository requires a complete URL when no Git account is selected.";
+
+        await RunJobOnceAsync(
+            new GitRepoSyncRequest(_repoWithoutAccountId),
+            new InvalidOperationException(error));
+
+        var repo = await WaitForRepoStatusAsync(_repoWithoutAccountId, GitReposStatus.Degraded);
+        var gitRef = await GetRepoRefAsync(_repoWithoutAccountId, "main");
+
+        Assert.NotNull(repo);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        Assert.NotNull(gitRef);
+        Assert.Equal(error, gitRef.LastError);
+        _gitCliRepositoryMock.Verify(
+            x => x.TestConnectionAsync(
+                It.IsAny<string>(),
+                It.IsAny<GitAccount?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenGitStackAutoDeploys_DoesNotApplyInsideDbWorkItem()
     {
         await CreateTrackedGitStackAsync(
@@ -518,14 +542,19 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     private Task RunJobOnceAsync(Guid repoId)
         => RunJobOnceAsync(new GitRepoSyncRequest(repoId));
 
-    private async Task RunJobOnceAsync(GitRepoSyncRequest request)
+    private async Task RunJobOnceAsync(
+        GitRepoSyncRequest request,
+        InvalidOperationException? remoteUrlError = null)
     {
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
         var dbWorkQueue = new InlineDbWorkQueue(Services.GetRequiredService<IServiceScopeFactory>());
         _lastDbWorkQueue = dbWorkQueue;
-        _repoCacheManagerMock
-            .Setup(x => x.GetRemoteUrl(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>()))
-            .Returns<GitRepository, GitAccount?>((repo, _) => repo.Url);
+        var remoteUrlSetup = _repoCacheManagerMock
+            .Setup(x => x.GetRemoteUrl(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>()));
+        if (remoteUrlError is null)
+            remoteUrlSetup.Returns<GitRepository, GitAccount?>((repo, _) => repo.Url);
+        else
+            remoteUrlSetup.Throws(remoteUrlError);
         _alertServiceMock
             .Setup(x => x.ProcessAsync(It.IsAny<AlertType>(), It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()))
             .Callback(() => _alertProcessedInsideDbWorkItem = dbWorkQueue.IsExecuting)

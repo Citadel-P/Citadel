@@ -8,6 +8,7 @@ using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
+using System.Data.Common;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
@@ -479,7 +480,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
     }
 
-    public Task<int> UpdateAutoUpdateStateAsync(
+    public async Task<int> UpdateAutoUpdateStateAsync(
         Guid id,
         AutoUpdateState state,
         CancellationToken cancellationToken)
@@ -494,7 +495,19 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             WHERE Id = @Id
         """;
 
-        return db.ExecuteAsync(sql, MapAutoUpdateState(id, state), transaction: tx());
+        if (db is not DbConnection connection || tx() is not DbTransaction transaction)
+            throw new InvalidOperationException("DeploymentRepository requires ADO.NET database primitives.");
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.Transaction = transaction;
+        AddParameter(command, "Id", id);
+        AddParameter(command, "LastCheckedAt", state.LastCheckedAt);
+        AddParameter(command, "Status", EnumFormatter<AutoUpdateStatus>.GetValue(state.Status));
+        AddParameter(command, "CurrentDigest", state.CurrentDigest);
+        AddParameter(command, "RemoteDigest", state.RemoteDigest);
+        AddParameter(command, "LastError", state.LastError);
+        return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public Task<int> TryCompleteUpdateCheckAsync(
@@ -525,17 +538,16 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
               AND Spec = @ExpectedSpec::jsonb
         """;
 
-        var values = MapAutoUpdateState(id, state);
         return db.ExecuteAsync(
             sql,
             new
             {
-                values.Id,
-                values.LastCheckedAt,
-                values.Status,
-                values.CurrentDigest,
-                values.RemoteDigest,
-                values.LastError,
+                Id = id,
+                state.LastCheckedAt,
+                Status = EnumFormatter<AutoUpdateStatus>.GetValue(state.Status),
+                state.CurrentDigest,
+                state.RemoteDigest,
+                state.LastError,
                 ExpectedRowVersion = expectedRowVersion,
                 ExpectedPlatformId = expectedPlatformId,
                 ExpectedStatus = EnumFormatter<DeploymentStatus>.GetValue(expectedStatus),
@@ -573,22 +585,13 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             transaction: tx());
     }
 
-    private static AutoUpdateStateValues MapAutoUpdateState(Guid id, AutoUpdateState state)
-        => new(
-            id,
-            state.LastCheckedAt,
-            EnumFormatter<AutoUpdateStatus>.GetValue(state.Status),
-            state.CurrentDigest,
-            state.RemoteDigest,
-            state.LastError);
-
-    private sealed record AutoUpdateStateValues(
-        Guid Id,
-        DateTime LastCheckedAt,
-        string Status,
-        string? CurrentDigest,
-        string? RemoteDigest,
-        string? LastError);
+    private static void AddParameter(DbCommand command, string name, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+    }
 
     public Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken)
     {
@@ -599,6 +602,9 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         if (checkRowVersion == true)
             conditions.Add("RowVersion = @RowVersion");
+
+        if (state == ResourceControlState.Processing)
+            conditions.Add("ControlState <> @ProcessingState");
 
         var sql = $"""
             UPDATE Deployments
@@ -618,6 +624,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 Id = id,
                 ControlTriggeredBy = controlTriggeredBy,
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
+                ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
                 Status = EnumFormatter<DeploymentStatus>.GetValue(status),
                 RowVersion = rowVersion,
                 StartedAt = startedAt

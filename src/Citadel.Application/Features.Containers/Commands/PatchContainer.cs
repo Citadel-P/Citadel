@@ -9,6 +9,8 @@ using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Containers.Commands;
 
@@ -27,9 +29,14 @@ internal sealed class PatchContainerHandler(
     IContainerProcessingService containerService,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
-    IContainerAuthorizationService containerAuthorizationService)
+    IContainerAuthorizationService containerAuthorizationService,
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<PatchContainerHandler> logger)
     : ICommandHandler<PatchContainer, Result>
 {
+    private static readonly TimeSpan CompletionTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan RollbackTimeout = TimeSpan.FromSeconds(5);
+
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken ct)
     {
         var hasAccess = await containerAuthorizationService.HasAccessAsync(request.ContainerIds, ResourceType.Platform, PermissionLevel.Write, SpecificPermission.None, ct);
@@ -53,25 +60,60 @@ internal sealed class PatchContainerHandler(
         var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
         var resources = await containerService.MarkProcessingAsync(containerIds, actorId, ct);
 
+        if (resources.HasConflict)
+        {
+            return Result.Failure(new ConflictError(
+                "One or more containers, deployments, or stacks are already processing another operation."));
+        }
+
         if (resources.Containers.Count == 0)
         {
             return Result.Failure(new NotFoundError(
                 "No containers found for the provided ID(s)."));
         }
 
-        await containerService.NotifyProcessingAsync(resources, ct);
-
-        foreach (var platform in platforms)
+        using var completionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping);
+        completionCancellation.CancelAfter(CompletionTimeout);
+        var completionToken = completionCancellation.Token;
+        try
         {
-            var result = await PatchPlatformAsync(platform, request.Action, ct);
-            if (result.IsFailure())
-            {
-                await containerService.RollbackProcessingAsync(resources, actorId, ct);
-                return result;
-            }
-        }
+            await containerService.NotifyProcessingAsync(resources, completionToken);
 
-        return Result.Success();
+            foreach (var platform in platforms)
+            {
+                var result = await PatchPlatformAsync(platform, request.Action, completionToken);
+                if (result.IsFailure())
+                {
+                    await TryRollbackProcessingAsync(resources, actorId);
+                    return result;
+                }
+            }
+
+            await containerService.CompleteProcessingAsync(resources, platforms, actorId);
+            return Result.Success();
+        }
+        catch
+        {
+            await TryRollbackProcessingAsync(resources, actorId);
+            throw;
+        }
+    }
+
+    private async Task TryRollbackProcessingAsync(ProcessedResources resources, Guid actorId)
+    {
+        using var rollbackCancellation = new CancellationTokenSource(RollbackTimeout);
+        try
+        {
+            await containerService.RollbackProcessingAsync(
+                resources,
+                actorId,
+                rollbackCancellation.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to roll back container command claims");
+        }
     }
 
     private Task<Result> PatchPlatformAsync(PlatformCacheEntry platform, ContainerAction action, CancellationToken ct)

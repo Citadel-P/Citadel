@@ -21,7 +21,10 @@ public sealed record GetGithubPackageVersions(string RegistryName, string Packag
     }
 }
 
-internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrRepository gitHubCrService) 
+internal class GetGithubPackageVersionsHander(
+    IUnitOfWork unitOfWork,
+    IGitHubCrRepository gitHubCrService,
+    Application.Permissions.IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetGithubPackageVersions, Result<IEnumerable<GitHubCrPackageVersion>>>
 {
     public async ValueTask<Result<IEnumerable<GitHubCrPackageVersion>>> Handle(GetGithubPackageVersions query, CancellationToken cancellationToken)
@@ -30,6 +33,13 @@ internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrR
         if (registry == null) 
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does not exist"));
+        }
+
+        var permissions = await permissionEvaluator.EvaluateAsync(registry.Id, ResourceType.Registry, cancellationToken);
+        if (!permissions.Has(PermissionLevel.Read))
+        {
+            return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(
+                new ForbiddenError("Missing permission [Read] on [Registry]."));
         }
 
         if (registry.Configuration is not GitHubRegistry cfg)

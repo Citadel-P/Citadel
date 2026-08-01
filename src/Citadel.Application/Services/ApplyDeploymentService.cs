@@ -219,7 +219,7 @@ internal sealed partial class ApplyDeploymentService(
             yield break;
         }
 
-        await dbWorkQueue.EnqueueAsync(
+        await dbWorkQueue.EnqueueAndWaitAsync(
             new DeploymentSucceededWorkItem(
                 deployment.Id,
                 actorId,

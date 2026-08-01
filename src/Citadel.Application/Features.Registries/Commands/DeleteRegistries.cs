@@ -10,6 +10,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Registries.Commands;
 
@@ -20,19 +21,23 @@ internal class DeleteRegistriesHandler(
     IUnitOfWork unitOfWork,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IUserContextAccessor userContext) : ICommandHandler<DeleteRegistries, Result>
+    IUserContextAccessor userContext,
+    ILogger<DeleteRegistriesHandler> logger) : ICommandHandler<DeleteRegistries, Result>
 {
     public async ValueTask<Result> Handle(DeleteRegistries command, CancellationToken cancellationToken)
     {
         var actorId = userContext.Current.ActorId;
-        var toDelete = await unitOfWork.Registries.GetAllAsync(command.Ids, cancellationToken);
+        var requestedIds = command.Ids.Distinct().ToArray();
+        var toDelete = (await unitOfWork.Registries.GetAllAsync(requestedIds, cancellationToken) ?? [])
+            .ToArray();
 
-        if (toDelete == null || toDelete.Any() == false)
+        if (requestedIds.Length == 0 || toDelete.Length != requestedIds.Length)
         {
-            return Result.Failure(new NotFoundError("No registries found matching the provided IDs for deletion."));
+            return Result.Failure(new NotFoundError("One or more registries were not found."));
         }
 
-        var ids = toDelete.Select(s => s.Id).ToList();
+        var ids = toDelete.Select(s => s.Id).ToArray();
+        var notifications = new List<INotificationWorkItem>(ids.Length);
         foreach (var registry in toDelete)
         {
             var activity = new ActivityEvent(
@@ -46,14 +51,34 @@ internal class DeleteRegistriesHandler(
             );
 
             await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
-            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
+            notifications.Add(new ActivityNotificationWorkItem(
+                activityHub,
+                await activity.AssignActor(unitOfWork, cancellationToken)));
         }
 
-        var result = await unitOfWork.Registries.RemoveRangeAsync(command.Ids, cancellationToken);
+        var result = await unitOfWork.Registries.RemoveRangeAsync(ids, cancellationToken);
+        if (result != ids.Length)
+        {
+            await unitOfWork.RollbackAsync();
+            return Result.Failure(new ConflictError(
+                "The registry set changed while deletion was in progress."));
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return result > 0
-            ? Result.Success()
-            : Result.Failure(new NotFoundError("No registries found matching the provided IDs for deletion."));
+        using var notificationCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        foreach (var notification in notifications)
+        {
+            try
+            {
+                await notificationQueue.EnqueueAsync(notification, notificationCancellation.Token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish deleted registry activity");
+            }
+        }
+
+        return Result.Success();
     }
-} 
+}

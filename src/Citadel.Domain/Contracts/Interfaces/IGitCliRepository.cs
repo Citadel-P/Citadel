@@ -19,6 +19,7 @@ namespace Domain.Contracts.Interfaces;
 /// </summary>
 public interface IGitCliRepository
 {
+    void RemoveCredentialFile(Guid accountId);
     Task<Result> TestConnectionAsync(string url, GitAccount? account = null, CancellationToken ct = default);
     Task<Result<IReadOnlyList<GitRemoteBranchRef>>> ListRemoteBranchesAsync(string url, GitAccount? account = null, CancellationToken ct = default);
     Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default);

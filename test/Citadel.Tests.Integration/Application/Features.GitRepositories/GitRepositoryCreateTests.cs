@@ -51,6 +51,31 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
     }
 
     [Fact]
+    public async Task Create_GitRepository_Without_GitAccount_And_IncompleteUrl_ReturnsBadRequest()
+    {
+        var createJson = """
+        {
+          "name": "GR-INCOMPLETE-URL",
+          "description": "A git repository",
+          "url": "host.docker.internal3222/admin01/beszel",
+          "defaultBranch": "main",
+          "webhook": { "enabled": false },
+          "gitAccountId": null
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync(
+            "/api/v1/gitRepositories",
+            content,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("complete repository URL", responseBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Create_GitRepository_With_Linked_GitAccount_ReturnsSuccess()
     {
         Guid gitAccountId;

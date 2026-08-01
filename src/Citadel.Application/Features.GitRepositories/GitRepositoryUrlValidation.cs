@@ -12,8 +12,17 @@ internal static class GitRepositoryUrlValidation
         string url,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(url))
+            return Result.Failure(new BadRequestError("Repository URL is required."));
+
         if (gitAccountId is null)
-            return Result.Success();
+        {
+            if (IsDirectRemoteUrl(url))
+                return Result.Success();
+
+            return Result.Failure(new BadRequestError(
+                "Enter a complete repository URL (for example, https://host/owner/repository) when no Git account is selected."));
+        }
 
         var gitAccount = await unitOfWork.GitAccounts.GetAsync(gitAccountId.Value, cancellationToken);
         if (gitAccount is null)
@@ -28,6 +37,18 @@ internal static class GitRepositoryUrlValidation
         }
 
         return Result.Success();
+    }
+
+    private static bool IsDirectRemoteUrl(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri.Scheme is "http" or "https" or "file"
+                && (absoluteUri.IsFile || !string.IsNullOrWhiteSpace(absoluteUri.Host));
+        }
+
+        return url.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
+            && url.IndexOf(':', "git@".Length) > "git@".Length;
     }
 
     private static string ExtractDomain(string url)

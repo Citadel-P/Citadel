@@ -1,5 +1,8 @@
 using Application.TaskJobs;
+using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace Tests.Unit.Application.TaskJobs;
 
@@ -53,5 +56,50 @@ public sealed class ContainerStatsMemoryTests
 
         Assert.True(retained);
         Assert.Empty(stats);
+    }
+
+    [Fact]
+    public async Task ContainerStatsBatchWorkItem_ShouldPropagatePersistenceFailure()
+    {
+        var platformId = Guid.CreateVersion7();
+        var containerId = Guid.CreateVersion7();
+        var stat = new ContainerStat(
+            containerId,
+            MemoryActive: 1,
+            MemoryCache: 2,
+            CpuUsage: 3,
+            MemoryLimit: 4,
+            RxBytes: 5,
+            TxBytes: 6,
+            Created: 7);
+        IReadOnlyDictionary<string, Guid> containers =
+            new Dictionary<string, Guid> { ["docker-id"] = containerId };
+        var cache = new Mock<IPlatformContainerCache>();
+        cache
+            .Setup(value => value.TryGetContainers(platformId, out containers))
+            .Returns(true);
+        var statsRepository = new Mock<IContainerStatRepository>();
+        statsRepository
+            .Setup(repository => repository.BulkInsertAsync(
+                It.IsAny<IEnumerable<ContainerStat>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database unavailable"));
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(value => value.ContainerStats).Returns(statsRepository.Object);
+        var workItem = new ContainerStatsBatchWorkItem(
+            new Dictionary<Guid, List<ContainerStat>>
+            {
+                [platformId] = [stat]
+            },
+            cache.Object,
+            NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            workItem.ExecuteAsync(uow.Object, TestContext.Current.CancellationToken));
+
+        Assert.Equal("database unavailable", exception.Message);
+        uow.Verify(
+            value => value.CommitAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

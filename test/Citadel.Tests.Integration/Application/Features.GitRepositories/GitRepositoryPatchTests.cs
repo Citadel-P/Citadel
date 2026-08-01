@@ -290,6 +290,27 @@ public class GitRepositoryPatchTests(PostgresTestFixture fixture) : IntegrationT
     }
 
     [Fact]
+    public async Task Patch_GitRepository_Remove_GitAccount_With_IncompleteUrl_Should_ReturnBadRequest()
+    {
+        var patchJson = """
+        {
+          "url": "host.docker.internal3222/admin01/beszel",
+          "gitAccountId": null
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/gitRepositories/{gitRepositoryId}",
+            content,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("complete repository URL", responseBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Patch_GitRepository_With_Invalid_Data_Should_Return_BadRequest()
     {
         var patchJson = $$"""

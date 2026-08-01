@@ -7,6 +7,7 @@ using Infrastructure.Repositories.Mappers;
 using LightResults;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -34,9 +35,31 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     }.ToFrozenDictionary();
 
     private static readonly string CitadelTempDir = Path.Combine(Path.GetTempPath(), "citadel");
+    private static readonly string SshKeyRoot = Path.Combine(CitadelTempDir, "ssh");
+    private static readonly string SshKeyDirectory = Path.Combine(
+        SshKeyRoot,
+        Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
 
     // accountId -> resolved key file path (content-addressed); rewrites only when the key changes
     private static readonly ConcurrentDictionary<Guid, string> SshKeyCache = new();
+    private static readonly object SshKeySync = new();
+
+    static GitCliRepository()
+    {
+        TryDeleteKeyDirectory(SshKeyDirectory);
+        TryDeleteStaleKeyDirectories();
+        AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
+            TryDeleteKeyDirectory(SshKeyDirectory);
+    }
+
+    public void RemoveCredentialFile(Guid accountId)
+    {
+        lock (SshKeySync)
+        {
+            if (SshKeyCache.TryRemove(accountId, out var keyFile))
+                TryDeleteKeyFile(keyFile);
+        }
+    }
 
     public async Task<Result> TestConnectionAsync(string url, GitAccount? account, CancellationToken ct = default)
     {
@@ -63,10 +86,12 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         args.AddRange(["ls-remote", "--heads", url]);
 
         var result = await processService.ExecuteAsync(GitExecutable, args, env, null, ct);
-        if (!result.IsSuccess)
+        if (!result.IsSuccess || result.StandardOutputTruncated)
         {
             return Result.Failure<IReadOnlyList<GitRemoteBranchRef>>(
-                $"Could not discover repository branches. Error: {result.StandardError}");
+                result.StandardOutputTruncated
+                    ? "Could not discover repository branches because Git returned too much data."
+                    : $"Could not discover repository branches. Error: {result.StandardError}");
         }
 
         var branches = result.StandardOutput
@@ -95,7 +120,7 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
             var args = new[] { "-C", NormalizeLocalGitPath(repoPath), "rev-parse", candidate };
             var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
 
-            if (result.IsSuccess)
+            if (result.IsSuccess && !result.StandardOutputTruncated)
                 return Result.Success(result.StandardOutput.Trim());
         }
 
@@ -179,9 +204,12 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         };
 
         var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
-        if (!result.IsSuccess)
+        if (!result.IsSuccess || result.StandardOutputTruncated)
         {
-            return Result.Failure<IReadOnlyList<string>>(result.StandardError);
+            return Result.Failure<IReadOnlyList<string>>(
+                result.StandardOutputTruncated
+                    ? "Git returned too many changed paths."
+                    : result.StandardError);
         }
 
         var paths = result.StandardOutput
@@ -681,20 +709,95 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     private static string GetOrWriteSshKey(Guid accountId, string privateKey)
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes(privateKey));
-        var shortHash = Convert.ToHexStringLower(contentHash.AsSpan(0, 4));
-        var keyDir = Path.Combine(CitadelTempDir, "ssh");
-        var keyFile = Path.Combine(keyDir, $"{accountId:N}_{shortHash}");
+        var shortHash = Convert.ToHexStringLower(contentHash.AsSpan(0, 16));
+        var keyFile = Path.Combine(SshKeyDirectory, $"{accountId:N}_{shortHash}");
 
-        if (SshKeyCache.TryGetValue(accountId, out var cached) && cached == keyFile && File.Exists(keyFile))
+        lock (SshKeySync)
+        {
+            if (SshKeyCache.TryGetValue(accountId, out var cached) &&
+                cached == keyFile &&
+                File.Exists(keyFile))
+            {
+                return keyFile;
+            }
+
+            Directory.CreateDirectory(SshKeyDirectory);
+            File.WriteAllText(keyFile, privateKey.TrimEnd() + "\n");
+            SetKeyFilePermissions(keyFile);
+            SshKeyCache[accountId] = keyFile;
+
+            if (cached is not null && !string.Equals(cached, keyFile, StringComparison.Ordinal))
+                TryDeleteKeyFile(cached);
+
             return keyFile;
-
-        Directory.CreateDirectory(keyDir);
-        File.WriteAllText(keyFile, privateKey.TrimEnd() + "\n");
-        SetKeyFilePermissions(keyFile);
-        SshKeyCache[accountId] = keyFile;
-
-        return keyFile;
+        }
     }
+
+    private static void TryDeleteKeyFile(string keyFile)
+    {
+        try
+        {
+            File.Delete(keyFile);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static void TryDeleteStaleKeyDirectories()
+    {
+        try
+        {
+            foreach (var directory in Directory.EnumerateDirectories(SshKeyRoot))
+            {
+                if (string.Equals(directory, SshKeyDirectory, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var name = Path.GetFileName(directory);
+                if (!int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var processId) ||
+                    !IsProcessRunning(processId))
+                {
+                    TryDeleteKeyDirectory(directory);
+                }
+            }
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static bool IsProcessRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryDeleteKeyDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     private static void SetKeyFilePermissions(string keyFile)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

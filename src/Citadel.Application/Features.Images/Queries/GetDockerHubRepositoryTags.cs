@@ -21,7 +21,10 @@ public sealed record GetDockerHubRepositoryTags(string RegistryName, string Repo
     }
 }
 
-public sealed class GetDockerHubRepositoryTagsHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService)
+public sealed class GetDockerHubRepositoryTagsHandler(
+    IUnitOfWork unitOfWork,
+    IDockerHubRegistryRepository dockerHubService,
+    Application.Permissions.IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetDockerHubRepositoryTags, Result<IEnumerable<DockerHubTag>>>
 {
     public async ValueTask<Result<IEnumerable<DockerHubTag>>> Handle(GetDockerHubRepositoryTags query, CancellationToken cancellationToken)
@@ -30,6 +33,13 @@ public sealed class GetDockerHubRepositoryTagsHandler(IUnitOfWork unitOfWork, ID
         if (registry == null)
         {
             return Result.Failure<IEnumerable<DockerHubTag>>(new NotFoundError("The provided registry name does not exist"));
+        }
+
+        var permissions = await permissionEvaluator.EvaluateAsync(registry.Id, ResourceType.Registry, cancellationToken);
+        if (!permissions.Has(PermissionLevel.Read))
+        {
+            return Result.Failure<IEnumerable<DockerHubTag>>(
+                new ForbiddenError("Missing permission [Read] on [Registry]."));
         }
 
         if (registry.Configuration is not DockerHubRegistry cfg)

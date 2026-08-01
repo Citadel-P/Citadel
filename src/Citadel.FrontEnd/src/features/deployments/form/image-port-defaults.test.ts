@@ -1,4 +1,4 @@
-import { shouldApplyLocalImagePortDefaults } from './image-port-defaults';
+import { portsAfterImageSourceChange, shouldApplyLocalImagePortDefaults } from './image-port-defaults';
 
 describe('shouldApplyLocalImagePortDefaults', () => {
   it('does not alter ports during initial form load', () => {
@@ -15,5 +15,15 @@ describe('shouldApplyLocalImagePortDefaults', () => {
 
   it('ignores a response for a previously selected image', () => {
     expect(shouldApplyLocalImagePortDefaults('old-image', 'new-image', [])).toBe(false);
+  });
+});
+
+describe('portsAfterImageSourceChange', () => {
+  it('preserves the inspected port mapping while selecting an adoption image source', () => {
+    expect(portsAfterImageSourceChange(true, ['9987:80/tcp'])).toEqual(['9987:80/tcp']);
+  });
+
+  it('clears image-specific ports for a regular deployment source change', () => {
+    expect(portsAfterImageSourceChange(false, ['9987:80/tcp'])).toEqual([]);
   });
 });

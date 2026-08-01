@@ -27,6 +27,7 @@ import { ChevronDown, ChevronRight, Unlink } from 'lucide-react';
 import { ContainerActionResource, ContainerStackGroupResource, isContainerStackGroup } from './actions';
 import { useAppContext } from '@/lib/context/app-context';
 import { SystemContainerBadge } from './system-container-badge';
+import { normalizeContainerSelection } from './selection';
 
 type ContainerTableRow = ContainerActionResource;
 type PlatformResourceLimits = {
@@ -61,7 +62,7 @@ export const ContainersTable = ({
   );
   const handleSelectionChange = useCallback(
     (selectedRows: ContainerTableRow[]) => {
-      const selectedResources = getSelectedContainers(selectedRows);
+      const selectedResources = normalizeContainerSelection(selectedRows);
       const selectionKey = selectedResources.map(getSelectionSignature).sort().join('|');
 
       if (selectionKey === lastSelectionKeyRef.current) return;
@@ -85,30 +86,21 @@ export const ContainersTable = ({
   );
 };
 
-const getSelectedContainers = (selectedRows: ContainerTableRow[]) => {
-  const selectedByContainerId = new Map<string, ContainerView>();
+const getSelectionSignature = (resource: ContainerActionResource): string => {
+  if (isContainerStackGroup(resource)) {
+    return `${resource.id}:${resource.containers.map(getSelectionSignature).sort().join(',')}`;
+  }
 
-  selectedRows.forEach((resource) => {
-    const containers = isContainerStackGroup(resource) ? resource.containers : [resource];
-
-    containers.forEach((container) => {
-      selectedByContainerId.set(container.containerId, container);
-    });
-  });
-
-  return Array.from(selectedByContainerId.values());
-};
-
-const getSelectionSignature = (container: ContainerView) =>
-  [
-    container.containerId,
-    container.state,
-    container.controlState,
-    container.isSystem,
-    container.capabilities?.canRead,
-    container.capabilities?.canWrite,
-    container.capabilities?.canExecute,
+  return [
+    resource.containerId,
+    resource.state,
+    resource.controlState,
+    resource.isSystem,
+    resource.capabilities?.canRead,
+    resource.capabilities?.canWrite,
+    resource.capabilities?.canExecute,
   ].join(':');
+};
 
 const columns = (
   actions: Record<

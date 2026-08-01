@@ -20,7 +20,10 @@ public sealed record GetDockerHubRepositories(string RegistryName) : IQuery<Resu
     }
 }
 
-internal sealed class GetDockerHubRepositoriesHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService) 
+internal sealed class GetDockerHubRepositoriesHandler(
+    IUnitOfWork unitOfWork,
+    IDockerHubRegistryRepository dockerHubService,
+    Application.Permissions.IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetDockerHubRepositories, Result<IEnumerable<DockerHubRepositoryInfo>>>
 {
     public async ValueTask<Result<IEnumerable<DockerHubRepositoryInfo>>> Handle(GetDockerHubRepositories query, CancellationToken cancellationToken)
@@ -29,6 +32,13 @@ internal sealed class GetDockerHubRepositoriesHandler(IUnitOfWork unitOfWork, ID
         if (registry == null)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry name does not exist"));
+        }
+
+        var permissions = await permissionEvaluator.EvaluateAsync(registry.Id, ResourceType.Registry, cancellationToken);
+        if (!permissions.Has(PermissionLevel.Read))
+        {
+            return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(
+                new ForbiddenError("Missing permission [Read] on [Registry]."));
         }
 
         if (registry.Configuration is not DockerHubRegistry cfg)

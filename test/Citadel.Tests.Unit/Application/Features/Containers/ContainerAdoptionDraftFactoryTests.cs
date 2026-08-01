@@ -1,11 +1,17 @@
+using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
 using Application.Services;
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Domain.Entities.Registries;
+using Hosting.Common;
+using Hosting.Common.ErrorTypes;
+using Moq;
 
 namespace Tests.Unit.Application.Features.Containers;
 
@@ -86,6 +92,99 @@ public sealed class ContainerAdoptionDraftFactoryTests
     }
 
     [Fact]
+    public async Task ImageValidation_ShouldAcceptMatchingExternalSourceWithoutInspectingOrPulling()
+    {
+        var context = CreateContext(entrypoint: ["/docker-entrypoint.sh"], includeImage: false);
+        var registry = CreateDefaultRegistry();
+        var unitOfWork = CreateRegistryUnitOfWork(registry);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        var spec = new DeploymentSpec(
+            new ExternalImage(registry.Id, "nginx:1.27"),
+            UpdateBehavior.Disabled);
+
+        var result = await ContainerAdoptionImageValidation.ResolveAsync(
+            context,
+            spec,
+            unitOfWork,
+            connectorFactory.Object,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
+        Assert.Same(context, resolved);
+        connectorFactory.Verify(
+            value => value.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ImageValidation_ShouldRejectExternalSourceFromAnotherRepository()
+    {
+        var context = CreateContext(entrypoint: ["/docker-entrypoint.sh"], includeImage: false);
+        var registry = CreateDefaultRegistry();
+        var unitOfWork = CreateRegistryUnitOfWork(registry);
+        var spec = new DeploymentSpec(
+            new ExternalImage(registry.Id, "redis"),
+            UpdateBehavior.Disabled);
+
+        var result = await ContainerAdoptionImageValidation.ResolveAsync(
+            context,
+            spec,
+            unitOfWork,
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        var badRequest = Assert.IsType<BadRequestError>(error);
+        Assert.Contains("original image repository", badRequest.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ImageValidation_ShouldRejectUnrelatedExternalSourceWhenOriginalImageExists()
+    {
+        var context = CreateContext();
+        var registry = CreateDefaultRegistry();
+        var unitOfWork = CreateRegistryUnitOfWork(registry);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        var spec = new DeploymentSpec(
+            new ExternalImage(registry.Id, "redis:latest"),
+            UpdateBehavior.Disabled);
+
+        var result = await ContainerAdoptionImageValidation.ResolveAsync(
+            context,
+            spec,
+            unitOfWork,
+            connectorFactory.Object,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        var badRequest = Assert.IsType<BadRequestError>(error);
+        Assert.Contains("original image repository", badRequest.Message, StringComparison.OrdinalIgnoreCase);
+        connectorFactory.Verify(
+            value => value.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ImageValidation_ShouldRejectBuildReplacementWhenOriginalImageIsMissing()
+    {
+        var context = CreateContext(includeImage: false);
+        var spec = new DeploymentSpec(
+            new BuildImage(Guid.CreateVersion7()),
+            UpdateBehavior.Disabled);
+
+        var result = await ContainerAdoptionImageValidation.ResolveAsync(
+            context,
+            spec,
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        var badRequest = Assert.IsType<BadRequestError>(error);
+        Assert.Contains("local replacement or an external image", badRequest.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Fingerprint_ShouldBeDeterministicAndIncludeRuntimeState()
     {
         var context = CreateContext();
@@ -138,6 +237,55 @@ public sealed class ContainerAdoptionDraftFactoryTests
             issue.Code == "ENTRYPOINT_NOT_PRESERVED"
             && issue.Severity == AdoptionIssueSeverity.Blocker);
     }
+
+    [Fact]
+    public void Create_ShouldTreatExplicitRootAsTheImageDefaultUser()
+    {
+        var explicitRoot = CreateContext(user: "0", imageUser: null);
+        var differentUser = CreateContext(user: "1000", imageUser: null);
+
+        var rootDraft = ContainerAdoptionDraftFactory.Create(
+            explicitRoot,
+            "root-user",
+            FingerprintService);
+        var differentUserDraft = ContainerAdoptionDraftFactory.Create(
+            differentUser,
+            "different-user",
+            FingerprintService);
+
+        Assert.DoesNotContain(rootDraft.Issues, issue => issue.Code == "USER_NOT_PRESERVED");
+        Assert.Contains(differentUserDraft.Issues, issue => issue.Code == "USER_NOT_PRESERVED");
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(0L, false)]
+    [InlineData(100_000L, false)]
+    [InlineData(50_000L, true)]
+    public void CpuPeriod_ShouldIgnoreDockerDefaultAndRejectCustomValues(long? cpuPeriod, bool expected)
+        => Assert.Equal(expected, ContainerAdoptionDraftFactory.IsUnsupportedCpuPeriod(cpuPeriod));
+
+    [Theory]
+    [InlineData(268_435_456L, null, 536_870_912L, null, false)]
+    [InlineData(268_435_456L, null, 0L, null, false)]
+    [InlineData(268_435_456L, null, 268_435_456L, null, true)]
+    [InlineData(268_435_456L, null, -1L, null, true)]
+    [InlineData(null, null, 536_870_912L, null, true)]
+    [InlineData(268_435_456L, 134_217_728L, 536_870_912L, null, true)]
+    [InlineData(268_435_456L, null, 536_870_912L, 0L, true)]
+    public void MemoryConfiguration_ShouldAllowDockerDefaultAndRejectCustomValues(
+        long? memory,
+        long? memoryReservation,
+        long? memorySwap,
+        long? memorySwappiness,
+        bool expected)
+        => Assert.Equal(
+            expected,
+            ContainerAdoptionDraftFactory.IsUnsupportedMemoryConfiguration(
+                memory,
+                memoryReservation,
+                memorySwap,
+                memorySwappiness));
 
     [Fact]
     public void Create_ShouldBlockUnsupportedMountPropagation()
@@ -319,6 +467,8 @@ public sealed class ContainerAdoptionDraftFactoryTests
         IReadOnlyList<string>? imageEntrypoint = null,
         IReadOnlyList<MountPointInfo>? mounts = null,
         string? stopSignal = null,
+        string? user = null,
+        string? imageUser = null,
         bool includeImage = true)
     {
         var platform = new Platform(
@@ -355,8 +505,9 @@ public sealed class ContainerAdoptionDraftFactoryTests
             labels ?? new Dictionary<string, string>(),
             entrypoint ?? [],
             mounts ?? [],
-            stopSignal);
-        var imageInspection = entrypoint is { Count: > 0 }
+            stopSignal,
+            user);
+        var imageInspection = entrypoint is { Count: > 0 } || !string.IsNullOrWhiteSpace(user)
             ? new InspectImageResult(
                 Id: image.DockerImageId,
                 Size: 100,
@@ -371,6 +522,7 @@ public sealed class ContainerAdoptionDraftFactoryTests
                 Layers: [],
                 Labels: new Dictionary<string, string>(),
                 Containers: [],
+                User: imageUser,
                 EntryPoint: imageEntrypoint ?? [])
             : null;
 
@@ -382,12 +534,35 @@ public sealed class ContainerAdoptionDraftFactoryTests
             includeImage ? imageInspection : null);
     }
 
+    private static Registry CreateDefaultRegistry()
+        => Registry.FromPersistence(
+            Constants.DefaultRegistryId,
+            "Docker Hub",
+            null,
+            RegistryStatus.Active,
+            "https://docker.io",
+            DateTime.UtcNow,
+            Constants.SystemId,
+            new DockerHubRegistry());
+
+    private static IUnitOfWork CreateRegistryUnitOfWork(Registry registry)
+    {
+        var registries = new Mock<IRegistryRepository>();
+        registries
+            .Setup(repository => repository.GetAsync(registry.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registry);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Registries).Returns(registries.Object);
+        return unitOfWork.Object;
+    }
+
     private static ContainerInspectionInfo Inspection(
         IReadOnlyList<string> environment,
         IReadOnlyDictionary<string, string> labels,
         IReadOnlyList<string> entrypoint,
         IReadOnlyList<MountPointInfo> mounts,
-        string? stopSignal)
+        string? stopSignal,
+        string? user)
         => new(
             Id: "container-id",
             Created: "2026-07-29T00:00:00Z",
@@ -415,7 +590,7 @@ public sealed class ContainerAdoptionDraftFactoryTests
             Config: new ContainerConfiguration(
                 Hostname: null,
                 Domainname: null,
-                User: null,
+                User: user,
                 AttachStdin: null,
                 AttachStdout: null,
                 AttachStderr: null,

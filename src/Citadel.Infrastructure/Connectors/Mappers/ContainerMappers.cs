@@ -597,7 +597,8 @@ internal static class ContainerMappers
             Ports: container.Ports?.Map(),
             StackId: ParseStackId(container.StackId),
             IsSystem: container.IsSystem,
-            SystemRole: MapSystemRole(container.IsSystem, container.SystemRole)
+            SystemRole: MapSystemRole(container.IsSystem, container.SystemRole),
+            HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels
         );
 
     internal static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -710,7 +711,8 @@ internal static class ContainerMappers
             State: container?.State?.Map() ?? ContainerStateStatus.Unknown,
             StackId: container?.StackId,
             IsSystem: container?.IsSystem ?? false,
-            SystemRole: MapSystemRole(container?.IsSystem ?? false, container?.SystemRole)
+            SystemRole: MapSystemRole(container?.IsSystem ?? false, container?.SystemRole),
+            HasCitadelOwnershipLabels: container?.HasCitadelOwnershipLabels ?? false
         );
 
     private static ContainerSystemRole? MapSystemRole(bool isSystem, string? role)

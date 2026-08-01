@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Configs;
 using Domain;
 using Domain.Entities.Automation;
 
@@ -6,6 +7,14 @@ namespace Tests.Unit.Application.Services;
 
 public sealed class AutomationServicesTests
 {
+    [Fact]
+    public void AutomationOptions_DefaultInternalBaseUrl_ShouldUseAllowedLoopbackHost()
+    {
+        var options = new AutomationOptions();
+
+        Assert.Equal("http://localhost:8000", options.InternalBaseUrl);
+    }
+
     [Fact]
     public void AutomationRunCoordinator_ShouldCancelRegisteredRun()
     {

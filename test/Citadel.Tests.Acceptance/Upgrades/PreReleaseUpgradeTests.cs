@@ -70,7 +70,13 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
             2L,
             await ScalarAsync<long>(
                 connection,
-                "SELECT COUNT(*) FROM actions WHERE scheduleenabled = TRUE;",
+                """
+                SELECT COUNT(*)
+                FROM actions
+                WHERE name IN ('Prune images', 'Restart unhealthy stacks')
+                  AND enabled = FALSE
+                  AND scheduleenabled = FALSE;
+                """,
                 cancellationToken));
         Assert.Equal(
             3L,
@@ -140,6 +146,60 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                 new NpgsqlParameter("scriptName", scriptName)));
 
         PreReleaseBaseline.ApplyCandidateMigrations(connectionString);
+    }
+
+    [Fact]
+    public async Task CandidateMigration_ShouldEnforceSingleActiveActionRunPerAction()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var connectionString = await postgres.CreateDatabaseAsync(cancellationToken);
+        await PreReleaseBaseline.RestoreAsync(connectionString, cancellationToken);
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using (var seed = new NpgsqlCommand(
+            """
+            INSERT INTO actions (
+                id, alertonfailure, code, createdbyactorid, enabled, name,
+                runasactorid, scheduleenabled, scheduletimezone, timeoutseconds)
+            VALUES (
+                '019f0000-0000-7000-8000-000000000100', FALSE, '',
+                '00000000-0000-0000-0000-000000000001', TRUE, 'Active run constraint probe',
+                '00000000-0000-0000-0000-000000000001', FALSE, 'UTC', 60);
+
+            INSERT INTO actionruns (
+                id, actionid, actionname, codehash, codesnapshot, queuedat,
+                runasactorid, startedat, status, timeoutseconds, trigger)
+            VALUES (
+                '019f0000-0000-7000-8000-000000000101',
+                '019f0000-0000-7000-8000-000000000100',
+                'Active run constraint probe', '', '', TIMESTAMPTZ '2026-07-31T10:00:00Z',
+                '00000000-0000-0000-0000-000000000001',
+                TIMESTAMPTZ '2026-07-31T10:00:01Z', 'Running', 60, 'Manual');
+            """,
+            connection))
+        {
+            await seed.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using var duplicate = new NpgsqlCommand(
+            """
+            INSERT INTO actionruns (
+                id, actionid, actionname, codehash, codesnapshot, queuedat,
+                runasactorid, status, timeoutseconds, trigger)
+            VALUES (
+                '019f0000-0000-7000-8000-000000000102',
+                '019f0000-0000-7000-8000-000000000100',
+                'Active run constraint probe', '', '', TIMESTAMPTZ '2026-07-31T10:01:00Z',
+                '00000000-0000-0000-0000-000000000001',
+                'Queued', 60, 'Manual');
+            """,
+            connection);
+        var exception = await Assert.ThrowsAsync<PostgresException>(
+            () => duplicate.ExecuteNonQueryAsync(cancellationToken));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, exception.SqlState);
+        Assert.Equal("ix_actionruns_active_action", exception.ConstraintName);
     }
 
     private static async Task AssertCandidateStateAndCreateTagAsync(

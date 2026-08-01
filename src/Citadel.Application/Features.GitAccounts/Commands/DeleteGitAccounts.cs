@@ -10,19 +10,31 @@ namespace Application.Features.GitAccounts.Commands;
 [RequirePermission(ResourceType.GitAccount, PermissionLevel.Execute)]
 public sealed record DeleteGitAccounts(IEnumerable<Guid> Ids) : ICommand<Result>;
 
-internal sealed class DeleteGitAccountsHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteGitAccounts, Result>
+internal sealed class DeleteGitAccountsHandler(
+    IUnitOfWork unitOfWork,
+    IGitCliRepository gitCliRepository) : ICommandHandler<DeleteGitAccounts, Result>
 {
     public async ValueTask<Result> Handle(DeleteGitAccounts command, CancellationToken cancellationToken)
     {
-        var toDelete = await unitOfWork.GitAccounts.GetAllAsync(command.Ids, cancellationToken);
-        if (toDelete is null || !toDelete.Any())
-            return Result.Failure(new NotFoundError("No git accounts found matching the provided IDs for deletion."));
+        var requestedIds = command.Ids.Distinct().ToArray();
+        var toDelete = (await unitOfWork.GitAccounts.GetAllAsync(requestedIds, cancellationToken) ?? [])
+            .ToArray();
+        if (requestedIds.Length == 0 || toDelete.Length != requestedIds.Length)
+            return Result.Failure(new NotFoundError("One or more git accounts were not found."));
 
-        var result = await unitOfWork.GitAccounts.RemoveRangeAsync(command.Ids, cancellationToken);
+        var result = await unitOfWork.GitAccounts.RemoveRangeAsync(requestedIds, cancellationToken);
+        if (result != requestedIds.Length)
+        {
+            await unitOfWork.RollbackAsync();
+            return Result.Failure(new ConflictError(
+                "The git-account set changed while deletion was in progress."));
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return result > 0
-            ? Result.Success()
-            : Result.Failure(new NotFoundError("No git accounts found matching the provided IDs for deletion."));
+        foreach (var account in toDelete)
+            gitCliRepository.RemoveCredentialFile(account.Id);
+
+        return Result.Success();
     }
 }

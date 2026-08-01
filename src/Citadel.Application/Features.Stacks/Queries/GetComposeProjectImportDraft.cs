@@ -116,7 +116,8 @@ internal sealed record ComposeProjectContainerContext(
 internal sealed record ComposeProjectImportContext(
     Platform Platform,
     string ProjectName,
-    IReadOnlyList<ComposeProjectContainerContext> Containers)
+    IReadOnlyList<ComposeProjectContainerContext> Containers,
+    Guid? OrphanedOwnerStackId = null)
 {
     public IReadOnlyList<ComposeProjectContainerContext> ManagedContainers { get; } =
         Containers.Where(static container => !container.IsOneOff).ToArray();
@@ -243,6 +244,8 @@ internal static class ComposeProjectImportDraftFactory
 
         await Task.WhenAll(workers);
         var contexts = new List<ComposeProjectContainerContext>(inspected.Length);
+        Guid? orphanedOwnerStackId = null;
+        var ownedContainerCount = 0;
         foreach (var item in inspected)
         {
             if (!item.Result.IsSuccess(out var inspection))
@@ -252,10 +255,23 @@ internal static class ComposeProjectImportDraftFactory
                 return Result.Failure<ComposeProjectImportContext>(
                     new ConflictError("Container identity changed while preparing the import draft."));
             }
-            if (HasCitadelOwnershipLabel(inspection.Config?.Labels))
+            var labels = inspection.Config?.Labels;
+            if (HasCitadelOwnershipLabel(labels))
             {
-                return Result.Failure<ComposeProjectImportContext>(
-                    new ConflictError($"Container '{item.Container.Name}' has existing Citadel ownership labels."));
+                ownedContainerCount++;
+                if (labels is null || !StackContainerOwnership.TryGetStackId(labels, out var ownerStackId))
+                {
+                    return Result.Failure<ComposeProjectImportContext>(
+                        new ConflictError(
+                            $"Container '{item.Container.Name}' has invalid or unsupported Citadel ownership labels."));
+                }
+                if (orphanedOwnerStackId is not null && orphanedOwnerStackId != ownerStackId)
+                {
+                    return Result.Failure<ComposeProjectImportContext>(
+                        new ConflictError("Compose project containers reference different Citadel owners."));
+                }
+
+                orphanedOwnerStackId = ownerStackId;
             }
 
             var serviceName = GetServiceName(inspection);
@@ -263,10 +279,23 @@ internal static class ComposeProjectImportDraftFactory
             contexts.Add(new ComposeProjectContainerContext(item.Container, inspection, serviceName, isOneOff));
         }
 
+        if (ownedContainerCount > 0 && ownedContainerCount != inspected.Length)
+        {
+            return Result.Failure<ComposeProjectImportContext>(
+                new ConflictError("Compose project contains a mix of Citadel-owned and unmanaged containers."));
+        }
+        if (orphanedOwnerStackId is not null
+            && await unitOfWork.Stacks.ExistsAsync(orphanedOwnerStackId.Value, cancellationToken))
+        {
+            return Result.Failure<ComposeProjectImportContext>(
+                new ConflictError("Compose project is owned by an existing Citadel stack."));
+        }
+
         var context = new ComposeProjectImportContext(
             platform,
             projectName,
-            contexts.OrderBy(container => container.Container.DockerContainerId, StringComparer.Ordinal).ToArray());
+            contexts.OrderBy(container => container.Container.DockerContainerId, StringComparer.Ordinal).ToArray(),
+            orphanedOwnerStackId);
         if (context.ManagedContainers.Count == 0)
         {
             return Result.Failure<ComposeProjectImportContext>(
@@ -294,7 +323,7 @@ internal static class ComposeProjectImportDraftFactory
             new ComposeProjectStackDraft(
                 name,
                 context.Platform.Id,
-                null,
+                $"Imported from Docker Compose project {context.ProjectName}.",
                 StackDriftPolicy.Disabled,
                 []),
             issues,
@@ -387,7 +416,7 @@ internal static class ComposeProjectImportDraftFactory
         IUserContextAccessor userContext,
         CancellationToken cancellationToken)
     {
-        var safeSpec = ForceSafeSpec(context.ProjectName, spec);
+        var safeSpec = NormalizeImportSpec(context.ProjectName, spec);
         if (!IsCompatible(stackSource, safeSpec))
         {
             return Result.Failure<ComposeProjectSourceAnalysis>(
@@ -525,20 +554,17 @@ internal static class ComposeProjectImportDraftFactory
         }
     }
 
-    private static StackSpec ForceSafeSpec(string projectName, StackSpec spec)
+    internal static StackSpec NormalizeImportSpec(string projectName, StackSpec spec)
         => spec switch
         {
             ManualStack manual => manual with
             {
                 ProjectName = projectName,
-                UpdateBehavior = StackUpdateBehavior.Disabled,
                 DestroyBeforeDeploy = false
             },
             GitStack git => git with
             {
                 ProjectName = projectName,
-                UpdateBehavior = StackUpdateBehavior.Disabled,
-                Webhook = null,
                 DestroyBeforeDeploy = false
             },
             _ => spec
@@ -608,9 +634,11 @@ internal static class ComposeProjectImportDraftFactory
            && string.Equals(oneOff, "True", StringComparison.OrdinalIgnoreCase);
 
     private static bool HasCitadelOwnershipLabel(IReadOnlyDictionary<string, string>? labels)
-        => labels?.Keys.Any(label =>
-            label.StartsWith(CitadelLabels.Prefix, StringComparison.OrdinalIgnoreCase)
-            || label.StartsWith(CitadelLabels.LegacyExtensionPrefix, StringComparison.OrdinalIgnoreCase)) == true;
+        => labels is not null
+           && (labels.Keys.Any(label =>
+                   label.StartsWith(CitadelLabels.Prefix, StringComparison.OrdinalIgnoreCase)
+                   || label.StartsWith(CitadelLabels.LegacyExtensionPrefix, StringComparison.OrdinalIgnoreCase))
+               || StackContainerOwnership.IsCitadelManaged(labels));
 
     private static string ComputeSourceDigest(
         StackSpec spec,

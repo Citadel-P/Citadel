@@ -11,6 +11,10 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 const EMPTY_CONTAINERS: never[] = [];
+const standaloneContainerActions = [ContainerGroupActions.adopt, ContainerGroupActions.importStack];
+const groupedContainerActions = Object.values(ContainerGroupActions).filter(
+  (action) => !standaloneContainerActions.includes(action),
+);
 
 const UnmanagedContainersFilter = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -79,7 +83,12 @@ export const ContainerComponents: RequiredComponents = {
   },
   DropdownActions: ContainerDropdownActions,
   GroupActions: ({ items }) => (
-    <ActionBar type="Container" items={items} actions={Object.values(ContainerGroupActions)} />
+    <ActionBar
+      type="Container"
+      items={items}
+      actions={groupedContainerActions}
+      standaloneActions={standaloneContainerActions}
+    />
   ),
 
   filterItems: (items, search) => {

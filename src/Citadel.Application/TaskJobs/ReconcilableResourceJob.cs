@@ -181,7 +181,7 @@ internal class ReconcilableResourceJob(
                                     startedAt: null,
                                     rowVersion: deployment.RowVersion,
                                     checkRowVersion: true,
-                                    controlTriggeredBy: deployment.ControlTriggeredBy ?? Constants.SystemId,
+                                    controlTriggeredBy: null,
                                     cancellationToken);
                 if (row > 0)
                 {
@@ -218,7 +218,7 @@ internal class ReconcilableResourceJob(
                                     startedAt: null,
                                     rowVersion: stack.RowVersion,
                                     checkRowVersion: true,
-                                    controlTriggeredBy: stack.ControlTriggeredBy ?? Constants.SystemId,
+                                    controlTriggeredBy: null,
                                     cancellationToken);
                 if (row)
                 {
@@ -255,7 +255,7 @@ internal class ReconcilableResourceJob(
                                     startedAt: null,
                                     rowVersion: container.RowVersion,
                                     checkRowVersion: true,
-                                    controlTriggeredBy: container.ControlTriggeredBy ?? Constants.SystemId,
+                                    controlTriggeredBy: null,
                                     cancellationToken);
                 if (row > 0)
                 {

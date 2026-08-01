@@ -208,7 +208,7 @@ internal static class ContainerAdoptionDraftFactory
         {
             issues.Add(new AdoptionIssue(
                 "SOURCE_IMAGE_UNAVAILABLE",
-                "The container's original Docker image is no longer available. Select a local replacement image; future Apply operations will use it.",
+                "The container's original Docker image is no longer available. Select a local replacement image or an external image from the same repository; future Apply operations will use it.",
                 AdoptionIssueSeverity.Warning,
                 "spec.image.imageId"));
         }
@@ -654,12 +654,16 @@ internal static class ContainerAdoptionDraftFactory
             "PID_LIMIT",
             "PID limits are not represented by deployments.");
         AddBlocker(
-            host?.MemoryReservation is > 0 || host?.MemorySwap is > 0 or -1 || host?.MemorySwappiness is >= 0,
+            IsUnsupportedMemoryConfiguration(
+                host?.Memory,
+                host?.MemoryReservation,
+                host?.MemorySwap,
+                host?.MemorySwappiness),
             "MEMORY_CONFIGURATION",
             "Memory reservation, swap, or swappiness settings are not represented by deployments.");
         AddBlocker(
             host?.IoMaximumBandwidth is > 0
-            || host?.CpuPeriod is > 0
+            || IsUnsupportedCpuPeriod(host?.CpuPeriod)
             || host?.CpuPercent is > 0
             || host?.CpuCount is > 0
             || host?.KernelMemoryTCP is > 0,
@@ -722,7 +726,7 @@ internal static class ContainerAdoptionDraftFactory
         }
 
         AddMismatch(
-            !string.Equals(config?.User ?? string.Empty, imageInspection.User ?? string.Empty, StringComparison.Ordinal),
+            !ImageUsersAreEquivalent(config?.User, imageInspection.User),
             "USER_NOT_PRESERVED",
             "The container user override differs from the selected image.");
         AddMismatch(
@@ -759,6 +763,36 @@ internal static class ContainerAdoptionDraftFactory
         => !string.IsNullOrWhiteSpace(config?.User)
            || config?.Entrypoint.Count > 0
            || !string.IsNullOrWhiteSpace(config?.WorkingDir);
+
+    internal static bool IsUnsupportedCpuPeriod(long? cpuPeriod)
+        => cpuPeriod is > 0 and not 100_000;
+
+    internal static bool IsUnsupportedMemoryConfiguration(
+        long? memory,
+        long? memoryReservation,
+        long? memorySwap,
+        long? memorySwappiness)
+    {
+        if (memoryReservation is > 0 || memorySwappiness is >= 0)
+            return true;
+
+        if (memorySwap is null or 0)
+            return false;
+
+        return memorySwap == -1 || memory is not > 0 || memorySwap != memory * 2;
+    }
+
+    private static bool ImageUsersAreEquivalent(string? containerUser, string? imageUser)
+        => string.Equals(
+            NormalizeImageUser(containerUser),
+            NormalizeImageUser(imageUser),
+            StringComparison.Ordinal);
+
+    private static string NormalizeImageUser(string? user)
+    {
+        var value = user?.Trim() ?? string.Empty;
+        return value is "0" or "root" ? string.Empty : value;
+    }
 
     internal static ContainerRestartPolicy? MapRestartPolicy(string? value)
     {

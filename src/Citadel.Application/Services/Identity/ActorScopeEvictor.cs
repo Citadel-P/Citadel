@@ -1,4 +1,5 @@
 using Domain.Contracts.Interfaces;
+using Application.Services.SignalR;
 
 namespace Application.Services.Identity;
 
@@ -13,7 +14,8 @@ internal sealed class ActorScopeEvictor(
     IUnitOfWork unitOfWork,
     IRoleCache roleCache,
     IActorScopeProvider actorScopeProvider,
-    IPermissionCache permissionCache) : IActorScopeEvictor
+    IPermissionCache permissionCache,
+    IUserConnectionRevoker connectionRevoker) : IActorScopeEvictor
 {
     public async Task EvictPermissionsForActorAsync(
         Guid actorId,
@@ -50,6 +52,10 @@ internal sealed class ActorScopeEvictor(
             permissionCache.InvalidateUser(userId);
         }
 
+        // Active subscriptions are an authorization boundary. Revoke them before the
+        // cancelable distributed invalidation so a failed cache operation cannot leave a
+        // connection receiving data under its old permissions.
+        connectionRevoker.RevokeUsers(ids);
         await actorScopeProvider.InvalidateManyAsync(ids, cancellationToken);
     }
 }

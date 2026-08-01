@@ -18,6 +18,13 @@ internal sealed class BuildRunWorkerJob(
     private readonly BuildOptions options = buildOptions.Value;
     private readonly SemaphoreSlim concurrency = new(Math.Max(1, buildOptions.Value.MaxParallelRuns));
     private readonly TrackedBackgroundTasks activeTasks = new();
+    private CancellationToken shutdownDeadline;
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        shutdownDeadline = cancellationToken;
+        return base.StopAsync(cancellationToken);
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,7 +47,7 @@ internal sealed class BuildRunWorkerJob(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         finally
         {
-            await activeTasks.DrainAsync();
+            await activeTasks.DrainAsync(shutdownDeadline);
         }
     }
 

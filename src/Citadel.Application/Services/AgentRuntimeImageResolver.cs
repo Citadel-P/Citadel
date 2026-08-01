@@ -25,7 +25,13 @@ internal sealed class AgentRuntimeImageResolver(
 {
     private static readonly TimeSpan ResolvedImageCacheDuration = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan MissingImageCacheDuration = TimeSpan.FromSeconds(30);
+    internal const int MaxCacheEntries = 1024;
+    private const int CacheLowWaterMark = 896;
     private readonly ConcurrentDictionary<RuntimeImageCacheKey, RuntimeImageCacheEntry> cache = new();
+    private readonly Lock cacheGate = new();
+    private int setsSinceCompaction;
+
+    internal int CachedEntryCount => cache.Count;
 
     public async Task<string?> TryResolveAsync(
         IContainerConnector containerConnector,
@@ -155,9 +161,43 @@ internal sealed class AgentRuntimeImageResolver(
     }
 
     private void Cache(RuntimeImageCacheKey key, string? image, TimeSpan duration)
-        => cache[key] = new RuntimeImageCacheEntry(
-            string.IsNullOrWhiteSpace(image) ? null : image.Trim(),
-            DateTimeOffset.UtcNow.Add(duration));
+    {
+        using (cacheGate.EnterScope())
+        {
+            var now = DateTimeOffset.UtcNow;
+            cache[key] = new RuntimeImageCacheEntry(
+                string.IsNullOrWhiteSpace(image) ? null : image.Trim(),
+                now.Add(duration));
+
+            setsSinceCompaction++;
+            if (cache.Count > MaxCacheEntries || (setsSinceCompaction & 255) == 0)
+                Compact(now);
+        }
+    }
+
+    private void Compact(DateTimeOffset now)
+    {
+        foreach (var (key, entry) in cache)
+        {
+            if (entry.ExpiresAtUtc <= now)
+                RemoveEntry(key, entry);
+        }
+
+        if (cache.Count <= MaxCacheEntries)
+            return;
+
+        var removeCount = cache.Count - CacheLowWaterMark;
+        foreach (var entry in cache
+                     .OrderBy(static pair => pair.Value.ExpiresAtUtc)
+                     .Take(removeCount))
+        {
+            RemoveEntry(entry.Key, entry.Value);
+        }
+    }
+
+    private void RemoveEntry(RuntimeImageCacheKey key, RuntimeImageCacheEntry entry)
+        => ((ICollection<KeyValuePair<RuntimeImageCacheKey, RuntimeImageCacheEntry>>)cache)
+            .Remove(new KeyValuePair<RuntimeImageCacheKey, RuntimeImageCacheEntry>(key, entry));
 
     private sealed record RuntimeImageCacheKey(
         Guid PlatformId,

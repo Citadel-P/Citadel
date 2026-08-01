@@ -35,7 +35,8 @@ internal static class ContainerMappers
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             stats: container.Stats?.Select(ToDomain).ToList(),
             isSystem: container.IsSystem,
-            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
     }
 
     internal static Container? ToDomain(this ContainerWithImageDto? container)
@@ -88,7 +89,8 @@ internal static class ContainerMappers
                 controlState: ResourceControlState.Idle
                 ) : null,
             isSystem: container.IsSystem,
-            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
     }
 
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerWithLastStatDto> containers)
@@ -171,7 +173,8 @@ internal static class ContainerMappers
                 Created: container.Stat_Created
                 )],
             isSystem: container.IsSystem,
-            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole));
+            systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
     }
 
     internal static IEnumerable<ContainerStat> ToDomain(this IEnumerable<ContainerStatDto> stats)

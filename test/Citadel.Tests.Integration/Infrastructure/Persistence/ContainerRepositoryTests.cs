@@ -78,7 +78,8 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
             [first.Id, second.Id],
             [first.DockerContainerId, second.DockerContainerId],
             stack.Id,
-            TestContext.Current.CancellationToken);
+            orphanedOwnerStackId: null,
+            cancellationToken: TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         var persisted = (await uow.Containers.GetByIdAsync(
@@ -87,6 +88,51 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
             .ToArray();
         Assert.Equal(2, affected);
         Assert.All(persisted, container => Assert.Equal(stack.Id, container.StackId));
+    }
+
+    [Fact]
+    public async Task TryAssignComposeProjectToStackAsync_ShouldAllowOnlyMissingOrphanedOwner()
+    {
+        var platform = CreatePlatform();
+        const string projectName = "orphaned-project";
+        var destination = CreateStack(platform.Id, projectName, "recovered");
+        var liveOwner = CreateStack(platform.Id, projectName, "live-owner");
+        var recoverable = CreateContainer(platform.Id, projectName, hasCitadelOwnershipLabels: true);
+        var stillOwned = CreateContainer(platform.Id, projectName, hasCitadelOwnershipLabels: true);
+        var missingOwnerId = Guid.CreateVersion7();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Stacks.AddAsync(destination, TestContext.Current.CancellationToken);
+        await uow.Stacks.AddAsync(liveOwner, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(recoverable, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(stillOwned, TestContext.Current.CancellationToken);
+
+        var recovered = await uow.Containers.TryAssignComposeProjectToStackAsync(
+            platform.Id,
+            projectName,
+            [recoverable.Id],
+            [recoverable.DockerContainerId],
+            destination.Id,
+            missingOwnerId,
+            TestContext.Current.CancellationToken);
+        var rejected = await uow.Containers.TryAssignComposeProjectToStackAsync(
+            platform.Id,
+            projectName,
+            [stillOwned.Id],
+            [stillOwned.DockerContainerId],
+            destination.Id,
+            liveOwner.Id,
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, recovered);
+        Assert.Equal(0, rejected);
+        Assert.Equal(
+            destination.Id,
+            (await uow.Containers.GetByIdAsync(recoverable.Id, TestContext.Current.CancellationToken))?.StackId);
+        Assert.Null((await uow.Containers.GetByIdAsync(stillOwned.Id, TestContext.Current.CancellationToken))?.StackId);
     }
 
     [Fact]
@@ -213,7 +259,21 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
             connectorType: PlatformConnectorType.EdgeAgent,
             platformDescriptor: new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
 
-    private static Container CreateContainer(Guid platformId, string? dockerStack)
+    private static Stack CreateStack(Guid platformId, string projectName, string name)
+        => Stack.Create(
+            name: $"{name}-{Guid.CreateVersion7():N}",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                ProjectName: projectName));
+
+    private static Container CreateContainer(
+        Guid platformId,
+        string? dockerStack,
+        bool hasCitadelOwnershipLabels = false)
         => new(
             name: $"container-{Guid.CreateVersion7():N}",
             dockerImageId: $"image-{Guid.CreateVersion7():N}",
@@ -221,5 +281,6 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
             ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             dockerContainerId: $"container-{Guid.CreateVersion7():N}",
             state: ContainerStateStatus.Running,
-            dockerStack: dockerStack);
+            dockerStack: dockerStack,
+            hasCitadelOwnershipLabels: hasCitadelOwnershipLabels);
 }

@@ -5,7 +5,8 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 	<OpenApiDocumentsDirectory>..\schema</OpenApiDocumentsDirectory>
 	<OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
-	<OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+	<OpenApiGenerateDocumentsOnBuild Condition="'$(RuntimeIdentifier)' == ''">true</OpenApiGenerateDocumentsOnBuild>
+	<OpenApiGenerateDocumentsOnBuild Condition="'$(RuntimeIdentifier)' != ''">false</OpenApiGenerateDocumentsOnBuild>
 	<DockerfileFile>Dockerfile</DockerfileFile>
 	<DockerfileContext>..\..</DockerfileContext>
 	<DockerfileRunArguments>-p 8000:8000 -p 8001:8001 --env-file "$(MSBuildProjectDirectory)\.env" -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock"</DockerfileRunArguments>

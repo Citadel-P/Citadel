@@ -88,9 +88,11 @@ internal sealed class AdoptContainerHandler(
         }
 
         var requestedSpec = BuildImageProvenance.Clear(command.Spec);
-        var validationContextResult = await GetImageValidationContextAsync(
+        var validationContextResult = await ContainerAdoptionImageValidation.ResolveAsync(
             context,
             requestedSpec,
+            unitOfWork,
+            imageConnectorFactory,
             cancellationToken);
         if (!validationContextResult.IsSuccess(out var validationContext))
             return Result.Failure<Deployment>(validationContextResult.Errors);
@@ -304,61 +306,6 @@ internal sealed class AdoptContainerHandler(
         return deployment;
     }
 
-    private async Task<Result<ContainerAdoptionContext>> GetImageValidationContextAsync(
-        ContainerAdoptionContext context,
-        DeploymentSpec spec,
-        CancellationToken cancellationToken)
-    {
-        if (spec.Image is not LocalImage localImage)
-        {
-            return context.Image is null
-                ? Result.Failure<ContainerAdoptionContext>(
-                    new BadRequestError("Select a local replacement image before adopting this container."))
-                : context;
-        }
-
-        if (!Guid.TryParse(localImage.ImageId, out var imageId) || imageId == Guid.Empty)
-        {
-            return Result.Failure<ContainerAdoptionContext>(
-                new BadRequestError("Select a valid local image before adopting this container."));
-        }
-
-        var selectedImage = await unitOfWork.Images.GetByIdAsync(
-            imageId,
-            context.Platform.Id,
-            cancellationToken);
-        if (selectedImage is null)
-        {
-            return Result.Failure<ContainerAdoptionContext>(
-                new NotFoundError("The selected local image is not available on this platform."));
-        }
-
-        if (context.Image?.Id == selectedImage.Id)
-        {
-            if (!ContainerAdoptionDraftFactory.RequiresImageDefaultComparison(context.Inspection.Config)
-                || context.ImageInspection is not null)
-            {
-                return context;
-            }
-        }
-
-        var inspectionResult = await imageConnectorFactory
-            .GetConnector(context.Platform.ConnectorType)
-            .InspectImageAsync(
-                new InspectImageCommand(context.Platform.Address, selectedImage.DockerImageId),
-                cancellationToken);
-        if (!inspectionResult.IsSuccess(out var inspection))
-            return Result.Failure<ContainerAdoptionContext>(inspectionResult.Errors);
-
-        if (!string.Equals(inspection.Id, selectedImage.DockerImageId, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result.Failure<ContainerAdoptionContext>(
-                new ConflictError("The selected replacement image changed. Refresh the platform and try again."));
-        }
-
-        return context with { Image = selectedImage, ImageInspection = inspection };
-    }
-
     private async Task<Result> ValidateLicenseAsync(
         DeploymentSpec spec,
         CancellationToken cancellationToken)
@@ -382,5 +329,203 @@ internal sealed class AdoptContainerHandler(
         }
 
         return Result.Success();
+    }
+}
+
+internal static class ContainerAdoptionImageValidation
+{
+    internal static async Task<Result<ContainerAdoptionContext>> ResolveAsync(
+        ContainerAdoptionContext context,
+        DeploymentSpec spec,
+        IUnitOfWork unitOfWork,
+        IConnectorFactory<IImageConnector> imageConnectorFactory,
+        CancellationToken cancellationToken)
+    {
+        if (spec.Image is LocalImage localImage)
+        {
+            return await ResolveLocalAsync(
+                context,
+                localImage,
+                unitOfWork,
+                imageConnectorFactory,
+                cancellationToken);
+        }
+
+        if (spec.Image is ExternalImage externalImage)
+        {
+            return await ResolveExternalAsync(
+                context,
+                externalImage,
+                unitOfWork,
+                cancellationToken);
+        }
+
+        if (context.Image is not null)
+            return context;
+
+        return Result.Failure<ContainerAdoptionContext>(
+            new BadRequestError(
+                "Select a local replacement or an external image from the original repository before adopting this container."));
+    }
+
+    private static async Task<Result<ContainerAdoptionContext>> ResolveLocalAsync(
+        ContainerAdoptionContext context,
+        LocalImage localImage,
+        IUnitOfWork unitOfWork,
+        IConnectorFactory<IImageConnector> imageConnectorFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(localImage.ImageId, out var imageId) || imageId == Guid.Empty)
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new BadRequestError("Select a valid local image before adopting this container."));
+        }
+
+        var selectedImage = await unitOfWork.Images.GetByIdAsync(
+            imageId,
+            context.Platform.Id,
+            cancellationToken);
+        if (selectedImage is null)
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new NotFoundError("The selected local image is not available on this platform."));
+        }
+
+        if (context.Image?.Id != selectedImage.Id
+            && !ReferencesSameRepository(context, selectedImage.Tags))
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new BadRequestError("Select a replacement from the container's original image repository."));
+        }
+
+        if (context.Image?.Id == selectedImage.Id
+            && (!ContainerAdoptionDraftFactory.RequiresImageDefaultComparison(context.Inspection.Config)
+                || context.ImageInspection is not null))
+        {
+            return context;
+        }
+
+        return await InspectAsync(
+            context,
+            selectedImage,
+            selectedImage.DockerImageId,
+            imageConnectorFactory,
+            cancellationToken);
+    }
+
+    private static async Task<Result<ContainerAdoptionContext>> ResolveExternalAsync(
+        ContainerAdoptionContext context,
+        ExternalImage externalImage,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        var registry = await unitOfWork.Registries.GetAsync(
+            externalImage.RegistryId,
+            cancellationToken);
+        if (registry is null)
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new NotFoundError("The selected registry does not exist."));
+        }
+
+        var imageReference = new PullImageService.PullImageInput(
+                context.Platform.Id,
+                externalImage.RegistryId,
+                externalImage.ImageTag)
+            .ToConnectorCommand(context.Platform.Address, registry)
+            .FromImage;
+
+        if (!ReferencesSameRepository(context, [imageReference]))
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new BadRequestError(
+                    "Select an external image from the container's original image repository."));
+        }
+
+        return context;
+    }
+
+    private static async Task<Result<ContainerAdoptionContext>> InspectAsync(
+        ContainerAdoptionContext context,
+        Image selectedImage,
+        string imageReference,
+        IConnectorFactory<IImageConnector> imageConnectorFactory,
+        CancellationToken cancellationToken)
+    {
+        var inspectionResult = await imageConnectorFactory
+            .GetConnector(context.Platform.ConnectorType)
+            .InspectImageAsync(
+                new InspectImageCommand(context.Platform.Address, imageReference),
+                cancellationToken);
+        if (!inspectionResult.IsSuccess(out var inspection))
+            return Result.Failure<ContainerAdoptionContext>(inspectionResult.Errors);
+
+        return ValidateInspection(context, selectedImage, inspection);
+    }
+
+    private static Result<ContainerAdoptionContext> ValidateInspection(
+        ContainerAdoptionContext context,
+        Image selectedImage,
+        InspectImageResult inspection)
+    {
+        if (!string.Equals(inspection.Id, selectedImage.DockerImageId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new ConflictError("The selected replacement image changed. Refresh the platform and try again."));
+        }
+
+        return context with { Image = selectedImage, ImageInspection = inspection };
+    }
+
+    private static bool ReferencesSameRepository(
+        ContainerAdoptionContext context,
+        IEnumerable<string> selectedReferences)
+    {
+        var sourceRepositories = (context.Image?.Tags ?? [])
+            .Append(context.Inspection.Config?.Image ?? string.Empty)
+            .Select(GetRepository)
+            .Where(static value => value is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return selectedReferences
+            .Select(GetRepository)
+            .Any(repository => repository is not null && sourceRepositories.Contains(repository));
+    }
+
+    private static string? GetRepository(string imageReference)
+    {
+        var value = imageReference.Trim().TrimStart('/').ToLowerInvariant();
+        if (value.Length == 0
+            || value.StartsWith("sha256:", StringComparison.Ordinal)
+            || value.Contains("<none>", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var digestSeparator = value.LastIndexOf('@');
+        if (digestSeparator > 0)
+            value = value[..digestSeparator];
+
+        var slash = value.LastIndexOf('/');
+        var tagSeparator = value.LastIndexOf(':');
+        if (tagSeparator > slash)
+            value = value[..tagSeparator];
+
+        var firstSlash = value.IndexOf('/');
+        if (firstSlash < 0)
+            return $"docker.io/library/{value}";
+
+        var firstSegment = value[..firstSlash];
+        if (string.Equals(firstSegment, "index.docker.io", StringComparison.Ordinal))
+            return "docker.io" + value[firstSlash..];
+
+        if (!firstSegment.Contains('.')
+            && !firstSegment.Contains(':')
+            && !string.Equals(firstSegment, "localhost", StringComparison.Ordinal))
+        {
+            return $"docker.io/{value}";
+        }
+
+        return value;
     }
 }

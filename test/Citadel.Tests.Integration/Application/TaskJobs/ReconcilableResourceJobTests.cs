@@ -179,6 +179,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             async uow => (await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken)).First(),
             deployment => deployment.ControlState == ResourceControlState.Idle);
         Assert.Equal(ResourceControlState.Idle, deployment.ControlState);
+        Assert.Null(deployment.ControlTriggeredBy);
 
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<DeploymentNotificationWorkItem>(), It.IsAny<CancellationToken>()),
@@ -196,6 +197,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             async uow => (await uow.Stacks.GetAllAsync(TestContext.Current.CancellationToken)).First(),
             stack => stack.ControlState == ResourceControlState.Idle);
         Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+        Assert.Null(stack.ControlTriggeredBy);
 
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<StackNotificationWorkItem>(), It.IsAny<CancellationToken>()),
@@ -215,6 +217,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
 
         var container = (await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken)).First();
         Assert.Equal(ResourceControlState.Idle, container.ControlState);
+        Assert.Null(container.ControlTriggeredBy);
 
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<ContainerNotificationWorkItem>(), It.IsAny<CancellationToken>()),

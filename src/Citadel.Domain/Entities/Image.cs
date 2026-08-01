@@ -32,10 +32,14 @@ public sealed class Image(
     #endregion
     public Registry? Registry { get; private set; } = registry;
 
-    public void MarkProcessing()
+    public bool MarkProcessing()
     {
+        if (ControlState == ResourceControlState.Processing)
+            return false;
+
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return true;
     }
 
     public void ReleaseProcessing()

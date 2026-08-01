@@ -1,12 +1,13 @@
 import { Eye, FolderInput, PackagePlus, Trash } from 'lucide-react';
 import {
-  ContainerView,
+  type ContainerView,
+  type ContainerDataView,
   ContainerStateStatus,
   ResourceControlState,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { formatId } from '@/lib/utils';
+import { formatId, isUnmanagedContainer } from '@/lib/utils';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { CommandAction, ToggleAction } from '@/components/custom/actions-builder';
@@ -42,8 +43,9 @@ export type ContainerStackGroupResource = {
 
 export type ContainerActionResource = ContainerView | ContainerStackGroupResource;
 
-export const isContainerStackGroup = (resource: ContainerActionResource): resource is ContainerStackGroupResource =>
-  'isStackGroup' in resource && resource.isStackGroup;
+export const isContainerStackGroup = (
+  resource: ContainerActionResource | ContainerDataView,
+): resource is ContainerStackGroupResource => 'isStackGroup' in resource && resource.isStackGroup;
 
 type ContainerActionKey = 'start' | 'stop' | 'pause' | 'unpause' | 'restart';
 type ContainerVariablesFactory<T extends BaseContainerResource> = (
@@ -146,6 +148,31 @@ const getContainers = (resources: ContainerActionResource | ContainerActionResou
   return selected.flatMap((resource) => (isContainerStackGroup(resource) ? resource.containers : [resource]));
 };
 
+export const isAdoptableContainer = (resource: ContainerActionResource | ContainerDataView) =>
+  !isContainerStackGroup(resource) && !resource.stack && isUnmanagedContainer(resource);
+
+export const isImportableStack = (resource: ContainerActionResource | ContainerDataView) => {
+  const containers = isContainerStackGroup(resource) ? resource.containers : [resource];
+  return (
+    !!resource.stack &&
+    !resource.stackId &&
+    containers.length > 0 &&
+    containers.every(
+      (container) => !container.isSystem && !container.deploymentId && !container.stackId,
+    )
+  );
+};
+
+export const isImportableStackSelection = (resources: ContainerActionResource[]) => {
+  const first = resources[0];
+  if (!first?.stack) return false;
+
+  return resources.every(
+    (resource) =>
+      resource.platformId === first.platformId && resource.stack === first.stack && isImportableStack(resource),
+  );
+};
+
 export const containsSystemContainer = (resources: { isSystem: boolean } | { isSystem: boolean }[]) => {
   const selected = Array.isArray(resources) ? resources : [resources];
   return selected.some((resource) => resource.isSystem);
@@ -177,7 +204,7 @@ const { startAction, stopAction, pauseAction, restartAction } = createContainerA
   getActionTargets,
 );
 
-export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions } =
+const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions } =
   createActionsBuilder<ContainerActionResource>()
     .addAction(startAction)
     .addAction(stopAction)
@@ -185,7 +212,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
     .addAction(restartAction)
     .addAction({
       key: 'adopt',
-      title: 'Adopt as Deployment',
+      title: 'Adopt Container',
       type: 'command',
       separatorBefore: true,
       icon: PackagePlus,
@@ -193,15 +220,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       useHandler: ({ resources }) => {
         const navigate = useNavigate();
         const selected = Array.isArray(resources) ? resources[0] : resources;
-        const canExecute =
-          !!selected &&
-          (!Array.isArray(resources) || resources.length === 1) &&
-          !isContainerStackGroup(selected) &&
-          !selected.isSystem &&
-          !selected.deploymentId &&
-          !selected.stackId &&
-          !selected.stack &&
-          !isProcessing(selected);
+        const canExecute = !!selected && isAdoptableContainer(selected) && !isProcessing(selected);
 
         return {
           canExecute,
@@ -215,34 +234,24 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
     })
     .addAction({
       key: 'importStack',
-      title: 'Import Compose project as Stack',
+      title: 'Import Stack',
       type: 'command',
+      separatorBefore: true,
       icon: FolderInput,
       requiredCapabilities: ['canInspect'],
       useHandler: ({ resources }) => {
         const navigate = useNavigate();
-        const selected = Array.isArray(resources) ? resources[0] : resources;
+        const selection = Array.isArray(resources) ? resources : [resources];
+        const selected = selection[0];
         const projectName = selected?.stack;
-        const projectContainers =
-          selected && isContainerStackGroup(selected)
-            ? selected.containers
-            : selected && !isContainerStackGroup(selected)
-              ? [selected]
-              : [];
+        const projectContainers = selection.flatMap((resource) =>
+          isContainerStackGroup(resource) ? resource.containers : [resource],
+        );
         const canExecute =
           !!selected &&
-          (!Array.isArray(resources) || resources.length === 1) &&
-          !!projectName &&
-          !selected.stackId &&
+          isImportableStackSelection(selection) &&
           !isProcessing(selected) &&
-          projectContainers.length > 0 &&
-          projectContainers.every(
-            (container) =>
-              !container.isSystem &&
-              !container.deploymentId &&
-              !container.stackId &&
-              !isProcessing(container),
-          );
+          projectContainers.every((container) => !isProcessing(container));
 
         return {
           canExecute,
@@ -314,3 +323,22 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       },
     })
     .build();
+
+const AdoptAction = baseContainerDropdownActions.adopt;
+const ImportStackAction = baseContainerDropdownActions.importStack;
+const AdoptGroupAction = baseContainerGroupActions.adopt;
+const ImportStackGroupAction = baseContainerGroupActions.importStack;
+
+export const ContainerDropdownActions = {
+  ...baseContainerDropdownActions,
+  adopt: (props) => (isAdoptableContainer(props.resource) ? <AdoptAction {...props} /> : null),
+  importStack: (props) => (isImportableStack(props.resource) ? <ImportStackAction {...props} /> : null),
+} satisfies typeof baseContainerDropdownActions;
+
+export const ContainerGroupActions = {
+  ...baseContainerGroupActions,
+  adopt: (props) =>
+    props.resources.length === 1 && isAdoptableContainer(props.resources[0]) ? <AdoptGroupAction {...props} /> : null,
+  importStack: (props) =>
+    isImportableStackSelection(props.resources) ? <ImportStackGroupAction {...props} /> : null,
+} satisfies typeof baseContainerGroupActions;

@@ -1,4 +1,5 @@
 using Application.Services.Identity;
+using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Moq;
 
@@ -19,7 +20,12 @@ public class ActorScopeEvictorBatchTests
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
         var permissionCache = new Mock<IPermissionCache>();
-        var evictor = new ActorScopeEvictor(uow.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
+        var evictor = new ActorScopeEvictor(
+            uow.Object,
+            roleCache.Object,
+            actorScopeProvider.Object,
+            permissionCache.Object,
+            Mock.Of<IUserConnectionRevoker>());
 
         await evictor.EvictUsers(
             new[] { userA, userB, userA, userC },

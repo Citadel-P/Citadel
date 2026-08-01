@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Application.Configs;
 
 namespace Tests.Acceptance.Setup;
 
@@ -35,6 +36,10 @@ public sealed class ComposeConfigurationTests
             RequiredProductionSettings.Order(StringComparer.Ordinal),
             environment.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("ReverseProxy", environment["Transport__Mode"]);
+        Assert.Contains(
+            new Uri(new AutomationOptions().InternalBaseUrl).Host,
+            environment["AllowedHosts"].Split(';'),
+            StringComparer.OrdinalIgnoreCase);
         Assert.StartsWith("replace-", environment["PG_PASSWORD"]);
         Assert.Contains("# CITADEL_IMAGE_TAG=latest", template);
         Assert.Contains("# PG_HOST=pg_db", template);

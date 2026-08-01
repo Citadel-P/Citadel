@@ -2,10 +2,10 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ContainerLogs } from './container-logs';
-import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
+import { ContainerDetailsView, useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
 import { ContainerInspect } from './container-inspect';
 import { ContainerStats } from './container-stats';
-import { ContainerInfoActions } from './actions';
+import { ContainerInfoActions, getContainerManagementAction } from './actions';
 import { ContainerInfoTable } from './container-info-table';
 import { ContainerStateStatus, ContainerDataView, ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -16,7 +16,11 @@ import { Unlink } from 'lucide-react';
 import { isUnmanagedContainer } from '@/lib/utils';
 import { SystemContainerBadge } from '../system-container-badge';
 
-export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDataView> = {
+const groupedContainerInfoActions = Object.values(ContainerInfoActions).filter(
+  (action) => action !== ContainerInfoActions.adopt && action !== ContainerInfoActions.importStack,
+);
+
+export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDetailsView> = {
   Header: {
     Indicator: ({ resource }) => {
       return (
@@ -39,7 +43,14 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerData
         </span>
       ) : null,
     ActionButtons: ({ resource }) => {
-      return <GenericActionBarButtons resource={resource} actions={Object.values(ContainerInfoActions)} />;
+      const managementAction = getContainerManagementAction(resource);
+      return (
+        <GenericActionBarButtons
+          resource={resource}
+          actions={groupedContainerInfoActions}
+          standaloneActions={managementAction ? [managementAction] : []}
+        />
+      );
     },
   },
   SubHeader: ({ resource }) => {

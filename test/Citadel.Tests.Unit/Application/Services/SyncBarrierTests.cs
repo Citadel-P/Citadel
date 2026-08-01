@@ -102,4 +102,32 @@ public class SyncBarrierTests
 
         await Task.WhenAll(wait1, wait2, wait3);
     }
+
+    [Fact]
+    public async Task RemovePlatform_ReleasesWaitersAndRemovesEveryBarrierForPlatform()
+    {
+        var barrier = new SyncBarrier();
+        var waitA = barrier.WaitForAsync<JobA>(_id).AsTask();
+        var waitB = barrier.WaitForAsync<JobB>(_id).AsTask();
+        barrier.MarkSynced<JobA>(_otherId);
+
+        barrier.RemovePlatform(_id);
+
+        await Task.WhenAll(waitA, waitB);
+        Assert.Equal(1, barrier.Count);
+        Assert.True(barrier.WaitForAsync<JobA>(_otherId).IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task WaitForAsync_AfterPlatformRemoval_CompletesImmediately()
+    {
+        var barrier = new SyncBarrier();
+
+        barrier.RemovePlatform(_id);
+
+        var wait = barrier.WaitForAsync<JobA>(_id).AsTask();
+        Assert.True(wait.IsCompletedSuccessfully);
+        await wait;
+        Assert.Equal(0, barrier.Count);
+    }
 }

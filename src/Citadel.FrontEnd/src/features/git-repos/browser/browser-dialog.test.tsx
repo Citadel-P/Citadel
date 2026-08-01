@@ -6,8 +6,18 @@ import userEvent from '@testing-library/user-event';
 import { GitRepositoryBrowseAction } from './browser-dialog';
 
 vi.mock('./repository-browser', () => ({
-  RepositoryBrowser: ({ repository }: { repository: GitRepositoryView }) => (
-    <div data-testid="repository-browser">{repository.name}</div>
+  RepositoryBrowser: ({
+    repository,
+    branch,
+    commitSha,
+  }: {
+    repository: GitRepositoryView;
+    branch?: string | null;
+    commitSha?: string | null;
+  }) => (
+    <div data-testid="repository-browser" data-branch={branch} data-commit={commitSha}>
+      {repository.name}
+    </div>
   ),
 }));
 
@@ -42,5 +52,24 @@ describe('GitRepositoryBrowseAction', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(queryClient.getQueryData(treeKey)).toBeUndefined();
     expect(queryClient.getQueryData(fileKey)).toBeUndefined();
+  });
+
+  it('uses the compact label and selected stack revision when requested', async () => {
+    const repository = {
+      id: '019f9b44-a8da-7000-8000-000000000001',
+      name: 'infrastructure',
+    } as GitRepositoryView;
+    const user = userEvent.setup();
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <GitRepositoryBrowseAction resource={repository} title="Browse" branch="main" commitSha="abcdef123456" />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Browse' }));
+
+    expect(screen.getByTestId('repository-browser')).toHaveAttribute('data-branch', 'main');
+    expect(screen.getByTestId('repository-browser')).toHaveAttribute('data-commit', 'abcdef123456');
   });
 });

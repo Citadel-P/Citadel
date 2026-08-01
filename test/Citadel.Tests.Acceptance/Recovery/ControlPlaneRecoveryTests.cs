@@ -599,11 +599,18 @@ public sealed class ControlPlaneRecoveryTests(AcceptancePostgresFixture postgres
                 connection,
                 $"SELECT COUNT(*) FROM activityevents WHERE id = '{ActivityId}';",
                 cancellationToken));
-        Assert.True(
+        Assert.Equal(
+            2L,
             await CountAsync(
                 connection,
-                "SELECT COUNT(*) FROM actions WHERE scheduleenabled = TRUE;",
-                cancellationToken) > 0);
+                """
+                SELECT COUNT(*)
+                FROM actions
+                WHERE name IN ('Prune images', 'Restart unhealthy stacks')
+                  AND enabled = FALSE
+                  AND scheduleenabled = FALSE;
+                """,
+                cancellationToken));
         Assert.Equal(
             1L,
             await CountAsync(

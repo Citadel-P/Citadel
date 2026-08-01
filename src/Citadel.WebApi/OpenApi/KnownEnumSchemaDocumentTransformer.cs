@@ -11,6 +11,7 @@ internal sealed class KnownEnumSchemaDocumentTransformer : IOpenApiDocumentTrans
     {
         SetEnumSchema<BackupRunStatus>(document);
         SetEnumSchema<ContainerSystemRole>(document);
+        SetEnumSchema<DayOfWeek>(document);
         return Task.CompletedTask;
     }
 

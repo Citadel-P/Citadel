@@ -1,9 +1,12 @@
 ﻿using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
@@ -21,17 +24,29 @@ public interface IDeploymentProcessingService
 internal sealed class DeploymentProcessingService(
     IServiceScopeFactory scopeFactory,
     INotificationQueue notificationQueue,
-    IDeploymentStreamManager deploymentHub) : IDeploymentProcessingService
+    IDeploymentStreamManager deploymentHub,
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<DeploymentProcessingService> logger) : IDeploymentProcessingService
 {
     public async Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, Guid actorId, CancellationToken ct)
     {
         var successfullyUpdated = new List<Deployment>();
+        var requestedIds = deploymentIds.Distinct().Order().ToArray();
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var deployments = await uow.Deployments.GetAllAsync(deploymentIds, ct);
-        foreach (var deployment in deployments ?? [])
+        var deployments = (await uow.Deployments.GetAllAsync(requestedIds, ct) ?? [])
+            .OrderBy(deployment => deployment.Id)
+            .ToArray();
+
+        if (deployments.Length != requestedIds.Length ||
+            deployments.Any(deployment => deployment.ControlState == ResourceControlState.Processing))
+        {
+            return [];
+        }
+
+        foreach (var deployment in deployments)
         {
             deployment.MarkProcessing(actorId);
 
@@ -45,10 +60,10 @@ internal sealed class DeploymentProcessingService(
                 actorId,
                 ct);
 
-            if (affectedRow != 0)
-            {
-                successfullyUpdated.Add(deployment);
-            }
+            if (affectedRow == 0)
+                return [];
+
+            successfullyUpdated.Add(deployment);
         }
 
         await uow.CommitAsync(ct);
@@ -59,31 +74,47 @@ internal sealed class DeploymentProcessingService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var released = new List<Deployment>();
 
         foreach (var deployment in deployments)
         {
             deployment.ReleaseProcessing(deployment.Status);
 
-            await uow.Deployments.UpdateProcessingAsync(
+            var affected = await uow.Deployments.UpdateProcessingAsync(
                 deployment.Id,
                 deployment.Status,
                 deployment.ControlState,
                 deployment.ControlStartedAt,
-                deployment.RowVersion,
+                deployment.RowVersion + 1,
                 checkRowVersion: true,
-                deployment.ControlTriggeredBy != null ? deployment.ControlTriggeredBy.Value : Constants.SystemId,
+                controlTriggeredBy: null,
                 ct);
+            if (affected != 0)
+                released.Add(deployment);
         }
 
         await uow.CommitAsync(ct);
-        await NotifyProcessingAsync(deployments, ct: ct);
+        await NotifyProcessingAsync(released, ct: ct);
     }
 
     public async Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, string action = "update", CancellationToken ct = default)
     {
-        foreach (var deployment in deployments)
+        using var notificationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            applicationLifetime.ApplicationStopping,
+            ct);
+        notificationCancellation.CancelAfter(TimeSpan.FromSeconds(5));
+        try
         {
-            await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment, action), ct);
+            foreach (var deployment in deployments)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new DeploymentNotificationWorkItem(deploymentHub, deployment, action),
+                    notificationCancellation.Token);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to enqueue deployment processing notifications");
         }
     }
 }

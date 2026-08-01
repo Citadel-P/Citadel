@@ -1,4 +1,5 @@
 using Application.Services.Identity;
+using Application.Services.SignalR;
 using Moq;
 using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
@@ -38,7 +39,12 @@ public class ActorScopeEvictorRoleTests
         var actorScopeProvider = new Mock<IActorScopeProvider>();
         var permissionCache = new Mock<IPermissionCache>();
 
-        var evictor = new ActorScopeEvictor(uow.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
+        var evictor = new ActorScopeEvictor(
+            uow.Object,
+            roleCache.Object,
+            actorScopeProvider.Object,
+            permissionCache.Object,
+            Mock.Of<IUserConnectionRevoker>());
 
         await evictor.EvictPermissionsForRoleAsync(roleId, TestContext.Current.CancellationToken);
 

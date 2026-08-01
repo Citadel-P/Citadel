@@ -41317,7 +41317,8 @@
           "state",
           "controlState",
           "isSystem",
-          "systemRole"
+          "systemRole",
+          "hasCitadelOwnershipLabels"
         ],
         "type": "object",
         "properties": {
@@ -41351,6 +41352,9 @@
                 "$ref": "#/components/schemas/ContainerSystemRole"
               }
             ]
+          },
+          "hasCitadelOwnershipLabels": {
+            "type": "boolean"
           },
           "created": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -42005,6 +42009,7 @@
           "stack",
           "isSystem",
           "systemRole",
+          "hasCitadelOwnershipLabels",
           "lastStats",
           "ports",
           "deploymentId",
@@ -42069,6 +42074,9 @@
                 "$ref": "#/components/schemas/ContainerSystemRole"
               }
             ]
+          },
+          "hasCitadelOwnershipLabels": {
+            "type": "boolean"
           },
           "lastStats": {
             "oneOf": [
@@ -43041,7 +43049,8 @@
           "Thursday",
           "Friday",
           "Saturday"
-        ]
+        ],
+        "type": "string"
       },
       "DeleteAlertChannelsInput": {
         "required": [

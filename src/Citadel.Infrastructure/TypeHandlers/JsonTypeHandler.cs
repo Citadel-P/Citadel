@@ -7,32 +7,22 @@ namespace Infrastructure.TypeHandlers;
 
 public class JsonTypeHandler<T> : SqlMapper.TypeHandler<T>
 {
-    private readonly JsonSerializerOptions? _options;
-    private readonly JsonTypeInfo<T>? _typeInfo;
-
-    public JsonTypeHandler(JsonSerializerOptions? options = null)
-    {
-        _options = options;
-    }
+    private readonly JsonTypeInfo<T> _typeInfo;
 
     public JsonTypeHandler(JsonTypeInfo<T> typeInfo)
     {
-        _typeInfo = typeInfo;
+        _typeInfo = typeInfo ?? throw new ArgumentNullException(nameof(typeInfo));
     }
 
     public override void SetValue(IDbDataParameter parameter, T value)
     {
-        parameter.Value = _typeInfo is not null
-            ? JsonSerializer.Serialize(value, _typeInfo)
-            : JsonSerializer.Serialize(value, _options);
+        parameter.Value = JsonSerializer.Serialize(value, _typeInfo);
     }
 
     public override T? Parse(object value)
     {
         if (value is not string json) return default;
 
-        return _typeInfo is not null
-            ? JsonSerializer.Deserialize(json, _typeInfo)
-            : JsonSerializer.Deserialize<T>(json, _options);
+        return JsonSerializer.Deserialize(json, _typeInfo);
     }
 }

@@ -193,7 +193,8 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
             new Domain.Contracts.Resources.Images.PullImageStreamItem(ProgressMessage: "Pulling nginx:latest..."),
             new Domain.Contracts.Resources.Images.PullImageStreamItem(
                 ProgressMessage: "Pull completed",
-                DockerImageId: "sha256:pulledimage123"
+                DockerImageId: "sha256:pulledimage123",
+                Digest: "sha256:applied"
             )
         };
 
@@ -222,7 +223,6 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
         var content = new StringContent(applyInputJson, Encoding.UTF8, "application/json");
 
         // Act
-        var checkpoint = dbWorkQueue.CreateCheckpoint();
         var response = await Client.PostAsync(
             "/api/v1/deployments/apply",
             content,
@@ -238,15 +238,13 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
             Times.Once
         );
 
-        await dbWorkQueue.WaitForIdleAfterAsync(
-            checkpoint,
-            TestContext.Current.CancellationToken);
-
-        // Verify deployment status is Healthy
-        var verifyScope = Services.CreateAsyncScope();
+        // A successful response means the resulting deployment state is already committed.
+        await using var verifyScope = Services.CreateAsyncScope();
         var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await verifyUow.Deployments.GetAsync(deploymentWithExternalImage.Id, TestContext.Current.CancellationToken);
         Assert.Equal(DeploymentStatus.Healthy, deployment?.Status);
+        var appliedImage = Assert.IsType<ExternalImage>(deployment?.Spec?.Image);
+        Assert.Equal("sha256:applied", appliedImage.ResolvedDigest);
 
         // Verify container was linked to deployment
         var persistedContainer = await verifyUow.Containers.GetByIdAsync(containerId, TestContext.Current.CancellationToken);

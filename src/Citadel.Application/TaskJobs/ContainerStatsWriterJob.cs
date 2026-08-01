@@ -146,21 +146,33 @@ internal sealed class ContainerStatsWriterJob(
         if (_bufferedCount == 0) return;
 
         var dataToFlush = _buffer;
+        var retryDelay = TimeSpan.FromSeconds(1);
 
-        try
+        while (true)
         {
-            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(dataToFlush, platformContainerCache, logger), ct);
-            _buffer = [];
-            _bufferedCount = 0;
-            _lastFlush = DateTime.UtcNow;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to enqueue DB batch");
+            try
+            {
+                await dbQueue.EnqueueAndWaitAsync(
+                    new ContainerStatsBatchWorkItem(dataToFlush, platformContainerCache, logger),
+                    ct);
+                _buffer = [];
+                _bufferedCount = 0;
+                _lastFlush = DateTime.UtcNow;
+                return;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Failed to persist container stats batch. Retrying in {Delay}.",
+                    retryDelay);
+                await Task.Delay(retryDelay, ct);
+                retryDelay = TimeSpan.FromSeconds(Math.Min(30, retryDelay.TotalSeconds * 2));
+            }
         }
     }
 }
@@ -172,58 +184,44 @@ internal sealed class ContainerStatsBatchWorkItem(
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
     {
-        try
+        // Flatten the dictionary into a single list for bulk insert
+        var filteredList = new List<ContainerStat>();
+        var droppedCount = 0;
+
+        foreach (var (platformId, stats) in batch)
         {
-            // Flatten the dictionary into a single list for bulk insert
-            var filteredList = new List<ContainerStat>();
-            var droppedCount = 0;
-
-            foreach (var (platformId, stats) in batch)
+            if (!platformContainerCache.TryGetContainers(platformId, out var containers))
             {
-                if (!platformContainerCache.TryGetContainers(platformId, out var containers))
-                {
-                    droppedCount += stats.Count;
-                    continue;
-                }
-
-                var containerIds = new HashSet<Guid>();
-                foreach (var containerId in containers.Values)
-                {
-                    containerIds.Add(containerId);
-                }
-
-                foreach (var stat in stats)
-                {
-                    if (containerIds.Contains(stat.ContainerId))
-                    {
-                        filteredList.Add(stat);
-                    }
-                    else
-                    {
-                        droppedCount++;
-                    }
-                }
+                droppedCount += stats.Count;
+                continue;
             }
 
-            if (filteredList.Count == 0) return;
-
-            if (droppedCount > 0)
+            var containerIds = new HashSet<Guid>();
+            foreach (var containerId in containers.Values)
             {
-                logger.LogWarning(
-                    "Dropped {Count} container stats because their containers were no longer present in the platform cache when the batch was flushed.",
-                    droppedCount);
+                containerIds.Add(containerId);
             }
 
-            await uow.ContainerStats.BulkInsertAsync(filteredList, token);
-            await uow.CommitAsync(token);
+            foreach (var stat in stats)
+            {
+                if (containerIds.Contains(stat.ContainerId))
+                    filteredList.Add(stat);
+                else
+                    droppedCount++;
+            }
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+
+        if (filteredList.Count == 0) return;
+
+        if (droppedCount > 0)
         {
+            logger.LogWarning(
+                "Dropped {Count} container stats because their containers were no longer present in the platform cache when the batch was flushed.",
+                droppedCount);
         }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Database bulk insert failed.");
-        }
+
+        await uow.ContainerStats.BulkInsertAsync(filteredList, token);
+        await uow.CommitAsync(token);
     }
 }
 

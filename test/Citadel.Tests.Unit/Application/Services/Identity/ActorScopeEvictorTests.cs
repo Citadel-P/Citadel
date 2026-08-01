@@ -1,4 +1,5 @@
 using Application.Services.Identity;
+using Application.Services.SignalR;
 using Moq;
 using Domain.Contracts.Interfaces;
 
@@ -28,7 +29,12 @@ public class ActorScopeEvictorTests
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
         var permissionCache = new Mock<IPermissionCache>();
-        var evictor = new ActorScopeEvictor(uow.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
+        var evictor = new ActorScopeEvictor(
+            uow.Object,
+            roleCache.Object,
+            actorScopeProvider.Object,
+            permissionCache.Object,
+            Mock.Of<IUserConnectionRevoker>());
 
         await evictor.EvictPermissionsForActorAsync(actorId, TestContext.Current.CancellationToken);
 
@@ -46,7 +52,13 @@ public class ActorScopeEvictorTests
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
         var permissionCache = new Mock<IPermissionCache>();
-        var evictor = new ActorScopeEvictor(uow.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
+        var connectionRevoker = new Mock<IUserConnectionRevoker>();
+        var evictor = new ActorScopeEvictor(
+            uow.Object,
+            roleCache.Object,
+            actorScopeProvider.Object,
+            permissionCache.Object,
+            connectionRevoker.Object);
 
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
@@ -57,5 +69,36 @@ public class ActorScopeEvictorTests
         roleCache.Verify(cache => cache.RemoveRoles(userB), Times.Once);
         permissionCache.Verify(cache => cache.InvalidateUser(userA), Times.Once);
         permissionCache.Verify(cache => cache.InvalidateUser(userB), Times.Once);
+        connectionRevoker.Verify(
+            revoker => revoker.RevokeUsers(
+                It.Is<IEnumerable<Guid>>(ids => ids.Order().SequenceEqual(new[] { userA, userB }.Order()))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EvictUsersAsync_RevokesConnectionsBeforeDistributedInvalidationFails()
+    {
+        var userId = Guid.NewGuid();
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
+        actorScopeProvider
+            .Setup(provider => provider.InvalidateManyAsync(
+                It.IsAny<IEnumerable<Guid>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("cache unavailable"));
+        var connectionRevoker = new Mock<IUserConnectionRevoker>();
+        var evictor = new ActorScopeEvictor(
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<IRoleCache>(),
+            actorScopeProvider.Object,
+            Mock.Of<IPermissionCache>(),
+            connectionRevoker.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            evictor.EvictUsers([userId], TestContext.Current.CancellationToken));
+
+        connectionRevoker.Verify(
+            revoker => revoker.RevokeUsers(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { userId }))),
+            Times.Once);
     }
 }

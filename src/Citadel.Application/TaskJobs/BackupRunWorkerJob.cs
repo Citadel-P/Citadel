@@ -18,6 +18,13 @@ internal sealed class BackupRunWorkerJob(
     private readonly BackupOptions options = backupOptions.Value;
     private readonly SemaphoreSlim concurrency = new(Math.Max(1, backupOptions.Value.MaxParallelRuns));
     private readonly TrackedBackgroundTasks activeTasks = new();
+    private CancellationToken shutdownDeadline;
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        shutdownDeadline = cancellationToken;
+        return base.StopAsync(cancellationToken);
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -48,36 +55,46 @@ internal sealed class BackupRunWorkerJob(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         finally
         {
-            await activeTasks.DrainAsync();
+            await activeTasks.DrainAsync(shutdownDeadline);
         }
     }
 
     private async Task InterruptAbandonedRunsAsync(CancellationToken cancellationToken)
     {
-        try
+        while (true)
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var interrupted = await unitOfWork.BackupRuns.InterruptInProgressAsync(
-                timeProvider.GetUtcNow(),
-                "Backup run was interrupted by an application restart.",
-                cancellationToken);
-            await unitOfWork.CommitAsync(cancellationToken);
-
-            if (interrupted > 0)
+            try
             {
-                logger.LogWarning(
-                    "Marked {Count} in-progress backup runs as interrupted after application restart.",
-                    interrupted);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                var interrupted = await unitOfWork.BackupRuns.InterruptInProgressAsync(
+                    timeProvider.GetUtcNow(),
+                    "Backup run was interrupted by an application restart.",
+                    cancellationToken);
+                await unitOfWork.CommitAsync(cancellationToken);
+
+                if (interrupted > 0)
+                {
+                    logger.LogWarning(
+                        "Marked {Count} in-progress backup runs as interrupted after application restart.",
+                        interrupted);
+                }
+
+                return;
             }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Citadel could not reconcile interrupted backup runs during startup.");
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Citadel could not reconcile interrupted backup runs during startup. Retrying.");
+                await Task.Delay(
+                    TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds)),
+                    cancellationToken);
+            }
         }
     }
 

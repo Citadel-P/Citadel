@@ -115,6 +115,27 @@ public class AlertRuleDeleteTests(PostgresTestFixture fixture) : IntegrationTest
     }
 
     [Fact]
+    public async Task Delete_AlertRules_ShouldNotPartiallyDelete_WhenBatchContainsMissingId()
+    {
+        var content = $$"""
+        {
+            "ids": ["{{ruleId}}", "{{Guid.NewGuid()}}"]
+        }
+        """;
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alertRules")
+        {
+            Content = new StringContent(content, Encoding.UTF8, "application/json")
+        };
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Assert.NotNull(await uow.AlertRules.GetByIdAsync(ruleId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Delete_AlertChannel_ReturnsSuccess()
     {
         await using var beforeScope = Services.CreateAsyncScope();

@@ -144,4 +144,38 @@ public class PlatformDeleteTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal("https://delete.address", deleted.Platform.Address);
         healthMonitorMock.Verify(x => x.UntrackPlatform("https://delete.address", It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task Delete_Platforms_Should_Not_Partially_Delete_When_Later_Id_Does_Not_Exist()
+    {
+        // Arrange
+        var missingPlatformId = Guid.CreateVersion7();
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/platforms")
+        {
+            Content = JsonContent.Create(new { ids = new[] { platformId, missingPlatformId } })
+        };
+
+        // Act
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var exists = await uow.Platforms.ExistsAsync(platformId, TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platformId,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformDeleted,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(exists);
+        Assert.Empty(activities.Items);
+        healthMonitorMock.Verify(
+            x => x.UntrackPlatform(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 }

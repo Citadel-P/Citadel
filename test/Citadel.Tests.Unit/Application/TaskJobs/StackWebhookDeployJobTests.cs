@@ -196,10 +196,69 @@ public sealed class StackWebhookDeployJobTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task TransientStartupRecoveryFailure_RetriesWithoutTerminatingWorker()
+    {
+        var recovered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recoveryAttempts = 0;
+        var queueRepository = new Mock<IStackWebhookDeployQueueRepository>();
+        queueRepository
+            .Setup(x => x.RequeueInterruptedAsync(
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                if (Interlocked.Increment(ref recoveryAttempts) == 1)
+                    throw new InvalidOperationException("database unavailable");
+
+                recovered.TrySetResult();
+                return Task.FromResult(0);
+            });
+        queueRepository
+            .Setup(x => x.GetReadyIdsAsync(
+                It.IsAny<int>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(x => x.StackWebhookDeployQueue).Returns(queueRepository.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        await using var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+        var channel = Channel.CreateBounded<StackWebhookDeploySignal>(4);
+        var job = CreateJob(
+            services,
+            Mock.Of<IApplyStackService>(),
+            Mock.Of<IAlertService>(),
+            channel.Reader);
+
+        await job.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await channel.Writer.WriteAsync(
+                new StackWebhookDeploySignal(Guid.CreateVersion7()),
+                TestContext.Current.CancellationToken);
+            await recovered.Task.WaitAsync(
+                TimeSpan.FromSeconds(2),
+                TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await job.StopAsync(TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(2, recoveryAttempts);
+    }
+
     private static StackWebhookDeployJob CreateJob(
         ServiceProvider services,
         IApplyStackService applyStackService,
-        IAlertService alertService)
+        IAlertService alertService,
+        ChannelReader<StackWebhookDeploySignal>? reader = null)
     {
         var channel = Channel.CreateBounded<StackWebhookDeploySignal>(4);
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
@@ -215,10 +274,11 @@ public sealed class StackWebhookDeployJobTests
             TimeProvider.System,
             NullLogger<StackWebhookDeployProcessor>.Instance);
         return new StackWebhookDeployJob(
-            channel.Reader,
+            reader ?? channel.Reader,
             queue,
             processor,
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<StackWebhookDeployJob>.Instance);
     }
 
     private static Mock<IStackWebhookDeployQueueRepository> CreateQueue(

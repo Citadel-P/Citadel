@@ -1,5 +1,13 @@
-import { forwardRef, ReactNode, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { forwardRef, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../ui/dialog';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -118,20 +126,36 @@ export const ActionWithDialog = ({
   additional,
   targetClassName,
   variant,
+  open: controlledOpen,
+  onOpenChange,
+  renderTrigger = true,
+  description,
 }: {
   name: string;
   title: string;
   icon: ReactNode;
   iconPosition?: 'left' | 'right';
   disabled?: boolean;
-  onClick?: () => void;
+  onClick?: () => void | Promise<unknown>;
   additional?: ReactNode;
   targetClassName?: string;
   variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  renderTrigger?: boolean;
+  description?: ReactNode;
 }) => {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (controlledOpen === undefined) setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [controlledOpen, onOpenChange],
+  );
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
-  const { input, setInput, isLoading, isConfirmDisabled, handleConfirm, reset } = useConfirmByName({
+  const { input, setInput, isLoading, isConfirmDisabled, handleConfirm } = useConfirmByName({
     name,
     disabled,
     onConfirm: onClick,
@@ -146,29 +170,30 @@ export const ActionWithDialog = ({
     confirmDisabled: isConfirmDisabled,
     confirmButtonRef,
   });
+  useEffect(() => {
+    if (open) setInput('');
+  }, [open, setInput]);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(open) => {
-        setOpen(open);
-        reset();
-      }}>
-      <DialogTrigger asChild>
-        <ActionButton
-          className={targetClassName}
-          title={title}
-          icon={icon}
-          iconPosition={iconPosition}
-          disabled={disabled}
-          onClick={() => setOpen(true)}
-          loading={isLoading}
-          variant={variant}
-        />
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {renderTrigger && (
+        <DialogTrigger asChild>
+          <ActionButton
+            className={targetClassName}
+            title={title}
+            icon={icon}
+            iconPosition={iconPosition}
+            disabled={disabled}
+            onClick={() => setOpen(true)}
+            loading={isLoading}
+            variant={variant}
+          />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Confirm {title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4">
           <p
@@ -181,7 +206,12 @@ export const ActionWithDialog = ({
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
-          <Input value={input} onChange={(e) => setInput(e.target.value)} className="focus-visible:ring-1" />
+          <Input
+            aria-label={`Enter ${name} to confirm`}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="focus-visible:ring-1"
+          />
           {additional}
         </div>
         <DialogFooter>

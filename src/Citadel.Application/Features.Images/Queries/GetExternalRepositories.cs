@@ -20,7 +20,11 @@ public sealed record GetExternalRepositories(string Name) : IQuery<Result<IEnume
     }
 }
 
-internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) 
+internal sealed class GetExternalRepositoriesHander(
+    IUnitOfWork unitOfWork,
+    IDockerHubRegistryRepository dockerHubService,
+    IGitHubCrRepository gitHubCrService,
+    Application.Permissions.IPermissionEvaluator permissionEvaluator)
     : IQueryHandler<GetExternalRepositories, Result<IEnumerable<IImageRepository>>>
 {
     public async ValueTask<Result<IEnumerable<IImageRepository>>> Handle(GetExternalRepositories query, CancellationToken cancellationToken)
@@ -29,6 +33,13 @@ internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDoc
         if (registry == null) 
         {
             return Result.Failure<IEnumerable<IImageRepository>>(new NotFoundError("The provided registry name does not exist"));
+        }
+
+        var permissions = await permissionEvaluator.EvaluateAsync(registry.Id, ResourceType.Registry, cancellationToken);
+        if (!permissions.Has(PermissionLevel.Read))
+        {
+            return Result.Failure<IEnumerable<IImageRepository>>(
+                new ForbiddenError("Missing permission [Read] on [Registry]."));
         }
 
         if (registry.Configuration is GitHubRegistry ghCfg) 

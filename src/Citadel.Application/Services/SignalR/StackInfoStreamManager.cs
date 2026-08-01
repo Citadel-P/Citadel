@@ -106,7 +106,8 @@ internal sealed class StackInfoStreamManager(
                     ControlState: container.ControlState,
                     Ports: container.Ports,
                     IsSystem: container.IsSystem,
-                    SystemRole: container.SystemRole)))
+                    SystemRole: container.SystemRole,
+                    HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels)))
             .ToList();
     }
 

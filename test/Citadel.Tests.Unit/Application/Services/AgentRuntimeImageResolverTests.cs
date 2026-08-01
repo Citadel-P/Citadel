@@ -108,6 +108,50 @@ public sealed class AgentRuntimeImageResolverTests
     }
 
     [Fact]
+    public async Task TryResolveAsync_ShouldBoundCacheAcrossPlatformChurn()
+    {
+        var platformConnector = new Mock<IPlatformConnector>(MockBehavior.Strict);
+        platformConnector
+            .Setup(connector => connector.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new PlatformResult(
+                Name: string.Empty,
+                Address: string.Empty,
+                NetworkCount: 0,
+                VolumeCount: 0,
+                ImageCount: 0,
+                CpuCount: 0,
+                MemTotal: 0,
+                ServerVersion: null,
+                AgentVersion: "1.0",
+                Descriptor: null,
+                AgentRuntimeImage: "citadel-agent:dev")));
+
+        var platformConnectorFactory = new Mock<IConnectorFactory<IPlatformConnector>>(MockBehavior.Strict);
+        platformConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+
+        var resolver = new AgentRuntimeImageResolver(
+            Mock.Of<IServiceScopeFactory>(),
+            platformConnectorFactory.Object,
+            NullLogger<AgentRuntimeImageResolver>.Instance);
+
+        for (var index = 0; index <= AgentRuntimeImageResolver.MaxCacheEntries; index++)
+        {
+            await resolver.TryResolveAsync(
+                Mock.Of<IContainerConnector>(),
+                $"agent://platform-{index}",
+                Guid.CreateVersion7(),
+                PlatformConnectorType.Agent,
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.InRange(resolver.CachedEntryCount, 1, AgentRuntimeImageResolver.MaxCacheEntries);
+    }
+
+    [Fact]
     public async Task TryResolveAsync_ShouldInspectLastSeenEdgeAgentContainerAndReturnItsImageWhenPlatformInfoHasNoImage()
     {
         var platformId = Guid.CreateVersion7();

@@ -33,9 +33,6 @@ internal sealed class ContainerCreatedWorkItem(
 
             var container = eventInfo.Container.Map(platformId, image?.Id);
 
-            // cache update (in-memory)
-            platformContainerCache.TryAddContainer(platformId, container.DockerContainerId, container.Id);
-            
             await uow.Containers.AddAsync(container, cancellationToken);
 
             // update image status
@@ -66,6 +63,9 @@ internal sealed class ContainerCreatedWorkItem(
                 await uow.CommitAsync(cancellationToken);
             }
 
+            // Publish the cache entry only after the durable container write succeeds.
+            platformContainerCache.TryAddContainer(platformId, container.DockerContainerId, container.Id);
+
             var notificationItem = new ContainerNotificationWorkItem(
                 container,
                 eventInfo,
@@ -74,12 +74,16 @@ internal sealed class ContainerCreatedWorkItem(
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
 
-            if (!container.IsSystem)
+            if (!container.IsSystem && !container.HasCitadelOwnershipLabels)
             {
                 await unmanagedContainerAlertWriter.WriteAsync(
                         new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
                         cancellationToken);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

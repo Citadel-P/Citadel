@@ -346,6 +346,37 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
             transaction: tx());
     }
 
+    public Task<int> ResetActionsWithTerminalRunsAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Actions a
+            SET ControlState = @IdleState,
+                CurrentRunId = NULL,
+                ControlStartedAt = NULL,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            FROM ActionRuns r
+            WHERE r.Id = a.CurrentRunId
+              AND a.ControlState = @ProcessingState
+              AND r.Status <> ALL(@ActiveStatuses)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                IdleState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
+                ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ActiveStatuses = new[]
+                {
+                    EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
+                    EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
+                },
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
+    }
+
     public async Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(CancellationToken cancellationToken = default)
     {
         string sql = $$"""

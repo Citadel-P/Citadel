@@ -149,6 +149,7 @@ internal sealed class ImportComposeProjectHandler(
             containerIds,
             dockerContainerIds,
             stack.Id,
+            context.OrphanedOwnerStackId,
             cancellationToken);
         if (assigned != containerIds.Length)
         {

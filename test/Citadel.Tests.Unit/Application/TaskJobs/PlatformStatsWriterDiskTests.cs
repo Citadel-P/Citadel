@@ -1,5 +1,7 @@
 using Application.TaskJobs;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Moq;
 
 namespace Tests.Unit.Application.TaskJobs;
 
@@ -52,6 +54,36 @@ public sealed class PlatformStatsWriterDiskTests
         Assert.Null(snapshot.DiskUsage);
         Assert.Null(snapshot.DiskUsedBytes);
         Assert.Null(snapshot.DiskTotalBytes);
+    }
+
+    [Fact]
+    public async Task PersistPlatformStatsWorkItem_ShouldPropagatePersistenceFailure()
+    {
+        var platformId = Guid.CreateVersion7();
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(repository => repository.GetByIdAsync(
+                platformId,
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database unavailable"));
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(value => value.Platforms).Returns(platforms.Object);
+        var workItem = new PersistPlatformStatsWorkItem(
+            new Dictionary<Guid, List<PlatformStatsResult>>
+            {
+                [platformId] =
+                [
+                    CreateSample(
+                        diskUsage: 50,
+                        diskUsedBytes: 50,
+                        diskTotalBytes: 100)
+                ]
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            workItem.ExecuteAsync(uow.Object, TestContext.Current.CancellationToken));
+
+        Assert.Equal("database unavailable", exception.Message);
     }
 
     private static PlatformStatsResult CreateSample(

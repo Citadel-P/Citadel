@@ -16,6 +16,13 @@ internal sealed class AutomationActionRunWorkerJob(
     private readonly AutomationOptions options = automationOptions.Value;
     private readonly SemaphoreSlim concurrency = new(Math.Max(1, automationOptions.Value.MaxParallelRuns));
     private readonly TrackedBackgroundTasks activeTasks = new();
+    private CancellationToken shutdownDeadline;
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        shutdownDeadline = cancellationToken;
+        return base.StopAsync(cancellationToken);
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -24,6 +31,8 @@ internal sealed class AutomationActionRunWorkerJob(
 
         try
         {
+            await ReconcileInterruptedRunsAsync(minimumDelay, stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 var dispatched = options.Enabled
@@ -36,7 +45,47 @@ internal sealed class AutomationActionRunWorkerJob(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         finally
         {
-            await activeTasks.DrainAsync();
+            await activeTasks.DrainAsync(shutdownDeadline);
+        }
+    }
+
+    private async Task ReconcileInterruptedRunsAsync(
+        TimeSpan retryDelay,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                var interrupted = await unitOfWork.ActionRuns.InterruptInProgressAsync(
+                    DateTime.UtcNow,
+                    "Automation run was interrupted by an application restart.",
+                    cancellationToken);
+                await unitOfWork.AutomationActions.ResetActionsWithTerminalRunsAsync(cancellationToken);
+                await unitOfWork.CommitAsync(cancellationToken);
+
+                if (interrupted > 0)
+                {
+                    logger.LogWarning(
+                        "Marked {Count} in-progress automation runs as failed after application restart.",
+                        interrupted);
+                }
+
+                return;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Citadel could not reconcile interrupted automation runs during startup. Retrying.");
+                await Task.Delay(retryDelay, cancellationToken);
+            }
         }
     }
 

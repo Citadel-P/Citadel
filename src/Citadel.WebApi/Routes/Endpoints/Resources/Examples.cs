@@ -86,7 +86,7 @@ internal static class Examples
         {
             var options = new JsonSerializerOptions()
             {
-                Converters = { new JsonStringEnumConverter() },
+                Converters = { new JsonStringEnumConverter<RegistryStatus>() },
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
             return new ApplicationJsonContext(options);

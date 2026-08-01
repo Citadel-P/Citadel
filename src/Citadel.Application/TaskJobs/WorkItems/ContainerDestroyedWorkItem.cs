@@ -36,8 +36,6 @@ internal sealed class ContainerDestroyedWorkItem(
             var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
             if (existing is null) return;
 
-            platformContainerCache.TryRemoveContainer(platformId, existing.DockerContainerId);
-
             if (!string.IsNullOrEmpty(existing.DockerImageId))
             {
                 image = await UpdateImage(uow, existing, cancellationToken);
@@ -63,6 +61,9 @@ internal sealed class ContainerDestroyedWorkItem(
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
             await uow.CommitAsync(cancellationToken);
+
+            // Remove the cache entry only after the durable delete succeeds.
+            platformContainerCache.TryRemoveContainer(platformId, existing.DockerContainerId);
 
             var containerNotification = new ContainerNotificationWorkItem(
                 existing,
@@ -93,6 +94,10 @@ internal sealed class ContainerDestroyedWorkItem(
             {
                 await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activityEvent.AssignActor(uow, cancellationToken)), cancellationToken);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

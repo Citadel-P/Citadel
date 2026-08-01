@@ -40,7 +40,7 @@ import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { GitBranch, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { FolderInput, GitBranch, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
@@ -48,14 +48,8 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { getDriftModePreset } from './drift-policy';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ActionWithDialog } from '@/components/custom/action-with-dialog';
+import { GitRepositoryBrowseAction } from '@/features/git-repos/browser/browser-dialog';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -736,12 +730,10 @@ export const StackForm = ({
   mode,
   metadataChanged,
   disabled,
-  onSourceDirtyChange,
 }: {
   mode: 'add' | 'edit';
   metadataChanged?: boolean;
   disabled?: boolean;
-  onSourceDirtyChange?: (dirty: boolean) => void;
 }) => {
   const id = useParams().id;
   const [searchParams] = useSearchParams();
@@ -812,22 +804,12 @@ export const StackForm = ({
   const currentGitRepoId = (update as any)?.spec?.gitRepoId ?? (original.spec as any)?.gitRepoId ?? null;
   const currentGitBranch = (update as any)?.spec?.branch ?? (original.spec as any)?.branch ?? null;
   const currentPinnedCommit = (update as any)?.spec?.commitSha ?? (original.spec as any)?.commitSha ?? null;
-  const sourceDirty = useMemo(() => {
-    if (Object.prototype.hasOwnProperty.call(update, 'stackSource')) return true;
-
-    const specPatch = (update as any)?.spec;
-    if (!specPatch || typeof specPatch !== 'object') return false;
-
-    return [
-      'gitRepoId',
-      'branch',
-      'commitSha',
-      'composePaths',
-      'workingDirectory',
-      'composeEnvFilesFromRepo',
-      'additionalEnvFileFromRepo',
-    ].some((key) => Object.prototype.hasOwnProperty.call(specPatch, key));
-  }, [update]);
+  const { data: gitRepositoryData, isFetching: isGitRepositoryLoading } = useRead(
+    'getGitRepository',
+    { id: currentGitRepoId ?? '' },
+    { enabled: currentStackSource === StackSource.Git && !!currentGitRepoId },
+  );
+  const currentGitRepository = gitRepositoryData?.data;
   const { data: gitRefsData } = useRead(
     'getGitRepositoryRefs',
     { id: currentGitRepoId ?? '' },
@@ -937,9 +919,7 @@ export const StackForm = ({
             ...(spec ?? {}),
             $type: specTypeForSource(source),
             projectName: importProject,
-            updateBehavior: StackUpdateBehavior.Disabled,
             destroyBeforeDeploy: false,
-            ...(source === StackSource.Git ? { webhook: null } : {}),
           } as StackSpec,
           driftPolicy: DEFAULT_DRIFT_POLICY,
         };
@@ -959,10 +939,6 @@ export const StackForm = ({
     if (!metadataChanged) return;
     refreshData();
   }, [metadataChanged, refreshData]);
-
-  useEffect(() => {
-    onSourceDirtyChange?.(sourceDirty);
-  }, [onSourceDirtyChange, sourceDirty]);
 
   const { save: handleSave, isPending } = useSaveResource<StackInput, any>({
     mode,
@@ -1001,6 +977,12 @@ export const StackForm = ({
     onRefresh: refreshData,
   });
 
+  const resolveImportConfirmation = useCallback((confirmed: boolean) => {
+    const resolver = importConfirmationResolver.current;
+    importConfirmationResolver.current = null;
+    setImportConfirmationOpen(false);
+    resolver?.(confirmed);
+  }, []);
   const confirmComposeImport = useCallback(
     async (payload: StackInput) => {
       if (!importPlatform || !importProject) return false;
@@ -1031,13 +1013,6 @@ export const StackForm = ({
     },
     [importPlatform, importProject, validateComposeProjectImportDraft],
   );
-
-  const resolveImportConfirmation = useCallback((confirmed: boolean) => {
-    const resolver = importConfirmationResolver.current;
-    importConfirmationResolver.current = null;
-    setImportConfirmationOpen(false);
-    resolver?.(confirmed);
-  }, []);
 
   const patchDriftPolicy = useCallback(
     (prev: Partial<StackInput>, patch: Partial<StackDriftPolicy>): Partial<StackInput> => ({
@@ -1145,23 +1120,39 @@ export const StackForm = ({
                       description: 'Repository that contains the Compose project for this stack.',
                       validate: (v) => (!v ? 'Repository is required' : null),
                       render: (value, set) => (
-                        <ResourceSelectorField
-                          sourceType={LookupResourceType.Stack}
-                          targetType={LookupResourceType.GitRepository}
-                          sourceResourceId={id}
-                          selected={value}
-                          onSelect={(v: { id: string } | undefined) =>
-                            set((prev) => ({
-                              spec: {
-                                ...(prev.spec as any),
-                                $type: 'Git',
-                                gitRepoId: v?.id ?? '',
-                                branch: undefined,
-                              } as any,
-                            }))
-                          }
-                          placeholder="Select Repository"
-                        />
+                        <div className="flex w-full max-w-100 items-center gap-2">
+                          <ResourceSelectorField
+                            sourceType={LookupResourceType.Stack}
+                            targetType={LookupResourceType.GitRepository}
+                            sourceResourceId={id}
+                            selected={value}
+                            onSelect={(v: { id: string } | undefined) =>
+                              set((prev) => ({
+                                spec: {
+                                  ...(prev.spec as any),
+                                  $type: 'Git',
+                                  gitRepoId: v?.id ?? '',
+                                  branch: undefined,
+                                } as any,
+                              }))
+                            }
+                            placeholder="Select Repository"
+                            className="max-w-none flex-1"
+                          />
+                          <GitRepositoryBrowseAction
+                            resource={currentGitRepository}
+                            title="Browse"
+                            branch={currentGitBranch}
+                            commitSha={currentPinnedCommit}
+                            loading={isGitRepositoryLoading}
+                            className="flex-none"
+                            disabledReason={
+                              currentGitRepoId
+                                ? 'The selected repository is unavailable.'
+                                : 'Select a repository to browse.'
+                            }
+                          />
+                        </div>
                       ),
                     }),
                     defineField({
@@ -1611,13 +1602,15 @@ export const StackForm = ({
                   id: 'drift_policy',
                   label: 'Drift Management',
                   title: 'Drift Management',
-                  description:
-                    'Detect runtime differences between the compose file and the containers currently running on the platform.',
+                  description: isComposeImport
+                    ? 'Disabled during import. Edit the stack after importing it to configure drift management.'
+                    : 'Detect runtime differences between the compose file and the containers currently running on the platform.',
                   items: [
                     defineField({
                       key: 'driftPolicy.mode',
                       label: 'Mode',
                       description: 'Choose how this stack handles drift checks.',
+                      disabled: isComposeImport,
                       render: (value, set) => (
                         <ItemSelector
                           collection={licensedDriftModes}
@@ -1856,6 +1849,8 @@ export const StackForm = ({
       currentGitRepoId,
       currentGitBranch,
       currentPinnedCommit,
+      currentGitRepository,
+      isGitRepositoryLoading,
       currentDriftPolicy,
       canDiscoverGitPaths,
       discoveredComposePaths,
@@ -1892,9 +1887,12 @@ export const StackForm = ({
         </AlertMessage>
       ))}
       {isComposeImport && (
-        <AlertMessage type="info" title={isImportDraftLoading ? 'Inspecting Compose project' : 'Import Compose project'}>
+        <AlertMessage
+          type="info"
+          title={isImportDraftLoading ? 'Inspecting Compose project' : 'Import Compose project'}>
           Select the Web Editor or Git source that defines this project. Citadel will compare it with the running
-          services, then attach the containers without applying or restarting them.
+          services, then attach the containers without applying or restarting them. Drift management can be configured
+          after the import.
         </AlertMessage>
       )}
       {importIssues.map((issue) => (
@@ -1907,10 +1905,11 @@ export const StackForm = ({
       ))}
       {importValidation && (
         <AlertMessage type="info" title="Source comparison">
-          {importValidation.services.filter(
-            (service) => Number(service.runtimeContainerCount) > 0 && service.definedInSource,
-          )
-            .length}{' '}
+          {
+            importValidation.services.filter(
+              (service) => Number(service.runtimeContainerCount) > 0 && service.definedInSource,
+            ).length
+          }{' '}
           of {importDraft?.source.services.length ?? 0} running services match the selected source.
         </AlertMessage>
       )}
@@ -1932,29 +1931,23 @@ export const StackForm = ({
         draftKey={formDraftKey}
         draftVersion={1}
       />
-      <Dialog
+      <ActionWithDialog
+        renderTrigger={false}
         open={importConfirmationOpen}
-        onOpenChange={(open) => {
-          if (!open) resolveImportConfirmation(false);
-        }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import {importProject ?? 'Compose project'}?</DialogTitle>
-            <DialogDescription>
-              Citadel will start managing all current project containers as one stack. Docker will not be changed now.
-              Future Apply operations will use the reviewed {currentStackSource === StackSource.Git ? 'Git' : 'Web Editor'} source.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => resolveImportConfirmation(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => resolveImportConfirmation(true)}>
-              Import Project
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={(open) => !open && resolveImportConfirmation(false)}
+        name={importProject ?? ''}
+        title="Import"
+        icon={<FolderInput className="h-4 w-4" />}
+        disabled={!importProject}
+        onClick={() => resolveImportConfirmation(true)}
+        description={
+          <>
+            Citadel will start managing all current project containers as one stack. Docker will not be changed now.
+            Future Apply operations will use the reviewed{' '}
+            {currentStackSource === StackSource.Git ? 'Git' : 'Web Editor'} source.
+          </>
+        }
+      />
     </div>
   );
 };

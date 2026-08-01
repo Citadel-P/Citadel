@@ -245,6 +245,13 @@ partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping
 {
+    internal static DerivedTypeMapping<DeploymentImageInfo> DeploymentImageInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
+    {
+        [nameof(ImageSource.Local)] = typeof(LocalImage),
+        [nameof(ImageSource.External)] = typeof(ExternalImage),
+        [nameof(ImageSource.Build)] = typeof(BuildImage),
+    };
+
     internal static DerivedTypeMapping<PlatformDescriptor> PlatformDescriptorMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
         [nameof(PlatformType.Docker)] = typeof(DockerPlatformDescriptor),

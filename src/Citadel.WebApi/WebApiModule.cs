@@ -151,6 +151,7 @@ internal static class WebApiModule
             PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
             DerivedTypeUnions =
             [
+                DerivedTypesMapping.DeploymentImageInfoMappings,
                 DerivedTypesMapping.PlatformDescriptorMappings,
                 DerivedTypesMapping.BackupRepositorySpecMappings,
                 DerivedTypesMapping.BackupSourceSpecMappings,

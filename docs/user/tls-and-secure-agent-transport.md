@@ -74,7 +74,7 @@ EdgeAgent__PublicGrpcUrl=https://citadel.example.com
 
 Transport__ForwardedHeaders__KnownProxies=172.30.0.2
 Transport__ForwardedHeaders__ForwardLimit=1
-AllowedHosts=citadel.example.com
+AllowedHosts=citadel.example.com;localhost
 
 AgentTransport__AllowInsecure=true
 ```
@@ -135,7 +135,7 @@ Transport__ApiPort=8000
 Transport__EdgeGrpcPort=8001
 
 EdgeAgent__PublicGrpcUrl=https://citadel.example.com:8001
-AllowedHosts=citadel.example.com
+AllowedHosts=citadel.example.com;localhost
 
 Transport__Certificate__Path=/etc/citadel/tls/core-fullchain.pem
 Transport__Certificate__PrivateKeyPath=/etc/citadel/tls/core-key.pem

@@ -161,6 +161,9 @@ public static class InfrastructureModule
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services
+            .AddHttpClient("VaultKvV2")
+                .AddPolicyHandler(Configuration.GetRetryPolicy())
+            .Services
             .AddSingleton<IVaultKvV2ApiFactory, VaultKvV2ApiFactory>();
 
     private static void RegisterTypeHandlers()

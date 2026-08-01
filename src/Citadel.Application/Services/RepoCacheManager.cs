@@ -30,7 +30,8 @@ internal interface IRepoCacheManager
 
 internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCacheManager> logger) : IRepoCacheManager
 {
-    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _repoLocks = new();
+    private readonly ConcurrentDictionary<Guid, RepoLockEntry> _repoLocks = new();
+    internal int ActiveLockCount => _repoLocks.Count;
 
     public Task<RepoSyncResult> SynchronizeAsync(
         GitRepository repo,
@@ -46,58 +47,50 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         RepoSyncOptions options,
         CancellationToken ct = default)
     {
-        var semaphore = _repoLocks.GetOrAdd(repo.Id, _ => new SemaphoreSlim(1, 1));
-        await semaphore.WaitAsync(ct);
+        using var repoLock = await AcquireRepoLockAsync(repo.Id, ct);
 
-        try
+        var targetPath = ApplicationStoragePaths.GetRepositoryCachePath(repo);
+        var url = GetRemoteUrl(repo, account);
+        var syncBranch = string.IsNullOrWhiteSpace(branch) ? repo.DefaultBranch ?? "main" : branch;
+        GitOperation operation = GitOperation.Pull;
+
+        // Ensure Local Source Exists
+        if (!Directory.Exists(Path.Combine(targetPath, ".git")))
         {
-            var targetPath = ApplicationStoragePaths.GetRepositoryCachePath(repo);
-            var url = GetRemoteUrl(repo, account);
-            var syncBranch = string.IsNullOrWhiteSpace(branch) ? repo.DefaultBranch ?? "main" : branch;
-            GitOperation operation = GitOperation.Pull;
+            await EnsureDeletedAsync(targetPath, ct);
+            var cloneResult = await gitCli.CloneAsync(url, targetPath, syncBranch, account, ct);
 
-            // Ensure Local Source Exists
-            if (!Directory.Exists(Path.Combine(targetPath, ".git")))
-            {
-                await EnsureDeletedAsync(targetPath, ct);
-                var cloneResult = await gitCli.CloneAsync(url, targetPath, syncBranch, account, ct);
+            operation = GitOperation.Clone;
 
-                operation = GitOperation.Clone;
+            if (cloneResult.IsFailure(out var error))
+                return new RepoSyncResult(Operation: operation, Error: error.Message);
 
-                if (cloneResult.IsFailure(out var error))
-                    return new RepoSyncResult(Operation: operation, Error: error.Message);
-
-            }
-            else
-            {
-                // Fetch the requested branch without relying on the current working-tree branch.
-                var fetchResult = await gitCli.FetchAsync(targetPath, syncBranch, account, ct);
-                if (fetchResult.IsFailure(out var error))
-                    return new RepoSyncResult(Operation: operation, Error: error.Message);
-
-                var resetResult = await gitCli.ResetWorkingTreeAsync(targetPath, syncBranch, ct);
-                if (resetResult.IsFailure(out error))
-                    return new RepoSyncResult(Operation: operation, Error: error.Message);
-            }
-
-            if (options.ExecuteHooks)
-            {
-                var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, operation, ct);
-                if (hookResult.IsFailure(out var hookError))
-                    return new RepoSyncResult(Operation: operation, Error: hookError.Message);
-            }
-
-            // Resolve the SHA for the state tracker
-            var hashResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, syncBranch, ct);
-            if (hashResult.IsFailure(out var hashError, out var hash))
-                return new RepoSyncResult(Operation: operation, Error: hashError.Message);
-
-            return new RepoSyncResult(operation, hash, Success: true, CachePath: targetPath);
         }
-        finally
+        else
         {
-            semaphore.Release();
+            // Fetch the requested branch without relying on the current working-tree branch.
+            var fetchResult = await gitCli.FetchAsync(targetPath, syncBranch, account, ct);
+            if (fetchResult.IsFailure(out var error))
+                return new RepoSyncResult(Operation: operation, Error: error.Message);
+
+            var resetResult = await gitCli.ResetWorkingTreeAsync(targetPath, syncBranch, ct);
+            if (resetResult.IsFailure(out error))
+                return new RepoSyncResult(Operation: operation, Error: error.Message);
         }
+
+        if (options.ExecuteHooks)
+        {
+            var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, operation, ct);
+            if (hookResult.IsFailure(out var hookError))
+                return new RepoSyncResult(Operation: operation, Error: hookError.Message);
+        }
+
+        // Resolve the SHA for the state tracker
+        var hashResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, syncBranch, ct);
+        if (hashResult.IsFailure(out var hashError, out var hash))
+            return new RepoSyncResult(Operation: operation, Error: hashError.Message);
+
+        return new RepoSyncResult(operation, hash, Success: true, CachePath: targetPath);
     }
 
     public Task DeleteCacheAsync(string path, CancellationToken ct = default)
@@ -105,19 +98,78 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
 
     public async Task DeleteCacheAsync(GitRepository repo, CancellationToken ct = default)
     {
-        var semaphore = _repoLocks.GetOrAdd(repo.Id, _ => new SemaphoreSlim(1, 1));
-        await semaphore.WaitAsync(ct);
+        using var repoLock = await AcquireRepoLockAsync(repo.Id, ct);
 
-        try
+        await EnsureDeletedAsync(
+            ApplicationStoragePaths.GetRepositoryCachePath(repo),
+            ct);
+    }
+
+    private async ValueTask<RepoLockLease> AcquireRepoLockAsync(
+        Guid repositoryId,
+        CancellationToken cancellationToken)
+    {
+        while (true)
         {
-            await EnsureDeletedAsync(
-                ApplicationStoragePaths.GetRepositoryCachePath(repo),
-                ct);
+            var entry = _repoLocks.GetOrAdd(repositoryId, static _ => new RepoLockEntry());
+            lock (entry)
+            {
+                if (entry.Removed)
+                    continue;
+                entry.ReferenceCount++;
+            }
+
+            try
+            {
+                await entry.Semaphore.WaitAsync(cancellationToken);
+                return new RepoLockLease(this, repositoryId, entry);
+            }
+            catch
+            {
+                ReleaseRepoLock(repositoryId, entry, releaseSemaphore: false);
+                throw;
+            }
         }
-        finally
+    }
+
+    private void ReleaseRepoLock(
+        Guid repositoryId,
+        RepoLockEntry entry,
+        bool releaseSemaphore)
+    {
+        if (releaseSemaphore)
+            entry.Semaphore.Release();
+
+        var dispose = false;
+        lock (entry)
         {
-            semaphore.Release();
+            entry.ReferenceCount--;
+            if (entry.ReferenceCount == 0)
+            {
+                entry.Removed = true;
+                dispose = _repoLocks.TryRemove(
+                    new KeyValuePair<Guid, RepoLockEntry>(repositoryId, entry));
+            }
         }
+
+        if (dispose)
+            entry.Semaphore.Dispose();
+    }
+
+    private sealed class RepoLockEntry
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int ReferenceCount { get; set; }
+        public bool Removed { get; set; }
+    }
+
+    private readonly struct RepoLockLease(
+        RepoCacheManager owner,
+        Guid repositoryId,
+        RepoLockEntry entry) : IDisposable
+    {
+        public void Dispose()
+            => owner.ReleaseRepoLock(repositoryId, entry, releaseSemaphore: true);
     }
 
     private async Task<Result> ExecuteHooksInternalAsync(GitRepository repo, string repoRoot, GitOperation operation, CancellationToken ct)
@@ -274,7 +326,10 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         }
 
         if (account == null)
-            throw new InvalidOperationException($"Auth required for {repo.Id} but no account provided.");
+        {
+            throw new InvalidOperationException(
+                $"Repository {repo.Id} requires a complete URL when no Git account is selected.");
+        }
 
         return $"https://{account.Domain}/{repo.Url.TrimStart('/')}";
     }

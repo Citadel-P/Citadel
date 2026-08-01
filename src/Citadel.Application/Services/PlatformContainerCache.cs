@@ -11,7 +11,7 @@ namespace Application.Services;
 internal sealed class PlatformContainerCache : IPlatformContainerCache
 {
     // Atomic snapshot
-    private volatile PlatformSnapshot _snapshot =new([], []);
+    private volatile PlatformSnapshot _snapshot = new([], [], 0);
 
     private static string NormalizeId(string id) => id.ToLowerInvariant().Trim();
     private const int ShortIdLength = 12;
@@ -39,16 +39,19 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
             foreach (var cid in newContainers.Keys)
                 mapBuilder[cid] = platformId;
 
+            var mutationVersion = oldSnap.LastMutationVersion + 1;
             var view = new PlatformView(
                 entry.Id, 
                 entry.Address, 
                 entry.ConnectorType, 
-                newContainers);
+                newContainers,
+                mutationVersion);
 
             var newSnap = oldSnap with
             {
                 Platforms = oldSnap.Platforms.SetItem(platformId, view),
-                ContainerToPlatform = mapBuilder.ToImmutable()
+                ContainerToPlatform = mapBuilder.ToImmutable(),
+                LastMutationVersion = mutationVersion
             };
 
             if (ReferenceEquals(
@@ -69,15 +72,18 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
             if (!oldSnap.Platforms.TryGetValue(platformId, out var platform)) 
                 return false;
 
+            var mutationVersion = oldSnap.LastMutationVersion + 1;
             var newPlatform = platform with 
             {
-                Containers = platform.Containers.SetItem(nid, dbId) 
+                Containers = platform.Containers.SetItem(nid, dbId),
+                MutationVersion = mutationVersion
             };
 
             var newSnap = oldSnap with
             {
                 Platforms = oldSnap.Platforms.SetItem(platformId, newPlatform),
-                ContainerToPlatform = oldSnap.ContainerToPlatform.SetItem(nid, platformId)
+                ContainerToPlatform = oldSnap.ContainerToPlatform.SetItem(nid, platformId),
+                LastMutationVersion = mutationVersion
             };
 
             if (ReferenceEquals(
@@ -98,15 +104,18 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
             if (!oldSnap.Platforms.TryGetValue(platformId, out var platform)) return false;
             if (!platform.Containers.ContainsKey(fullId)) return false;
 
+            var mutationVersion = oldSnap.LastMutationVersion + 1;
             var newPlatform = platform with 
             { 
-                Containers = platform.Containers.Remove(fullId) 
+                Containers = platform.Containers.Remove(fullId),
+                MutationVersion = mutationVersion
             };
 
             var newSnap = oldSnap with
             {
                 Platforms = oldSnap.Platforms.SetItem(platformId, newPlatform),
-                ContainerToPlatform = oldSnap.ContainerToPlatform.Remove(fullId)
+                ContainerToPlatform = oldSnap.ContainerToPlatform.Remove(fullId),
+                LastMutationVersion = mutationVersion
             };
 
             if (ReferenceEquals(
@@ -125,11 +134,13 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
 
             var mapBuilder = oldSnap.ContainerToPlatform.ToBuilder();
             foreach (var cid in platform.Containers.Keys) mapBuilder.Remove(cid);
+            var mutationVersion = oldSnap.LastMutationVersion + 1;
 
             var newSnap = oldSnap with
             {
                 Platforms = oldSnap.Platforms.Remove(platformId),
-                ContainerToPlatform = mapBuilder.ToImmutable()
+                ContainerToPlatform = mapBuilder.ToImmutable(),
+                LastMutationVersion = mutationVersion
             };
 
             if (ReferenceEquals(
@@ -137,6 +148,14 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
                     oldSnap))
                 return true;
         }
+    }
+
+    public long GetMutationVersion(Guid platformId)
+    {
+        var snapshot = _snapshot;
+        return snapshot.Platforms.TryGetValue(platformId, out var platform)
+            ? platform.MutationVersion
+            : -1;
     }
 
     public bool TryGetContainers(Guid platformId, [MaybeNullWhen(false)] out IReadOnlyDictionary<string, Guid> containers)
@@ -294,12 +313,14 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
 
 internal sealed record PlatformSnapshot(
     ImmutableDictionary<Guid, PlatformView> Platforms,
-    ImmutableDictionary<string, Guid> ContainerToPlatform
+    ImmutableDictionary<string, Guid> ContainerToPlatform,
+    long LastMutationVersion
 );
 
 internal sealed record PlatformView(
     Guid Id,
     string Address,
     PlatformConnectorType ConnectorType,
-    ImmutableDictionary<string, Guid> Containers
+    ImmutableDictionary<string, Guid> Containers,
+    long MutationVersion
 );

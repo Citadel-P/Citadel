@@ -1463,6 +1463,7 @@ namespace Infrastructure.Migrations.Migrations
                     deploymentid = table.Column<Guid>(type: "uuid", nullable: true),
                     dockercontainerid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     dockerimageid = table.Column<string>(type: "text", nullable: false),
+                    hascitadelownershiplabels = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     imageid = table.Column<Guid>(type: "uuid", nullable: true),
                     issystem = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     name = table.Column<string>(type: "text", nullable: false),
@@ -2087,6 +2088,13 @@ namespace Infrastructure.Migrations.Migrations
                 columns: new[] { "actionid", "queuedat", "id" },
                 descending: new[] { false, true, true })
                 .Annotation("Npgsql:IndexInclude", new[] { "status" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actionruns_active_action",
+                table: "actionruns",
+                column: "actionid",
+                unique: true,
+                filter: "status IN ('Queued', 'Running')");
 
             migrationBuilder.CreateIndex(
                 name: "ix_actionruns_runasactorid",

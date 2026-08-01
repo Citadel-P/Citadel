@@ -791,7 +791,7 @@ internal sealed class AutomationRunQueueService(
                 new BadRequestError($"Timeout must be between 1 and {options.MaxTimeoutSeconds} seconds."));
         }
 
-        if (await unitOfWork.ActionRuns.HasActiveRunAsync(action.Id, cancellationToken))
+        async Task<Result<ActionRun>> RejectActiveRunAsync()
         {
             var rejected = new ActionRun(
                 action.Id,
@@ -818,6 +818,9 @@ internal sealed class AutomationRunQueueService(
             return Result.Failure<ActionRun>(new ConflictError("Another run for this action is already queued or running."));
         }
 
+        if (await unitOfWork.ActionRuns.HasActiveRunAsync(action.Id, cancellationToken))
+            return await RejectActiveRunAsync();
+
         var run = new ActionRun(
             action.Id,
             action.Name,
@@ -828,7 +831,8 @@ internal sealed class AutomationRunQueueService(
             codeSnapshot,
             resolvedTimeout);
 
-        await unitOfWork.ActionRuns.AddAsync(run, cancellationToken);
+        if (await unitOfWork.ActionRuns.AddAsync(run, cancellationToken) == 0)
+            return await RejectActiveRunAsync();
         await AddRunActivityAsync(
             unitOfWork,
             action,

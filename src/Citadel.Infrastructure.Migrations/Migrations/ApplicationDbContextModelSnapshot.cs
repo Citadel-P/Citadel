@@ -115,6 +115,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id")
                         .HasName("pk_actionruns");
 
+                    b.HasIndex("ActionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_actionruns_active_action")
+                        .HasFilter("status IN ('Queued', 'Running')");
+
                     b.HasIndex("RunAsActorId")
                         .HasDatabaseName("ix_actionruns_runasactorid");
 
@@ -2607,6 +2612,12 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("dockerimageid");
+
+                    b.Property<bool>("HasCitadelOwnershipLabels")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("hascitadelownershiplabels");
 
                     b.Property<Guid?>("ImageId")
                         .HasColumnType("uuid")

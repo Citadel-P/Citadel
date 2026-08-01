@@ -1,41 +1,30 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
+import { useQueryClient } from '@tanstack/react-query';
 import { DeploymentView } from '@/api/generated/api.types';
+import { ResourceResponse } from '@/api/types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useDeploymentGroup = (deploymentId: string) => {
   const { data, isLoading } = useRead('getDeployment', { deploymentId });
-  const [deploymentUpdate, setDeploymentUpdate] = useState<Partial<DeploymentView> | null>(null);
+  const queryClient = useQueryClient();
 
-  const deployment = useMemo(() => {
-    if (!data?.data) return undefined;
-    if (!deploymentUpdate) return data.data;
-    return { ...data.data, ...deploymentUpdate };
-  }, [data, deploymentUpdate]);
+  const handleDeploymentInfoUpdated = useCallback(
+    (deployment: DeploymentView) => {
+      if (deployment.id !== deploymentId) return;
 
-  const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView) => {
-    const info = (deployment?.latestActivityView?.info as any)?.[1];
-    if (info) {
-      info.$type = (deployment?.latestActivityView?.info as any)?.[0];
-    }
-
-    setDeploymentUpdate({
-      name: deployment.name,
-      status: deployment.status,
-      description: deployment.description,
-      dockerContainerId: deployment.dockerContainerId,
-      containerId: deployment.containerId,
-      controlState: deployment.controlState,
-      autoUpdateState: deployment.autoUpdateState,
-      platformStatus: deployment.platformStatus,
-      platformName: deployment.platformName,
-      imageName: deployment.imageName,
-      imageId: deployment.imageId,
-      dockerImageId: deployment.dockerImageId,
-      latestActivityView: deployment.latestActivityView ? { ...deployment.latestActivityView, info } : null,
-    });
-  }, []);
+      queryClient.setQueryData<ResourceResponse<'getDeployment'>>(['getDeployment', { deploymentId }], (current) =>
+        current?.data
+          ? {
+              ...current,
+              data: mergeDeploymentInfo(current.data, deployment),
+            }
+          : current,
+      );
+    },
+    [deploymentId, queryClient],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
@@ -58,5 +47,38 @@ export const useDeploymentGroup = (deploymentId: string) => {
     removeEventListeners,
   });
 
-  return { deployment, isLoading };
+  return { deployment: data?.data, isLoading };
+};
+
+export const mergeDeploymentInfo = (current: DeploymentView, update: DeploymentView): DeploymentView => {
+  const spec = update.spec
+    ? {
+        ...update.spec,
+        image: normalizeMessagePackUnion(update.spec.image) as DeploymentView['spec']['image'],
+      }
+    : current.spec;
+  const info = normalizeMessagePackUnion(update.latestActivityView?.info) as NonNullable<
+    DeploymentView['latestActivityView']
+  >['info'];
+
+  return {
+    ...update,
+    capabilities: update.capabilities ?? current.capabilities,
+    spec,
+    latestActivityView: update.latestActivityView ? { ...update.latestActivityView, info } : null,
+  };
+};
+
+const normalizeMessagePackUnion = (value: unknown): unknown => {
+  if (
+    !Array.isArray(value) ||
+    typeof value[0] !== 'string' ||
+    value[1] === null ||
+    typeof value[1] !== 'object' ||
+    Array.isArray(value[1])
+  ) {
+    return value;
+  }
+
+  return { ...value[1], $type: value[0] };
 };

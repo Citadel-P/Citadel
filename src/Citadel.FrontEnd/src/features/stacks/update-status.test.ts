@@ -1,6 +1,13 @@
-import { AutoUpdateStatus, ResourceControlState, StackReleaseStatus, StackView } from '@/api/generated/api.types';
+import {
+  AutoUpdateStatus,
+  ResourceControlState,
+  StackReleaseStatus,
+  StackSource,
+  StackView,
+} from '@/api/generated/api.types';
 import {
   canCheckStackUpdates,
+  getStackUpdateCheckDisabledReason,
   getStackImageUpdateCheckMessage,
   getStackUpdateStatus,
   hasStackUpdateAvailable,
@@ -9,13 +16,49 @@ import {
 describe('Stack update status', () => {
   it('does not allow update checks before the stack is applied', () => {
     expect(canCheckStackUpdates({ status: StackReleaseStatus.Created } as StackView)).toBe(false);
-    expect(canCheckStackUpdates({ status: StackReleaseStatus.Healthy } as StackView)).toBe(true);
+    expect(
+      canCheckStackUpdates({
+        status: StackReleaseStatus.Healthy,
+        stackSource: StackSource.WebEditor,
+      } as StackView),
+    ).toBe(true);
     expect(
       canCheckStackUpdates({
         status: StackReleaseStatus.Healthy,
         controlState: ResourceControlState.Processing,
       } as StackView),
     ).toBe(false);
+  });
+
+  it('requires an applied commit before checking an imported Git stack', () => {
+    const imported = {
+      status: StackReleaseStatus.Healthy,
+      controlState: ResourceControlState.Idle,
+      stackSource: StackSource.Git,
+      spec: {
+        $type: 'Git',
+        gitRepoId: 'repo-1',
+        branch: 'main',
+      },
+      source: null,
+    } as StackView;
+
+    expect(canCheckStackUpdates(imported)).toBe(false);
+    expect(getStackUpdateCheckDisabledReason(imported)).toBe(
+      'Redeploy this stack once so Citadel has an applied Git commit to compare.',
+    );
+
+    expect(
+      canCheckStackUpdates({
+        ...imported,
+        source: {
+          sourceType: StackSource.Git,
+          gitRepositoryId: 'repo-1',
+          branch: 'main',
+          resolvedCommitSha: 'abc123',
+        },
+      } as StackView),
+    ).toBe(true);
   });
 
   it('reports an available service-image update', () => {

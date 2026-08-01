@@ -26,7 +26,7 @@ import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { useStackInfoGroup } from './hooks/useStackInfoGroup';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import {
@@ -74,7 +74,6 @@ import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useNavigate } from 'react-router';
-import { StackSourceFilesPanel } from './source-browser';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -166,19 +165,7 @@ export const StackFormComponents: RequiredFormComponents = {
 };
 
 const StackConfigTab = ({ stack, metadataChanged }: { stack: StackView; metadataChanged?: boolean }) => {
-  const [sourceDirty, setSourceDirty] = useState(false);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <StackForm
-        mode="edit"
-        metadataChanged={metadataChanged}
-        disabled={!hasCapability(stack, 'canWrite')}
-        onSourceDirtyChange={setSourceDirty}
-      />
-      <StackSourceFilesPanel stack={stack} sourceDirty={sourceDirty} />
-    </div>
-  );
+  return <StackForm mode="edit" metadataChanged={metadataChanged} disabled={!hasCapability(stack, 'canWrite')} />;
 };
 
 const DuplicateStackConfigButton = ({ stack }: { stack: StackView }) => {

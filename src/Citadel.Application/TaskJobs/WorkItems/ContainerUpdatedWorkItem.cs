@@ -104,7 +104,8 @@ internal sealed class ContainerUpdatedWorkItem(
             state: eventInfo.Container?.State,
             ports: eventInfo.Container?.Ports,
             isSystem: eventInfo.Container?.IsSystem,
-            systemRole: eventInfo.Container?.SystemRole);
+            systemRole: eventInfo.Container?.SystemRole,
+            hasCitadelOwnershipLabels: eventInfo.Container?.HasCitadelOwnershipLabels);
         await uow.Containers.UpdateAsync(container, cancellationToken);
 
         container.ReleaseProcessing();

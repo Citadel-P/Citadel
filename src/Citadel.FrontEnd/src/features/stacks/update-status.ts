@@ -4,11 +4,49 @@ import {
   RecreateStackOnNewCommitState,
   ResourceControlState,
   StackReleaseStatus,
+  StackSource,
   StackView,
 } from '@/api/generated/api.types';
 
 export const canCheckStackUpdates = (stack: StackView | null | undefined): boolean =>
-  !!stack && stack.status !== StackReleaseStatus.Created && stack.controlState !== ResourceControlState.Processing;
+  getStackUpdateCheckDisabledReason(stack) === undefined;
+
+export const getStackUpdateCheckDisabledReason = (stack: StackView | null | undefined): string | undefined => {
+  if (!stack) return 'Select a stack to check for updates.';
+  if (stack.status === StackReleaseStatus.Created) {
+    return 'Apply this stack before checking for updates.';
+  }
+  if (stack.controlState === ResourceControlState.Processing) {
+    return 'Wait for the current stack operation to finish.';
+  }
+
+  const allowedStatuses = [
+    StackReleaseStatus.Healthy,
+    StackReleaseStatus.Degraded,
+    StackReleaseStatus.Stopped,
+    StackReleaseStatus.Paused,
+  ];
+  if (!allowedStatuses.includes(stack.status)) {
+    return 'The current stack state does not support update checks.';
+  }
+
+  if (stack.stackSource === StackSource.Git) {
+    const spec = stack.spec?.$type === 'Git' ? stack.spec : null;
+    const source = stack.source;
+    const hasMatchingAppliedCommit =
+      !!spec &&
+      source?.sourceType === StackSource.Git &&
+      source.gitRepositoryId === spec.gitRepoId &&
+      source.branch === spec.branch &&
+      !!source.resolvedCommitSha?.trim();
+
+    if (!hasMatchingAppliedCommit) {
+      return 'Redeploy this stack once so Citadel has an applied Git commit to compare.';
+    }
+  }
+
+  return undefined;
+};
 
 export const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
   stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];

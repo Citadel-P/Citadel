@@ -28,6 +28,10 @@ internal sealed class DeploymentImageScannerJob(
             {
                 await ScanOnceAsync(cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Image scan failed.");
@@ -57,6 +61,10 @@ internal sealed class DeploymentImageScannerJob(
                 }
 
                 imageDigestCache.Set(scanTask.Key, digest);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

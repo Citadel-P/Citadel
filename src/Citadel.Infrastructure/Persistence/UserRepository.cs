@@ -607,12 +607,11 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         await db.ExecuteAsync(
             lockSql,
-            new { AdministratorMutationLockId = administratorMutationLockId, cancellationToken },
+            new { AdministratorMutationLockId = administratorMutationLockId },
             transaction: tx());
 
         return await db.ExecuteScalarAsync<bool>(
             sql,
-            new { cancellationToken },
             transaction: tx());
     }
 

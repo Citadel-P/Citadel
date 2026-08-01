@@ -974,6 +974,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                     RowVersion = RowVersion + 1
                 WHERE Id = @Id
                   AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+                  AND (@State <> @ProcessingState OR ControlState <> @ProcessingState)
                 RETURNING Id, CurrentStackReleaseId
             ),
             updated_release AS (
@@ -992,6 +993,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             Id = id,
             Status = EnumFormatter<StackReleaseStatus>.GetValue(status),
             State = EnumFormatter<ResourceControlState>.GetValue(state),
+            ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
             StartedAt = startedAt,
             RowVersion = rowVersion,
             CheckRowVersion = checkRowVersion,

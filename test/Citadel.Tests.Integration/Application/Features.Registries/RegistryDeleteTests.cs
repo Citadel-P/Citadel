@@ -52,4 +52,26 @@ public class RegistryDeleteTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task Delete_Registries_ShouldNotPartiallyDelete_WhenBatchContainsMissingId()
+    {
+        var content = $$"""
+        {
+            "ids": ["{{registryId}}", "{{Guid.NewGuid()}}"]
+        }
+        """;
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/registries")
+        {
+            Content = new StringContent(content, Encoding.UTF8, "application/json")
+        };
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(registries, registry => registry.Id == registryId);
+    }
+
 }

@@ -34,7 +34,7 @@ import {
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useConfirmByName, useDialogHotkeys, useMutate, useRead, useSaveResource } from '@/lib/hooks';
+import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams, useSearchParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
@@ -42,21 +42,11 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
-import { ConfirmButton } from '@/components/custom/action-with-dialog';
+import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { KeyRound, PackagePlus } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
 import { getDeploymentConfigurationNames } from './adoption-configuration-names';
-import { shouldApplyLocalImagePortDefaults } from './image-port-defaults';
+import { portsAfterImageSourceChange, shouldApplyLocalImagePortDefaults } from './image-port-defaults';
 
 const enum ImageSource {
   local = 'Local',
@@ -223,7 +213,6 @@ export const DeploymentForm = ({
   const adoptionDraftLoadedRef = useRef<string | null>(null);
   const adoptionPreviewFingerprintRef = useRef<string | null>(null);
   const adoptionConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
-  const adoptionConfirmButtonRef = useRef<HTMLButtonElement>(null);
   const [adoptionConfirmationOpen, setAdoptionConfirmationOpen] = useState(false);
   const [sensitiveImportPreference, setSensitiveImportPreference] = useState<{
     containerId: string;
@@ -263,6 +252,25 @@ export const DeploymentForm = ({
   const adoptionDraft = adoptionDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
   const adoptionIssues = adoptionDraft?.issues ?? EMPTY_ADOPTION_ISSUES;
+  const sourceImageUnavailable = adoptionIssues.some((issue) => issue.code === 'SOURCE_IMAGE_UNAVAILABLE');
+  const availableImageSources = useMemo(
+    () =>
+      sourceImageUnavailable
+        ? {
+            ...image_source,
+            [ImageSource.external]: {
+              ...image_source[ImageSource.external],
+              description: 'Use a registry image for future Apply operations. Adoption will not pull it.',
+            },
+            [ImageSource.build]: {
+              ...image_source[ImageSource.build],
+              description: 'A missing original image cannot be validated against a build project.',
+              disabled: true,
+            },
+          }
+        : image_source,
+    [sourceImageUnavailable],
+  );
   const sensitiveAdoptionIssues = adoptionIssues.filter(
     (issue) => issue.code === 'SENSITIVE_ENVIRONMENT_VALUE_REQUIRED',
   );
@@ -280,35 +288,13 @@ export const DeploymentForm = ({
     setAdoptionConfirmationOpen(false);
     resolver?.(confirmed);
   }, []);
-  const {
-    input: adoptionConfirmationInput,
-    setInput: setAdoptionConfirmationInput,
-    isLoading: adoptionConfirmationLoading,
-    isConfirmDisabled: adoptionConfirmationDisabled,
-    handleConfirm: handleAdoptionConfirmation,
-    reset: resetAdoptionConfirmation,
-  } = useConfirmByName({
-    name: adoptionContainerName,
-    disabled: !adoptionContainerName,
-    onConfirm: () => resolveAdoptionConfirmation(true),
-    onClose: () => setAdoptionConfirmationOpen(false),
-    hotkeysEnabled: adoptionConfirmationOpen,
-  });
-  useDialogHotkeys({
-    enabled: adoptionConfirmationOpen,
-    onConfirm: handleAdoptionConfirmation,
-    onCancel: () => resolveAdoptionConfirmation(false),
-    confirmDisabled: adoptionConfirmationDisabled,
-    confirmButtonRef: adoptionConfirmButtonRef,
-  });
   const confirmAdoption = useCallback(
     () =>
       new Promise<boolean>((resolve) => {
-        resetAdoptionConfirmation();
         adoptionConfirmationResolver.current = resolve;
         setAdoptionConfirmationOpen(true);
       }),
-    [resetAdoptionConfirmation],
+    [],
   );
   const formDraftKey = adoptFrom
     ? `deployment:adopt:${adoptFrom}`
@@ -535,7 +521,7 @@ export const DeploymentForm = ({
                 render: (val, set) => {
                   return (
                     <ItemSelector
-                      collection={image_source}
+                      collection={availableImageSources}
                       value={val}
                       onChange={(v: ImageSource) =>
                         set((prev) => ({
@@ -547,7 +533,7 @@ export const DeploymentForm = ({
                                 : ({ $type: v } as any),
                             updateBehavior:
                               v === ImageSource.build ? UpdateBehavior.Disabled : prev.spec?.updateBehavior,
-                            ports: [],
+                            ports: portsAfterImageSourceChange(!!adoptFrom, prev.spec?.ports),
                           },
                         }))
                       }
@@ -1081,6 +1067,7 @@ export const DeploymentForm = ({
       currentPlatformId,
       currentImage,
       currentSpec.image,
+      availableImageSources,
       mode,
       id,
       effectiveConfigurationNames,
@@ -1160,59 +1147,24 @@ export const DeploymentForm = ({
         draftKey={formDraftKey}
         draftVersion={1}
       />
-      <Dialog
+      <ActionWithDialog
+        renderTrigger={false}
         open={adoptionConfirmationOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            resetAdoptionConfirmation();
-            resolveAdoptionConfirmation(false);
-          }
-        }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adopt {adoptionDraft?.source.name ?? 'container'}?</DialogTitle>
-            <DialogDescription>
-              Citadel will start managing this existing container as a deployment. Docker will not be changed now.
-              Future Apply operations will recreate it from the reviewed configuration.
-              {importSensitiveEnvironmentAsSecrets &&
-                ' Detected sensitive values will be stored as encrypted Citadel secrets.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 my-4">
-            <p className="break-all">
-              Please enter{' '}
-              <button
-                type="button"
-                className="cursor-pointer font-bold"
-                onClick={() => {
-                  navigator.clipboard.writeText(adoptionContainerName);
-                  toast(`Copied "${adoptionContainerName}" to clipboard!`);
-                }}>
-                {adoptionContainerName}
-              </button>{' '}
-              below to confirm this action.
-              <br />
-              <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
-            </p>
-            <Input
-              aria-label={`Enter ${adoptionContainerName} to confirm`}
-              value={adoptionConfirmationInput}
-              onChange={(event) => setAdoptionConfirmationInput(event.target.value)}
-              className="focus-visible:ring-1"
-            />
-          </div>
-          <DialogFooter>
-            <ConfirmButton
-              ref={adoptionConfirmButtonRef}
-              title="Adopt"
-              icon={<PackagePlus className="h-4 w-4" />}
-              disabled={adoptionConfirmationDisabled}
-              onClick={handleAdoptionConfirmation}
-              loading={adoptionConfirmationLoading}
-            />
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={(open) => !open && resolveAdoptionConfirmation(false)}
+        name={adoptionContainerName}
+        title="Adopt"
+        icon={<PackagePlus className="h-4 w-4" />}
+        disabled={!adoptionContainerName}
+        onClick={() => resolveAdoptionConfirmation(true)}
+        description={
+          <>
+            Citadel will adopt this container as a managed deployment without changing the running container. The next
+            Apply will recreate it using the reviewed configuration.
+            {importSensitiveEnvironmentAsSecrets &&
+              ' Any detected sensitive values will be saved as encrypted Citadel secrets.'}
+          </>
+        }
+      />
     </div>
   );
 };

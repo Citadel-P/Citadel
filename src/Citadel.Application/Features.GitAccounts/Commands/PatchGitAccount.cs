@@ -84,7 +84,9 @@ public sealed record PatchGitAccount(Guid Id, JsonMergePatchDocument<GitAccount>
     }
 }
 
-internal sealed class PatchGitAccountHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchGitAccount, Result<GitAccount>>
+internal sealed class PatchGitAccountHandler(
+    IUnitOfWork unitOfWork,
+    IGitCliRepository gitCliRepository) : ICommandHandler<PatchGitAccount, Result<GitAccount>>
 {
     public async ValueTask<Result<GitAccount>> Handle(PatchGitAccount command, CancellationToken cancellationToken)
     {
@@ -107,8 +109,15 @@ internal sealed class PatchGitAccountHandler(IUnitOfWork unitOfWork) : ICommandH
             authType: patchedGitAccount.AuthType,
             configuration: patchedGitAccount.Configuration);
 
-        await unitOfWork.GitAccounts.UpdateAsync(gitAccount, cancellationToken);
+        if (await unitOfWork.GitAccounts.UpdateAsync(gitAccount, cancellationToken) == 0)
+        {
+            await unitOfWork.RollbackAsync();
+            return Result.Failure<GitAccount>(new ConflictError(
+                "The git account changed while it was being updated."));
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
+        gitCliRepository.RemoveCredentialFile(gitAccount.Id);
 
         return gitAccount;
     }

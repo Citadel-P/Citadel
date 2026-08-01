@@ -77,6 +77,50 @@ public sealed class DeploymentRepositoryTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
+    public async Task UpdateAutoUpdateStateAsync_ShouldPersistAllFields()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreatePlatform($"deployment-direct-update-platform-{suffix}");
+        var deployment = new Deployment(
+            $"deployment-direct-update-{suffix}",
+            Constants.SystemId,
+            platform.Id,
+            new DeploymentSpec(new LocalImage("nginx:latest"), UpdateBehavior.Disabled));
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.Deployments.AddAsync(deployment, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var checkedAt = DateTime.UtcNow;
+        var state = new AutoUpdateState(
+            checkedAt,
+            AutoUpdateStatus.Failed,
+            "sha256:current",
+            "sha256:remote",
+            "registry unavailable");
+
+        var affected = await uow.Deployments.UpdateAutoUpdateStateAsync(
+            deployment.Id,
+            state,
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var stored = await uow.Deployments.GetAsync(deployment.Id, cancellationToken);
+
+        Assert.Equal(1, affected);
+        Assert.NotNull(stored?.AutoUpdateState);
+        Assert.Equal(AutoUpdateStatus.Failed, stored.AutoUpdateState.Status);
+        Assert.Equal("sha256:current", stored.AutoUpdateState.CurrentDigest);
+        Assert.Equal("sha256:remote", stored.AutoUpdateState.RemoteDigest);
+        Assert.Equal("registry unavailable", stored.AutoUpdateState.LastError);
+        Assert.Equal(checkedAt, stored.AutoUpdateState.LastCheckedAt, TimeSpan.FromMilliseconds(1));
+    }
+
+    [Fact]
     public async Task TryCompleteUpdateCheckAsync_ShouldReleaseProcessingAndRejectStaleConfigurationOrStatus()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

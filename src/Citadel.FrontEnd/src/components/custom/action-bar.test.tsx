@@ -46,6 +46,26 @@ describe('GenericActionBarButtons', () => {
 });
 
 describe('GenericActionBar', () => {
+  it('renders standalone selection actions outside the grouped actions', () => {
+    const StartAction = () => <button type="button">Start</button>;
+    const AdoptAction = () => <button type="button">Adopt Container</button>;
+
+    render(
+      <LayoutContext.Provider value={layoutContext}>
+        <GenericActionBar
+          selectedItems={[{ id: '1' }]}
+          allItems={[{ id: '1' }]}
+          resource="Container"
+          actions={[StartAction]}
+          standaloneActions={[AdoptAction]}
+        />
+      </LayoutContext.Provider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Adopt Container' }).closest('[role="group"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start' }).closest('[role="group"]')).not.toBeNull();
+  });
+
   it.each([
     [false, 'lg:left-[var(--sidebar-width)]'],
     [true, 'lg:left-[var(--sidebar-width-icon)]'],

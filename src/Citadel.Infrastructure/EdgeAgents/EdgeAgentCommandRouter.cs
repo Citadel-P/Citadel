@@ -91,7 +91,8 @@ internal sealed class EdgeAgentCommandRouter(
             }
 
             completed = true;
-            return EdgeAgentCommandRouterResult.Failure("Edge Agent command completed without a response.");
+            return EdgeAgentCommandRouterResult.Failure(
+                pending.FailureReason ?? "Edge Agent command completed without a response.");
         }
         catch (OperationCanceledException)
         {
@@ -214,6 +215,8 @@ internal sealed class EdgeAgentCommandRouter(
                 if (!canRead)
                 {
                     completed = true;
+                    if (pending.FailureReason is { } failureReason)
+                        yield return EdgeAgentStreamItem.Failure(failureReason);
                     yield break;
                 }
 
@@ -233,7 +236,7 @@ internal sealed class EdgeAgentCommandRouter(
                     }
 
                     yield return item;
-                    if (item.Completed)
+                    if (item.Completed || item.ErrorMessage is not null)
                     {
                         yield break;
                     }
@@ -398,6 +401,8 @@ internal sealed class EdgeAgentCommandRouter(
                 if (!canRead)
                 {
                     completed = true;
+                    if (pending.FailureReason is { } failureReason)
+                        yield return EdgeAgentStreamItem.Failure(failureReason);
                     yield break;
                 }
 
@@ -409,7 +414,7 @@ internal sealed class EdgeAgentCommandRouter(
                     }
 
                     yield return item;
-                    if (item.Completed)
+                    if (item.Completed || item.ErrorMessage is not null)
                     {
                         yield break;
                     }

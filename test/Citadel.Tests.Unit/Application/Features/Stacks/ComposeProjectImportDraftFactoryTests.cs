@@ -14,6 +14,29 @@ public sealed class ComposeProjectImportDraftFactoryTests
     private static readonly IAdoptionFingerprintService FingerprintService = TestAdoptionFingerprint.Create();
 
     [Fact]
+    public void StackOwnership_ShouldRequireManagedLabelAndValidStackId()
+    {
+        var stackId = Guid.CreateVersion7();
+        var valid = new Dictionary<string, string>
+        {
+            [CitadelLabels.Managed] = "true",
+            [CitadelLabels.StackId] = stackId.ToString("D")
+        };
+        var malformed = new Dictionary<string, string>
+        {
+            [CitadelLabels.Managed] = "true",
+            [CitadelLabels.StackId] = "not-a-guid"
+        };
+
+        Assert.True(StackContainerOwnership.TryGetStackId(valid, out var parsed));
+        Assert.Equal(stackId, parsed);
+        Assert.False(StackContainerOwnership.TryGetStackId(malformed, out _));
+        Assert.False(StackContainerOwnership.TryGetStackId(
+            new Dictionary<string, string> { [CitadelLabels.StackId] = stackId.ToString("D") },
+            out _));
+    }
+
+    [Fact]
     public void Create_ShouldExcludeOneOffContainersAndReportThem()
     {
         var context = CreateContext(
@@ -31,7 +54,17 @@ public sealed class ComposeProjectImportDraftFactoryTests
     }
 
     [Fact]
-    public async Task AnalyzeSource_ShouldForceSafeSettingsAndCompareServices()
+    public void Create_ShouldDescribeDockerComposeOrigin()
+    {
+        var context = CreateContext(("api", false, "nginx:1.27"));
+
+        var draft = ComposeProjectImportDraftFactory.Create(context, "sample", FingerprintService);
+
+        Assert.Equal("Imported from Docker Compose project sample.", draft.Draft.Description);
+    }
+
+    [Fact]
+    public async Task AnalyzeSource_ShouldPreserveReviewedUpdateBehaviorAndForceRuntimeSafety()
     {
         var context = CreateContext(("api", false, "nginx:1.27"));
         var requested = new ManualStack(
@@ -60,13 +93,38 @@ public sealed class ComposeProjectImportDraftFactoryTests
         Assert.True(result.IsSuccess(out var analysis));
         var safeSpec = Assert.IsType<ManualStack>(analysis.SafeSpec);
         Assert.Equal("sample", safeSpec.ProjectName);
-        Assert.Equal(StackUpdateBehavior.Disabled, safeSpec.UpdateBehavior);
+        Assert.Equal(StackUpdateBehavior.StackAutoDeploy, safeSpec.UpdateBehavior);
         Assert.False(safeSpec.DestroyBeforeDeploy);
 
         var validation = ComposeProjectImportDraftFactory.CreateValidation(context, analysis, FingerprintService);
         Assert.DoesNotContain(validation.Issues, issue => issue.Severity == AdoptionIssueSeverity.Blocker);
         Assert.Contains(validation.Issues, issue => issue.Code == "SERVICE_IMAGE_DIFFERS");
         Assert.Contains(validation.Issues, issue => issue.Code == "SOURCE_SERVICE_NOT_RUNNING");
+    }
+
+    [Fact]
+    public void NormalizeImportSpec_ShouldPreserveReviewedGitAutomationSettings()
+    {
+        var webhook = new StackWebhookConfig(
+            Enabled: true,
+            Secret: "secret",
+            BranchFilter: "main");
+        var requested = new GitStack(
+            Guid.CreateVersion7(),
+            "main",
+            null,
+            StackUpdateBehavior.StackAutoDeploy,
+            ProjectName: "different-project",
+            Webhook: webhook,
+            DestroyBeforeDeploy: true);
+
+        var normalized = Assert.IsType<GitStack>(
+            ComposeProjectImportDraftFactory.NormalizeImportSpec("sample", requested));
+
+        Assert.Equal("sample", normalized.ProjectName);
+        Assert.Equal(StackUpdateBehavior.StackAutoDeploy, normalized.UpdateBehavior);
+        Assert.Equal(webhook, normalized.Webhook);
+        Assert.False(normalized.DestroyBeforeDeploy);
     }
 
     [Fact]

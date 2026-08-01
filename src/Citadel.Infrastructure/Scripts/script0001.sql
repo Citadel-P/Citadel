@@ -786,6 +786,7 @@ CREATE TABLE containers (
     deploymentid uuid,
     dockercontainerid text NOT NULL,
     dockerimageid text NOT NULL,
+    hascitadelownershiplabels boolean NOT NULL DEFAULT FALSE,
     imageid uuid,
     issystem boolean NOT NULL DEFAULT FALSE,
     name text NOT NULL,
@@ -1221,6 +1222,8 @@ VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000
 
 CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat DESC, id DESC) INCLUDE (status);
 
+CREATE UNIQUE INDEX ix_actionruns_active_action ON actionruns (actionid) WHERE status IN ('Queued', 'Running');
+
 CREATE INDEX ix_actionruns_runasactorid ON actionruns (runasactorid);
 
 CREATE INDEX ix_actionruns_status_queuedat ON actionruns (status, queuedat);
@@ -1611,7 +1614,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260729204645_migration0001', '10.0.10');
+VALUES ('20260731224736_migration0001', '10.0.10');
 
 COMMIT;
 

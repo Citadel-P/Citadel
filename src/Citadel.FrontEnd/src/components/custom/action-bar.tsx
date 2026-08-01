@@ -24,19 +24,35 @@ export const ActionBar = <T,>({
   type,
   items,
   actions,
+  standaloneActions = [],
 }: {
   type: ResourceType;
   items: T[];
   actions: ButtonGroupComponent<T>[];
+  standaloneActions?: ButtonGroupComponent<T>[];
 }) => {
   const [selectedRows, _] = useSelectedResources<T>(type);
 
   if (!selectedRows?.length) return null;
 
-  return <GenericActionBar selectedItems={selectedRows} allItems={items} resource={type} actions={actions} />;
+  return (
+    <GenericActionBar
+      selectedItems={selectedRows}
+      allItems={items}
+      resource={type}
+      actions={actions}
+      standaloneActions={standaloneActions}
+    />
+  );
 };
 
-export const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps<T>) => {
+export const GenericActionBar = <T,>({
+  selectedItems,
+  allItems,
+  resource,
+  actions,
+  standaloneActions = [],
+}: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
   if (!selectedItems?.length) return null;
 
@@ -49,8 +65,13 @@ export const GenericActionBar = <T,>({ selectedItems, allItems, resource, action
       <div className="w-full text-center text-xs text-muted-foreground sm:mt-2 sm:w-auto sm:flex-1 sm:text-left">
         {selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
       </div>
-      <div className="w-full min-w-0 sm:w-auto">
-        <ButtonGroup className={RESPONSIVE_BUTTON_GROUP_CLASS}>
+      <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+        {standaloneActions.map((Action, id) => (
+          <div className="col-span-2 flex min-w-0 [&>*]:w-full sm:col-span-1 sm:[&>*]:w-auto" key={id}>
+            <Action resources={selectedItems} />
+          </div>
+        ))}
+        <ButtonGroup className={cn('col-span-2', RESPONSIVE_BUTTON_GROUP_CLASS)}>
           {actions.map((Action, id) => (
             <Action resources={selectedItems} key={id} />
           ))}
@@ -152,6 +173,7 @@ interface ActionBarProps<T> {
   allItems: T[] | undefined;
   selectedItems: T[] | undefined;
   actions: ButtonGroupComponent<T>[];
+  standaloneActions?: ButtonGroupComponent<T>[];
 }
 
 interface ActionButtonsProps {

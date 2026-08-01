@@ -5,6 +5,7 @@ using Application.TaskJobs;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Stacks;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Collections.Immutable;
 using System.Threading.Channels;
 using Tests.Integration.Helpers;
 
@@ -190,6 +192,105 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     }
 
     [Fact]
+    public async Task OnlineSync_ShouldNotOverwriteOrDeleteContainersUpdatedAfterSnapshotStarted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var staleSnapshotContainer = Fakes.GetDummyContainers().First() with
+        {
+            State = ContainerStateStatus.Exited
+        };
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = scope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer>
+                {
+                    [staleSnapshotContainer.Id] = staleSnapshotContainer
+                },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                snapshotStartedAt: 0,
+                cacheMutationVersion: cache.GetMutationVersion(platformId),
+                logger: Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(uow, ct);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stored = (await assertUow.Containers.GetByPlatformIdAsync(platformId, ct)).ToArray();
+
+        Assert.Equal(3, stored.Length);
+        Assert.Equal(
+            ContainerStateStatus.Offline,
+            Assert.Single(stored, container => container.DockerContainerId == staleSnapshotContainer.Id).State);
+    }
+
+    [Fact]
+    public async Task OnlineSync_ShouldDiscardSnapshotCapturedBeforeContainerCacheMutation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var staleSnapshotContainer = Fakes.GetDummyContainers().First() with
+        {
+            State = ContainerStateStatus.Running
+        };
+        var notificationQueue = new Mock<INotificationQueue>();
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = scope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var stored = (await uow.Containers.GetByPlatformIdAsync(platformId, ct)).ToArray();
+            cache.ReplacePlatformContainers(
+                platformId,
+                new PlatformCacheEntry(
+                    platformId,
+                    "https://original.address",
+                    PlatformConnectorType.Agent,
+                    stored.ToImmutableDictionary(container => container.DockerContainerId, container => container.Id)));
+            var capturedVersion = cache.GetMutationVersion(platformId);
+            Assert.True(cache.TryRemoveContainer(platformId, staleSnapshotContainer.Id));
+
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer>
+                {
+                    [staleSnapshotContainer.Id] = staleSnapshotContainer
+                },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                snapshotStartedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1,
+                cacheMutationVersion: capturedVersion,
+                logger: Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(uow, ct);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedAfter = Assert.Single(
+            await assertUow.Containers.GetByPlatformIdAsync(platformId, ct),
+            container => container.DockerContainerId == staleSnapshotContainer.Id);
+        Assert.Equal(ContainerStateStatus.Offline, storedAfter.State);
+        notificationQueue.Verify(
+            queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task OnlineSync_Should_Persist_Provided_StackId()
     {
         var stack = Stack.Create(
@@ -239,6 +340,8 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
                 Mock.Of<IContainerStreamManager>(),
                 Mock.Of<IDeploymentStreamManager>(),
                 Mock.Of<IStackStreamManager>(),
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1,
+                cache.GetMutationVersion(platformId),
                 Mock.Of<ILogger<ContainerSyncJob>>());
 
             await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
@@ -249,6 +352,133 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         var linked = Assert.Single(dbContainers, container => container.DockerContainerId == dockerContainer.Id);
         Assert.Equal(stack.Id, linked.StackId);
+    }
+
+    [Fact]
+    public async Task OnlineSync_ShouldPreserveRecoveredStackRelationshipWhileRuntimeHasOldOwnerLabel()
+    {
+        var dockerContainer = new DockerContainer(
+            Name: "/beszel",
+            Image: "henrygd/beszel:latest",
+            ImageId: "sha256:beszel",
+            Id: "orphaned-owned-container-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: "beszel-git",
+            StackId: Guid.CreateVersion7(),
+            HasCitadelOwnershipLabels: true);
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var seedUow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await seedUow.Containers.AddAsync(
+                new Container(
+                    name: dockerContainer.Name,
+                    dockerImageId: dockerContainer.ImageId,
+                    platformId: platformId,
+                    dockerContainerId: dockerContainer.Id,
+                    state: dockerContainer.State,
+                    created: dockerContainer.Created,
+                    dockerStack: dockerContainer.Stack),
+                TestContext.Current.CancellationToken);
+            await seedUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var syncScope = Services.CreateAsyncScope())
+        {
+            var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer>
+                {
+                    [dockerContainer.Id] = dockerContainer
+                },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1,
+                cache.GetMutationVersion(platformId),
+                Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
+        }
+
+        var recoveredStack = Stack.Create(
+            name: $"recovered-beszel-{Guid.CreateVersion7():N}",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  beszel:\n    image: henrygd/beszel:latest\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                ProjectName: dockerContainer.Stack));
+
+        await using (var recoveryScope = Services.CreateAsyncScope())
+        {
+            var recoveryUow = recoveryScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var persisted = Assert.Single(
+                await recoveryUow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken),
+                container => container.DockerContainerId == dockerContainer.Id);
+
+            Assert.Null(persisted.StackId);
+            Assert.True(persisted.HasCitadelOwnershipLabels);
+            await recoveryUow.Stacks.AddAsync(recoveredStack, TestContext.Current.CancellationToken);
+
+            var blockedWithoutRecovery = await recoveryUow.Containers.TryAssignComposeProjectToStackAsync(
+                platformId,
+                dockerContainer.Stack!,
+                [persisted.Id],
+                [persisted.DockerContainerId],
+                recoveredStack.Id,
+                orphanedOwnerStackId: null,
+                cancellationToken: TestContext.Current.CancellationToken);
+            var assigned = await recoveryUow.Containers.TryAssignComposeProjectToStackAsync(
+                platformId,
+                dockerContainer.Stack!,
+                [persisted.Id],
+                [persisted.DockerContainerId],
+                recoveredStack.Id,
+                orphanedOwnerStackId: dockerContainer.StackId,
+                cancellationToken: TestContext.Current.CancellationToken);
+            await recoveryUow.CommitAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, blockedWithoutRecovery);
+            Assert.Equal(1, assigned);
+        }
+
+        await using (var resyncScope = Services.CreateAsyncScope())
+        {
+            var resyncUow = resyncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = resyncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer> { [dockerContainer.Id] = dockerContainer },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1,
+                cache.GetMutationVersion(platformId),
+                Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(resyncUow, TestContext.Current.CancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var recovered = Assert.Single(
+            await assertUow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken),
+            container => container.DockerContainerId == dockerContainer.Id);
+        Assert.Equal(recoveredStack.Id, recovered.StackId);
     }
 
     [Fact]

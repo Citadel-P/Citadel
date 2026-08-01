@@ -13,6 +13,8 @@ using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.MergePatch;
 using LightResults;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Tests.Common;
 using Actor = Domain.Entities.Identity.Actor;
@@ -208,6 +210,18 @@ public class StackLifecycleTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
+        stacks
+            .Setup(x => x.UpdateProcessingAsync(
+                stack.Id,
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
         var platforms = new Mock<IPlatformRepository>();
@@ -319,7 +333,10 @@ public class StackLifecycleTests
             connectorFactory.Object,
             stackHub.Object,
             platformHub.Object,
-            stackStorage);
+            stackStorage,
+            CreateUserContext(actorId),
+            CreateApplicationLifetime(),
+            Mock.Of<ILogger<DeleteStacksHandler>>());
 
         var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);
 
@@ -331,7 +348,7 @@ public class StackLifecycleTests
         stacks.Verify(x => x.RemoveRangeAsync(
             It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
             It.IsAny<CancellationToken>()), Times.Once);
-        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         stackHub.Verify(x => x.SendStackInfo(stack, "delete"), Times.Once);
     }
 
@@ -361,6 +378,18 @@ public class StackLifecycleTests
                 It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+
+        stacks
+            .Setup(x => x.UpdateProcessingAsync(
+                stack.Id,
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var platforms = new Mock<IPlatformRepository>();
         platforms
@@ -425,7 +454,10 @@ public class StackLifecycleTests
             connectorFactory.Object,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IPlatformStreamManager>(),
-            stackStorage);
+            stackStorage,
+            CreateUserContext(actorId),
+            CreateApplicationLifetime(),
+            Mock.Of<ILogger<DeleteStacksHandler>>());
 
         var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);
 
@@ -441,6 +473,112 @@ public class StackLifecycleTests
         stacks.Verify(x => x.RemoveRangeAsync(
             It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteStacks_preflights_entire_batch_before_deleting_runtime_containers()
+    {
+        var actorId = Guid.CreateVersion7();
+        var stackA = Stack.Create(
+            "stack-a",
+            actorId,
+            StackSource.WebEditor,
+            Guid.CreateVersion7(),
+            new ManualStack("services: {}", StackUpdateBehavior.Disabled));
+        var stackB = Stack.Create(
+            "stack-b",
+            actorId,
+            StackSource.WebEditor,
+            Guid.CreateVersion7(),
+            new ManualStack("services: {}", StackUpdateBehavior.Disabled));
+        stackA.PartialUpdate(StackReleaseStatus.Healthy);
+        stackB.PartialUpdate(StackReleaseStatus.Healthy);
+
+        var orderedStacks = new[] { stackA, stackB }.OrderBy(stack => stack.Id).ToArray();
+        var resolvableStack = orderedStacks[0];
+        var disconnectedStack = orderedStacks[1];
+        var requestedIds = orderedStacks.Select(stack => stack.Id).ToArray();
+
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(repository => repository.GetAllAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(requestedIds)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderedStacks);
+        stacks
+            .Setup(repository => repository.UpdateProcessingAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(value => value.Stacks).Returns(stacks.Object);
+        unitOfWork
+            .Setup(value => value.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var platform = new PlatformCacheEntry(
+            resolvableStack.CurrentStackRelease!.PlatformId,
+            "http://docker.local",
+            PlatformConnectorType.Local,
+            ImmutableDictionary<string, Guid>.Empty);
+        var connector = new Mock<IContainerConnector>();
+        connector
+            .Setup(value => value.ListContainersAsync(
+                It.Is<ContainerFilterCommand>(command =>
+                    command.Filters!["label"].ContainsKey(
+                        $"{CitadelLabels.StackId}={resolvableStack.Id:D}")),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>
+                {
+                    ["owned-container"] = new DockerContainer(
+                        "/stack-a-app-1",
+                        "nginx",
+                        "owned-container",
+                        "sha256:owned",
+                        ContainerStateStatus.Running)
+                }));
+        var connectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        connectorFactory
+            .Setup(value => value.GetConnector(PlatformConnectorType.Local))
+            .Returns(connector.Object);
+
+        using var stackStorage = new TestStackStoragePathProvider();
+        var handler = new DeleteStacksHandler(
+            unitOfWork.Object,
+            new TestPlatformContainerCache(platform),
+            connectorFactory.Object,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IPlatformStreamManager>(),
+            stackStorage,
+            CreateUserContext(actorId),
+            CreateApplicationLifetime(),
+            Mock.Of<ILogger<DeleteStacksHandler>>());
+
+        var result = await handler.Handle(
+            new DeleteStacks(requestedIds),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("not found", error.Message, StringComparison.OrdinalIgnoreCase);
+        connector.Verify(
+            value => value.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        stacks.Verify(
+            value => value.RemoveRangeAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(
+            value => value.CommitAsync(It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+        Assert.Equal(ResourceControlState.Idle, resolvableStack.ControlState);
+        Assert.Equal(ResourceControlState.Idle, disconnectedStack.ControlState);
     }
 
     private static ContainerInspectionInfo InspectionWithLabels(IReadOnlyDictionary<string, string> labels)
@@ -491,6 +629,22 @@ public class StackLifecycleTests
                 Labels: labels),
             NetworkSettings: null);
 
+    private static IUserContextAccessor CreateUserContext(Guid actorId)
+    {
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext
+            .Setup(x => x.Current)
+            .Returns(Mock.Of<IUserContext>(x => x.ActorId == actorId));
+        return userContext.Object;
+    }
+
+    private static IHostApplicationLifetime CreateApplicationLifetime()
+    {
+        var lifetime = new Mock<IHostApplicationLifetime>();
+        lifetime.SetupGet(value => value.ApplicationStopping).Returns(CancellationToken.None);
+        return lifetime.Object;
+    }
+
     private sealed class TestStackStoragePathProvider : IStackStoragePathProvider, IDisposable
     {
         public string StacksRoot { get; } = Path.Combine(Path.GetTempPath(), $"citadel-stack-storage-{Guid.NewGuid():N}");
@@ -511,6 +665,8 @@ public class StackLifecycleTests
 
     private sealed class TestPlatformContainerCache(PlatformCacheEntry platform) : IPlatformContainerCache
     {
+        public long GetMutationVersion(Guid platformId) => platform.Id == platformId ? 1 : -1;
+
         public void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry cacheEntry)
         {
         }

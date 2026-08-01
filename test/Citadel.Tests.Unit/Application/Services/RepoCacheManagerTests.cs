@@ -1,4 +1,8 @@
 using Application.Services;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Git;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace Tests.Unit.Application.Services;
 
@@ -65,5 +69,30 @@ public sealed class RepoCacheManagerTests
             if (Directory.Exists(temp))
                 Directory.Delete(temp, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task DeleteCacheAsync_ShouldReleasePerRepositoryLockEntries()
+    {
+        var manager = new RepoCacheManager(
+            Mock.Of<IGitCliRepository>(),
+            NullLogger<RepoCacheManager>.Instance);
+
+        for (var index = 0; index < 250; index++)
+        {
+            var repository = new GitRepository(
+                name: $"lock-release-{index}",
+                description: null,
+                url: "https://example.invalid/repository.git",
+                defaultBranch: "main",
+                gitAccountId: null,
+                createdByActorId: Guid.CreateVersion7());
+
+            await manager.DeleteCacheAsync(
+                repository,
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(0, manager.ActiveLockCount);
     }
 }

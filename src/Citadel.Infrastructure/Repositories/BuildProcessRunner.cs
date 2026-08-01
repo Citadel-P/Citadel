@@ -19,18 +19,32 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
         using var timeoutCts = new CancellationTokenSource(command.Timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var ct = linkedCts.Token;
+        var redactionValues = PrepareRedactionValues(command);
 
         string? digest = null;
         var imageConnector = imageConnectorFactory.GetConnector(command.PlatformConnectorType);
         (byte[] Archive, DockerBuildContext Context)? contextArchive = null;
         if (RequiresPackagedContext(command.PlatformConnectorType))
         {
-            contextArchive = await BuildContextArchive.CreateBytesAsync(command.ContextPath, command.DockerfilePath, ct);
-            if (contextArchive.Value.Archive.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
+            string? sizeError = null;
+            try
+            {
+                contextArchive = await BuildContextArchive.CreateBytesAsync(
+                    command.ContextPath,
+                    command.DockerfilePath,
+                    EdgeAgentDefaults.MaxEnvelopePayloadBytes,
+                    ct);
+            }
+            catch (BuildContextSizeLimitExceededException ex)
+            {
+                sizeError = ex.Message;
+            }
+
+            if (sizeError is not null)
             {
                 yield return new BuildProcessEvent(
                     BuildProcessStream.StdErr,
-                    $"Docker build context is too large for agent transfer ({contextArchive.Value.Archive.Length} bytes, max {EdgeAgentDefaults.MaxEnvelopePayloadBytes} bytes).");
+                    sizeError);
                 yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1);
                 yield break;
             }
@@ -40,7 +54,7 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
         var buildFailed = false;
         await foreach (var message in imageConnector.BuildImageProgressStreamAsync(ToBuildImageCommand(command, contextArchive), ct))
         {
-            foreach (var item in MapMessage(message, command))
+            foreach (var item in MapMessage(message, command.MaxLineBytes, redactionValues))
             {
                 if (item.Stream is BuildProcessStream.StdErr)
                     buildFailed = true;
@@ -60,7 +74,7 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
             var pushFailed = false;
             await foreach (var message in imageConnector.PushImageProgressStreamAsync(ToPushImageCommand(command, imageReference), ct))
             {
-                foreach (var item in MapMessage(message, command))
+                foreach (var item in MapMessage(message, command.MaxLineBytes, redactionValues))
                 {
                     if (item.Message is not null)
                         digest ??= TryParseDigest(item.Message);
@@ -104,18 +118,26 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
     private static PushImageCommand ToPushImageCommand(BuildProcessCommand command, string imageReference)
         => new(command.PlatformAddress, imageReference, command.RegistryCredential?.RegistryAuth);
 
-    private static IEnumerable<BuildProcessEvent> MapMessage(ImageBuildStreamItem message, BuildProcessCommand command)
+    private static IEnumerable<BuildProcessEvent> MapMessage(
+        ImageBuildStreamItem message,
+        int maxLineBytes,
+        IReadOnlyList<string> redactionValues)
     {
         if (!string.IsNullOrWhiteSpace(message.ErrorMessage) || message.Error is not null)
         {
             yield return new BuildProcessEvent(
                 BuildProcessStream.StdErr,
-                Sanitize(message.ErrorMessage ?? message.Error?.Message ?? "Docker API returned an error.", command));
+                Sanitize(
+                    message.ErrorMessage ?? message.Error?.Message ?? "Docker API returned an error.",
+                    maxLineBytes,
+                    redactionValues));
             yield break;
         }
 
         if (!string.IsNullOrWhiteSpace(message.Stream))
-            yield return new BuildProcessEvent(BuildProcessStream.StdOut, Sanitize(message.Stream.TrimEnd(), command));
+            yield return new BuildProcessEvent(
+                BuildProcessStream.StdOut,
+                Sanitize(message.Stream.TrimEnd(), maxLineBytes, redactionValues));
 
         if (!string.IsNullOrWhiteSpace(message.Status))
         {
@@ -126,30 +148,37 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
             if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
                 line += $" {message.ProgressMessage}";
 
-            yield return new BuildProcessEvent(BuildProcessStream.StdOut, Sanitize(line, command));
+            yield return new BuildProcessEvent(
+                BuildProcessStream.StdOut,
+                Sanitize(line, maxLineBytes, redactionValues));
         }
     }
 
-    private static string Sanitize(string value, BuildProcessCommand command)
+    private static string Sanitize(
+        string value,
+        int maxLineBytes,
+        IReadOnlyList<string> redactionValues)
     {
         var sanitized = AnsiRegex().Replace(value, string.Empty).Replace("\0", string.Empty, StringComparison.Ordinal);
-        var redactionValues = command.Secrets
-            .Select(static x => x.Value)
-            .Concat(command.BuildArgs.Select(static x => x.Value))
-            .Append(command.RegistryCredential?.RegistryAuth ?? string.Empty)
-            .Where(static x => !string.IsNullOrEmpty(x))
-            .Distinct(StringComparer.Ordinal)
-            .OrderByDescending(static x => x.Length);
 
         foreach (var secret in redactionValues)
         {
             sanitized = RedactValue(sanitized, secret);
         }
 
-        return sanitized.Length <= command.MaxLineBytes
+        return sanitized.Length <= maxLineBytes
             ? sanitized
-            : sanitized[..command.MaxLineBytes] + "...";
+            : sanitized[..maxLineBytes] + "...";
     }
+
+    private static string[] PrepareRedactionValues(BuildProcessCommand command)
+        => [.. command.Secrets
+            .Select(static x => x.Value)
+            .Concat(command.BuildArgs.Select(static x => x.Value))
+            .Append(command.RegistryCredential?.RegistryAuth ?? string.Empty)
+            .Where(static x => !string.IsNullOrEmpty(x))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(static x => x.Length)];
 
     private static string RedactValue(string value, string secret)
     {

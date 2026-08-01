@@ -36,6 +36,10 @@ internal sealed class DeploymentAutoUpdateJob(
             {
                 await RunOnceAsync(cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error occurred while running deployment auto-update job.");
@@ -59,6 +63,10 @@ internal sealed class DeploymentAutoUpdateJob(
                 var result = await CheckDeploymentAsync(deploymentCheck, cancellationToken);
                 if (result is not null)
                     await dbWorkQueue.EnqueueAsync(result, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

@@ -1,7 +1,9 @@
 using System.Formats.Tar;
 using System.Buffers.Binary;
 using System.IO.Pipelines;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json.Serialization.Metadata;
 using Hosting.DockerClient.Models.Images;
 using Hosting.DockerClient.HttpClient;
 using Hosting.DockerClient.Services;
@@ -59,6 +61,44 @@ public sealed class BuildImageServiceTests
     }
 
     [Fact]
+    public async Task BuildContextArchive_ShouldApplyRootedRecursiveAndNegatedDockerIgnoreRules()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source");
+        Directory.CreateDirectory(Path.Combine(source, "nested", "cache"));
+        Directory.CreateDirectory(Path.Combine(source, "node_modules"));
+        await File.WriteAllTextAsync(Path.Combine(source, "Dockerfile"), "FROM scratch", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "root-only.txt"), "ignored", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "nested", "root-only.txt"), "kept", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "root.log"), "ignored", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "nested", "nested.log"), "ignored", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "nested", "cache", "value.txt"), "ignored", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "node_modules", "drop.txt"), "ignored", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "node_modules", "keep.txt"), "kept", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(
+            Path.Combine(source, ".dockerignore"),
+            "/root-only.txt\n**/*.log\ncache\nnode_modules\n!node_modules/keep.txt\n",
+            TestContext.Current.CancellationToken);
+        var archivePath = Path.Combine(temp.Path, "context.tar");
+
+        await BuildContextArchive.CreateAsync(
+            source,
+            Path.Combine(source, "Dockerfile"),
+            archivePath,
+            TestContext.Current.CancellationToken);
+
+        var entries = ReadTarEntries(archivePath);
+        Assert.Contains(".dockerignore", entries);
+        Assert.Contains("nested/root-only.txt", entries);
+        Assert.Contains("node_modules/keep.txt", entries);
+        Assert.DoesNotContain("root-only.txt", entries);
+        Assert.DoesNotContain("root.log", entries);
+        Assert.DoesNotContain("nested/nested.log", entries);
+        Assert.DoesNotContain("nested/cache/value.txt", entries);
+        Assert.DoesNotContain("node_modules/drop.txt", entries);
+    }
+
+    [Fact]
     public async Task BuildKitSecretSession_ShouldServeRequestedSecret()
     {
         var pair = DuplexStreamPair.Create();
@@ -105,6 +145,47 @@ public sealed class BuildImageServiceTests
     }
 
     [Fact]
+    public async Task BuildKitSecretSession_ShouldBoundIncompleteRequestStreams()
+    {
+        var pair = DuplexStreamPair.Create();
+        var session = new BuildKitSecretSession(
+            new FakeDockerConnection(pair.Server),
+            [new BuildImageSecret("npmrc", "registry-token")]);
+
+        await session.StartAsync(TestContext.Current.CancellationToken);
+        await pair.Client.WriteAsync(
+            "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8.ToArray(),
+            TestContext.Current.CancellationToken);
+        await WriteHttp2FrameAsync(
+            pair.Client,
+            type: 0x4,
+            flags: 0,
+            streamId: 0,
+            [],
+            TestContext.Current.CancellationToken);
+
+        for (var index = 0; index <= BuildKitSecretSession.MaxConcurrentRequestStreams; index++)
+        {
+            await WriteHttp2FrameAsync(
+                pair.Client,
+                type: 0x1,
+                flags: 0x4,
+                streamId: index * 2 + 1,
+                [],
+                TestContext.Current.CancellationToken);
+        }
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(
+            () => session.Completion.WaitAsync(
+                TimeSpan.FromSeconds(2),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("too many concurrent", error.Message);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            async () => await session.DisposeAsync());
+    }
+
+    [Fact]
     public async Task StreamBuildImage_ShouldUseBuildKitSessionForSecrets()
     {
         using var temp = new TempDirectory();
@@ -136,6 +217,34 @@ public sealed class BuildImageServiceTests
         Assert.Contains("session=", connection.Requests[1].RequestUri?.PathAndQuery);
     }
 
+    [Fact]
+    public async Task StreamPullImage_DisposingEnumeratorShouldCancelProducer()
+    {
+        var streamService = new BlockingMessageStreamService();
+        var service = new ImageService(
+            Mock.Of<IDockerClient>(),
+            streamService,
+            Mock.Of<IDockerConnection>());
+        var command = new PullImageStreamCommand(
+            FromImage: "nginx",
+            FromSrc: null,
+            Repo: null,
+            Auth: null,
+            Tag: "latest");
+
+        await using (var enumerator = service
+                         .StreamPullImage(command, TestContext.Current.CancellationToken)
+                         .GetAsyncEnumerator(TestContext.Current.CancellationToken))
+        {
+            Assert.True(await enumerator.MoveNextAsync());
+            Assert.Equal("started", enumerator.Current.Status);
+        }
+
+        await streamService.ProducerCancelled.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+    }
+
     private static List<string> ReadTarEntries(string archivePath)
     {
         using var archive = File.OpenRead(archivePath);
@@ -146,6 +255,40 @@ public sealed class BuildImageServiceTests
             entries.Add(entry.Name);
 
         return entries;
+    }
+
+    private sealed class BlockingMessageStreamService : IStreamService
+    {
+        public TaskCompletionSource ProducerCancelled { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> MonitorStreamForBytesAsync(
+            Task<Stream> streamTask,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public IAsyncEnumerable<string> MonitorStreamForStringsAsync(
+            Task<Stream> streamTask,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<T> MonitorStreamForMessagesAsync<T>(
+            Task<Stream> streamTask,
+            JsonTypeInfo<T> jsonTypeInfo,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            where T : class
+        {
+            try
+            {
+                yield return (T)(object)new JSONMessage { Status = "started" };
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            finally
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    ProducerCancelled.TrySetResult();
+            }
+        }
     }
 
     private static byte[] EncodeGetSecretRequest(string id)

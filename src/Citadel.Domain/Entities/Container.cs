@@ -17,7 +17,8 @@ public class Container(
     Guid? imageId = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
     bool isSystem = false,
-    ContainerSystemRole? systemRole = null) : IReconcilableResource
+    ContainerSystemRole? systemRole = null,
+    bool hasCitadelOwnershipLabels = false) : IReconcilableResource
 {
     private readonly List<ContainerStat> stats = [];
     private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
@@ -37,6 +38,7 @@ public class Container(
     public string? DockerStack { get; private set; } = dockerStack;
     public bool IsSystem { get; private set; } = isSystem;
     public ContainerSystemRole? SystemRole { get; private set; } = isSystem ? systemRole : null;
+    public bool HasCitadelOwnershipLabels { get; private set; } = hasCitadelOwnershipLabels;
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
@@ -64,7 +66,8 @@ public class Container(
         Guid? stackId = null,
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
         bool? isSystem = null,
-        ContainerSystemRole? systemRole = null)
+        ContainerSystemRole? systemRole = null,
+        bool? hasCitadelOwnershipLabels = null)
     {
         if (name != null) Name = name;
         if (dockerImageId != null) DockerImageId = dockerImageId;
@@ -80,6 +83,8 @@ public class Container(
             IsSystem = isSystem.Value;
             SystemRole = isSystem.Value ? systemRole : null;
         }
+        if (hasCitadelOwnershipLabels is not null)
+            HasCitadelOwnershipLabels = hasCitadelOwnershipLabels.Value;
         if (ports != null)
         {
             this.ports.Clear();
@@ -133,7 +138,8 @@ public class Container(
         Deployment? deployment = null,
         IReadOnlyCollection<ContainerStat>? stats = null,
         bool isSystem = false,
-        ContainerSystemRole? systemRole = null
+        ContainerSystemRole? systemRole = null,
+        bool hasCitadelOwnershipLabels = false
         )
     {
         var container = new Container(
@@ -149,7 +155,8 @@ public class Container(
             stackId: stackId,
             deploymentId: deploymentId,
             isSystem: isSystem,
-            systemRole: systemRole)
+            systemRole: systemRole,
+            hasCitadelOwnershipLabels: hasCitadelOwnershipLabels)
         {
             Id = id,
             Image = image,
