@@ -10,7 +10,7 @@ namespace Tests.Acceptance.Upgrades;
 internal static class PreReleaseBaseline
 {
     private const string BaselineScriptName = "Infrastructure.Scripts.script0001.sql";
-    private const string BaselineSchemaHash = "c61346cafa0c2c509c5e4c2a952e114be1fca0a1de539259282f5e642e494c50";
+    private const string BaselineSchemaHash = "77f39ee041588b9be9a24ebee5e96ccc2d808a584bfd880533d5b33c25aec53f";
     private const string FixtureDirectory = "Fixtures/Upgrades";
 
     public static async Task RestoreAsync(

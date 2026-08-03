@@ -57,6 +57,7 @@ CREATE TABLE platforms (
     id uuid NOT NULL,
     address text NOT NULL,
     agentversion text,
+    clusterid text,
     connectortype text NOT NULL,
     cpucount integer NOT NULL,
     description text,
@@ -1516,6 +1517,8 @@ CREATE UNIQUE INDEX ix_permissions_roleid_resourcetype ON permissions (roleid, r
 
 CREATE UNIQUE INDEX ix_platforms_address ON platforms (address);
 
+CREATE UNIQUE INDEX ix_platforms_clusterid ON platforms (clusterid) WHERE clusterid IS NOT NULL;
+
 CREATE INDEX ix_platforms_globalsearch_address_trgm ON platforms USING gin (address gin_trgm_ops);
 
 CREATE INDEX ix_platforms_globalsearch_name_trgm ON platforms USING gin (name gin_trgm_ops);
@@ -1614,7 +1617,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260731224736_migration0001', '10.0.10');
+VALUES ('20260803154607_migration0001', '10.0.10');
 
 COMMIT;
 

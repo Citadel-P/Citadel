@@ -2,16 +2,59 @@ using Application.Features.Containers.Queries;
 using Application.Features.Stacks.Queries;
 using Application.Services;
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Moq;
 
 namespace Tests.Unit.Application.Features.Stacks;
 
 public sealed class ComposeProjectImportDraftFactoryTests
 {
     private static readonly IAdoptionFingerprintService FingerprintService = TestAdoptionFingerprint.Create();
+
+    [Fact]
+    public async Task LoadContext_ShouldRejectSwarmPlatformBeforeCallingConnector()
+    {
+        var context = CreateContext(("api", false, "nginx:1.27"));
+        context.Platform.PartialUpdate(
+            descriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "node-1",
+                NodeAddr: "10.0.0.1",
+                LocalNodeState: "Active",
+                ControlAvailable: true,
+                Nodes: 1,
+                Managers: 1,
+                DaemonId: "docker",
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0,
+                ClusterId: "cluster-1"));
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(repository => repository.GetByIdAsync(context.Platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(context.Platform);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Platforms).Returns(platforms.Object);
+        var connectors = new Mock<IConnectorFactory<IContainerConnector>>();
+
+        var result = await ComposeProjectImportDraftFactory.LoadContextAsync(
+            context.Platform.Id,
+            context.ProjectName,
+            unitOfWork.Object,
+            connectors.Object,
+            Mock.Of<IContainerAuthorizationService>(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("Docker Standalone", error.Message, StringComparison.Ordinal);
+        connectors.Verify(
+            factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+    }
 
     [Fact]
     public void StackOwnership_ShouldRequireManagedLabelAndValidStackId()

@@ -49,6 +49,9 @@ internal class ImageSyncJob(
         {
             try
             {
+                if (!platform.IsOnLine || !platform.IsValidated)
+                    continue;
+
                 // Schedule sync via DB queue
                 var result = await connectorFactory.GetConnector(platform.Type).ListImagesAsync(platform.Address, cancellationToken: ct);
                 if (!result.IsSuccess(out var freshImages, out var error))

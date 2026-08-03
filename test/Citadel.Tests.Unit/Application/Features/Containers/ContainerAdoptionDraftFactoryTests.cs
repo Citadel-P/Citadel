@@ -20,6 +20,52 @@ public sealed class ContainerAdoptionDraftFactoryTests
     private static readonly IAdoptionFingerprintService FingerprintService = TestAdoptionFingerprint.Create();
 
     [Fact]
+    public async Task LoadContext_ShouldRejectSwarmPlatformBeforeCallingConnector()
+    {
+        var context = CreateContext();
+        context.Platform.PartialUpdate(descriptor: CreateSwarmDescriptor());
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(repository => repository.GetByIdAsync(context.Container.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(context.Container);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(repository => repository.GetByIdAsync(context.Platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(context.Platform);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Containers).Returns(containers.Object);
+        unitOfWork.SetupGet(value => value.Platforms).Returns(platforms.Object);
+        var authorization = new Mock<IContainerAuthorizationService>();
+        authorization
+            .Setup(service => service.HasAccessAsync(
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<ResourceType>(),
+                It.IsAny<PermissionLevel>(),
+                It.IsAny<SpecificPermission>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var containerConnectors = new Mock<IConnectorFactory<IContainerConnector>>();
+        var imageConnectors = new Mock<IConnectorFactory<IImageConnector>>();
+
+        var result = await ContainerAdoptionDraftFactory.LoadContextAsync(
+            context.Container.Id,
+            unitOfWork.Object,
+            containerConnectors.Object,
+            imageConnectors.Object,
+            authorization.Object,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("Docker Standalone", error.Message, StringComparison.Ordinal);
+        containerConnectors.Verify(
+            factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+        imageConnectors.Verify(
+            factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+    }
+
+    [Fact]
     public void Create_ShouldRedactSensitiveEnvironmentAndRejectOwnershipLabels()
     {
         var context = CreateContext(
@@ -544,6 +590,21 @@ public sealed class ContainerAdoptionDraftFactoryTests
             DateTime.UtcNow,
             Constants.SystemId,
             new DockerHubRegistry());
+
+    private static DockerSwarmPlatformDescriptor CreateSwarmDescriptor()
+        => new(
+            NodeID: "node-1",
+            NodeAddr: "10.0.0.1",
+            LocalNodeState: "Active",
+            ControlAvailable: true,
+            Nodes: 1,
+            Managers: 1,
+            DaemonId: "docker",
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0,
+            ClusterId: "cluster-1");
 
     private static IUnitOfWork CreateRegistryUnitOfWork(Registry registry)
     {

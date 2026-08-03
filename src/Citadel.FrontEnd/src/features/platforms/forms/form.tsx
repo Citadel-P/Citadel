@@ -3,6 +3,7 @@ import {
   EdgeAgentEnrollmentView,
   EdgeAgentStatusView,
   PlatformConnectorType,
+  PlatformType,
   PlatformView,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
@@ -154,6 +155,35 @@ export const PlatformForm = ({
                 }),
               ]
             : []),
+          defineGroupField<PlatformFormInput>({
+            id: 'runtime',
+            label: 'Runtime',
+            items: [
+              defineField({
+                key: 'type',
+                label: 'Platform Type',
+                required: true,
+                description:
+                  mode === 'edit'
+                    ? 'Platform type is fixed after creation.'
+                    : 'Choose Docker Standalone for one daemon or Docker Swarm for an existing manager node.',
+                render: (value, set) => (
+                  <Select
+                    value={value ?? PlatformType.Docker}
+                    onValueChange={(type) => set({ type: type as PlatformType })}
+                    disabled={formDisabled || isEdit}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={PlatformType.Docker}>Docker Standalone</SelectItem>
+                      <SelectItem value={PlatformType.DockerSwarm}>Docker Swarm</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ),
+              }),
+            ],
+          }),
           defineGroupField<PlatformFormInput>({
             id: 'connector',
             label: 'Connector',

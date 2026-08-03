@@ -38,7 +38,7 @@ internal class ContainerStatsStreamerJob(
         {
             await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
             {
-                if (platform.IsOnLine)
+                if (platform.IsOnLine && platform.IsValidated)
                     StartStreamStatsForPlatform(platform, cancellationToken);
                 else
                     await StopStreamStatsForPlatformAsync(platform.Address);

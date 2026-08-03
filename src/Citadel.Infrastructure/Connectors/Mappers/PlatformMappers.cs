@@ -32,12 +32,40 @@ internal static class PlatformMappers
                 ContainersRunning: platformInfo?.PlatformStat?.ContainersRunning ?? 0,
                 ContainersStopped: platformInfo?.PlatformStat?.ContainersStopped ?? 0,
                 ImageUsedBytes: platformInfo.HasImageUsedBytes ? platformInfo.ImageUsedBytes : null,
-                VolumeUsedBytes: platformInfo.HasVolumeUsedBytes ? platformInfo.VolumeUsedBytes : null
+                VolumeUsedBytes: platformInfo.HasVolumeUsedBytes ? platformInfo.VolumeUsedBytes : null,
+                ApiVersion: platformInfo.ApiVersion,
+                MinimumApiVersion: platformInfo.MinimumApiVersion
             );
         }
         else
         {
-            // Todo : Implement Swarm descriptor 
+            descriptor = new DockerSwarmPlatformDescriptor(
+                NodeID: platformInfo.SwarmInfo.NodeID,
+                NodeAddr: platformInfo.SwarmInfo.NodeAddr,
+                LocalNodeState: platformInfo.SwarmInfo.LocalNodeState,
+                ControlAvailable: platformInfo.SwarmInfo.ControlAvailable,
+                Nodes: platformInfo.SwarmInfo.Nodes,
+                Managers: platformInfo.SwarmInfo.Managers,
+                DaemonId: platformInfo.Id,
+                ContainerCount: platformInfo.PlatformStat?.ContainerCount ?? 0,
+                ContainersRunning: platformInfo.PlatformStat?.ContainersRunning ?? 0,
+                ContainersPaused: platformInfo.PlatformStat?.ContainersPaused ?? 0,
+                ContainersStopped: platformInfo.PlatformStat?.ContainersStopped ?? 0,
+                Driver: platformInfo.Driver,
+                OperatingSystem: platformInfo.OperatingSystem,
+                OsVersion: platformInfo.OsVersion,
+                OsType: platformInfo.OsType,
+                Architecture: platformInfo.Architecture,
+                ImageUsedBytes: platformInfo.HasImageUsedBytes ? platformInfo.ImageUsedBytes : null,
+                VolumeUsedBytes: platformInfo.HasVolumeUsedBytes ? platformInfo.VolumeUsedBytes : null,
+                ApiVersion: platformInfo.ApiVersion,
+                MinimumApiVersion: platformInfo.MinimumApiVersion,
+                ClusterId: platformInfo.SwarmInfo.ClusterID,
+                ClusterCreatedAt: platformInfo.SwarmInfo.ClusterCreatedAt?.ToDateTimeOffset(),
+                Error: platformInfo.SwarmInfo.Error,
+                RemoteManagers: platformInfo.SwarmInfo.RemoteManagers.Select(peer => new SwarmPeer(peer.NodeID, peer.Addr)),
+                ServiceCount: platformInfo.SwarmInfo.HasServiceCount ? platformInfo.SwarmInfo.ServiceCount : null,
+                RunningTaskCount: platformInfo.SwarmInfo.HasRunningTaskCount ? platformInfo.SwarmInfo.RunningTaskCount : null);
         }
         return new PlatformResult
             (
@@ -52,7 +80,8 @@ internal static class PlatformMappers
                 AgentVersion: platformInfo.AgentVersion,
                 Descriptor: descriptor,
                 PlatformStat: platformInfo.PlatformStat.Map(),
-                AgentRuntimeImage: platformInfo.AgentRuntimeImage
+                AgentRuntimeImage: platformInfo.AgentRuntimeImage,
+                ClusterId: (descriptor as DockerSwarmPlatformDescriptor)?.ClusterId
             );
     }
 
@@ -74,12 +103,40 @@ internal static class PlatformMappers
                 ContainersRunning: platformInfo.PlatformStatistics?.ContainersRunning ?? 0,
                 ContainersStopped: platformInfo.PlatformStatistics?.ContainersStopped ?? 0,
                 ImageUsedBytes: platformInfo.ImageUsedBytes,
-                VolumeUsedBytes: platformInfo.VolumeUsedBytes
+                VolumeUsedBytes: platformInfo.VolumeUsedBytes,
+                ApiVersion: platformInfo.ApiVersion,
+                MinimumApiVersion: platformInfo.MinimumApiVersion
             );
         }
         else
         {
-            // Todo : Implement Swarm descriptor 
+            descriptor = new DockerSwarmPlatformDescriptor(
+                NodeID: platformInfo.SwarmInfo.NodeId,
+                NodeAddr: platformInfo.SwarmInfo.NodeAddress,
+                LocalNodeState: platformInfo.SwarmInfo.LocalNodeState,
+                ControlAvailable: platformInfo.SwarmInfo.ControlAvailable,
+                Nodes: platformInfo.SwarmInfo.Nodes,
+                Managers: platformInfo.SwarmInfo.Managers,
+                DaemonId: platformInfo.Id,
+                ContainerCount: platformInfo.PlatformStatistics?.ContainerCount ?? 0,
+                ContainersRunning: platformInfo.PlatformStatistics?.ContainersRunning ?? 0,
+                ContainersPaused: platformInfo.PlatformStatistics?.ContainersPaused ?? 0,
+                ContainersStopped: platformInfo.PlatformStatistics?.ContainersStopped ?? 0,
+                Driver: platformInfo.Driver,
+                OperatingSystem: platformInfo.OperatingSystem,
+                OsVersion: platformInfo.OsVersion,
+                OsType: platformInfo.OsType,
+                Architecture: platformInfo.Architecture,
+                ImageUsedBytes: platformInfo.ImageUsedBytes,
+                VolumeUsedBytes: platformInfo.VolumeUsedBytes,
+                ApiVersion: platformInfo.ApiVersion,
+                MinimumApiVersion: platformInfo.MinimumApiVersion,
+                ClusterId: platformInfo.SwarmInfo.ClusterId,
+                ClusterCreatedAt: platformInfo.SwarmInfo.ClusterCreatedAt,
+                Error: platformInfo.SwarmInfo.Error,
+                RemoteManagers: platformInfo.SwarmInfo.RemoteManagers.Select(peer => new SwarmPeer(peer.NodeId, peer.Address)),
+                ServiceCount: platformInfo.SwarmInfo.ServiceCount,
+                RunningTaskCount: platformInfo.SwarmInfo.RunningTaskCount);
         }
         return new PlatformResult
         (
@@ -94,7 +151,8 @@ internal static class PlatformMappers
             AgentVersion: platformInfo.AgentVersion,
             Descriptor: descriptor,
             PlatformStat: platformInfo.PlatformStatistics?.Map(),
-            AgentRuntimeImage: platformInfo.AgentRuntimeImage
+            AgentRuntimeImage: platformInfo.AgentRuntimeImage,
+            ClusterId: (descriptor as DockerSwarmPlatformDescriptor)?.ClusterId
         );
     }
 

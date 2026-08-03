@@ -60,6 +60,9 @@ internal sealed class ImageScanScheduler(
 
         foreach (var deployment in deployments)
         {
+            if (deployment.Platform?.PlatformDescriptor.Type != PlatformType.Docker)
+                continue;
+
             var result = imageCheckBuilder.BuildDeploymentCheck(deployment, ImageCheckMode.Scheduled);
             if (result.IsSuccess(out var check))
                 checks.Add(check);
@@ -75,6 +78,9 @@ internal sealed class ImageScanScheduler(
 
         foreach (var stack in stacks)
         {
+            if (stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type != PlatformType.Docker)
+                continue;
+
             var result = imageCheckBuilder.BuildManualStackChecks(stack, ImageCheckMode.Scheduled);
             if (result.IsSuccess(out var stackChecks))
                 checks.AddRange(stackChecks);

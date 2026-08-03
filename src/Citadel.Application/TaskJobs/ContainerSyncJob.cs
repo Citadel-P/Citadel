@@ -59,6 +59,9 @@ internal sealed class ContainerSyncJob(
         {
             try
             {
+                if (platformEvent.IsOnLine && !platformEvent.IsValidated)
+                    continue;
+
                 await EnqueueSyncForPlatform(syncBarrier, platformEvent, cancellationToken);
             }
             catch (Exception ex)

@@ -8,7 +8,17 @@ namespace Domain.Entities.Platforms;
 [JsonDerivedType(typeof(DockerPlatformDescriptor), nameof(PlatformType.Docker))]
 [JsonDerivedType(typeof(DockerSwarmPlatformDescriptor), nameof(PlatformType.DockerSwarm))]
 [JsonDerivedType(typeof(KubernetesPlatformDescriptor), nameof(PlatformType.Kubernetes))]
-public abstract record PlatformDescriptor;
+public abstract record PlatformDescriptor
+{
+    [JsonIgnore]
+    public PlatformType Type => this switch
+    {
+        DockerSwarmPlatformDescriptor => PlatformType.DockerSwarm,
+        DockerPlatformDescriptor => PlatformType.Docker,
+        KubernetesPlatformDescriptor => PlatformType.Kubernetes,
+        _ => throw new InvalidOperationException($"Unsupported platform descriptor '{GetType().Name}'.")
+    };
+}
 [method: JsonConstructor]
 public record DockerPlatformDescriptor(
         string DaemonId,
@@ -22,7 +32,9 @@ public record DockerPlatformDescriptor(
         string? OsType = null,
         string? Architecture = null,
         long? ImageUsedBytes = null,
-        long? VolumeUsedBytes = null) : PlatformDescriptor
+        long? VolumeUsedBytes = null,
+        string? ApiVersion = null,
+        string? MinimumApiVersion = null) : PlatformDescriptor
 {
     public DockerPlatformDescriptor Create(
         string? daemonId = null,
@@ -71,8 +83,14 @@ public sealed record DockerSwarmPlatformDescriptor(
     string? Architecture = null,
     long? ImageUsedBytes = null,
     long? VolumeUsedBytes = null,
+    string? ApiVersion = null,
+    string? MinimumApiVersion = null,
+    string? ClusterId = null,
+    DateTimeOffset? ClusterCreatedAt = null,
     string? Error = null,
-    IEnumerable<SwarmPeer>? RemoteManagers = null
+    IEnumerable<SwarmPeer>? RemoteManagers = null,
+    long? ServiceCount = null,
+    long? RunningTaskCount = null
     ) : DockerPlatformDescriptor(
         DaemonId: DaemonId,
         ContainerCount: ContainerCount,
@@ -85,7 +103,9 @@ public sealed record DockerSwarmPlatformDescriptor(
         OsType: OsType,
         Architecture: Architecture,
         ImageUsedBytes: ImageUsedBytes,
-        VolumeUsedBytes: VolumeUsedBytes)
+        VolumeUsedBytes: VolumeUsedBytes,
+        ApiVersion: ApiVersion,
+        MinimumApiVersion: MinimumApiVersion)
 {
     public DockerSwarmPlatformDescriptor PartialUpdate(
         string? nodeID = null,
@@ -94,7 +114,9 @@ public sealed record DockerSwarmPlatformDescriptor(
         bool? controlAvailable = null,
         string? error = null,
         long? nodes = null,
-        long? managers = null) =>
+        long? managers = null,
+        long? serviceCount = null,
+        long? runningTaskCount = null) =>
         this with
         {
             NodeID = nodeID ?? NodeID,
@@ -103,7 +125,9 @@ public sealed record DockerSwarmPlatformDescriptor(
             ControlAvailable = controlAvailable ?? ControlAvailable,
             Error = error ?? Error,
             Nodes = nodes ?? Nodes,
-            Managers = managers ?? Managers
+            Managers = managers ?? Managers,
+            ServiceCount = serviceCount ?? ServiceCount,
+            RunningTaskCount = runningTaskCount ?? RunningTaskCount
         };
 }
 

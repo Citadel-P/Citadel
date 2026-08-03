@@ -195,7 +195,15 @@ internal sealed class PersistPlatformStatsWorkItem(
 
             PlatformDescriptor? descriptor = existing.PlatformDescriptor switch
             {
-                DockerSwarmPlatformDescriptor => null, // TODO
+                DockerSwarmPlatformDescriptor swarm => swarm with
+                {
+                    ContainerCount = last.PlatformStat.ContainerCount,
+                    ContainersRunning = last.PlatformStat.ContainersRunning,
+                    ContainersPaused = last.PlatformStat.ContainersPaused,
+                    ContainersStopped = last.PlatformStat.ContainersStopped,
+                    ImageUsedBytes = last.ImageUsedBytes,
+                    VolumeUsedBytes = last.VolumeUsedBytes
+                },
                 KubernetesPlatformDescriptor => null,  // TODO
                 DockerPlatformDescriptor docker => docker.Create(
                     containerCount: last.PlatformStat.ContainerCount,

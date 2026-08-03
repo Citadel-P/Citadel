@@ -6176,6 +6176,8 @@ export interface PlatformDescriptorDockerPlatformDescriptor {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   volumeUsedBytes?: null | number | string;
+  apiVersion?: null | string;
+  minimumApiVersion?: null | string;
 }
 
 export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
@@ -6194,8 +6196,21 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   managers: number | string;
+  clusterId?: null | string;
+  /** @format date-time */
+  clusterCreatedAt?: null | string;
   error?: null | string;
   remoteManagers?: null | SwarmPeer[];
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  serviceCount?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  runningTaskCount?: null | number | string;
   daemonId: string;
   /**
    * @format int64
@@ -6232,6 +6247,8 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   volumeUsedBytes?: null | number | string;
+  apiVersion?: null | string;
+  minimumApiVersion?: null | string;
 }
 
 export interface PlatformDescriptorKubernetesPlatformDescriptor {
@@ -6385,6 +6402,7 @@ export interface PlatformView {
   stackStatusCounts: PlatformWorkloadStatusCountsView;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
+  clusterId: null | string;
   tags?: TagSummaryView[];
   capabilities?: null | PlatformCapabilities;
 }

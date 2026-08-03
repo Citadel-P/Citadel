@@ -50,6 +50,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         c.DockerContainerId AS Container_DockerContainerId,
         p.Name AS Platform_Name,
         p.Status AS Platform_Status,
+        p.PlatformDescriptor AS Platform_Descriptor,
         i.Name as Image_Name,
         i.Id AS Image_Id,
         i.DockerImageId AS Image_DockerImageId,
@@ -74,10 +75,15 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 ei.Status AS ActivityEvent_Status,
                 ei.Id AS ActivityEvent_Id,
                 ei.CreatedAt AS ActivityEvent_CreatedAt,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor,
                 {{ResourceTagSql.TagAggregate("d")}}
                 FROM Deployments d
             LEFT JOIN Containers c 
                 ON c.DeploymentId = d.Id
+            INNER JOIN Platforms p
+                ON p.Id = d.PlatformId
             LEFT JOIN LATERAL (
                 SELECT e.Id, e.EventType, e.Status, e.Info, e.CreatedAt
                 FROM ActivityEvents e
@@ -118,7 +124,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             c.Id AS Container_ContainerId,
             c.DockerContainerId AS Container_DockerContainerId,
             p.Name AS Platform_Name,
-            p.status AS Platform_Status
+            p.status AS Platform_Status,
+            p.PlatformDescriptor AS Platform_Descriptor
         FROM Deployments d 
         LEFT JOIN Containers c
             ON d.Id = c.DeploymentId
@@ -231,10 +238,15 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             SELECT 
                 d.*,
                 c.Id AS Container_ContainerId,
-                c.DockerImageId AS Container_DockerImageId
+                c.DockerImageId AS Container_DockerImageId,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor
             FROM Deployments d
             LEFT JOIN Containers c
                 ON c.DeploymentId = d.Id
+            INNER JOIN Platforms p
+                ON p.Id = d.PlatformId
             """;
         var result = await db.QueryAsync<DeploymentDto>(sql, transaction: tx());
         return result.ToDomain();
@@ -281,6 +293,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 d.AutoUpdateState_LastError,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor,
                 i.Name as Image_Name,
                 i.Id AS Image_Id,
                 i.DockerImageId AS Image_DockerImageId,
@@ -383,7 +396,10 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             FROM (
                 SELECT p.Id, p.Name
                 FROM Platforms p
-                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+                JOIN Deployments source ON source.Id = @DeploymentId
+                JOIN Platforms source_platform ON source_platform.Id = source.PlatformId
+                WHERE p.PlatformDescriptor ->> '$type' = source_platform.PlatformDescriptor ->> '$type'
+                  AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
 
                 UNION
 

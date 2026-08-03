@@ -53,6 +53,12 @@ internal sealed class ChangeStackStateHandler(
             return Result.Failure(new NotFoundError("No stacks found for the provided stack ID(s)."));
         }
 
+        if (processedStacks.Any(processed => processed.Stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm))
+        {
+            await TryRollbackProcessingAsync(processedStacks);
+            return Result.Failure(new BadRequestError("Container state actions are not available for Docker Swarm stacks."));
+        }
+
         using var completionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             applicationLifetime.ApplicationStopping);
         completionCancellation.CancelAfter(CompletionTimeout);

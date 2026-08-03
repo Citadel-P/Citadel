@@ -607,8 +607,13 @@ internal static class Configuration
         platform.Property<string>("AgentVersion").HasColumnType(Text);
         platform.Property<string>("ServerVersion").HasColumnType(Text);
         platform.Property<string>("PlatformDescriptor").HasColumnType(Json).IsRequired();
+        platform.Property<string>("ClusterId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
 
         platform.HasIndex("Address").IsUnique().HasDatabaseName($"IX_{tableName}_Address");
+        platform.HasIndex("ClusterId")
+            .IsUnique()
+            .HasFilter("clusterid IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_ClusterId");
         ConfigureGlobalSearchIndex(platform, tableName, "Name");
         ConfigureGlobalSearchIndex(platform, tableName, "Address");
 

@@ -9,7 +9,8 @@ public sealed class Deployment(
     Guid createdByActorId,
     Guid platformId,
     DeploymentSpec? spec = null,
-    string? description = null) : IAuditedEntity, IReconcilableResource
+    string? description = null,
+    Platform? platform = null) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -34,7 +35,7 @@ public sealed class Deployment(
 
     public DeploymentSpec? Spec { get; private set; } = spec;
 
-    public Platform? Platform { get; private set; } = null;
+    public Platform? Platform { get; private set; } = platform;
     public Image? Image { get; private set; } = null;
     public Container? Container { get; private set; } = null;
     public ActivityEvent? LatestActivityEvent { get; private set; } = null;
@@ -75,12 +76,11 @@ public sealed class Deployment(
         Container? container = null,
         ActivityEvent? latestActivityEvent = null)
     {
-        return new Deployment(name, createdByActorId, platformId, spec, description)
+        return new Deployment(name, createdByActorId, platformId, spec, description, platform)
         {
             Id = id,
             Image = image,
             Status = status,
-            Platform = platform,
             CreatedAt = createdAt,
             Container = container,
             RowVersion = rowVersion,

@@ -1047,6 +1047,7 @@ public interface IPlatformRepository
     Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<Platform?> GetByDaemonIdAsync(string daemonId, Guid? excludePlatformId, CancellationToken cancellationToken);
+    Task<Platform?> GetByClusterIdAsync(string clusterId, Guid? excludePlatformId, CancellationToken cancellationToken);
     Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<Platform>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);

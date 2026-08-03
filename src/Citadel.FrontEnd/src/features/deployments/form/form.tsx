@@ -493,8 +493,10 @@ export const DeploymentForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: !!adoptFrom,
-            description: 'Select the platform to deploy on.',
+            disabled: !!id || !!adoptFrom,
+            description: id
+              ? 'The platform cannot be changed after the deployment is created.'
+              : 'Select the platform to deploy on.',
             render: (value, set) => {
               return (
                 <ResourceSelectorField

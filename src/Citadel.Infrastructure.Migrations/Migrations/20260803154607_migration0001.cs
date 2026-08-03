@@ -95,6 +95,7 @@ namespace Infrastructure.Migrations.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     address = table.Column<string>(type: "text", nullable: false),
                     agentversion = table.Column<string>(type: "text", nullable: true),
+                    clusterid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     connectortype = table.Column<string>(type: "text", nullable: false),
                     cpucount = table.Column<int>(type: "integer", nullable: false),
                     description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
@@ -2885,6 +2886,13 @@ namespace Infrastructure.Migrations.Migrations
                 table: "platforms",
                 column: "address",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_platforms_clusterid",
+                table: "platforms",
+                column: "clusterid",
+                unique: true,
+                filter: "clusterid IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_platforms_globalsearch_address_trgm",

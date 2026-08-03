@@ -52,6 +52,9 @@ internal class PlatformSyncJob(
     {
         await foreach (var evt in platformHealthReader.ReadAllAsync(cancellationToken))
         {
+            if (evt.IsValidated)
+                continue;
+
             try
             {
                 await SyncPlatform(evt, cancellationToken);
@@ -176,6 +179,8 @@ internal class PlatformSyncJob(
                 platformStreamManager,
                 activityStreamManager,
                 notifQueue,
+                platformHealthBroadCaster,
+                platformContainerCache,
                 platformInfo,
                 evt.Id,
                 logger);
@@ -192,6 +197,8 @@ internal sealed class PlatformOnlineSyncWorkItem(
     IPlatformStreamManager platformStreamManager,
     IActivityStreamManager activityStreamManager,
     INotificationQueue notificationQueue,
+    IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IPlatformContainerCache platformContainerCache,
     PlatformResult platformInfo,
     Guid platformId,
     ILogger logger) : IDbWorkItem
@@ -209,6 +216,62 @@ internal sealed class PlatformOnlineSyncWorkItem(
 
             var previousStatus = platform.Status;
             var updatedDescriptor = platformInfo.Descriptor;
+            string? clusterId = null;
+            if (platformInfo.Descriptor is null
+                || platformInfo.Descriptor.Type != platform.PlatformDescriptor.Type)
+            {
+                logger.LogError(
+                    "Platform {PlatformId} synchronization was rejected because its platform type changed",
+                    platformId);
+                await RejectAsync(platform, uow, cancellationToken);
+                return;
+            }
+
+            if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+            {
+                if (platformInfo.Descriptor is not DockerSwarmPlatformDescriptor reportedSwarm
+                    || !reportedSwarm.ControlAvailable
+                    || string.IsNullOrWhiteSpace(reportedSwarm.ClusterId))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because the endpoint is not an active Swarm manager",
+                        platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
+                    return;
+                }
+
+                clusterId = reportedSwarm.ClusterId.Trim();
+                if (!string.IsNullOrWhiteSpace(platform.ClusterId)
+                    && !string.Equals(platform.ClusterId, clusterId, StringComparison.Ordinal))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because its Swarm cluster identity changed",
+                        platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(platform.ClusterId))
+                {
+                    var existingCluster = await uow.Platforms.GetByClusterIdAsync(
+                        clusterId,
+                        platformId,
+                        cancellationToken);
+                    if (existingCluster is not null)
+                    {
+                        logger.LogError(
+                            "Platform {PlatformId} synchronization was rejected because Swarm cluster {ClusterId} belongs to platform {ExistingPlatformId}",
+                            platformId,
+                            clusterId,
+                            existingCluster.Id);
+                        await RejectAsync(platform, uow, cancellationToken);
+                        return;
+                    }
+                }
+
+                updatedDescriptor = reportedSwarm with { ClusterId = clusterId };
+            }
+
             if (platform.PlatformDescriptor is DockerPlatformDescriptor currentDescriptor)
             {
                 if (platformInfo.Descriptor is not DockerPlatformDescriptor reportedDescriptor
@@ -217,6 +280,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                     logger.LogError(
                         "Platform {PlatformId} synchronization was rejected because Docker did not report a daemon id",
                         platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
                     return;
                 }
 
@@ -232,6 +296,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                     logger.LogError(
                         "Platform {PlatformId} synchronization was rejected because its Docker daemon identity changed",
                         platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
                     return;
                 }
 
@@ -249,6 +314,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                             platformId,
                             reportedDaemonId,
                             existingPlatform.Id);
+                        await RejectAsync(platform, uow, cancellationToken);
                         return;
                     }
                 }
@@ -267,7 +333,8 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 serverVersion: platformInfo.ServerVersion,
                 agentVersion: platformInfo.AgentVersion,
                 cpuCount: platformInfo.CpuCount,
-                descriptor: updatedDescriptor
+                descriptor: updatedDescriptor,
+                clusterId: clusterId
             );
 
             var activity = previousStatus == PlatformStatus.Online
@@ -280,6 +347,15 @@ internal sealed class PlatformOnlineSyncWorkItem(
 
             await uow.Platforms.UpdateAsync(platform, cancellationToken);
             await uow.CommitAsync(cancellationToken);
+
+            await platformHealthBroadCaster.PublishAsync(
+                new PlatformHealth(
+                    platform.Id,
+                    platform.Address,
+                    platform.ConnectorType,
+                    IsOnLine: true,
+                    IsValidated: true),
+                cancellationToken);
 
             // Notify clients
             var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
@@ -295,6 +371,41 @@ internal sealed class PlatformOnlineSyncWorkItem(
         {
             logger.LogError(ex, "Error during PlatformOnlineSyncWorkItem for {PlatformId}", platformId);
         }
+    }
+
+    private async Task RejectAsync(
+        Platform platform,
+        IUnitOfWork uow,
+        CancellationToken cancellationToken)
+    {
+        platformContainerCache.EvictPlatform(platform.Id);
+        await platformHealthBroadCaster.PublishAsync(
+            new PlatformHealth(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                IsOnLine: false,
+                IsValidated: true),
+            cancellationToken);
+
+        var previousStatus = platform.Status;
+        if (previousStatus == PlatformStatus.Offline)
+            return;
+
+        platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+        var activity = PlatformActivity.Disconnected(platform, previousStatus, Constants.SystemId);
+        await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        await uow.Platforms.UpdateAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        await notificationQueue.EnqueueAsync(
+            new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform),
+            cancellationToken);
+        await notificationQueue.EnqueueAsync(
+            new ActivityNotificationWorkItem(
+                activityStreamManager,
+                await activity.AssignActor(uow, cancellationToken)),
+            cancellationToken);
     }
 }
 

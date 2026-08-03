@@ -145,6 +145,12 @@ internal static class ContainerAdoptionDraftFactory
         if (platform is null)
             return Result.Failure<ContainerAdoptionContext>(new NotFoundError("Container platform does not exist."));
 
+        if (platform.PlatformDescriptor.Type != PlatformType.Docker)
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new BadRequestError("Only containers on Docker Standalone platforms can be adopted as deployments."));
+        }
+
         if (platform.Status != PlatformStatus.Online)
             return Result.Failure<ContainerAdoptionContext>(new ConflictError("Container platform is offline."));
 

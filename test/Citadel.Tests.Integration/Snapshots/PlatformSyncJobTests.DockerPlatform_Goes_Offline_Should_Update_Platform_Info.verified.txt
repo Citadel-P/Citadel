@@ -46,8 +46,12 @@
     OsType: null,
     Architecture: null,
     ImageUsedBytes: null,
-    VolumeUsedBytes: null
+    VolumeUsedBytes: null,
+    ApiVersion: null,
+    MinimumApiVersion: null,
+    Type: Docker
   },
+  ClusterId: null,
   Stats: null,
   Tags: null
 }

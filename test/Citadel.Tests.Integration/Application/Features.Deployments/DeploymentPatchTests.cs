@@ -127,6 +127,64 @@ public class DeploymentPatchTests(PostgresTestFixture fixture) : IntegrationTest
     }
 
     [Fact]
+    public async Task Patch_Deployment_Should_Reject_Platform_Change_Without_Modifying_Deployment()
+    {
+        var targetPlatformId = Guid.CreateVersion7();
+        var patchJson = $$"""
+        {
+          "platformId": "{{targetPlatformId}}"
+        }
+        """;
+        using var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/deployments/{_deploymentId}",
+            content,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
+        Assert.Equal(_platformId, deployment?.PlatformId);
+    }
+
+    [Fact]
+    public async Task Patch_Deployment_Should_Reject_NonConfiguration_Properties()
+    {
+        const string patchJson = """
+        {
+          "name": "forged-audit-name"
+        }
+        """;
+        using var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/deployments/{_deploymentId}",
+            content,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
+        Assert.Equal("Test Deployment", deployment?.Name);
+    }
+
+    [Fact]
+    public async Task Patch_Deployment_Should_Reject_NonObject_Document()
+    {
+        using var content = new StringContent("[]", Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/deployments/{_deploymentId}",
+            content,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Patch_Deployment_WithAutoUpdateInternalImage_ReturnsBadRequest()
     {
         var createJson = $$"""

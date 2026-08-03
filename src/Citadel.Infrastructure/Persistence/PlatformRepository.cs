@@ -102,6 +102,30 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result?.ToDomain();
     }
 
+    public async Task<Platform?> GetByClusterIdAsync(
+        string clusterId,
+        Guid? excludePlatformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT p.*
+            FROM Platforms p
+            WHERE p.ClusterId = @ClusterId
+              AND (@ExcludePlatformId IS NULL OR p.Id <> @ExcludePlatformId)
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(
+            sql,
+            new
+            {
+                ClusterId = clusterId,
+                ExcludePlatformId = excludePlatformId
+            },
+            transaction: tx());
+
+        return result?.ToDomain();
+    }
+
     public Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -262,10 +286,11 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         string sql = ResourceTagSql.InputTagsCte + """
             inserted_platform AS (
                 INSERT INTO Platforms (
-                    Id, Name, Address, Description, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
+                    Id, Name, Address, Description, NetworkCount, VolumeCount, ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor, ClusterId)
                 SELECT
-                    @Id, @Name, @Address, @Description, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json
+                    @Id, @Name, @Address, @Description, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json, @ClusterId
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                ON CONFLICT (ClusterId) WHERE ClusterId IS NOT NULL DO NOTHING
                 RETURNING Id
             ),
             """ + ResourceTagSql.InsertTagsCte("inserted_platform", "p") + "\n"
@@ -287,6 +312,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Status = EnumFormatter<PlatformStatus>.GetValue(platform.Status),
             ConnectorType = EnumFormatter<PlatformConnectorType>.GetValue(platform.ConnectorType),
             PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            platform.ClusterId,
             CreatedAt = DateTime.UtcNow,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
             TagIds = tagIdArray,
@@ -318,6 +344,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 ServerVersion = @ServerVersion,
                 AgentVersion = @AgentVersion,
                 PlatformDescriptor = @PlatformDescriptor::json,
+                ClusterId = @ClusterId,
                 Status = @Status
             WHERE Id = @Id
          """;
@@ -335,6 +362,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             platform.ServerVersion,
             platform.AgentVersion,
             PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            platform.ClusterId,
             Status = EnumFormatter<PlatformStatus>.GetValue(platform.Status),
             Id = platform.Id
         }, transaction: tx());

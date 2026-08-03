@@ -29,7 +29,8 @@ public sealed class StackRelease : IAuditedEntity
         Guid platformId,
         StackSpec spec,
         Guid createdByActorId,
-        string? version)
+        string? version,
+        Platform? platform = null)
     {
         return new StackRelease
         {
@@ -39,6 +40,7 @@ public sealed class StackRelease : IAuditedEntity
             Status = StackReleaseStatus.Created,
             Spec = spec,
             CreatedByActorId = createdByActorId,
+            Platform = platform,
         };
     }
 

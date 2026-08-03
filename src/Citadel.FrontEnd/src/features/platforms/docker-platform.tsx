@@ -1,13 +1,15 @@
 import {
   PlatformConnectorType,
   PlatformDescriptorDockerPlatformDescriptor,
+  PlatformDescriptorDockerSwarmPlatformDescriptor,
   PlatformStatus,
+  PlatformType,
   PlatformView,
   TagSummaryView,
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
-import { Box, Cpu, HardDrive, Layers, MemoryStick, PlugZap, Rocket } from 'lucide-react';
+import { Box, Cpu, HardDrive, Layers, MemoryStick, Network, PlugZap, Rocket, Workflow } from 'lucide-react';
 import { cn, toFixedNumber } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -38,6 +40,10 @@ export const DockerPlatform = ({
   >;
 }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
+  const isSwarm = platform.type === PlatformType.DockerSwarm;
+  const swarmDescriptor = isSwarm
+    ? (platform.platformDescriptor as PlatformDescriptorDockerSwarmPlatformDescriptor)
+    : undefined;
   const isOnline = platform.status === PlatformStatus.Online;
   const lastSnapshot = platform.stats?.at(0)?.created
     ? new Date(platform.stats[0].created! * 1000).getTime()
@@ -76,7 +82,15 @@ export const DockerPlatform = ({
           {/* Logo + status */}
           <div className="relative shrink-0">
             <div className="h-12 w-12 rounded-full border border-border/60 p-0.5">
-              <DockerIcon />
+              {isSwarm ? (
+                <div
+                  aria-label="Docker Swarm"
+                  className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Network className="h-7 w-7" />
+                </div>
+              ) : (
+                <DockerIcon aria-label="Docker" />
+              )}
             </div>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -112,18 +126,29 @@ export const DockerPlatform = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
-                {descriptor.containerCount ?? '-'} containers
-              </Link>
-              <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
-                {platform.imageCount ?? '-'} images
-              </Link>
-              <Link to={`/platforms/${platform.id}/volumes`} className="hover:text-foreground hover:underline">
-                {platform.volumeCount ?? '-'} volumes
-              </Link>
-              <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
-                {platform.networkCount ?? '-'} networks
-              </Link>
+              {swarmDescriptor ? (
+                <>
+                  <span>{formatCount(swarmDescriptor.nodes, 'node')}</span>
+                  <span>{formatCount(swarmDescriptor.managers, 'manager')}</span>
+                  <span>{formatCount(swarmDescriptor.serviceCount, 'service')}</span>
+                  <span>{formatCount(swarmDescriptor.runningTaskCount, 'running task')}</span>
+                </>
+              ) : (
+                <>
+                  <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
+                    {descriptor.containerCount ?? '-'} containers
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
+                    {platform.imageCount ?? '-'} images
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/volumes`} className="hover:text-foreground hover:underline">
+                    {platform.volumeCount ?? '-'} volumes
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
+                    {platform.networkCount ?? '-'} networks
+                  </Link>
+                </>
+              )}
               <CompactTagSummary tags={platform.tags} />
             </div>
           </div>
@@ -133,7 +158,7 @@ export const DockerPlatform = ({
           </div>
 
           <section
-            aria-label="Platform workloads"
+            aria-label={isSwarm ? 'Swarm workloads' : 'Platform workloads'}
             className="col-span-full grid min-w-0 grid-cols-3 gap-2 border-t pt-3 2xl:col-span-1 2xl:col-start-3 2xl:row-start-1 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
             <WorkloadMetric
               icon={Rocket}
@@ -151,22 +176,31 @@ export const DockerPlatform = ({
               iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.stacks}
               states={getStackStates(platform.stackStatusCounts)}
             />
-            <WorkloadMetric
-              icon={Box}
-              label="Containers"
-              total={descriptor.containerCount}
-              to={`/platforms/${platform.id}/containers`}
-              iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.containers}
-              states={getContainerStates({
-                running: descriptor.containersRunning,
-                stopped: descriptor.containersStopped,
-                paused: descriptor.containersPaused,
-              })}
-            />
+            {swarmDescriptor ? (
+              <WorkloadMetric
+                icon={Workflow}
+                label="Running tasks"
+                total={swarmDescriptor.runningTaskCount}
+                iconClassName="text-sky-500"
+              />
+            ) : (
+              <WorkloadMetric
+                icon={Box}
+                label="Containers"
+                total={descriptor.containerCount}
+                to={`/platforms/${platform.id}/containers`}
+                iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.containers}
+                states={getContainerStates({
+                  running: descriptor.containersRunning,
+                  stopped: descriptor.containersStopped,
+                  paused: descriptor.containersPaused,
+                })}
+              />
+            )}
           </section>
 
           <section
-            aria-label="Platform utilization"
+            aria-label={isSwarm ? 'Connected manager utilization' : 'Platform utilization'}
             className="col-span-full grid min-w-0 grid-cols-1 gap-1.5 border-t pt-3 sm:grid-cols-3 2xl:col-span-1 2xl:col-start-4 2xl:row-start-1 2xl:grid-cols-1 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
             <UsageMetric
               icon={Cpu}
@@ -175,7 +209,7 @@ export const DockerPlatform = ({
               online={isOnline}
               colorClassName="bg-sky-500"
               iconClassName="text-sky-500"
-              tooltip={`Container CPU usage normalized across ${platform.cpuCount} platform cores`}
+              tooltip={`Container CPU usage normalized across ${platform.cpuCount} ${isSwarm ? 'connected manager' : 'platform'} cores`}
             />
             <UsageMetric
               icon={MemoryStick}
@@ -184,7 +218,7 @@ export const DockerPlatform = ({
               online={isOnline}
               colorClassName="bg-emerald-500"
               iconClassName="text-emerald-500"
-              tooltip={`Container working-set memory as a share of ${byteTransform(platform.memTotal, 1)} platform memory`}
+              tooltip={`Container working-set memory as a share of ${byteTransform(platform.memTotal, 1)} ${isSwarm ? 'connected manager' : 'platform'} memory`}
             />
             <UsageMetric
               icon={HardDrive}
@@ -258,28 +292,42 @@ const WorkloadMetric = ({
   total,
   to,
   iconClassName,
-  states,
+  states = [],
 }: {
   icon: React.FC<{ className?: string }>;
   label: string;
   total?: string | number | null;
-  to: string;
+  to?: string;
   iconClassName?: string;
-  states: WorkloadState[];
+  states?: WorkloadState[];
 }) => {
+  const labelContent = (
+    <>
+      <Icon className={cn('h-3.5 w-3.5 shrink-0', iconClassName)} />
+      <span className="truncate">{label}</span>
+    </>
+  );
+
   return (
     <div className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-sm px-1 py-1.5">
-      <Link
-        to={to}
-        className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
-        <Icon className={cn('h-3.5 w-3.5 shrink-0', iconClassName)} />
-        <span className="truncate">{label}</span>
-      </Link>
-      <div className="flex min-w-0 items-center justify-center gap-1.5">
-        <Link to={to} className="tabular-nums text-[15px] font-medium text-foreground hover:underline">
-          {total ?? 0}
+      {to ? (
+        <Link
+          to={to}
+          className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+          {labelContent}
         </Link>
-        <WorkloadStatusBreakdown states={states} />
+      ) : (
+        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">{labelContent}</span>
+      )}
+      <div className="flex min-w-0 items-center justify-center gap-1.5">
+        {to ? (
+          <Link to={to} className="tabular-nums text-[15px] font-medium text-foreground hover:underline">
+            {total ?? '-'}
+          </Link>
+        ) : (
+          <span className="tabular-nums text-[15px] font-medium text-foreground">{total ?? '-'}</span>
+        )}
+        {states.length > 0 && <WorkloadStatusBreakdown states={states} />}
       </div>
     </div>
   );
@@ -335,3 +383,6 @@ const getConnectorLabel = (connectorType: PlatformConnectorType, agentVersion?: 
 
   return 'Local';
 };
+
+const formatCount = (value: number | string | null | undefined, singular: string) =>
+  `${value ?? '-'} ${Number(value) === 1 ? singular : `${singular}s`}`;

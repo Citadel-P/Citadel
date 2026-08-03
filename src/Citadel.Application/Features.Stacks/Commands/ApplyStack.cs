@@ -1,4 +1,5 @@
 ﻿using Application.Services;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -13,13 +14,31 @@ public sealed record ApplyStack(Guid Id, bool? Recreate = false) : IStreamComman
 
 internal sealed class ApplyStackHandler(
     IApplyStackService applyStackService,
+    IUnitOfWork unitOfWork,
     IUserContextAccessor userContext) : IStreamCommandHandler<ApplyStack, StackStreamItem>
 {
     public async IAsyncEnumerable<StackStreamItem> Handle(ApplyStack request, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var actorId = userContext.Current.ActorId == Guid.Empty
+        var user = userContext.Current;
+        var actorId = user.ActorId == Guid.Empty
             ? Constants.SystemId
-            : userContext.Current.ActorId;
+            : user.ActorId;
+
+        if (!user.IsAdmin)
+        {
+            var stack = await unitOfWork.Stacks.GetAsync(request.Id, cancellationToken);
+            if (stack?.CurrentStackRelease is not null
+                && !await unitOfWork.Platforms.CanAccessAsync(
+                    user.UserId,
+                    stack.CurrentStackRelease.PlatformId,
+                    cancellationToken))
+            {
+                yield return StackStreamItem.FromStdErr(
+                    "The stack platform does not exist or is not accessible.",
+                    1);
+                yield break;
+            }
+        }
 
         await foreach (var streamItem in applyStackService.ApplyAsync(
             request.Id,

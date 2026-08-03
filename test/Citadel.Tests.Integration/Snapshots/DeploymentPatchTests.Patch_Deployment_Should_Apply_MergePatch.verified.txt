@@ -39,5 +39,6 @@
       --housekeeping_interval=5s
     ]
   },
-  platformStatus: Offline
+  platformStatus: Online,
+  platformName: Docker-P-01
 }

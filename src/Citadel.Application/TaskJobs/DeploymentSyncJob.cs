@@ -41,6 +41,9 @@ internal sealed class DeploymentSyncJob(
         {
             try
             {
+                if (platformEvent.IsOnLine && !platformEvent.IsValidated)
+                    continue;
+
                 await ScheduleDeploymentSync(platformEvent.Id, platformEvent.IsOnLine, ct);
             }
             catch (Exception ex)
@@ -90,7 +93,9 @@ internal sealed class DeploymentSyncWorkItem(
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var updated = new List<Deployment>();
-        var deployments = (await uow.Deployments.GetByPlatformIdAsync(platformId, ct)).ToArray();
+        var deployments = (await uow.Deployments.GetByPlatformIdAsync(platformId, ct))
+            .Where(static deployment => deployment.Platform?.PlatformDescriptor.Type == PlatformType.Docker)
+            .ToArray();
 
         if (!platformIsOnline)
         {

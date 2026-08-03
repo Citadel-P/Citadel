@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using FluentValidation;

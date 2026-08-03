@@ -59,13 +59,32 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         var previousPlatformId = deployment.PlatformId;
 
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
-        
+
+        if (patchedDeployment.PlatformId != deployment.PlatformId)
+        {
+            return Result.Failure<Deployment>(new BadRequestError(
+                "Changing a deployment's platform is not supported. Duplicate it on the target platform instead."));
+        }
+
+        var targetPlatform = await unitOfWork.Platforms.GetByIdAsync(patchedDeployment.PlatformId, cancellationToken);
+        if (targetPlatform is null)
+        {
+            return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist."));
+        }
+
+        var user = userContext.Current;
+        if (!user.IsAdmin
+            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, patchedDeployment.PlatformId, cancellationToken))
+        {
+            return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist or is not accessible."));
+        }
+
         if (patchedDeployment.Spec is not null)
         {
             patchedDeployment.PartialUpdate(
                 spec: BuildImageProvenance.Preserve(patchedDeployment.Spec, deployment.Spec));
 
-            var imageValidation = await DeploymentImageValidation.ValidateAsync(patchedDeployment.Spec, unitOfWork, cancellationToken);
+            var imageValidation = await DeploymentImageValidation.ValidateAsync(patchedDeployment.Spec, targetPlatform.PlatformDescriptor.Type, unitOfWork, cancellationToken);
             if (imageValidation.IsFailure(out var imageError))
             {
                 return Result.Failure<Deployment>(imageError);
@@ -94,21 +113,21 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             }
         }
 
-        // Add activity
-        var activity = new ActivityEvent(
-                actorId: actorId,
-                resourceId: deployment.Id,
-                resourceName: deployment.Name,
-                status: ActivityStatus.Success,
-                platformId: deployment.PlatformId,
-                eventType: ActivityEventType.DeploymentUpdated,
-                info: new DeploymentUpdated(deployment.ToSnapshot(), patchedDeployment.ToSnapshot(command.Id))
-            );
+        var oldSnapshot = deployment.ToSnapshot();
 
         // Update deployment
         deployment.PartialUpdate(
             platformId: patchedDeployment.PlatformId,
             spec: patchedDeployment.Spec);
+
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: deployment.Id,
+            resourceName: deployment.Name,
+            status: ActivityStatus.Success,
+            platformId: deployment.PlatformId,
+            eventType: ActivityEventType.DeploymentUpdated,
+            info: new DeploymentUpdated(oldSnapshot, deployment.ToSnapshot()));
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
 

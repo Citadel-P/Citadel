@@ -40,6 +40,9 @@ internal sealed class StackSyncJob(
         {
             try
             {
+                if (platformEvent.IsOnLine && !platformEvent.IsValidated)
+                    continue;
+
                 await ScheduleStackSync(platformEvent.Id, platformEvent.IsOnLine, ct);
             }
             catch (Exception ex)
@@ -88,7 +91,9 @@ internal sealed class StackSyncWorkItem(
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var updated = new List<Stack>();
-        var stacks = (await uow.Stacks.GetInfoAsync(ct, platformId: platformId)).ToArray();
+        var stacks = (await uow.Stacks.GetInfoAsync(ct, platformId: platformId))
+            .Where(static stack => stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == PlatformType.Docker)
+            .ToArray();
 
         if (stacks.Length == 0)
             return;

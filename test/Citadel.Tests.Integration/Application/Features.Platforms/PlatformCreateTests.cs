@@ -216,6 +216,91 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         await VerifyJson(responseBody);
     }
 
+    [Fact]
+    public async Task CreatePlatform_WithSwarmManager_IsAvailableByDefaultAndPersistsClusterIdentity()
+    {
+        ConfigureEmptyDockerInventory(CreateSwarmPlatformResult("daemon-swarm", "cluster-swarm", controlAvailable: true));
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            new StringContent(
+                """
+                {
+                  "name": "SWARM-NEW",
+                  "address": "https://localhost:9100",
+                  "type": "DockerSwarm",
+                  "connectorType": "agent"
+                }
+                """,
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByNameAsync("SWARM-NEW", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(platform);
+        Assert.Equal("cluster-swarm", platform.ClusterId);
+        Assert.Equal(PlatformType.DockerSwarm, platform.PlatformDescriptor.Type);
+        Assert.Equal("cluster-swarm", Assert.IsType<DockerSwarmPlatformDescriptor>(platform.PlatformDescriptor).ClusterId);
+    }
+
+    [Fact]
+    public async Task CreatePlatform_Standalone_ShouldRejectActiveSwarm()
+    {
+        ConfigureEmptyDockerInventory(CreateSwarmPlatformResult("daemon-active", "cluster-active", controlAvailable: true));
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            new StringContent(
+                """
+                {
+                  "name": "WRONG-STANDALONE",
+                  "address": "https://localhost:9101",
+                  "type": "Docker",
+                  "connectorType": "agent"
+                }
+                """,
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            "active Swarm member",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreatePlatform_Swarm_ShouldRejectWorkerNode()
+    {
+        ConfigureEmptyDockerInventory(CreateSwarmPlatformResult("daemon-worker", null, controlAvailable: false));
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            new StringContent(
+                """
+                {
+                  "name": "SWARM-WORKER",
+                  "address": "https://localhost:9102",
+                  "type": "DockerSwarm",
+                  "connectorType": "agent"
+                }
+                """,
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            "Swarm worker",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData(PlatformConnectorType.Local)]
     [InlineData(PlatformConnectorType.Agent)]
@@ -480,6 +565,55 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(paused, docker.ContainersPaused);
         Assert.Equal(stopped, docker.ContainersStopped);
     }
+
+    private void ConfigureEmptyDockerInventory(PlatformResult platformResult)
+    {
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(platformConnector.Object);
+        platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(platformResult));
+        imageFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(imageConnector.Object);
+        imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<ImageResult>>([]));
+        containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(containerConnector.Object);
+        containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>()));
+        healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>()))
+            .Returns(true);
+    }
+
+    private static PlatformResult CreateSwarmPlatformResult(
+        string daemonId,
+        string? clusterId,
+        bool controlAvailable) => new(
+        Name: "swarm",
+        Address: "https://localhost",
+        NetworkCount: 0,
+        VolumeCount: 0,
+        ImageCount: 0,
+        CpuCount: 4,
+        MemTotal: 1024,
+        ServerVersion: "28.0",
+        AgentVersion: "test",
+        Descriptor: new DockerSwarmPlatformDescriptor(
+            NodeID: "node-1",
+            NodeAddr: "10.0.0.10",
+            LocalNodeState: "Active",
+            ControlAvailable: controlAvailable,
+            Nodes: 3,
+            Managers: 1,
+            DaemonId: daemonId,
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0,
+            ApiVersion: "1.49",
+            MinimumApiVersion: "1.24",
+            ClusterId: clusterId),
+        ClusterId: clusterId);
 
     private void AssertPlatformCache(Platform platform, IEnumerable<Container> containers)
     {

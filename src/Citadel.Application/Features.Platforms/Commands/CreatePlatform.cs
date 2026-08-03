@@ -75,24 +75,22 @@ internal sealed class CreatePlatformHandler(
             return Result.Failure<Platform>(new BadRequestError(addressError));
         }
 
-        if (command.Type == PlatformType.Docker)
+        if (command.Type is not (PlatformType.Docker or PlatformType.DockerSwarm))
         {
-            if (command.ConnectorType == PlatformConnectorType.EdgeAgent)
-            {
-                return await HandleEdgeDockerPlatform(command, cancellationToken);
-            }
-
-            if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
-            {
-                return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
-            }
-
-            return await HandleDockerPlatform(command, cancellationToken);
+            return Result.Failure<Platform>(new BadRequestError("Currently, only Docker Standalone and Docker Swarm platform types are supported."));
         }
-        else
+
+        if (command.ConnectorType == PlatformConnectorType.EdgeAgent)
         {
-            return Result.Failure<Platform>(new BadRequestError("Currently, only the Docker platform type is supported."));
+            return await HandleEdgeDockerPlatform(command, cancellationToken);
         }
+
+        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
+        {
+            return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
+        }
+
+        return await HandleDockerPlatform(command, cancellationToken);
     }
 
     private async Task<Result<Platform>> HandleEdgeDockerPlatform(CreatePlatform command, CancellationToken cancellationToken)
@@ -116,12 +114,25 @@ internal sealed class CreatePlatformHandler(
             memTotal: 0,
             status: PlatformStatus.Offline,
             connectorType: PlatformConnectorType.EdgeAgent,
-            platformDescriptor: new DockerPlatformDescriptor(
-                DaemonId: string.Empty,
-                ContainerCount: 0,
-                ContainersRunning: 0,
-                ContainersPaused: 0,
-                ContainersStopped: 0),
+            platformDescriptor: command.Type == PlatformType.DockerSwarm
+                ? new DockerSwarmPlatformDescriptor(
+                    NodeID: string.Empty,
+                    NodeAddr: string.Empty,
+                    LocalNodeState: string.Empty,
+                    ControlAvailable: false,
+                    Nodes: 0,
+                    Managers: 0,
+                    DaemonId: string.Empty,
+                    ContainerCount: 0,
+                    ContainersRunning: 0,
+                    ContainersPaused: 0,
+                    ContainersStopped: 0)
+                : new DockerPlatformDescriptor(
+                    DaemonId: string.Empty,
+                    ContainerCount: 0,
+                    ContainersRunning: 0,
+                    ContainersPaused: 0,
+                    ContainersStopped: 0),
             serverVersion: null,
             agentVersion: null,
             description: command.Description);
@@ -129,7 +140,7 @@ internal sealed class CreatePlatformHandler(
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)
-            return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
+            return Result.Failure<Platform>(await GetPlatformInsertErrorAsync(platform, cancellationToken));
 
         var activity = PlatformActivity.Created(platform, actorId);
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
@@ -160,6 +171,12 @@ internal sealed class CreatePlatformHandler(
         }
 
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
+        var typeValidation = await ValidatePlatformTypeAsync(command.Type, platform, cancellationToken);
+        if (typeValidation is not null)
+        {
+            return Result.Failure<Platform>(typeValidation);
+        }
+
         if (platform.PlatformDescriptor is not DockerPlatformDescriptor descriptor
             || string.IsNullOrWhiteSpace(descriptor.DaemonId))
         {
@@ -186,7 +203,7 @@ internal sealed class CreatePlatformHandler(
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)
-            return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
+            return Result.Failure<Platform>(await GetPlatformInsertErrorAsync(platform, cancellationToken));
 
         var images = (await GetImages(platform, cancellationToken)).ToArray();
         if (images.Length > 0)
@@ -217,6 +234,63 @@ internal sealed class CreatePlatformHandler(
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
+    }
+
+    private async Task<Error> GetPlatformInsertErrorAsync(
+        Platform platform,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(platform.ClusterId)
+            && await unitOfWork.Platforms.GetByClusterIdAsync(
+                platform.ClusterId,
+                excludePlatformId: null,
+                cancellationToken) is { } existing)
+        {
+            return new ConflictError(
+                $"This Swarm cluster is already registered as platform '{existing.Name}'.");
+        }
+
+        return new BadRequestError("One or more tags do not exist.");
+    }
+
+    private async Task<Error?> ValidatePlatformTypeAsync(
+        PlatformType requestedType,
+        Platform platform,
+        CancellationToken cancellationToken)
+    {
+        if (requestedType == PlatformType.Docker)
+        {
+            return platform.PlatformDescriptor is DockerSwarmPlatformDescriptor
+                ? new BadRequestError("This Docker Engine is an active Swarm member. Register it as Docker Swarm instead.")
+                : null;
+        }
+
+        if (platform.PlatformDescriptor is not DockerSwarmPlatformDescriptor swarm)
+        {
+            return new BadRequestError("This Docker Engine is not an active Swarm member.");
+        }
+
+        if (!swarm.ControlAvailable)
+        {
+            return new BadRequestError("The selected Docker Engine is a Swarm worker. Connect Citadel to a manager node.");
+        }
+
+        if (string.IsNullOrWhiteSpace(swarm.ClusterId))
+        {
+            return new BadRequestError("The Swarm manager did not report a cluster id.");
+        }
+
+        var clusterId = swarm.ClusterId.Trim();
+        var existing = await unitOfWork.Platforms.GetByClusterIdAsync(clusterId, null, cancellationToken);
+        if (existing is not null)
+        {
+            return new ConflictError($"This Swarm cluster is already registered as platform '{existing.Name}'.");
+        }
+
+        platform.PartialUpdate(
+            descriptor: swarm with { ClusterId = clusterId },
+            clusterId: clusterId);
+        return null;
     }
 
     private async Task<IEnumerable<Image>> GetImages(Platform platform, CancellationToken cancellationToken)

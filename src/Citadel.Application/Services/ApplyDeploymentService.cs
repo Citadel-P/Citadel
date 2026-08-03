@@ -57,6 +57,21 @@ internal sealed partial class ApplyDeploymentService(
             yield break;
         }
 
+        if (deployment.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm)
+        {
+            yield return Error(501, "Applying Docker Swarm services is not available yet.");
+            yield break;
+        }
+
+        var existingContainer = await GetContainer(deployment.Id, ct);
+        if (existingContainer is not null && existingContainer.PlatformId != deployment.PlatformId)
+        {
+            yield return Error(
+                409,
+                "This deployment references a different platform than its existing container. Duplicate it on the target platform or restore the original platform before applying.");
+            yield break;
+        }
+
         if (!platformCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
         {
             var message = "Platform not found or disconnected.";
@@ -156,7 +171,7 @@ internal sealed partial class ApplyDeploymentService(
 
         if (recreate)
         {
-            var (deletedContainerId, errorMessage) = await DeleteContainer(deployment.Id, platform, ct);
+            var (deletedContainerId, errorMessage) = await DeleteContainer(existingContainer, ct);
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 yield return Error(500, errorMessage);
@@ -452,13 +467,17 @@ internal sealed partial class ApplyDeploymentService(
         return image?.DockerImageId;
     }
 
-    private async Task<(string? ContainerId, string? error)> DeleteContainer(Guid deploymentId, PlatformCacheEntry platform, CancellationToken ct)
+    private async Task<(string? ContainerId, string? error)> DeleteContainer(Container? container, CancellationToken ct)
     {
-        var container = await GetContainer(deploymentId, ct);
         if (container == null) return (null, null);
 
-        var connector = containerConnectorFactory.GetConnector(platform.ConnectorType);
-        var commandToApply = new DeleteContainerCommand([container.DockerContainerId], platform.Address, true, true, false);
+        if (!platformCache.TryGetCacheEntry(container.PlatformId, out var appliedPlatform, out _))
+        {
+            return (null, "The deployment's current platform is unavailable. Restore that platform before moving the deployment.");
+        }
+
+        var connector = containerConnectorFactory.GetConnector(appliedPlatform.ConnectorType);
+        var commandToApply = new DeleteContainerCommand([container.DockerContainerId], appliedPlatform.Address, true, true, false);
 
         var result = await connector.DeleteAsync(commandToApply, ct);
         if (result.IsFailure(out var error))

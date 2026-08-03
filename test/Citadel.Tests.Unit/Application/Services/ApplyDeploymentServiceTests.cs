@@ -13,7 +13,9 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Identity;
+using Domain.Entities.Platforms;
 using LightResults;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -21,6 +23,144 @@ namespace Tests.Unit.Application.Services;
 
 public sealed class ApplyDeploymentServiceTests
 {
+    [Fact]
+    public async Task ApplyAsync_SwarmDeployment_ShouldFailBeforeOpeningContainerConnectors()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platform = CreateSwarmPlatform();
+        var deployment = new Deployment(
+            name: "swarm-api",
+            createdByActorId: actorId,
+            platformId: platform.Id,
+            spec: new DeploymentSpec(
+                Image: new ExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                UpdateBehavior: UpdateBehavior.Disabled),
+            platform: platform);
+        var deployments = new Mock<IDeploymentRepository>();
+        deployments.Setup(x => x.GetAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deployment);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Deployments).Returns(deployments.Object);
+        var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>(MockBehavior.Strict);
+        var deploymentConnectorFactory = new Mock<IConnectorFactory<IDeploymentConnector>>(MockBehavior.Strict);
+        var service = new ApplyDeploymentService(
+            Mock.Of<IDbWorkQueue>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IPullImageService>(),
+            new ImageDigestCache(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformContainerCache>(),
+            Mock.Of<IResourceBindingResolver>(),
+            new SecretRedactor(),
+            Mock.Of<IAlertService>(),
+            Mock.Of<IDeploymentStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            containerConnectorFactory.Object,
+            deploymentConnectorFactory.Object,
+            Mock.Of<IBuildImageResolver>());
+
+        var items = new List<DeploymentStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+                           deployment.Id,
+                           actorId,
+                           recreate: false,
+                           TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        var error = Assert.Single(items).Error;
+        Assert.NotNull(error);
+        Assert.Equal(501, error.Code);
+        containerConnectorFactory.VerifyNoOtherCalls();
+        deploymentConnectorFactory.VerifyNoOtherCalls();
+    }
+
+    private static Platform CreateSwarmPlatform() => new(
+        name: "swarm",
+        address: "https://swarm.test",
+        networkCount: 0,
+        volumeCount: 0,
+        imageCount: 0,
+        cpuCount: 1,
+        memTotal: 1024,
+        serverVersion: null,
+        agentVersion: null,
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            "node", "10.0.0.1", "Active", true, 1, 1,
+            "daemon", 0, 0, 0, 0));
+
+    [Fact]
+    public async Task ApplyAsync_PlatformMismatch_ShouldFailWithoutDeletingExistingContainer()
+    {
+        var actorId = Guid.CreateVersion7();
+        var targetPlatformId = Guid.CreateVersion7();
+        var deployment = new Deployment(
+            name: "api",
+            createdByActorId: actorId,
+            platformId: targetPlatformId,
+            spec: new DeploymentSpec(
+                Image: new ExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                UpdateBehavior: UpdateBehavior.Disabled));
+        var existingContainer = new Container(
+            name: "api",
+            dockerImageId: "sha256:image",
+            platformId: Guid.CreateVersion7(),
+            dockerContainerId: "existing-container",
+            state: ContainerStateStatus.Running);
+        var deployments = new Mock<IDeploymentRepository>();
+        deployments
+            .Setup(repository => repository.GetAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deployment);
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(repository => repository.GetByDeploymentIdAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingContainer);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Deployments).Returns(deployments.Object);
+        unitOfWork.SetupGet(value => value.Containers).Returns(containers.Object);
+        var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>(MockBehavior.Strict);
+        var deploymentConnectorFactory = new Mock<IConnectorFactory<IDeploymentConnector>>(MockBehavior.Strict);
+        var service = new ApplyDeploymentService(
+            Mock.Of<IDbWorkQueue>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IPullImageService>(),
+            new ImageDigestCache(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformContainerCache>(),
+            Mock.Of<IResourceBindingResolver>(),
+            new SecretRedactor(),
+            Mock.Of<IAlertService>(),
+            Mock.Of<IDeploymentStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            containerConnectorFactory.Object,
+            deploymentConnectorFactory.Object,
+            Mock.Of<IBuildImageResolver>());
+
+        var items = new List<DeploymentStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+                           deployment.Id,
+                           actorId,
+                           recreate: true,
+                           TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        var error = Assert.Single(items).Error;
+        Assert.Equal(409, error?.Code);
+        containerConnectorFactory.VerifyNoOtherCalls();
+        deploymentConnectorFactory.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task ApplyAsync_Should_Inject_And_Snapshot_Only_Configured_Citadel_Entries()
     {
@@ -75,11 +215,17 @@ public sealed class ApplyDeploymentServiceTests
             .Setup(x => x.GetByIdAsync(localImage.Id, platformId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(localImage);
 
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(x => x.GetByDeploymentIdAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Container?)null);
+
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Deployments).Returns(deployments.Object);
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
         unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
         unitOfWork
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);

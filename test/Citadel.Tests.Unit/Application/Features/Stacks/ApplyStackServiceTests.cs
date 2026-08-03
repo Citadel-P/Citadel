@@ -18,6 +18,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories;
@@ -29,6 +30,81 @@ namespace Tests.Unit.Application.Features.Stacks;
 
 public class ApplyStackServiceTests
 {
+    [Fact]
+    public async Task ApplyAsync_SwarmStack_ShouldFailBeforeOpeningContainerOrProcessConnectors()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platform = CreateSwarmPlatform();
+        var stack = Stack.Create(
+            "swarm-stack",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack("services: {}", StackUpdateBehavior.Disabled),
+            platform: platform);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>(MockBehavior.Strict);
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>(MockBehavior.Strict);
+        var service = new ApplyStackService(
+            Mock.Of<IDbWorkQueue>(),
+            Mock.Of<IStackStreamManager>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IActivityStreamManager>(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformContainerCache>(),
+            stackConnectorFactory.Object,
+            containerConnectorFactory.Object,
+            Mock.Of<IGitStackMaterializer>(),
+            Mock.Of<IResourceBindingResolver>(),
+            Mock.Of<ISecretRedactor>(),
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+                           stack.Id,
+                           actorId,
+                           serviceNames: null,
+                           pullImages: false,
+                           recreate: false,
+                           waitForCompletion: false,
+                           StackApplyOperation.Apply,
+                           previousStackSnapshot: null,
+                           TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Contains(items, item =>
+            item.Type == StackApplyEventType.StdErr
+            && item.Message?.Contains("not available", StringComparison.OrdinalIgnoreCase) == true);
+        stackConnectorFactory.VerifyNoOtherCalls();
+        containerConnectorFactory.VerifyNoOtherCalls();
+    }
+
+    private static Platform CreateSwarmPlatform() => new(
+        name: "swarm",
+        address: "https://swarm.test",
+        networkCount: 0,
+        volumeCount: 0,
+        imageCount: 0,
+        cpuCount: 1,
+        memTotal: 1024,
+        serverVersion: null,
+        agentVersion: null,
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            "node", "10.0.0.1", "Active", true, 1, 1,
+            "daemon", 0, 0, 0, 0));
+
     [Fact]
     public async Task ApplyAsync_Should_Materialize_Real_GitStack_Source_From_Local_Repository()
     {

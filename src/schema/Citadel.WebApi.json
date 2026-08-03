@@ -49338,6 +49338,18 @@
               "string"
             ],
             "format": "int64"
+          },
+          "apiVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "minimumApiVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -49390,6 +49402,19 @@
             ],
             "format": "int64"
           },
+          "clusterId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clusterCreatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
           "error": {
             "type": [
               "null",
@@ -49404,6 +49429,24 @@
             "items": {
               "$ref": "#/components/schemas/SwarmPeer"
             }
+          },
+          "serviceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "runningTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "daemonId": {
             "type": "string"
@@ -49487,6 +49530,18 @@
               "string"
             ],
             "format": "int64"
+          },
+          "apiVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "minimumApiVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -49778,7 +49833,8 @@
           "deploymentStatusCounts",
           "stackStatusCounts",
           "stats",
-          "platformDescriptor"
+          "platformDescriptor",
+          "clusterId"
         ],
         "type": "object",
         "properties": {
@@ -49898,6 +49954,12 @@
               {
                 "$ref": "#/components/schemas/PlatformDescriptor"
               }
+            ]
+          },
+          "clusterId": {
+            "type": [
+              "null",
+              "string"
             ]
           },
           "tags": {

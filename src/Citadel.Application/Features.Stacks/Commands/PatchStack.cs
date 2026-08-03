@@ -73,6 +73,12 @@ internal sealed class PatchStackHandler(
             return Result.Failure<Stack>(new BadRequestError("PlatformId is required."));
         }
 
+        if (patched.PlatformId.Value != previousPlatformId)
+        {
+            return Result.Failure<Stack>(new BadRequestError(
+                "Changing a stack's platform is not supported. Duplicate it on the target platform instead."));
+        }
+
         if (patched.Spec == null)
         {
             return Result.Failure<Stack>(new BadRequestError("Spec is required."));
@@ -108,6 +114,13 @@ internal sealed class PatchStackHandler(
         if (platform == null)
         {
             return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist."));
+        }
+
+        var user = userContext.Current;
+        if (!user.IsAdmin
+            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, patched.PlatformId.Value, cancellationToken))
+        {
+            return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }
 
         if (patched.Spec is GitStack gitSpec)

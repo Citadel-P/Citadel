@@ -8,6 +8,21 @@ namespace Infrastructure.Persistence.Mappers;
 
 internal static class PlatformMappers
 {
+    internal static Platform ToDomainSummary(Guid id, string name, string? status, string descriptor)
+        => Platform.FromPersistence(
+            id: id,
+            name: name,
+            address: string.Empty,
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 0,
+            memTotal: 0,
+            status: status != null ? Enum.Parse<PlatformStatus>(status) : PlatformStatus.Offline,
+            connectorType: PlatformConnectorType.Unknown,
+            platformDescriptor: JsonSerializer.Deserialize(descriptor, PlatformJsonContext.Default.PlatformDescriptor)
+                ?? throw new InvalidDataException($"Platform descriptor is missing for platform {id}."));
+
     internal static Platform ToDomain(this PlatformDto platform)
     {
         var result = Platform.FromPersistence(
@@ -30,7 +45,8 @@ internal static class PlatformMappers
             deploymentCount: platform.DeploymentCount,
             stackCount: platform.StackCount,
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
-            stackStatusCounts: MapStackStatusCounts(platform));
+            stackStatusCounts: MapStackStatusCounts(platform),
+            clusterId: platform.ClusterId);
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
@@ -61,6 +77,7 @@ internal static class PlatformMappers
             stackCount: platform.StackCount,
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
             stackStatusCounts: MapStackStatusCounts(platform),
+            clusterId: platform.ClusterId,
             stats: [new PlatformStat(
                 Created: platform?.Stat_Created ?? 0,
                 MemoryUsage: platform?.Stat_MemoryUsage ?? 0,

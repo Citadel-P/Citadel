@@ -153,6 +153,11 @@ internal static class ComposeProjectImportDraftFactory
         var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
         if (platform is null)
             return Result.Failure<ComposeProjectImportContext>(new NotFoundError("Platform does not exist."));
+        if (platform.PlatformDescriptor.Type != PlatformType.Docker)
+        {
+            return Result.Failure<ComposeProjectImportContext>(
+                new BadRequestError("Only Compose projects on Docker Standalone platforms can be imported as stacks."));
+        }
         if (platform.Status != PlatformStatus.Online)
             return Result.Failure<ComposeProjectImportContext>(new ConflictError("Platform is offline."));
 

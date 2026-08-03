@@ -31,6 +31,7 @@ public sealed record PlatformView(
     PlatformWorkloadStatusCountsView StackStatusCounts,
     IEnumerable<PlatformStatView>? Stats,
     PlatformDescriptor? PlatformDescriptor,
+    string? ClusterId,
     IReadOnlyList<TagSummaryView> Tags = null!,
     PlatformCapabilities? Capabilities = null
     )
@@ -121,6 +122,7 @@ internal static class PlatformMapperExtension
         ServerVersion: platform.ServerVersion,
         AgentVersion: platform.AgentVersion,
         PlatformDescriptor: platform.PlatformDescriptor,
+        ClusterId: platform.ClusterId,
         Stats: platform.Stats?.Select(Map)?.ToList(),
         Tags: [.. platform.Tags.Select(TagSummaryView.Map)]);
 

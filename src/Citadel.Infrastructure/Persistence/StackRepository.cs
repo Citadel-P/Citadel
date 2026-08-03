@@ -43,6 +43,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
         p.Name AS Platform_Name,
         p.Status AS Platform_Status,
+        p.PlatformDescriptor AS Platform_Descriptor,
         {{ResourceTagSql.TagAggregate("s")}}
     FROM Stacks s
     LEFT JOIN StackReleases sr
@@ -105,6 +106,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor,
                 ei.Info AS ActivityEvent_ActivityEventInfo,
                 ei.EventType AS ActivityEvent_EventType,
                 ei.Status AS ActivityEvent_Status,
@@ -253,7 +255,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.CreatedAt AS CurrentRelease_CreatedAt,
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
-                p.Status AS Platform_Status
+                p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor
             FROM Stacks s
             INNER JOIN StackReleases sr
                 ON s.CurrentStackReleaseId = sr.Id
@@ -363,7 +366,11 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             FROM (
                 SELECT p.Id, p.Name
                 FROM Platforms p
-                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+                JOIN Stacks source ON source.Id = @StackId
+                JOIN StackReleases source_release ON source_release.Id = source.CurrentStackReleaseId
+                JOIN Platforms source_platform ON source_platform.Id = source_release.PlatformId
+                WHERE p.PlatformDescriptor ->> '$type' = source_platform.PlatformDescriptor ->> '$type'
+                  AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
 
                 UNION
 
@@ -924,7 +931,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.CreatedAt AS CurrentRelease_CreatedAt,
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
-                p.Status AS Platform_Status
+                p.Status AS Platform_Status,
+                p.PlatformDescriptor AS Platform_Descriptor
             FROM Stacks s
             INNER JOIN StackReleases sr
                 ON s.CurrentStackReleaseId = sr.Id

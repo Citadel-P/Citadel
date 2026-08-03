@@ -21,7 +21,8 @@ public class Platform(
     long deploymentCount = 0,
     long stackCount = 0,
     PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
-    PlatformWorkloadStatusCounts? stackStatusCounts = null)
+    PlatformWorkloadStatusCounts? stackStatusCounts = null,
+    string? clusterId = null)
 {
     private readonly List<PlatformStat> stats = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -44,6 +45,7 @@ public class Platform(
     public PlatformWorkloadStatusCounts StackStatusCounts { get; private set; } =
         stackStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
+    public string? ClusterId { get; private set; } = clusterId;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
@@ -66,7 +68,8 @@ public class Platform(
         long deploymentCount = 0,
         long stackCount = 0,
         PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
-        PlatformWorkloadStatusCounts? stackStatusCounts = null
+        PlatformWorkloadStatusCounts? stackStatusCounts = null,
+        string? clusterId = null
         )
     {
         var platform = new Platform(
@@ -86,7 +89,8 @@ public class Platform(
             deploymentCount: deploymentCount,
             stackCount: stackCount,
             deploymentStatusCounts: deploymentStatusCounts,
-            stackStatusCounts: stackStatusCounts)
+            stackStatusCounts: stackStatusCounts,
+            clusterId: clusterId)
         {
             Id = id,
         };
@@ -111,7 +115,8 @@ public class Platform(
         string? agentVersion = null,
         string? description = null,
         PlatformDescriptor? descriptor = null,
-        PlatformStatus? platformStatus = null)
+        PlatformStatus? platformStatus = null,
+        string? clusterId = null)
     {
         if (name != null) Name = name;
         if (address != null) Address = address;
@@ -125,6 +130,7 @@ public class Platform(
         if (description != null) Description = description;
         if (platformStatus != null) Status = platformStatus.Value;
         if (descriptor != null) PlatformDescriptor = descriptor;
+        if (clusterId != null) ClusterId = clusterId;
     }
 
     public Platform AppendStat(PlatformStat stat)

@@ -53,7 +53,21 @@ internal sealed class CreateStackHandler(
 {
     public async ValueTask<Result<Stack>> Handle(CreateStack command, CancellationToken cancellationToken)
     {
-        var actorId = userContext.Current.ActorId;
+        var user = userContext.Current;
+        var actorId = user.ActorId;
+
+        var platform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
+        if (platform == null)
+        {
+            return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist."));
+        }
+
+        if (!user.IsAdmin
+            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, command.PlatformId, cancellationToken))
+        {
+            return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist or is not accessible."));
+        }
+
         if (await unitOfWork.Stacks.ExistsAsync(command.Name, cancellationToken))
         {
             return Result.Failure<Stack>(new ConflictError("Name already exists"));
@@ -76,12 +90,6 @@ internal sealed class CreateStackHandler(
             return Result.Failure<Stack>(new BadRequestError("StackSource does not match the provided StackSpec."));
         }
 
-        var platform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
-        if (platform == null)
-        {
-            return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist."));
-        }
-
         if (spec is GitStack gitSpec)
         {
             var validationError = GitStackSpecValidation.Validate(gitSpec);
@@ -97,7 +105,18 @@ internal sealed class CreateStackHandler(
             }
         }
 
-        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, cancellationToken);
+        var platformType = platform.PlatformDescriptor.Type;
+        if (platformType == PlatformType.DockerSwarm)
+        {
+            return Result.Failure<Stack>(new NotFoundError("Docker Swarm stacks are not available yet."));
+        }
+
+        if (platformType != PlatformType.Docker)
+        {
+            return Result.Failure<Stack>(new BadRequestError("Stacks require a Docker Standalone platform."));
+        }
+
+        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, platformType, cancellationToken);
         if (!duplicateSourceResult.IsSuccess(out var duplicateSource))
         {
             return Result.Failure<Stack>(duplicateSourceResult.Errors);
@@ -146,6 +165,7 @@ internal sealed class CreateStackHandler(
 
     private async Task<Result<ActivitySourceResource?>> GetValidDuplicateSourceAsync(
         ActivitySourceResource? source,
+        PlatformType targetPlatformType,
         CancellationToken cancellationToken)
     {
         if (source is null)
@@ -161,6 +181,9 @@ internal sealed class CreateStackHandler(
         var user = userContext.Current;
         if (!user.IsAdmin && !await unitOfWork.Stacks.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
             return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source stack."));
+
+        if (sourceStack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type != targetPlatformType)
+            return Result.Failure<ActivitySourceResource?>(new BadRequestError("A stack duplicate must target the same platform type as its source."));
 
         return Result.Success<ActivitySourceResource?>(new ActivitySourceResource(
             ActivityResourceType.Stack,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef, Fragment, useMemo } from 'react';
 import { useLayoutContext } from '@/lib/context/layout-context';
-import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
+import { ISubMenuItem, MenuItems, PlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { SidebarSubMenu } from './sidebar-sidemenu';
@@ -17,6 +17,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useRead } from '@/lib/hooks';
+import { PlatformType } from '@/api/generated/api.types';
 
 export const SidebarMenu = () => {
   const location = useLocation();
@@ -30,16 +31,19 @@ export const SidebarMenu = () => {
   const addedPlatformIdsRef = useRef<Set<string>>(new Set());
 
   const isRouteActive = useCallback(
-    (path: string) => location.pathname === path || (location.pathname === '/' && path === ''),
-    [location.pathname],
+    (path: string) =>
+      location.pathname === path ||
+      `${location.pathname}${location.search}` === path ||
+      (location.pathname === '/' && path === ''),
+    [location.pathname, location.search],
   );
 
   const addPlatformToMenu = useCallback(
-    (platform: { id: string; name: string }) => {
+    (platform: { id: string; name: string; type: PlatformType }) => {
       if (!platform?.id || addedPlatformIdsRef.current.has(platform.id)) return;
 
       const platformRoute = `/platforms/edit/${platform.id}`;
-      const platformMenu = DockerPlatformMenu(platform);
+      const platformMenu = PlatformMenu(platform);
 
       platformMenu.children?.forEach((item) => {
         item.active = isRouteActive(item.route ?? '');
@@ -98,7 +102,7 @@ export const SidebarMenu = () => {
         if (item.children && children?.length === 0) return [];
 
         const hasActiveChild = children ? children.some((c) => c.active) : false;
-        const isActive = isRouteActive(item.route ?? '');
+        const isActive = !!item.route && isRouteActive(item.route);
 
         return [
           {
@@ -118,7 +122,11 @@ export const SidebarMenu = () => {
 
   useEffect(() => {
     if (currentPlatform?.id) {
-      addPlatformToMenu({ id: currentPlatform.id, name: currentPlatform.name ?? '' });
+      addPlatformToMenu({
+        id: currentPlatform.id,
+        name: currentPlatform.name ?? '',
+        type: currentPlatform.type,
+      });
     }
   }, [currentPlatform, addPlatformToMenu]);
 
@@ -155,6 +163,8 @@ export const SidebarMenu = () => {
   }, [platforms]);
 
   const toggleMenu = (menu: ISubMenuItem) => {
+    if (menu.disabled) return;
+
     const targetLabel = menu.label;
     const targetRoute = menu.route;
 

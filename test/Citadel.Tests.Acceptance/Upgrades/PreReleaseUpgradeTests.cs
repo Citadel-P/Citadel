@@ -84,6 +84,31 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                 connection,
                 """
                 SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND (table_name, column_name) IN (
+                    ('platforms', 'clusterid'),
+                    ('deployments', 'lockedplatformtype'),
+                    ('stacks', 'lockedplatformtype'));
+                """,
+                cancellationToken));
+        Assert.Equal(
+            1L,
+            await ScalarAsync<long>(
+                connection,
+                """
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname = 'ix_platforms_clusterid';
+                """,
+                cancellationToken));
+        Assert.Equal(
+            3L,
+            await ScalarAsync<long>(
+                connection,
+                """
+                SELECT COUNT(*)
                 FROM tags
                 WHERE name IN (
                     'Pre-release preserved',

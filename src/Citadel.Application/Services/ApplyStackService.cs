@@ -77,6 +77,12 @@ internal class ApplyStackService(
             yield break;
         }
 
+        if (stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm)
+        {
+            yield return StackStreamItem.FromStdErr("Applying Docker Swarm stacks is not available yet.", 1);
+            yield break;
+        }
+
         if (stack.ControlState == ResourceControlState.Processing)
         {
             yield return StackStreamItem.FromStdErr("Stack is already being processed.", 1);

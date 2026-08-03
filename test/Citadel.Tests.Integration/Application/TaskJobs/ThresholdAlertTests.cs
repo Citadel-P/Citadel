@@ -406,7 +406,8 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
                 _platformId,
                 address,
                 PlatformConnectorType.Agent,
-                IsOnLine: true),
+                IsOnLine: true,
+                IsValidated: true),
             TestContext.Current.CancellationToken);
 
         var cpuEvaluationCount = 0;

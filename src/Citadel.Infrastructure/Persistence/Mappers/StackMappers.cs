@@ -16,20 +16,13 @@ internal static class StackMappers
 
     internal static Stack ToDomain(this StackDto dto)
     {
-        var platform = dto.Platform_Name == null
+        var platform = dto.Platform_Name == null || dto.Platform_Descriptor == null
             ? null
-            : Platform.FromPersistence(
-                id: dto.CurrentRelease_PlatformId ?? Guid.Empty,
-                name: dto.Platform_Name,
-                address: string.Empty,
-                networkCount: 0,
-                volumeCount: 0,
-                imageCount: 0,
-                cpuCount: 0,
-                memTotal: 0,
-                status: dto.Platform_Status != null ? Enum.Parse<PlatformStatus>(dto.Platform_Status) : PlatformStatus.Offline,
-                connectorType: PlatformConnectorType.Unknown,
-                platformDescriptor: null);
+            : PlatformMappers.ToDomainSummary(
+                dto.CurrentRelease_PlatformId ?? Guid.Empty,
+                dto.Platform_Name,
+                dto.Platform_Status,
+                dto.Platform_Descriptor);
 
         var currentRelease = !dto.HasCurrentReleaseIdentity
             ? null

@@ -1,10 +1,10 @@
-﻿{
+{
   type: https://tools.ietf.org/html/rfc9110#section-15.5.1,
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
     0: [
-      Currently, only the Docker platform type is supported.
+      Currently, only Docker Standalone and Docker Swarm platform types are supported.
     ]
   },
   traceId: {Scrubbed}

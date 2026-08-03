@@ -41,6 +41,12 @@ internal sealed class ChangeDeploymentStateHandler(
             return Result.Failure(new NotFoundError("No deployments found for the provided deployment ID(s)."));
         }
 
+        if (deployments.Any(deployment => deployment.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm))
+        {
+            await TryRollbackProcessingAsync(deployments);
+            return Result.Failure(new BadRequestError("Container state actions are not available for Docker Swarm deployments."));
+        }
+
         using var completionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             applicationLifetime.ApplicationStopping);
         completionCancellation.CancelAfter(CompletionTimeout);

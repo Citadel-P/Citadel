@@ -79,7 +79,7 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
 
         // Act
         var checkpoint = _dbWorkQueue.CreateCheckpoint();
-        await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await _dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -104,7 +104,7 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
 
         // Act
         var checkpoint = _dbWorkQueue.CreateCheckpoint();
-        await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await _dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,

@@ -254,4 +254,9 @@ internal sealed class PlatformState(Guid id, PlatformConnectorType type)
     }
 }
 
-public sealed record PlatformHealth(Guid Id, string Address, PlatformConnectorType Type, bool IsOnLine);
+public sealed record PlatformHealth(
+    Guid Id,
+    string Address,
+    PlatformConnectorType Type,
+    bool IsOnLine,
+    bool IsValidated = false);

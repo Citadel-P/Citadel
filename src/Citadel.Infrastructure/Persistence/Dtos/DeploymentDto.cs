@@ -31,7 +31,8 @@ internal sealed record DeploymentDto(
     string? ActivityEvent_EventType = null,
     string? ActivityEvent_ActivityEventInfo = null,
     DateTime? ActivityEvent_CreatedAt = null,
-    string? TagsJson = null
+    string? TagsJson = null,
+    string? Platform_Descriptor = null
     )
 {
     public DeploymentDto()

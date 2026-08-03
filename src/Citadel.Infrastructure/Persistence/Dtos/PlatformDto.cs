@@ -15,6 +15,7 @@ internal record PlatformDto(
     string? ServerVersion,
     string? AgentVersion,
     string? Description,
+    string? ClusterId = null,
     long DeploymentCount = 0,
     long StackCount = 0,
     long DeploymentHealthyCount = 0,
@@ -33,7 +34,7 @@ internal record PlatformDto(
     string? TagsJson = null)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];
-    public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, null, 0, 0)
+    public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, null, null, null)
     {
 
     }

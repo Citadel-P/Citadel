@@ -33,7 +33,10 @@ public static class Platforms
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, PlatformView.Map);
     }
 
-    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreatePlatformInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Create(
+        IMediator mediator,
+        [FromBody] CreatePlatformInput request,
+        CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, PlatformView.Map);

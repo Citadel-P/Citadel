@@ -125,7 +125,15 @@ public class StackLifecycleTests
                 memTotal: 0,
                 status: PlatformStatus.Online,
                 connectorType: PlatformConnectorType.Local,
-                platformDescriptor: null!));
+                platformDescriptor: new DockerPlatformDescriptor(
+                    DaemonId: "daemon-1",
+                    ContainerCount: 0,
+                    ContainersRunning: 0,
+                    ContainersPaused: 0,
+                    ContainersStopped: 0)));
+        platforms
+            .Setup(x => x.CanAccessAsync(actorId, platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         platforms
             .Setup(x => x.GetPlatformsWithLatestStatByIdsAsync(
                 It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { platformId })),
@@ -148,7 +156,10 @@ public class StackLifecycleTests
         var userContext = new Mock<IUserContextAccessor>();
         userContext
             .Setup(x => x.Current)
-            .Returns(Mock.Of<IUserContext>(x => x.ActorId == actorId));
+            .Returns(Mock.Of<IUserContext>(x =>
+                x.ActorId == actorId
+                && x.UserId == actorId
+                && !x.IsAdmin));
 
         var patch = JsonMergePatchDocument<StackPatchModel>.FromJson($$"""
             {

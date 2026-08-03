@@ -2,6 +2,7 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -148,11 +149,17 @@ public class ManualStackAutoUpdateTests
         var disabled = CreateStack("disabled", StackUpdateBehavior.Disabled, registryId, StackReleaseStatus.Healthy);
         var stopped = CreateStack("stopped", StackUpdateBehavior.Notify, registryId, StackReleaseStatus.Stopped);
         var missingRegistry = CreateStack("missing-registry", StackUpdateBehavior.Notify, null, StackReleaseStatus.Healthy);
+        var swarm = CreateStack(
+            "swarm",
+            StackUpdateBehavior.Notify,
+            registryId,
+            StackReleaseStatus.Healthy,
+            platformType: PlatformType.DockerSwarm);
 
         var stacks = new Mock<IStackRepository>();
         stacks
             .Setup(x => x.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([eligible, disabled, stopped, missingRegistry]);
+            .ReturnsAsync([eligible, disabled, stopped, missingRegistry, swarm]);
 
         var uow = new Mock<IUnitOfWork>();
         uow.Setup(x => x.Stacks).Returns(stacks.Object);
@@ -192,19 +199,40 @@ public class ManualStackAutoUpdateTests
         StackUpdateBehavior updateBehavior,
         Guid? registryId,
         StackReleaseStatus status,
-        string compose = "services:\n  api:\n    image: nginx:latest\n")
+        string compose = "services:\n  api:\n    image: nginx:latest\n",
+        PlatformType platformType = PlatformType.Docker)
     {
+        var platform = CreatePlatform(platformType);
         var stack = Stack.Create(
             name,
             Guid.CreateVersion7(),
             StackSource.WebEditor,
-            Guid.CreateVersion7(),
+            platform.Id,
             new ManualStack(
                 ComposeFile: compose,
                 UpdateBehavior: updateBehavior,
-                RegistryId: registryId));
+                RegistryId: registryId),
+            platform: platform);
 
         stack.PartialUpdate(status);
         return stack;
     }
+
+    private static Platform CreatePlatform(PlatformType platformType) => new(
+        name: platformType.ToString(),
+        address: "https://platform.test",
+        networkCount: 0,
+        volumeCount: 0,
+        imageCount: 0,
+        cpuCount: 1,
+        memTotal: 1024,
+        serverVersion: null,
+        agentVersion: null,
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: platformType == PlatformType.DockerSwarm
+            ? new DockerSwarmPlatformDescriptor(
+                "node", "10.0.0.1", "Active", true, 1, 1,
+                "daemon", 0, 0, 0, 0)
+            : new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
 }

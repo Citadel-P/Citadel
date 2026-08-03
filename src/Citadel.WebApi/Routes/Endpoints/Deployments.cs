@@ -91,6 +91,13 @@ public static class Deployments
         DeploymentInputPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
+        if (!patchInput.HasOnlyConfigurationProperties())
+        {
+            return TypedResults.Problem(
+                detail: "Deployment configuration patches may only contain platformId and spec. Use the metadata or rename endpoints for other fields.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
         var mapped = patchInput.Map<PatchDeploymentInput, Deployment>();
         var result = await mediator.Send(new PatchDeployment(id, mapped), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);

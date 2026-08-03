@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,12 +62,19 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
+        var swarmPlatform = CreateSwarmPlatform();
         var deployment1 = CreateDeployment(platform.Id, "deployment-1", "nginx:latest");
         var deployment2 = CreateDeployment(platform.Id, "deployment-2", "nginx:latest");
+        var swarmDeployment = CreateDeployment(
+            swarmPlatform.Id,
+            "swarm-deployment",
+            "redis:latest");
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment1, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment2, TestContext.Current.CancellationToken);
+        await uow.Deployments.AddAsync(swarmDeployment, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;
@@ -94,6 +102,18 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
             Times.Once);
     }
 
+    [Fact]
+    public async Task Scanner_Should_Not_Inspect_Unsupported_Swarm_Workloads()
+    {
+        await RunScannerJobOnceAsync(TestContext.Current.CancellationToken);
+
+        _imageConnectorMock.Verify(
+            x => x.DistributionInspectAsync(
+                It.Is<DistributionInspectCommand>(command => command.ImageName == "redis:latest"),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     private async Task RunScannerJobOnceAsync(CancellationToken cancellationToken)
     {
         if (_runScannerJob is null)
@@ -111,7 +131,10 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
         }
     }
 
-    private static Deployment CreateDeployment(Guid platformId, string name, string imageTag)
+    private static Deployment CreateDeployment(
+        Guid platformId,
+        string name,
+        string imageTag)
         => new(
             name: name,
             description: "scanner-test",
@@ -120,4 +143,22 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
             spec: new DeploymentSpec(
                 UpdateBehavior: UpdateBehavior.Notify,
                 Image: new ExternalImage(Constants.DefaultRegistryId, imageTag)));
+
+    private static Platform CreateSwarmPlatform() => new(
+        name: "scanner-swarm",
+        address: "https://scanner-swarm.test",
+        networkCount: 0,
+        volumeCount: 0,
+        imageCount: 0,
+        cpuCount: 1,
+        memTotal: 1024,
+        serverVersion: null,
+        agentVersion: null,
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            "node", "10.0.0.1", "Active", true, 1, 1,
+            "scanner-swarm-daemon", 0, 0, 0, 0,
+            ClusterId: "scanner-swarm-cluster"),
+        clusterId: "scanner-swarm-cluster");
 }

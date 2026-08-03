@@ -9,6 +9,7 @@
   controlState: Idle,
   updated: 0,
   isSystem: false,
+  hasCitadelOwnershipLabels: false,
   deploymentId: Guid_3,
   imageView: {
     id: Guid_4,

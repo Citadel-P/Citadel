@@ -47,7 +47,7 @@ export const Platforms = ({
         ))}
       {(items ?? []).map(
         (platform) =>
-          platform.type === PlatformType.Docker && (
+          (platform.type === PlatformType.Docker || platform.type === PlatformType.DockerSwarm) && (
             <div key={`${platform.id}`} className="space-y-1 rounded-sm shadow-xs">
               <DockerPlatform platform={platform} actions={actions} />
             </div>

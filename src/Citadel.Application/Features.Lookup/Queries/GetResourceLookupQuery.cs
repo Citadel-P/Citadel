@@ -175,6 +175,7 @@ internal sealed class GetResourceLookupQueryHandler(
                  PermissionLevel.Read,
                  SpecificPermission.None,
                  cancellationToken))
+             .Where(static item => item.PlatformDescriptor.Type != PlatformType.DockerSwarm)
              .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
@@ -211,6 +212,7 @@ internal sealed class GetResourceLookupQueryHandler(
                  PermissionLevel.Read,
                  SpecificPermission.None,
                  cancellationToken))
+             .Where(static item => item.PlatformDescriptor.Type != PlatformType.DockerSwarm)
              .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)

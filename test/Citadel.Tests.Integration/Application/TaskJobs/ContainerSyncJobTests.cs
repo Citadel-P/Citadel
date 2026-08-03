@@ -95,7 +95,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -142,7 +142,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -178,7 +178,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -209,7 +209,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var cache = scope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
             var workItem = new SyncOnlinePlatformContainersWorkItem(
-                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
                 notificationQueue.Object,
                 new Dictionary<string, DockerContainer>
                 {
@@ -262,7 +262,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             Assert.True(cache.TryRemoveContainer(platformId, staleSnapshotContainer.Id));
 
             var workItem = new SyncOnlinePlatformContainersWorkItem(
-                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
                 notificationQueue.Object,
                 new Dictionary<string, DockerContainer>
                 {
@@ -330,7 +330,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
             var workItem = new SyncOnlinePlatformContainersWorkItem(
-                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
                 notificationQueue.Object,
                 new Dictionary<string, DockerContainer>
                 {
@@ -394,7 +394,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
             var workItem = new SyncOnlinePlatformContainersWorkItem(
-                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
                 notificationQueue.Object,
                 new Dictionary<string, DockerContainer>
                 {
@@ -459,7 +459,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             var resyncUow = resyncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var cache = resyncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
             var workItem = new SyncOnlinePlatformContainersWorkItem(
-                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
                 notificationQueue.Object,
                 new Dictionary<string, DockerContainer> { [dockerContainer.Id] = dockerContainer },
                 cache,
@@ -679,7 +679,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,

@@ -29,6 +29,19 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
 };
 
 function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISubMenuItem) => void }) {
+  if (sub.disabled) {
+    return (
+      <SidebarMenuSubButton
+        aria-disabled="true"
+        tabIndex={-1}
+        title={sub.disabledReason}
+        className="cursor-not-allowed text-sidebar-foreground/40 hover:bg-transparent hover:text-sidebar-foreground/40">
+        {sub.icon && <span className="flex items-center">{sub.icon}</span>}
+        <span className="truncate">{sub.label}</span>
+      </SidebarMenuSubButton>
+    );
+  }
+
   if (sub.children) {
     return (
       <SidebarMenuSubButton

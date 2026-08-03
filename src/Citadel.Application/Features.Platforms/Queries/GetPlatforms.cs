@@ -1,3 +1,4 @@
+using Domain;
 using Application.Features.Tags.Queries;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
@@ -10,7 +11,9 @@ namespace Application.Features.Platforms.Queries;
 
 public sealed record GetPlatforms(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<IEnumerable<Platform>>>;
 
-internal class GetPlatformsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetPlatforms, Result<IEnumerable<Platform>>>
+internal class GetPlatformsHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor) : IQueryHandler<GetPlatforms, Result<IEnumerable<Platform>>>
 {
     public async ValueTask<Result<IEnumerable<Platform>>> Handle(GetPlatforms request, CancellationToken cancellationToken)
     {

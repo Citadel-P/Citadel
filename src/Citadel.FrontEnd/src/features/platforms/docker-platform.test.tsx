@@ -1,4 +1,4 @@
-import { PlatformConnectorType, PlatformStatus, PlatformView } from '@/api/generated/api.types';
+import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { DockerPlatform } from './docker-platform';
@@ -7,6 +7,7 @@ const createPlatform = (diskUsage: number | null): PlatformView =>
   ({
     id: 'platform-1',
     name: 'Platform',
+    type: PlatformType.Docker,
     status: PlatformStatus.Online,
     connectorType: PlatformConnectorType.Local,
     serverVersion: '29.0.0',
@@ -99,5 +100,37 @@ describe('DockerPlatform disk usage', () => {
 
     expect(screen.getByText('N/A')).toBeVisible();
     expect(screen.queryByText('101 %')).not.toBeInTheDocument();
+  });
+
+  it('renders cluster inventory and a distinct icon for a Swarm platform', () => {
+    const platform = createPlatform(42.5);
+    platform.type = PlatformType.DockerSwarm;
+    platform.platformDescriptor = {
+      $type: 'DockerSwarm',
+      operatingSystem: 'Linux',
+      nodes: 3,
+      managers: 1,
+      serviceCount: 6,
+      runningTaskCount: 10,
+      containerCount: 2,
+      containersRunning: 2,
+      containersStopped: 0,
+      containersPaused: 0,
+    } as PlatformView['platformDescriptor'];
+
+    render(
+      <MemoryRouter>
+        <DockerPlatform platform={platform} actions={{}} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText('Docker Swarm')).toBeVisible();
+    expect(screen.getByText('3 nodes')).toBeVisible();
+    expect(screen.getByText('1 manager')).toBeVisible();
+    expect(screen.getByText('6 services')).toBeVisible();
+    expect(screen.getByText('10 running tasks')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Swarm workloads' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Connected manager utilization' })).toBeVisible();
+    expect(screen.queryByText('2 containers')).not.toBeInTheDocument();
   });
 });

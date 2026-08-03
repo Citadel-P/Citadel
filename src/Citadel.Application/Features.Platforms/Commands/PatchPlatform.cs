@@ -106,6 +106,48 @@ internal class PatchPlatformHandler(
                             "Docker engine did not report a daemon id."));
                 }
 
+                var lockedType = platform.PlatformDescriptor.Type;
+                if (descriptor.Type != lockedType)
+                {
+                    return Result.Failure<Platform>(new BadRequestError(
+                        $"Platform type is locked to {lockedType}. The new endpoint reports {descriptor.Type}."));
+                }
+
+                string? clusterId = null;
+                if (lockedType == PlatformType.DockerSwarm)
+                {
+                    var swarm = (DockerSwarmPlatformDescriptor)descriptor;
+                    if (!swarm.ControlAvailable)
+                    {
+                        return Result.Failure<Platform>(new BadRequestError(
+                            "The selected Docker Engine is a Swarm worker. Connect Citadel to a manager node."));
+                    }
+
+                    if (string.IsNullOrWhiteSpace(swarm.ClusterId))
+                    {
+                        return Result.Failure<Platform>(new BadRequestError(
+                            "The Swarm manager did not report a cluster id."));
+                    }
+
+                    clusterId = swarm.ClusterId.Trim();
+                    if (!string.IsNullOrWhiteSpace(platform.ClusterId)
+                        && !string.Equals(platform.ClusterId, clusterId, StringComparison.Ordinal))
+                    {
+                        return Result.Failure<Platform>(new BadRequestError(
+                            "The new manager belongs to a different Swarm cluster."));
+                    }
+
+                    var existingCluster = await unitOfWork.Platforms.GetByClusterIdAsync(
+                        clusterId,
+                        platform.Id,
+                        cancellationToken);
+                    if (existingCluster is not null)
+                    {
+                        return Result.Failure<Platform>(new ConflictError(
+                            $"This Swarm cluster is already registered as platform '{existingCluster.Name}'."));
+                    }
+                }
+
                 var daemonId = descriptor.DaemonId.Trim();
                 var existingPlatform = await unitOfWork.Platforms.GetByDaemonIdAsync(
                     daemonId,
@@ -129,7 +171,8 @@ internal class PatchPlatformHandler(
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
                     description: patchedPlatform.Description,
-                    descriptor: descriptor with { DaemonId = daemonId });
+                    descriptor: descriptor with { DaemonId = daemonId },
+                    clusterId: clusterId);
 
                 await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);

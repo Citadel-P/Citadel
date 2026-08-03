@@ -73,7 +73,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
     }
 
     [Fact]
-    public async Task Patch_Stack_Should_Update_Current_Release_Definition_Without_Creating_New_Release()
+    public async Task Patch_Stack_Should_Reject_Platform_Change_Without_Modifying_Release()
     {
         var patchJson = $$"""
         {
@@ -88,7 +88,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
 
         var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}", content, cancellationToken: TestContext.Current.CancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -98,21 +98,14 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.NotNull(stack);
         Assert.Equal("stack-1", stack.Name);
         Assert.Equal("original-description", stack.Description);
-        Assert.Equal(2, releases.Count);
+        Assert.Single(releases);
         Assert.Equal("1", stack.CurrentStackRelease!.Version);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
-        Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
+        Assert.Equal(platformId, stack.CurrentStackRelease.PlatformId);
         Assert.Equal(stack.CurrentStackReleaseId, stack.CurrentStackRelease.Id);
-        Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).ComposeFile);
+        Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).ComposeFile);
         var binding = Assert.Single(stack.CurrentStackRelease.ResourceBindings ?? []);
         Assert.Equal("stripe_api_key", binding.Name);
-
-        var rollbackSnapshot = Assert.Single(releases, release => release.Id != stack.CurrentStackReleaseId);
-        Assert.Equal("1", rollbackSnapshot.Version);
-        Assert.Equal(StackReleaseStatus.Healthy, rollbackSnapshot.Status);
-        Assert.Equal(platformId, rollbackSnapshot.PlatformId);
-        Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(rollbackSnapshot.Spec).ComposeFile);
-        Assert.Equal("stripe_api_key", Assert.Single(rollbackSnapshot.ResourceBindings ?? []).Name);
     }
 
     [Fact]
@@ -185,9 +178,8 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
     [Fact]
     public async Task Patch_Stack_Should_Record_Distinct_Old_And_New_Snapshots_In_Update_Activity()
     {
-        var patchJson = $$"""
+        var patchJson = """
         {
-          "platformId": "{{otherPlatformId}}",
           "spec": {
             "$type": "WebEditor",
             "composeFile": "compose.updated.yml"
@@ -215,7 +207,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var update = Assert.IsType<StackUpdated>(activity?.Info);
 
         Assert.Equal(platformId, update.OldStack.StackRelease!.PlatformId);
-        Assert.Equal(otherPlatformId, update.NewStack.StackRelease!.PlatformId);
+        Assert.Equal(platformId, update.NewStack.StackRelease!.PlatformId);
         Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(update.OldStack.StackRelease.Spec).ComposeFile);
         Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(update.NewStack.StackRelease.Spec).ComposeFile);
         Assert.Equal("stripe_api_key", Assert.Single(update.OldStack.StackRelease.ResourceBindings ?? []).Name);

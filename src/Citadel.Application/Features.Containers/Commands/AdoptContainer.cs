@@ -173,7 +173,11 @@ internal sealed class AdoptContainerHandler(
         if (licenseResult.IsFailure(out var licenseError))
             return Result.Failure<Deployment>(licenseError);
 
-        var imageValidation = await DeploymentImageValidation.ValidateAsync(spec, unitOfWork, cancellationToken);
+        var imageValidation = await DeploymentImageValidation.ValidateAsync(
+            spec,
+            PlatformType.Docker,
+            unitOfWork,
+            cancellationToken);
         if (imageValidation.IsFailure(out var imageError))
             return Result.Failure<Deployment>(imageError);
 

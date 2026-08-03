@@ -150,9 +150,10 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
         Assert.Equal("123456", descriptor.DaemonId);
         Assert.Equal(1, platform.NetworkCount);
         Assert.Equal(5, descriptor.ContainerCount);
+        Assert.Equal(PlatformStatus.Offline, platform.Status);
         hubManagerMock.Verify(
             x => x.PushPlatformUpdate(It.IsAny<Platform>()),
-            Times.Never);
+            Times.Once);
     }
 
     [Fact]

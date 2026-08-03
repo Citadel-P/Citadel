@@ -1070,8 +1070,10 @@ export const StackForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: isComposeImport,
-            description: 'Select the platform to deploy on.',
+            disabled: !!id || isComposeImport,
+            description: id
+              ? 'The platform cannot be changed after the stack is created.'
+              : 'Select the platform to deploy on.',
             render: (value, set) => {
               return (
                 <ResourceSelectorField

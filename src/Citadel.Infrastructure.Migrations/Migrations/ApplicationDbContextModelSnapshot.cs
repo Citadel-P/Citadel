@@ -4238,6 +4238,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("agentversion");
 
+                    b.Property<string>("ClusterId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("clusterid");
+
                     b.Property<string>("ConnectorType")
                         .IsRequired()
                         .HasColumnType("text")
@@ -4293,6 +4298,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Address")
                         .IsUnique()
                         .HasDatabaseName("ix_platforms_address");
+
+                    b.HasIndex("ClusterId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_platforms_clusterid")
+                        .HasFilter("clusterid IS NOT NULL");
 
                     b.HasIndex(new[] { "Address" }, "IX_Platforms_GlobalSearch_Address_Trgm")
                         .HasDatabaseName("ix_platforms_globalsearch_address_trgm");

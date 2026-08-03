@@ -38,7 +38,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         Guid platformId,
         StackSpec spec,
         string? description = null,
-        StackDriftPolicy? driftPolicy = null)
+        StackDriftPolicy? driftPolicy = null,
+        Domain.Entities.Platforms.Platform? platform = null)
     {
         var stack = new Stack
         {
@@ -55,7 +56,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
             platformId: platformId,
             spec: spec,
             createdByActorId: createdByActorId,
-            version: "1");
+            version: "1",
+            platform: platform);
 
         stack.CurrentStackReleaseId = stack.CurrentStackRelease.Id;
 

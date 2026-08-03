@@ -21,7 +21,8 @@ internal static class PlatformMapper
             memTotal: platformInfo.MemTotal,
             serverVersion: platformInfo.ServerVersion,
             agentVersion: platformInfo.AgentVersion,
-            platformDescriptor: platformInfo.Descriptor);
+            platformDescriptor: platformInfo.Descriptor,
+            clusterId: platformInfo.ClusterId);
     }
 
     internal static List<PlatformStat> Map(this Dictionary<Guid, List<PlatformStatsResult>> stats)

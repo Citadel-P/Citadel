@@ -37,7 +37,7 @@ internal sealed class DockerDaemonEventJob(
         {
             await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
             {
-                if (platform.IsOnLine)
+                if (platform.IsOnLine && platform.IsValidated)
                     StartMonitoringPlatform(platform, cancellationToken);
                 else
                     StopMonitoringPlatform(platform.Address);

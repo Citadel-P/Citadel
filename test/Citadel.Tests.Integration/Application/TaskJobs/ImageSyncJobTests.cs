@@ -90,7 +90,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
         
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -105,6 +105,43 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
         Assert.Equal(3, dbImages.Count());
         Assert.Equal(dbImages.Select(s => s.Name), freshImages.Select(s => s.GetName()));
         streamManagerMock.Verify(x => x.SendImagesInfo(It.IsAny<Guid>(), It.IsAny<IEnumerable<Image>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RawOnlineHealthEvent_ShouldWaitForIdentityValidation()
+    {
+        var connectorCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        imageFactoryMock
+            .Setup(factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(imageConnector.Object);
+        imageConnector
+            .Setup(connector => connector.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => connectorCalled.TrySetResult())
+            .ReturnsAsync(Result.Success(Fakes.GetDummyImages()));
+
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                platformId,
+                "https://original.address",
+                PlatformConnectorType.Agent,
+                IsOnLine: true),
+            TestContext.Current.CancellationToken);
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                platformId,
+                "https://original.address",
+                PlatformConnectorType.Agent,
+                IsOnLine: true,
+                IsValidated: true),
+            TestContext.Current.CancellationToken);
+
+        await connectorCalled.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        imageConnector.Verify(
+            connector => connector.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -131,7 +168,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -168,7 +205,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,
@@ -218,7 +255,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         // Act
         var checkpoint = dbWorkQueue.CreateCheckpoint();
-        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await dbWorkQueue.WaitForIdleAfterAsync(
             checkpoint,

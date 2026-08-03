@@ -50,11 +50,36 @@ internal class CreateDeploymentHandler(
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
-        var actorId = userContext.Current.ActorId;
+        var user = userContext.Current;
+        var actorId = user.ActorId;
+
+        var targetPlatform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
+        if (targetPlatform is null)
+        {
+            return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist."));
+        }
+
+        if (!user.IsAdmin
+            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, command.PlatformId, cancellationToken))
+        {
+            return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist or is not accessible."));
+        }
+
         var exist = await unitOfWork.Deployments.ExistsAsync(command.Name, command.PlatformId, cancellationToken);
         if (exist)
         {
             return Result.Failure<Deployment>(new ConflictError("Name already exists"));
+        }
+
+        var platformType = targetPlatform.PlatformDescriptor.Type;
+        if (platformType == PlatformType.DockerSwarm)
+        {
+            return Result.Failure<Deployment>(new NotFoundError("Docker Swarm deployments are not available yet."));
+        }
+
+        if (platformType != PlatformType.Docker)
+        {
+            return Result.Failure<Deployment>(new BadRequestError("Deployments require a Docker Standalone platform."));
         }
 
         var spec = BuildImageProvenance.Clear(command.Spec);
@@ -80,13 +105,13 @@ internal class CreateDeploymentHandler(
                 return Result.Failure<Deployment>(entitlementError);
         }
 
-        var imageValidation = await DeploymentImageValidation.ValidateAsync(spec, unitOfWork, cancellationToken);
+        var imageValidation = await DeploymentImageValidation.ValidateAsync(spec, platformType, unitOfWork, cancellationToken);
         if (imageValidation.IsFailure(out var imageError))
         {
             return Result.Failure<Deployment>(imageError);
         }
 
-        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, cancellationToken);
+        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, platformType, cancellationToken);
         if (!duplicateSourceResult.IsSuccess(out var duplicateSource))
         {
             return Result.Failure<Deployment>(duplicateSourceResult.Errors);
@@ -138,6 +163,7 @@ internal class CreateDeploymentHandler(
 
     private async Task<Result<ActivitySourceResource?>> GetValidDuplicateSourceAsync(
         ActivitySourceResource? source,
+        PlatformType targetPlatformType,
         CancellationToken cancellationToken)
     {
         if (source is null)
@@ -154,6 +180,9 @@ internal class CreateDeploymentHandler(
         if (!user.IsAdmin && !await unitOfWork.Deployments.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
             return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source deployment."));
 
+        if (sourceDeployment.Platform?.PlatformDescriptor.Type != targetPlatformType)
+            return Result.Failure<ActivitySourceResource?>(new BadRequestError("A deployment duplicate must target the same platform type as its source."));
+
         return Result.Success<ActivitySourceResource?>(new ActivitySourceResource(
             ActivityResourceType.Deployment,
             sourceDeployment.Id,
@@ -165,9 +194,13 @@ internal static class DeploymentImageValidation
 {
     internal static async Task<Result> ValidateAsync(
         DeploymentSpec spec,
+        PlatformType platformType,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (platformType == PlatformType.DockerSwarm && spec.Image is LocalImage)
+            return Result.Failure(new BadRequestError("Local images cannot be used by a Docker Swarm deployment. Select an external image or a build that publishes to a registry."));
+
         if (spec.Image is BuildImage buildImage)
         {
             if (spec.UpdateBehavior != UpdateBehavior.Disabled)
