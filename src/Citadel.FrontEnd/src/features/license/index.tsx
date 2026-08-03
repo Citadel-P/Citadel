@@ -79,7 +79,7 @@ export default function LicensePage() {
 
   if (licenseQuery.isLoading || requestQuery.isLoading) {
     return (
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+      <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
         <div className="rounded-sm border bg-background p-4">
           <Loader />
         </div>
@@ -88,7 +88,7 @@ export default function LicensePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+    <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
       <div className="space-y-4 bg-background rounded-lg p-4">
         <header className="rounded-sm border bg-background p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -265,7 +265,9 @@ function CapabilityRow({ capability }: { capability: LicenseCapabilityView }) {
       <div
         className={cn(
           'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm',
-          capability.enabled ? 'bg-green-500/10 text-green-700 dark:text-green-300' : 'bg-muted/35 text-muted-foreground',
+          capability.enabled
+            ? 'bg-green-500/10 text-green-700 dark:text-green-300'
+            : 'bg-muted/35 text-muted-foreground',
         )}>
         {capability.enabled ? <Check className="size-3" /> : <Lock className="size-3" />}
       </div>

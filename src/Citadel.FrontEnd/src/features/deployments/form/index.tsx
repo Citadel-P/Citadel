@@ -289,36 +289,34 @@ const RuntimeTabs = ({
 
   return (
     <Tabs defaultValue={defaultValue} className="w-full">
-      <TabsList className="w-fit justify-start">
-        <TabsTrigger className="text-xs" value="logs" disabled={!canViewLogs}>
+      <TabsList className="w-fit max-w-full overflow-x-auto">
+        <TabsTrigger value="logs" disabled={!canViewLogs}>
           Logs
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="inspect" disabled={!canInspect}>
+        <TabsTrigger value="inspect" disabled={!canInspect}>
           Inspect
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="terminal" disabled={terminalDisabled}>
+        <TabsTrigger value="terminal" disabled={terminalDisabled}>
           Terminal
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="stats">
-          Stats
-        </TabsTrigger>
+        <TabsTrigger value="stats">Stats</TabsTrigger>
       </TabsList>
       {canViewLogs && (
-        <TabsContent value="logs" className="w-full mt-2">
+        <TabsContent value="logs" className="mt-2 w-full">
           <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />
         </TabsContent>
       )}
       {canInspect && (
-        <TabsContent value="inspect" className="w-full mt-2">
+        <TabsContent value="inspect" className="mt-2 w-full">
           <DeploymentInspect key={deploymentId} deploymentId={deploymentId} />
         </TabsContent>
       )}
       {!terminalDisabled && (
-        <TabsContent value="terminal" className="w-full mt-2">
+        <TabsContent value="terminal" className="mt-2 w-full">
           <DeploymentExec key={deploymentId} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
         </TabsContent>
       )}
-      <TabsContent value="stats" className="w-full mt-2">
+      <TabsContent value="stats" className="mt-2 w-full">
         <DeploymentStats key={deploymentId} resource={containerInfo} deploymentId={deploymentId} />
       </TabsContent>
     </Tabs>

@@ -182,7 +182,7 @@ export const SidebarMenu = () => {
         <SidebarGroup key={menu.group || i}>
           <SidebarGroupLabel>{menu.group}</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenuList className="pl-1 group-data-[collapsible=icon]:pl-0">
+            <SidebarMenuList>
               {menu.items.map((item) => (
                 <SidebarMenuItem key={item.label}>
                   <SidebarRow
@@ -222,7 +222,7 @@ function SidebarRow({
       data-sidebar-icon
       className={clsx(
         'relative flex size-3.5 shrink-0 items-center justify-center [&>svg]:size-3.5',
-        item.active ? 'text-primary' : 'text-muted-foreground',
+        item.active ? 'text-primary' : 'text-sidebar-foreground/70',
       )}>
       {item.icon}
       {hasBadge && (
@@ -237,7 +237,7 @@ function SidebarRow({
         tooltip={item.label}
         isActive={item.active}
         onClick={onClick}
-        className={clsx('text-muted-foreground', hasBadge && 'pr-10')}
+        className={clsx(hasBadge && 'pr-10')}
         aria-expanded={!!item.expanded}>
         {icon}
         <span data-sidebar-label className="truncate">
@@ -245,7 +245,7 @@ function SidebarRow({
         </span>
         <ChevronRight
           className={clsx(
-            'ml-auto size-4 text-muted-foreground/60 transition-transform duration-300 ease-out group-data-[collapsible=icon]:hidden',
+            'ml-auto size-3.5 text-sidebar-foreground/40 transition-transform duration-200 ease-out group-data-[collapsible=icon]:hidden',
             item.expanded && 'rotate-90',
           )}
           aria-hidden

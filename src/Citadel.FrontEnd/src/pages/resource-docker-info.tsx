@@ -35,7 +35,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
 
   return (
     <div className="flex-col justify-between relative">
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
         <div className="max-w-full rounded-lg border border-border bg-background p-4">
           <div className="flex flex-col gap-2">
             {(isLoading || !resource) && !error ? (

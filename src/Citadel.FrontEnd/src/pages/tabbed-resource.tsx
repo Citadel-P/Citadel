@@ -73,7 +73,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   return (
     <div className="flex-col relative">
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
         <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-4">
           <ResourceHeader
             type={type}
@@ -101,7 +101,6 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
                   <TabsTrigger
                     key={t.label}
                     value={t.label}
-                    className="text-xs"
                     disabled={t.disabled?.(null as any) ?? false}
                     onClick={() => navigateToTab(t)}>
                     {t.label}

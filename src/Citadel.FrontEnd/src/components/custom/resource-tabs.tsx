@@ -32,10 +32,7 @@ export const ResourceTabs = ({
 
   const [activeTab, setActiveTab] = useLocalStorage(localKey, tabs[0]?.label ?? 'default');
   const { sentinelRef, isStuck } = useStickySentinel();
-  const enabledTabs = useMemo(
-    () => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)),
-    [tabs, resource],
-  );
+  const enabledTabs = useMemo(() => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)), [tabs, resource]);
   const hashTab = useMemo(() => {
     const hash = (location.hash || window.location.hash).replace(/^#/, '');
     if (!hash) return undefined;
@@ -64,16 +61,12 @@ export const ResourceTabs = ({
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(
-          'sticky top-0 z-30 bg-background left-0 right-0 transition-all duration-200',
-          isStuck ? '-mx-4' : 'mx-0',
+          'sticky top-0 right-0 left-0 z-30 transition-all duration-200',
+          isStuck ? '-mx-4 bg-accent' : 'mx-0 bg-background',
         )}>
-        <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
+        <TabsList className={cn('w-full overflow-x-auto', isStuck && 'px-4')}>
           {tabs.map((tab) => (
-            <TabsTrigger
-              key={tab.label}
-              value={tab.label}
-              className="text-xs"
-              disabled={tab.disabled?.(resource) ?? false}>
+            <TabsTrigger key={tab.label} value={tab.label} disabled={tab.disabled?.(resource) ?? false}>
               {tab.label}
             </TabsTrigger>
           ))}

@@ -48,7 +48,7 @@ const themeModes = [
 
 export function Header() {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 shadow-none backdrop-blur transition-[width,height] supports-backdrop-filter:bg-background/90 bg-background/90 ">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-4 shadow-none transition-[width,height]">
       <SidebarTrigger />
       <Separator orientation="vertical" className="mr-2 h-4" />
       <div className="flex min-w-0 flex-1 items-center">

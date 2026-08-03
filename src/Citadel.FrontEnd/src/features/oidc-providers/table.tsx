@@ -1,5 +1,4 @@
 import { OidcProviderView } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -26,11 +25,7 @@ export function OidcProvidersTable({
   const [, setSelectedResources] = useSelectedResources<OidcProviderView>('OidcProvider');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
 
 const columns = (

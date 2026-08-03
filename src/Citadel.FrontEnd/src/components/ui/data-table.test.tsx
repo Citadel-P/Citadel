@@ -58,3 +58,22 @@ describe('DataTable nested row selection', () => {
     await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([child]));
   });
 });
+
+describe('DataTable styling', () => {
+  it('uses one typography and spacing contract for every column', () => {
+    render(<DataTable columns={columns} data={[{ id: 'stack', name: 'Stack' }]} isLoading={false} />);
+
+    const table = screen.getByRole('table');
+    expect(table.closest('[data-slot="table-container"]')).toHaveClass('rounded-md', 'border', 'p-1');
+
+    screen.getAllByRole('columnheader').forEach((header) => {
+      expect(header).toHaveClass('h-11', 'text-xs', 'font-semibold');
+    });
+
+    screen.getAllByRole('cell').forEach((cell) => {
+      expect(cell).toHaveClass('h-12', 'text-sm');
+    });
+
+    expect(screen.getAllByRole('row')[1]).toHaveClass('even:bg-muted/15');
+  });
+});

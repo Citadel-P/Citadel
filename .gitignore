@@ -242,6 +242,10 @@ _Pvt_Extensions
 *.received.*
 *.received/
 
+# Local design verification artifacts
+/.artifacts/
+/design-qa.md
+
 # Data folder
 src/Citadel.WebApi/data/
 /tls/

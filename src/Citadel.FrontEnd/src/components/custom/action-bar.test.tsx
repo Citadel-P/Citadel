@@ -87,6 +87,8 @@ describe('GenericActionBar', () => {
     const actionGroup = screen.getByRole('group');
 
     expect(actionBar).toHaveClass('inset-x-0', expectedLeftClass);
+    expect(actionBar).toHaveClass('lg:min-h-[var(--layout-footer-height)]');
+    expect(actionBar).toHaveClass('border-t', 'border-sidebar-border', 'bg-sidebar');
     expect(actionBar).not.toHaveAttribute('style');
     expect(actionGroup).toHaveClass('grid', 'w-full', 'grid-cols-2', 'gap-2', 'sm:flex', 'sm:w-fit');
     expect(actionGroup.parentElement).toHaveClass('w-full', 'sm:w-auto');

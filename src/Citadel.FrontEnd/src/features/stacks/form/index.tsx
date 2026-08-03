@@ -26,7 +26,7 @@ import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { useStackInfoGroup } from './hooks/useStackInfoGroup';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import {
@@ -658,19 +658,17 @@ const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers:
 
   return (
     <Tabs defaultValue={defaultValue} className="w-full">
-      <TabsList className="w-fit justify-start">
-        <TabsTrigger className="text-xs" value="logs" disabled={!canViewLogs}>
+      <TabsList className="w-fit max-w-full overflow-x-auto">
+        <TabsTrigger value="logs" disabled={!canViewLogs}>
           Logs
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="inspect" disabled={!canInspect || !hasContainers}>
+        <TabsTrigger value="inspect" disabled={!canInspect || !hasContainers}>
           Inspect
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="terminal" disabled={!canOpenTerminal || !hasContainers}>
+        <TabsTrigger value="terminal" disabled={!canOpenTerminal || !hasContainers}>
           Terminal
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="stats">
-          Stats
-        </TabsTrigger>
+        <TabsTrigger value="stats">Stats</TabsTrigger>
       </TabsList>
       {canViewLogs && (
         <TabsContent value="logs" className="mt-2 w-full">
@@ -898,11 +896,7 @@ const StackContainersTable = ({
 }) => {
   const columns = useMemo(() => getStackContainerColumns(platformId), [platformId]);
 
-  return (
-    <div className="rounded-sm border p-1 shadow-xs">
-      <DataTable columns={columns} data={containers} isLoading={isLoading} />
-    </div>
-  );
+  return <DataTable columns={columns} data={containers} isLoading={isLoading} />;
 };
 
 const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerDataView>[] => [

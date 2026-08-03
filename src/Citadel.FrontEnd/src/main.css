@@ -4,7 +4,11 @@
 @plugin "tailwindcss-animate";
 
 @theme {
-  --font-sans: system-ui, sans-serif;
+  --font-sans: 'Geist Variable', 'Segoe UI', system-ui, sans-serif;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --layout-content-width: 96rem;
+  --layout-footer-height: 3.5625rem;
   /* Animations */
   --animate-wiggle: wiggle 1s ease-in-out infinite;
   --animate-fade-in-down: fade-in-down 0.3s ease-out;
@@ -218,6 +222,8 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
   }
 
   /* Scrollbar Styles */
@@ -267,13 +273,9 @@
   position: relative;
 }
 
-.sidebar-expanded {
-  --sidebar-width: 270px;
-  --sidebar-width-icon: 58px;
-}
-
+.sidebar-expanded,
 .sidebar-collapsed {
-  --sidebar-width: 88px;
+  --sidebar-width: 248px;
   --sidebar-width-icon: 58px;
 }
 
@@ -293,14 +295,14 @@
 }
 
 :root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #334155;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
 }
 
 .dark {

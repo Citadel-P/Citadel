@@ -42,7 +42,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { ContentCard } from '@/components/custom/content-card';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
@@ -596,9 +595,7 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
         <Plus className="h-3 w-3" /> Add Window
       </Button>
       {quietHours.length > 0 && (
-        <ContentCard>
-          <QuietHoursTable quietHours={quietHours} disabled={disabled} onEdit={handleEdit} onDelete={handleRemove} />
-        </ContentCard>
+        <QuietHoursTable quietHours={quietHours} disabled={disabled} onEdit={handleEdit} onDelete={handleRemove} />
       )}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>

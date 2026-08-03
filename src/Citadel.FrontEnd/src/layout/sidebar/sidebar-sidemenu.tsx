@@ -36,11 +36,11 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
         onClick={() => toggleMenu(sub)}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleMenu(sub)}
         aria-expanded={!!sub.expanded}>
-        {sub.icon && <span className="mr-2 flex items-center">{sub.icon}</span>}
+        {sub.icon && <span className="flex items-center">{sub.icon}</span>}
         <span className="flex-1 text-left">{sub.label}</span>
         <ChevronRight
           className={clsx(
-            'h-4 w-4 transition-transform duration-300 ease-out text-muted-foreground/60',
+            'size-3.5 text-sidebar-foreground/40 transition-transform duration-200 ease-out',
             sub.expanded && 'rotate-90',
           )}
           aria-hidden

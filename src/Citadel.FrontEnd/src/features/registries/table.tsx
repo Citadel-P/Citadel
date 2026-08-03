@@ -11,7 +11,6 @@ import { useSelectedResources } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
-import { ContentCard } from '@/components/custom/content-card';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TagChips } from '@/features/tags/components';
 
@@ -136,11 +135,7 @@ export const RegistriesTable = ({
   const [_, setSelectedResources] = useSelectedResources<RegistryView>('Registry');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const RegistryNameRow = ({ registry }: { registry: RegistryView }) => {

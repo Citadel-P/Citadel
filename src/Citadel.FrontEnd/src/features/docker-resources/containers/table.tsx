@@ -21,7 +21,6 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
 import { ChevronDown, ChevronRight, Unlink } from 'lucide-react';
 import { ContainerActionResource, ContainerStackGroupResource, isContainerStackGroup } from './actions';
@@ -74,15 +73,13 @@ export const ContainersTable = ({
   );
 
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={rows}
-        isLoading={isLoading}
-        getSubRows={getSubRows}
-        onSelectionChange={handleSelectionChange}
-      />
-    </ContentCard>
+    <DataTable
+      columns={cols}
+      data={rows}
+      isLoading={isLoading}
+      getSubRows={getSubRows}
+      onSelectionChange={handleSelectionChange}
+    />
   );
 };
 

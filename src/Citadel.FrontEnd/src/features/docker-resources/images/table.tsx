@@ -14,7 +14,6 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -35,11 +34,7 @@ export const ImagesTable = ({
   const formatDateTime = useProfileDateTimeFormatter();
   const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const columns = (

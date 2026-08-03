@@ -23,15 +23,15 @@ export const Sidebar = () => {
 
   return (
     <SidebarRoot collapsible="icon">
-      <SidebarHeader className="h-16 justify-center border-b border-border">
+      <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
         <span
           onClick={() => navigate('/')}
           onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
           role="button"
           tabIndex={0}
-          className="flex h-10 cursor-pointer items-center gap-3 rounded-md  focus:outline-hidden focus:ring-1 hover:bg-card">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded bg-primary p-2 text-background">
-            <LogoIcon />
+          className="flex h-10 cursor-pointer items-center gap-3 rounded-md focus:outline-hidden focus:ring-2 focus:ring-sidebar-ring/50 hover:bg-sidebar-accent">
+          <span className="flex size-8 shrink-0 items-center justify-center">
+            <LogoIcon className="size-8" />
           </span>
           <b className="truncate text-sm font-bold text-foreground group-data-[collapsible=icon]:hidden">Citadel</b>
         </span>
@@ -41,9 +41,9 @@ export const Sidebar = () => {
         <SidebarMenu />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border">
+      <SidebarFooter className="h-[var(--layout-footer-height)] shrink-0 justify-center border-t border-sidebar-border">
         {sidebarMinimized ? (
-          <div className="group/version relative flex h-9 items-center justify-center rounded-md p-2 hover:bg-card">
+          <div className="group/version relative flex h-8 items-center justify-center rounded-md p-2 hover:bg-sidebar-accent">
             <Info width={18} className="text-muted-foreground/50" />
             <span className="absolute bottom-2 left-12 z-10 w-auto min-w-max origin-left scale-0 rounded-md bg-foreground p-2 text-xs font-bold text-background shadow-md transition-all duration-200 group-hover/version:scale-100">
               v {version} - {licenseType}
@@ -55,12 +55,10 @@ export const Sidebar = () => {
               target="_blank"
               rel="noreferrer"
               href="https://github.com/Citadel-P/Citadel"
-              className="truncate rounded-lg bg-card px-2 text-foreground hover:underline">
+              className="truncate rounded-md bg-sidebar-accent px-2 text-foreground hover:underline">
               v {version}
             </a>
-            <Link
-              to="/license"
-              className="truncate rounded-lg bg-card px-2 text-foreground">
+            <Link to="/license" className="truncate rounded-md bg-sidebar-accent px-2 text-foreground">
               {licenseType}
             </Link>
           </div>

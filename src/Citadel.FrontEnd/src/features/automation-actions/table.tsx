@@ -1,5 +1,4 @@
 import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -29,11 +28,7 @@ export function AutomationActionsTable({
   const [, setSelectedResources] = useSelectedResources<AutomationActionView>('AutomationAction');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
 
 const columns = (
@@ -96,7 +91,7 @@ const columns = (
 ];
 
 const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
-  const status = action.latestRun?.status ?? action.enabled;
+  const status = action.enabled ? (action.latestRun?.status ?? true) : false;
 
   return (
     <div className="flex min-w-0 items-center gap-1">

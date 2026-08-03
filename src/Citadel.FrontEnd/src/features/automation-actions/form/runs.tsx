@@ -1,5 +1,4 @@
 import { ActionRunStatus, AutomationActionRunView, AutomationActionView } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { LogViewer } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -58,9 +57,7 @@ export function AutomationActionRunsTab({ resource }: { resource: AutomationActi
 
   return (
     <div className="flex flex-col gap-4">
-      <ContentCard>
-        <DataTable columns={columns} data={runs} isLoading={isLoading} />
-      </ContentCard>
+      <DataTable columns={columns} data={runs} isLoading={isLoading} />
 
       <AutomationRunLogsSheet
         open={Boolean(logRunId)}

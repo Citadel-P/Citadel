@@ -1,5 +1,4 @@
 import { TagView } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,7 +35,7 @@ export function TagsTable({
   }, []);
 
   return (
-    <ContentCard>
+    <>
       <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
       <TagFormDialog
         mode="edit"
@@ -44,7 +43,7 @@ export function TagsTable({
         open={editingTag !== null}
         onOpenChange={(open) => !open && setEditingTag(null)}
       />
-    </ContentCard>
+    </>
   );
 }
 

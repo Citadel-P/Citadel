@@ -38,7 +38,7 @@ export function LicenseReminder() {
   if (!notice || !noticeKey || dismissedKey === noticeKey) return null;
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 pt-4 sm:px-6">
       <Alert
         className={
           notice.tone === 'danger'

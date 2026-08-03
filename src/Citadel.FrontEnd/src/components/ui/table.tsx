@@ -1,14 +1,13 @@
-// This component has been patched:
-// - remove the borders from row, add zebra style
-// - add bg-accent/60 to table head
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
-      <table data-slot="table" className={cn('w-full caption-bottom', className)} {...props} />
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto rounded-md border border-border bg-background p-1">
+      <table data-slot="table" className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   );
 }
@@ -17,7 +16,10 @@ function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
   return (
     <thead
       data-slot="table-header"
-      className={cn('[&_tr]:border-1 border-1 text-foreground bg-accent/60', className)}
+      className={cn(
+        'border-0 bg-transparent text-muted-foreground/75 [&_tr]:border-0 [&_tr]:bg-muted/20 [&_tr]:even:bg-muted/20 [&_tr]:hover:bg-muted/20',
+        className,
+      )}
       {...props}
     />
   );
@@ -42,8 +44,7 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot="table-row"
       className={cn(
-        'text-left border-0 text-sm hover:bg-card/30 data-[state=selected]:bg-card/30 border-b-0 transition-colors',
-        'even:bg-muted/10',
+        'border-b border-border bg-transparent text-left text-sm transition-colors even:bg-muted/15 hover:bg-muted/25 data-[state=selected]:bg-muted/25',
         className,
       )}
       {...props}
@@ -56,7 +57,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'p-3 text-muted-foreground border h-10 px-2 text-sm text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+        'h-11 border-0 px-3 py-0 text-left align-middle text-xs font-semibold tracking-[0.03125rem] whitespace-nowrap first:rounded-l-sm last:rounded-r-sm [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
         className,
       )}
       {...props}
@@ -69,7 +70,7 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
     <td
       data-slot="table-cell"
       className={cn(
-        'h-12 px-2 text-sm whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+        'h-12 px-3 py-1.5 align-middle text-sm whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
         className,
       )}
       {...props}

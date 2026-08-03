@@ -141,9 +141,11 @@ describe('Header', () => {
     const search = screen.getByTestId('global-search');
     const indicator = screen.getByTestId('live-connection-indicator');
     const breadcrumb = screen.getByTestId('breadcrumb');
+    const header = screen.getByRole('banner');
 
     expect(breadcrumb.parentElement?.nextElementSibling).toContainElement(indicator);
     expect(indicator.parentElement?.nextElementSibling).toContainElement(search);
+    expect(header).toHaveClass('border-sidebar-border', 'bg-sidebar');
   });
 });
 

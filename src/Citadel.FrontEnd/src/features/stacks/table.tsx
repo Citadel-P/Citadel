@@ -16,7 +16,6 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -49,15 +48,13 @@ export const StacksTable = ({
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={items}
-        isLoading={isLoading}
-        emptyState={emptyState}
-        onSelectionChange={setSelectedResources}
-      />
-    </ContentCard>
+    <DataTable
+      columns={cols}
+      data={items}
+      isLoading={isLoading}
+      emptyState={emptyState}
+      onSelectionChange={setSelectedResources}
+    />
   );
 };
 
@@ -143,7 +140,7 @@ const StackNameRow = ({ stack }: { stack: StackView }) => {
         <StateIndicator value={stack.status} isProcessing={stack.controlState === ResourceControlState.Processing} />
       </div>
       <span
-        className="cursor-pointer hover:underline"
+        className="cursor-pointer text-foreground hover:underline"
         onClick={onClick}
         title={stack.name}
         onKeyDown={(e) => {

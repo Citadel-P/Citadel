@@ -12,7 +12,6 @@ import {
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { ContentCard } from '@/components/custom/content-card';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -224,18 +223,14 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
 
   return (
     <div className="flex flex-col gap-4">
-      <ContentCard>
-        <DataTable columns={columns} data={runs ?? []} isLoading={isLoading && !runs} />
-      </ContentCard>
+      <DataTable columns={columns} data={runs ?? []} isLoading={isLoading && !runs} />
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-sm font-medium">Restore runs</h3>
           <span className="text-xs text-muted-foreground">{visibleRestoreRuns.length} recent</span>
         </div>
-        <ContentCard>
-          <DataTable columns={restoreColumns} data={visibleRestoreRuns} isLoading={isRestoreLoading && !restoreRuns} />
-        </ContentCard>
+        <DataTable columns={restoreColumns} data={visibleRestoreRuns} isLoading={isRestoreLoading && !restoreRuns} />
       </div>
 
       {restoreRun && (

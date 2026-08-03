@@ -9,7 +9,6 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { HardDrive } from 'lucide-react';
 import { formatId } from '@/lib/utils';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
@@ -36,15 +35,13 @@ export const DeploymentsTable = ({
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={items}
-        isLoading={isLoading}
-        emptyState={emptyState}
-        onSelectionChange={setSelectedResources}
-      />
-    </ContentCard>
+    <DataTable
+      columns={cols}
+      data={items}
+      isLoading={isLoading}
+      emptyState={emptyState}
+      onSelectionChange={setSelectedResources}
+    />
   );
 };
 

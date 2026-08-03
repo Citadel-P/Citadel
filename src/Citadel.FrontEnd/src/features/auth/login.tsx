@@ -86,9 +86,9 @@ const Login = () => {
   return (
     <div className="h-screen w-full overflow-hidden bg-card">
       <div className="mx-auto flex flex-col items-center justify-center px-6 py-8 md:h-screen lg:py-0">
-        <div className="flex items-start mb-6">
-          <span className="p-2 mr-2 w-9 h-9 text-background rounded bg-primary">
-            <LogoIcon />
+        <div className="mb-6 flex items-center">
+          <span className="mr-3 flex size-12 shrink-0 items-center justify-center">
+            <LogoIcon className="size-12" />
           </span>
           <span className="text-2xl font-semibold">Citadel</span>
         </div>

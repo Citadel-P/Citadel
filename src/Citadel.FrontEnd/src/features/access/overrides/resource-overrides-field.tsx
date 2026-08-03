@@ -17,7 +17,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SelectField } from '@/components/custom/common';
-import { ContentCard } from '@/components/custom/content-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRead } from '@/lib/hooks';
 import { CitadelIcons } from '@/lib/icons';
@@ -367,8 +366,7 @@ export const ResourceOverridesField = ({
       ) : null}
 
       {entries.length > 0 && (
-        <ContentCard className="w-full">
-          <Table>
+        <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Resource</TableHead>
@@ -474,8 +472,7 @@ export const ResourceOverridesField = ({
                   );
                 })}
             </TableBody>
-          </Table>
-        </ContentCard>
+        </Table>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -497,9 +494,8 @@ export const ResourceOverridesField = ({
               />
             </div>
 
-            <div className="overflow-auto flex-1 min-h-0">
-              <ContentCard className="w-full overflow-auto max-h-[55vh]">
-                <Table>
+            <div className="overflow-auto flex-1 min-h-0 max-h-[55vh]">
+              <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Resource</TableHead>
@@ -590,8 +586,7 @@ export const ResourceOverridesField = ({
                       })
                     )}
                   </TableBody>
-                </Table>
-              </ContentCard>
+              </Table>
             </div>
           </div>
 

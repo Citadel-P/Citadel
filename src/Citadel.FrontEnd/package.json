@@ -23,6 +23,7 @@
     "api:generate": "npx swagger-typescript-api generate --path ./src/api/schema/swagger.json -o ./src/api/ -n generated/api.types.ts --responses && tsx scripts/generate-resources.ts"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
     "@formkit/auto-animate": "^0.9.0",
     "@microsoft/signalr": "^10.0.0",
     "@microsoft/signalr-protocol-msgpack": "^10.0.0",

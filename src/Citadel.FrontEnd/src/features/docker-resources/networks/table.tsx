@@ -11,7 +11,6 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ActionData } from '@/pages/types';
-import { ContentCard } from '@/components/custom/content-card';
 import { SystemBadge } from '@/components/custom/system-badge';
 
 export const NetworksTable = ({
@@ -29,11 +28,7 @@ export const NetworksTable = ({
   const [_, setSelectedResources] = useSelectedResources<DockerNetworkResultView>('Network');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const columns = (

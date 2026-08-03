@@ -1,5 +1,4 @@
 import { ResourceBindingKind, ResourceBindingView, SecretDefinitionView } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Badge } from '@/components/ui/badge';
@@ -34,14 +33,12 @@ export const ResourceBindingsDataTable = ({
   const cols = useMemo(() => columns({ secretNames, actions }), [actions, secretNames]);
 
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={items ?? EMPTY_ENTRIES}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
-    </ContentCard>
+    <DataTable
+      columns={cols}
+      data={items ?? EMPTY_ENTRIES}
+      isLoading={isLoading}
+      onSelectionChange={setSelectedResources}
+    />
   );
 };
 

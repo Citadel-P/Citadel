@@ -11,7 +11,6 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { truncate } from '@/lib/truncate';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -37,9 +36,7 @@ export const VolumesTable = ({
 
   return (
     <>
-      <ContentCard>
-        <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-      </ContentCard>
+      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
       <VolumeBrowserSheet
         open={!!browsingVolume}
         onOpenChange={(open) => !open && setBrowsingVolume(null)}

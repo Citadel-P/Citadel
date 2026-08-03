@@ -4,7 +4,6 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
-import { ContentCard } from '@/components/custom/content-card';
 import { SeverityStatusCell } from '@/components/custom/common';
 import { Activity, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,14 +31,12 @@ export const AlertRulesTable = ({
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={items ?? EMPTY_ROWS}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
-    </ContentCard>
+    <DataTable
+      columns={cols}
+      data={items ?? EMPTY_ROWS}
+      isLoading={isLoading}
+      onSelectionChange={setSelectedResources}
+    />
   );
 };
 

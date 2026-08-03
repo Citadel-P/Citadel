@@ -1,5 +1,4 @@
 import { ActorType, BuildProjectView, BuildRunLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
 import { LogViewer, type LogEntry } from '@/components/custom/common';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -212,9 +211,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <ContentCard>
-        <DataTable columns={columns} data={displayedRuns} isLoading={isLoading} />
-      </ContentCard>
+      <DataTable columns={columns} data={displayedRuns} isLoading={isLoading} />
 
       <BuildRunLogsSheet
         open={Boolean(logRunId)}

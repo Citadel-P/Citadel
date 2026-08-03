@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from '@/components/ui/sonner';
+import '@fontsource-variable/geist';
 import './main.css';
 import QueryClientWrapper from './query-client-wrapper';
 import { ApiClientProvider } from './api/api-client-provider';

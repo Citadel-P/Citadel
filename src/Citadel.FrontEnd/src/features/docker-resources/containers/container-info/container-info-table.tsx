@@ -161,12 +161,14 @@ export const ContainerInfoTable = ({
   const containerInfo = data?.data;
 
   return (
-    <ContainerInfoTableRenderer
-      containerInfo={containerInfo}
-      container={container}
-      displayOptions={displayOptions}
-      isLoading={isLoading}
-    />
+    <div className="rounded-sm border p-1 shadow-xs">
+      <ContainerInfoTableRenderer
+        containerInfo={containerInfo}
+        container={container}
+        displayOptions={displayOptions}
+        isLoading={isLoading}
+      />
+    </div>
   );
 };
 
@@ -219,9 +221,5 @@ const ContainerInfoTableRenderer = ({
 
   const finalIsLoading = !container?.id || Boolean(isLoading);
 
-  return (
-    <div className="rounded-sm border p-1 shadow-xs">
-      <DataTable columns={columns} data={tableData} isLoading={finalIsLoading} />
-    </div>
-  );
+  return <DataTable columns={columns} data={tableData} isLoading={finalIsLoading} />;
 };

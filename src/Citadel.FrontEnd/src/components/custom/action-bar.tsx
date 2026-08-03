@@ -59,7 +59,7 @@ export const GenericActionBar = <T,>({
   return (
     <div
       className={cn(
-        'fixed inset-x-0 bottom-0 z-20 flex min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-2 bg-background p-2 shadow-lg transition-[left] duration-200 ease-in-out sm:justify-between',
+        'fixed inset-x-0 bottom-0 z-20 flex min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-sidebar-border bg-sidebar p-2 shadow-lg transition-[left] duration-200 ease-in-out sm:justify-between lg:min-h-[var(--layout-footer-height)]',
         sidebarMinimized ? 'lg:left-[var(--sidebar-width-icon)]' : 'lg:left-[var(--sidebar-width)]',
       )}>
       <div className="w-full text-center text-xs text-muted-foreground sm:mt-2 sm:w-auto sm:flex-1 sm:text-left">

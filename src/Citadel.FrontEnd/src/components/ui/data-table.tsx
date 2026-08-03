@@ -92,7 +92,7 @@ export function DataTable<TData extends Identifiable, TValue>({
   }, [rowSelection, data]);
 
   return (
-    <div className="rounded-none">
+    <div data-slot="data-table">
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -118,7 +118,7 @@ export function DataTable<TData extends Identifiable, TValue>({
             ))
           ) : (
             <TableRow className="group">
-              <TableCell colSpan={columns.length} className="h-24">
+              <TableCell colSpan={columns.length} className="h-24 border-0 px-3 text-sm">
                 {isLoading && <Loader />}
                 {!isLoading && (
                   <div className="flex flex-col items-center justify-center gap-1 p-4 text-center">

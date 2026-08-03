@@ -35,10 +35,9 @@ const tabs: ResourceTabElement<TestResource>[] = [
 
 describe('ResourceTabs', () => {
   it('switches tabs, updates the URL hash, and restores the selected tab', async () => {
-    const firstRender = renderCitadel(
-      <ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />,
-      { route: '/containers/1' },
-    );
+    const firstRender = renderCitadel(<ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />, {
+      route: '/containers/1',
+    });
 
     expect(screen.getByText('overview content')).toBeVisible();
 
@@ -57,10 +56,9 @@ describe('ResourceTabs', () => {
   });
 
   it('renders log content again after switching to another tab and back', async () => {
-    const { user } = renderCitadel(
-      <ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />,
-      { route: '/containers/1#logs' },
-    );
+    const { user } = renderCitadel(<ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />, {
+      route: '/containers/1#logs',
+    });
 
     expect(screen.getByText('log output')).toBeVisible();
 
@@ -74,14 +72,9 @@ describe('ResourceTabs', () => {
   it('falls back to the first enabled tab when the stored tab becomes disabled', async () => {
     localStorage.setItem('resource-tab', JSON.stringify('Logs'));
 
-    renderCitadel(
-      <ResourceTabs
-        localKey="resource-tab"
-        resource={{ ...resource, logsEnabled: false }}
-        tabs={tabs}
-      />,
-      { route: '/containers/1' },
-    );
+    renderCitadel(<ResourceTabs localKey="resource-tab" resource={{ ...resource, logsEnabled: false }} tabs={tabs} />, {
+      route: '/containers/1',
+    });
 
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeDisabled();
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('data-state', 'active');
@@ -97,5 +90,27 @@ describe('ResourceTabs', () => {
 
     expect(screen.getByRole('tab', { name: 'Inspect' })).toHaveAttribute('data-state', 'active');
     expect(screen.getByText('inspect content')).toBeVisible();
+  });
+
+  it('applies the shared underline treatment without changing tab navigation', async () => {
+    const { user } = renderCitadel(<ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />, {
+      route: '/containers/1',
+    });
+
+    const tabList = screen.getByRole('tablist');
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+    expect(tabList).toHaveClass('border-b', 'bg-transparent', 'overflow-y-hidden');
+    expect(overviewTab).toHaveClass(
+      'text-[12px]',
+      'after:h-0.75',
+      'after:scale-x-0',
+      'data-[state=active]:after:scale-x-100',
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Logs' }));
+
+    expect(screen.getByText('log output')).toBeVisible();
+    expect(screen.getByRole('tabpanel')).toHaveClass('data-[state=active]:animate-in');
   });
 });

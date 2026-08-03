@@ -51,7 +51,6 @@ import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
 import { CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { ContentCard } from './content-card';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -1646,15 +1645,13 @@ export function PagedDataTable<TData extends { id?: string | null }, TValue>({
 
   return (
     <div className="flex flex-col gap-4" ref={tableTopRef}>
-      <ContentCard>
-        <DataTable
-          columns={columns}
-          data={data}
-          isLoading={isLoading}
-          onSelectionChange={onSelectionChange}
-          getRowId={getRowId}
-        />
-      </ContentCard>
+      <DataTable
+        columns={columns}
+        data={data}
+        isLoading={isLoading}
+        onSelectionChange={onSelectionChange}
+        getRowId={getRowId}
+      />
       {showPagination && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <PaginationControls

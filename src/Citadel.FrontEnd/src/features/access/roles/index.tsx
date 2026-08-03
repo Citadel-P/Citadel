@@ -10,7 +10,6 @@ import {
   LicenseCapability,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -411,8 +410,7 @@ const PermissionsMatrixTable = ({
   const orderedResources = ROLE_PERMISSION_RESOURCES.filter((resource) => permissionMatrix[resource]);
 
   return (
-    <ContentCard>
-      <Table>
+    <Table>
         <TableHeader>
           <TableRow>
             <TableHead className="w-48">Resource</TableHead>
@@ -440,8 +438,7 @@ const PermissionsMatrixTable = ({
             );
           })}
         </TableBody>
-      </Table>
-    </ContentCard>
+    </Table>
   );
 };
 

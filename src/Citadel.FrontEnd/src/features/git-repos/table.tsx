@@ -8,7 +8,6 @@ import { ActionData } from '@/pages/types';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { ContentCard } from '@/components/custom/content-card';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TagChips } from '@/features/tags/components';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -97,11 +96,7 @@ export const GitReposTable = ({
   const formatDateTime = useProfileDateTimeFormatter();
   const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
-  return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
-  );
+  return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const RepoNameRow = ({ repo }: { repo: GitRepositoryView }) => {
