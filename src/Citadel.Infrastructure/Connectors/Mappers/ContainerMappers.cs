@@ -639,60 +639,91 @@ internal static class ContainerMappers
         return @event.KindCase switch
         {
             DaemonEventResponse.KindOneofCase.DaemonContainerEventResponse
-                => MapContainer(@event.DaemonContainerEventResponse),
+                => MapContainer(@event.DaemonContainerEventResponse, @event.Scope),
 
             DaemonEventResponse.KindOneofCase.DaemonImageEventResponse
-                => MapImage(@event.DaemonImageEventResponse),
+                => MapImage(@event.DaemonImageEventResponse, @event.Scope),
 
             DaemonEventResponse.KindOneofCase.DaemonVolumeEventResponse
-                => MapVolume(@event.DaemonVolumeEventResponse),
+                => MapVolume(@event.DaemonVolumeEventResponse, @event.Scope),
 
             DaemonEventResponse.KindOneofCase.DaemonNetworkEventResponse
-                => MapNetwork(@event.DaemonNetworkEventResponse),
+                => MapNetwork(@event.DaemonNetworkEventResponse, @event.Scope),
+
+            DaemonEventResponse.KindOneofCase.DaemonResourceEventResponse
+                => MapResource(@event.DaemonResourceEventResponse, @event.Scope),
 
             _ => throw new InvalidOperationException("Unknown event kind")
         };
     }
 
-    private static DaemonContainerEventInfo MapContainer(DaemonContainerEventResponse evt)
+    private static DaemonContainerEventInfo MapContainer(
+        DaemonContainerEventResponse evt,
+        Citadel.Platforms.V1.DaemonEventScope scope)
     {
         return new DaemonContainerEventInfo
         (
             Action: evt.Action,
             ContainerId: evt.ContainerId,
-            Container: evt.Container?.Map()
+            Container: evt.Container?.Map(),
+            Scope: scope.Map()
         );
     }
 
-    private static DaemonImageEventInfo MapImage(DaemonImageEventResponse evt)
+    private static DaemonImageEventInfo MapImage(
+        DaemonImageEventResponse evt,
+        Citadel.Platforms.V1.DaemonEventScope scope)
     {
         return new DaemonImageEventInfo
         (
             Action: evt.Action,
             ImageId: evt.ImageId,
-            Image: evt.Image?.Map()
+            Image: evt.Image?.Map(),
+            Scope: scope.Map()
         );
     }
 
-    private static DaemonVolumeEventInfo MapVolume(DaemonVolumeEventResponse evt)
+    private static DaemonVolumeEventInfo MapVolume(
+        DaemonVolumeEventResponse evt,
+        Citadel.Platforms.V1.DaemonEventScope scope)
     {
         return new DaemonVolumeEventInfo
         (
             Action: evt.Action,
             VolumeId: evt.VolumeId,
-            Volume: evt.Volume?.Map()
+            Volume: evt.Volume?.Map(),
+            Scope: scope.Map()
         );
     }
 
-    private static DaemonNetworkEventInfo MapNetwork(DaemonNetworkEventResponse evt)
+    private static DaemonNetworkEventInfo MapNetwork(
+        DaemonNetworkEventResponse evt,
+        Citadel.Platforms.V1.DaemonEventScope scope)
     {
         return new DaemonNetworkEventInfo
         (
             Action: evt.Action,
             NetworkId: evt.NetworkId,
-            Network: evt.Network?.Map()
+            Network: evt.Network?.Map(),
+            Scope: scope.Map()
         );
     }
+
+    private static DaemonResourceEventInfo MapResource(
+        DaemonResourceEventResponse evt,
+        Citadel.Platforms.V1.DaemonEventScope scope) =>
+        new(evt.Action, evt.Type.Map(), evt.ResourceId, scope.Map());
+
+    private static Domain.Contracts.Resources.Containers.DaemonEventScope Map(
+        this Citadel.Platforms.V1.DaemonEventScope scope) =>
+        scope switch
+        {
+            Citadel.Platforms.V1.DaemonEventScope.LocalScope =>
+                Domain.Contracts.Resources.Containers.DaemonEventScope.Local,
+            Citadel.Platforms.V1.DaemonEventScope.SwarmScope =>
+                Domain.Contracts.Resources.Containers.DaemonEventScope.Swarm,
+            _ => Domain.Contracts.Resources.Containers.DaemonEventScope.Unknown
+        };
 
     internal static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
         => containers.ToDictionary(c => c.Key, c => c.Value.Map());

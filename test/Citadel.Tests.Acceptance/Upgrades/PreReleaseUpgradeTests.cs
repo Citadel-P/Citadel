@@ -79,7 +79,7 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                 """,
                 cancellationToken));
         Assert.Equal(
-            3L,
+            1L,
             await ScalarAsync<long>(
                 connection,
                 """
@@ -87,9 +87,45 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                   AND (table_name, column_name) IN (
-                    ('platforms', 'clusterid'),
-                    ('deployments', 'lockedplatformtype'),
-                    ('stacks', 'lockedplatformtype'));
+                    ('platforms', 'clusterid'));
+                """,
+                cancellationToken));
+        Assert.Equal(
+            6L,
+            await ScalarAsync<long>(
+                connection,
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name IN (
+                    'swarmnodeprojections',
+                    'swarmserviceprojections',
+                    'swarmtaskprojections',
+                    'swarmnetworkprojections',
+                    'swarmsecretprojections',
+                    'swarmconfigprojections');
+                """,
+                cancellationToken));
+        Assert.Equal(
+            6L,
+            await ScalarAsync<long>(
+                connection,
+                """
+                SELECT COUNT(*)
+                FROM pg_constraint constraint_info
+                JOIN pg_class child_table ON child_table.oid = constraint_info.conrelid
+                JOIN pg_class parent_table ON parent_table.oid = constraint_info.confrelid
+                WHERE constraint_info.contype = 'f'
+                  AND constraint_info.confdeltype = 'c'
+                  AND parent_table.relname = 'platforms'
+                  AND child_table.relname IN (
+                    'swarmnodeprojections',
+                    'swarmserviceprojections',
+                    'swarmtaskprojections',
+                    'swarmnetworkprojections',
+                    'swarmsecretprojections',
+                    'swarmconfigprojections');
                 """,
                 cancellationToken));
         Assert.Equal(

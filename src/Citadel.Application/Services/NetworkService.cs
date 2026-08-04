@@ -29,6 +29,14 @@ internal class NetworkService(IPlatformContainerCache platformContainerCache, IC
         );
 
         var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await networkConnector.ListNetworksAsync(args, cancellationToken);
+        var result = await networkConnector.ListNetworksAsync(args, cancellationToken);
+        if (result.IsFailure(out var networkError, out var networks))
+            return Result.Failure<IEnumerable<DockerNetworkResult>>(networkError);
+
+        var list = networks as DockerNetworkResult[] ?? [.. networks];
+        foreach (var network in list)
+            network.PlatformId = query.PlatformId;
+
+        return Result.Success<IEnumerable<DockerNetworkResult>>(list);
     }
 }

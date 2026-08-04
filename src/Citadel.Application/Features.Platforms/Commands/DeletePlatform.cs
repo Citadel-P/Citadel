@@ -21,7 +21,7 @@ public sealed record DeletePlatforms(IEnumerable<Guid> Ids) : ICommand<Result>
     internal sealed class Validator : AbstractValidator<DeletePlatforms>
     {
         public Validator()
-            => RuleForEach(s => s.Ids).NotNull();
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
     }
 }
 

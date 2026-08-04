@@ -78,6 +78,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IInstalledLicenseRepository InstalledLicense { get; }
     IInstanceSetupStateRepository InstanceSetupState { get; }
     IPlatformStatRepository PlatformStats { get; }
+    ISwarmProjectionRepository Swarm { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
     IGlobalSearchRepository GlobalSearch { get; }
@@ -995,6 +996,24 @@ public interface IPlatformStatRepository
     Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
+}
+
+public interface ISwarmProjectionRepository
+{
+    Task<IReadOnlyList<SwarmNodeProjection>> GetNodesAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmNodeProjection?> GetNodeAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmServiceProjection>> GetServicesAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmServiceProjection?> GetServiceAsync(Guid platformId, string dockerServiceId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmTaskProjection>> GetTasksAsync(Guid platformId, int limit, CancellationToken cancellationToken);
+    Task<SwarmTaskProjection?> GetTaskAsync(Guid platformId, string dockerTaskId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmNetworkProjection>> GetNetworksAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmNetworkProjection?> GetNetworkAsync(Guid platformId, string dockerNetworkId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmSecretProjection>> GetSecretsAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmSecretProjection?> GetSecretAsync(Guid platformId, string dockerSecretId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmConfigProjection>> GetConfigsAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmConfigProjection?> GetConfigAsync(Guid platformId, string dockerConfigId, CancellationToken cancellationToken);
+    Task<int> ReplaceAsync(Guid platformId, SwarmProjectionSnapshot snapshot, CancellationToken cancellationToken);
+    Task<int> MarkStaleAsync(Guid platformId, CancellationToken cancellationToken);
 }
 
 public interface ITeamRepository

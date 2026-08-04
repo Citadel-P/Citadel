@@ -8,23 +8,24 @@ describe('PlatformMenu', () => {
     expect(menu.children?.map((item) => item.label)).toEqual(['Containers', 'Images', 'Networks', 'Volumes']);
   });
 
-  it('uses cluster and manager groups for Swarm platforms', () => {
+  it('uses a flat cluster and manager resource menu for Swarm platforms', () => {
     const menu = PlatformMenu({ id: 'swarm-1', name: 'Swarm', type: PlatformType.DockerSwarm });
 
     expect(menu.children?.map((item) => item.label)).toEqual([
-      'Overview',
-      'Cluster',
-      'Resources',
-      'Orchestration',
-      'Connected manager',
-    ]);
-    expect(menu.children?.find((item) => item.label === 'Cluster')?.children?.map((item) => item.label)).toEqual([
       'Nodes',
       'Services',
       'Tasks',
+      'Secrets',
+      'Configs',
+      'Containers',
+      'Volumes',
+      'Networks',
+      'Images',
     ]);
-    expect(
-      menu.children?.find((item) => item.label === 'Connected manager')?.children?.map((item) => item.label),
-    ).toEqual(['Containers', 'Images', 'Volumes']);
+    const nodes = menu.children?.[0];
+    expect(nodes?.route).toBe('/platforms/swarm-1/swarm/nodes');
+    expect(nodes?.disabled).not.toBe(true);
+    expect(menu.children?.every((item) => item.route && !item.disabled && !item.children)).toBe(true);
+    expect(menu.children?.find((item) => item.label === 'Networks')?.route).toBe('/platforms/swarm-1/swarm/networks');
   });
 });

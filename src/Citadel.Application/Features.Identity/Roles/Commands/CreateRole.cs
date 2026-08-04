@@ -13,7 +13,7 @@ using Mediator;
 namespace Application.Features.Identity.Roles.Commands;
 
 [RequirePermission(ResourceType.Role, PermissionLevel.Write)]
-public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> Permissions) : ICommand<Result<RoleDetails>>, IAdministratorRequest
+public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel>? Permissions) : ICommand<Result<RoleDetails>>, IAdministratorRequest
 {
     internal sealed class Validator : AbstractValidator<CreateRole>
     {
@@ -55,7 +55,7 @@ internal sealed class CreateRoleHandler(
         if (entitlement.IsFailure())
             return Result.Failure<RoleDetails>(entitlement.Errors);
 
-        var permissions = command.Permissions.Select(x => x.ToDomain(Guid.Empty)).ToArray();
+        var permissions = command.Permissions!.Select(x => x.ToDomain(Guid.Empty)).ToArray();
         var role = Role.Create(command.Name, RoleType.Custom, permissions);
         await unitOfWork.Roles.AddAsync(role, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);

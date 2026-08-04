@@ -8,7 +8,7 @@ using Mediator;
 namespace Application.Features.Volumes.Queries;
 
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
-public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null) 
+public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null)
     : IQuery<Result<IEnumerable<DockerVolumeResult>>>;
 
 internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<ListVolumes, Result<IEnumerable<DockerVolumeResult>>>
@@ -26,9 +26,17 @@ internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache
                 Dangling: query.Dangling,
                 Driver: query.Driver,
                 Name: query.Name
-            );
+        );
 
         var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await volumeConnector.ListVolumesAsync(args, cancellationToken);
+        var result = await volumeConnector.ListVolumesAsync(args, cancellationToken);
+        if (result.IsFailure(out var volumeError, out var volumes))
+            return Result.Failure<IEnumerable<DockerVolumeResult>>(volumeError);
+
+        var list = volumes as DockerVolumeResult[] ?? [.. volumes];
+        foreach (var volume in list)
+            volume.PlatformId = query.PlatformId;
+
+        return Result.Success<IEnumerable<DockerVolumeResult>>(list);
     }
 }

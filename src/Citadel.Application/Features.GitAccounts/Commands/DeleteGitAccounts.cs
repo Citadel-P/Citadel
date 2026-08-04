@@ -1,5 +1,6 @@
 using Hosting.Common;
 using Domain.Contracts.Interfaces;
+using FluentValidation;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -8,7 +9,14 @@ using Mediator;
 namespace Application.Features.GitAccounts.Commands;
 
 [RequirePermission(ResourceType.GitAccount, PermissionLevel.Execute)]
-public sealed record DeleteGitAccounts(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteGitAccounts(IEnumerable<Guid> Ids) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteGitAccounts>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal sealed class DeleteGitAccountsHandler(
     IUnitOfWork unitOfWork,

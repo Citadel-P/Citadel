@@ -354,7 +354,19 @@ public enum EdgeAgentCommandKind
     NetworkCreate = 62,
     NetworkDelete = 63,
     StackApplyStream = 70,
-    DeploymentApply = 80
+    DeploymentApply = 80,
+    SwarmNodeList = 90,
+    SwarmNodeInspect = 91,
+    SwarmServiceList = 92,
+    SwarmServiceInspect = 93,
+    SwarmTaskList = 94,
+    SwarmTaskInspect = 95,
+    SwarmNetworkList = 96,
+    SwarmNetworkInspect = 97,
+    SwarmSecretList = 98,
+    SwarmSecretInspect = 99,
+    SwarmConfigList = 100,
+    SwarmConfigInspect = 101
 }
 
 public enum ContainerRestartPolicy

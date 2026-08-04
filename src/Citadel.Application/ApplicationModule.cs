@@ -37,7 +37,7 @@ public static class ApplicationModule
             .AddMediator(options =>
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
-                options.PipelineBehaviors = 
+                options.PipelineBehaviors =
                 [
                     typeof(PermissionBehavior<,>),
                     typeof(ValidatorBehavior<,>)
@@ -88,6 +88,13 @@ public static class ApplicationModule
             .AddSingleton<IVolumeContentService, VolumeContentService>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
+            .AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>()
+            .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
+            .AddSingleton<GitRepoSyncInFlightTracker>()
+            .AddSingleton<StackWebhookDeployQueueService>()
+            .AddSingleton<StackWebhookDeployProcessor>()
+            .AddSingleton<SwarmReconciliationJob>()
+            .AddSingleton<ISwarmReconciliationCoordinator>(provider => provider.GetRequiredService<SwarmReconciliationJob>())
             .AddScoped<IActorScopeEvictor, ActorScopeEvictor>()
             .AddScoped<IAdministratorGuard, AdministratorGuard>()
             .AddScoped<IActorScopeProvider, ActorScopeProvider>()
@@ -163,6 +170,23 @@ public static class ApplicationModule
             .AddScoped<IBuildRunExecutionService, BuildRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
+        services
+            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions(singleWriter: false)))
+            .AddSingleton(provider => provider.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
+            .AddSingleton(provider => provider.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
+            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
+            .AddSingleton(provider => provider.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
+            .AddSingleton(provider => provider.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader)
+            .AddSingleton(Channel.CreateBounded<StackWebhookDeploySignal>(Helpers.ChannelDefaultOptions(singleWriter: false)))
+            .AddSingleton(provider => provider.GetRequiredService<Channel<StackWebhookDeploySignal>>().Writer)
+            .AddSingleton(provider => provider.GetRequiredService<Channel<StackWebhookDeploySignal>>().Reader)
+            .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
+            .AddSingleton(provider => provider.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Writer)
+            .AddSingleton(provider => provider.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Reader)
+            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions(singleWriter: false)))
+            .AddSingleton(provider => provider.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
+            .AddSingleton(provider => provider.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
+
         services.TryAddSingleton<IAutomationApiEndpointCatalog, EmptyAutomationApiEndpointCatalog>();
 
         return services;
@@ -223,8 +247,6 @@ public static class ApplicationModule
         if (Helpers.IsDesignTime()) return services;
 
         services
-            .AddSingleton<GitRepoSyncInFlightTracker>()
-            .AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>()
             .AddHostedService<InitialAdministratorBootstrapService>()
             .AddHostedService<DockerDaemonEventJob>()
             .AddHostedService<CleanupJob>()
@@ -238,6 +260,7 @@ public static class ApplicationModule
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
+            .AddHostedService(provider => provider.GetRequiredService<SwarmReconciliationJob>())
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()
@@ -254,25 +277,6 @@ public static class ApplicationModule
             .AddHostedService<BuildAgentPoolHealthMonitorJob>()
             .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
-        services
-            .AddSingleton<StackWebhookDeployQueueService>()
-            .AddSingleton<StackWebhookDeployProcessor>()
-            .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
-            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions(singleWriter: false)))
-            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
-            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader)
-            .AddSingleton(Channel.CreateBounded<StackWebhookDeploySignal>(Helpers.ChannelDefaultOptions(singleWriter: false)))
-            .AddSingleton(s => s.GetRequiredService<Channel<StackWebhookDeploySignal>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<StackWebhookDeploySignal>>().Reader)
-            .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
-            .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Reader)
-            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions(singleWriter: false)))
-            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
 
         return services;
     }

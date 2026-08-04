@@ -25,6 +25,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Hubs;
 
@@ -41,6 +42,25 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DockerPlatformDescriptor>]
 [GenerateShapeFor<List<PlatformStatView>>]
 [GenerateShapeFor<SwarmInfoView>]
+[GenerateShapeFor<SwarmNodeView>]
+[GenerateShapeFor<SwarmNodesView>]
+[GenerateShapeFor<IReadOnlyList<SwarmNodeView>>]
+[GenerateShapeFor<SwarmServiceView>]
+[GenerateShapeFor<SwarmServicesView>]
+[GenerateShapeFor<IReadOnlyList<SwarmServiceView>>]
+[GenerateShapeFor<SwarmTaskView>]
+[GenerateShapeFor<SwarmTasksView>]
+[GenerateShapeFor<IReadOnlyList<SwarmTaskView>>]
+[GenerateShapeFor<SwarmNetworkView>]
+[GenerateShapeFor<SwarmNetworksView>]
+[GenerateShapeFor<IReadOnlyList<SwarmNetworkView>>]
+[GenerateShapeFor<SwarmSecretView>]
+[GenerateShapeFor<SwarmSecretsView>]
+[GenerateShapeFor<IReadOnlyList<SwarmSecretView>>]
+[GenerateShapeFor<SwarmConfigView>]
+[GenerateShapeFor<SwarmConfigsView>]
+[GenerateShapeFor<IReadOnlyList<SwarmConfigView>>]
+[GenerateShapeFor<SwarmInventoryView>]
 [GenerateShapeFor<List<SwarmPeerView>>]
 [GenerateShapeFor<PlatformsView>]
 [GenerateShapeFor<PlatformStatsBatchView>]

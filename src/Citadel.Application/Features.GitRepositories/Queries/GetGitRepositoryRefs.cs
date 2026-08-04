@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -22,7 +23,7 @@ internal sealed class GetGitRepositoryRefsHandler(IUnitOfWork unitOfWork)
         if (repo is null)
         {
             return Result.Failure<IReadOnlyList<GitRepositoryRef>>(
-                $"Git repository with ID {query.Id} does not exist");
+                new NotFoundError($"Git repository with ID {query.Id} does not exist"));
         }
 
         var refs = await unitOfWork.GitRepositories.GetRefsByRepositoryIdAsync(query.Id, cancellationToken);

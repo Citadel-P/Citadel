@@ -19,7 +19,7 @@ public sealed record CreateTag(string Name, string Color) : ICommand<Result<Tag>
         {
             RuleFor(x => x.Name)
                 .NotEmpty()
-                .Must(name => name.Trim().Length <= TagValidation.MaxNameLength)
+                .Must(name => name is null || name.Trim().Length <= TagValidation.MaxNameLength)
                 .WithMessage($"Tag name cannot exceed {TagValidation.MaxNameLength} characters.");
 
             RuleFor(x => x.Color)

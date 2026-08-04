@@ -62,6 +62,7 @@ using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Swarm;
 using WebApi.Routes.Endpoints.Resources.Search;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using Application.Features.Webhooks.Commands;
@@ -154,6 +155,19 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<PlatformStat>))]
 [JsonSerializable(typeof(SwarmPeer))]
 [JsonSerializable(typeof(SwarmInfoView))]
+[JsonSerializable(typeof(SwarmNodeView))]
+[JsonSerializable(typeof(SwarmNodesView))]
+[JsonSerializable(typeof(SwarmServiceView))]
+[JsonSerializable(typeof(SwarmServicesView))]
+[JsonSerializable(typeof(SwarmTaskView))]
+[JsonSerializable(typeof(SwarmTasksView))]
+[JsonSerializable(typeof(SwarmNetworkView))]
+[JsonSerializable(typeof(SwarmNetworksView))]
+[JsonSerializable(typeof(SwarmSecretView))]
+[JsonSerializable(typeof(SwarmSecretsView))]
+[JsonSerializable(typeof(SwarmConfigView))]
+[JsonSerializable(typeof(SwarmConfigsView))]
+[JsonSerializable(typeof(SwarmInventoryView))]
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(List<PlatformStatView>))]

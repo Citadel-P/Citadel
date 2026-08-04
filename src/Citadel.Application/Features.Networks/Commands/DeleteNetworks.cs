@@ -17,6 +17,7 @@ public sealed record class DeleteNetworks(Guid PlatformId, string[] Ids) : IComm
         public Validator()
         {
             RuleFor(s => s.PlatformId).NotEmpty().NotNull();
+            RuleFor(s => s.Ids).NotNull().NotEmpty();
             RuleForEach(s => s.Ids).ValidHashId();
         }
     }

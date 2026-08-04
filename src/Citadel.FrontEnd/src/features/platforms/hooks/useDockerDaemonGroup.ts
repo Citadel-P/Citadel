@@ -1,6 +1,17 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ContainerView, DockerNetworkResultView, DockerVolumeResultView, ImageView } from '@/api/generated/api.types';
+import {
+  ContainerView,
+  DockerNetworkResultView,
+  DockerVolumeResultView,
+  ImageView,
+  SwarmConfigsView,
+  SwarmNetworksView,
+  SwarmNodesView,
+  SwarmSecretsView,
+  SwarmServicesView,
+  SwarmTasksView,
+} from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaemonListeners) => {
@@ -31,14 +42,25 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     [],
   );
 
+  const handleSwarmInventoryUpdated = useCallback((inventory: SwarmInventoryUpdate) => {
+    listenersRef.current?.onSwarmInventoryUpdated?.(inventory);
+  }, []);
+
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
       hub.on('ImageEventReceived', handleImageEventReceived);
       hub.on('VolumeEventReceived', handleVolumeEventReceived);
       hub.on('NetworkEventReceived', handleNetworkEventReceived);
       hub.on('ContainerEventReceived', handleContainerEventReceived);
+      hub.on('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
     },
-    [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
+    [
+      handleContainerEventReceived,
+      handleImageEventReceived,
+      handleVolumeEventReceived,
+      handleNetworkEventReceived,
+      handleSwarmInventoryUpdated,
+    ],
   );
 
   const removeEventListeners = useCallback(
@@ -47,8 +69,15 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.off('VolumeEventReceived', handleVolumeEventReceived);
       hub.off('NetworkEventReceived', handleNetworkEventReceived);
       hub.off('ContainerEventReceived', handleContainerEventReceived);
+      hub.off('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
     },
-    [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
+    [
+      handleContainerEventReceived,
+      handleImageEventReceived,
+      handleVolumeEventReceived,
+      handleNetworkEventReceived,
+      handleSwarmInventoryUpdated,
+    ],
   );
 
   useSignalRGroup({
@@ -86,4 +115,15 @@ export type DockerDaemonListeners = {
   onImageEvent?: (event: ImageEvent) => void;
   onVolumeEvent?: (event: VolumeEvent) => void;
   onNetworkEvent?: (event: NetworkEvent) => void;
+  onSwarmInventoryUpdated?: (inventory: SwarmInventoryUpdate) => void;
+};
+
+export type SwarmInventoryUpdate = {
+  platformId: string;
+  nodes: SwarmNodesView;
+  services: SwarmServicesView;
+  tasks: SwarmTasksView;
+  networks: SwarmNetworksView;
+  secrets: SwarmSecretsView;
+  configs: SwarmConfigsView;
 };

@@ -4,6 +4,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 using Domain.Entities.Activities;
+using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
@@ -15,7 +16,14 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.Registries.Commands;
 
 [RequirePermission(ResourceType.Registry, PermissionLevel.Execute)]
-public sealed record DeleteRegistries(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteRegistries(IEnumerable<Guid> Ids) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteRegistries>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal class DeleteRegistriesHandler(
     IUnitOfWork unitOfWork,

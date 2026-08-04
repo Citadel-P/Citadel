@@ -37,6 +37,20 @@ namespace Domain;
 [JsonSerializable(typeof(KubernetesPlatformDescriptor))]
 [JsonSerializable(typeof(ICollection<SwarmPeer>))]
 [JsonSerializable(typeof(PlatformDescriptor))]
+[JsonSerializable(typeof(SwarmNodeProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmNodeProjection>))]
+[JsonSerializable(typeof(SwarmServiceProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmServiceProjection>))]
+[JsonSerializable(typeof(SwarmTaskProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmTaskProjection>))]
+[JsonSerializable(typeof(SwarmNetworkProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmNetworkProjection>))]
+[JsonSerializable(typeof(SwarmSecretProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmSecretProjection>))]
+[JsonSerializable(typeof(SwarmConfigProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmConfigProjection>))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(string[]))]
 public partial class PlatformJsonContext : JsonSerializerContext
 {
 }

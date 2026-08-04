@@ -26,6 +26,7 @@ using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Hubs;
 
@@ -109,6 +110,16 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.PlatformsGroup)
             .SendAsync("PlatformStatsUpdated", PlatformStatsBatchView.Map(platformId, platform));
+    #endregion
+
+    #region Swarm
+    public Task SendSwarmInventory(
+        Guid platformId,
+        SwarmProjectionSnapshot snapshot,
+        CancellationToken cancellationToken = default) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
+            .SendAsync("SwarmInventoryUpdated", SwarmInventoryView.Map(platformId, snapshot), cancellationToken);
     #endregion
 
     #region Backups

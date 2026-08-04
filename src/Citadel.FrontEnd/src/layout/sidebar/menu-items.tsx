@@ -177,39 +177,15 @@ const SwarmPlatformMenu = (platform: { id: string; name: string }): ISubMenuItem
   route: `/platforms/edit/${platform.id}`,
   isPlatform: true,
   children: [
-    { label: 'Overview', route: `/platforms/edit/${platform.id}` },
-    {
-      label: 'Cluster',
-      expanded: true,
-      children: [
-        { label: 'Nodes', disabled: true, disabledReason: 'Node inventory is not available yet.' },
-        { label: 'Services', disabled: true, disabledReason: 'Service inventory is not available yet.' },
-        { label: 'Tasks', disabled: true, disabledReason: 'Task inventory is not available yet.' },
-      ],
-    },
-    {
-      label: 'Resources',
-      children: [
-        { label: 'Networks', disabled: true, disabledReason: 'Swarm network inventory is not available yet.' },
-        { label: 'Secrets', disabled: true, disabledReason: 'Swarm secret inventory is not available yet.' },
-        { label: 'Configs', disabled: true, disabledReason: 'Swarm config inventory is not available yet.' },
-      ],
-    },
-    {
-      label: 'Orchestration',
-      children: [
-        { label: 'Deployments', route: `/deployments?platformId=${platform.id}` },
-        { label: 'Stacks', route: `/stacks?platformId=${platform.id}` },
-      ],
-    },
-    {
-      label: 'Connected manager',
-      children: [
-        { label: 'Containers', route: `/platforms/${platform.id}/containers` },
-        { label: 'Images', route: `/platforms/${platform.id}/images` },
-        { label: 'Volumes', route: `/platforms/${platform.id}/volumes` },
-      ],
-    },
+    { label: 'Nodes', route: `/platforms/${platform.id}/swarm/nodes` },
+    { label: 'Services', route: `/platforms/${platform.id}/swarm/services` },
+    { label: 'Tasks', route: `/platforms/${platform.id}/swarm/tasks` },
+    { label: 'Secrets', route: `/platforms/${platform.id}/swarm/secrets` },
+    { label: 'Configs', route: `/platforms/${platform.id}/swarm/configs` },
+    { label: 'Containers', route: `/platforms/${platform.id}/containers` },
+    { label: 'Volumes', route: `/platforms/${platform.id}/volumes` },
+    { label: 'Networks', route: `/platforms/${platform.id}/swarm/networks` },
+    { label: 'Images', route: `/platforms/${platform.id}/images` },
   ],
 });
 

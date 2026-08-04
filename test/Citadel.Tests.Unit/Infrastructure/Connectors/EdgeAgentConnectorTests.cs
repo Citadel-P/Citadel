@@ -4,10 +4,12 @@ using Citadel.Containers.V1;
 using Citadel.Images.V1;
 using Citadel.Platforms.V1;
 using Citadel.SharedModels.V1;
+using Citadel.Swarm.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Swarm;
 using Google.Protobuf;
 using Infrastructure.Connectors.EdgeAgentConnectors;
 using LightResults;
@@ -18,6 +20,70 @@ namespace Tests.Unit.Infrastructure.Connectors;
 
 public class EdgeAgentConnectorTests
 {
+    [Fact]
+    public async Task ListNodesAsync_ShouldRouteSwarmNodeListCommand()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter
+        {
+            UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmNodesResponse
+            {
+                Nodes =
+                {
+                    new SwarmNodeMessage
+                    {
+                        Id = "node-1",
+                        Hostname = "manager-1",
+                        Role = "Manager",
+                        Status = "Ready",
+                        Availability = "Active"
+                    }
+                }
+            }.ToByteArray())
+        };
+        var connector = new EdgeSwarmConnector(router);
+
+        var result = await connector.ListNodesAsync(
+            new ListSwarmNodesCommand($"edge://{platformId}"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out var nodes, out var error), error?.Message);
+        Assert.Equal(platformId, router.PlatformId);
+        Assert.Equal(EdgeAgentCommandKind.SwarmNodeList, router.Kind);
+        Assert.Single(nodes);
+        Assert.Equal("node-1", nodes[0].Id);
+    }
+
+    [Fact]
+    public async Task SwarmInventoryLists_ShouldRouteTheirMatchingEdgeCommands()
+    {
+        var platformId = Guid.CreateVersion7();
+        var address = $"edge://{platformId}";
+        var router = new TestEdgeAgentCommandRouter();
+        var connector = new EdgeSwarmConnector(router);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmServicesResponse().ToByteArray());
+        Assert.True((await connector.ListServicesAsync(new ListSwarmServicesCommand(address))).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmServiceList, router.Kind);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmTasksResponse().ToByteArray());
+        Assert.True((await connector.ListTasksAsync(new ListSwarmTasksCommand(address))).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmTaskList, router.Kind);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmNetworksResponse().ToByteArray());
+        Assert.True((await connector.ListNetworksAsync(new ListSwarmNetworksCommand(address))).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmNetworkList, router.Kind);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmSecretsResponse().ToByteArray());
+        Assert.True((await connector.ListSecretsAsync(new ListSwarmSecretsCommand(address))).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmSecretList, router.Kind);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new ListSwarmConfigsResponse().ToByteArray());
+        Assert.True((await connector.ListConfigsAsync(new ListSwarmConfigsCommand(address))).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmConfigList, router.Kind);
+        Assert.Equal(platformId, router.PlatformId);
+    }
+
     [Fact]
     public async Task ListImagesAsync_Should_Route_ImageList_Command()
     {
@@ -124,6 +190,40 @@ public class EdgeAgentConnectorTests
         Assert.Equal(100, result.PlatformStat.DiskTotalBytes);
         Assert.Equal(75, result.PlatformStat.DiskUsage);
         Assert.Equal("edge-test", result.AgentVersion);
+    }
+
+    [Fact]
+    public async Task StreamDaemonEventAsync_ShouldMapSwarmResourceEventAndScope()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter();
+        router.StreamItems.Add(EdgeAgentStreamItem.Output(new DaemonEventResponse
+        {
+            Scope = Citadel.Platforms.V1.DaemonEventScope.SwarmScope,
+            DaemonResourceEventResponse = new DaemonResourceEventResponse
+            {
+                Type = EventMessageType.Secret,
+                Action = "create",
+                ResourceId = "secret-1"
+            }
+        }.ToByteArray()));
+        router.StreamItems.Add(EdgeAgentStreamItem.Complete());
+        var connector = new EdgePlatformConnector(router);
+
+        var events = new List<DaemonEventInfo>();
+        await foreach (var daemonEvent in connector.StreamDaemonEventAsync(
+                           new StreamDaemonEventCommand($"edge://{platformId}"),
+                           TestContext.Current.CancellationToken))
+        {
+            events.Add(daemonEvent);
+        }
+
+        var resource = Assert.IsType<DaemonResourceEventInfo>(Assert.Single(events));
+        Assert.Equal(ContainerEventType.Secret, resource.Type);
+        Assert.Equal("create", resource.Action);
+        Assert.Equal("secret-1", resource.ResourceId);
+        Assert.Equal(global::Domain.Contracts.Resources.Containers.DaemonEventScope.Swarm, resource.Scope);
+        Assert.Equal(EdgeAgentCommandKind.PlatformDaemonEventsStream, router.Kind);
     }
 
     [Fact]
@@ -242,7 +342,7 @@ public class EdgeAgentConnectorTests
         public Guid? PlatformId { get; private set; }
         public EdgeAgentCommandKind? Kind { get; private set; }
         public byte[]? Payload { get; private set; }
-        public EdgeAgentCommandRouterResult UnaryResult { get; init; } = EdgeAgentCommandRouterResult.Success([]);
+        public EdgeAgentCommandRouterResult UnaryResult { get; set; } = EdgeAgentCommandRouterResult.Success([]);
         public List<EdgeAgentStreamItem> StreamItems { get; } = [];
         public List<byte[]> Inputs { get; } = [];
         public bool Cancelled { get; private set; }

@@ -17,6 +17,7 @@ public sealed record DeleteVolumes(Guid PlatformId, string[] Names, bool? Force 
         public Validator()
         {
             RuleFor(s => s.PlatformId).NotEmpty().NotNull();
+            RuleFor(s => s.Names).NotNull().NotEmpty();
             RuleForEach(s => s.Names).ValidNameIdentifier();
         }
     }

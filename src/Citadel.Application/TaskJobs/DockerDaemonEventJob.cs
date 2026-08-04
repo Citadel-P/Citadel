@@ -25,6 +25,7 @@ internal sealed class DockerDaemonEventJob(
     IStackStreamManager stackHub,
     IImageStreamManager imageStream,
     IDeploymentStreamManager deploymentHub,
+    ISwarmReconciliationCoordinator swarmReconciliationCoordinator,
     IDbWorkQueue dbWorkQueue) : BackgroundService
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(10);
@@ -95,6 +96,11 @@ internal sealed class DockerDaemonEventJob(
                                    .GetConnector(platform.Type)
                                    .StreamDaemonEventAsync(command, cancellationToken))
                     {
+                        await swarmReconciliationCoordinator.NotifyDaemonEventAsync(
+                            platform.Id,
+                            reply,
+                            cancellationToken);
+
                         if (reply is DaemonContainerEventInfo containerEvent)
                         {
                             switch (reply.Action)

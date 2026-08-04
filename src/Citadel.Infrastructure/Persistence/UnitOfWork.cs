@@ -42,6 +42,7 @@ internal class UnitOfWork : IUnitOfWork
         InstalledLicense = new Lazy<IInstalledLicenseRepository>(() => new InstalledLicenseRepository(connection, GetTransaction));
         InstanceSetupState = new Lazy<IInstanceSetupStateRepository>(() => new InstanceSetupStateRepository(connection, GetTransaction));
         PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
+        Swarm = new Lazy<ISwarmProjectionRepository>(() => new SwarmProjectionRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
         GitAccounts = new Lazy<IGitAccountRepository>(() => new GitAccountRepository(connection, GetTransaction));
@@ -125,6 +126,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IInstalledLicenseRepository> InstalledLicense { get; }
     private Lazy<IInstanceSetupStateRepository> InstanceSetupState { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
+    private Lazy<ISwarmProjectionRepository> Swarm { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
     private Lazy<IContainerStatRepository> ContainerStats { get; }
 
@@ -143,6 +145,7 @@ internal class UnitOfWork : IUnitOfWork
     IAlertEventRepository IUnitOfWork.AlertEvents => AlertEvents.Value;
     IDeploymentRepository IUnitOfWork.Deployments => Deployments.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
+    ISwarmProjectionRepository IUnitOfWork.Swarm => Swarm.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
     IUserMfaRepository IUnitOfWork.UserMfa => UserMfa.Value;
     IMfaChallengeRepository IUnitOfWork.MfaChallenges => MfaChallenges.Value;

@@ -1,5 +1,6 @@
 using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
+using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
@@ -9,7 +10,14 @@ using Mediator;
 namespace Application.Features.Identity.Users.Commands;
 
 [RequirePermission(ResourceType.User, PermissionLevel.Execute)]
-public sealed record DeleteUsers(IEnumerable<Guid> Ids) : ICommand<Result>, IAdministratorRequest;
+public sealed record DeleteUsers(IEnumerable<Guid> Ids) : ICommand<Result>, IAdministratorRequest
+{
+    internal sealed class Validator : AbstractValidator<DeleteUsers>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal sealed class DeleteUsersHandler(
     IUnitOfWork unitOfWork,

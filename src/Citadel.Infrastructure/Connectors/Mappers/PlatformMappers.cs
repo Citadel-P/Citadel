@@ -341,6 +341,7 @@ internal static class PlatformMappers
             DaemonImageResult imageEvent => imageEvent.Map(),
             DaemonVolumeResult volumeEvent => volumeEvent.Map(),
             DaemonNetworkResult networkEvent => networkEvent.Map(),
+            DaemonResourceResult resourceEvent => resourceEvent.Map(),
             _ => throw new NotSupportedException($"Event type {@event.GetType().Name} is not supported")
         };
     }
@@ -351,7 +352,8 @@ internal static class PlatformMappers
         (
             Action: result.Action,
             ContainerId: result.ContainerId,
-            Container: result.Container?.Map()
+            Container: result.Container?.Map(),
+            Scope: result.Scope.Map()
         );
     }
 
@@ -361,7 +363,8 @@ internal static class PlatformMappers
         (
             Action: result.Action,
             ImageId: result.ImageId,
-            Image: result.Image?.Map()
+            Image: result.Image?.Map(),
+            Scope: result.Scope.Map()
         );
     }
 
@@ -371,7 +374,8 @@ internal static class PlatformMappers
         (
             Action: result.Action,
             VolumeId: result.VolumeId,
-            Volume: result.Volume?.Map()
+            Volume: result.Volume?.Map(),
+            Scope: result.Scope.Map()
         );
     }
 
@@ -381,19 +385,45 @@ internal static class PlatformMappers
         (
             Action: result.Action,
             NetworkId: result.NetworkId,
-            Network: result.Network?.Map()
+            Network: result.Network?.Map(),
+            Scope: result.Scope.Map()
         );
     }
+
+    internal static DaemonEventInfo Map(this DaemonResourceResult result) =>
+        new DaemonResourceEventInfo(
+            result.Action,
+            result.Type.Map(),
+            result.ResourceId,
+            result.Scope.Map());
 
     internal static ContainerEventType Map(this Hosting.DockerClient.EventMessageType type)
     {
         return type switch
         {
             Hosting.DockerClient.EventMessageType.Container => ContainerEventType.Container,
+            Hosting.DockerClient.EventMessageType.Builder => ContainerEventType.Builder,
+            Hosting.DockerClient.EventMessageType.Config => ContainerEventType.Config,
+            Hosting.DockerClient.EventMessageType.Daemon => ContainerEventType.Daemon,
             Hosting.DockerClient.EventMessageType.Image => ContainerEventType.Image,
             Hosting.DockerClient.EventMessageType.Network => ContainerEventType.Network,
+            Hosting.DockerClient.EventMessageType.Node => ContainerEventType.Node,
+            Hosting.DockerClient.EventMessageType.Plugin => ContainerEventType.Plugin,
+            Hosting.DockerClient.EventMessageType.Secret => ContainerEventType.Secret,
+            Hosting.DockerClient.EventMessageType.Service => ContainerEventType.Service,
             Hosting.DockerClient.EventMessageType.Volume => ContainerEventType.Volume,
             _ => ContainerEventType.Unknown
         };
     }
+
+    private static Domain.Contracts.Resources.Containers.DaemonEventScope Map(
+        this Hosting.DockerClient.EventMessageScope scope) =>
+        scope switch
+        {
+            Hosting.DockerClient.EventMessageScope.Local =>
+                Domain.Contracts.Resources.Containers.DaemonEventScope.Local,
+            Hosting.DockerClient.EventMessageScope.Swarm =>
+                Domain.Contracts.Resources.Containers.DaemonEventScope.Swarm,
+            _ => Domain.Contracts.Resources.Containers.DaemonEventScope.Unknown
+        };
 }

@@ -54,6 +54,13 @@ public interface IApplicationHubDispatcher
     Task PushPlatformStats(Guid platformId, PlatformStatsResult platform);
     #endregion
 
+    #region Swarm
+    Task SendSwarmInventory(
+        Guid platformId,
+        SwarmProjectionSnapshot snapshot,
+        CancellationToken cancellationToken = default);
+    #endregion
+
     #region Deployments
     Task SendDeploymentInfo(Deployment deployment, string action);
     #endregion

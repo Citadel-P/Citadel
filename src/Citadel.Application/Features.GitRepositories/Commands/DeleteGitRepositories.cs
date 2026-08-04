@@ -7,6 +7,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
@@ -20,7 +21,14 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.GitRepositories.Commands;
 
 [RequirePermission(ResourceType.GitRepository, PermissionLevel.Execute)]
-public sealed record DeleteGitRepositories(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteGitRepositories(IEnumerable<Guid> Ids) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteGitRepositories>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal sealed class DeleteGitRepositoriesHandler(
     IUnitOfWork unitOfWork,

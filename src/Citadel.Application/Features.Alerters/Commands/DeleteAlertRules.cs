@@ -5,6 +5,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
+using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
@@ -16,7 +17,14 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.Alerters.Commands;
 
 [RequirePermission(ResourceType.Alert, PermissionLevel.Execute)]
-public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteAlertRules>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal sealed class DeleteAlertRulesHandler(
     IUnitOfWork unitOfWork,

@@ -4,9 +4,9 @@ using Hosting.Common;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Roles;
 
-public sealed record RoleInput(string Name, IEnumerable<PermissionInput> Permissions)
+public sealed record RoleInput(string Name, IEnumerable<PermissionInput>? Permissions)
 {
-    internal CreateRole ToCommand() => new(Name, Permissions.Select(x => x.ToModel()));
+    internal CreateRole ToCommand() => new(Name, Permissions?.Select(x => x.ToModel()));
 }
 
 public sealed record PermissionInput(

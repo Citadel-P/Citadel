@@ -7257,9 +7257,201 @@ export interface StartProfileMfaSetupInput {
   password: string;
 }
 
+export interface SwarmConfigView {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  name: string;
+  templatingDriver: null | string;
+  serviceNames: string[];
+  labels: Record<string, string>;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  updatedAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmConfigsView {
+  items: SwarmConfigView[];
+}
+
+export interface SwarmNetworkView {
+  id: string;
+  name: string;
+  scope: string;
+  driver: string;
+  isAttachable: boolean;
+  isInternal: boolean;
+  isIngress: boolean;
+  isEncrypted: boolean;
+  enableIPv6: boolean;
+  subnets: string[];
+  serviceNames: string[];
+  labels: Record<string, string>;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmNetworksView {
+  items: SwarmNetworkView[];
+}
+
+export interface SwarmNodeView {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  hostname: string;
+  role: string;
+  isLeader: boolean;
+  reachability: string;
+  status: string;
+  statusMessage: null | string;
+  availability: string;
+  engineVersion: string;
+  operatingSystem: string;
+  architecture: string;
+  address: string;
+  labels: Record<string, string>;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  runningTaskCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  desiredTaskCount: number | string;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  updatedAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmNodesView {
+  items: SwarmNodeView[];
+}
+
 export interface SwarmPeer {
   nodeID: null | string;
   addr: null | string;
+}
+
+export interface SwarmSecretView {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  name: string;
+  driver: null | string;
+  serviceNames: string[];
+  labels: Record<string, string>;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  updatedAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmSecretsView {
+  items: SwarmSecretView[];
+}
+
+export interface SwarmServiceView {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  name: string;
+  mode: string;
+  image: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  runningTaskCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  desiredTaskCount: number | string;
+  updateState: string;
+  updateMessage: null | string;
+  ports: string[];
+  networkIds: string[];
+  secretIds: string[];
+  configIds: string[];
+  labels: Record<string, string>;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  updatedAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmServicesView {
+  items: SwarmServiceView[];
+}
+
+export interface SwarmTaskView {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  name: string;
+  serviceId: string;
+  serviceName: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  slot: null | number | string;
+  nodeId: string;
+  nodeHostname: string;
+  desiredState: string;
+  state: string;
+  statusMessage: null | string;
+  error: null | string;
+  image: string;
+  ports: string[];
+  /** @format date-time */
+  statusTimestamp: null | string;
+  /** @format date-time */
+  createdAt: null | string;
+  /** @format date-time */
+  updatedAt: null | string;
+  /** @format date-time */
+  observedAt: string;
+  isStale: boolean;
+}
+
+export interface SwarmTasksView {
+  items: SwarmTaskView[];
 }
 
 export interface TagSummaryView {
@@ -10242,6 +10434,342 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmNodes
+     * @summary List the persisted nodes observed on a Docker Swarm platform
+     * @request GET:/api/v1/platforms/{platformId}/swarm/nodes
+     * @secure
+     * @response `200` `SwarmNodesView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmNodes: (platformId: string, params: RequestParams = {}) =>
+      this.request<SwarmNodesView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/nodes`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmNode
+     * @summary Get a persisted Docker Swarm node
+     * @request GET:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}
+     * @secure
+     * @response `200` `SwarmNodeView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmNode: (
+      platformId: string,
+      nodeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmNodeView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/nodes/${nodeId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmServices
+     * @summary List the persisted services observed on a Docker Swarm platform
+     * @request GET:/api/v1/platforms/{platformId}/swarm/services
+     * @secure
+     * @response `200` `SwarmServicesView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmServices: (platformId: string, params: RequestParams = {}) =>
+      this.request<SwarmServicesView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmService
+     * @summary Get a persisted Docker Swarm service
+     * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}
+     * @secure
+     * @response `200` `SwarmServiceView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmService: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmServiceView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmTasks
+     * @summary List a bounded set of persisted Docker Swarm tasks
+     * @request GET:/api/v1/platforms/{platformId}/swarm/tasks
+     * @secure
+     * @response `200` `SwarmTasksView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmTasks: (
+      platformId: string,
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmTasksView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/tasks`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmTask
+     * @summary Get a persisted Docker Swarm task
+     * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}
+     * @secure
+     * @response `200` `SwarmTaskView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmTask: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmTaskView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmNetworks
+     * @summary List the persisted cluster networks observed on a Docker Swarm platform
+     * @request GET:/api/v1/platforms/{platformId}/swarm/networks
+     * @secure
+     * @response `200` `SwarmNetworksView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmNetworks: (platformId: string, params: RequestParams = {}) =>
+      this.request<SwarmNetworksView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/networks`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmNetwork
+     * @summary Get a persisted Docker Swarm network
+     * @request GET:/api/v1/platforms/{platformId}/swarm/networks/{resourceId}
+     * @secure
+     * @response `200` `SwarmNetworkView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmNetwork: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmNetworkView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/networks/${resourceId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmSecrets
+     * @summary List Docker Swarm secret metadata without secret data
+     * @request GET:/api/v1/platforms/{platformId}/swarm/secrets
+     * @secure
+     * @response `200` `SwarmSecretsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmSecrets: (platformId: string, params: RequestParams = {}) =>
+      this.request<SwarmSecretsView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/secrets`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmSecret
+     * @summary Get Docker Swarm secret metadata without secret data
+     * @request GET:/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}
+     * @secure
+     * @response `200` `SwarmSecretView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmSecret: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmSecretView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/secrets/${resourceId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListSwarmConfigs
+     * @summary List persisted Docker Swarm config metadata
+     * @request GET:/api/v1/platforms/{platformId}/swarm/configs
+     * @secure
+     * @response `200` `SwarmConfigsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSwarmConfigs: (platformId: string, params: RequestParams = {}) =>
+      this.request<SwarmConfigsView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmConfig
+     * @summary Get persisted Docker Swarm config metadata
+     * @request GET:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}
+     * @secure
+     * @response `200` `SwarmConfigView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmConfig: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmConfigView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
         ...params,
       }),
 

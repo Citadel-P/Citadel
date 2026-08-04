@@ -1,6 +1,7 @@
 using Application.Services.Alerts;
 using Hosting.Common;
 using Domain.Contracts.Interfaces;
+using FluentValidation;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -9,7 +10,14 @@ using Mediator;
 namespace Application.Features.Alerters.Commands;
 
 [RequirePermission(ResourceType.AlertChannel, PermissionLevel.Execute)]
-public sealed record DeleteAlertChannels(IEnumerable<Guid> Ids) : ICommand<Result>;
+public sealed record DeleteAlertChannels(IEnumerable<Guid> Ids) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteAlertChannels>
+    {
+        public Validator()
+            => RuleFor(command => command.Ids).NotNull().NotEmpty();
+    }
+}
 
 internal sealed class DeleteAlertChannelsHandler(
     IUnitOfWork unitOfWork,
@@ -25,7 +33,7 @@ internal sealed class DeleteAlertChannelsHandler(
         {
             alertRuleCache.RemoveChannels(ids);
         }
-        
+
         return result > 0
             ? Result.Success()
             : Result.Failure(new NotFoundError("No alert channels found matching the provided IDs for deletion."));

@@ -23,13 +23,12 @@ public sealed record CreateVolume(
     {
         public Validator()
         {
-            When(s => s.Name is not null, () => RuleFor(s => s.Name).ValidNameIdentifier());
-            When(s => s.Driver is not null, () =>
-            {
-                RuleFor(s => s.Driver)
+            RuleFor(s => s.PlatformId).NotEmpty();
+            RuleFor(s => s.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.Driver)
+                .NotEmpty()
                 .Must(static driver => driver == "local")
                 .WithMessage("Driver must be 'local'.");
-            });
             When(s => s.Labels is not null, () =>
             {
                 RuleForEach(s => s.Labels).SetValidator(new KeyPairValidator());
@@ -42,10 +41,10 @@ public sealed record CreateVolume(
     }
 }
 
-internal sealed class CreateVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) 
+internal sealed class CreateVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory)
     : ICommandHandler<CreateVolume, Result<DockerVolumeResult>>
 {
-    
+
     public async ValueTask<Result<DockerVolumeResult>> Handle(CreateVolume command, CancellationToken cancellationToken)
     {
         try

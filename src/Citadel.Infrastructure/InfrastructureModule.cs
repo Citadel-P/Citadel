@@ -137,6 +137,9 @@ public static class InfrastructureModule
             .AddSingleton<AgentDeploymentConnector>()
             .AddSingleton<LocalDeploymentConnector>()
             .AddSingleton<EdgeDeploymentConnector>()
+            .AddSingleton<AgentSwarmConnector>()
+            .AddSingleton<LocalSwarmConnector>()
+            .AddSingleton<EdgeSwarmConnector>()
             .AddSingleton(typeof(IConnectorFactory<>), typeof(ConnectorFactory<>))
             .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>(sp => sp.GetRequiredService<EdgeImageConnector>())
             .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>(sp => sp.GetRequiredService<EdgeVolumeConnector>())
@@ -144,7 +147,8 @@ public static class InfrastructureModule
             .AddConnectorFactory<IStackConnector, AgentStackConnector, LocalStackConnector>(sp => sp.GetRequiredService<EdgeStackConnector>())
             .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>(sp => sp.GetRequiredService<EdgePlatformConnector>())
             .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>(sp => sp.GetRequiredService<EdgeContainerConnector>())
-            .AddConnectorFactory<IDeploymentConnector, AgentDeploymentConnector, LocalDeploymentConnector>(sp => sp.GetRequiredService<EdgeDeploymentConnector>());
+            .AddConnectorFactory<IDeploymentConnector, AgentDeploymentConnector, LocalDeploymentConnector>(sp => sp.GetRequiredService<EdgeDeploymentConnector>())
+            .AddConnectorFactory<ISwarmConnector, AgentSwarmConnector, LocalSwarmConnector>(sp => sp.GetRequiredService<EdgeSwarmConnector>());
 
     /// <summary>
     /// Adds HTTP clients to the service collection.

@@ -17,6 +17,7 @@ const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
 const Profile = lazy(() => import('@/features/profile'));
 const License = lazy(() => import('@/features/license'));
 const InitialSetup = lazy(() => import('@/features/setup'));
+const SwarmResource = lazy(() => import('@/features/swarm'));
 
 export const Router = () => {
   return (
@@ -44,6 +45,7 @@ export const Router = () => {
 
                 <Route path="platforms">
                   <Route index element={<Resources />} />
+                  <Route path=":platformId/swarm/:resourceType/:resourceId?" element={<SwarmResource />} />
                   <Route path=":platformId/:type" element={<Resources />} />
                   <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
                   <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />

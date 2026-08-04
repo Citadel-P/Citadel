@@ -19,7 +19,10 @@ public sealed record PatchContainer(string[] ContainerIds, ContainerAction Actio
     internal class Validator : AbstractValidator<PatchContainer>
     {
         public Validator()
-            => RuleForEach(s => s.ContainerIds).ValidContainerId();
+        {
+            RuleFor(s => s.ContainerIds).NotNull().NotEmpty();
+            RuleForEach(s => s.ContainerIds).ValidContainerId();
+        }
     }
 }
 
