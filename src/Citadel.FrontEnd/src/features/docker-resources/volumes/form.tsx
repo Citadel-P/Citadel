@@ -5,19 +5,17 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { FormShell, defineSection, defineField } from '@/components/custom/form-builder';
 import { FieldInput } from '@/components/custom/form-builder';
-import { CreateVolumeInput } from '@/api/generated/api.types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CreateVolumeInput, PlatformType } from '@/api/generated/api.types';
 import { Constants } from '@/lib/constants';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle } from 'lucide-react';
 import { KeyValuePairInput } from '@/components/custom/key-value-pair-input';
 
-const driverOptions = [{ value: 'local', label: 'Local' }];
-
 export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
   const { mutateAsync, isPending } = useMutate('createVolume');
+  const isSwarmPlatform = currentPlatform?.type === PlatformType.DockerSwarm;
 
   const [update, setUpdate] = useState<Partial<CreateVolumeInput>>({
     driver: 'local',
@@ -68,27 +66,17 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
         defineField({
           key: 'driver',
           label: 'Driver',
+          description: isSwarmPlatform
+            ? 'Use local for node-local storage, or enter an installed shared-storage volume plugin. Docker does not provide a volume driver named swarm.'
+            : 'Name of the built-in local driver or an installed volume plugin.',
           required: true,
+          validate: (value) => (/\s/.test(value ?? '') ? 'Driver cannot contain whitespace.' : null),
           render: (value, set) => (
-            <Select
-              onValueChange={(v) =>
-                set(() => ({
-                  driver: v,
-                }))
-              }
-              value={value}>
-              <SelectTrigger className="w-full max-w-100">
-                <SelectValue placeholder="Select driver type" />
-              </SelectTrigger>
-
-              <SelectContent className="bg-background">
-                {driverOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FieldInput
+              placeholder="e.g. local or my-storage-plugin"
+              value={value ?? ''}
+              onChange={(v) => set({ driver: v })}
+            />
           ),
         }),
       ],

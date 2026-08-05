@@ -1,4 +1,6 @@
 ﻿using System.Text;
+using System.Net;
+using System.Net.Http.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -247,6 +249,7 @@ public class CreateNetworkTests(PostgresTestFixture fixture) : IntegrationTestBa
         {    
            "name":"New-Custom-Driver-Network",
            "driver":"overlay",
+           "scope":"swarm",
            "enableIPv4":true,
            "enableIPv6":false,
            "internal":false,
@@ -290,6 +293,7 @@ public class CreateNetworkTests(PostgresTestFixture fixture) : IntegrationTestBa
         {
            "name":"Internal-Attachable-Network",
            "driver":"overlay",
+           "scope":"swarm",
            "enableIPv4":true,
            "enableIPv6":false,
            "internal":true,
@@ -320,5 +324,36 @@ public class CreateNetworkTests(PostgresTestFixture fixture) : IntegrationTestBa
         response.EnsureSuccessStatusCode();
 
         await VerifyJson(responseBody);
+    }
+
+    [Theory]
+    [InlineData("overlay", "local", "Overlay networks must use Swarm scope.")]
+    [InlineData("bridge", "swarm", "Swarm-scoped networks must use the overlay driver.")]
+    public async Task Create_Network_Rejects_Incompatible_Driver_And_Scope(
+        string driver,
+        string scope,
+        string expectedError)
+    {
+        var response = await Client.PostAsJsonAsync(
+            "/api/v1/networks",
+            new
+            {
+                name = "invalid-network",
+                driver,
+                scope,
+                enableIPv4 = true,
+                enableIPv6 = false,
+                @internal = false,
+                attachable = false,
+                ingress = false,
+                platformId = "0198740b-a501-7ae8-8afc-1e6ce659ee02"
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(expectedError, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        networkConnectorMock.Verify(
+            value => value.CreateNetworkAsync(It.IsAny<CreateDockerNetworkCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

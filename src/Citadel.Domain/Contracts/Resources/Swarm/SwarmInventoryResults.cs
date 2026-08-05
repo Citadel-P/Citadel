@@ -1,3 +1,5 @@
+using Domain.Entities;
+
 namespace Domain.Contracts.Resources.Swarm;
 
 public sealed record SwarmServiceResult(
@@ -11,7 +13,11 @@ public sealed record SwarmTaskResult(
     string Id, long VersionIndex, string Name, string ServiceId, int? Slot, string NodeId,
     string DesiredState, string State, string? StatusMessage, string? Error, string Image,
     IReadOnlyList<string> Ports, DateTimeOffset? StatusTimestamp,
-    DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt, string? ContainerId = null);
+
+public sealed record SwarmTaskStatsResult(
+    string DockerContainerId,
+    IReadOnlyList<ContainerStat> Stats);
 
 public sealed record SwarmNetworkResult(
     string Id, string Name, string Scope, string Driver, bool IsAttachable, bool IsInternal,
@@ -25,3 +31,5 @@ public sealed record SwarmSecretResult(
 public sealed record SwarmConfigResult(
     string Id, long VersionIndex, string Name, string? TemplatingDriver,
     IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt);
+
+public sealed record SwarmLogsResult(IReadOnlyList<string> Lines, bool Truncated);

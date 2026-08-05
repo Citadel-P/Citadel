@@ -20,6 +20,7 @@ import { LoaderCircle } from 'lucide-react';
 
 type StateValue =
   | boolean
+  | string
   | ContainerStateStatus
   | RegistryStatus
   | DeploymentStatus
@@ -42,7 +43,9 @@ type StateIndicatorKind =
   | 'buildAgentPoolValidation'
   | 'buildRun'
   | 'container'
-  | 'platform';
+  | 'platform'
+  | 'swarmNode'
+  | 'swarmTask';
 
 type StatusStyle = {
   colorClass: string;
@@ -189,6 +192,43 @@ const getPlatformStatusStyle = (value: StateValue): StatusStyle | undefined => {
   }
 };
 
+const getSwarmTaskStatusStyle = (value: StateValue): StatusStyle => {
+  switch (String(value).toLowerCase()) {
+    case 'running':
+      return { colorClass: 'bg-green-500', tooltip: 'Running' };
+    case 'failed':
+    case 'rejected':
+    case 'orphaned':
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case 'new':
+    case 'pending':
+    case 'assigned':
+    case 'accepted':
+    case 'preparing':
+    case 'ready':
+    case 'starting':
+      return { colorClass: 'bg-yellow-500', tooltip: String(value) };
+    case 'complete':
+    case 'shutdown':
+    case 'remove':
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+    default:
+      return { colorClass: 'bg-gray-400', tooltip: String(value || 'Unknown') };
+  }
+};
+
+const getSwarmNodeStatusStyle = (value: StateValue): StatusStyle => {
+  switch (String(value).toLowerCase()) {
+    case 'ready':
+      return { colorClass: 'bg-green-500', tooltip: 'Ready' };
+    case 'down':
+    case 'disconnected':
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    default:
+      return { colorClass: 'bg-orange-400', tooltip: String(value || 'Unknown') };
+  }
+};
+
 const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIndicatorKind) => {
   // Boolean-based statuses
   if (typeof value === 'boolean') {
@@ -224,6 +264,14 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 
   if (kind === 'platform') {
     return getPlatformStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'swarmTask') {
+    return getSwarmTaskStatusStyle(value);
+  }
+
+  if (kind === 'swarmNode') {
+    return getSwarmNodeStatusStyle(value);
   }
 
   // Enum-based statuses

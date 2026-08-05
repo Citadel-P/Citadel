@@ -138,6 +138,57 @@ public sealed class VolumeEndpointTests(PostgresTestFixture fixture) : Integrati
     }
 
     [Fact]
+    public async Task CreateVolume_ShouldForwardAnInstalledPluginDriver()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        connector
+            .Setup(value => value.CreateVolumeAsync(
+                It.Is<CreateDockerVolumeCommand>(command =>
+                    command.PlatformAddress == "docker.test:2375"
+                    && command.Name == "shared-data"
+                    && command.Driver == "storage/plugin"
+                    && command.Options != null
+                    && command.Options["region"] == "west"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(Volume("shared-data")));
+
+        using var response = await Client.PostAsJsonAsync(
+            "/api/v1/volumes",
+            new
+            {
+                platformId = PlatformId,
+                name = "shared-data",
+                driver = "storage/plugin",
+                options = new Dictionary<string, string> { ["region"] = "west" }
+            },
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        connector.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("invalid driver")]
+    public async Task CreateVolume_ShouldRejectAnInvalidDriver(string driver)
+    {
+        using var response = await Client.PostAsJsonAsync(
+            "/api/v1/volumes",
+            new
+            {
+                platformId = PlatformId,
+                name = "shared-data",
+                driver
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        connector.Verify(
+            value => value.CreateVolumeAsync(It.IsAny<CreateDockerVolumeCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task VolumeContentEndpoints_ShouldStreamContentAndPersistDownloadActivity()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

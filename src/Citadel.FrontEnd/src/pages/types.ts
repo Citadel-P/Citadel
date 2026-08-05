@@ -88,7 +88,7 @@ export interface RequiredFormComponents<T = any> {
 export interface RequiredDockerInfoComponents<T = any> {
   /** Configuration for header  */
   Header: {
-    Indicator: React.FC<{ resource: T }>;
+    Indicator?: React.FC<{ resource: T }>;
     NameSuffix?: React.FC<{ resource: T }>;
     ActionButtons: React.FC<{ resource: T }>;
   };
@@ -99,6 +99,9 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Data hook for this resource */
   useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
+
+/** Swarm resource details use the same page contract as Docker resource details. */
+export type RequiredSwarmInfoComponents<T = any> = RequiredDockerInfoComponents<T>;
 
 export interface ResourceDataHookResult<T> {
   items: T[];

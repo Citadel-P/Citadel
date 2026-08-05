@@ -4,7 +4,7 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
-import { SeverityStatusCell } from '@/components/custom/common';
+import { StateBadge } from '@/components/custom/state-badge';
 import { Activity, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,7 +75,7 @@ const columns = (
     {
       accessorKey: 'severity',
       header: ({ column }) => <SortableCell cellName="Severity" column={column} />,
-      cell: ({ row }) => <SeverityStatusCell severity={row.original.severity} />,
+      cell: ({ row }) => <StateBadge value={row.original.severity} kind="alertSeverity" />,
       sortingFn: (rowA: any, rowB: any): number => rowA.original?.severity?.localeCompare(rowB.original?.severity),
     },
     {

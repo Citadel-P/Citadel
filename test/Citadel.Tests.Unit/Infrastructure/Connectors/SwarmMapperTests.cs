@@ -90,7 +90,7 @@ public sealed class SwarmMapperTests
 
         var task = new SwarmTaskResult(
             "task-1", 3, "web.1", "service-1", 1, "node-1", "Running", "Running",
-            null, null, "nginx:latest", [], timestamp, timestamp, timestamp);
+            null, null, "nginx:latest", [], timestamp, timestamp, timestamp, "container-1");
         var taskMessage = new SwarmTaskMessage
         {
             Id = task.Id,
@@ -102,6 +102,7 @@ public sealed class SwarmMapperTests
             DesiredState = task.DesiredState,
             State = task.State,
             Image = task.Image,
+            ContainerId = task.ContainerId,
             StatusTimestamp = Timestamp.FromDateTimeOffset(timestamp),
             CreatedAt = Timestamp.FromDateTimeOffset(timestamp),
             UpdatedAt = Timestamp.FromDateTimeOffset(timestamp)

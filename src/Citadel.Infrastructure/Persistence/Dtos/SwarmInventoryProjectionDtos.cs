@@ -1,10 +1,20 @@
 namespace Infrastructure.Persistence.Dtos;
 
+internal sealed record SwarmProjectionSummaryDto(
+    bool IsStale,
+    int NodeCount,
+    int ManagerCount,
+    int ServiceCount,
+    int RunningTaskCount,
+    int DesiredTaskCount,
+    int NetworkCount);
+
 internal sealed record SwarmServiceProjectionDto(
     Guid PlatformId, string DockerServiceId, long VersionIndex, string Name, string Mode,
     string Image, int RunningTaskCount, int DesiredTaskCount, string UpdateState,
     string? UpdateMessage, string Ports, string NetworkIds, string SecretIds, string ConfigIds,
-    string Labels, DateTime? DockerCreatedAt, DateTime? DockerUpdatedAt,
+    string Labels, string Ownership, string? DockerStackNamespace, string? OwnershipDiagnostic,
+    DateTime? DockerCreatedAt, DateTime? DockerUpdatedAt,
     DateTime ObservedAt, bool IsStale);
 
 internal sealed record SwarmTaskProjectionDto(

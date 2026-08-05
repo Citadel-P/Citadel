@@ -1,4 +1,4 @@
-import { PlatformConnectorType, PlatformStatus, PlatformView } from '@/api/generated/api.types';
+import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import {
@@ -228,6 +228,32 @@ describe('platform disk statistics', () => {
     expect(screen.getByRole('link', { name: /Networks/ }).querySelector('svg')).toHaveClass('text-cyan-500');
     expect(screen.getByText('20 GB')).toHaveAttribute('title', 'Disk space used by Docker image layers');
     expect(screen.getByText('3 GB')).toHaveAttribute('title', 'Disk space used by Docker local volumes');
+  });
+
+  it('leaves Swarm-specific backup and network cards for the upper summary', () => {
+    const platform = {
+      id: 'swarm-1',
+      type: PlatformType.DockerSwarm,
+      status: PlatformStatus.Online,
+      platformDescriptor: {
+        containerCount: 1,
+        containersRunning: 1,
+        containersStopped: 0,
+        containersPaused: 0,
+      },
+      deploymentStatusCounts: { total: 0 },
+      stackStatusCounts: { total: 0 },
+      stats: [],
+    } as PlatformView;
+
+    render(
+      <MemoryRouter>
+        <PlatformResourceSummary platform={platform} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole('link', { name: /Backups/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Networks/ })).not.toBeInTheDocument();
   });
 
   it('does not report valid current metrics as unavailable while history is empty', () => {

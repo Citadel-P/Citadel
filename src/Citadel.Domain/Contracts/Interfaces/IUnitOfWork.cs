@@ -1000,6 +1000,7 @@ public interface IPlatformStatRepository
 
 public interface ISwarmProjectionRepository
 {
+    Task<SwarmProjectionSummary> GetSummaryAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmNodeProjection>> GetNodesAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmNodeProjection?> GetNodeAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmServiceProjection>> GetServicesAsync(Guid platformId, CancellationToken cancellationToken);

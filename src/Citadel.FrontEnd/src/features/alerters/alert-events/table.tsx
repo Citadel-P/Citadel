@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { AlertEventStatusCell, PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
+import { PagedDataTable, TargetCell } from '@/components/custom/common';
+import { StateBadge } from '@/components/custom/state-badge';
 import type { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
@@ -91,13 +92,13 @@ const columns = (
   {
     accessorKey: 'severity',
     header: ({ column }) => <SortableCell cellName="Severity" column={column} />,
-    cell: ({ row }) => <SeverityStatusCell severity={row.original.severity} />,
+    cell: ({ row }) => <StateBadge value={row.original.severity} kind="alertSeverity" />,
     sortingFn: (rowA, rowB) => rowA.original.severity.localeCompare(rowB.original.severity),
   },
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => <AlertEventStatusCell status={row.original.status} />,
+    cell: ({ row }) => <StateBadge value={row.original.status} kind="alertEvent" />,
     sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {

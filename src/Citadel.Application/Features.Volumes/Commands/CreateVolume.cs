@@ -27,8 +27,9 @@ public sealed record CreateVolume(
             RuleFor(s => s.Name).NotEmpty().ValidNameIdentifier();
             RuleFor(s => s.Driver)
                 .NotEmpty()
-                .Must(static driver => driver == "local")
-                .WithMessage("Driver must be 'local'.");
+                .MaximumLength(255)
+                .Must(static driver => driver is null || driver.All(static character => !char.IsWhiteSpace(character)))
+                .WithMessage("Driver cannot contain whitespace.");
             When(s => s.Labels is not null, () =>
             {
                 RuleForEach(s => s.Labels).SetValidator(new KeyPairValidator());

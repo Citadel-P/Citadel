@@ -3,16 +3,108 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Swarm;
+using Domain.Entities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
+using LightResults;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Swarm;
 
 public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    private readonly Mock<ISwarmConnector> connector = new(MockBehavior.Strict);
     private Guid platformId;
+    private Guid taskContainerId;
     private Guid otherPlatformId;
     private Guid standalonePlatformId;
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        connector
+            .Setup(value => value.InspectNodeAsync(
+                It.IsAny<InspectSwarmNodeCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectSwarmNodeCommand command, CancellationToken _) => Result.Success(
+                new SwarmNodeResult(
+                    command.NodeId,
+                    2,
+                    "primary-manager-live",
+                    "Manager",
+                    true,
+                    "Reachable",
+                    "Ready",
+                    null,
+                    "Active",
+                    "29.0",
+                    "linux",
+                    "x86_64",
+                    "10.0.0.10",
+                    new Dictionary<string, string> { ["zone"] = "primary" },
+                    3,
+                    3,
+                    null,
+                    null)));
+        connector
+            .Setup(value => value.InspectServiceAsync(
+                It.IsAny<InspectSwarmServiceCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectSwarmServiceCommand command, CancellationToken _) => Result.Success(
+                new SwarmServiceResult(
+                    command.ServiceId,
+                    2,
+                    "primary-web",
+                    "Replicated",
+                    "nginx:inspected",
+                    2,
+                    2,
+                    "Completed",
+                    null,
+                    ["80/tcp"],
+                    ["primary-network"],
+                    ["primary-secret"],
+                    ["primary-config"],
+                    new Dictionary<string, string> { ["environment"] = "test" },
+                    null,
+                    null)));
+        connector
+            .Setup(value => value.GetServiceLogsAsync(
+                It.IsAny<GetSwarmServiceLogsCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmLogsResult(["service output"], false)));
+        connector
+            .Setup(value => value.GetTaskLogsAsync(
+                It.IsAny<GetSwarmTaskLogsCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmLogsResult(["task output"], true)));
+        connector
+            .Setup(value => value.InspectTaskAsync(
+                It.IsAny<InspectSwarmTaskCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectSwarmTaskCommand command, CancellationToken _) => Result.Success(
+                new SwarmTaskResult(
+                    command.TaskId,
+                    1,
+                    "primary-web.1",
+                    "primary-service",
+                    1,
+                    command.TaskId == "primary-task-2" ? "worker-node" : "node-swarm-endpoints",
+                    "Running",
+                    "Running",
+                    null,
+                    null,
+                    "nginx:primary",
+                    ["80/tcp"],
+                    null,
+                    null,
+                    null,
+                    ContainerId: $"container-{command.TaskId}")));
+        services.ReplaceService<IConnectorFactory<ISwarmConnector>>(
+            new FakeConnectorFactory(connector.Object));
+    }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -23,6 +115,19 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(otherPlatform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(standalonePlatform, TestContext.Current.CancellationToken);
+        var taskContainer = new Container(
+            "primary-web.1",
+            "sha256:image",
+            platform.Id,
+            "container-primary-task-1",
+            ContainerStateStatus.Running);
+        await uow.Containers.AddAsync(taskContainer, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        await uow.ContainerStats.BulkInsertAsync(
+            [new ContainerStat(taskContainer.Id, 256, 32, 12.5, 1024, 2048, 1024,
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds())],
+            TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         await uow.Swarm.ReplaceAsync(
@@ -36,6 +141,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
+        taskContainerId = taskContainer.Id;
         otherPlatformId = otherPlatform.Id;
         standalonePlatformId = standalonePlatform.Id;
     }
@@ -75,6 +181,54 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         using var detailDocument = await ReadJsonAsync(detailResponse);
         Assert.Equal(resourceId, detailDocument.RootElement.GetProperty("id").GetString());
         Assert.Equal(expectedValue, detailDocument.RootElement.GetProperty(property).GetString());
+    }
+
+    [Theory]
+    [InlineData("nodes", "primary-node")]
+    [InlineData("services", "primary-service")]
+    [InlineData("tasks", "primary-task-1")]
+    [InlineData("networks", "primary-network")]
+    [InlineData("secrets", "primary-secret")]
+    [InlineData("configs", "primary-config")]
+    public async Task ListAndDetailEndpoints_ShouldReturnCallerPlatformCapabilities(
+        string resource,
+        string resourceId)
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Logs | SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var listResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}",
+            TestContext.Current.CancellationToken);
+        listResponse.EnsureSuccessStatusCode();
+
+        using (var listDocument = await ReadJsonAsync(listResponse))
+        {
+            AssertReadInspectAndLogsCapabilities(listDocument.RootElement.GetProperty("capabilities"));
+            var item = listDocument.RootElement
+                .GetProperty("items")
+                .EnumerateArray()
+                .Single(value => value.GetProperty("id").GetString() == resourceId);
+            AssertReadInspectAndLogsCapabilities(item.GetProperty("capabilities"));
+        }
+
+        var detailResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}/{resourceId}",
+            TestContext.Current.CancellationToken);
+        detailResponse.EnsureSuccessStatusCode();
+
+        using var detailDocument = await ReadJsonAsync(detailResponse);
+        AssertReadInspectAndLogsCapabilities(detailDocument.RootElement.GetProperty("capabilities"));
     }
 
     [Fact]
@@ -169,10 +323,319 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.False(document.RootElement.TryGetProperty("value", out _));
     }
 
+    [Fact]
+    public async Task OverviewEndpoint_ShouldReturnPersistedClusterSummary()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        var root = document.RootElement;
+        Assert.Equal("Healthy", root.GetProperty("health").GetString());
+        Assert.False(root.GetProperty("isStale").GetBoolean());
+        Assert.False(root.TryGetProperty("observedAt", out _));
+        Assert.Equal(1, root.GetProperty("nodeCount").GetInt32());
+        Assert.Equal(1, root.GetProperty("managerCount").GetInt32());
+        Assert.Equal(1, root.GetProperty("serviceCount").GetInt32());
+        Assert.Equal(3, root.GetProperty("runningTaskCount").GetInt32());
+        Assert.Equal(3, root.GetProperty("desiredTaskCount").GetInt32());
+        Assert.Equal(1, root.GetProperty("networkCount").GetInt32());
+        Assert.False(root.TryGetProperty("inventory", out _));
+        Assert.True(root.GetProperty("capabilities").GetProperty("canRead").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ServiceEndpoint_ShouldExposePersistedOwnershipClassification()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        var root = document.RootElement;
+        Assert.Equal("DockerStackExternal", root.GetProperty("ownership").GetString());
+        Assert.Equal("primary-stack", root.GetProperty("dockerStackNamespace").GetString());
+        Assert.Equal("Orphaned Citadel metadata", root.GetProperty("ownershipDiagnostic").GetString());
+    }
+
+    [Theory]
+    [InlineData("services", "primary-service", 0)]
+    [InlineData("services", "primary-service", 201)]
+    [InlineData("tasks", "primary-task-1", 0)]
+    [InlineData("tasks", "primary-task-1", 201)]
+    public async Task LogsEndpoint_ShouldRejectOutOfRangeTail(string resource, string resourceId, int tail)
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}/{resourceId}/logs?tail={tail}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LogsEndpoint_ShouldRequirePlatformLogsPermission()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service/logs",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        connector.Verify(
+            value => value.GetServiceLogsAsync(
+                It.IsAny<GetSwarmServiceLogsCommand>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LogsEndpoints_ShouldReturnBoundedConnectorResultsForProjectedResources()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Logs)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var serviceResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service/logs?tail=25",
+            TestContext.Current.CancellationToken);
+        serviceResponse.EnsureSuccessStatusCode();
+        using (var serviceDocument = await ReadJsonAsync(serviceResponse))
+        {
+            Assert.Equal("service output", serviceDocument.RootElement.GetProperty("lines")[0].GetString());
+            Assert.False(serviceDocument.RootElement.GetProperty("truncated").GetBoolean());
+        }
+
+        var taskResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/logs?tail=12",
+            TestContext.Current.CancellationToken);
+        taskResponse.EnsureSuccessStatusCode();
+        using (var taskDocument = await ReadJsonAsync(taskResponse))
+        {
+            Assert.Equal("task output", taskDocument.RootElement.GetProperty("lines")[0].GetString());
+            Assert.True(taskDocument.RootElement.GetProperty("truncated").GetBoolean());
+        }
+
+        connector.Verify(value => value.GetServiceLogsAsync(
+            It.Is<GetSwarmServiceLogsCommand>(command => command.ServiceId == "primary-service" && command.Tail == 25),
+            It.IsAny<CancellationToken>()), Times.Once);
+        connector.Verify(value => value.GetTaskLogsAsync(
+            It.Is<GetSwarmTaskLogsCommand>(command => command.TaskId == "primary-task-1" && command.Tail == 12),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LogsEndpoint_ShouldRejectAnIdOutsideTheSelectedPlatformBeforeCallingConnector()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/foreign-service/logs",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        connector.Verify(
+            value => value.GetServiceLogsAsync(
+                It.IsAny<GetSwarmServiceLogsCommand>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task TaskInspectEndpoint_ShouldRequireInspectPermissionAndReturnLiveTaskData()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/inspect",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        connector.Verify(
+            value => value.InspectTaskAsync(It.IsAny<InspectSwarmTaskCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        var inspector = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(inspector.UserId, inspector.ActorId));
+
+        var allowed = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/inspect",
+            TestContext.Current.CancellationToken);
+        allowed.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(allowed);
+        Assert.Equal("primary-task-1", document.RootElement.GetProperty("id").GetString());
+        Assert.Equal("container-primary-task-1", document.RootElement.GetProperty("containerId").GetString());
+    }
+
+    [Fact]
+    public async Task ServiceInspectEndpoint_ShouldRequireInspectPermissionAndReturnLiveServiceData()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service/inspect",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        connector.Verify(
+            value => value.InspectServiceAsync(It.IsAny<InspectSwarmServiceCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        var inspector = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(inspector.UserId, inspector.ActorId));
+
+        var allowed = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service/inspect",
+            TestContext.Current.CancellationToken);
+        allowed.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(allowed);
+        Assert.Equal("primary-service", document.RootElement.GetProperty("id").GetString());
+        Assert.Equal("nginx:inspected", document.RootElement.GetProperty("image").GetString());
+        Assert.Equal("test", document.RootElement.GetProperty("labels").GetProperty("environment").GetString());
+    }
+
+    [Fact]
+    public async Task NodeInspectEndpoint_ShouldRequireInspectPermissionAndReturnLiveNodeData()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node/inspect",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        connector.Verify(
+            value => value.InspectNodeAsync(It.IsAny<InspectSwarmNodeCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        var inspector = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(inspector.UserId, inspector.ActorId));
+
+        var allowed = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node/inspect",
+            TestContext.Current.CancellationToken);
+        allowed.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(allowed);
+        Assert.Equal("primary-node", document.RootElement.GetProperty("id").GetString());
+        Assert.Equal("primary-manager-live", document.RootElement.GetProperty("hostname").GetString());
+        Assert.Equal("primary", document.RootElement.GetProperty("labels").GetProperty("zone").GetString());
+    }
+
+    [Fact]
+    public async Task TaskStatsEndpoint_ShouldUseTheRunningContainerOnTheConnectedNode()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/stats",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        Assert.Equal(
+            "container-primary-task-1",
+            document.RootElement.GetProperty("dockerContainerId").GetString());
+        var stats = document.RootElement.GetProperty("stats").EnumerateArray().Single();
+        Assert.Equal(taskContainerId, stats.GetProperty("containerId").GetGuid());
+        Assert.Equal(12.5, stats.GetProperty("cpuUsage").GetDouble());
+        Assert.Equal(256, stats.GetProperty("memoryActive").GetDouble());
+    }
+
+    [Fact]
+    public async Task TaskStatsEndpoint_ShouldExplainTheNodeLocalDockerLimitation()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-2/stats",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var document = await ReadJsonAsync(response);
+        Assert.Contains("not running on the connected manager", document.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task TaskStatsEndpoint_ShouldRejectUnsupportedHistoryWindow()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/stats?hours=12",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response) =>
         await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
             cancellationToken: TestContext.Current.CancellationToken);
+
+    private static void AssertReadInspectAndLogsCapabilities(JsonElement capabilities)
+    {
+        var serialized = capabilities.GetRawText();
+        Assert.True(capabilities.GetProperty("canRead").GetBoolean(), serialized);
+        Assert.False(capabilities.GetProperty("canWrite").GetBoolean());
+        Assert.False(capabilities.GetProperty("canExecute").GetBoolean());
+        Assert.True(capabilities.GetProperty("canViewLogs").GetBoolean(), serialized);
+        Assert.True(capabilities.GetProperty("canInspect").GetBoolean(), serialized);
+        Assert.False(capabilities.GetProperty("canOpenTerminal").GetBoolean());
+        Assert.False(capabilities.GetProperty("canPull").GetBoolean());
+    }
 
     private static SwarmProjectionSnapshot CreateSnapshot(Guid selectedPlatformId, string prefix, int taskCount = 1)
     {
@@ -186,7 +649,10 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             selectedPlatformId, $"{prefix}-service", 2, $"{prefix}-web", "Replicated", $"nginx:{prefix}",
             taskCount, taskCount, "Completed", null, ["80:80/tcp"], [$"{prefix}-network"],
             [$"{prefix}-secret"], [$"{prefix}-config"], new Dictionary<string, string> { ["app"] = prefix },
-            observedAt.AddDays(-1), observedAt, observedAt, false);
+            observedAt.AddDays(-1), observedAt, observedAt, false,
+            SwarmServiceOwnership.DockerStackExternal,
+            DockerStackNamespace: $"{prefix}-stack",
+            OwnershipDiagnostic: "Orphaned Citadel metadata");
         var tasks = Enumerable.Range(1, taskCount)
             .Select(index => new SwarmTaskProjection(
                 selectedPlatformId, $"{prefix}-task-{index}", index, $"{prefix}-web.{index}",
@@ -256,4 +722,9 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             ContainersRunning: 0,
             ContainersPaused: 0,
             ContainersStopped: 0));
+
+    private sealed class FakeConnectorFactory(ISwarmConnector value) : IConnectorFactory<ISwarmConnector>
+    {
+        public ISwarmConnector GetConnector(PlatformConnectorType type) => value;
+    }
 }

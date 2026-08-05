@@ -19,7 +19,9 @@ internal static class SwarmProjectionMappers
         value.RunningTaskCount, value.DesiredTaskCount, value.UpdateState, value.UpdateMessage,
         DeserializeList(value.Ports), DeserializeList(value.NetworkIds), DeserializeList(value.SecretIds),
         DeserializeList(value.ConfigIds), DeserializeLabels(value.Labels), ToOffset(value.DockerCreatedAt),
-        ToOffset(value.DockerUpdatedAt), ToOffset(value.ObservedAt), value.IsStale);
+        ToOffset(value.DockerUpdatedAt), ToOffset(value.ObservedAt), value.IsStale,
+        Enum.Parse<SwarmServiceOwnership>(value.Ownership), value.DockerStackNamespace,
+        value.OwnershipDiagnostic);
 
     internal static SwarmTaskProjection ToDomain(this SwarmTaskProjectionDto value) => new(
         value.PlatformId, value.DockerTaskId, value.VersionIndex, value.Name, value.DockerServiceId,

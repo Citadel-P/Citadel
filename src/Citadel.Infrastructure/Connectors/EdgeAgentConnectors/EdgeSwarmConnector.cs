@@ -61,10 +61,14 @@ internal sealed class EdgeSwarmConnector(IEdgeAgentCommandRouter commandRouter) 
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceList, new ListSwarmServicesRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, ListSwarmServicesResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceInspect, new InspectSwarmServiceRequest { ServiceId = command.ServiceId }, SwarmServiceMessage.Parser, static value => value.Map(), cancellationToken);
+    public Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default) =>
+        SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceLogs, new SwarmLogsRequest { ResourceId = command.ServiceId, Tail = SwarmInventoryLimits.NormalizeLogLines(command.Tail) }, SwarmLogsResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<IReadOnlyList<SwarmTaskResult>>> ListTasksAsync(ListSwarmTasksCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmTaskList, new ListSwarmTasksRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, ListSwarmTasksResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmTaskResult>> InspectTaskAsync(InspectSwarmTaskCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmTaskInspect, new InspectSwarmTaskRequest { TaskId = command.TaskId }, SwarmTaskMessage.Parser, static value => value.Map(), cancellationToken);
+    public Task<Result<SwarmLogsResult>> GetTaskLogsAsync(GetSwarmTaskLogsCommand command, CancellationToken cancellationToken = default) =>
+        SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmTaskLogs, new SwarmLogsRequest { ResourceId = command.TaskId, Tail = SwarmInventoryLimits.NormalizeLogLines(command.Tail) }, SwarmLogsResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<IReadOnlyList<SwarmNetworkResult>>> ListNetworksAsync(ListSwarmNetworksCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmNetworkList, new ListSwarmNetworksRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, ListSwarmNetworksResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmNetworkResult>> InspectNetworkAsync(InspectSwarmNetworkCommand command, CancellationToken cancellationToken = default) =>

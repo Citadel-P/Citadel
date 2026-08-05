@@ -115,7 +115,10 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
                     PermissionLevel.Read,
                     SpecificPermission.Logs)
             ]);
+        var noPlatformAccess = await CreateAuthorizationSubjectAsync();
 
+        await AssertAuthorizationAllowedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerInfoGroup(containerId));
+        await AssertAuthorizationDeniedAsync(noPlatformAccess, Constants.WellKnownSignalRGroups.ContainerInfoGroup(containerId));
         await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
         await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId));
         await AssertAuthorizationDeniedAsync(

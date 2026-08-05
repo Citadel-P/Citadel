@@ -1841,6 +1841,14 @@ public static class PublicEndpoints
 
     private static void MapPlatformEndpoints(RouteGroupBuilder platforms)
     {
+        platforms.MapGet("{platformId:guid}/swarm", SwarmInventory.GetOverview)
+            .WithSummary("Get Docker Swarm cluster health and persisted inventory")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmOverview");
+
         platforms.MapGet("{platformId:guid}/swarm/nodes", SwarmNodes.List)
             .WithSummary("List the persisted nodes observed on a Docker Swarm platform")
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -1857,6 +1865,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmNode");
 
+        platforms.MapGet("{platformId:guid}/swarm/nodes/{nodeId}/inspect", SwarmNodes.Inspect)
+            .WithSummary("Inspect a live Docker Swarm node")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("inspectSwarmNode");
+
         platforms.MapGet("{platformId:guid}/swarm/services", SwarmInventory.ListServices)
             .WithSummary("List the persisted services observed on a Docker Swarm platform")
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
@@ -1867,6 +1882,18 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmService");
+        platforms.MapGet("{platformId:guid}/swarm/services/{resourceId}/inspect", SwarmInventory.InspectService)
+            .WithSummary("Inspect a live Docker Swarm service")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("inspectSwarmService");
+        platforms.MapGet("{platformId:guid}/swarm/services/{resourceId}/logs", SwarmInventory.GetServiceLogs)
+            .WithSummary("Get a bounded tail of Docker Swarm service logs")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmServiceLogs");
         platforms.MapGet("{platformId:guid}/swarm/tasks", SwarmInventory.ListTasks)
             .WithSummary("List a bounded set of persisted Docker Swarm tasks")
             .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
@@ -1877,6 +1904,24 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmTask");
+        platforms.MapGet("{platformId:guid}/swarm/tasks/{resourceId}/inspect", SwarmInventory.InspectTask)
+            .WithSummary("Inspect a live Docker Swarm task")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("inspectSwarmTask");
+        platforms.MapGet("{platformId:guid}/swarm/tasks/{resourceId}/stats", SwarmInventory.GetTaskStats)
+            .WithSummary("Get historical stats for a task running on the connected Swarm node")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmTaskStats");
+        platforms.MapGet("{platformId:guid}/swarm/tasks/{resourceId}/logs", SwarmInventory.GetTaskLogs)
+            .WithSummary("Get a bounded tail of Docker Swarm task logs")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmTaskLogs");
         platforms.MapGet("{platformId:guid}/swarm/networks", SwarmInventory.ListNetworks)
             .WithSummary("List the persisted cluster networks observed on a Docker Swarm platform")
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)

@@ -61,6 +61,12 @@ export default [
       'jsx-a11y': fixupPluginRules(jsxA11Y),
     },
 
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+
     languageOptions: {
       globals: {
         ...globals.browser,

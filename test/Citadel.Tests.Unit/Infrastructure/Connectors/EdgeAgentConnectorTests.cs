@@ -85,6 +85,47 @@ public class EdgeAgentConnectorTests
     }
 
     [Fact]
+    public async Task SwarmLogs_ShouldRouteBoundedServiceAndTaskCommands()
+    {
+        var platformId = Guid.CreateVersion7();
+        var address = $"edge://{platformId}";
+        var router = new TestEdgeAgentCommandRouter();
+        var connector = new EdgeSwarmConnector(router);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new SwarmLogsResponse
+        {
+            Lines = { "service output" }
+        }.ToByteArray());
+        var serviceResult = await connector.GetServiceLogsAsync(
+            new GetSwarmServiceLogsCommand(address, "service-1", 25),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(serviceResult.IsSuccess(out var serviceLogs, out var serviceError), serviceError?.Message);
+        Assert.Equal("service output", Assert.Single(serviceLogs.Lines));
+        Assert.Equal(EdgeAgentCommandKind.SwarmServiceLogs, router.Kind);
+        var serviceRequest = SwarmLogsRequest.Parser.ParseFrom(router.Payload);
+        Assert.Equal("service-1", serviceRequest.ResourceId);
+        Assert.Equal(25, serviceRequest.Tail);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success(new SwarmLogsResponse
+        {
+            Lines = { "task output" },
+            Truncated = true
+        }.ToByteArray());
+        var taskResult = await connector.GetTaskLogsAsync(
+            new GetSwarmTaskLogsCommand(address, "task-1", 12),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(taskResult.IsSuccess(out var taskLogs, out var taskError), taskError?.Message);
+        Assert.True(taskLogs.Truncated);
+        Assert.Equal("task output", Assert.Single(taskLogs.Lines));
+        Assert.Equal(EdgeAgentCommandKind.SwarmTaskLogs, router.Kind);
+        var taskRequest = SwarmLogsRequest.Parser.ParseFrom(router.Payload);
+        Assert.Equal("task-1", taskRequest.ResourceId);
+        Assert.Equal(12, taskRequest.Tail);
+    }
+
+    [Fact]
     public async Task ListImagesAsync_Should_Route_ImageList_Command()
     {
         var platformId = Guid.CreateVersion7();

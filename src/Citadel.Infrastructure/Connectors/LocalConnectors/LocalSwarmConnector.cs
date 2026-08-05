@@ -32,10 +32,14 @@ internal sealed class LocalSwarmConnector(ISwarmService swarmService) : ISwarmCo
         => ServiceResultHandlers.HandleResult(await swarmService.ListServicesAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.InspectServiceAsync(command.ServiceId, cancellationToken), SwarmMappers.Map);
+    public async Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default)
+        => ServiceResultHandlers.HandleResult(await swarmService.GetServiceLogsAsync(command.ServiceId, command.Tail, cancellationToken), SwarmMappers.Map);
     public async Task<Result<IReadOnlyList<SwarmTaskResult>>> ListTasksAsync(ListSwarmTasksCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.ListTasksAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmTaskResult>> InspectTaskAsync(InspectSwarmTaskCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.InspectTaskAsync(command.TaskId, cancellationToken), SwarmMappers.Map);
+    public async Task<Result<SwarmLogsResult>> GetTaskLogsAsync(GetSwarmTaskLogsCommand command, CancellationToken cancellationToken = default)
+        => ServiceResultHandlers.HandleResult(await swarmService.GetTaskLogsAsync(command.TaskId, command.Tail, cancellationToken), SwarmMappers.Map);
     public async Task<Result<IReadOnlyList<SwarmNetworkResult>>> ListNetworksAsync(ListSwarmNetworksCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.ListNetworksAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmNetworkResult>> InspectNetworkAsync(InspectSwarmNetworkCommand command, CancellationToken cancellationToken = default)

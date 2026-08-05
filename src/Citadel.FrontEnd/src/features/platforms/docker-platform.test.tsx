@@ -129,6 +129,20 @@ describe('DockerPlatform disk usage', () => {
     expect(screen.getByText('1 manager')).toBeVisible();
     expect(screen.getByText('6 services')).toBeVisible();
     expect(screen.getByText('10 running tasks')).toBeVisible();
+    expect(screen.getByRole('link', { name: '3 nodes' })).toHaveAttribute('href', `/platforms/${platform.id}/nodes`);
+    expect(screen.getByRole('link', { name: '1 manager' })).toHaveAttribute('href', `/platforms/${platform.id}/nodes`);
+    expect(screen.getByRole('link', { name: '6 services' })).toHaveAttribute(
+      'href',
+      `/platforms/${platform.id}/services`,
+    );
+    expect(screen.getByRole('link', { name: '10 running tasks' })).toHaveAttribute(
+      'href',
+      `/platforms/${platform.id}/tasks`,
+    );
+    expect(screen.getByRole('link', { name: 'Running tasks' })).toHaveAttribute(
+      'href',
+      `/platforms/${platform.id}/tasks`,
+    );
     expect(screen.getByRole('region', { name: 'Swarm workloads' })).toBeVisible();
     expect(screen.getByRole('region', { name: 'Connected manager utilization' })).toBeVisible();
     expect(screen.queryByText('2 containers')).not.toBeInTheDocument();

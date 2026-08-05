@@ -8,12 +8,13 @@ import { ResourceHeader } from './resource-header';
 
 type RegularResourceViewProps<T = any> = {
   Components: RegularResourceComponents<T>;
-  type: ResourceType;
+  type: string;
+  showTaskSheet?: boolean;
 };
 
 const EMPTY_ITEMS: never[] = [];
 
-export const RegularResourceView = <T,>({ Components, type }: RegularResourceViewProps<T>) => {
+export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true }: RegularResourceViewProps<T>) => {
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
   const [searchParams] = useSearchParams();
@@ -29,7 +30,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
     [items, search, Components],
   );
 
-  const [_, setSelected] = useSelectedResources(type);
+  const [_, setSelected] = useSelectedResources(type as ResourceType);
   useEffect(() => {
     return () => setSelected([]);
   }, [type, setSelected]);
@@ -74,7 +75,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
       </div>
 
       {Components.GroupActions && <Components.GroupActions items={items ?? EMPTY_ITEMS} />}
-      {type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type} />}
+      {showTaskSheet && type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type as ResourceType} />}
     </div>
   );
 };

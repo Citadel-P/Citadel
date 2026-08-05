@@ -6837,6 +6837,103 @@
         ]
       }
     },
+    "/api/v1/platforms/{platformId}/swarm": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get Docker Swarm cluster health and persisted inventory",
+        "operationId": "getSwarmOverview",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmOverviewView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms/{platformId}/swarm/nodes": {
       "get": {
         "tags": [
@@ -6993,6 +7090,121 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Inspect a live Docker Swarm node",
+        "operationId": "inspectSwarmNode",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmNodeInspectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7241,6 +7453,249 @@
         ]
       }
     },
+    "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Inspect a live Docker Swarm service",
+        "operationId": "inspectSwarmService",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmServiceInspectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get a bounded tail of Docker Swarm service logs",
+        "operationId": "getSwarmServiceLogs",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmLogsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms/{platformId}/swarm/tasks": {
       "get": {
         "tags": [
@@ -7410,6 +7865,377 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Inspect a live Docker Swarm task",
+        "operationId": "inspectSwarmTask",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmTaskInspectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get historical stats for a task running on the connected Swarm node",
+        "operationId": "getSwarmTaskStats",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmTaskStatsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get a bounded tail of Docker Swarm task logs",
+        "operationId": "getSwarmTaskLogs",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmLogsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -51202,6 +52028,16 @@
                 "$ref": "#/components/schemas/PlatformCapabilities"
               }
             ]
+          },
+          "swarmCapabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmCapabilities"
+              }
+            ]
           }
         }
       },
@@ -54522,6 +55358,57 @@
           null
         ]
       },
+      "SwarmCapabilities": {
+        "required": [
+          "canViewCluster",
+          "canManageNodes",
+          "canViewServices",
+          "canManageNetworks",
+          "canManageSecrets",
+          "canManageConfigs",
+          "supportsDeploymentApply",
+          "supportsStackApply",
+          "canViewManagerLocalResources",
+          "supportsServiceStatus",
+          "supportsClusterVolumes"
+        ],
+        "type": "object",
+        "properties": {
+          "canViewCluster": {
+            "type": "boolean"
+          },
+          "canManageNodes": {
+            "type": "boolean"
+          },
+          "canViewServices": {
+            "type": "boolean"
+          },
+          "canManageNetworks": {
+            "type": "boolean"
+          },
+          "canManageSecrets": {
+            "type": "boolean"
+          },
+          "canManageConfigs": {
+            "type": "boolean"
+          },
+          "supportsDeploymentApply": {
+            "type": "boolean"
+          },
+          "supportsStackApply": {
+            "type": "boolean"
+          },
+          "canViewManagerLocalResources": {
+            "type": "boolean"
+          },
+          "supportsServiceStatus": {
+            "type": "boolean"
+          },
+          "supportsClusterVolumes": {
+            "type": "boolean"
+          }
+        }
+      },
       "SwarmConfigView": {
         "required": [
           "id",
@@ -54589,12 +55476,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmConfigsView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -54603,6 +55501,27 @@
             "items": {
               "$ref": "#/components/schemas/SwarmConfigView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
+          }
+        }
+      },
+      "SwarmLogsView": {
+        "required": [
+          "lines",
+          "truncated"
+        ],
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       },
@@ -54684,12 +55603,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmNetworksView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -54698,6 +55628,117 @@
             "items": {
               "$ref": "#/components/schemas/SwarmNetworkView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
+          }
+        }
+      },
+      "SwarmNodeInspectView": {
+        "required": [
+          "id",
+          "versionIndex",
+          "hostname",
+          "role",
+          "isLeader",
+          "reachability",
+          "status",
+          "statusMessage",
+          "availability",
+          "engineVersion",
+          "operatingSystem",
+          "architecture",
+          "address",
+          "labels",
+          "runningTaskCount",
+          "desiredTaskCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "isLeader": {
+            "type": "boolean"
+          },
+          "reachability": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "statusMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "availability": {
+            "type": "string"
+          },
+          "engineVersion": {
+            "type": "string"
+          },
+          "operatingSystem": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "runningTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "desiredTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -54815,12 +55856,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmNodesView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -54829,6 +55881,94 @@
             "items": {
               "$ref": "#/components/schemas/SwarmNodeView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
+          }
+        }
+      },
+      "SwarmOverviewView": {
+        "required": [
+          "platformId",
+          "health",
+          "message",
+          "isStale",
+          "nodeCount",
+          "managerCount",
+          "serviceCount",
+          "runningTaskCount",
+          "desiredTaskCount",
+          "networkCount",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "health": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isStale": {
+            "type": "boolean"
+          },
+          "nodeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "managerCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "serviceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "runningTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "desiredTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "networkCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
           }
         }
       },
@@ -54920,12 +56060,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmSecretsView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -54934,10 +56085,13 @@
             "items": {
               "$ref": "#/components/schemas/SwarmSecretView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
           }
         }
       },
-      "SwarmServiceView": {
+      "SwarmServiceInspectView": {
         "required": [
           "id",
           "versionIndex",
@@ -54954,9 +56108,7 @@
           "configIds",
           "labels",
           "createdAt",
-          "updatedAt",
-          "observedAt",
-          "isStale"
+          "updatedAt"
         ],
         "type": "object",
         "properties": {
@@ -55048,6 +56200,146 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "SwarmServiceOwnership": {
+        "enum": [
+          "Unmanaged",
+          "DockerStackExternal",
+          "CitadelDeployment",
+          "CitadelStack"
+        ]
+      },
+      "SwarmServiceView": {
+        "required": [
+          "id",
+          "versionIndex",
+          "name",
+          "mode",
+          "image",
+          "runningTaskCount",
+          "desiredTaskCount",
+          "updateState",
+          "updateMessage",
+          "ports",
+          "networkIds",
+          "secretIds",
+          "configIds",
+          "labels",
+          "ownership",
+          "dockerStackNamespace",
+          "ownershipDiagnostic",
+          "createdAt",
+          "updatedAt",
+          "observedAt",
+          "isStale"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "runningTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "desiredTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "updateState": {
+            "type": "string"
+          },
+          "updateMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networkIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secretIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "configIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/SwarmServiceOwnership"
+          },
+          "dockerStackNamespace": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ownershipDiagnostic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           },
           "observedAt": {
             "type": "string",
@@ -55055,12 +56347,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmServicesView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -55068,6 +56371,133 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SwarmServiceView"
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
+          }
+        }
+      },
+      "SwarmTaskInspectView": {
+        "required": [
+          "id",
+          "versionIndex",
+          "name",
+          "serviceId",
+          "slot",
+          "nodeId",
+          "desiredState",
+          "state",
+          "statusMessage",
+          "error",
+          "image",
+          "ports",
+          "statusTimestamp",
+          "createdAt",
+          "updatedAt",
+          "containerId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "slot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "desiredState": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "statusMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "image": {
+            "type": "string"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "statusTimestamp": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "containerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SwarmTaskStatsView": {
+        "required": [
+          "dockerContainerId",
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "dockerContainerId": {
+            "type": "string"
+          },
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
             }
           }
         }
@@ -55185,12 +56615,23 @@
           },
           "isStale": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
       "SwarmTasksView": {
         "required": [
-          "items"
+          "items",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -55199,6 +56640,9 @@
             "items": {
               "$ref": "#/components/schemas/SwarmTaskView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PlatformCapabilities"
           }
         }
       },

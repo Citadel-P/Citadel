@@ -128,10 +128,18 @@ export const DockerPlatform = ({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {swarmDescriptor ? (
                 <>
-                  <span>{formatCount(swarmDescriptor.nodes, 'node')}</span>
-                  <span>{formatCount(swarmDescriptor.managers, 'manager')}</span>
-                  <span>{formatCount(swarmDescriptor.serviceCount, 'service')}</span>
-                  <span>{formatCount(swarmDescriptor.runningTaskCount, 'running task')}</span>
+                  <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
+                    {formatCount(swarmDescriptor.nodes, 'node')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
+                    {formatCount(swarmDescriptor.managers, 'manager')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/services`} className="hover:text-foreground hover:underline">
+                    {formatCount(swarmDescriptor.serviceCount, 'service')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/tasks`} className="hover:text-foreground hover:underline">
+                    {formatCount(swarmDescriptor.runningTaskCount, 'running task')}
+                  </Link>
                 </>
               ) : (
                 <>
@@ -181,6 +189,7 @@ export const DockerPlatform = ({
                 icon={Workflow}
                 label="Running tasks"
                 total={swarmDescriptor.runningTaskCount}
+                to={`/platforms/${platform.id}/tasks`}
                 iconClassName="text-sky-500"
               />
             ) : (

@@ -19,11 +19,17 @@ public interface ISwarmConnector
     Task<Result<SwarmServiceResult>> InspectServiceAsync(
         InspectSwarmServiceCommand command,
         CancellationToken cancellationToken = default);
+    Task<Result<SwarmLogsResult>> GetServiceLogsAsync(
+        GetSwarmServiceLogsCommand command,
+        CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SwarmTaskResult>>> ListTasksAsync(
         ListSwarmTasksCommand command,
         CancellationToken cancellationToken = default);
     Task<Result<SwarmTaskResult>> InspectTaskAsync(
         InspectSwarmTaskCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result<SwarmLogsResult>> GetTaskLogsAsync(
+        GetSwarmTaskLogsCommand command,
         CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SwarmNetworkResult>>> ListNetworksAsync(
         ListSwarmNetworksCommand command,

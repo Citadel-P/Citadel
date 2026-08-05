@@ -2153,6 +2153,10 @@ internal static class Configuration
         service.Property<string>("SecretIds").HasColumnType(JsonB).IsRequired();
         service.Property<string>("ConfigIds").HasColumnType(JsonB).IsRequired();
         service.Property<string>("Labels").HasColumnType(JsonB).IsRequired();
+        service.Property<string>("Ownership").HasColumnType(Text).HasMaxLength(32).IsRequired()
+            .HasDefaultValue(nameof(SwarmServiceOwnership.Unmanaged));
+        service.Property<string>("DockerStackNamespace").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
+        service.Property<string>("OwnershipDiagnostic").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         AddSwarmObservationFields(service);
         AddSwarmPlatformRelationship(service);
         return builder;

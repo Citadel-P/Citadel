@@ -6,23 +6,24 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import MemoryUsage from './stats/memory-usage';
 import CpuUsage from './stats/cpu-usage';
 import NetworkUsage from './stats/network-usage';
+import type { ContainerStatsResource } from './stats/types';
 
 type StatsPanelProps = {
-  resource: ContainerDataView | undefined;
+  resource: ContainerStatsResource | undefined;
   memory: StatsQueryState;
   cpu: StatsQueryState;
   network: StatsQueryState;
   liveStats: ContainerStatView[];
 };
 
-type StatsQueryState = {
+export type StatsQueryState = {
   baseStats: ContainerStatView[];
   isLoading: boolean;
   windowHours: StatsWindowHours;
   onWindowHoursChange: (hours: StatsWindowHours) => void;
 };
 
-const StatsPanel = ({ resource, memory, cpu, network, liveStats }: StatsPanelProps) => {
+export const ContainerStatsCharts = ({ resource, memory, cpu, network, liveStats }: StatsPanelProps) => {
   const memoryStats = useCombinedStats(memory.baseStats, liveStats);
   const cpuStats = useCombinedStats(cpu.baseStats, liveStats);
   const networkStats = useCombinedStats(network.baseStats, liveStats);
@@ -122,7 +123,7 @@ export const ContainerStats = ({ resource }: { resource: ContainerDataView | und
   const cpu = useContainerStatsWindow(resource?.id);
   const network = useContainerStatsWindow(resource?.id);
 
-  return <StatsPanel resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
+  return <ContainerStatsCharts resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
 };
 
 export const DeploymentStats = ({
@@ -137,5 +138,5 @@ export const DeploymentStats = ({
   const cpu = useDeploymentStatsWindow(deploymentId);
   const network = useDeploymentStatsWindow(deploymentId);
 
-  return <StatsPanel resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
+  return <ContainerStatsCharts resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
 };

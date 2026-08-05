@@ -25,6 +25,19 @@ public sealed record PlatformCapabilities(
     public static PlatformCapabilities Empty => new(false, false, false, false, false, false, false);
 }
 
+public sealed record SwarmCapabilities(
+    bool CanViewCluster,
+    bool CanManageNodes,
+    bool CanViewServices,
+    bool CanManageNetworks,
+    bool CanManageSecrets,
+    bool CanManageConfigs,
+    bool SupportsDeploymentApply,
+    bool SupportsStackApply,
+    bool CanViewManagerLocalResources,
+    bool SupportsServiceStatus,
+    bool SupportsClusterVolumes);
+
 public sealed record ImageCapabilities(
     bool CanRead,
     bool CanWrite,
@@ -162,6 +175,28 @@ public static class CapabilityMapper
             CanDownload:
                 content.Has(PermissionLevel.Read, SpecificPermission.Download)
         );
+    }
+
+    public static SwarmCapabilities? ToSwarmCapabilities(
+        Domain.Entities.Platforms.Platform platform,
+        PermissionMetadata permission)
+    {
+        if (platform.PlatformDescriptor is not Domain.Entities.Platforms.DockerSwarmPlatformDescriptor)
+            return null;
+
+        var common = ToResourceCapabilities(permission);
+        return new SwarmCapabilities(
+            CanViewCluster: common.CanRead,
+            CanManageNodes: false,
+            CanViewServices: common.CanRead,
+            CanManageNetworks: false,
+            CanManageSecrets: false,
+            CanManageConfigs: false,
+            SupportsDeploymentApply: false,
+            SupportsStackApply: false,
+            CanViewManagerLocalResources: common.CanRead,
+            SupportsServiceStatus: false,
+            SupportsClusterVolumes: false);
     }
 
     public static NetworkCapabilities ToNetworkCapabilities(PermissionMetadata permission)

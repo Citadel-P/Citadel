@@ -15,13 +15,8 @@ import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
-import {
-  ActorCell,
-  AlertEventStatusCell,
-  LogViewer,
-  TargetCell,
-  UpdateAvailableNotice,
-} from '@/components/custom/common';
+import { ActorCell, LogViewer, TargetCell, UpdateAvailableNotice } from '@/components/custom/common';
+import { StateBadge } from '@/components/custom/state-badge';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
   ActivityView,
@@ -1050,7 +1045,7 @@ function AlertEventActions({
   return (
     <div className="flex flex-row items-center gap-2">
       <NotepadText className="size-3.5 text-foreground/80" />
-      <AlertEventStatusCell status={status} />
+      <StateBadge value={status} kind="alertEvent" />
       {canAcknowledge && (
         <Button
           size="icon-xs"

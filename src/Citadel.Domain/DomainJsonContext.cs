@@ -28,6 +28,7 @@ namespace Domain;
         typeof(JsonStringEnumConverter<PlatformType>),
         typeof(JsonStringEnumConverter<PlatformStatus>),
         typeof(JsonStringEnumConverter<PlatformConnectorType>),
+        typeof(JsonStringEnumConverter<SwarmServiceOwnership>),
     })]
 [JsonSerializable(typeof(Platform))]
 [JsonSerializable(typeof(PlatformStat))]

@@ -13,7 +13,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ReactNode, useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
+import { ContainerStatView } from '@/api/generated/api.types';
+import type { ContainerStatsResource } from './types';
 import { byteTransform } from '@/lib/bytes.helper';
 
 const NetworkUsageHeader = ({
@@ -21,7 +22,7 @@ const NetworkUsageHeader = ({
   windowHours,
   controls,
 }: {
-  container: ContainerDataView | undefined;
+  container: ContainerStatsResource | undefined;
   windowHours: number;
   controls?: ReactNode;
 }) => (
@@ -56,7 +57,7 @@ const NetworkUsage = ({
   controls,
 }: {
   stats: ContainerStatView[];
-  container: ContainerDataView | undefined;
+  container: ContainerStatsResource | undefined;
   isLoading: boolean;
   windowHours: number;
   controls?: ReactNode;

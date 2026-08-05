@@ -3,6 +3,15 @@ import { ResourceName, resources } from '@/api/generated/resources';
 import { useApiClientContext } from '@/api/api-client-context';
 
 export type DockerResourceType = 'Network' | 'Volume' | 'Image' | 'Container';
+export type SwarmResourceType = 'Node' | 'Service' | 'Task' | 'Secret' | 'Config';
+
+export const SwarmResourcePathMap = {
+  nodes: 'Node',
+  services: 'Service',
+  tasks: 'Task',
+  secrets: 'Secret',
+  configs: 'Config',
+} as const satisfies Record<string, SwarmResourceType>;
 export type ResourceType =
   | DockerResourceType
   | 'Registry'

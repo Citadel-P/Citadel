@@ -5,6 +5,7 @@ using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Tests.Integration.Infrastructure.Persistence;
 
@@ -29,7 +30,9 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
             platform.Id, "service-1", 2, "web", "Replicated", "nginx:latest", 1, 2,
             "Completed", null, ["80:80/tcp"], ["network-1"], ["secret-1"], ["config-1"],
             new Dictionary<string, string> { ["team"] = "ops" }, observedAt, observedAt,
-            observedAt, false);
+            observedAt, false, SwarmServiceOwnership.DockerStackExternal,
+            DockerStackNamespace: "sample-stack",
+            OwnershipDiagnostic: "Orphaned Citadel metadata");
         var task = new SwarmTaskProjection(
             platform.Id, "task-1", 3, "web.1", "service-1", "web", 1, "node-1",
             "manager-1", "Running", "Running", null, null, "nginx:latest", ["80/tcp"],
@@ -61,6 +64,19 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
         var storedConfig = Assert.Single(await uow.Swarm.GetConfigsAsync(platform.Id, cancellationToken));
         Assert.Equal("west", storedNode.Labels["zone"]);
         Assert.Equal(["80:80/tcp"], storedService.Ports);
+        Assert.Equal(SwarmServiceOwnership.DockerStackExternal, storedService.Ownership);
+        Assert.Equal("sample-stack", storedService.DockerStackNamespace);
+        Assert.Equal("Orphaned Citadel metadata", storedService.OwnershipDiagnostic);
+        await using (var connection = new NpgsqlConnection(ConnectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT Ownership FROM SwarmServiceProjections WHERE PlatformId = @platformId";
+            command.Parameters.AddWithValue("platformId", platform.Id);
+            Assert.Equal(
+                nameof(SwarmServiceOwnership.DockerStackExternal),
+                await command.ExecuteScalarAsync(cancellationToken));
+        }
         Assert.Equal("manager-1", storedTask.NodeHostname);
         Assert.Equal(["10.0.0.0/24"], storedNetwork.Subnets);
         Assert.Equal(["web"], storedSecret.ServiceNames);
@@ -82,6 +98,14 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
         await uow.Swarm.MarkStaleAsync(platform.Id, cancellationToken);
         await uow.CommitAsync(cancellationToken);
         Assert.True(Assert.Single(await uow.Swarm.GetNodesAsync(platform.Id, cancellationToken)).IsStale);
+        var summary = await uow.Swarm.GetSummaryAsync(platform.Id, cancellationToken);
+        Assert.True(summary.IsStale);
+        Assert.Equal(1, summary.NodeCount);
+        Assert.Equal(1, summary.ManagerCount);
+        Assert.Equal(0, summary.ServiceCount);
+        Assert.Equal(0, summary.RunningTaskCount);
+        Assert.Equal(0, summary.DesiredTaskCount);
+        Assert.Equal(0, summary.NetworkCount);
     }
 
     [Fact]

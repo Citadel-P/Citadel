@@ -3,14 +3,25 @@ namespace Domain.Contracts.Resources.Swarm;
 public static class SwarmInventoryLimits
 {
     public const int MaximumItems = 500;
+    public const int DefaultLogLines = 100;
+    public const int MaximumLogLines = 200;
 
     public static int Normalize(int requested) => Math.Clamp(requested, 1, MaximumItems);
+    public static int NormalizeLogLines(int requested) => Math.Clamp(requested, 1, MaximumLogLines);
 }
 
 public sealed record ListSwarmServicesCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmServiceCommand(string PlatformAddress, string ServiceId);
+public sealed record GetSwarmServiceLogsCommand(
+    string PlatformAddress,
+    string ServiceId,
+    int Tail = SwarmInventoryLimits.DefaultLogLines);
 public sealed record ListSwarmTasksCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmTaskCommand(string PlatformAddress, string TaskId);
+public sealed record GetSwarmTaskLogsCommand(
+    string PlatformAddress,
+    string TaskId,
+    int Tail = SwarmInventoryLimits.DefaultLogLines);
 public sealed record ListSwarmNetworksCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmNetworkCommand(string PlatformAddress, string NetworkId);
 public sealed record ListSwarmSecretsCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);

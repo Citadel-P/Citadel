@@ -16,12 +16,13 @@ import {
 } from '@/components/custom/form-builder';
 import { KeyValuePairInput, KVPair } from '@/components/custom/key-value-pair-input';
 
-import { CreateNetworkInput, IPAMConfigInput } from '@/api/generated/api.types';
+import { CreateNetworkInput, IPAMConfigInput, PlatformType } from '@/api/generated/api.types';
 
 type CreateNetworkFormInput = Omit<
   CreateNetworkInput,
   'platformId' | 'scope' | 'configOnly' | 'labels' | 'options' | 'ipam'
 > & {
+  scope: 'local' | 'swarm';
   labels: KVPair[];
   options: KVPair[];
   ipam: {
@@ -30,12 +31,14 @@ type CreateNetworkFormInput = Omit<
   };
 };
 
-const DRIVER_OPTIONS = [
-  { value: 'bridge', label: 'Bridge' },
-  { value: 'overlay', label: 'Overlay' },
-  { value: 'ipvlan', label: 'Ipvlan' },
-  { value: 'macvlan', label: 'Macvlan' },
-];
+const DRIVER_OPTIONS = {
+  local: [
+    { value: 'bridge', label: 'Bridge' },
+    { value: 'ipvlan', label: 'Ipvlan' },
+    { value: 'macvlan', label: 'Macvlan' },
+  ],
+  swarm: [{ value: 'overlay', label: 'Overlay' }],
+} as const;
 
 const REGEX = {
   ipv4Cidr: /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}\/([0-9]|[1-2][0-9]|3[0-2])$/,
@@ -49,10 +52,13 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
   const { mutateAsync, isPending } = useMutate('createNetwork');
+  const isSwarmPlatform = currentPlatform?.type === PlatformType.DockerSwarm;
+  const defaultScope = isSwarmPlatform ? 'swarm' : 'local';
 
   const defaultValues: CreateNetworkFormInput = {
     name: '',
-    driver: 'bridge',
+    driver: isSwarmPlatform ? 'overlay' : 'bridge',
+    scope: defaultScope,
     enableIPv4: true,
     enableIPv6: false,
     internal: false,
@@ -90,7 +96,6 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
     const payload: CreateNetworkInput = {
       ...formValues,
       platformId: currentPlatform?.id ?? '',
-      scope: 'local',
       configOnly: false,
       labels: labelsObj,
       options: optionsObj,
@@ -126,6 +131,31 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                 : null,
           render: (value, set) => <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} />,
         }),
+        ...(isSwarmPlatform
+          ? [
+              defineField<CreateNetworkFormInput>({
+                key: 'scope',
+                label: 'Scope',
+                description: 'Swarm networks span the cluster; local networks exist only on the connected manager.',
+                required: true,
+                render: (value, set) => (
+                  <Select
+                    onValueChange={(scope: 'local' | 'swarm') =>
+                      set({ scope, driver: scope === 'swarm' ? 'overlay' : 'bridge' })
+                    }
+                    value={value}>
+                    <SelectTrigger aria-label="Scope" className="w-full max-w-100">
+                      <SelectValue placeholder="Select network scope" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background">
+                      <SelectItem value="swarm">Swarm</SelectItem>
+                      <SelectItem value="local">Local manager</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ),
+              }),
+            ]
+          : []),
         defineField({
           key: 'driver',
           label: 'Driver',
@@ -133,11 +163,11 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
           required: true,
           render: (value, set) => (
             <Select onValueChange={(v) => set({ driver: v })} value={value}>
-              <SelectTrigger className="w-full max-w-100">
+              <SelectTrigger aria-label="Driver" className="w-full max-w-100">
                 <SelectValue placeholder="Select driver" />
               </SelectTrigger>
               <SelectContent className="bg-background">
-                {DRIVER_OPTIONS.map((opt) => (
+                {DRIVER_OPTIONS[merged.scope].map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>

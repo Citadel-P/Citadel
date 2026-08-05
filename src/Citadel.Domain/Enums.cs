@@ -366,7 +366,17 @@ public enum EdgeAgentCommandKind
     SwarmSecretList = 98,
     SwarmSecretInspect = 99,
     SwarmConfigList = 100,
-    SwarmConfigInspect = 101
+    SwarmConfigInspect = 101,
+    SwarmServiceLogs = 102,
+    SwarmTaskLogs = 103
+}
+
+public enum SwarmServiceOwnership
+{
+    Unmanaged = 0,
+    DockerStackExternal,
+    CitadelDeployment,
+    CitadelStack
 }
 
 public enum ContainerRestartPolicy

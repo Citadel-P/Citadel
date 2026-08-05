@@ -13,7 +13,6 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   ActorType,
-  ActivityStatus,
   AutoUpdateStatus,
   ContainerStateStatus,
   ContainerStatView,
@@ -21,9 +20,7 @@ import {
   PlatformStatus,
   UpdateBehavior,
   ActivityResourceType,
-  AlertSeverity,
   AlertResourceType,
-  AlertEventStatus,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
@@ -1458,54 +1455,6 @@ export const TargetCell = ({
     </div>
   );
 };
-
-export const ActivityStatusCell = ({ status }: { status: ActivityStatus }) => {
-  const statusConfig: Record<ActivityStatus, { className: string; label: string }> = {
-    [ActivityStatus.Success]: { className: 'bg-green-200/25 text-green-700', label: 'Success' },
-    [ActivityStatus.Information]: { className: 'bg-blue-200/25 text-blue-700', label: 'Info' },
-    [ActivityStatus.Warning]: { className: 'bg-orange-200/25 text-orange-500', label: 'Warning' },
-    [ActivityStatus.Failure]: { className: 'bg-red-200/25 text-red-700', label: 'Failure' },
-  };
-
-  const { className, label } = statusConfig[status] ?? statusConfig[ActivityStatus.Failure];
-
-  return <Badge className={className}>{label}</Badge>;
-};
-
-export const SeverityStatusCell = ({ severity }: { severity: AlertSeverity }) => {
-  const severityConfig: Record<AlertSeverity, { className: string; label: string }> = {
-    [AlertSeverity.Info]: { className: 'bg-blue-200/25 text-blue-700', label: 'Info' },
-    [AlertSeverity.Warning]: {
-      className: 'bg-orange-200/25 text-orange-500',
-      label: 'Warning',
-    },
-    [AlertSeverity.Critical]: {
-      className: 'bg-red-200/25 text-red-700',
-      label: 'Critical',
-    },
-  };
-
-  const { className, label } = severityConfig[severity] ?? severityConfig[AlertSeverity.Info];
-
-  return <Badge className={className}>{label}</Badge>;
-};
-
-export function AlertEventStatusCell({ status }: { status: AlertEventStatus }) {
-  const config: Record<AlertEventStatus, { label: string; className: string }> = {
-    [AlertEventStatus.Active]: { label: 'Active', className: 'bg-red-200/25 text-red-700' },
-    [AlertEventStatus.Acknowledged]: {
-      label: 'Acknowledged',
-      className: 'bg-orange-200/25 text-orange-600',
-    },
-    [AlertEventStatus.Resolved]: {
-      label: 'Resolved',
-      className: 'bg-green-200/25 text-green-700',
-    },
-  };
-
-  const value = config[status];
-  return <Badge className={value.className}>{value.label}</Badge>;
-}
 
 type PaginationControlsProps = {
   currentPage: number;

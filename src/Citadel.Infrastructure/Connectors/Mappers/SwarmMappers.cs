@@ -11,6 +11,8 @@ using HostingSwarmTask = Hosting.DockerClient.Models.Swarm.SwarmTaskResult;
 using HostingSwarmNetwork = Hosting.DockerClient.Models.Swarm.SwarmNetworkResult;
 using HostingSwarmSecret = Hosting.DockerClient.Models.Swarm.SwarmSecretResult;
 using HostingSwarmConfig = Hosting.DockerClient.Models.Swarm.SwarmConfigResult;
+using DomainSwarmLogs = Domain.Contracts.Resources.Swarm.SwarmLogsResult;
+using HostingSwarmLogs = Hosting.DockerClient.Models.Swarm.SwarmLogsResult;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -91,13 +93,14 @@ internal static class SwarmMappers
     public static DomainSwarmTask Map(this HostingSwarmTask source) => new(
         source.Id, source.VersionIndex, source.Name, source.ServiceId, source.Slot, source.NodeId,
         source.DesiredState, source.State, source.StatusMessage, source.Error, source.Image,
-        source.Ports, source.StatusTimestamp, source.CreatedAt, source.UpdatedAt);
+        source.Ports, source.StatusTimestamp, source.CreatedAt, source.UpdatedAt, source.ContainerId);
     public static IReadOnlyList<DomainSwarmTask> Map(this IReadOnlyList<HostingSwarmTask> source) => MapList(source, static value => value.Map());
     public static DomainSwarmTask Map(this SwarmTaskMessage source) => new(
         source.Id, checked((long)source.VersionIndex), source.Name, source.ServiceId,
         source.HasSlot ? source.Slot : null, source.NodeId, source.DesiredState, source.State,
         EmptyToNull(source.StatusMessage), EmptyToNull(source.Error), source.Image, source.Ports.ToArray(),
-        source.StatusTimestamp?.ToDateTimeOffset(), source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset());
+        source.StatusTimestamp?.ToDateTimeOffset(), source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset(),
+        EmptyToNull(source.ContainerId));
     public static IReadOnlyList<DomainSwarmTask> Map(this ListSwarmTasksResponse source) => MapList(source.Tasks, static value => value.Map());
 
     public static DomainSwarmNetwork Map(this HostingSwarmNetwork source) => new(
@@ -125,6 +128,9 @@ internal static class SwarmMappers
         source.Id, checked((long)source.VersionIndex), source.Name, EmptyToNull(source.TemplatingDriver), source.Labels,
         source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset());
     public static IReadOnlyList<DomainSwarmConfig> Map(this ListSwarmConfigsResponse source) => MapList(source.Configs, static value => value.Map());
+
+    public static DomainSwarmLogs Map(this HostingSwarmLogs source) => new(source.Lines, source.Truncated);
+    public static DomainSwarmLogs Map(this SwarmLogsResponse source) => new(source.Lines.ToArray(), source.Truncated);
 
     private static IReadOnlyList<TResult> MapList<TSource, TResult>(IReadOnlyList<TSource> source, Func<TSource, TResult> map)
     {

@@ -33,7 +33,8 @@ public sealed record PlatformView(
     PlatformDescriptor? PlatformDescriptor,
     string? ClusterId,
     IReadOnlyList<TagSummaryView> Tags = null!,
-    PlatformCapabilities? Capabilities = null
+    PlatformCapabilities? Capabilities = null,
+    SwarmCapabilities? SwarmCapabilities = null
     )
 {
     internal static List<PlatformView> Map(IEnumerable<Platform> platforms)
@@ -72,6 +73,9 @@ public sealed record PlatformView(
             views[i] = baseView with
             {
                 Capabilities = CapabilityMapper.ToPlatformCapabilities(
+                    meta == default ? PermissionMetadata.Empty : meta),
+                SwarmCapabilities = CapabilityMapper.ToSwarmCapabilities(
+                    platform,
                     meta == default ? PermissionMetadata.Empty : meta)
             };
         }
@@ -84,7 +88,8 @@ public sealed record PlatformView(
         var permissions = await permissionService.EvaluateAsync(platform.Id, ResourceType.Platform);
         return platform.Map() with
         {
-            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
+            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions),
+            SwarmCapabilities = CapabilityMapper.ToSwarmCapabilities(platform, permissions)
         };
     }
 }

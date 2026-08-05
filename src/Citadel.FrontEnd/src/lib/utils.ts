@@ -77,6 +77,9 @@ export const filterBySplit = <T>(items: T[] | undefined, search: string, extract
 };
 export const normalizeDockerId = (id?: string) => (id ? id.slice(0, 12).toLowerCase() : undefined);
 
+export const getTaskName = (task: { id: string; name?: string | null; slot?: number | null }) =>
+  task.name?.trim() || `Task ${task.slot ?? task.id.slice(0, 12)}`;
+
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');

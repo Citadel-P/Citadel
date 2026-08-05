@@ -8,13 +8,52 @@ public sealed record SwarmServiceProjection(
     string? UpdateMessage, IReadOnlyList<string> Ports, IReadOnlyList<string> NetworkIds,
     IReadOnlyList<string> SecretIds, IReadOnlyList<string> ConfigIds,
     IReadOnlyDictionary<string, string> Labels, DateTimeOffset? DockerCreatedAt,
-    DateTimeOffset? DockerUpdatedAt, DateTimeOffset ObservedAt, bool IsStale)
+    DateTimeOffset? DockerUpdatedAt, DateTimeOffset ObservedAt, bool IsStale,
+    SwarmServiceOwnership Ownership = SwarmServiceOwnership.Unmanaged,
+    string? DockerStackNamespace = null,
+    string? OwnershipDiagnostic = null)
 {
     public static SwarmServiceProjection FromObservation(Guid platformId, SwarmServiceResult value, DateTimeOffset observedAt) =>
         new(platformId, value.Id, value.VersionIndex, value.Name, value.Mode, value.Image,
             value.RunningTaskCount, value.DesiredTaskCount, value.UpdateState, value.UpdateMessage,
             value.Ports, value.NetworkIds, value.SecretIds, value.ConfigIds, value.Labels,
-            value.CreatedAt, value.UpdatedAt, observedAt, false);
+            value.CreatedAt, value.UpdatedAt, observedAt, false,
+            SwarmServiceOwnershipClassifier.Classify(value.Labels),
+            SwarmServiceOwnershipClassifier.GetDockerStackNamespace(value.Labels),
+            SwarmServiceOwnershipClassifier.GetDiagnostic(value.Labels));
+}
+
+internal static class SwarmServiceOwnershipClassifier
+{
+    private const string CitadelPrefix = "com.citadel.";
+    private const string ManagedLabel = CitadelPrefix + "managed";
+    private const string DeploymentIdLabel = CitadelPrefix + "deployment-id";
+    private const string StackIdLabel = CitadelPrefix + "stack-id";
+    private const string DockerStackNamespaceLabel = "com.docker.stack.namespace";
+
+    public static SwarmServiceOwnership Classify(IReadOnlyDictionary<string, string> labels) =>
+        GetDockerStackNamespace(labels) is not null || HasOrphanedStackMetadata(labels)
+            ? SwarmServiceOwnership.DockerStackExternal
+            : SwarmServiceOwnership.Unmanaged;
+
+    public static string? GetDockerStackNamespace(IReadOnlyDictionary<string, string> labels) =>
+        labels.TryGetValue(DockerStackNamespaceLabel, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+
+    public static string? GetDiagnostic(IReadOnlyDictionary<string, string> labels) =>
+        HasCitadelOwnerMetadata(labels) ? "Orphaned Citadel metadata" : null;
+
+    private static bool HasOrphanedStackMetadata(IReadOnlyDictionary<string, string> labels) =>
+        IsCitadelManaged(labels) && labels.ContainsKey(StackIdLabel);
+
+    private static bool HasCitadelOwnerMetadata(IReadOnlyDictionary<string, string> labels) =>
+        IsCitadelManaged(labels)
+        && (labels.ContainsKey(DeploymentIdLabel) || labels.ContainsKey(StackIdLabel));
+
+    private static bool IsCitadelManaged(IReadOnlyDictionary<string, string> labels) =>
+        labels.TryGetValue(ManagedLabel, out var managed)
+        && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record SwarmTaskProjection(
@@ -71,3 +110,12 @@ public sealed record SwarmProjectionSnapshot(
     IReadOnlyList<SwarmNetworkProjection> Networks,
     IReadOnlyList<SwarmSecretProjection> Secrets,
     IReadOnlyList<SwarmConfigProjection> Configs);
+
+public sealed record SwarmProjectionSummary(
+    bool IsStale,
+    int NodeCount,
+    int ManagerCount,
+    int ServiceCount,
+    int RunningTaskCount,
+    int DesiredTaskCount,
+    int NetworkCount);

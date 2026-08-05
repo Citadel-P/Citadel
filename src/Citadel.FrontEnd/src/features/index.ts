@@ -1,5 +1,11 @@
-import { DockerResourceType, ResourceType } from '@/api/types';
-import { RequiredComponents, RequiredDockerInfoComponents, RequiredFormComponents } from '@/pages/types';
+import { DockerResourceType, ResourceType, SwarmResourceType } from '@/api/types';
+import {
+  RequiredComponents,
+  RequiredDockerInfoComponents,
+  RequiredFormComponents,
+  RequiredSwarmInfoComponents,
+  RegularResourceComponents,
+} from '@/pages/types';
 import { ImageComponents } from './docker-resources/images';
 import { VolumeComponents, VolumeFormComponents } from './docker-resources/volumes';
 import { NetworkComponents, NetworkFormComponents } from './docker-resources/networks';
@@ -39,6 +45,16 @@ import { BackupRepositoryComponents } from './backup-repositories';
 import { BackupRepositoryFormComponents } from './backup-repositories/form';
 import { BackupPolicyComponents } from './backup-policies';
 import { BackupPolicyFormComponents } from './backup-policies/form';
+import { NodeComponents } from './swarm-resources/nodes';
+import { NodeInfoComponents } from './swarm-resources/nodes/node-info';
+import { ServiceComponents } from './swarm-resources/services';
+import { ServiceInfoComponents } from './swarm-resources/services/service-info';
+import { TaskComponents } from './swarm-resources/tasks';
+import { TaskInfoComponents } from './swarm-resources/tasks/task-info';
+import { SecretComponents } from './swarm-resources/secrets';
+import { SecretInfoComponents } from './swarm-resources/secrets/secret-info';
+import { ConfigComponents } from './swarm-resources/configs';
+import { ConfigInfoComponents } from './swarm-resources/configs/config-info';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -111,4 +127,24 @@ export const DockerResourceInfoComponents: {
   Volume: VolumeInfoComponents,
   Network: NetworkInfoComponents,
   Container: ContainerInfoComponents,
+};
+
+export const SwarmResourceComponents: {
+  [key in SwarmResourceType]: RegularResourceComponents;
+} = {
+  Node: NodeComponents,
+  Service: ServiceComponents,
+  Task: TaskComponents,
+  Secret: SecretComponents,
+  Config: ConfigComponents,
+};
+
+export const SwarmResourceInfoComponents: {
+  [key in SwarmResourceType]: RequiredSwarmInfoComponents;
+} = {
+  Node: NodeInfoComponents,
+  Service: ServiceInfoComponents,
+  Task: TaskInfoComponents,
+  Secret: SecretInfoComponents,
+  Config: ConfigInfoComponents,
 };

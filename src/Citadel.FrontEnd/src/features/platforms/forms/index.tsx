@@ -1,4 +1,4 @@
-import { PlatformView } from '@/api/generated/api.types';
+import { PlatformType, PlatformView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
@@ -10,6 +10,7 @@ import { usePlatformBackupSummaries } from '../platform-backups';
 import { PlatformForm } from './form';
 import { usePlatformGroup } from './hooks/usePlatformGroup';
 import { PlatformResourceSummary, PlatformStatsTab } from './platform-stats';
+import { SwarmPlatformSummary } from '@/features/swarm/platform-summary';
 
 type PlatformFormResource = PlatformView & RequiredFormFields;
 
@@ -23,12 +24,23 @@ const PlatformSubHeader = ({ resource }: { resource: PlatformFormResource }) => 
   const { summaries, isLoading, isError } = usePlatformBackupSummaries([resource.id]);
 
   return (
-    <PlatformResourceSummary
-      platform={resource}
-      backupSummary={summaries.get(resource.id)}
-      isBackupSummaryLoading={isLoading}
-      isBackupSummaryError={isError}
-    />
+    <>
+      {resource.type === PlatformType.DockerSwarm && (
+        <SwarmPlatformSummary
+          platformId={resource.id}
+          networkCount={resource.networkCount}
+          backupSummary={summaries.get(resource.id)}
+          isBackupSummaryLoading={isLoading}
+          isBackupSummaryError={isError}
+        />
+      )}
+      <PlatformResourceSummary
+        platform={resource}
+        backupSummary={summaries.get(resource.id)}
+        isBackupSummaryLoading={isLoading}
+        isBackupSummaryError={isError}
+      />
+    </>
   );
 };
 

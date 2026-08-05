@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ReactNode, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
+import { ContainerStatView } from '@/api/generated/api.types';
+import type { ContainerStatsResource } from './types';
 
 const MemoryUsage = ({
   stats,
@@ -23,7 +24,7 @@ const MemoryUsage = ({
   controls,
 }: {
   stats: ContainerStatView[];
-  container: ContainerDataView | undefined;
+  container: ContainerStatsResource | undefined;
   isLoading: boolean;
   windowHours: number;
   controls?: ReactNode;
@@ -103,18 +104,8 @@ const MemoryUsage = ({
             />
           }
         />
-        <Area
-          dataKey="memoryActive"
-          type="natural"
-          fill="url(#fillmemoryActive)"
-          stroke="var(--color-memoryActive)"
-        />
-        <Area
-          dataKey="memoryCache"
-          type="natural"
-          fill="url(#fillmemoryCache)"
-          stroke="var(--color-memoryCache)"
-        />
+        <Area dataKey="memoryActive" type="natural" fill="url(#fillmemoryActive)" stroke="var(--color-memoryActive)" />
+        <Area dataKey="memoryCache" type="natural" fill="url(#fillmemoryCache)" stroke="var(--color-memoryCache)" />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
@@ -135,7 +126,7 @@ const MemoryUsage = ({
   );
 };
 interface MemoryUsageHeaderProps {
-  container: ContainerDataView | undefined;
+  container: ContainerStatsResource | undefined;
   windowHours: number;
   controls?: ReactNode;
 }

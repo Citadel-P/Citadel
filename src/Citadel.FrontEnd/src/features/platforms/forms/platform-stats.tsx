@@ -4,6 +4,7 @@ import {
   PlatformDescriptorDockerPlatformDescriptor,
   PlatformStatView,
   PlatformStatus,
+  PlatformType,
   PlatformView,
 } from '@/api/generated/api.types';
 import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
@@ -128,7 +129,6 @@ export const PlatformResourceSummary = ({
 }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
   const currentDisk = getCurrentDiskUsage(platform);
-  const backupMetric = getBackupMetric(backupSummary, isBackupSummaryLoading, isBackupSummaryError);
   const resourceMetrics: ResourceMetric[] = [
     {
       icon: Box,
@@ -176,31 +176,41 @@ export const PlatformResourceSummary = ({
       detail: formatStorageUsage(descriptor?.volumeUsedBytes),
       detailTitle: 'Disk space used by Docker local volumes',
     },
-    {
-      icon: Network,
-      label: 'Networks',
-      value: platform.networkCount ?? '-',
-      to: `/platforms/${platform.id}/networks`,
-      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.networks,
-    },
-    {
-      icon: ArchiveRestore,
-      label: 'Backups',
-      value: backupMetric.value,
-      to: '/backup-policies',
-      iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.backups,
-      states: getBackupSourceStates(backupSummary),
-      detail: backupMetric.detail,
-      detailTitle: backupMetric.detailTitle,
-    },
   ];
+
+  if (platform.type !== PlatformType.DockerSwarm) {
+    const backupMetric = getBackupMetric(backupSummary, isBackupSummaryLoading, isBackupSummaryError);
+    resourceMetrics.push(
+      {
+        icon: Network,
+        label: 'Networks',
+        value: platform.networkCount ?? '-',
+        to: `/platforms/${platform.id}/networks`,
+        iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.networks,
+      },
+      {
+        icon: ArchiveRestore,
+        label: 'Backups',
+        value: backupMetric.value,
+        to: '/backup-policies',
+        iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.backups,
+        states: getBackupSourceStates(backupSummary),
+        detail: backupMetric.detail,
+        detailTitle: backupMetric.detailTitle,
+      },
+    );
+  }
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-3 py-3">
-        <div className="grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <div
+          className={cn(
+            'grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-4',
+            platform.type === PlatformType.DockerSwarm ? 'xl:grid-cols-5' : 'xl:grid-cols-7',
+          )}>
           {resourceMetrics.map((metric) => (
-            <Metric key={metric.label} {...metric} />
+            <PlatformResourceMetric key={metric.label} {...metric} />
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
@@ -565,7 +575,16 @@ const StatsChartCard = ({
   );
 };
 
-const Metric = ({ icon: Icon, label, value, to, iconClassName, states, detail, detailTitle }: ResourceMetric) => {
+export const PlatformResourceMetric = ({
+  icon: Icon,
+  label,
+  value,
+  to,
+  iconClassName,
+  states,
+  detail,
+  detailTitle,
+}: ResourceMetric) => {
   const content = (
     <div className="flex min-w-0 items-start gap-3">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/60">
@@ -598,7 +617,7 @@ const Metric = ({ icon: Icon, label, value, to, iconClassName, states, detail, d
   );
 };
 
-type ResourceMetric = {
+export type ResourceMetric = {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: React.ReactNode;

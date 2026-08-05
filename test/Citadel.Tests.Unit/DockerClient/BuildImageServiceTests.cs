@@ -267,6 +267,12 @@ public sealed class BuildImageServiceTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<BoundedStreamReadResult> ReadStreamForBytesAsync(
+            Task<Stream> streamTask,
+            int maximumBytes,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public IAsyncEnumerable<string> MonitorStreamForStringsAsync(
             Task<Stream> streamTask,
             CancellationToken cancellationToken = default)

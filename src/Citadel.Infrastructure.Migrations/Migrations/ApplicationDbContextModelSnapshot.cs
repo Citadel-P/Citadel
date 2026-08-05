@@ -5433,6 +5433,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("dockercreatedat");
 
+                    b.Property<string>("DockerStackNamespace")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerstacknamespace");
+
                     b.Property<DateTimeOffset?>("DockerUpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("dockerupdatedat");
@@ -5474,6 +5479,19 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<DateTimeOffset>("ObservedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("observedat");
+
+                    b.Property<string>("Ownership")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Unmanaged")
+                        .HasColumnName("ownership");
+
+                    b.Property<string>("OwnershipDiagnostic")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("ownershipdiagnostic");
 
                     b.Property<string>("Ports")
                         .IsRequired()

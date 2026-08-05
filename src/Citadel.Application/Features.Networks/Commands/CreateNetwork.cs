@@ -48,6 +48,12 @@ public sealed record CreateNetwork(
                 .Must(static scope => scopeTypes.Contains(scope))
                 .WithMessage($"Scope must be one of the following: {string.Join(", ", scopeTypes)}");
             });
+            RuleFor(s => s)
+                .Must(static network => network.Scope != "swarm" || network.Driver == "overlay")
+                .WithMessage("Swarm-scoped networks must use the overlay driver.");
+            RuleFor(s => s)
+                .Must(static network => network.Driver != "overlay" || network.Scope == "swarm")
+                .WithMessage("Overlay networks must use Swarm scope.");
             When(s => s.Attachable is not null && s.Attachable.Value, () =>
             {
                 RuleFor(s => s)

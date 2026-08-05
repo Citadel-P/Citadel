@@ -13,11 +13,10 @@ const Login = lazy(() => import('@/features/auth/login'));
 const MfaVerify = lazy(() => import('@/features/auth/mfa/verify'));
 const MandatoryMfaSetup = lazy(() => import('@/features/auth/mfa/mandatory-setup'));
 const Resources = lazy(() => import('@/pages/resource'));
-const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
+const PlatformResource = lazy(() => import('@/pages/platform-resource'));
 const Profile = lazy(() => import('@/features/profile'));
 const License = lazy(() => import('@/features/license'));
 const InitialSetup = lazy(() => import('@/features/setup'));
-const SwarmResource = lazy(() => import('@/features/swarm'));
 
 export const Router = () => {
   return (
@@ -45,10 +44,8 @@ export const Router = () => {
 
                 <Route path="platforms">
                   <Route index element={<Resources />} />
-                  <Route path=":platformId/swarm/:resourceType/:resourceId?" element={<SwarmResource />} />
-                  <Route path=":platformId/:type" element={<Resources />} />
                   <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
-                  <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
+                  <Route path=":platformId/:type/:resourceId?" element={<PlatformResource />} />
                 </Route>
 
                 <Route path=":type" element={<Resources />} />

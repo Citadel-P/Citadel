@@ -3,7 +3,8 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
-import { ActorCell, ActivityStatusCell, PagedDataTable, TargetCell } from '@/components/custom/common';
+import { ActorCell, PagedDataTable, TargetCell } from '@/components/custom/common';
+import { StateBadge } from '@/components/custom/state-badge';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -69,7 +70,7 @@ const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): Col
     {
       accessorKey: 'status',
       header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-      cell: ({ row }) => <ActivityStatusCell status={row.original.status} />,
+      cell: ({ row }) => <StateBadge value={row.original.status} kind="activity" />,
       sortingFn: (rowA, rowB) => (rowA.original.status! < rowB.original.status! ? 1 : -1),
     },
     {
