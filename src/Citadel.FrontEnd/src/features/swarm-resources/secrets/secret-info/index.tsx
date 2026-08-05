@@ -1,33 +1,41 @@
-import { SwarmSecretView } from '@/api/generated/api.types';
-import { AlertMessage } from '@/components/custom/alert-message';
 import { DockerLabelsSection, Section } from '@/components/custom/common';
+import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredSwarmInfoComponents } from '@/pages/types';
-import { Info } from 'lucide-react';
-import { NoResourceActions, ServiceReferences, StaleBadge, StaleWarning } from '../../shared';
-import { useSecretInfoGroup } from '../hooks/useSecretsGroup';
+import { GenericActionBarButtons } from '@/components/custom/action-bar';
+import { Boxes, Info } from 'lucide-react';
+import { StaleBadge, StaleWarning } from '../../shared';
+import { ReferencingServices } from '../../resource-references';
+import { SecretInfoActions } from '../actions';
+import { SwarmSecretInfoView, useSecretInfoGroup } from '../hooks/useSecretsGroup';
 import { SecretInfoTable } from './table';
 
-export const SecretInfoComponents: RequiredSwarmInfoComponents<SwarmSecretView> = {
+export const SecretInspect = ({ resource }: { resource: SwarmSecretInfoView }) => (
+  <div className="flex flex-col gap-8">
+    <Section title="Details" Icon={Info}>
+      <SecretInfoTable secret={resource} />
+    </Section>
+    {resource.serviceNames.length > 0 && (
+      <Section title="Services using this secret" Icon={Boxes}>
+        <ReferencingServices resource={resource} />
+      </Section>
+    )}
+    <DockerLabelsSection labels={resource.labels} />
+  </div>
+);
+
+export const SecretInfoComponents: RequiredSwarmInfoComponents<SwarmSecretInfoView> = {
   Header: {
+    Indicator: ({ resource }) => <StateIndicator value={resource.inUse} />,
     NameSuffix: StaleBadge,
-    ActionButtons: NoResourceActions,
+    ActionButtons: ({ resource }) => (
+      <GenericActionBarButtons resource={resource} actions={Object.values(SecretInfoActions)} />
+    ),
   },
   SubHeader: ({ resource }) => <StaleWarning resource={resource} />,
   Tabs: [
     {
       label: 'Inspect',
-      Content: ({ resource }) => (
-        <div className="flex flex-col gap-8">
-          <AlertMessage title="Secret metadata" type="info">
-            Only metadata and service references are available. Docker never returns the secret value.
-          </AlertMessage>
-          <Section title="Details" Icon={Info}>
-            <SecretInfoTable secret={resource} />
-          </Section>
-          <ServiceReferences names={resource.serviceNames} />
-          <DockerLabelsSection labels={resource.labels} />
-        </div>
-      ),
+      Content: ({ resource }) => <SecretInspect resource={resource} />,
     },
   ],
   useData: useSecretInfoGroup,

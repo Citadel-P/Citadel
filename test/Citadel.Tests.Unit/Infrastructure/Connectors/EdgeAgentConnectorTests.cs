@@ -85,6 +85,86 @@ public class EdgeAgentConnectorTests
     }
 
     [Fact]
+    public async Task SwarmSecretAndConfigMutations_ShouldRouteMatchingEdgeCommandsAndPayloads()
+    {
+        var platformId = Guid.CreateVersion7();
+        var address = $"edge://{platformId}";
+        var router = new TestEdgeAgentCommandRouter();
+        var connector = new EdgeSwarmConnector(router);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.CreateSecretAsync(new CreateSwarmSecretCommand(
+            address, "database-password", "sensitive"u8.ToArray(), new Dictionary<string, string> { ["team"] = "ops" }),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmSecretCreate, router.Kind);
+        var createSecret = CreateSwarmSecretRequest.Parser.ParseFrom(router.Payload);
+        Assert.Equal("database-password", createSecret.Name);
+        Assert.Equal("sensitive", createSecret.Data.ToStringUtf8());
+        Assert.Equal("ops", createSecret.Labels["team"]);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.UpdateSecretLabelsAsync(new UpdateSwarmSecretLabelsCommand(
+            address, "secret-created", 1, new Dictionary<string, string> { ["team"] = "platform" }),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmSecretUpdate, router.Kind);
+        var updateSecret = UpdateSwarmResourceLabelsRequest.Parser.ParseFrom(router.Payload);
+        Assert.Equal("secret-created", updateSecret.ResourceId);
+        Assert.Equal(1UL, updateSecret.VersionIndex);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.DeleteSecretAsync(
+            new DeleteSwarmSecretCommand(address, "secret-created"),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmSecretDelete, router.Kind);
+        Assert.Equal("secret-created", DeleteSwarmSecretRequest.Parser.ParseFrom(router.Payload).SecretId);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.CreateConfigAsync(new CreateSwarmConfigCommand(
+            address, "application-config", "setting=true"u8.ToArray(), new Dictionary<string, string>()),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmConfigCreate, router.Kind);
+        Assert.Equal("setting=true", CreateSwarmConfigRequest.Parser.ParseFrom(router.Payload).Data.ToStringUtf8());
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.UpdateConfigLabelsAsync(new UpdateSwarmConfigLabelsCommand(
+            address, "config-created", 1, new Dictionary<string, string> { ["team"] = "platform" }),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmConfigUpdate, router.Kind);
+
+        router.UnaryResult = EdgeAgentCommandRouterResult.Success([]);
+        Assert.True((await connector.DeleteConfigAsync(
+            new DeleteSwarmConfigCommand(address, "config-created"),
+            TestContext.Current.CancellationToken)).IsSuccess());
+        Assert.Equal(EdgeAgentCommandKind.SwarmConfigDelete, router.Kind);
+        Assert.Equal("config-created", DeleteSwarmConfigRequest.Parser.ParseFrom(router.Payload).ConfigId);
+        Assert.Equal(platformId, router.PlatformId);
+    }
+
+    [Fact]
+    public async Task GetConfigDataAsync_ShouldRouteAndDecodeTheEdgeResponse()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter
+        {
+            UnaryResult = EdgeAgentCommandRouterResult.Success(new SwarmConfigDataResponse
+            {
+                Data = ByteString.CopyFromUtf8("setting=true\n")
+            }.ToByteArray())
+        };
+        var connector = new EdgeSwarmConnector(router);
+
+        var result = await connector.GetConfigDataAsync(
+            new InspectSwarmConfigCommand($"edge://{platformId}", "config-1"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var data, out var error), error?.Message);
+        Assert.Equal("setting=true\n", Encoding.UTF8.GetString(data));
+        Assert.Equal(platformId, router.PlatformId);
+        Assert.Equal(EdgeAgentCommandKind.SwarmConfigData, router.Kind);
+        Assert.Equal("config-1", InspectSwarmConfigRequest.Parser.ParseFrom(router.Payload).ConfigId);
+    }
+
+    [Fact]
     public async Task SwarmLogs_ShouldRouteBoundedServiceAndTaskCommands()
     {
         var platformId = Guid.CreateVersion7();

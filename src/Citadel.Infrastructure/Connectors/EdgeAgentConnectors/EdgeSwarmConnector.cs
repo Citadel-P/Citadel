@@ -77,10 +77,46 @@ internal sealed class EdgeSwarmConnector(IEdgeAgentCommandRouter commandRouter) 
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmSecretList, new ListSwarmSecretsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, ListSwarmSecretsResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmSecretResult>> InspectSecretAsync(InspectSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmSecretInspect, new InspectSwarmSecretRequest { SecretId = command.SecretId }, SwarmSecretMessage.Parser, static value => value.Map(), cancellationToken);
+    public Task<Result> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmSecretCreate, new CreateSwarmSecretRequest
+        {
+            Name = command.Name,
+            Data = ByteString.CopyFrom(command.Data),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken);
+    public Task<Result> UpdateSecretLabelsAsync(UpdateSwarmSecretLabelsCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmSecretUpdate, new UpdateSwarmResourceLabelsRequest
+        {
+            ResourceId = command.SecretId,
+            VersionIndex = checked((ulong)command.VersionIndex),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken);
+    public Task<Result> DeleteSecretAsync(DeleteSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmSecretDelete,
+            new DeleteSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken);
     public Task<Result<IReadOnlyList<SwarmConfigResult>>> ListConfigsAsync(ListSwarmConfigsCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigList, new ListSwarmConfigsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, ListSwarmConfigsResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmConfigResult>> InspectConfigAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigInspect, new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, SwarmConfigMessage.Parser, static value => value.Map(), cancellationToken);
+    public Task<Result<byte[]>> GetConfigDataAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigData, new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, SwarmConfigDataResponse.Parser, static value => value.Data.ToByteArray(), cancellationToken);
+    public Task<Result> CreateConfigAsync(CreateSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigCreate, new CreateSwarmConfigRequest
+        {
+            Name = command.Name,
+            Data = ByteString.CopyFrom(command.Data),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken);
+    public Task<Result> UpdateConfigLabelsAsync(UpdateSwarmConfigLabelsCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigUpdate, new UpdateSwarmResourceLabelsRequest
+        {
+            ResourceId = command.ConfigId,
+            VersionIndex = checked((ulong)command.VersionIndex),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken);
+    public Task<Result> DeleteConfigAsync(DeleteSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmConfigDelete,
+            new DeleteSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken);
 
     private async Task<Result<TResult>> SendAsync<TMessage, TResult>(
         string platformAddress,
@@ -104,5 +140,26 @@ internal sealed class EdgeSwarmConnector(IEdgeAgentCommandRouter commandRouter) 
         return response.IsSuccess && response.Payload is not null
             ? Result.Success(map(parser.ParseFrom(response.Payload)))
             : Result.Failure<TResult>(EdgeConnectorHelpers.CommandFailure(kind, response));
+    }
+
+    private async Task<Result> SendMutationAsync(
+        string platformAddress,
+        EdgeAgentCommandKind kind,
+        IMessage request,
+        CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetPlatformId(platformAddress, out var platformId, out var addressError))
+            return Result.Failure(addressError!);
+
+        var response = await commandRouter.SendUnaryAsync(
+            platformId,
+            kind,
+            request.ToByteArray(),
+            TimeSpan.FromSeconds(30),
+            correlationId: null,
+            cancellationToken);
+        return response.IsSuccess
+            ? Result.Success()
+            : Result.Failure(EdgeConnectorHelpers.CommandFailure(kind, response));
     }
 }

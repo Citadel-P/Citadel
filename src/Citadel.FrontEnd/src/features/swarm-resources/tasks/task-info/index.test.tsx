@@ -29,11 +29,17 @@ vi.mock('@/features/docker-resources/containers/container-info/container-stats',
   ),
 }));
 
+vi.mock('@/features/docker-resources/containers/container-info/container-exec', () => ({
+  ContainerExec: ({ containerId }: { containerId: string }) => <div>Terminal connected to {containerId}</div>,
+}));
+
 const platformId = '00000000-0000-0000-0000-000000000200';
 const containerId = '00000000-0000-0000-0000-000000000300';
 const dockerContainerId = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
 
 describe('TaskInfoComponents', () => {
+  beforeEach(() => localStorage.clear());
+
   it('uses resource capabilities and streams stats through the standard info page', async () => {
     const fake = new FakeHubConnection();
     let statsRequests = 0;
@@ -97,6 +103,7 @@ describe('TaskInfoComponents', () => {
     expect(screen.getByRole('columnheader', { name: 'Desired' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeDisabled();
     expect(screen.getByRole('tab', { name: 'Inspect' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
     expect(screen.getByRole('tab', { name: 'Stats' })).toBeEnabled();
     expect(await screen.findByText('Memory Usage')).toBeVisible();
     expect(await screen.findByText('12.50%')).toBeVisible();
@@ -128,6 +135,64 @@ describe('TaskInfoComponents', () => {
     expect(await screen.findByText('18.75%')).toBeVisible();
     expect(screen.getByTestId('task-live-stat-count')).toHaveTextContent('1');
     expect(statsRequests).toBe(1);
+  });
+
+  it('opens a terminal for a running task on the connected manager with terminal permission', async () => {
+    const fake = new FakeHubConnection();
+    const terminalTaskId = 'task-terminal';
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks/${terminalTaskId}`, () =>
+        HttpResponse.json({
+          ...task(),
+          id: terminalTaskId,
+          capabilities: {
+            ...task().capabilities,
+            canOpenTerminal: true,
+          },
+        }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}`, () =>
+        HttpResponse.json({
+          id: platformId,
+          platformDescriptor: {
+            $type: 'DockerSwarm',
+            nodeID: 'node-1',
+          },
+          capabilities: {
+            canRead: true,
+            canWrite: false,
+            canExecute: false,
+            canViewLogs: false,
+            canInspect: false,
+            canOpenTerminal: true,
+            canPull: false,
+          },
+        }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks/${terminalTaskId}/terminal`, () =>
+        HttpResponse.json({ dockerContainerId }),
+      ),
+    );
+
+    renderCitadel(
+      <Routes>
+        <Route
+          path="/platforms/:platformId/tasks/:resourceId"
+          element={<ResourceInfoView Components={TaskInfoComponents} type="Task" />}
+        />
+      </Routes>,
+      {
+        route: `/platforms/${platformId}/tasks/${terminalTaskId}`,
+        signalR: {
+          connectionFactory: () => fake.asHubConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+
+    expect(await screen.findByRole('tab', { name: 'Terminal' })).toBeEnabled();
+    expect(await screen.findByText(`Terminal connected to ${dockerContainerId}`)).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Inspect' })).toBeDisabled();
   });
 });
 

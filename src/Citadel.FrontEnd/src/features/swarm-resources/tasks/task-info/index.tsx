@@ -5,6 +5,10 @@ import { SwarmTaskInfoView, useTaskInfoGroup } from '../hooks/useTasksGroup';
 import { TaskInspect } from './inspect';
 import { TaskStats } from './stats';
 import { TaskInfoTable } from './table';
+import { TaskTerminal } from './terminal';
+
+const canOpenTaskTerminal = (resource: SwarmTaskInfoView) =>
+  resource.state.toLowerCase() === 'running' && resource.capabilities?.canOpenTerminal === true;
 
 export const TaskInfoComponents: RequiredSwarmInfoComponents<SwarmTaskInfoView> = {
   Header: {
@@ -35,6 +39,11 @@ export const TaskInfoComponents: RequiredSwarmInfoComponents<SwarmTaskInfoView> 
       label: 'Inspect',
       disabled: (resource) => resource.capabilities?.canInspect !== true,
       Content: ({ resource }) => <TaskInspect task={resource} />,
+    },
+    {
+      label: 'Terminal',
+      disabled: (resource) => !canOpenTaskTerminal(resource),
+      Content: ({ resource }) => <TaskTerminal task={resource} />,
     },
     {
       label: 'Stats',

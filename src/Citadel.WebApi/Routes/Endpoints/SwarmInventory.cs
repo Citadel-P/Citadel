@@ -3,6 +3,7 @@ using Application.Permissions;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Routes.Endpoints;
@@ -76,6 +77,14 @@ public static class SwarmInventory
         EndpointHandlers.HandleResult(
             await mediator.Send(new GetSwarmTaskStats(platformId, resourceId, hours), ct),
             SwarmTaskStatsView.Map);
+    public static async Task<Results<Ok<SwarmTaskTerminalView>, ProblemHttpResult>> GetTaskTerminalTarget(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResult(
+            await mediator.Send(new GetSwarmTaskTerminalTarget(platformId, resourceId), ct),
+            static dockerContainerId => new SwarmTaskTerminalView(dockerContainerId));
     public static async Task<Results<Ok<SwarmLogsView>, ProblemHttpResult>> GetTaskLogs(IMediator mediator, Guid platformId, string resourceId, int tail = 100, CancellationToken ct = default) =>
         EndpointHandlers.HandleResult(await mediator.Send(new GetSwarmTaskLogs(platformId, resourceId, tail), ct), SwarmLogsView.Map);
     public static async Task<Results<Ok<SwarmNetworksView>, ProblemHttpResult>> ListNetworks(
@@ -116,6 +125,28 @@ public static class SwarmInventory
             await mediator.Send(new GetSwarmSecret(platformId, resourceId), ct),
             permissionEvaluator,
             SwarmSecretView.Map);
+    public static async Task<Results<NoContent, ProblemHttpResult>> CreateSecret(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] CreateSwarmSecretInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToCommand(platformId), ct));
+    public static async Task<Results<NoContent, ProblemHttpResult>> UpdateSecretLabels(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        [FromBody] UpdateSwarmResourceLabelsInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToSecretCommand(platformId, resourceId), ct));
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteSecrets(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] DeleteSwarmResourcesInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToSecretCommand(platformId), ct));
     public static async Task<Results<Ok<SwarmConfigsView>, ProblemHttpResult>> ListConfigs(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
@@ -135,4 +166,34 @@ public static class SwarmInventory
             await mediator.Send(new GetSwarmConfig(platformId, resourceId), ct),
             permissionEvaluator,
             SwarmConfigView.Map);
+    public static async Task<Results<Ok<SwarmConfigDataView>, ProblemHttpResult>> GetConfigData(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResult(
+            await mediator.Send(new GetSwarmConfigData(platformId, resourceId), ct),
+            static content => new SwarmConfigDataView(content));
+    public static async Task<Results<NoContent, ProblemHttpResult>> CreateConfig(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] CreateSwarmConfigInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToCommand(platformId), ct));
+    public static async Task<Results<NoContent, ProblemHttpResult>> UpdateConfigLabels(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        [FromBody] UpdateSwarmResourceLabelsInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToConfigCommand(platformId, resourceId), ct));
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteConfigs(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] DeleteSwarmResourcesInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToConfigCommand(platformId), ct));
 }

@@ -4485,6 +4485,18 @@ export interface CreateStackInput {
   duplicateSource?: null | DuplicateSourceInput;
 }
 
+export interface CreateSwarmConfigInput {
+  name: string;
+  data: string;
+  labels?: null | Record<string, string>;
+}
+
+export interface CreateSwarmSecretInput {
+  name: string;
+  data: string;
+  labels?: null | Record<string, string>;
+}
+
 export interface CreateTagInput {
   name: string;
   color: string;
@@ -4615,6 +4627,10 @@ export interface DeleteRegistriesInput {
 }
 
 export interface DeleteRolesInput {
+  ids: string[];
+}
+
+export interface DeleteSwarmResourcesInput {
   ids: string[];
 }
 
@@ -7279,6 +7295,10 @@ export interface SwarmCapabilities {
   supportsClusterVolumes: boolean;
 }
 
+export interface SwarmConfigDataView {
+  content: string;
+}
+
 export interface SwarmConfigView {
   id: string;
   /**
@@ -7297,6 +7317,7 @@ export interface SwarmConfigView {
   /** @format date-time */
   observedAt: string;
   isStale: boolean;
+  inUse: boolean;
   capabilities?: null | PlatformCapabilities;
 }
 
@@ -7477,6 +7498,7 @@ export interface SwarmSecretView {
   /** @format date-time */
   observedAt: string;
   isStale: boolean;
+  inUse: boolean;
   capabilities?: null | PlatformCapabilities;
 }
 
@@ -7596,6 +7618,10 @@ export interface SwarmTaskInspectView {
 export interface SwarmTaskStatsView {
   dockerContainerId: string;
   stats: ContainerStatView[];
+}
+
+export interface SwarmTaskTerminalView {
+  dockerContainerId: string;
 }
 
 export interface SwarmTaskView {
@@ -7945,6 +7971,15 @@ export interface UpdateResourceBindingInput {
   secretId: null | string;
   secretDeliveryMode?: any;
   targetPath?: null | string;
+}
+
+export interface UpdateSwarmResourceLabelsInput {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  labels?: null | Record<string, string>;
 }
 
 export interface UpdateVaultKvV2SecretProviderInput {
@@ -10992,6 +11027,36 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name GetSwarmTaskTerminalTarget
+     * @summary Resolve the local container for a Docker Swarm task terminal
+     * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal
+     * @secure
+     * @response `200` `SwarmTaskTerminalView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmTaskTerminalTarget: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmTaskTerminalView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/terminal`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmTaskLogs
      * @summary Get a bounded tail of Docker Swarm task logs
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs
@@ -11110,6 +11175,68 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name CreateSwarmSecret
+     * @summary Create a Docker Swarm secret
+     * @request POST:/api/v1/platforms/{platformId}/swarm/secrets
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createSwarmSecret: (
+      platformId: string,
+      data: CreateSwarmSecretInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/secrets`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name DeleteSwarmSecrets
+     * @summary Delete unused Docker Swarm secrets
+     * @request DELETE:/api/v1/platforms/{platformId}/swarm/secrets
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSwarmSecrets: (
+      platformId: string,
+      data: DeleteSwarmResourcesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/secrets`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmSecret
      * @summary Get Docker Swarm secret metadata without secret data
      * @request GET:/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}
@@ -11132,6 +11259,38 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name UpdateSwarmSecretLabels
+     * @summary Update Docker Swarm secret labels
+     * @request PATCH:/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}/labels
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmSecretLabels: (
+      platformId: string,
+      resourceId: string,
+      data: UpdateSwarmResourceLabelsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/secrets/${resourceId}/labels`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 
@@ -11164,6 +11323,68 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name CreateSwarmConfig
+     * @summary Create a Docker Swarm config
+     * @request POST:/api/v1/platforms/{platformId}/swarm/configs
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createSwarmConfig: (
+      platformId: string,
+      data: CreateSwarmConfigInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name DeleteSwarmConfigs
+     * @summary Delete unused Docker Swarm configs
+     * @request DELETE:/api/v1/platforms/{platformId}/swarm/configs
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSwarmConfigs: (
+      platformId: string,
+      data: DeleteSwarmResourcesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmConfig
      * @summary Get persisted Docker Swarm config metadata
      * @request GET:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}
@@ -11186,6 +11407,68 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetSwarmConfigData
+     * @summary Get Docker Swarm config data for read-only inspection
+     * @request GET:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content
+     * @secure
+     * @response `200` `SwarmConfigDataView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmConfigData: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmConfigDataView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}/content`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name UpdateSwarmConfigLabels
+     * @summary Update Docker Swarm config labels
+     * @request PATCH:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/labels
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmConfigLabels: (
+      platformId: string,
+      resourceId: string,
+      data: UpdateSwarmResourceLabelsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}/labels`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

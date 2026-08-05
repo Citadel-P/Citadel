@@ -1,4 +1,5 @@
 import { CurrentProfileView, UserDateTimeFormat } from '@/api/generated/api.types';
+import { PageContainer } from '@/components/custom/common';
 import { getBrowserTimezone } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
 import Loader from '@/components/ui/loader';
@@ -24,31 +25,21 @@ export default function ProfilePage() {
 
   if (profileQuery.isLoading || preferencesQuery.isLoading) {
     return (
-      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-        <div className="rounded-sm border bg-background p-4">
-          <Loader />
-        </div>
-      </div>
+      <PageContainer className="border">
+        <Loader />
+      </PageContainer>
     );
   }
 
   if (!profile) {
-    return (
-      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-        <div className="rounded-sm border bg-background p-4 text-sm text-muted-foreground">
-          Profile is not available.
-        </div>
-      </div>
-    );
+    return <PageContainer className="border text-sm text-muted-foreground">Profile is not available.</PageContainer>;
   }
 
   return (
-    <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-      <div className="space-y-4 bg-background p-4 rounded-lg">
-        <AccountHeader profile={profile} formatDate={formatDate} />
-        <ProfileForm profile={profile} preferences={preferences} formatDate={formatDate} />
-      </div>
-    </div>
+    <PageContainer className="space-y-4">
+      <AccountHeader profile={profile} formatDate={formatDate} />
+      <ProfileForm profile={profile} preferences={preferences} formatDate={formatDate} />
+    </PageContainer>
   );
 }
 

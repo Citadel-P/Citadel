@@ -1,4 +1,5 @@
 import { LicenseCapabilityView, LicenseStatus } from '@/api/generated/api.types';
+import { PageContainer } from '@/components/custom/common';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -79,17 +80,15 @@ export default function LicensePage() {
 
   if (licenseQuery.isLoading || requestQuery.isLoading) {
     return (
-      <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
-        <div className="rounded-sm border bg-background p-4">
-          <Loader />
-        </div>
-      </div>
+      <PageContainer>
+        <Loader />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
-      <div className="space-y-4 bg-background rounded-lg p-4">
+    <>
+      <PageContainer className="flex flex-col gap-4">
         <header className="rounded-sm border bg-background p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -211,7 +210,7 @@ export default function LicensePage() {
             </section>
           </aside>
         </div>
-      </div>
+      </PageContainer>
       <ConfirmDeleteDialog
         type="License"
         open={confirmRemoveOpen}
@@ -228,7 +227,7 @@ export default function LicensePage() {
           </>
         }
       />
-    </div>
+    </>
   );
 }
 

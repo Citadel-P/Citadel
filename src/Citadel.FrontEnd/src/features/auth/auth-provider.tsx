@@ -35,6 +35,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   const { isSetupReady, requiresSetup, error: setupError } = useSetupContext();
   const { mutate: requestLogout } = useMutate('logout');
   const { mutateAsync: requestLogin, isPending, validationErrors } = useMutate('login');
+  const { mutateAsync: requestRefresh, reset: resetRefresh } = useMutate('refreshToken', { gcTime: 0 });
 
   const [authState, dispatch] = useReducer(authReducer, initialState);
 
@@ -54,9 +55,11 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   );
 
   const requestRefreshToken = useCallback(async () => {
-    const response = await apiClient.api.refreshToken({});
-    return response.data.accessToken;
-  }, [apiClient]);
+    const response = await requestRefresh({});
+    const accessToken = response.data.accessToken;
+    resetRefresh();
+    return accessToken;
+  }, [requestRefresh, resetRefresh]);
 
   const { error, didAttemptRefresh, triggerManualRefresh, isAccessTokenExpired } = useTokenRefresh(
     authState.token,

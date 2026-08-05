@@ -1,4 +1,5 @@
 import { ResourceType } from '@/api/types';
+import { PageContainer } from '@/components/custom/common';
 import TaskSheet from '@/components/custom/task-sheet';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMemo, useState, useEffect } from 'react';
@@ -44,35 +45,33 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
 
   return (
     <div className="flex-col justify-between relative">
-      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-4">
-          <ResourceHeader
-            type={type}
-            icon={Components.Icon}
-            title={headerCfg.title}
-            subtitle={headerCfg.subtitle}
-            showSearch={headerCfg.showSearch}
-            showAdd={headerCfg.showAdd}
-            showTagFilter={headerCfg.showTagFilter}
-            showPlatformFilter={headerCfg.showPlatformFilter}
-            addDisabled={!capabilities?.canWrite}
-            addButtonTitle={headerCfg.addButtonTitle}
-            Extra={headerCfg.Extra}
-            onSearch={setSearch}
-            onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate(headerCfg.addButtonUrl ?? './add'))}
-          />
-          {AddDialog && <AddDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />}
+      <PageContainer className="flex flex-col gap-4">
+        <ResourceHeader
+          type={type}
+          icon={Components.Icon}
+          title={headerCfg.title}
+          subtitle={headerCfg.subtitle}
+          showSearch={headerCfg.showSearch}
+          showAdd={headerCfg.showAdd}
+          showTagFilter={headerCfg.showTagFilter}
+          showPlatformFilter={headerCfg.showPlatformFilter}
+          addDisabled={!capabilities?.canWrite}
+          addButtonTitle={headerCfg.addButtonTitle}
+          Extra={headerCfg.Extra}
+          onSearch={setSearch}
+          onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate(headerCfg.addButtonUrl ?? './add'))}
+        />
+        {AddDialog && <AddDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />}
 
-          {Components.SubHeader && <Components.SubHeader />}
+        {Components.SubHeader && <Components.SubHeader />}
 
-          <Content
-            items={filtered}
-            actions={Components.DropdownActions ?? {}}
-            isLoading={isLoading}
-            isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
-          />
-        </div>
-      </div>
+        <Content
+          items={filtered}
+          actions={Components.DropdownActions ?? {}}
+          isLoading={isLoading}
+          isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
+        />
+      </PageContainer>
 
       {Components.GroupActions && <Components.GroupActions items={items ?? EMPTY_ITEMS} />}
       {showTaskSheet && type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type as ResourceType} />}

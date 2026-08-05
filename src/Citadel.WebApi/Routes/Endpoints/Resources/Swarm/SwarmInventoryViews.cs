@@ -125,6 +125,8 @@ public sealed record SwarmTaskStatsView(
         new(value.DockerContainerId, ContainerStatView.Map(value.Stats));
 }
 
+public sealed record SwarmTaskTerminalView(string DockerContainerId);
+
 public sealed record SwarmNetworkView(
     string Id, string Name, string Scope, string Driver, bool IsAttachable, bool IsInternal,
     bool IsIngress, bool IsEncrypted, bool EnableIPv6, IReadOnlyList<string> Subnets,
@@ -167,12 +169,13 @@ public sealed record SwarmNetworksView(
 public sealed record SwarmSecretView(
     string Id, long VersionIndex, string Name, string? Driver, IReadOnlyList<string> ServiceNames,
     IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt,
-    DateTimeOffset ObservedAt, bool IsStale,
+    DateTimeOffset ObservedAt, bool IsStale, bool InUse,
     PlatformCapabilities? Capabilities = null)
 {
     public static SwarmSecretView Map(SwarmSecretProjection value) => new(
         value.DockerSecretId, value.VersionIndex, value.Name, value.Driver, value.ServiceNames,
-        value.Labels, value.DockerCreatedAt, value.DockerUpdatedAt, value.ObservedAt, value.IsStale);
+        value.Labels, value.DockerCreatedAt, value.DockerUpdatedAt, value.ObservedAt, value.IsStale,
+        value.ServiceNames.Count != 0);
 
     public static async Task<SwarmSecretView> Map(
         SwarmSecretProjection value,
@@ -204,12 +207,13 @@ public sealed record SwarmSecretsView(
 public sealed record SwarmConfigView(
     string Id, long VersionIndex, string Name, string? TemplatingDriver, IReadOnlyList<string> ServiceNames,
     IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt,
-    DateTimeOffset ObservedAt, bool IsStale,
+    DateTimeOffset ObservedAt, bool IsStale, bool InUse,
     PlatformCapabilities? Capabilities = null)
 {
     public static SwarmConfigView Map(SwarmConfigProjection value) => new(
         value.DockerConfigId, value.VersionIndex, value.Name, value.TemplatingDriver, value.ServiceNames,
-        value.Labels, value.DockerCreatedAt, value.DockerUpdatedAt, value.ObservedAt, value.IsStale);
+        value.Labels, value.DockerCreatedAt, value.DockerUpdatedAt, value.ObservedAt, value.IsStale,
+        value.ServiceNames.Count != 0);
 
     public static async Task<SwarmConfigView> Map(
         SwarmConfigProjection value,
@@ -237,6 +241,8 @@ public sealed record SwarmConfigsView(
         return new SwarmConfigsView(items, capabilities);
     }
 }
+
+public sealed record SwarmConfigDataView(string Content);
 
 public sealed record SwarmLogsView(IReadOnlyList<string> Lines, bool Truncated)
 {

@@ -1916,6 +1916,12 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmTaskStats");
+        platforms.MapGet("{platformId:guid}/swarm/tasks/{resourceId}/terminal", SwarmInventory.GetTaskTerminalTarget)
+            .WithSummary("Resolve the local container for a Docker Swarm task terminal")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmTaskTerminalTarget");
         platforms.MapGet("{platformId:guid}/swarm/tasks/{resourceId}/logs", SwarmInventory.GetTaskLogs)
             .WithSummary("Get a bounded tail of Docker Swarm task logs")
             .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
@@ -1942,6 +1948,24 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmSecret");
+        platforms.MapPost("{platformId:guid}/swarm/secrets", SwarmInventory.CreateSecret)
+            .WithSummary("Create a Docker Swarm secret")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createSwarmSecret");
+        platforms.MapPatch("{platformId:guid}/swarm/secrets/{resourceId}/labels", SwarmInventory.UpdateSecretLabels)
+            .WithSummary("Update Docker Swarm secret labels")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateSwarmSecretLabels");
+        platforms.MapDelete("{platformId:guid}/swarm/secrets", SwarmInventory.DeleteSecrets)
+            .WithSummary("Delete unused Docker Swarm secrets")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteSwarmSecrets");
         platforms.MapGet("{platformId:guid}/swarm/configs", SwarmInventory.ListConfigs)
             .WithSummary("List persisted Docker Swarm config metadata")
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
@@ -1952,6 +1976,30 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmConfig");
+        platforms.MapGet("{platformId:guid}/swarm/configs/{resourceId}/content", SwarmInventory.GetConfigData)
+            .WithSummary("Get Docker Swarm config data for read-only inspection")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmConfigData");
+        platforms.MapPost("{platformId:guid}/swarm/configs", SwarmInventory.CreateConfig)
+            .WithSummary("Create a Docker Swarm config")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createSwarmConfig");
+        platforms.MapPatch("{platformId:guid}/swarm/configs/{resourceId}/labels", SwarmInventory.UpdateConfigLabels)
+            .WithSummary("Update Docker Swarm config labels")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateSwarmConfigLabels");
+        platforms.MapDelete("{platformId:guid}/swarm/configs", SwarmInventory.DeleteConfigs)
+            .WithSummary("Delete unused Docker Swarm configs")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteSwarmConfigs");
 
         platforms.MapGet("{platformId:guid}/unmanaged-compose-projects/{projectName}", Stacks.GetComposeImportDraft)
             .WithSummary("Get an unmanaged Docker Compose project import draft")

@@ -508,6 +508,13 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.SwarmConfigInspect => ProtoEdgeCommandKind.SwarmConfigInspect,
             EdgeAgentCommandKind.SwarmServiceLogs => ProtoEdgeCommandKind.SwarmServiceLogs,
             EdgeAgentCommandKind.SwarmTaskLogs => ProtoEdgeCommandKind.SwarmTaskLogs,
+            EdgeAgentCommandKind.SwarmSecretCreate => ProtoEdgeCommandKind.SwarmSecretCreate,
+            EdgeAgentCommandKind.SwarmSecretUpdate => ProtoEdgeCommandKind.SwarmSecretUpdate,
+            EdgeAgentCommandKind.SwarmSecretDelete => ProtoEdgeCommandKind.SwarmSecretDelete,
+            EdgeAgentCommandKind.SwarmConfigCreate => ProtoEdgeCommandKind.SwarmConfigCreate,
+            EdgeAgentCommandKind.SwarmConfigUpdate => ProtoEdgeCommandKind.SwarmConfigUpdate,
+            EdgeAgentCommandKind.SwarmConfigDelete => ProtoEdgeCommandKind.SwarmConfigDelete,
+            EdgeAgentCommandKind.SwarmConfigData => ProtoEdgeCommandKind.SwarmConfigData,
             _ => ProtoEdgeCommandKind.Unspecified
         };
 }

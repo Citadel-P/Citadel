@@ -6,6 +6,7 @@ import {
   useCallback,
   useDeferredValue,
   memo,
+  type ComponentProps,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -89,6 +90,14 @@ import { formatId } from '@/lib/utils';
 import { StateIndicator } from './state-indicator';
 import { getContainerSeriesColor } from './container-series-colors';
 import { useFormFieldAccessibility } from './form-field-accessibility';
+
+export const PageContainer = ({ className, children, ...props }: ComponentProps<'div'>) => (
+  <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
+    <div className={cn('w-full rounded-md border-border bg-background p-4 shadow-sm', className)} {...props}>
+      {children}
+    </div>
+  </div>
+);
 
 export type StatsWindowHours = 24 | 48 | 72;
 
@@ -217,7 +226,10 @@ export const IntegrationCard = ({
 
       <div className="mt-4 flex items-center justify-between border-t border-muted pt-4">
         {footerLeft}
-        <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} role="presentation">
+        <div
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation">
           {footerRight}
         </div>
       </div>
@@ -1100,7 +1112,13 @@ export const LogViewer = memo(
           html = ansiConverter.toHtml(message);
           ansiCache.set(message, html);
         }
-        return { ...log, message, containerName: parsed.containerName, html, severity: log.severity ?? formatted.severity };
+        return {
+          ...log,
+          message,
+          containerName: parsed.containerName,
+          html,
+          severity: log.severity ?? formatted.severity,
+        };
       });
     }, [containerFilteringEnabled, normalizedLogs]);
 
@@ -1323,20 +1341,18 @@ function formatLogMessage(message: string): { message: string; severity?: LogSev
 }
 
 function isTaskSuccessMessage(message: string): boolean {
-  return message === 'Stack is now running.'
-    || message === 'Deployment is now running.'
-    || message === 'Stack rolled back successfully.'
-    || message === 'Stack applied successfully.';
+  return (
+    message === 'Stack is now running.' ||
+    message === 'Deployment is now running.' ||
+    message === 'Stack rolled back successfully.' ||
+    message === 'Stack applied successfully.'
+  );
 }
 
 function parseLogfmtMessageValue(value: string): string | undefined {
   const quoted = value.match(/\bmsg="((?:\\.|[^"\\])*)"/);
   if (quoted) {
-    return quoted[1]
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\')
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '\t');
+    return quoted[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
   }
 
   const unquoted = value.match(/\bmsg=([^\s].*)$/);

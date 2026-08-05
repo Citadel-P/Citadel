@@ -1,12 +1,12 @@
 # Docker Swarm
 
 Docker Swarm support is included with Citadel and does not require a feature
-flag. The current release provides a read-only cluster experience: Citadel can
-register an existing manager, show persisted cluster inventory, inspect
-resources, and retrieve bounded Service and Task logs.
+flag. Citadel can register an existing manager, show persisted cluster
+inventory, inspect resources, retrieve bounded Service and Task logs, and
+manage standalone Swarm Secrets and Configs.
 
-Citadel does not yet create, update, import, or delete Swarm resources, and it
-does not yet Apply Deployments or Stacks to Swarm. Those actions remain blocked
+Service, Task, Node, and Swarm workload mutations remain unavailable. Citadel
+does not yet Apply Deployments or Stacks to Swarm; those actions remain blocked
 until their transactional recovery paths are implemented.
 
 ## Before You Begin
@@ -59,12 +59,17 @@ Selecting a Swarm Platform opens its Swarm navigation:
 - **Services** shows mode, image, replica counts, update state, ports, labels,
   and ownership classification.
 - **Tasks** shows current and recent scheduler attempts, including Service,
-  Node, desired/current state, image, and Docker error details.
+  Node, desired/current state, image, and Docker error details. A running Task
+  can open a terminal when its container is on the connected manager.
 - **Networks** shows Swarm-scoped Network metadata and attached Services.
-- **Secrets** shows Secret metadata only. Docker never returns stored Secret
-  values.
-- **Configs** shows Config metadata and attached Services. Config content is
-  not exposed in the current read-only milestone.
+- **Secrets** uses one Inspect tab for details, referencing Services, and
+  labels. Docker never returns stored Secret values, so the Edit dialog exposes
+  labels only. Citadel can create Secrets, edit their labels, and delete unused
+  Secrets.
+- **Configs** uses one Inspect tab for details, referencing Services, and
+  labels. The Edit dialog loads current content directly from Docker into a
+  read-only editor and keeps labels editable. Citadel can create Configs, edit
+  their labels, and delete unused Configs.
 
 Containers, Images, and Volumes visible through the same manager remain
 manager-local Docker resources. They are not cluster inventory. An Image on
@@ -84,14 +89,45 @@ available when the manager disconnects.
   usable manager control, or Docker reported a sanitized manager error.
 - **Offline** means Citadel cannot currently reach the Platform.
 
-Each resource includes its last observation time. Treat stale data as
-diagnostic only; do not assume it is safe to act on outside Citadel.
+Treat stale data as diagnostic only; do not assume it is safe to act on
+outside Citadel.
 
 Citadel uses Docker daemon events for prompt refreshes after Service, Node,
 Network, Secret, or Config changes. A bounded reconciliation also runs every
 30 minutes to recover from missed events, reconnects, and partial event data.
 Multiple events for one Platform are coalesced so they do not create an
 unbounded queue of refresh jobs.
+
+## Manage Secrets And Configs
+
+Platform Write permission is required for all mutations. Select **Add** on the
+Secrets or Configs page to create a resource. Citadel does not store a copy of
+a Secret's value, and Docker does not return it after creation. Keep a secure
+copy if you may need the value later.
+
+On a Config page, **Edit** opens a dialog and loads the content from the
+connected Swarm manager only when the user has Platform Inspect permission.
+The editor is read-only; Citadel does not persist the content in its inventory
+projection or publish it through SignalR. On a Secret page, **Edit** opens the
+same compact dialog but shows labels only because Docker does not disclose the
+stored value.
+
+The indicator beside each resource name reports usage:
+
+- green means one or more observed Services reference the resource;
+- gray means the resource is unused.
+
+Use the row checkbox to select one or more resources. **Delete** is enabled only
+when every selected resource is unused and its observation is current. Citadel
+checks the same rule again in the API immediately before deletion. Docker is
+the final concurrency guard: if a Service starts using a resource between the
+check and delete, Docker rejects the operation and Citadel reconciles the
+result.
+
+Docker supports changing Secret and Config labels in place. Editing the Secret
+value or Config data is not available because payload changes require a new
+version and coordinated Service replacement. Delete and recreate manually only
+after reviewing every consumer.
 
 ## Understand Service Ownership
 
@@ -123,11 +159,24 @@ Docker Service and Task logs are only available for logging drivers supported
 by Docker's Service/Task logs endpoints. If retrieval fails, use the logging
 driver's external destination.
 
+## Open A Task Terminal
+
+Open a running Task and select **Terminal**. Terminal access requires Platform
+Read plus the Terminal permission. Docker exec is node-local, so Citadel can
+open the terminal only when the Task is running on the manager connected to the
+Platform. Tasks on another manager or worker remain visible, but their terminal
+cannot be opened through this connection.
+
 ## Permissions
 
 - Platform Read: view the Swarm overview and persisted inventory.
+- Platform Read plus Inspect: inspect live Node, Service, and Task data and
+  load Config content into the read-only editor.
 - Platform Read plus Logs: retrieve Service and Task logs.
-- Platform Write: register or edit the Platform connection.
+- Platform Read plus Terminal: open a terminal for a running Task on the
+  connected manager.
+- Platform Write: register or edit the Platform connection and create, edit
+  labels on, or delete unused Secrets and Configs.
 
 All checks are enforced by the API. Hidden or disabled UI controls are not the
 authorization boundary.
@@ -158,10 +207,11 @@ driver supports retrieval.
 
 ## Current Limits
 
-The current read-only Swarm milestone does not provide:
+The current Swarm milestone does not provide:
 
 - Swarm initialization, join/leave, token, CA, unlock, or quorum management;
-- Node, Service, Network, Secret, Config, or Task mutations;
+- Node, Service, Network, or Task mutations;
+- in-place Secret value or Config data replacement;
 - Swarm Deployment or Stack create/Apply/delete operations;
 - Service or Docker Stack import/adoption;
 - cluster-wide image distribution, volume semantics, backup, or restore;

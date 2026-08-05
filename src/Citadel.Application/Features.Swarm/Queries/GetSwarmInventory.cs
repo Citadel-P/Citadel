@@ -1,6 +1,9 @@
+using System.Text;
 using Domain;
 using Application.TaskJobs;
+using Application.Features.Swarm.Commands;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Platforms;
 using FluentValidation;
 using Hosting.Common;
@@ -41,6 +44,8 @@ public sealed record GetSwarmSecret(Guid PlatformId, string ResourceId) : IQuery
 public sealed record GetSwarmConfigs(Guid PlatformId) : IQuery<Result<IReadOnlyList<SwarmConfigProjection>>>;
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetSwarmConfig(Guid PlatformId, string ResourceId) : IQuery<Result<SwarmConfigProjection>>;
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read, SpecificPermission.Inspect)]
+public sealed record GetSwarmConfigData(Guid PlatformId, string ResourceId) : IQuery<Result<string>>;
 
 internal static class SwarmQuery
 {
@@ -145,5 +150,46 @@ internal sealed class GetSwarmConfigHandler(IUnitOfWork unitOfWork, ISwarmReconc
     {
         var error = await SwarmQuery.ValidateAndEnsureInitializedAsync(unitOfWork, reconciliationCoordinator, query.PlatformId, ct);
         return error is null ? SwarmQuery.Found(await unitOfWork.Swarm.GetConfigAsync(query.PlatformId, query.ResourceId, ct), "config") : Result.Failure<SwarmConfigProjection>(error);
+    }
+}
+
+internal sealed class GetSwarmConfigDataHandler(
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<ISwarmConnector> connectorFactory)
+    : IQueryHandler<GetSwarmConfigData, Result<string>>
+{
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
+    public async ValueTask<Result<string>> Handle(GetSwarmConfigData query, CancellationToken cancellationToken)
+    {
+        var context = await SwarmMutationContext.LoadAsync(
+            unitOfWork,
+            connectorFactory,
+            query.PlatformId,
+            cancellationToken);
+        if (!context.IsSuccess(out var value, out var error))
+            return Result.Failure<string>(error!);
+
+        if (await unitOfWork.Swarm.GetConfigAsync(
+                query.PlatformId,
+                query.ResourceId,
+                cancellationToken) is null)
+            return Result.Failure<string>(new NotFoundError("Swarm config does not exist."));
+
+        var result = await value.Connector.GetConfigDataAsync(
+            new InspectSwarmConfigCommand(value.Platform.Address, query.ResourceId),
+            cancellationToken);
+        if (!result.IsSuccess(out var data, out error))
+            return Result.Failure<string>(error!);
+
+        try
+        {
+            return Result.Success(StrictUtf8.GetString(data));
+        }
+        catch (DecoderFallbackException)
+        {
+            return Result.Failure<string>(new BadRequestError(
+                "This Swarm config contains binary data and cannot be displayed in the text editor."));
+        }
     }
 }

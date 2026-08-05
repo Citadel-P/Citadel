@@ -99,4 +99,25 @@ export default [
       ],
     },
   },
+  {
+    files: [
+      'src/features/swarm-resources/**/*.{ts,tsx}',
+      'src/features/**/form.{ts,tsx}',
+      'src/features/**/form/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/api/api-client-context',
+              message:
+                'Resource forms must use useRead/useMutate so centralized cancellation, validation, and HTTP error handling remain active.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

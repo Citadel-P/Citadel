@@ -1,5 +1,5 @@
-import { PlatformCapabilities, SwarmTaskView } from '@/api/generated/api.types';
-import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import type { PlatformCapabilities, SwarmTaskView } from '@/api/generated/api.types';
+import type { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { getTaskName } from '@/lib/utils';

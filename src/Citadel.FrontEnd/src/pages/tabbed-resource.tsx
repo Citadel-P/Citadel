@@ -1,4 +1,5 @@
 import { PluralResourceMap, ResourceType } from '@/api/types';
+import { PageContainer } from '@/components/custom/common';
 import { SearchField } from '@/components/custom/search-field';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Button } from '@/components/ui/button';
@@ -73,76 +74,74 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   return (
     <div className="flex-col relative">
-      <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-4">
-          <ResourceHeader
-            type={type}
-            icon={Components.Icon}
-            title={header.title}
-            subtitle={header.subtitle}
-            showSearch={showTopSearch}
-            showAdd={header.showAdd}
-            showTagFilter={header.showTagFilter}
-            showPlatformFilter={header.showPlatformFilter}
-            addDisabled={addDisabled}
-            addButtonTitle={header.addButtonTitle}
-            Extra={header.Extra}
-            onSearch={setSearch}
-            onAdd={() => navigate('./add')}
-          />
+      <PageContainer className="flex flex-col gap-4">
+        <ResourceHeader
+          type={type}
+          icon={Components.Icon}
+          title={header.title}
+          subtitle={header.subtitle}
+          showSearch={showTopSearch}
+          showAdd={header.showAdd}
+          showTagFilter={header.showTagFilter}
+          showPlatformFilter={header.showPlatformFilter}
+          addDisabled={addDisabled}
+          addButtonTitle={header.addButtonTitle}
+          Extra={header.Extra}
+          onSearch={setSearch}
+          onAdd={() => navigate('./add')}
+        />
 
-          {Components.SubHeader && <Components.SubHeader />}
+        {Components.SubHeader && <Components.SubHeader />}
 
-          <Tabs value={activeTab.label} onValueChange={handleTabChange}>
-            <div className="flex flex-col sm:flex-row justify-between gap-2">
-              {/* Tabs */}
-              <TabsList className="overflow-x-auto">
-                {tabs.map((t) => (
-                  <TabsTrigger
-                    key={t.label}
-                    value={t.label}
-                    disabled={t.disabled?.(null as any) ?? false}
-                    onClick={() => navigateToTab(t)}>
-                    {t.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+        <Tabs value={activeTab.label} onValueChange={handleTabChange}>
+          <div className="flex flex-col sm:flex-row justify-between gap-2">
+            {/* Tabs */}
+            <TabsList className="overflow-x-auto">
+              {tabs.map((t) => (
+                <TabsTrigger
+                  key={t.label}
+                  value={t.label}
+                  disabled={t.disabled?.(null as any) ?? false}
+                  onClick={() => navigateToTab(t)}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-              {/* Actions */}
-              <div className="flex gap-1 flex-col sm:flex-row">
-                {showTabSearch && (
-                  <SearchField
-                    placeholder={tabHeader.searchPlaceholder}
-                    onSearch={(q) => {
-                      tabHeader.onSearch?.(q);
-                      setSearch(q);
-                    }}
-                  />
-                )}
+            {/* Actions */}
+            <div className="flex gap-1 flex-col sm:flex-row">
+              {showTabSearch && (
+                <SearchField
+                  placeholder={tabHeader.searchPlaceholder}
+                  onSearch={(q) => {
+                    tabHeader.onSearch?.(q);
+                    setSearch(q);
+                  }}
+                />
+              )}
 
-                {showAdd && (
-                  <Button
-                    onClick={() => navigate(tabHeader.addButtonUrl ?? './add')}
-                    disabled={addDisabled}
-                    className="bg-primary hover:bg-primary/80 text-sm px-2.5 py-2.5">
-                    <Plus className="h-3 w-3" />
-                    {tabHeader.addButtonTitle ?? header.addButtonTitle ?? `Add ${type}`}
-                  </Button>
-                )}
+              {showAdd && (
+                <Button
+                  onClick={() => navigate(tabHeader.addButtonUrl ?? './add')}
+                  disabled={addDisabled}
+                  className="bg-primary hover:bg-primary/80 text-sm px-2.5 py-2.5">
+                  <Plus className="h-3 w-3" />
+                  {tabHeader.addButtonTitle ?? header.addButtonTitle ?? `Add ${type}`}
+                </Button>
+              )}
 
-                {tabHeader.Extra && <tabHeader.Extra />}
-              </div>
+              {tabHeader.Extra && <tabHeader.Extra />}
             </div>
+          </div>
 
-            {/* Content */}
-            {tabs.map((t) => (
-              <TabsContent key={t.label} value={t.label}>
-                <TabContentWrapper key={t.label} tab={t} Components={Components} search={search} />
-              </TabsContent>
-            ))}
-          </Tabs>
-        </div>
-      </div>
+          {/* Content */}
+          {tabs.map((t) => (
+            <TabsContent key={t.label} value={t.label}>
+              <TabContentWrapper key={t.label} tab={t} Components={Components} search={search} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      </PageContainer>
 
       <TaskSheet type={type} />
     </div>

@@ -26,5 +26,27 @@ public sealed record ListSwarmNetworksCommand(string PlatformAddress, int Limit 
 public sealed record InspectSwarmNetworkCommand(string PlatformAddress, string NetworkId);
 public sealed record ListSwarmSecretsCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmSecretCommand(string PlatformAddress, string SecretId);
+public sealed record CreateSwarmSecretCommand(
+    string PlatformAddress,
+    string Name,
+    byte[] Data,
+    IReadOnlyDictionary<string, string> Labels);
+public sealed record UpdateSwarmSecretLabelsCommand(
+    string PlatformAddress,
+    string SecretId,
+    long VersionIndex,
+    IReadOnlyDictionary<string, string> Labels);
+public sealed record DeleteSwarmSecretCommand(string PlatformAddress, string SecretId);
 public sealed record ListSwarmConfigsCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmConfigCommand(string PlatformAddress, string ConfigId);
+public sealed record CreateSwarmConfigCommand(
+    string PlatformAddress,
+    string Name,
+    byte[] Data,
+    IReadOnlyDictionary<string, string> Labels);
+public sealed record UpdateSwarmConfigLabelsCommand(
+    string PlatformAddress,
+    string ConfigId,
+    long VersionIndex,
+    IReadOnlyDictionary<string, string> Labels);
+public sealed record DeleteSwarmConfigCommand(string PlatformAddress, string ConfigId);

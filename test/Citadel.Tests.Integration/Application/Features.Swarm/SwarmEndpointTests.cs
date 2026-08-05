@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Channels;
 using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -7,6 +9,7 @@ using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -21,9 +24,119 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     private Guid taskContainerId;
     private Guid otherPlatformId;
     private Guid standalonePlatformId;
+    private bool secretDeleteReportsNotFound;
+    private readonly List<SwarmSecretResult> liveSecrets =
+    [
+        new("primary-secret", 3, "primary-secret-name", null,
+            new Dictionary<string, string> { ["secret"] = "primary" }, null, null),
+        new("primary-unused-secret", 1, "primary-unused-secret", null,
+            new Dictionary<string, string>(), null, null)
+    ];
+    private readonly List<SwarmConfigResult> liveConfigs =
+    [
+        new("primary-config", 4, "primary-config-name", "golang",
+            new Dictionary<string, string> { ["config"] = "primary" }, null, null),
+        new("primary-unused-config", 1, "primary-unused-config", null,
+            new Dictionary<string, string>(), null, null)
+    ];
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
+        connector
+            .Setup(value => value.ListNodesAsync(It.IsAny<ListSwarmNodesCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNodeResult>>(
+            [
+                new("primary-node", 1, "primary-manager", "Manager", true, "Reachable", "Ready", null,
+                    "Active", "28.0", "linux", "x86_64", "10.0.0.1",
+                    new Dictionary<string, string> { ["zone"] = "primary" }, 1, 1, null, null)
+            ]));
+        connector
+            .Setup(value => value.ListServicesAsync(It.IsAny<ListSwarmServicesCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>(
+            [
+                new("primary-service", 2, "primary-web", "Replicated", "nginx:primary", 1, 1,
+                    "Completed", null, ["80:80/tcp"], ["primary-network"], ["primary-secret"],
+                    ["primary-config"], new Dictionary<string, string> { ["app"] = "primary" }, null, null)
+            ]));
+        connector
+            .Setup(value => value.ListTasksAsync(It.IsAny<ListSwarmTasksCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmTaskResult>>(
+            [
+                new("primary-task-1", 1, "primary-web.1", "primary-service", 1, "primary-node",
+                    "Running", "Running", null, null, "nginx:primary", ["80/tcp"], null, null, null,
+                    "container-primary-task-1")
+            ]));
+        connector
+            .Setup(value => value.ListNetworksAsync(It.IsAny<ListSwarmNetworksCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNetworkResult>>(
+            [
+                new("primary-network", "primary-overlay", "Swarm", "overlay", true, false, false, true,
+                    false, ["10.0.0.0/24"], new Dictionary<string, string> { ["network"] = "primary" }, null)
+            ]));
+        connector
+            .Setup(value => value.ListSecretsAsync(It.IsAny<ListSwarmSecretsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Result.Success<IReadOnlyList<SwarmSecretResult>>(liveSecrets.ToArray()));
+        connector
+            .Setup(value => value.ListConfigsAsync(It.IsAny<ListSwarmConfigsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Result.Success<IReadOnlyList<SwarmConfigResult>>(liveConfigs.ToArray()));
+        connector
+            .Setup(value => value.GetConfigDataAsync(It.IsAny<InspectSwarmConfigCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success("setting=true\n"u8.ToArray()));
+        connector
+            .Setup(value => value.CreateSecretAsync(It.IsAny<CreateSwarmSecretCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CreateSwarmSecretCommand command, CancellationToken _) =>
+            {
+                var created = new SwarmSecretResult(
+                    $"secret-{command.Name}", 1, command.Name, null, command.Labels, null, null);
+                liveSecrets.Add(created);
+                return Result.Success();
+            });
+        connector
+            .Setup(value => value.UpdateSecretLabelsAsync(It.IsAny<UpdateSwarmSecretLabelsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UpdateSwarmSecretLabelsCommand command, CancellationToken _) =>
+            {
+                var index = liveSecrets.FindIndex(value => value.Id == command.SecretId);
+                var current = liveSecrets[index];
+                var updated = current with { VersionIndex = current.VersionIndex + 1, Labels = command.Labels };
+                liveSecrets[index] = updated;
+                return Result.Success();
+            });
+        connector
+            .Setup(value => value.DeleteSecretAsync(It.IsAny<DeleteSwarmSecretCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DeleteSwarmSecretCommand command, CancellationToken _) =>
+            {
+                if (secretDeleteReportsNotFound)
+                    return Result.Failure(new NotFoundError("Secret does not exist."));
+
+                liveSecrets.RemoveAll(value => value.Id == command.SecretId);
+                return Result.Success();
+            });
+        connector
+            .Setup(value => value.CreateConfigAsync(It.IsAny<CreateSwarmConfigCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CreateSwarmConfigCommand command, CancellationToken _) =>
+            {
+                var created = new SwarmConfigResult(
+                    $"config-{command.Name}", 1, command.Name, null, command.Labels, null, null);
+                liveConfigs.Add(created);
+                return Result.Success();
+            });
+        connector
+            .Setup(value => value.UpdateConfigLabelsAsync(It.IsAny<UpdateSwarmConfigLabelsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UpdateSwarmConfigLabelsCommand command, CancellationToken _) =>
+            {
+                var index = liveConfigs.FindIndex(value => value.Id == command.ConfigId);
+                var current = liveConfigs[index];
+                var updated = current with { VersionIndex = current.VersionIndex + 1, Labels = command.Labels };
+                liveConfigs[index] = updated;
+                return Result.Success();
+            });
+        connector
+            .Setup(value => value.DeleteConfigAsync(It.IsAny<DeleteSwarmConfigCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DeleteSwarmConfigCommand command, CancellationToken _) =>
+            {
+                liveConfigs.RemoveAll(value => value.Id == command.ConfigId);
+                return Result.Success();
+            });
         connector
             .Setup(value => value.InspectNodeAsync(
                 It.IsAny<InspectSwarmNodeCommand>(),
@@ -104,6 +217,8 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                     ContainerId: $"container-{command.TaskId}")));
         services.ReplaceService<IConnectorFactory<ISwarmConnector>>(
             new FakeConnectorFactory(connector.Object));
+        services.RemoveService<IDbWorkQueue>();
+        services.AddSingleton<IDbWorkQueue, InlineDbWorkQueue>();
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -323,6 +438,162 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.False(document.RootElement.TryGetProperty("value", out _));
     }
 
+    [Theory]
+    [InlineData("secrets", "primary-secret", true)]
+    [InlineData("secrets", "primary-unused-secret", false)]
+    [InlineData("configs", "primary-config", true)]
+    [InlineData("configs", "primary-unused-config", false)]
+    public async Task SecretAndConfigEndpoints_ShouldExposePersistedUsageState(
+        string resource,
+        string resourceId,
+        bool expectedInUse)
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}/{resourceId}",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        Assert.Equal(expectedInUse, document.RootElement.GetProperty("inUse").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SecretLifecycle_ShouldPersistProjectionWithoutReturningSecretData()
+    {
+        var create = await Client.PostAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets",
+            JsonContent("""{"name":"new-secret","data":"highly-sensitive","labels":{"team":"ops"}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, create.StatusCode);
+
+        var detail = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets/secret-new-secret",
+            TestContext.Current.CancellationToken);
+        detail.EnsureSuccessStatusCode();
+        using (var document = await ReadJsonAsync(detail))
+        {
+            Assert.False(document.RootElement.GetProperty("inUse").GetBoolean());
+            Assert.Equal("ops", document.RootElement.GetProperty("labels").GetProperty("team").GetString());
+            Assert.False(document.RootElement.TryGetProperty("data", out _));
+            Assert.False(document.RootElement.TryGetProperty("value", out _));
+        }
+        connector.Verify(value => value.CreateSecretAsync(
+            It.Is<CreateSwarmSecretCommand>(command =>
+                command.Name == "new-secret" && Encoding.UTF8.GetString(command.Data) == "highly-sensitive"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        var update = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets/secret-new-secret/labels",
+            JsonContent("""{"versionIndex":1,"labels":{"team":"platform"}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
+
+        var updatedDetail = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets/secret-new-secret",
+            TestContext.Current.CancellationToken);
+        updatedDetail.EnsureSuccessStatusCode();
+        using (var document = await ReadJsonAsync(updatedDetail))
+        {
+            Assert.Equal("platform", document.RootElement.GetProperty("labels").GetProperty("team").GetString());
+            Assert.Equal(2, document.RootElement.GetProperty("versionIndex").GetInt64());
+        }
+
+        var delete = await SendDeleteAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets",
+            """{"ids":["secret-new-secret"]}""");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var afterDelete = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets/secret-new-secret",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, afterDelete.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConfigLifecycle_ShouldPersistCreateLabelUpdateAndDelete()
+    {
+        var create = await Client.PostAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs",
+            JsonContent("""{"name":"new-config","data":"setting=true","labels":{}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, create.StatusCode);
+
+        var update = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/config-new-config/labels",
+            JsonContent("""{"versionIndex":1,"labels":{"environment":"test"}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
+
+        var detail = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/config-new-config",
+            TestContext.Current.CancellationToken);
+        detail.EnsureSuccessStatusCode();
+        using (var document = await ReadJsonAsync(detail))
+        {
+            Assert.False(document.RootElement.GetProperty("inUse").GetBoolean());
+            Assert.Equal("test", document.RootElement.GetProperty("labels").GetProperty("environment").GetString());
+        }
+
+        var delete = await SendDeleteAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs",
+            """{"ids":["config-new-config"]}""");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+        connector.Verify(value => value.DeleteConfigAsync(
+            It.Is<DeleteSwarmConfigCommand>(command => command.ConfigId == "config-new-config"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("secrets", "primary-secret")]
+    [InlineData("configs", "primary-config")]
+    public async Task DeleteReferencedResource_ShouldReturnConflictWithoutCallingDocker(string resource, string resourceId)
+    {
+        var response = await SendDeleteAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}",
+            $$"""{"ids":["{{resourceId}}"]}""");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        connector.Verify(value => value.DeleteSecretAsync(
+            It.IsAny<DeleteSwarmSecretCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(value => value.DeleteConfigAsync(
+            It.IsAny<DeleteSwarmConfigCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteSecret_ShouldSucceedWhenDockerReportsItWasAlreadyRemoved()
+    {
+        liveSecrets.RemoveAll(value => value.Id == "primary-unused-secret");
+        secretDeleteReportsNotFound = true;
+
+        var response = await SendDeleteAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets",
+            """{"ids":["primary-unused-secret"]}""");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var detail = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/secrets/primary-unused-secret",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, detail.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("secrets", "{\"name\":\"denied\",\"data\":\"value\"}")]
+    [InlineData("configs", "{\"name\":\"denied\",\"data\":\"value\"}")]
+    public async Task MutationEndpoints_ShouldRequireWriteAccess(string resource, string payload)
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var response = await Client.PostAsync(
+            $"/api/v1/platforms/{platformId}/swarm/{resource}",
+            JsonContent(payload),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Fact]
     public async Task OverviewEndpoint_ShouldReturnPersistedClusterSummary()
     {
@@ -535,6 +806,71 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     }
 
     [Fact]
+    public async Task ConfigDataEndpoint_ShouldRequireInspectPermissionAndReturnLiveUtf8Content()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/primary-config/content",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        connector.Verify(
+            value => value.GetConfigDataAsync(It.IsAny<InspectSwarmConfigCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        var inspector = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(inspector.UserId, inspector.ActorId));
+
+        var allowed = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/primary-config/content",
+            TestContext.Current.CancellationToken);
+        allowed.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(allowed);
+        Assert.Equal("setting=true\n", document.RootElement.GetProperty("content").GetString());
+        connector.Verify(
+            value => value.GetConfigDataAsync(
+                It.Is<InspectSwarmConfigCommand>(command =>
+                    command.ConfigId == "primary-config"
+                    && command.PlatformAddress == "https://swarm-endpoints.test"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var unknown = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/not-in-inventory/content",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        connector.Verify(
+            value => value.GetConfigDataAsync(
+                It.Is<InspectSwarmConfigCommand>(command => command.ConfigId == "not-in-inventory"),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        connector
+            .Setup(value => value.GetConfigDataAsync(
+                It.Is<InspectSwarmConfigCommand>(command => command.ConfigId == "primary-config"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<byte[]>([0xC3, 0x28]));
+        var binary = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/configs/primary-config/content",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, binary.StatusCode);
+    }
+
+    [Fact]
     public async Task NodeInspectEndpoint_ShouldRequireInspectPermissionAndReturnLiveNodeData()
     {
         var reader = await CreateAuthorizationSubjectAsync(
@@ -611,6 +947,48 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     }
 
     [Fact]
+    public async Task TaskTerminalEndpoint_ShouldRequireTerminalPermissionAndResolveTheLocalContainer()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/terminal",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        var terminalUser = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Terminal)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(terminalUser.UserId, terminalUser.ActorId));
+
+        var allowed = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-1/terminal",
+            TestContext.Current.CancellationToken);
+        allowed.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(allowed);
+        Assert.Equal(
+            "container-primary-task-1",
+            document.RootElement.GetProperty("dockerContainerId").GetString());
+
+        var remote = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-2/terminal",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, remote.StatusCode);
+    }
+
+    [Fact]
     public async Task TaskStatsEndpoint_ShouldRejectUnsupportedHistoryWindow()
     {
         var response = await Client.GetAsync(
@@ -624,6 +1002,17 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
             cancellationToken: TestContext.Current.CancellationToken);
+
+    private static StringContent JsonContent(string json) => new(json, Encoding.UTF8, "application/json");
+
+    private async Task<HttpResponseMessage> SendDeleteAsync(string requestUri, string json)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, requestUri)
+        {
+            Content = JsonContent(json)
+        };
+        return await Client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
 
     private static void AssertReadInspectAndLogsCapabilities(JsonElement capabilities)
     {
@@ -673,8 +1062,14 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             selectedPlatformId, $"{prefix}-config", 4, $"{prefix}-config-name", "golang",
             [service.Name], new Dictionary<string, string> { ["config"] = prefix },
             observedAt, observedAt, observedAt, false);
+        var unusedSecret = new SwarmSecretProjection(
+            selectedPlatformId, $"{prefix}-unused-secret", 1, $"{prefix}-unused-secret", null,
+            [], new Dictionary<string, string>(), observedAt, observedAt, observedAt, false);
+        var unusedConfig = new SwarmConfigProjection(
+            selectedPlatformId, $"{prefix}-unused-config", 1, $"{prefix}-unused-config", null,
+            [], new Dictionary<string, string>(), observedAt, observedAt, observedAt, false);
 
-        return new SwarmProjectionSnapshot([node], [service], tasks, [network], [secret], [config]);
+        return new SwarmProjectionSnapshot([node], [service], tasks, [network], [secret, unusedSecret], [config, unusedConfig]);
     }
 
     private static Platform CreateSwarmPlatform(string name, string clusterId) => new(
@@ -726,5 +1121,21 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     private sealed class FakeConnectorFactory(ISwarmConnector value) : IConnectorFactory<ISwarmConnector>
     {
         public ISwarmConnector GetConnector(PlatformConnectorType type) => value;
+    }
+
+    private sealed class InlineDbWorkQueue(IServiceScopeFactory scopeFactory) : IDbWorkQueue
+    {
+        private readonly Channel<IDbWorkItem> channel = Channel.CreateUnbounded<IDbWorkItem>();
+
+        public ChannelReader<IDbWorkItem> Reader => channel.Reader;
+
+        public ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken) =>
+            EnqueueAndWaitAsync(item, cancellationToken);
+
+        public async ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            await item.ExecuteAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>(), cancellationToken);
+        }
     }
 }

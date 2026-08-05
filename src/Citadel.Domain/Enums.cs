@@ -368,7 +368,14 @@ public enum EdgeAgentCommandKind
     SwarmConfigList = 100,
     SwarmConfigInspect = 101,
     SwarmServiceLogs = 102,
-    SwarmTaskLogs = 103
+    SwarmTaskLogs = 103,
+    SwarmSecretCreate = 104,
+    SwarmSecretUpdate = 105,
+    SwarmSecretDelete = 106,
+    SwarmConfigCreate = 107,
+    SwarmConfigUpdate = 108,
+    SwarmConfigDelete = 109,
+    SwarmConfigData = 110
 }
 
 public enum SwarmServiceOwnership

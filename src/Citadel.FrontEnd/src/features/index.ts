@@ -55,6 +55,18 @@ import { SecretComponents } from './swarm-resources/secrets';
 import { SecretInfoComponents } from './swarm-resources/secrets/secret-info';
 import { ConfigComponents } from './swarm-resources/configs';
 import { ConfigInfoComponents } from './swarm-resources/configs/config-info';
+import { SecretFormComponents } from './swarm-resources/secrets/form';
+import { ConfigFormComponents } from './swarm-resources/configs/form';
+
+export const SwarmResourceComponents: {
+  [key in SwarmResourceType]: RegularResourceComponents;
+} = {
+  Node: NodeComponents,
+  Service: ServiceComponents,
+  Task: TaskComponents,
+  Secret: SecretComponents,
+  Config: ConfigComponents,
+};
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -63,6 +75,7 @@ export const ResourceComponents: {
   Volume: VolumeComponents,
   Network: NetworkComponents,
   Container: ContainerComponents,
+  ...SwarmResourceComponents,
 
   Platform: PlatformComponents,
   Registry: RegistryComponents,
@@ -94,6 +107,11 @@ export const ResourceFormComponents: {
   Network: NetworkFormComponents,
   Container: undefined,
   Image: undefined,
+  Node: undefined,
+  Service: undefined,
+  Task: undefined,
+  Secret: SecretFormComponents,
+  Config: ConfigFormComponents,
   Platform: PlatformFormComponents,
 
   Registry: RegistryFormComponents,
@@ -127,16 +145,6 @@ export const DockerResourceInfoComponents: {
   Volume: VolumeInfoComponents,
   Network: NetworkInfoComponents,
   Container: ContainerInfoComponents,
-};
-
-export const SwarmResourceComponents: {
-  [key in SwarmResourceType]: RegularResourceComponents;
-} = {
-  Node: NodeComponents,
-  Service: ServiceComponents,
-  Task: TaskComponents,
-  Secret: SecretComponents,
-  Config: ConfigComponents,
 };
 
 export const SwarmResourceInfoComponents: {

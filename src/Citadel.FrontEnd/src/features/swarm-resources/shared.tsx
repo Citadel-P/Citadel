@@ -7,11 +7,10 @@ import {
   SwarmServiceView,
 } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { LogViewer, Section } from '@/components/custom/common';
+import { LogViewer } from '@/components/custom/common';
 import { Badge } from '@/components/ui/badge';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
-import { Boxes } from 'lucide-react';
 import { ReactNode, useContext } from 'react';
 
 export const NoResourceActions = () => null;
@@ -41,38 +40,6 @@ export const Detail = ({ label, value, title }: { label: string; value: ReactNod
       {value}
     </div>
   </div>
-);
-
-export const Labels = ({ labels }: { labels?: Record<string, string> }) => {
-  const entries = Object.entries(labels ?? {});
-  return (
-    <section className="rounded-md border border-border p-4">
-      <h2 className="mb-3 text-sm font-semibold">Labels</h2>
-      <div className="flex flex-wrap gap-2">
-        {entries.length ? (
-          entries.map(([key, value]) => <Badge key={key} variant="secondary">{`${key}=${value}`}</Badge>)
-        ) : (
-          <span className="text-sm text-muted-foreground">No labels.</span>
-        )}
-      </div>
-    </section>
-  );
-};
-
-export const ServiceReferences = ({ names }: { names: string[] }) => (
-  <Section title="Used by services" Icon={Boxes}>
-    <div className="flex flex-wrap gap-2">
-      {names.length ? (
-        names.map((name) => (
-          <Badge key={name} variant="secondary">
-            {name}
-          </Badge>
-        ))
-      ) : (
-        <span className="text-sm text-muted-foreground">Not referenced by a service.</span>
-      )}
-    </div>
-  </Section>
 );
 
 export const SwarmLogs = ({

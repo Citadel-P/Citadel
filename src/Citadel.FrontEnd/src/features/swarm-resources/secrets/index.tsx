@@ -1,20 +1,24 @@
 import { RegularResourceComponents } from '@/pages/types';
+import { ActionBar } from '@/components/custom/action-bar';
 import { KeyRound } from 'lucide-react';
 import { useSecretsGroup } from './hooks/useSecretsGroup';
 import { SecretsTable } from './table';
+import { SecretDropdownActions, SecretGroupActions } from './actions';
 
 export const SecretComponents: RegularResourceComponents = {
   Icon: KeyRound,
   header: {
     title: 'Secrets',
     subtitle: 'Secret metadata only. Citadel never reads or returns secret data.',
-    showAdd: false,
+    showAdd: true,
     showSearch: true,
   },
-  Content: ({ items, isLoading }) => <SecretsTable items={items} isLoading={isLoading} />,
+  Content: ({ items, actions, isLoading }) => <SecretsTable items={items} actions={actions} isLoading={isLoading} />,
+  DropdownActions: SecretDropdownActions,
+  GroupActions: ({ items }) => <ActionBar type="Secret" items={items} actions={Object.values(SecretGroupActions)} />,
   useData: (platformId) => {
-    const { items, isLoading } = useSecretsGroup(platformId);
-    return { items, isLoading, capabilities: undefined };
+    const { items, capabilities, isLoading } = useSecretsGroup(platformId);
+    return { items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

@@ -48,8 +48,30 @@ internal sealed class LocalSwarmConnector(ISwarmService swarmService) : ISwarmCo
         => ServiceResultHandlers.HandleResult(await swarmService.ListSecretsAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmSecretResult>> InspectSecretAsync(InspectSwarmSecretCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.InspectSecretAsync(command.SecretId, cancellationToken), SwarmMappers.Map);
+    public Task<Result> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default)
+        => swarmService.CreateSecretAsync(
+            new Hosting.DockerClient.Models.Swarm.CreateSwarmSecretCommand(command.Name, command.Data, command.Labels),
+            cancellationToken);
+    public Task<Result> UpdateSecretLabelsAsync(UpdateSwarmSecretLabelsCommand command, CancellationToken cancellationToken = default)
+        => swarmService.UpdateSecretLabelsAsync(
+            new Hosting.DockerClient.Models.Swarm.UpdateSwarmSecretLabelsCommand(command.SecretId, command.VersionIndex, command.Labels),
+            cancellationToken);
+    public Task<Result> DeleteSecretAsync(DeleteSwarmSecretCommand command, CancellationToken cancellationToken = default)
+        => swarmService.DeleteSecretAsync(command.SecretId, cancellationToken);
     public async Task<Result<IReadOnlyList<SwarmConfigResult>>> ListConfigsAsync(ListSwarmConfigsCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.ListConfigsAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmConfigResult>> InspectConfigAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.InspectConfigAsync(command.ConfigId, cancellationToken), SwarmMappers.Map);
+    public Task<Result<byte[]>> GetConfigDataAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default)
+        => swarmService.GetConfigDataAsync(command.ConfigId, cancellationToken);
+    public Task<Result> CreateConfigAsync(CreateSwarmConfigCommand command, CancellationToken cancellationToken = default)
+        => swarmService.CreateConfigAsync(
+            new Hosting.DockerClient.Models.Swarm.CreateSwarmConfigCommand(command.Name, command.Data, command.Labels),
+            cancellationToken);
+    public Task<Result> UpdateConfigLabelsAsync(UpdateSwarmConfigLabelsCommand command, CancellationToken cancellationToken = default)
+        => swarmService.UpdateConfigLabelsAsync(
+            new Hosting.DockerClient.Models.Swarm.UpdateSwarmConfigLabelsCommand(command.ConfigId, command.VersionIndex, command.Labels),
+            cancellationToken);
+    public Task<Result> DeleteConfigAsync(DeleteSwarmConfigCommand command, CancellationToken cancellationToken = default)
+        => swarmService.DeleteConfigAsync(command.ConfigId, cancellationToken);
 }

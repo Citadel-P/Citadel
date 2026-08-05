@@ -1,21 +1,31 @@
+import { PlatformCapabilities, SwarmSecretView } from '@/api/generated/api.types';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { useLiveSwarmItems, useLiveSwarmResource } from '../../hooks/useSwarmResourceGroup';
 
 const selectSecrets = (inventory: SwarmInventoryUpdate) => inventory.secrets.items;
+
+export type SwarmSecretInfoView = SwarmSecretView & {
+  platformId: string;
+  description: null;
+  status: boolean;
+  capabilities?: PlatformCapabilities;
+};
 
 export const useSecretsGroup = (platformId: string) => {
   const args = useMemo(() => ({ platformId }), [platformId]);
   const query = useRead('listSwarmSecrets', args);
   const items = useLiveSwarmItems(platformId, 'listSwarmSecrets', args, query, selectSecrets);
-  return { items, isLoading: query.isLoading };
+  return { items, capabilities: query.data?.data.capabilities, isLoading: query.isLoading };
 };
 
 export const useSecretInfoGroup = (platformId: string, resourceId: string) => {
+  const currentPlatform = useContext(AppContext)?.currentPlatform;
   const args = useMemo(() => ({ platformId, resourceId }), [platformId, resourceId]);
   const query = useRead('getSwarmSecret', args);
-  const resource = useLiveSwarmResource(
+  const secret = useLiveSwarmResource(
     platformId,
     resourceId,
     'getSwarmSecret',
@@ -23,6 +33,21 @@ export const useSecretInfoGroup = (platformId: string, resourceId: string) => {
     `/platforms/${platformId}/secrets`,
     query,
     selectSecrets,
+  );
+  const resource = useMemo<SwarmSecretInfoView | undefined>(
+    () =>
+      secret
+        ? {
+            ...secret,
+            platformId,
+            description: null,
+            status: secret.inUse,
+            capabilities:
+              secret.capabilities ??
+              (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+          }
+        : undefined,
+    [currentPlatform, platformId, secret],
   );
   return { resource, isLoading: query.isLoading, error: query.error };
 };

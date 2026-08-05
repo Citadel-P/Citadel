@@ -43,10 +43,31 @@ public interface ISwarmConnector
     Task<Result<SwarmSecretResult>> InspectSecretAsync(
         InspectSwarmSecretCommand command,
         CancellationToken cancellationToken = default);
+    Task<Result> CreateSecretAsync(
+        CreateSwarmSecretCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> UpdateSecretLabelsAsync(
+        UpdateSwarmSecretLabelsCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> DeleteSecretAsync(
+        DeleteSwarmSecretCommand command,
+        CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SwarmConfigResult>>> ListConfigsAsync(
         ListSwarmConfigsCommand command,
         CancellationToken cancellationToken = default);
     Task<Result<SwarmConfigResult>> InspectConfigAsync(
         InspectSwarmConfigCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result<byte[]>> GetConfigDataAsync(
+        InspectSwarmConfigCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> CreateConfigAsync(
+        CreateSwarmConfigCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> UpdateConfigLabelsAsync(
+        UpdateSwarmConfigLabelsCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> DeleteConfigAsync(
+        DeleteSwarmConfigCommand command,
         CancellationToken cancellationToken = default);
 }

@@ -33,6 +33,17 @@ import {
   usePlatformForm,
 } from './hooks/usePlatformForm';
 
+const platformTypeInfo = {
+  [PlatformType.Docker]: {
+    label: 'Docker Standalone',
+    description: 'Manage one Docker Engine and its local resources.',
+  },
+  [PlatformType.DockerSwarm]: {
+    label: 'Docker Swarm',
+    description: 'Manage an existing Docker Swarm through a manager node.',
+  },
+} as const;
+
 const connectorInfo = {
   [PlatformConnectorType.Local]: {
     label: 'Local',
@@ -168,18 +179,11 @@ export const PlatformForm = ({
                     ? 'Platform type is fixed after creation.'
                     : 'Choose Docker Standalone for one daemon or Docker Swarm for an existing manager node.',
                 render: (value, set) => (
-                  <Select
+                  <PlatformTypeSelector
                     value={value ?? PlatformType.Docker}
-                    onValueChange={(type) => set({ type: type as PlatformType })}
-                    disabled={formDisabled || isEdit}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={PlatformType.Docker}>Docker Standalone</SelectItem>
-                      <SelectItem value={PlatformType.DockerSwarm}>Docker Swarm</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onChange={(type) => set({ type })}
+                    disabled={formDisabled || isEdit}
+                  />
                 ),
               }),
             ],
@@ -233,9 +237,7 @@ export const PlatformForm = ({
                           value={value ?? ''}
                           onChange={(address) => set({ address })}
                           placeholder={
-                            agentSetup?.requiresTls
-                              ? 'https://192.168.1.25:9000'
-                              : 'http://192.168.1.25:9000'
+                            agentSetup?.requiresTls ? 'https://192.168.1.25:9000' : 'http://192.168.1.25:9000'
                           }
                           disabled={formDisabled}
                         />
@@ -559,6 +561,37 @@ const getEnrollmentActionLabel = (hasVisibleEnrollment: boolean, isEnrolled: boo
 const formatDate = (value: unknown) => {
   if (!value) return '-';
   return new Date(value as string).toLocaleString();
+};
+
+const PlatformTypeSelector = ({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PlatformType;
+  onChange: (value: PlatformType) => void;
+  disabled?: boolean;
+}) => {
+  const selected = platformTypeInfo[value as keyof typeof platformTypeInfo] ?? platformTypeInfo[PlatformType.Docker];
+
+  return (
+    <Select value={value} onValueChange={(next) => onChange(next as PlatformType)} disabled={disabled}>
+      <SelectTrigger className="w-full max-w-100">
+        <SelectValue>{selected.label}</SelectValue>
+      </SelectTrigger>
+
+      <SelectContent className="bg-background">
+        {Object.entries(platformTypeInfo).map(([key, info]) => (
+          <SelectItem key={key} value={key}>
+            <div className="flex flex-col">
+              <span className="font-medium">{info.label}</span>
+              <span className="text-xs text-muted-foreground">{info.description}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 };
 
 const ConnectorTypeSelector = ({

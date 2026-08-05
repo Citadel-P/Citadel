@@ -2,6 +2,7 @@ using Citadel.Swarm.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Swarm;
 using Grpc.Core;
+using Google.Protobuf;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
@@ -88,10 +89,48 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListSecretsAsync(new ListSwarmSecretsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secrets", cancellationToken);
     public Task<Result<SwarmSecretResult>> InspectSecretAsync(InspectSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectSecretAsync(new InspectSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secret", cancellationToken);
+    public Task<Result> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateSecretAsync(new CreateSwarmSecretRequest
+        {
+            Name = command.Name,
+            Data = Google.Protobuf.ByteString.CopyFrom(command.Data),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken: cancellationToken).ResponseAsync, "secret", cancellationToken);
+    public Task<Result> UpdateSecretLabelsAsync(UpdateSwarmSecretLabelsCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateSecretLabelsAsync(new UpdateSwarmResourceLabelsRequest
+        {
+            ResourceId = command.SecretId,
+            VersionIndex = checked((ulong)command.VersionIndex),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken: cancellationToken).ResponseAsync, "secret", cancellationToken);
+    public Task<Result> DeleteSecretAsync(DeleteSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteSecretAsync(
+            new DeleteSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken: cancellationToken).ResponseAsync,
+            "secret", cancellationToken);
     public Task<Result<IReadOnlyList<SwarmConfigResult>>> ListConfigsAsync(ListSwarmConfigsCommand command, CancellationToken cancellationToken = default) =>
         ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListConfigsAsync(new ListSwarmConfigsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "configs", cancellationToken);
     public Task<Result<SwarmConfigResult>> InspectConfigAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectConfigAsync(new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "config", cancellationToken);
+    public Task<Result<byte[]>> GetConfigDataAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).GetConfigDataAsync(new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Data.ToByteArray(), "config data", cancellationToken);
+    public Task<Result> CreateConfigAsync(CreateSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateConfigAsync(new CreateSwarmConfigRequest
+        {
+            Name = command.Name,
+            Data = Google.Protobuf.ByteString.CopyFrom(command.Data),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken: cancellationToken).ResponseAsync, "config", cancellationToken);
+    public Task<Result> UpdateConfigLabelsAsync(UpdateSwarmConfigLabelsCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateConfigLabelsAsync(new UpdateSwarmResourceLabelsRequest
+        {
+            ResourceId = command.ConfigId,
+            VersionIndex = checked((ulong)command.VersionIndex),
+            Labels = { command.Labels.ToDictionary() }
+        }, cancellationToken: cancellationToken).ResponseAsync, "config", cancellationToken);
+    public Task<Result> DeleteConfigAsync(DeleteSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteConfigAsync(
+            new DeleteSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync,
+            "config", cancellationToken);
 
     private static async Task<Result<IReadOnlyList<T>>> ExecuteListAsync<TResponse, T>(Func<Task<TResponse>> call, Func<TResponse, IReadOnlyList<T>> map, string resource, CancellationToken cancellationToken)
     {
@@ -107,5 +146,26 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (RpcException exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException($"The Swarm {resource} request was cancelled.", exception, cancellationToken); }
         catch (RpcException exception) { return Result.Failure<T>(new ClientRpcException($"An error occurred while inspecting the Swarm {resource}, {exception.Message}", exception.StatusCode)); }
+    }
+
+    private static async Task<Result> ExecuteMutationAsync<TResponse>(
+        Func<Task<TResponse>> call,
+        string resource,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await call();
+            return Result.Success();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (RpcException exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException($"The Swarm {resource} request was cancelled.", exception, cancellationToken);
+        }
+        catch (RpcException exception)
+        {
+            return Result.Failure(new ClientRpcException($"An error occurred while mutating the Swarm {resource}, {exception.Message}", exception.StatusCode));
+        }
     }
 }

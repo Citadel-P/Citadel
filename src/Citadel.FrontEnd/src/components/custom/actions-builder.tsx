@@ -7,7 +7,7 @@ import { useMutate } from '@/lib/hooks';
 import { capitalize } from '@/lib/utils';
 import { CapabilityKey, hasCapabilities } from '@/lib/resource-capabilities';
 import type { DropdownActionComponent, ButtonGroupComponent, ButtonActionComponent } from '@/pages/types';
-import type { KnownResourceName, PrimaryArg, ResourceType } from '@/api/types';
+import type { KnownResourceName, PrimaryArg, ResourceType, UseMutateVariables } from '@/api/types';
 
 export type ActionKind = 'command' | 'toggle';
 export type BaseResource = { name: string };
@@ -24,8 +24,8 @@ export interface CommandAction<R, K extends KnownResourceName> {
   destructive?: boolean;
   invalidate?: K;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
-  useVariables?: (resources: R[] | R) => K extends KnownResourceName ? PrimaryArg<K> : any;
-  argName?: 'params' | 'data';
+  useVariables?: (resources: R[] | R) => K extends KnownResourceName ? PrimaryArg<K> | UseMutateVariables<K> : any;
+  argName?: 'params' | 'data' | 'variables';
   resourceType?: ResourceType;
   separatorBefore?: boolean;
   requiredCapabilities?: CapabilityKey[];
@@ -54,7 +54,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
   confirm?: boolean;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   canExecute?: (r: R) => boolean;
-  useVariables?: (resources: R | R[]) => K extends KnownResourceName ? PrimaryArg<K> : any;
+  useVariables?: (resources: R | R[]) => K extends KnownResourceName ? PrimaryArg<K> | UseMutateVariables<K> : any;
   useHandler?: (ctx: { resources: R | R[] }) => {
     run: () => void | Promise<void>;
     canExecute?: boolean;
@@ -62,7 +62,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
   };
   onSuccess?: (ctx: { resources: R | R[] }) => (() => void) | void;
   invalidate?: K;
-  argName?: 'params' | 'data';
+  argName?: 'params' | 'data' | 'variables';
   destructive?: boolean;
   resourceType?: ResourceType;
   requiredCapabilities?: CapabilityKey[];
@@ -310,7 +310,7 @@ function useUnifiedExecutor<R>(
     useHandler?: any;
     mutateKey?: KnownResourceName;
     invalidate?: any;
-    argName?: any;
+    argName?: 'params' | 'data' | 'variables';
     canExecute?: any;
     useVariables?: any;
     useSuccessHandler?: any;
@@ -357,7 +357,7 @@ function useMutationLogic<R, K extends KnownResourceName>(
   showToast: boolean,
   capabilitiesAllow: boolean,
   invalidate?: string,
-  argName: 'params' | 'data' = 'data',
+  argName: 'params' | 'data' | 'variables' = 'data',
 ) {
   const { mutateAsync, isPending } = useMutate(act.mutateKey || ('none' as any));
   const client = useQueryClient();
@@ -375,7 +375,7 @@ function useMutationLogic<R, K extends KnownResourceName>(
   const run = async () => {
     if (!act.mutateKey) return;
     try {
-      await mutateAsync({ [argName]: vars });
+      await mutateAsync(argName === 'variables' ? vars : { [argName]: vars });
       if (invalidate) client.invalidateQueries({ queryKey: [invalidate] });
       if (showToast) {
         const name = Array.isArray(resources) ? `${resources.length} items` : (resources as any).name;

@@ -8,6 +8,7 @@ import { useMutate, useResourceParamType } from '@/lib/hooks';
 import { capitalize } from '@/lib/utils';
 
 import { FieldInput } from '@/components/custom/form-builder';
+import { PageContainer } from '@/components/custom/common';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -151,11 +152,7 @@ const EditFormContent = ({
 };
 
 const PageShell = ({ mode, children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
-  <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
-    <div className={`w-full rounded-lg border bg-background p-4 flex flex-col ${mode === 'add' ? 'gap-6' : 'gap-0.5'}`}>
-      {children}
-    </div>
-  </div>
+  <PageContainer className={`flex flex-col border ${mode === 'add' ? 'gap-6' : 'gap-0.5'}`}>{children}</PageContainer>
 );
 
 const AddHeader = ({ type, title }: { type: string; title?: string }) => (

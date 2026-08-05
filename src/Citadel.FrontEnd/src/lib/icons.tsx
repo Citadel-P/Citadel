@@ -23,6 +23,9 @@ import {
   Webhook,
   Workflow,
   ServerPlus,
+  Boxes,
+  FileCode2,
+  ListChecks,
 } from 'lucide-react';
 
 export const DockerIcon = createLucideIcon('DockerIcon', [
@@ -49,6 +52,11 @@ export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ c
   ['Image']: DockerIcon,
   ['Network']: DockerIcon,
   ['Volume']: DockerIcon,
+  ['Node']: Server,
+  ['Service']: Boxes,
+  ['Task']: ListChecks,
+  ['Secret']: KeyRound,
+  ['Config']: FileCode2,
   ['Alert']: TriangleAlert,
   ['AlertRule']: Megaphone,
   ['AlertChannel']: Rss,

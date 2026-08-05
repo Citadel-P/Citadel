@@ -1,21 +1,31 @@
-import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import type { PlatformCapabilities, SwarmConfigView } from '@/api/generated/api.types';
+import type { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { useLiveSwarmItems, useLiveSwarmResource } from '../../hooks/useSwarmResourceGroup';
 
 const selectConfigs = (inventory: SwarmInventoryUpdate) => inventory.configs.items;
+
+export type SwarmConfigInfoView = SwarmConfigView & {
+  platformId: string;
+  description: null;
+  status: boolean;
+  capabilities?: PlatformCapabilities;
+};
 
 export const useConfigsGroup = (platformId: string) => {
   const args = useMemo(() => ({ platformId }), [platformId]);
   const query = useRead('listSwarmConfigs', args);
   const items = useLiveSwarmItems(platformId, 'listSwarmConfigs', args, query, selectConfigs);
-  return { items, isLoading: query.isLoading };
+  return { items, capabilities: query.data?.data.capabilities, isLoading: query.isLoading };
 };
 
 export const useConfigInfoGroup = (platformId: string, resourceId: string) => {
+  const currentPlatform = useContext(AppContext)?.currentPlatform;
   const args = useMemo(() => ({ platformId, resourceId }), [platformId, resourceId]);
   const query = useRead('getSwarmConfig', args);
-  const resource = useLiveSwarmResource(
+  const config = useLiveSwarmResource(
     platformId,
     resourceId,
     'getSwarmConfig',
@@ -23,6 +33,20 @@ export const useConfigInfoGroup = (platformId: string, resourceId: string) => {
     `/platforms/${platformId}/configs`,
     query,
     selectConfigs,
+  );
+  const resource = useMemo<SwarmConfigInfoView | undefined>(
+    () =>
+      config
+        ? {
+            ...config,
+            platformId,
+            description: null,
+            status: config.inUse,
+            capabilities:
+              config.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+          }
+        : undefined,
+    [config, currentPlatform, platformId],
   );
   return { resource, isLoading: query.isLoading, error: query.error };
 };
