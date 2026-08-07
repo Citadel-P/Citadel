@@ -58,6 +58,14 @@ internal sealed class UpdateSwarmServiceHandler(
             if (entitlement.IsFailure(out var entitlementError))
                 return Result.Failure<SwarmService>(entitlementError);
         }
+        if (SwarmServiceLicenseConfigurationPolicy.ExpandsAutomatedOperations(service.Spec, command.Spec))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<SwarmService>(entitlementError);
+        }
         var oldSnapshot = service.ToActivitySnapshot();
         if (!service.UpdateSpec(command.Spec))
             return Result.Failure<SwarmService>(new ConflictError("Scheduling mode cannot be changed after the Service has been applied."));

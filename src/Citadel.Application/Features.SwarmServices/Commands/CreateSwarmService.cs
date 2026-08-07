@@ -56,6 +56,14 @@ internal sealed class CreateSwarmServiceHandler(
             if (entitlement.IsFailure(out var entitlementError))
                 return Result.Failure<SwarmService>(entitlementError);
         }
+        if (SwarmServiceLicenseConfigurationPolicy.ExpandsAutomatedOperations(null, command.Spec))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<SwarmService>(entitlementError);
+        }
 
         var validation = await SwarmServiceValidation.ValidateAsync(
             command.Spec, command.PlatformId, unitOfWork, userContext, cancellationToken);

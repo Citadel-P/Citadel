@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities.Platforms;
 using Domain.Entities.SwarmServices;
 using Hosting.Common.Abstraction;
@@ -87,6 +88,26 @@ internal static class SwarmServiceValidation
             && imageTag.Contains('@', StringComparison.Ordinal))
             return Result.Failure<Platform>(new BadRequestError(
                 "Image update checks are not available for a digest-pinned image."));
+
+        if (WebhookConfigurationValidation.GetAuthenticationError(spec.Webhook) is { } webhookError)
+            return Result.Failure<Platform>(new BadRequestError(webhookError));
+        if (spec.Webhook?.Secret?.Length > 256)
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service webhook secret cannot exceed 256 characters."));
+        if (spec.Webhook?.BranchFilter?.Length > 256)
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service webhook branch filter cannot exceed 256 characters."));
+        if (spec.Webhook is { Enabled: true } && spec.UpdateBehavior == UpdateBehavior.Disabled)
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service update webhooks require Notify or Auto deploy update behavior."));
+        if (spec.Webhook is { Enabled: true } && spec.Image is not SwarmExternalImage)
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service update webhooks require an external tagged image."));
+        if (spec.Webhook is { Enabled: true }
+            && spec.Image is SwarmExternalImage { ImageTag: var webhookImageTag }
+            && webhookImageTag.Contains('@', StringComparison.Ordinal))
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service update webhooks are not available for a digest-pinned image."));
 
         var invalidPort = spec.Ports.FirstOrDefault(port =>
             port.TargetPort is < 1 or > 65535

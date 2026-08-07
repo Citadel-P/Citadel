@@ -30,6 +30,7 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
     private readonly Mock<IApplyStackService> _applyStackServiceMock = new();
     private readonly Mock<IAlertService> _alertServiceMock = new();
     private Guid _repoId;
+    private Guid _genericRepoId;
     private Guid _stackId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -59,6 +60,21 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
             webhook: new RepoWebhookConfig(Enabled: true));
 
         await uow.GitRepositories.AddAsync(repo, TestContext.Current.CancellationToken);
+
+        var genericRepo = new GitRepository(
+            name: "generic-webhook-repo",
+            description: "Repository with a generic shared-secret webhook",
+            url: "https://github.com/octocat/Hello-World.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: Constants.SystemId,
+            webhook: new RepoWebhookConfig(
+                Enabled: true,
+                Provider: WebhookProvider.Generic,
+                AuthScheme: WebhookAuthScheme.BearerToken,
+                Secret: "generic-integration-secret",
+                BranchFilter: "main"));
+        await uow.GitRepositories.AddAsync(genericRepo, TestContext.Current.CancellationToken);
 
         var platform = Fakes.GetDummyPlatform();
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
@@ -92,6 +108,7 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         _repoId = repo.Id;
+        _genericRepoId = genericRepo.Id;
         _stackId = stack.Id;
     }
 
@@ -165,6 +182,74 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
 
         Assert.IsType<GitRepoWebhookReceived>(rejectedDetails?.Info);
         Assert.IsType<GitRepoWebhookReceived>(queuedDetails?.Info);
+    }
+
+    [Fact]
+    public async Task Listener_GenericRepoPull_RequiresSharedSecretAndQueuesConfiguredResource()
+    {
+        using (var rejected = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/listener/generic/repo/{_genericRepoId}/pull"))
+        {
+            rejected.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            var rejectedResponse = await Client.SendAsync(rejected, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Unauthorized, rejectedResponse.StatusCode);
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/listener/generic/repo/{_genericRepoId}/pull");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            "generic-integration-secret");
+        request.Headers.Add("Idempotency-Key", "generic-delivery-1");
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.True(_gitSyncChannel.Reader.TryRead(out var syncRequest));
+        Assert.Equal(_genericRepoId, syncRequest.RepoId);
+        Assert.Equal("main", syncRequest.Branch);
+        Assert.Equal(GitRepoSyncTrigger.Webhook, syncRequest.Trigger);
+    }
+
+    [Fact]
+    public async Task Listener_WhenBodyExceedsLimit_RejectsWithoutDispatching()
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/listener/generic/repo/{_genericRepoId}/pull");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            "generic-integration-secret");
+        request.Content = new StringContent(
+            new string('x', 1024 * 1024 + 1),
+            Encoding.UTF8,
+            "text/plain");
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(_gitSyncChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task Listener_WhenChunkedBodyExceedsLimit_RejectsWithoutDispatching()
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/listener/generic/repo/{_genericRepoId}/pull");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            "generic-integration-secret");
+        request.Headers.TransferEncodingChunked = true;
+        request.Content = new UnknownLengthContent(Encoding.UTF8.GetBytes(new string('x', 1024 * 1024 + 1)));
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(_gitSyncChannel.Reader.TryRead(out _));
     }
 
     [Fact]
@@ -291,6 +376,18 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
     {
         await Task.CompletedTask;
         yield break;
+    }
+
+    private sealed class UnknownLengthContent(byte[] content) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+            => stream.WriteAsync(content).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     private sealed record WebhookResponse(bool Accepted, string Status, Guid RequestId, string? Reason);

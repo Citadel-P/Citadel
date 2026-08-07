@@ -4,9 +4,12 @@ import {
   SwarmServiceResources,
   SwarmNetworkView,
   SwarmServiceSpec,
+  UpdateBehavior,
+  WebhookAuthScheme,
+  WebhookProvider,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import {
   getServiceNetworkOptions,
@@ -184,12 +187,16 @@ describe('SwarmServiceForm', () => {
     expect(screen.getAllByText('Image').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Networks').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Advanced').length).toBeGreaterThan(0);
-    expect(screen.getByText('Task Resources')).toBeVisible();
-    const resourceProfile = screen.getByRole('combobox', { name: 'Profile' });
+    expect(screen.getAllByText('Resources').length).toBeGreaterThan(0);
+    const resourceProfile = screen.getByRole('combobox', { name: 'Resources' });
     expect(resourceProfile).toHaveTextContent('Automatic');
     expect(screen.queryByRole('spinbutton', { name: 'CPU Reservation' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Health Check').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Rolling Update').length).toBeGreaterThan(0);
+    const form = screen.getByRole('main');
+    const advancedHeading = within(form).getByText('Advanced');
+    const webhookHeading = within(form).getByRole('heading', { name: 'Webhook' });
+    expect(advancedHeading.compareDocumentPosition(webhookHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByTestId('environment-diagnostic')).toHaveTextContent(
       'LOG_LEVELs is not defined in Service or global variables.',
     );
@@ -223,6 +230,49 @@ describe('SwarmServiceForm', () => {
 
     expect(screen.getByRole('combobox', { name: 'Registry' })).toHaveTextContent('Docker Hub');
     expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('redis');
+  });
+
+  it('disables an enabled webhook when image update behavior is disabled', async () => {
+    const resource = {
+      id: 'service-id',
+      name: 'redis-service',
+      platformId,
+      rowVersion: 1,
+      tags: [],
+      spec: {
+        image: {
+          $type: 'External',
+          registryId: 'registry-1',
+          imageTag: 'redis',
+        },
+        updateBehavior: UpdateBehavior.Notify,
+        webhook: {
+          enabled: true,
+          provider: WebhookProvider.Generic,
+          authScheme: WebhookAuthScheme.BearerToken,
+          secret: 'shared-secret',
+        },
+      },
+    } as ManagedSwarmServiceView;
+
+    const { user } = renderCitadel(
+      <Routes>
+        <Route
+          path="/platforms/:platformId/services/edit/:id"
+          element={<SwarmServiceForm mode="edit" resource={resource} />}
+        />
+      </Routes>,
+      { route: `/platforms/${platformId}/services/edit/${resource.id}` },
+    );
+
+    expect(screen.getByText('Generic / CI')).toBeVisible();
+    await user.click(screen.getByRole('combobox', { name: 'Auto Update' }));
+    await user.keyboard('{Home}{Enter}');
+
+    expect(screen.queryByText('Generic / CI')).not.toBeInTheDocument();
+    const webhookSwitch = document.getElementById('swarm-service-update-webhook-enabled');
+    expect(webhookSwitch).not.toBeNull();
+    expect(webhookSwitch).not.toBeChecked();
   });
 
   it('loads a duplicate draft into the add form', async () => {

@@ -722,14 +722,16 @@ public enum WebHookAuthStyle
 public enum WebhookProvider
 {
     GitHub = 1,
-    GitLab = 2
+    GitLab = 2,
+    Generic = 3
 }
 
 public enum WebhookAuthScheme
 {
     GitHubHmacSha256 = 1,
     GitLabSignedToken = 2,
-    GitLabLegacyToken = 3
+    GitLabLegacyToken = 3,
+    BearerToken = 4
 }
 
 public enum WebhookExecution
@@ -738,7 +740,8 @@ public enum WebhookExecution
     StackDeploy = 2,
     AutomationActionRun = 3,
     BackupPolicyRun = 4,
-    BuildRun = 5
+    BuildRun = 5,
+    SwarmServiceUpdate = 6
 }
 
 public enum DeployedContainerState
@@ -936,6 +939,7 @@ public enum ActivityEventType
     SwarmServiceForceUpdated,
     SwarmServiceOperationFailed,
     SwarmServiceDuplicated,
+    SwarmServiceWebhookReceived,
     #endregion
 }
 

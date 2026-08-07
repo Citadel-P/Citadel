@@ -1,4 +1,5 @@
 using Domain.Entities.Stacks;
+using Domain.Contracts.Resources;
 
 namespace Application.Features.Stacks.Commands;
 
@@ -42,6 +43,13 @@ internal static class GitStackSpecValidation
             if (error is not null)
                 return error;
         }
+
+        if (WebhookConfigurationValidation.GetAuthenticationError(spec.Webhook) is { } webhookError)
+            return webhookError;
+        if (spec.Webhook?.Secret?.Length > 256)
+            return "Stack webhook secret cannot exceed 256 characters.";
+        if (spec.Webhook?.BranchFilter?.Length > 256)
+            return "Stack webhook branch filter cannot exceed 256 characters.";
 
         return null;
     }

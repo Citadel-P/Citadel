@@ -238,6 +238,95 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
     }
 
     [Fact]
+    public async Task CreateAndGet_ShouldPersistGenericWebhookConfigurationThroughDapperAot()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var webhook = new
+        {
+            enabled = true,
+            provider = "Generic",
+            authScheme = "BearerToken",
+            secret = "integration-shared-secret",
+            branchFilter = (string?)null,
+        };
+        using var createResponse = await Client.PostAsJsonAsync(
+            "/api/v1/swarmServices",
+            new
+            {
+                name = "managed-webhook-service",
+                platformId,
+                description = (string?)null,
+                spec = CreateSpec(replicas: 1, webhook: webhook),
+                tagIds = Array.Empty<Guid>(),
+            },
+            cancellationToken);
+        createResponse.EnsureSuccessStatusCode();
+        using var created = await JsonDocument.ParseAsync(
+            await createResponse.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        await using var scope = Services.CreateAsyncScope();
+        var persisted = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetAsync(id, cancellationToken);
+
+        Assert.NotNull(persisted);
+        Assert.True(persisted.Spec.Webhook?.Enabled);
+        Assert.Equal(WebhookProvider.Generic, persisted.Spec.Webhook?.Provider);
+        Assert.Equal(WebhookAuthScheme.BearerToken, persisted.Spec.Webhook?.AuthScheme);
+        Assert.Equal("integration-shared-secret", persisted.Spec.Webhook?.Secret);
+    }
+
+    [Fact]
+    public async Task Create_WithEnabledWebhookAndDisabledUpdates_ShouldRejectWithoutPersisting()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var response = await Client.PostAsJsonAsync(
+            "/api/v1/swarmServices",
+            new
+            {
+                name = "invalid-disabled-webhook-service",
+                platformId,
+                description = (string?)null,
+                spec = CreateSpec(
+                    replicas: 1,
+                    webhook: CreateGenericWebhook(),
+                    updateBehavior: "Disabled"),
+                tagIds = Array.Empty<Guid>(),
+            },
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.ExistsAsync(platformId, "invalid-disabled-webhook-service", cancellationToken));
+    }
+
+    [Fact]
+    public async Task Create_WithOversizedWebhookSecret_ShouldRejectWithoutPersisting()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var response = await Client.PostAsJsonAsync(
+            "/api/v1/swarmServices",
+            new
+            {
+                name = "invalid-webhook-secret-service",
+                platformId,
+                description = (string?)null,
+                spec = CreateSpec(
+                    replicas: 1,
+                    webhook: CreateGenericWebhook(new string('s', 257))),
+                tagIds = Array.Empty<Guid>(),
+            },
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var scope = Services.CreateAsyncScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.ExistsAsync(platformId, "invalid-webhook-secret-service", cancellationToken));
+    }
+
+    [Fact]
     public async Task DuplicateDraft_ShouldCreateServiceWithoutImageProvenance_AndRecordDuplicateActivity()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -248,7 +337,10 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
                 name = "duplicate-source-service",
                 platformId,
                 description = "Source description",
-                spec = CreateSpec(3, resolvedDigest: "sha256:source"),
+                spec = CreateSpec(
+                    3,
+                    resolvedDigest: "sha256:source",
+                    webhook: CreateGenericWebhook("source-only-secret")),
                 tagIds = new[] { tagId },
             },
             cancellationToken);
@@ -288,6 +380,9 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.True(
             !image.TryGetProperty("resolvedDigest", out var resolvedDigest)
             || resolvedDigest.ValueKind == JsonValueKind.Null);
+        Assert.True(
+            !draft.GetProperty("spec").TryGetProperty("webhook", out var duplicateWebhook)
+            || duplicateWebhook.ValueKind == JsonValueKind.Null);
         Assert.Equal(tagId, Assert.Single(draft.GetProperty("tagIds").EnumerateArray()).GetGuid());
 
         using var duplicateResponse = await Client.PostAsJsonAsync(
@@ -307,6 +402,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.Equal("duplicate-source-service-copy", duplicate.Name);
         Assert.Equal("Source description", duplicate.Description);
         Assert.Null(Assert.IsType<SwarmExternalImage>(duplicate.Spec.Image).ResolvedDigest);
+        Assert.Null(duplicate.Spec.Webhook);
         Assert.Equal(tagId, Assert.Single(duplicate.Tags).Id);
 
         var copiedBinding = Assert.Single(await uow.ResourceBindings.GetEntriesAsync(
@@ -705,6 +801,80 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
     }
 
     [Fact]
+    public async Task CheckUpdates_ShouldPersistAvailableDigestAndReleaseProcessingState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var id = await CreateServiceAsync(cancellationToken);
+        await MarkServiceAppliedAsync(id, cancellationToken);
+
+        using var response = await Client.PostAsync(
+            $"/api/v1/swarmServices/{id:D}/check-updates",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        await using var verificationScope = Services.CreateAsyncScope();
+        var persisted = await verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetAsync(id, cancellationToken);
+        Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
+        Assert.Equal(AutoUpdateStatus.UpdateAvailable, persisted?.AutoUpdateState.Status);
+        Assert.Equal("sha256:old", persisted?.AutoUpdateState.CurrentDigest);
+        Assert.Equal("sha256:current", persisted?.AutoUpdateState.RemoteDigest);
+    }
+
+    [Fact]
+    public async Task CheckUpdates_WhenScanFails_ShouldReleaseServiceWithCompletedPriorOperation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        imageDigestScanner
+            .Setup(scanner => scanner.ScanAsync(
+                It.IsAny<ImageScanTask>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<string>(new ConflictError("The platform is unavailable.")));
+        var id = await CreateServiceAsync(cancellationToken);
+        await MarkServiceAppliedAsync(id, cancellationToken);
+
+        using var response = await Client.PostAsync(
+            $"/api/v1/swarmServices/{id:D}/check-updates",
+            content: null,
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verificationScope = Services.CreateAsyncScope();
+        var persisted = await verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetAsync(id, cancellationToken);
+        Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
+        Assert.Equal(SwarmServiceOperationState.Completed, persisted?.CurrentOperation?.State);
+    }
+
+    [Fact]
+    public async Task CheckUpdates_WhenRegistryScanFails_ShouldPersistSafeFailureAndReleaseProcessingState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        imageDigestScanner
+            .Setup(scanner => scanner.ScanAsync(
+                It.IsAny<ImageScanTask>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<string>(new BadGatewayError("Registry is unavailable.")));
+        var id = await CreateServiceAsync(cancellationToken);
+        await MarkServiceAppliedAsync(id, cancellationToken);
+
+        using var response = await Client.PostAsync(
+            $"/api/v1/swarmServices/{id:D}/check-updates",
+            content: null,
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        await using var verificationScope = Services.CreateAsyncScope();
+        var persisted = await verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetAsync(id, cancellationToken);
+        Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
+        Assert.Equal(AutoUpdateStatus.Failed, persisted?.AutoUpdateState.Status);
+        Assert.Equal("sha256:old", persisted?.AutoUpdateState.CurrentDigest);
+        Assert.Equal("Registry is unavailable.", persisted?.AutoUpdateState.LastError);
+    }
+
+    [Fact]
     public async Task Apply_ShouldInterpolateReferencedServiceBindingsOnly()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1026,13 +1196,37 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         return document.RootElement.GetProperty("id").GetGuid();
     }
 
+    private async Task MarkServiceAppliedAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var service = await uow.SwarmServices.GetAsync(id, cancellationToken);
+        Assert.NotNull(service);
+        Assert.True(service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash",
+            clusterId: "managed-service-cluster"));
+        service.MarkOperationAttempted();
+        service.MarkOperationAccepted("docker-service", 1);
+        service.CompleteOperation(
+            SwarmServiceOperationState.Completed,
+            "runtime-hash",
+            "sha256:old");
+        Assert.Equal(1, await uow.SwarmServices.UpdateAsync(service, cancellationToken));
+        await uow.CommitAsync(cancellationToken);
+    }
+
     private object CreateSpec(
         int replicas,
         object[]? secrets = null,
         object[]? configs = null,
         string? resolvedDigest = null,
         string[]? networkIds = null,
-        string[]? environment = null) => new
+        string[]? environment = null,
+        object? webhook = null,
+        string updateBehavior = "Notify") => new
     {
         image = new Dictionary<string, object?>
         {
@@ -1041,7 +1235,8 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             ["imageTag"] = "nginx:1.27",
             ["resolvedDigest"] = resolvedDigest
         },
-        updateBehavior = "Notify",
+        updateBehavior,
+        webhook,
         schedulingMode = "Replicated",
         replicas,
         command = new[] { "/docker-entrypoint.sh" },
@@ -1085,6 +1280,15 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             order = "StartFirst",
             failureAction = "Pause"
         }
+    };
+
+    private static object CreateGenericWebhook(string secret = "integration-shared-secret") => new
+    {
+        enabled = true,
+        provider = "Generic",
+        authScheme = "BearerToken",
+        secret,
+        branchFilter = (string?)null,
     };
 
     private static Platform CreateSwarmPlatform() => new(

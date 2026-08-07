@@ -1,5 +1,6 @@
 using Domain.Entities;
 using Domain.Entities.Tags;
+using Domain.Contracts.Resources;
 
 namespace Domain.Entities.Backups;
 
@@ -206,6 +207,9 @@ public sealed class BackupPolicy(
 
         if (Webhook?.BranchFilter?.Length > 256)
             throw new ArgumentException("Backup policy webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
+
+        if (WebhookConfigurationValidation.GetAuthenticationError(Webhook) is { } webhookError)
+            throw new ArgumentException(webhookError, nameof(Webhook));
 
         if (KeepLastSuccessful is < 1 or > 1000)
             throw new ArgumentException("Backup retention must keep between 1 and 1000 successful snapshots.", nameof(KeepLastSuccessful));

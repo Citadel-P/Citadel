@@ -204,6 +204,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.SwarmServiceForceUpdated
             or ActivityEventType.SwarmServiceOperationFailed
             or ActivityEventType.SwarmServiceDuplicated
+            or ActivityEventType.SwarmServiceWebhookReceived
                 => ActivityResourceType.SwarmService,
 
             _ => throw new InvalidOperationException(
@@ -385,6 +386,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.SwarmServiceForceUpdated, SwarmServiceForceUpdated) => true,
             (ActivityEventType.SwarmServiceOperationFailed, SwarmServiceOperationFailed) => true,
             (ActivityEventType.SwarmServiceDuplicated, SwarmServiceDuplicated) => true,
+            (ActivityEventType.SwarmServiceWebhookReceived, SwarmServiceWebhookReceived) => true,
 
             _ => false
         };

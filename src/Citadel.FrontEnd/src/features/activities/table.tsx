@@ -131,6 +131,8 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
       ]
         .filter(Boolean)
         .join(' - ');
+    case 'SwarmServiceWebhookReceived':
+      return [info.status, formatWebhookReason(info.reason)].filter(Boolean).join(' - ');
     case 'StackGitUpdateAvailable':
       return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)}`;
     case 'StackGitAutoUpdated':

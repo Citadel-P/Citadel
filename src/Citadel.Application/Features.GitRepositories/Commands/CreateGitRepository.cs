@@ -4,6 +4,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
+using Domain.Contracts.Resources;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
@@ -40,6 +41,11 @@ public sealed record CreateGitRepository(
             RuleFor(x => x.DefaultBranch).NotEmpty();
             When(x => x.SyncMode == GitRepositorySyncMode.PullInterval, () =>
                 RuleFor(x => x.SyncIntervalMinutes).NotNull().GreaterThanOrEqualTo(1));
+            RuleFor(x => x.Webhook)
+                .Must(webhook => WebhookConfigurationValidation.GetAuthenticationError(webhook) is null)
+                .WithMessage(command => WebhookConfigurationValidation.GetAuthenticationError(command.Webhook));
+            RuleFor(x => x.Webhook!.Secret).MaximumLength(256).When(x => x.Webhook is not null);
+            RuleFor(x => x.Webhook!.BranchFilter).MaximumLength(256).When(x => x.Webhook is not null);
         }
     }
 }

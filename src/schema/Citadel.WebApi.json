@@ -35952,6 +35952,9 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceWebhookReceived"
           }
         ],
         "discriminator": {
@@ -36069,7 +36072,8 @@
             "SwarmServiceScaled": "#/components/schemas/ActivityEventInfoSwarmServiceScaled",
             "SwarmServiceForceUpdated": "#/components/schemas/ActivityEventInfoSwarmServiceForceUpdated",
             "SwarmServiceOperationFailed": "#/components/schemas/ActivityEventInfoSwarmServiceOperationFailed",
-            "SwarmServiceDuplicated": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated"
+            "SwarmServiceDuplicated": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated",
+            "SwarmServiceWebhookReceived": "#/components/schemas/ActivityEventInfoSwarmServiceWebhookReceived"
           }
         }
       },
@@ -38434,6 +38438,49 @@
           }
         }
       },
+      "ActivityEventInfoSwarmServiceWebhookReceived": {
+        "required": [
+          "requestId",
+          "authType",
+          "execution",
+          "status",
+          "reason",
+          "deliveryId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceWebhookReceived"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authType": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ActivityEventInfoUserMfaDisabled": {
         "properties": {
           "$type": {
@@ -38729,7 +38776,8 @@
           "SwarmServiceScaled",
           "SwarmServiceForceUpdated",
           "SwarmServiceOperationFailed",
-          "SwarmServiceDuplicated"
+          "SwarmServiceDuplicated",
+          "SwarmServiceWebhookReceived"
         ]
       },
       "ActivityResourceType": {
@@ -59481,6 +59529,16 @@
                 "$ref": "#/components/schemas/SwarmServiceUpdatePolicy"
               }
             ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceWebhookConfig"
+              }
+            ]
           }
         }
       },
@@ -59684,6 +59742,33 @@
               {
                 "$ref": "#/components/schemas/PlatformCapabilities"
               }
+            ]
+          }
+        }
+      },
+      "SwarmServiceWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -61740,14 +61825,16 @@
         "enum": [
           "GitHubHmacSha256",
           "GitLabSignedToken",
-          "GitLabLegacyToken"
+          "GitLabLegacyToken",
+          "BearerToken"
         ],
         "default": "GitHubHmacSha256"
       },
       "WebhookProvider": {
         "enum": [
           "GitHub",
-          "GitLab"
+          "GitLab",
+          "Generic"
         ],
         "default": "GitHub"
       }

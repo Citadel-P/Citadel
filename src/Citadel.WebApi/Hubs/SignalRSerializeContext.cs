@@ -65,6 +65,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<SwarmInventoryView>]
 [GenerateShapeFor<ManagedSwarmServiceView>]
 [GenerateShapeFor<SwarmServiceSpec>]
+[GenerateShapeFor<SwarmServiceWebhookConfig>]
 [GenerateShapeFor<SwarmServiceImageInfo>]
 [GenerateShapeFor<SwarmExternalImage>]
 [GenerateShapeFor<SwarmBuildImage>]
@@ -159,6 +160,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildRunTimedOut>]
 [GenerateShapeFor<BuildRunCancelled>]
 [GenerateShapeFor<BuildWebhookReceived>]
+[GenerateShapeFor<SwarmServiceWebhookReceived>]
 [GenerateShapeFor<BuildAgentPoolCreated>]
 [GenerateShapeFor<BuildAgentPoolUpdated>]
 [GenerateShapeFor<BuildAgentPoolRenamed>]
@@ -410,6 +412,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.BuildRunTimedOut)] = typeof(BuildRunTimedOut),
         [nameof(ActivityEventType.BuildRunCancelled)] = typeof(BuildRunCancelled),
         [nameof(ActivityEventType.BuildWebhookReceived)] = typeof(BuildWebhookReceived),
+        [nameof(ActivityEventType.SwarmServiceWebhookReceived)] = typeof(SwarmServiceWebhookReceived),
         [nameof(ActivityEventType.BuildAgentPoolCreated)] = typeof(BuildAgentPoolCreated),
         [nameof(ActivityEventType.BuildAgentPoolUpdated)] = typeof(BuildAgentPoolUpdated),
         [nameof(ActivityEventType.BuildAgentPoolRenamed)] = typeof(BuildAgentPoolRenamed),

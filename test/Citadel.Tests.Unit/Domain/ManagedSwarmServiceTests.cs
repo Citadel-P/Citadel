@@ -57,6 +57,25 @@ public sealed class ManagedSwarmServiceTests
     }
 
     [Fact]
+    public void DesiredAndRuntimeHashes_ShouldIgnoreWebhookConfiguration()
+    {
+        var first = CreateSpec(new SwarmExternalImage(Guid.CreateVersion7(), "nginx:1.27"));
+        var withWebhook = first with
+        {
+            Webhook = new SwarmServiceWebhookConfig(
+                Enabled: true,
+                Provider: WebhookProvider.Generic,
+                AuthScheme: WebhookAuthScheme.BearerToken,
+                Secret: "shared-secret"),
+        };
+
+        Assert.Equal(SwarmServiceSpecHasher.Hash(first), SwarmServiceSpecHasher.Hash(withWebhook));
+        Assert.Equal(
+            SwarmServiceRuntimeHasher.Hash(first, "nginx@sha256:applied"),
+            SwarmServiceRuntimeHasher.Hash(withWebhook, "nginx@sha256:applied"));
+    }
+
+    [Fact]
     public void RuntimeHash_ShouldUseResolvedImageAndCanonicalizeSetLikeFields()
     {
         var registryId = Guid.CreateVersion7();

@@ -139,13 +139,16 @@ public partial class DeploymentJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<SwarmServiceHealth>),
         typeof(JsonStringEnumConverter<SwarmServiceSynchronizationState>),
         typeof(JsonStringEnumConverter<SwarmServiceOperationKind>),
-        typeof(JsonStringEnumConverter<SwarmServiceOperationState>)
+        typeof(JsonStringEnumConverter<SwarmServiceOperationState>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
     })]
 [JsonSerializable(typeof(SwarmService))]
 [JsonSerializable(typeof(SwarmServiceSpec))]
 [JsonSerializable(typeof(SwarmServiceImageInfo))]
 [JsonSerializable(typeof(SwarmExternalImage))]
 [JsonSerializable(typeof(SwarmBuildImage))]
+[JsonSerializable(typeof(SwarmServiceWebhookConfig))]
 [JsonSerializable(typeof(SwarmServiceOperation))]
 public partial class SwarmServiceJsonContext : JsonSerializerContext
 {
@@ -206,6 +209,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(SwarmServiceScaled))]
 [JsonSerializable(typeof(SwarmServiceForceUpdated))]
 [JsonSerializable(typeof(SwarmServiceOperationFailed))]
+[JsonSerializable(typeof(SwarmServiceWebhookReceived))]
 [JsonSerializable(typeof(ActivitySourceResource))]
 [JsonSerializable(typeof(ActivityChangedField))]
 [JsonSerializable(typeof(DeploymentCreated))]

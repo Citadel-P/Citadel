@@ -1,6 +1,7 @@
 using Application.Features.Webhooks.Commands;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
@@ -12,6 +13,7 @@ using Domain.Entities.Builds;
 using Domain.Entities.Git;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -343,6 +345,167 @@ public sealed class ReceiveWebhookTests
                     && context.Webhooks.Single().Reason == "Webhook authentication failed"),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task RepoPull_WithGenericSharedSecret_QueuesUsingConfiguredBranch()
+    {
+        const string secret = "generic-webhook-secret";
+        var repo = CreateRepository(new RepoWebhookConfig(
+            Enabled: true,
+            Provider: WebhookProvider.Generic,
+            AuthScheme: WebhookAuthScheme.BearerToken,
+            Secret: secret,
+            BranchFilter: "main"));
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        SetupGitRepositoryClaim(gitRepos);
+        var handler = CreateHandler(gitRepos: gitRepos.Object, gitSyncWriter: channel.Writer);
+
+        var result = await handler.Handle(
+            new ReceiveWebhook(
+                "generic",
+                "repo",
+                repo.Id,
+                "pull",
+                Headers(("Authorization", $"Bearer {secret}")),
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.True(channel.Reader.TryRead(out var request));
+        Assert.Equal("main", request.Branch);
+    }
+
+    [Fact]
+    public async Task RepoPull_WithGenericProviderAndMissingSharedSecret_ReturnsUnauthorized()
+    {
+        var repo = CreateRepository(new RepoWebhookConfig(
+            Enabled: true,
+            Provider: WebhookProvider.Generic,
+            AuthScheme: WebhookAuthScheme.BearerToken,
+            Secret: "generic-webhook-secret"));
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var handler = CreateHandler(gitRepos: gitRepos.Object);
+
+        var result = await handler.Handle(
+            new ReceiveWebhook("generic", "repo", repo.Id, "pull", Headers(), []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.IsType<UnauthorizedError>(error);
+    }
+
+    [Fact]
+    public async Task SwarmServiceUpdate_WithGenericSharedSecret_UsesSharedUpdateCheckPipeline()
+    {
+        const string secret = "generic-service-secret";
+        var service = CreateSwarmWebhookService(secret);
+        var services = new Mock<ISwarmServiceRepository>();
+        services.Setup(x => x.GetAsync(service.Id, It.IsAny<CancellationToken>())).ReturnsAsync(service);
+        var updateChecks = new Mock<ISwarmServiceUpdateCheckService>();
+        updateChecks
+            .Setup(x => x.CheckAsync(service.Id, Constants.SystemId, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmServiceUpdateCheckResult(
+                service, true, false, "A newer image digest is available.")));
+        List<ActivityEvent> activities = [];
+        var handler = CreateHandler(
+            swarmServices: services.Object,
+            swarmServiceUpdateCheckService: updateChecks.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            new ReceiveWebhook(
+                "generic",
+                "swarm-service",
+                service.Id,
+                "update",
+                Headers(("Authorization", $"Bearer {secret}")),
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.Equal("A newer image digest is available.", response.Reason);
+        var activity = Assert.Single(activities);
+        Assert.Equal(ActivityEventType.SwarmServiceWebhookReceived, activity.EventType);
+        Assert.IsType<SwarmServiceWebhookReceived>(activity.Info);
+    }
+
+    [Fact]
+    public async Task SwarmServiceUpdate_WithoutAutomatedOperations_DoesNotCheckRegistry()
+    {
+        const string secret = "generic-service-secret";
+        var service = CreateSwarmWebhookService(secret);
+        var services = new Mock<ISwarmServiceRepository>();
+        services.Setup(x => x.GetAsync(service.Id, It.IsAny<CancellationToken>())).ReturnsAsync(service);
+        var updateChecks = new Mock<ISwarmServiceUpdateCheckService>();
+        var entitlements = new Mock<ILicenseEntitlementService>();
+        entitlements
+            .Setup(x => x.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.FromResult(Result.Failure(
+                new ForbiddenError("Automated operations requires a Team license."))));
+        var handler = CreateHandler(
+            swarmServices: services.Object,
+            swarmServiceUpdateCheckService: updateChecks.Object,
+            entitlementService: entitlements.Object);
+
+        var result = await handler.Handle(
+            new ReceiveWebhook(
+                "generic",
+                "swarm-service",
+                service.Id,
+                "update",
+                Headers(("Authorization", $"Bearer {secret}")),
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.StartsWith("Paused by license:", Assert.IsType<string>(response.Reason));
+        updateChecks.Verify(
+            x => x.CheckAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SwarmServiceUpdate_WhenActivityCommitFails_ReturnsCommittedResult()
+    {
+        const string secret = "generic-service-secret";
+        var service = CreateSwarmWebhookService(secret);
+        var services = new Mock<ISwarmServiceRepository>();
+        services.Setup(x => x.GetAsync(service.Id, It.IsAny<CancellationToken>())).ReturnsAsync(service);
+        var updateChecks = new Mock<ISwarmServiceUpdateCheckService>();
+        updateChecks
+            .Setup(x => x.CheckAsync(service.Id, Constants.SystemId, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmServiceUpdateCheckResult(
+                service, true, false, "A newer image digest is available.")));
+        var handler = CreateHandler(
+            swarmServices: services.Object,
+            swarmServiceUpdateCheckService: updateChecks.Object,
+            commit: _ => Task.FromException(new InvalidOperationException("Activity commit failed.")));
+
+        var result = await handler.Handle(
+            new ReceiveWebhook(
+                "generic",
+                "swarm-service",
+                service.Id,
+                "update",
+                Headers(("Authorization", $"Bearer {secret}")),
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
     }
 
     [Fact]
@@ -1115,6 +1278,7 @@ public sealed class ReceiveWebhookTests
         IBackupRunRepository? backupRuns = null,
         IBuildProjectRepository? buildProjects = null,
         IBuildRunRepository? buildRuns = null,
+        ISwarmServiceRepository? swarmServices = null,
         IPlatformRepository? platforms = null,
         IRegistryRepository? registries = null,
         ChannelWriter<GitRepoSyncRequest>? gitSyncWriter = null,
@@ -1125,7 +1289,9 @@ public sealed class ReceiveWebhookTests
         IGitCliRepository? gitCliRepository = null,
         List<ActivityEvent>? activities = null,
         List<StackWebhookDeployQueueItem>? stackDeployItems = null,
-        Func<CancellationToken, Task>? commit = null)
+        Func<CancellationToken, Task>? commit = null,
+        ISwarmServiceUpdateCheckService? swarmServiceUpdateCheckService = null,
+        ILicenseEntitlementService? entitlementService = null)
     {
         activities ??= [];
         var activityEvents = new Mock<IActivityEventRepository>();
@@ -1163,6 +1329,7 @@ public sealed class ReceiveWebhookTests
         unitOfWork.Setup(x => x.BackupRuns).Returns(backupRuns ?? Mock.Of<IBackupRunRepository>());
         unitOfWork.Setup(x => x.BuildProjects).Returns(buildProjects ?? Mock.Of<IBuildProjectRepository>());
         unitOfWork.Setup(x => x.BuildRuns).Returns(buildRuns ?? Mock.Of<IBuildRunRepository>());
+        unitOfWork.Setup(x => x.SwarmServices).Returns(swarmServices ?? Mock.Of<ISwarmServiceRepository>());
         unitOfWork.Setup(x => x.Platforms).Returns(platforms ?? Mock.Of<IPlatformRepository>());
         unitOfWork.Setup(x => x.Registries).Returns(registries ?? Mock.Of<IRegistryRepository>());
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
@@ -1186,10 +1353,26 @@ public sealed class ReceiveWebhookTests
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             Mock.Of<IAutomationRunQueueService>(),
-            new PermissiveLicenseEntitlementService(),
+            entitlementService ?? new PermissiveLicenseEntitlementService(),
             CreateApplicationLifetime(),
-            Mock.Of<ILogger<ReceiveWebhookHandler>>());
+            Mock.Of<ILogger<ReceiveWebhookHandler>>(),
+            swarmServiceUpdateCheckService ?? Mock.Of<ISwarmServiceUpdateCheckService>());
     }
+
+    private static SwarmService CreateSwarmWebhookService(string secret) => new(
+        "redis",
+        Guid.CreateVersion7(),
+        Constants.SystemId,
+        new SwarmServiceSpec
+        {
+            Image = new SwarmExternalImage(Guid.CreateVersion7(), "redis:latest"),
+            UpdateBehavior = UpdateBehavior.Notify,
+            Webhook = new SwarmServiceWebhookConfig(
+                Enabled: true,
+                Provider: WebhookProvider.Generic,
+                AuthScheme: WebhookAuthScheme.BearerToken,
+                Secret: secret),
+        });
 
     private static void SetupGitRepositoryClaim(Mock<IGitReposRepository> repositories)
     {

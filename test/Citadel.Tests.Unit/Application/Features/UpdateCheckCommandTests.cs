@@ -8,17 +8,88 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Tests.Common;
 
 namespace Tests.Unit.Application.Features;
 
 public sealed class UpdateCheckCommandTests
 {
+    [Fact]
+    public async Task CheckSwarmServiceUpdates_WhenScanIsCancelled_ReleasesCompletedServiceOperation()
+    {
+        var registry = CreateRegistry();
+        var service = CreateAppliedSwarmService(registry.Id);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var services = new Mock<ISwarmServiceRepository>();
+        var registries = new Mock<IRegistryRepository>();
+        var scanner = new Mock<IImageDigestScanner>();
+        var stream = new Mock<ISwarmServiceStreamManager>();
+        var updateStates = new List<(ResourceControlState State, CancellationToken Token)>();
+        using var requestCancellation = new CancellationTokenSource();
+
+        services
+            .Setup(x => x.GetAsync(service.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(service);
+        services
+            .Setup(x => x.UpdateAsync(service, It.IsAny<CancellationToken>()))
+            .Callback<SwarmService, CancellationToken>((value, token) =>
+                updateStates.Add((value.ControlState, token)))
+            .ReturnsAsync(1);
+        registries
+            .Setup(x => x.GetAsync(registry.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registry);
+        scanner
+            .Setup(x => x.ScanAsync(It.IsAny<ImageScanTask>(), It.IsAny<CancellationToken>()))
+            .Returns<ImageScanTask, CancellationToken>((_, token) =>
+                Task.FromException<Result<string>>(new OperationCanceledException(token)));
+        stream
+            .Setup(x => x.SendSwarmServiceInfo(It.IsAny<SwarmService>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork.SetupGet(x => x.SwarmServices).Returns(services.Object);
+        unitOfWork.SetupGet(x => x.Registries).Returns(registries.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var updateCheck = new SwarmServiceUpdateCheckService(
+            unitOfWork.Object,
+            new ImageCheckBuilder(),
+            scanner.Object,
+            new DeploymentUpdateEvaluator(),
+            new UpdateCheckLeaseManager(),
+            Mock.Of<ISwarmServiceMutationService>(),
+            new PermissiveLicenseEntitlementService(),
+            stream.Object,
+            TimeProvider.System);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => updateCheck.CheckAsync(
+            service.Id,
+            Constants.SystemId,
+            applyWhenAvailable: false,
+            requestCancellation.Token));
+
+        Assert.Equal(ResourceControlState.Idle, service.ControlState);
+        Assert.Equal(SwarmServiceOperationState.Completed, service.CurrentOperation?.State);
+        Assert.Collection(
+            updateStates,
+            started =>
+            {
+                Assert.Equal(ResourceControlState.Processing, started.State);
+                Assert.Equal(requestCancellation.Token, started.Token);
+            },
+            released =>
+            {
+                Assert.Equal(ResourceControlState.Idle, released.State);
+                Assert.Equal(CancellationToken.None, released.Token);
+            });
+    }
+
     [Fact]
     public async Task CheckDeploymentUpdates_PersistsAvailableStateAndNotifies()
     {
@@ -625,6 +696,32 @@ public sealed class UpdateCheckCommandTests
             new DeploymentSpec(
                 new ExternalImage(registryId, "example/app:latest", "sha256:current"),
                 UpdateBehavior.Disabled));
+
+    private static SwarmService CreateAppliedSwarmService(Guid registryId)
+    {
+        var service = new SwarmService(
+            "service",
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(registryId, "example/app:latest"),
+                UpdateBehavior = UpdateBehavior.Notify,
+            });
+        Assert.True(service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash",
+            clusterId: "cluster"));
+        service.MarkOperationAttempted();
+        service.MarkOperationAccepted("docker-service", 1);
+        service.CompleteOperation(
+            SwarmServiceOperationState.Completed,
+            "runtime-hash",
+            "sha256:current");
+        return service;
+    }
 
     private static IUserContextAccessor CreateUserContext()
     {

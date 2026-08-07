@@ -176,6 +176,13 @@ public sealed class AutomationAction(
 
         if (RunAsActorId == Guid.Empty)
             throw new ArgumentException("Run-as actor is required.", nameof(RunAsActorId));
+
+        if (WebhookConfigurationValidation.GetAuthenticationError(Webhook) is { } webhookError)
+            throw new ArgumentException(webhookError, nameof(Webhook));
+        if (Webhook?.Secret?.Length > 256)
+            throw new ArgumentException("Automation webhook secret cannot exceed 256 characters.", nameof(Webhook));
+        if (Webhook?.BranchFilter?.Length > 256)
+            throw new ArgumentException("Automation webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
     }
 
     public static AutomationAction FromPersistence(

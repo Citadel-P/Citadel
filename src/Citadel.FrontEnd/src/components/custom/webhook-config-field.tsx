@@ -4,6 +4,7 @@ import {
   BuildWebhookConfig,
   RepoWebhookConfig,
   StackWebhookConfig,
+  SwarmServiceWebhookConfig,
   WebhookAuthScheme,
   WebhookProvider,
 } from '@/api/generated/api.types';
@@ -19,15 +20,16 @@ type WebhookConfigValue =
   | StackWebhookConfig
   | AutomationWebhookConfig
   | BackupWebhookConfig
-  | BuildWebhookConfig;
+  | BuildWebhookConfig
+  | SwarmServiceWebhookConfig;
 type WebhookCommonConfig = Pick<RepoWebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
 type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'provider' | 'authScheme'>> &
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
 
 type WebhookConfigFieldProps = {
-  resourceType: 'repo' | 'stack' | 'automation-action' | 'backup-policy' | 'build';
+  resourceType: 'repo' | 'stack' | 'automation-action' | 'backup-policy' | 'build' | 'swarm-service';
   resourceId?: string;
-  execution: 'pull' | 'deploy' | 'run';
+  execution: 'pull' | 'deploy' | 'run' | 'update';
   value?: WebhookConfigValue | null;
   defaultBranch?: string | null;
   showBranchFilter?: boolean;
@@ -39,17 +41,20 @@ type WebhookConfigFieldProps = {
 const providerLabels: Record<WebhookProvider, string> = {
   [WebhookProvider.GitHub]: 'GitHub',
   [WebhookProvider.GitLab]: 'GitLab',
+  [WebhookProvider.Generic]: 'Generic / CI',
 };
 
 const authSchemeLabels: Record<WebhookAuthScheme, string> = {
   [WebhookAuthScheme.GitHubHmacSha256]: 'GitHub HMAC SHA-256',
   [WebhookAuthScheme.GitLabSignedToken]: 'GitLab signed webhook',
   [WebhookAuthScheme.GitLabLegacyToken]: 'GitLab token',
+  [WebhookAuthScheme.BearerToken]: 'Shared secret (Bearer header)',
 };
 
 const authSchemesByProvider: Record<WebhookProvider, WebhookAuthScheme[]> = {
   [WebhookProvider.GitHub]: [WebhookAuthScheme.GitHubHmacSha256],
   [WebhookProvider.GitLab]: [WebhookAuthScheme.GitLabSignedToken, WebhookAuthScheme.GitLabLegacyToken],
+  [WebhookProvider.Generic]: [WebhookAuthScheme.BearerToken],
 };
 
 const defaultAuthScheme = (provider: WebhookProvider) => authSchemesByProvider[provider][0];
@@ -79,15 +84,8 @@ function WebhookSubField({
 
 const generateSecret = () => {
   const bytes = new Uint8Array(32);
-  globalThis.crypto?.getRandomValues(bytes);
-
-  if (bytes.some((byte) => byte !== 0)) {
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  return Array.from({ length: 4 }, () => Math.random().toString(16).slice(2).padEnd(16, '0'))
-    .join('')
-    .slice(0, 64);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
 const normalizeValue = (
@@ -129,7 +127,8 @@ export function WebhookConfigField({
     defaultBranch,
   );
   const { enabled, provider, authScheme, branchFilter, secret } = normalized;
-  const authType = provider === WebhookProvider.GitLab ? 'gitlab' : 'github';
+  const authType =
+    provider === WebhookProvider.GitLab ? 'gitlab' : provider === WebhookProvider.Generic ? 'generic' : 'github';
   const listenerUrl = `${window.location.origin}/listener/${authType}/${resourceType}/${resourceId ?? '{resource-id}'}/${execution}`;
   const canCopyListenerUrl = !!resourceId;
   const [copiedUrl, copyUrl] = useCopyToClipboard(3000);
@@ -147,6 +146,10 @@ export function WebhookConfigField({
     patch({
       provider: nextProvider,
       authScheme: defaultAuthScheme(nextProvider),
+      secret:
+        nextProvider === WebhookProvider.Generic && !normalized.secret?.trim()
+          ? generateSecret()
+          : normalized.secret || null,
     });
   };
 
@@ -163,7 +166,7 @@ export function WebhookConfigField({
         <div className="border-t pt-3 flex flex-col gap-4">
           <WebhookSubField
             label="Provider"
-            description="Select the Git provider signature format used by the incoming webhook.">
+            description="Select the provider format, or use Generic / CI for an authenticated resource-specific trigger.">
             <FieldSelect
               value={provider}
               onChange={handleProviderChange}
@@ -177,7 +180,11 @@ export function WebhookConfigField({
 
           <WebhookSubField
             label="Authentication"
-            description="Choose how Citadel validates requests before running the webhook action."
+            description={
+              provider === WebhookProvider.Generic
+                ? 'Generic webhooks send the configured shared secret in the Authorization: Bearer header.'
+                : 'Choose how Citadel validates requests before running the webhook action.'
+            }
             className={'pb-3'}>
             <FieldSelect
               value={authScheme}
@@ -209,7 +216,11 @@ export function WebhookConfigField({
 
           <WebhookSubField
             label="Secret"
-            description="Optional shared secret configured in the Git provider. Leave empty to accept unsigned webhook deliveries."
+            description={
+              provider === WebhookProvider.Generic
+                ? 'Required shared secret for the CI system or external caller. This is not a Citadel user access token.'
+                : 'Optional shared secret configured in the Git provider. Leave empty to accept unsigned webhook deliveries.'
+            }
             className={'pt-3 border-t'}>
             <div className="flex max-w-140 flex-col gap-2 sm:flex-row">
               <FieldInput
@@ -232,7 +243,7 @@ export function WebhookConfigField({
 
           <WebhookSubField
             label="Listener URL"
-            description="Copy this URL into the Git provider webhook settings. The final resource ID is available after creation."
+            description="Copy this URL into the provider or CI webhook settings. The final resource ID is available after creation."
             className={'pt-3 border-t'}>
             <div className="flex max-w-180 flex-col gap-2 sm:flex-row">
               <FieldInput

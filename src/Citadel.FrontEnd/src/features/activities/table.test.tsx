@@ -47,4 +47,38 @@ describe('ActivitiesTable', () => {
     expect(summaryCell.closest('button')).toHaveClass('max-w-96', 'overflow-hidden');
     expect(screen.getByText('Git Repo Cloned')).toBeVisible();
   });
+
+  it('summarizes a managed Service webhook result', () => {
+    const activity = {
+      id: '019fbf2c-1c80-790f-a50a-11bbec0241d5',
+      platformId: '019fbf2c-1c80-790f-a50a-11bbec0241d6',
+      resourceId: '019fbf2c-1c80-790f-a50a-11bbec0241d7',
+      platformName: 'Production Swarm',
+      resourceName: 'redis',
+      platformStatus: 'Online',
+      resourceType: 'SwarmService',
+      eventType: 'SwarmServiceWebhookReceived',
+      status: 'Success',
+      createdAt: '2026-08-07T00:00:00Z',
+      info: {
+        $type: 'SwarmServiceWebhookReceived',
+        requestId: '019fbf2c-1c80-790f-a50a-11bbec0241d8',
+        authType: 'generic',
+        execution: 'update',
+        status: 'queued',
+        reason: 'A newer image digest is available.',
+        deliveryId: null,
+      },
+      actorId: '019fbf2c-1c80-790f-a50a-11bbec0241d9',
+      actorName: 'System',
+      actorType: 'System',
+    } as ActivityView;
+
+    renderCitadel(
+      <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
+    );
+
+    expect(screen.getByText('queued - A newer image digest is available.')).toBeVisible();
+    expect(screen.getByText('Swarm Service Webhook Received')).toBeVisible();
+  });
 });

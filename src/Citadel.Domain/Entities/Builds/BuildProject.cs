@@ -198,6 +198,8 @@ public sealed class BuildProject(
         if (TagTemplates.Count == 0) throw new ArgumentException("At least one tag template is required.", nameof(TagTemplates));
         if (Webhook?.Secret?.Length > 256) throw new ArgumentException("Build webhook secret cannot exceed 256 characters.", nameof(Webhook));
         if (Webhook?.BranchFilter?.Length > 256) throw new ArgumentException("Build webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
+        if (WebhookConfigurationValidation.GetAuthenticationError(Webhook) is { } webhookError)
+            throw new ArgumentException(webhookError, nameof(Webhook));
         ValidateBuildSecrets();
     }
 

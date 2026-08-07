@@ -39,6 +39,7 @@ import {
   ActivityEventInfoGitRepoWebhookReceived,
   ActivityEventInfoStackWebhookReceived,
   ActivityEventInfoBuildWebhookReceived,
+  ActivityEventInfoSwarmServiceWebhookReceived,
   BuildProjectSnapshot,
   ApplyStackInput,
   AutomationActionRunStreamItem,
@@ -717,6 +718,8 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
   GitRepoWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
+  SwarmServiceWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+
   OidcProviderCreated: (info, activity) => (
     <SpecViewer spec={info.provider} resourceId={activity.resourceId} title="Initial configuration" />
   ),
@@ -875,7 +878,8 @@ function WebhookActivityDetails({
   info:
     | ActivityEventInfoGitRepoWebhookReceived
     | ActivityEventInfoStackWebhookReceived
-    | ActivityEventInfoBuildWebhookReceived;
+    | ActivityEventInfoBuildWebhookReceived
+    | ActivityEventInfoSwarmServiceWebhookReceived;
 }) {
   const displayReason = formatWebhookReason(info.reason);
   const title =
@@ -898,7 +902,8 @@ function compactWebhookDetails(
   info:
     | ActivityEventInfoGitRepoWebhookReceived
     | ActivityEventInfoStackWebhookReceived
-    | ActivityEventInfoBuildWebhookReceived,
+    | ActivityEventInfoBuildWebhookReceived
+    | ActivityEventInfoSwarmServiceWebhookReceived,
   message: string,
   reason: string | null | undefined,
 ) {
@@ -909,13 +914,13 @@ function compactWebhookDetails(
       requestId: info.requestId,
       execution: info.execution,
       authType: info.authType,
-      providerEvent: info.eventType,
+      providerEvent: 'eventType' in info ? info.eventType : undefined,
       deliveryId: info.deliveryId,
-      repository: info.repositoryFullName,
-      branch: info.branch,
-      commit: info.commitSha,
-      dispatchedBranch: info.dispatchedBranch,
-      dispatchedCommit: info.dispatchedCommitSha,
+      repository: 'repositoryFullName' in info ? info.repositoryFullName : undefined,
+      branch: 'branch' in info ? info.branch : undefined,
+      commit: 'commitSha' in info ? info.commitSha : undefined,
+      dispatchedBranch: 'dispatchedBranch' in info ? info.dispatchedBranch : undefined,
+      dispatchedCommit: 'dispatchedCommitSha' in info ? info.dispatchedCommitSha : undefined,
     }).filter(([, value]) => value),
   );
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+using Domain.Contracts.Resources;
 
 namespace Domain.Entities.SwarmServices;
 
@@ -25,7 +26,16 @@ public sealed record SwarmServiceSpec
     public IReadOnlyList<string> PlacementConstraints { get; init; } = [];
     public SwarmServiceRestartPolicy? RestartPolicy { get; init; }
     public SwarmServiceUpdatePolicy? UpdatePolicy { get; init; }
+    public SwarmServiceWebhookConfig? Webhook { get; init; }
 }
+
+public sealed record SwarmServiceWebhookConfig(
+    bool Enabled = false,
+    WebhookProvider Provider = WebhookProvider.GitHub,
+    WebhookAuthScheme AuthScheme = WebhookAuthScheme.GitHubHmacSha256,
+    string? Secret = null,
+    string? BranchFilter = null)
+    : WebhookConfig(Enabled, Provider, AuthScheme, Secret, BranchFilter);
 
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]

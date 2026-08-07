@@ -58,7 +58,7 @@ internal sealed class GetSwarmServiceDuplicateDraftHandler(IUnitOfWork unitOfWor
             _ => spec.Image,
         };
 
-        return spec with { Image = image };
+        return spec with { Image = image, Webhook = null };
     }
 
     private async Task<string> GetAvailableDuplicateNameAsync(

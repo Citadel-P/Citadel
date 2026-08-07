@@ -1,6 +1,6 @@
 # Webhooks
 
-Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, queuing a build, running an automation action, or queuing a backup policy.
+Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, queuing a build, running an automation action, queuing a backup policy, or checking a managed Swarm Service image for updates.
 
 Citadel does not have a separate "Webhook" resource page. Webhook settings live on the resource that will be triggered.
 
@@ -16,6 +16,7 @@ mutating operation:
 - queue a build
 - run an automation action
 - queue a backup policy
+- check or automatically apply a managed Swarm Service image update
 - start a deployment or stack apply
 
 Webhook reception and authentication are not themselves paid. Without
@@ -42,6 +43,7 @@ Supported URL segments:
 | Build project | `build` | `run` | Queue a build run; execution requires Automated Operations |
 | Automation action | `automation-action` | `run` | Queue an action run; execution requires Automated Operations |
 | Backup policy | `backup-policy` | `run` | Queue a backup run; execution requires Automated Operations |
+| Managed Swarm Service | `swarm-service` | `update` | Check the configured external image tag and follow the Service update behavior |
 
 Supported auth types:
 
@@ -49,6 +51,7 @@ Supported auth types:
 | --- | --- |
 | GitHub-compatible | `github` |
 | GitLab | `gitlab` |
+| Generic / CI | `generic` |
 
 Examples:
 
@@ -58,6 +61,7 @@ https://citadel.example.com/listener/github/stack/019f0000-0000-7000-9000-000000
 https://citadel.example.com/listener/github/build/019f0000-0000-7000-9000-000000000003/run
 https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000004/run
 https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000005/run
+https://citadel.example.com/listener/generic/swarm-service/019f0000-0000-7000-9000-000000000006/update
 ```
 
 The listener is outside `/api/v1` and is intentionally public. Only `/listener/*` needs to be reachable by the external provider.
@@ -71,10 +75,26 @@ Supported authentication formats:
 - GitHub HMAC SHA-256
 - GitLab signed webhook
 - GitLab legacy token
+- Generic shared secret (sent in the `Authorization: Bearer` header)
 
 When a secret is configured, Citadel validates the provider signature or token before dispatching the webhook.
 
-When the secret is empty, Citadel accepts unsigned deliveries for that enabled resource and relies on the unguessable resource id, route shape, branch filter, repository identity checks, and listener rate limiting. For production, configure a secret.
+GitHub and GitLab-compatible configurations may accept unsigned deliveries when their secret is empty. Generic / CI webhooks always require a non-empty shared secret. This credential is scoped to the configured webhook and is not a Citadel user access token.
+
+### Generic / CI
+
+Use Generic / CI when the caller is not sending GitHub or GitLab signatures. Send the configured secret in the HTTP `Authorization` header; never put it in the URL:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <shared-secret>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: release-123" \
+  -d '{"branch":"main","commitSha":"abc123","changedPaths":["src/app.cs"]}' \
+  https://citadel.example.com/listener/generic/repo/<resource-id>/pull
+```
+
+The JSON body is optional. Citadel recognizes `branch`, `commitSha` (or `commit`), `repository`, and `changedPaths` when the target action uses Git metadata. When metadata is omitted, Citadel uses the saved resource identity and configured branch. `Idempotency-Key` is recorded for diagnostics; resource processing locks remain the retry-safety boundary.
 
 ### GitHub, Forgejo, And Gitea
 
@@ -250,12 +270,25 @@ Disabled or archived policies do not run from webhooks.
 
 For backup policy setup, see `docs/user/backups.md`.
 
+## Managed Swarm Service Webhooks
+
+Managed Service webhooks trigger the same bounded Registry digest check used by **Check for updates**. They never issue a blind Docker force update.
+
+- The Service must use an external tagged image and have been deployed once so an applied digest exists.
+- `Disabled` update behavior makes the delivery a no-op.
+- `Notify only` records and streams whether a newer digest is available.
+- `Auto deploy` starts the normal durable Service Apply path only when the digest changed and the required license capabilities are available.
+- Build-backed Services use the Build Project webhook instead; digest-pinned images cannot be checked for a newer tag.
+
+Service webhook deliveries create `SwarmServiceWebhookReceived` activities. Applying an available image continues through the normal Service operation and reconciliation activities.
+
 ## Activities, Runs, And Alerts
 
 Git repository and Git stack webhooks write webhook activity events:
 
 - `GitRepoWebhookReceived`
 - `StackWebhookReceived`
+- `SwarmServiceWebhookReceived`
 
 Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.
 
@@ -287,6 +320,8 @@ Use this checklist for Git providers:
 11. Send a test delivery from the provider.
 12. Check Citadel activity, action runs, or backup runs.
 
+For Generic / CI, select that provider, keep the generated secret safe, send it as an `Authorization: Bearer` header, and use the copied `generic` listener URL. A push event setting is not required.
+
 ## Troubleshooting
 
 Webhook target not found:
@@ -302,6 +337,7 @@ Webhook authentication failed:
 - The wrong provider/authentication format is selected.
 - GitLab signed webhook headers are missing or expired.
 - The provider is sending a token header while Citadel is configured for signed webhook mode, or the reverse.
+- A Generic / CI caller omitted the `Authorization: Bearer` header or used a different token.
 
 Webhook accepted but no work happened:
 
@@ -311,6 +347,7 @@ Webhook accepted but no work happened:
 - A Git stack push did not change any watched paths.
 - The repository payload does not match the linked repository.
 - The backup policy is disabled or already has an active run.
+- A managed Service has update checks disabled, has not been deployed once, or does not use an external tagged image.
 
 Provider cannot reach Citadel:
 

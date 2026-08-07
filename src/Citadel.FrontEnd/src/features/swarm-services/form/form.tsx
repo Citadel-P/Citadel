@@ -34,6 +34,7 @@ import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/
 import { AlertMessage } from '@/components/custom/alert-message';
 import { MonacoToArrayEditor } from '@/lib/monaco';
 import { ResourceTagSelector } from '@/features/tags/components';
+import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { createEnvironmentVariableValidator } from '@/lib/utils';
 import { ServiceMountsField, ServicePortsField, ServiceReferencesField } from './service-fields';
@@ -164,6 +165,7 @@ export const SwarmServiceForm = ({
   );
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
   const licensedUpdateBehaviors = useMemo(
     () => ({
       ...updateBehaviors,
@@ -408,6 +410,7 @@ export const SwarmServiceForm = ({
                         spec: {
                           ...previous.spec!,
                           updateBehavior: source === 'Build' ? UpdateBehavior.Disabled : previous.spec?.updateBehavior,
+                          webhook: source === 'Build' ? null : previous.spec?.webhook,
                           image:
                             source === 'Build'
                               ? { $type: 'Build', buildProjectId: '' }
@@ -646,7 +649,16 @@ export const SwarmServiceForm = ({
                   disabled={updateBehaviorUnavailable}
                   collection={licensedUpdateBehaviors}
                   onChange={(updateBehavior: UpdateBehavior) =>
-                    set((previous) => ({ spec: { ...previous.spec!, updateBehavior } }))
+                    set((previous) => ({
+                      spec: {
+                        ...previous.spec!,
+                        updateBehavior,
+                        webhook:
+                          updateBehavior === UpdateBehavior.Disabled && previous.spec?.webhook?.enabled
+                            ? { ...previous.spec.webhook, enabled: false }
+                            : previous.spec?.webhook,
+                      },
+                    }))
                   }
                 />
                 {updateBehaviorUnavailable && (
@@ -678,6 +690,47 @@ export const SwarmServiceForm = ({
               />
             ),
           }),
+          ...(imageType === 'External'
+            ? [
+                defineGroupField<FormValue>({
+                  id: 'webhook',
+                  label: 'Webhook',
+                  title: 'Webhook',
+                  description: 'Trigger an image update check from a Git provider, CI system, or external caller.',
+                  disabled: !automatedOperationsEnabled,
+                  requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
+                  items: [
+                    defineField<FormValue, 'spec.webhook'>({
+                      key: 'spec.webhook',
+                      label: 'Enabled',
+                      render: (value, set) => (
+                        <WebhookConfigField
+                          resourceType="swarm-service"
+                          resourceId={id}
+                          execution="update"
+                          showBranchFilter={false}
+                          value={value ?? { enabled: false }}
+                          disabled={disabled}
+                          enableDisabled={!automatedOperationsEnabled}
+                          onChange={(webhook) =>
+                            set((previous) => ({
+                              spec: {
+                                ...previous.spec!,
+                                webhook,
+                                updateBehavior:
+                                  webhook.enabled && previous.spec?.updateBehavior === UpdateBehavior.Disabled
+                                    ? UpdateBehavior.Notify
+                                    : previous.spec?.updateBehavior,
+                              },
+                            }))
+                          }
+                        />
+                      ),
+                    }),
+                  ],
+                }),
+              ]
+            : []),
           defineField<FormValue, 'spec.placementConstraints'>({
             key: 'spec.placementConstraints',
             label: 'Placement Constraints',
@@ -1129,6 +1182,7 @@ export const SwarmServiceForm = ({
     }),
     [
       builds,
+      automatedOperationsEnabled,
       configurationNames,
       configOptions,
       configsQuery.isLoading,
@@ -1138,6 +1192,7 @@ export const SwarmServiceForm = ({
       currentSpec.updatePolicy,
       disabled,
       imageType,
+      id,
       licensedUpdateBehaviors,
       mode,
       networks,

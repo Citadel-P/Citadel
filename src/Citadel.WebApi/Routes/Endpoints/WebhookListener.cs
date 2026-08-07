@@ -7,6 +7,8 @@ namespace WebApi.Routes.Endpoints;
 
 public static class WebhookListener
 {
+    private const int MaximumBodyBytes = 1024 * 1024;
+
     public static async Task<IResult> Receive(
         HttpContext httpContext,
         IMediator mediator,
@@ -51,8 +53,26 @@ public static class WebhookListener
 
     private static async Task<byte[]> ReadRawBodyAsync(HttpRequest request, CancellationToken cancellationToken)
     {
-        using var stream = new MemoryStream();
-        await request.Body.CopyToAsync(stream, cancellationToken);
+        if (request.ContentLength > MaximumBodyBytes)
+            return new byte[MaximumBodyBytes + 1];
+
+        var capacity = request.ContentLength is > 0
+            ? (int)request.ContentLength.Value
+            : 0;
+        using var stream = new MemoryStream(capacity);
+        var buffer = new byte[64 * 1024];
+        while (stream.Length <= MaximumBodyBytes)
+        {
+            var remaining = MaximumBodyBytes + 1 - (int)stream.Length;
+            var read = await request.Body.ReadAsync(
+                buffer.AsMemory(0, Math.Min(buffer.Length, remaining)),
+                cancellationToken);
+            if (read == 0)
+                break;
+
+            await stream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
+
         return stream.ToArray();
     }
 }

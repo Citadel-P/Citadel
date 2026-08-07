@@ -181,6 +181,15 @@ but an authorized manual check remains available after the first Deploy.
 Digest-pinned and build-produced images do not support Registry update checks.
 Auto deploy requires the Operational Guardrails license capability.
 
+An external tagged Service can also expose a resource-owned webhook. GitHub,
+GitLab, and Generic / CI callers use the same listener infrastructure as other
+Citadel resources. A Service webhook runs the normal digest check: **Notify
+only** reports a changed digest, while **Auto deploy** starts the durable Apply
+path only when an update exists. Generic / CI callers must send the configured
+shared secret as an `Authorization: Bearer` header. Build-backed Services use
+their Build Project webhook instead. This resource-owned shared secret is not a
+Citadel user access token.
+
 Scale and Restart Tasks keep the currently applied image even if its source tag
 has moved. Apply resolves the current tag digest and performs the image update.
 

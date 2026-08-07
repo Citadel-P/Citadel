@@ -7,12 +7,14 @@ using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities.Activities;
 using Domain.Entities.Builds;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -66,7 +68,8 @@ internal sealed class ReceiveWebhookHandler(
     IAutomationRunQueueService automationRunQueueService,
     ILicenseEntitlementService entitlementService,
     IHostApplicationLifetime applicationLifetime,
-    ILogger<ReceiveWebhookHandler> logger) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
+    ILogger<ReceiveWebhookHandler> logger,
+    ISwarmServiceUpdateCheckService swarmServiceUpdateCheckService) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
     private const int MaxBodyBytes = 1024 * 1024;
     private static readonly TimeSpan GitLabSignedTimestampTolerance = TimeSpan.FromMinutes(5);
@@ -85,6 +88,15 @@ internal sealed class ReceiveWebhookHandler(
         {
             await RecordActivityAsync(command, requestId, target, null, WebhookDispatchResult.NoOp(target.Error.Message), "rejected", target.Error.Message, ActivityStatus.Failure, cancellationToken);
             return Result.Failure<WebhookReceiveResult>(target.Error);
+        }
+
+        if (WebhookConfigurationValidation.GetAuthenticationError(
+                target.Provider,
+                target.AuthScheme,
+                target.Secret) is { } configurationError)
+        {
+            await RecordActivityAsync(command, requestId, target, null, WebhookDispatchResult.NoOp(configurationError), "rejected", configurationError, ActivityStatus.Failure, cancellationToken);
+            return Result.Failure<WebhookReceiveResult>(new BadRequestError(configurationError));
         }
 
         if (!Authenticate(target.AuthScheme, command.Headers, command.Body, target.Secret))
@@ -268,6 +280,34 @@ internal sealed class ReceiveWebhookHandler(
                 Error: null);
         }
 
+        if ((command.ResourceType.Equals("swarm-service", StringComparison.OrdinalIgnoreCase)
+                || command.ResourceType.Equals("swarmService", StringComparison.OrdinalIgnoreCase))
+            && command.Execution.Equals("update", StringComparison.OrdinalIgnoreCase))
+        {
+            var service = await unitOfWork.SwarmServices.GetAsync(command.ResourceId, cancellationToken);
+            var webhook = service?.Spec.Webhook;
+            if (service is null || webhook is null || !webhook.Enabled)
+                return WebhookTarget.NotFound();
+
+            if (webhook.Provider != provider)
+                return WebhookTarget.BadRequest("Webhook auth type does not match Service webhook provider.");
+
+            return new WebhookTarget(
+                Provider: webhook.Provider,
+                AuthScheme: webhook.AuthScheme,
+                Execution: WebhookExecution.SwarmServiceUpdate,
+                Secret: webhook.Secret,
+                BranchFilter: null,
+                Repository: null,
+                Stack: null,
+                GitStack: null,
+                Action: null,
+                BackupPolicy: null,
+                BuildProject: null,
+                Error: null,
+                SwarmService: service);
+        }
+
         return WebhookTarget.BadRequest("Unsupported webhook resource or execution.");
     }
 
@@ -287,8 +327,43 @@ internal sealed class ReceiveWebhookHandler(
             WebhookExecution.AutomationActionRun => await DispatchAutomationActionRunAsync(command, target, payload, cancellationToken),
             WebhookExecution.BackupPolicyRun => await DispatchBackupPolicyRunAsync(command, target, payload, cancellationToken),
             WebhookExecution.BuildRun => await DispatchBuildRunAsync(target, payload, cancellationToken),
+            WebhookExecution.SwarmServiceUpdate => await DispatchSwarmServiceUpdateAsync(target, cancellationToken),
             _ => WebhookDispatchResult.NoOp("Unsupported execution")
         };
+    }
+
+    private async Task<WebhookDispatchResult> DispatchSwarmServiceUpdateAsync(
+        WebhookTarget target,
+        CancellationToken cancellationToken)
+    {
+        var service = target.SwarmService;
+        if (service is null)
+            return WebhookDispatchResult.NoOp("Managed Swarm Service not found");
+        if (service.Spec.UpdateBehavior == UpdateBehavior.Disabled)
+            return WebhookDispatchResult.NoOp("Service image updates are disabled");
+
+        var entitlementNoOp = await GetEntitlementNoOpAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (entitlementNoOp is not null)
+            return entitlementNoOp;
+
+        var checkedService = await swarmServiceUpdateCheckService.CheckAsync(
+            service.Id,
+            Constants.SystemId,
+            applyWhenAvailable: true,
+            cancellationToken);
+        if (!checkedService.IsSuccess(out var result, out var error))
+            return WebhookDispatchResult.NoOp(error!.Message);
+
+        if (result!.UpdateAvailable
+            && result.Service.Spec.UpdateBehavior == UpdateBehavior.AutoDeploy
+            && !result.ApplyStarted)
+            return WebhookDispatchResult.NoOp(result.Reason, alreadyCommitted: true);
+
+        return result.UpdateAvailable
+            ? WebhookDispatchResult.Queued(reason: result.Reason, alreadyCommitted: true)
+            : WebhookDispatchResult.NoOp(result.Reason, alreadyCommitted: true);
     }
 
     private async Task<WebhookDispatchResult> DispatchRepoPullAsync(
@@ -303,7 +378,11 @@ internal sealed class ReceiveWebhookHandler(
         if (!RepositoryMatches(repo, payload))
             return WebhookDispatchResult.NoOp("Repository identity mismatch");
 
-        var branch = ResolveBranch(target.BranchFilter, payload.Branch, repo.DefaultBranch);
+        var branch = ResolveBranch(
+            target.BranchFilter,
+            payload.Branch,
+            repo.DefaultBranch,
+            target.Provider == WebhookProvider.Generic);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
@@ -350,7 +429,11 @@ internal sealed class ReceiveWebhookHandler(
         if (!RepositoryMatches(repo, payload))
             return WebhookDispatchResult.NoOp("Repository identity mismatch");
 
-        var branch = ResolveBranch(target.BranchFilter, payload.Branch, gitStack.Branch);
+        var branch = ResolveBranch(
+            target.BranchFilter,
+            payload.Branch,
+            gitStack.Branch,
+            target.Provider == WebhookProvider.Generic);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
@@ -407,7 +490,11 @@ internal sealed class ReceiveWebhookHandler(
         if (action is null)
             return WebhookDispatchResult.NoOp("Automation action not found");
 
-        var branch = ResolveBranch(target.BranchFilter, payload.Branch, fallbackBranch: null);
+        var branch = ResolveBranch(
+            target.BranchFilter,
+            payload.Branch,
+            fallbackBranch: null,
+            target.Provider == WebhookProvider.Generic);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
@@ -448,7 +535,11 @@ internal sealed class ReceiveWebhookHandler(
         if (!policy.Enabled)
             return WebhookDispatchResult.NoOp("Backup policy is disabled");
 
-        var branch = ResolveBranch(target.BranchFilter, payload.Branch, fallbackBranch: null);
+        var branch = ResolveBranch(
+            target.BranchFilter,
+            payload.Branch,
+            fallbackBranch: null,
+            target.Provider == WebhookProvider.Generic);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
@@ -498,7 +589,11 @@ internal sealed class ReceiveWebhookHandler(
         if (!RepositoryMatches(repo, payload))
             return WebhookDispatchResult.NoOp("Repository identity mismatch");
 
-        var branch = ResolveBranch(target.BranchFilter, payload.Branch, project.Branch);
+        var branch = ResolveBranch(
+            target.BranchFilter,
+            payload.Branch,
+            project.Branch,
+            target.Provider == WebhookProvider.Generic);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
@@ -1067,6 +1162,27 @@ internal sealed class ReceiveWebhookHandler(
             return true;
         }
 
+        if (command.ResourceType.Equals("swarm-service", StringComparison.OrdinalIgnoreCase)
+            || command.ResourceType.Equals("swarmService", StringComparison.OrdinalIgnoreCase))
+        {
+            var info = new SwarmServiceWebhookReceived(
+                requestId,
+                command.AuthType,
+                command.Execution,
+                status,
+                reason,
+                payload?.DeliveryId);
+            activity = new ActivityEvent(
+                platformId: target?.SwarmService?.PlatformId,
+                resourceId: target?.SwarmService?.Id ?? command.ResourceId,
+                actorId: Constants.SystemId,
+                resourceName: target?.SwarmService?.Name ?? $"swarm-service:{command.ResourceId}",
+                eventType: ActivityEventType.SwarmServiceWebhookReceived,
+                status: activityStatus,
+                info: info);
+            return true;
+        }
+
         return false;
     }
 
@@ -1084,16 +1200,28 @@ internal sealed class ReceiveWebhookHandler(
             return true;
         }
 
+        if (authType.Equals("generic", StringComparison.OrdinalIgnoreCase))
+        {
+            provider = WebhookProvider.Generic;
+            return true;
+        }
+
         provider = default;
         return false;
     }
 
-    private static (string? Branch, string? NoOpReason) ResolveBranch(string? filter, string? payloadBranch, string? fallbackBranch)
+    private static (string? Branch, string? NoOpReason) ResolveBranch(
+        string? filter,
+        string? payloadBranch,
+        string? fallbackBranch,
+        bool allowConfiguredBranchFallback = false)
     {
         if (!string.IsNullOrWhiteSpace(filter))
         {
             if (string.IsNullOrWhiteSpace(payloadBranch))
-                return (null, "Payload branch missing");
+                return allowConfiguredBranchFallback
+                    ? (filter, null)
+                    : (null, "Payload branch missing");
 
             return string.Equals(filter, payloadBranch, StringComparison.Ordinal)
                 ? (payloadBranch, null)
@@ -1137,14 +1265,24 @@ internal sealed class ReceiveWebhookHandler(
         if (string.IsNullOrWhiteSpace(payload))
             return "{}";
 
-        using var document = JsonDocument.Parse(rawBody);
-        return document.RootElement.ValueKind == JsonValueKind.Object
-            ? payload
-            : $$"""{"payload":{{payload}}}""";
+        try
+        {
+            using var document = JsonDocument.Parse(rawBody);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? payload
+                : $$"""{"payload":{{payload}}}""";
+        }
+        catch (JsonException)
+        {
+            return $$"""{"payload":"{{JsonEncodedText.Encode(payload)}}"}""";
+        }
     }
 
     private static bool Authenticate(WebhookAuthScheme authScheme, IReadOnlyDictionary<string, string[]> headers, byte[] rawBody, string? secret)
     {
+        if (authScheme == WebhookAuthScheme.BearerToken)
+            return !string.IsNullOrWhiteSpace(secret) && ValidateBearerSharedSecret(headers, secret);
+
         if (string.IsNullOrWhiteSpace(secret))
             return true;
 
@@ -1155,6 +1293,22 @@ internal sealed class ReceiveWebhookHandler(
             WebhookAuthScheme.GitLabLegacyToken => ValidateGitLabLegacy(headers, secret),
             _ => false
         };
+    }
+
+    private static bool ValidateBearerSharedSecret(
+        IReadOnlyDictionary<string, string[]> headers,
+        string secret)
+    {
+        var authorization = GetHeader(headers, "Authorization");
+        const string prefix = "Bearer ";
+        if (authorization is null || !authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var token = authorization[prefix.Length..].Trim();
+        var expected = Encoding.UTF8.GetBytes(secret);
+        var actual = Encoding.UTF8.GetBytes(token);
+        return expected.Length == actual.Length
+            && CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
     private static bool ValidateGitHub(IReadOnlyDictionary<string, string[]> headers, byte[] rawBody, string secret)
@@ -1242,6 +1396,9 @@ internal sealed class ReceiveWebhookHandler(
 
     private static WebhookPayloadInfo ParsePayload(WebhookProvider provider, IReadOnlyDictionary<string, string[]> headers, byte[] rawBody)
     {
+        if (provider == WebhookProvider.Generic)
+            return ParseGenericPayload(headers, rawBody);
+
         var deliveryId = provider == WebhookProvider.GitHub
             ? GetHeader(headers, "X-GitHub-Delivery")
             : GetHeader(headers, "webhook-id")
@@ -1293,6 +1450,51 @@ internal sealed class ReceiveWebhookHandler(
         catch
         {
             return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], true);
+        }
+    }
+
+    private static WebhookPayloadInfo ParseGenericPayload(
+        IReadOnlyDictionary<string, string[]> headers,
+        byte[] rawBody)
+    {
+        var deliveryId = GetHeader(headers, "Idempotency-Key")
+            ?? GetHeader(headers, "X-Citadel-Delivery");
+        var eventType = GetHeader(headers, "X-Citadel-Event") ?? "generic";
+        if (rawBody.Length == 0)
+            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], false);
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawBody);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], false);
+
+            var branch = TryGetString(root, "branch");
+            var commit = TryGetString(root, "commitSha") ?? TryGetString(root, "commit");
+            var repository = TryGetString(root, "repository");
+            var changedPaths = root.TryGetProperty("changedPaths", out var paths)
+                && paths.ValueKind == JsonValueKind.Array
+                ? paths.EnumerateArray()
+                    .Where(static value => value.ValueKind == JsonValueKind.String)
+                    .Select(static value => value.GetString())
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value!.Replace('\\', '/').Trim().TrimStart('/'))
+                    .ToArray()
+                : [];
+            return new WebhookPayloadInfo(
+                deliveryId,
+                eventType,
+                branch,
+                commit,
+                repository,
+                [],
+                changedPaths,
+                false);
+        }
+        catch (JsonException)
+        {
+            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], false);
         }
     }
 
@@ -1356,7 +1558,8 @@ internal sealed class ReceiveWebhookHandler(
         AutomationAction? Action,
         BackupPolicy? BackupPolicy,
         BuildProject? BuildProject,
-        Error? Error)
+        Error? Error,
+        SwarmService? SwarmService = null)
     {
         public static WebhookTarget NotFound()
             => new(default, default, default, null, null, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
@@ -1400,7 +1603,8 @@ internal sealed class ReceiveWebhookHandler(
                 dispatchedCommitSha,
                 alreadyCommitted);
 
-        public static WebhookDispatchResult NoOp(string reason) => new("noop", reason);
+        public static WebhookDispatchResult NoOp(string reason, bool alreadyCommitted = false)
+            => new("noop", reason, AlreadyCommitted: alreadyCommitted);
     }
 }
 

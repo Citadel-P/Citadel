@@ -14,6 +14,7 @@
 export enum WebhookProvider {
   GitHub = "GitHub",
   GitLab = "GitLab",
+  Generic = "Generic",
 }
 
 /** @default "GitHubHmacSha256" */
@@ -21,6 +22,7 @@ export enum WebhookAuthScheme {
   GitHubHmacSha256 = "GitHubHmacSha256",
   GitLabSignedToken = "GitLabSignedToken",
   GitLabLegacyToken = "GitLabLegacyToken",
+  BearerToken = "BearerToken",
 }
 
 export enum VolumeSharing {
@@ -910,6 +912,7 @@ export enum ActivityEventType {
   SwarmServiceForceUpdated = "SwarmServiceForceUpdated",
   SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
   SwarmServiceDuplicated = "SwarmServiceDuplicated",
+  SwarmServiceWebhookReceived = "SwarmServiceWebhookReceived",
 }
 
 export enum ActionRunTrigger {
@@ -1688,6 +1691,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "SwarmServiceDuplicated",
         ActivityEventInfoSwarmServiceDuplicated
       >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceWebhookReceived",
+        ActivityEventInfoSwarmServiceWebhookReceived
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -2399,6 +2406,17 @@ export interface ActivityEventInfoSwarmServiceUpdated {
   $type?: "SwarmServiceUpdated";
   oldService: SwarmServiceActivitySnapshot;
   newService: SwarmServiceActivitySnapshot;
+}
+
+export interface ActivityEventInfoSwarmServiceWebhookReceived {
+  $type?: "SwarmServiceWebhookReceived";
+  /** @format uuid */
+  requestId: string;
+  authType: string;
+  execution: string;
+  status: string;
+  reason: null | string;
+  deliveryId: null | string;
 }
 
 export interface ActivityEventInfoUserMfaDisabled {
@@ -8016,6 +8034,7 @@ export interface SwarmServiceSpec {
   placementConstraints?: string[];
   restartPolicy?: null | SwarmServiceRestartPolicy;
   updatePolicy?: null | SwarmServiceUpdatePolicy;
+  webhook?: null | SwarmServiceWebhookConfig;
 }
 
 export interface SwarmServiceUpdatePolicy {
@@ -8072,6 +8091,15 @@ export interface SwarmServiceView {
   observedAt: string;
   isStale: boolean;
   capabilities?: null | PlatformCapabilities;
+}
+
+export interface SwarmServiceWebhookConfig {
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
 }
 
 export interface SwarmServicesView {

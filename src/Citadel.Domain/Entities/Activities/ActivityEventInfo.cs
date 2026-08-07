@@ -129,6 +129,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(SwarmServiceForceUpdated), nameof(ActivityEventType.SwarmServiceForceUpdated))]
 [JsonDerivedType(typeof(SwarmServiceOperationFailed), nameof(ActivityEventType.SwarmServiceOperationFailed))]
 [JsonDerivedType(typeof(SwarmServiceDuplicated), nameof(ActivityEventType.SwarmServiceDuplicated))]
+[JsonDerivedType(typeof(SwarmServiceWebhookReceived), nameof(ActivityEventType.SwarmServiceWebhookReceived))]
 
 public abstract record ActivityEventInfo;
 
@@ -159,6 +160,13 @@ public sealed record SwarmServiceApplied(Guid OperationId, IReadOnlyList<string>
 public sealed record SwarmServiceScaled(Guid OperationId, int Replicas, IReadOnlyList<string> Warnings) : ActivityEventInfo;
 public sealed record SwarmServiceForceUpdated(Guid OperationId, IReadOnlyList<string> Warnings) : ActivityEventInfo;
 public sealed record SwarmServiceOperationFailed(Guid OperationId, SwarmServiceOperationKind Kind, string Reason) : ActivityEventInfo;
+public sealed record SwarmServiceWebhookReceived(
+    Guid RequestId,
+    string AuthType,
+    string Execution,
+    string Status,
+    string? Reason,
+    string? DeliveryId) : ActivityEventInfo;
 
 public static class SwarmServiceActivityExtensions
 {
@@ -169,7 +177,12 @@ public static class SwarmServiceActivityExtensions
         service.Description,
         service.DockerName,
         service.DockerServiceId,
-        service.Spec);
+        service.Spec with
+        {
+            Webhook = service.Spec.Webhook is null
+                ? null
+                : service.Spec.Webhook with { Secret = null },
+        });
 }
 
 public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;

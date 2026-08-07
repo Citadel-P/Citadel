@@ -96,6 +96,7 @@ public static class ApplicationModule
             .AddSingleton<SwarmReconciliationJob>()
             .AddSingleton<ISwarmReconciliationCoordinator>(provider => provider.GetRequiredService<SwarmReconciliationJob>())
             .AddScoped<ISwarmServiceMutationService, SwarmServiceMutationService>()
+            .AddScoped<ISwarmServiceUpdateCheckService, SwarmServiceUpdateCheckService>()
             .AddScoped<IActorScopeEvictor, ActorScopeEvictor>()
             .AddScoped<IAdministratorGuard, AdministratorGuard>()
             .AddScoped<IActorScopeProvider, ActorScopeProvider>()

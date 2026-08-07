@@ -10,4 +10,10 @@ internal static class SwarmServiceLicenseConfigurationPolicy
         SwarmServiceSpec proposed) =>
         proposed.UpdateBehavior == UpdateBehavior.AutoDeploy
         && current?.UpdateBehavior != UpdateBehavior.AutoDeploy;
+
+    public static bool ExpandsAutomatedOperations(
+        SwarmServiceSpec? current,
+        SwarmServiceSpec proposed) =>
+        proposed.Webhook is { Enabled: true }
+        && current?.Webhook != proposed.Webhook;
 }

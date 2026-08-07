@@ -675,6 +675,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(Domain.Contracts.Resources.SwarmServices.SwarmServiceProgressItem))]
 [JsonSerializable(typeof(IAsyncEnumerable<Domain.Contracts.Resources.SwarmServices.SwarmServiceProgressItem>))]
 [JsonSerializable(typeof(SwarmServiceSpec))]
+[JsonSerializable(typeof(SwarmServiceWebhookConfig))]
 [JsonSerializable(typeof(SwarmExternalImage))]
 [JsonSerializable(typeof(SwarmBuildImage))]
 [JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.SwarmServiceOperationView))]
