@@ -7,7 +7,8 @@ public sealed record SwarmServiceResult(
     int RunningTaskCount, int DesiredTaskCount, string UpdateState, string? UpdateMessage,
     IReadOnlyList<string> Ports, IReadOnlyList<string> NetworkIds,
     IReadOnlyList<string> SecretIds, IReadOnlyList<string> ConfigIds,
-    IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt);
+    IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt,
+    string RuntimeHash = "", long ForceUpdate = 0);
 
 public sealed record SwarmTaskResult(
     string Id, long VersionIndex, string Name, string ServiceId, int? Slot, string NodeId,

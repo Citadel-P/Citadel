@@ -7725,6 +7725,13 @@
               "format": "int32",
               "default": 50
             }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -19614,6 +19621,1095 @@
             "Bearer": [ ]
           }
         ]
+      }
+    },
+    "/api/v1/swarmServices": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "List managed Docker Swarm Services",
+        "operationId": "listManagedSwarmServices",
+        "parameters": [
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "platformId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServicesView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Create a managed Docker Swarm Service",
+        "operationId": "createSwarmService",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSwarmServiceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Delete managed Docker Swarm Services",
+        "operationId": "deleteSwarmServices",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Get a managed Docker Swarm Service",
+        "operationId": "getManagedSwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Update managed Docker Swarm Service configuration",
+        "operationId": "updateSwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSwarmServiceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/duplicate-draft": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Get managed Docker Swarm Service duplicate draft",
+        "operationId": "getSwarmServiceDuplicateDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmServiceDuplicateDraftView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/swarmServices/rename": {
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Rename a managed Docker Swarm Service",
+        "operationId": "renameSwarmService",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/tags": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Get managed Docker Swarm Service tags",
+        "operationId": "getSwarmServiceTags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Replace managed Docker Swarm Service tags",
+        "operationId": "replaceSwarmServiceTags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceResourceTagsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Update managed Docker Swarm Service metadata",
+        "operationId": "updateSwarmServiceMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/check-updates": {
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Check a managed Docker Swarm Service image for updates",
+        "operationId": "checkSwarmServiceUpdates",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedSwarmServiceView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/apply": {
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Apply a managed Docker Swarm Service and stream progress",
+        "operationId": "applySwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SwarmServiceProgressItem"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/scale": {
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Scale a managed Docker Swarm Service and stream progress",
+        "operationId": "scaleSwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaleSwarmServiceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SwarmServiceProgressItem"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/force-update": {
+      "post": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Force a managed Docker Swarm Service task update and stream progress",
+        "operationId": "forceUpdateSwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SwarmServiceProgressItem"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/inspect": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Inspect the Docker runtime for a managed Swarm Service",
+        "operationId": "inspectManagedSwarmService",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmServiceInspectView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swarmServices/{id}/logs": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Get bounded logs for a managed Swarm Service",
+        "operationId": "getManagedSwarmServiceLogs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmLogsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/stacks": {
@@ -34829,6 +35925,33 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoBackupPolicyArchived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceApplied"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceScaled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceForceUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceOperationFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated"
           }
         ],
         "discriminator": {
@@ -34937,7 +36060,16 @@
             "BackupPolicyCreated": "#/components/schemas/ActivityEventInfoBackupPolicyCreated",
             "BackupPolicyUpdated": "#/components/schemas/ActivityEventInfoBackupPolicyUpdated",
             "BackupPolicyRenamed": "#/components/schemas/ActivityEventInfoBackupPolicyRenamed",
-            "BackupPolicyArchived": "#/components/schemas/ActivityEventInfoBackupPolicyArchived"
+            "BackupPolicyArchived": "#/components/schemas/ActivityEventInfoBackupPolicyArchived",
+            "SwarmServiceCreated": "#/components/schemas/ActivityEventInfoSwarmServiceCreated",
+            "SwarmServiceUpdated": "#/components/schemas/ActivityEventInfoSwarmServiceUpdated",
+            "SwarmServiceRenamed": "#/components/schemas/ActivityEventInfoSwarmServiceRenamed",
+            "SwarmServiceDeleted": "#/components/schemas/ActivityEventInfoSwarmServiceDeleted",
+            "SwarmServiceApplied": "#/components/schemas/ActivityEventInfoSwarmServiceApplied",
+            "SwarmServiceScaled": "#/components/schemas/ActivityEventInfoSwarmServiceScaled",
+            "SwarmServiceForceUpdated": "#/components/schemas/ActivityEventInfoSwarmServiceForceUpdated",
+            "SwarmServiceOperationFailed": "#/components/schemas/ActivityEventInfoSwarmServiceOperationFailed",
+            "SwarmServiceDuplicated": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated"
           }
         }
       },
@@ -37104,6 +38236,204 @@
           }
         }
       },
+      "ActivityEventInfoSwarmServiceApplied": {
+        "required": [
+          "operationId",
+          "warnings"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceApplied"
+            ],
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceCreated": {
+        "required": [
+          "service"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceCreated"
+            ],
+            "type": "string"
+          },
+          "service": {
+            "$ref": "#/components/schemas/SwarmServiceActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceDeleted": {
+        "required": [
+          "service"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceDeleted"
+            ],
+            "type": "string"
+          },
+          "service": {
+            "$ref": "#/components/schemas/SwarmServiceActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceDuplicated": {
+        "required": [
+          "service",
+          "source"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceDuplicated"
+            ],
+            "type": "string"
+          },
+          "service": {
+            "$ref": "#/components/schemas/SwarmServiceActivitySnapshot"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ActivitySourceResource"
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceForceUpdated": {
+        "required": [
+          "operationId",
+          "warnings"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceForceUpdated"
+            ],
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceOperationFailed": {
+        "required": [
+          "operationId",
+          "kind",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceOperationFailed"
+            ],
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SwarmServiceOperationKind"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceScaled": {
+        "required": [
+          "operationId",
+          "replicas",
+          "warnings"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceScaled"
+            ],
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "replicas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoSwarmServiceUpdated": {
+        "required": [
+          "oldService",
+          "newService"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceUpdated"
+            ],
+            "type": "string"
+          },
+          "oldService": {
+            "$ref": "#/components/schemas/SwarmServiceActivitySnapshot"
+          },
+          "newService": {
+            "$ref": "#/components/schemas/SwarmServiceActivitySnapshot"
+          }
+        }
+      },
       "ActivityEventInfoUserMfaDisabled": {
         "properties": {
           "$type": {
@@ -37390,7 +38720,16 @@
           "BackupPolicyCreated",
           "BackupPolicyUpdated",
           "BackupPolicyRenamed",
-          "BackupPolicyArchived"
+          "BackupPolicyArchived",
+          "SwarmServiceCreated",
+          "SwarmServiceUpdated",
+          "SwarmServiceRenamed",
+          "SwarmServiceDeleted",
+          "SwarmServiceApplied",
+          "SwarmServiceScaled",
+          "SwarmServiceForceUpdated",
+          "SwarmServiceOperationFailed",
+          "SwarmServiceDuplicated"
         ]
       },
       "ActivityResourceType": {
@@ -37408,7 +38747,8 @@
           "Build",
           "BuildAgentPool",
           "Volume",
-          "BackupPolicy"
+          "BackupPolicy",
+          "SwarmService"
         ]
       },
       "ActivitySourceResource": {
@@ -45763,6 +47103,53 @@
           }
         }
       },
+      "CreateSwarmServiceInput": {
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SwarmServiceSpec"
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "duplicateSource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DuplicateSourceInput"
+              }
+            ]
+          }
+        }
+      },
       "CreateTagInput": {
         "required": [
           "name",
@@ -48892,7 +50279,8 @@
           "Registries",
           "Automations",
           "Backups",
-          "Builds"
+          "Builds",
+          "SwarmServices"
         ]
       },
       "GlobalSearchGroup": {
@@ -48993,7 +50381,8 @@
           "BackupPolicy",
           "BackupRepository",
           "Build",
-          "BuildAgentPool"
+          "BuildAgentPool",
+          "SwarmService"
         ]
       },
       "GlobalSearchResponse": {
@@ -50711,8 +52100,200 @@
           "BackupRepository",
           "BackupPolicy",
           "Build",
-          "BuildAgentPool"
+          "BuildAgentPool",
+          "SwarmService"
         ]
+      },
+      "ManagedSwarmServiceView": {
+        "required": [
+          "id",
+          "platformId",
+          "name",
+          "description",
+          "dockerName",
+          "dockerServiceId",
+          "spec",
+          "health",
+          "synchronizationState",
+          "controlState",
+          "autoUpdateState",
+          "appliedImageDigest",
+          "hasPendingDesiredChanges",
+          "hasRuntimeDrift",
+          "rowVersion",
+          "createdAt",
+          "updatedAt",
+          "platformName",
+          "platformStatus",
+          "runningTaskCount",
+          "desiredTaskCount",
+          "updateState",
+          "updateMessage",
+          "currentOperation",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dockerName": {
+            "type": "string"
+          },
+          "dockerServiceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SwarmServiceSpec"
+          },
+          "health": {
+            "$ref": "#/components/schemas/SwarmServiceHealth"
+          },
+          "synchronizationState": {
+            "$ref": "#/components/schemas/SwarmServiceSynchronizationState"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "autoUpdateState": {
+            "$ref": "#/components/schemas/AutoUpdateState"
+          },
+          "appliedImageDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasPendingDesiredChanges": {
+            "type": "boolean"
+          },
+          "hasRuntimeDrift": {
+            "type": "boolean"
+          },
+          "rowVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "platformName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "runningTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "desiredTaskCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "updateState": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updateMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "currentOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceOperationView"
+              }
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagSummaryView"
+            }
+          },
+          "tasks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SwarmTaskView"
+            }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceCapabilities"
+              }
+            ]
+          }
+        }
+      },
+      "ManagedSwarmServicesView": {
+        "required": [
+          "swarmServices",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "swarmServices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManagedSwarmServiceView"
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
       },
       "MandatoryMfaSetupCompleteView": {
         "required": [
@@ -54099,7 +55680,8 @@
         "enum": [
           "Global",
           "Stack",
-          "Deployment"
+          "Deployment",
+          "SwarmService"
         ]
       },
       "ResourceBindingSnapshot": {
@@ -54357,7 +55939,8 @@
           "BackupPolicy",
           "Volume",
           "Build",
-          "BuildAgentPool"
+          "BuildAgentPool",
+          "SwarmService"
         ]
       },
       "RestartPolicy": {
@@ -54539,6 +56122,22 @@
           "Path",
           "Dns"
         ]
+      },
+      "ScaleSwarmServiceInput": {
+        "required": [
+          "replicas"
+        ],
+        "type": "object",
+        "properties": {
+          "replicas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
       },
       "ScheduleType": {
         "enum": [
@@ -57070,6 +58669,265 @@
           }
         }
       },
+      "SwarmServiceActivitySnapshot": {
+        "required": [
+          "id",
+          "platformId",
+          "name",
+          "description",
+          "dockerName",
+          "dockerServiceId",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dockerName": {
+            "type": "string"
+          },
+          "dockerServiceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SwarmServiceSpec"
+          }
+        }
+      },
+      "SwarmServiceCapabilities": {
+        "required": [
+          "canViewLogs",
+          "canInspect",
+          "canApply",
+          "canViewResourceBindings",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canApply": {
+            "type": "boolean"
+          },
+          "canViewResourceBindings": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SwarmServiceConfigReference": {
+        "required": [
+          "configId",
+          "configName",
+          "targetName"
+        ],
+        "type": "object",
+        "properties": {
+          "configId": {
+            "type": "string"
+          },
+          "configName": {
+            "type": "string"
+          },
+          "targetName": {
+            "type": "string"
+          }
+        }
+      },
+      "SwarmServiceDuplicateDraftView": {
+        "required": [
+          "draft",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/CreateSwarmServiceInput"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDraftWarningView"
+            }
+          }
+        }
+      },
+      "SwarmServiceHealth": {
+        "enum": [
+          "Unknown",
+          "Healthy",
+          "Progressing",
+          "Degraded",
+          "Failed",
+          "Created"
+        ]
+      },
+      "SwarmServiceHealthCheck": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "test": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "intervalNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "timeoutNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "retries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "startPeriodNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SwarmServiceImageInfo": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SwarmServiceImageInfoSwarmExternalImage"
+          },
+          {
+            "$ref": "#/components/schemas/SwarmServiceImageInfoSwarmBuildImage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "External": "#/components/schemas/SwarmServiceImageInfoSwarmExternalImage",
+            "Build": "#/components/schemas/SwarmServiceImageInfoSwarmBuildImage"
+          }
+        }
+      },
+      "SwarmServiceImageInfoSwarmBuildImage": {
+        "required": [
+          "buildProjectId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Build"
+            ],
+            "type": "string"
+          },
+          "buildProjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resolvedImageReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resolvedBuildRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "SwarmServiceImageInfoSwarmExternalImage": {
+        "required": [
+          "registryId",
+          "imageTag"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "External"
+            ],
+            "type": "string"
+          },
+          "registryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "imageTag": {
+            "type": "string"
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "SwarmServiceInspectView": {
         "required": [
           "id",
@@ -57182,13 +59040,504 @@
           }
         }
       },
+      "SwarmServiceMount": {
+        "required": [
+          "kind",
+          "source",
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SwarmServiceMountKind"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "SwarmServiceMountKind": {
+        "enum": [
+          "Volume",
+          "Bind"
+        ]
+      },
+      "SwarmServiceOperationKind": {
+        "enum": [
+          "Apply",
+          "Scale",
+          "ForceUpdate",
+          "Delete"
+        ]
+      },
+      "SwarmServiceOperationState": {
+        "enum": [
+          "Prepared",
+          "Canceled",
+          "PendingAcceptance",
+          "Accepted",
+          "Rejected",
+          "NotAccepted",
+          "OutcomeUnknown",
+          "Completed",
+          "OwnershipConflict"
+        ]
+      },
+      "SwarmServiceOperationView": {
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "preparedAt",
+          "attemptedAt",
+          "completedAt",
+          "resultCode",
+          "warnings",
+          "resultMessage"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SwarmServiceOperationKind"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SwarmServiceOperationState"
+          },
+          "preparedAt": {
+            "format": "date-time"
+          },
+          "attemptedAt": {
+            "format": "date-time"
+          },
+          "completedAt": {
+            "format": "date-time"
+          },
+          "resultCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resultMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "SwarmServiceOwnership": {
         "enum": [
           "Unmanaged",
           "DockerStackExternal",
           "CitadelDeployment",
-          "CitadelStack"
+          "CitadelStack",
+          "CitadelService",
+          "OwnershipConflict"
         ]
+      },
+      "SwarmServicePort": {
+        "required": [
+          "targetPort"
+        ],
+        "type": "object",
+        "properties": {
+          "targetPort": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "publishedPort": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "protocol": {
+            "type": "string",
+            "default": "tcp"
+          },
+          "publishMode": {
+            "$ref": "#/components/schemas/SwarmServicePortPublishMode"
+          }
+        }
+      },
+      "SwarmServicePortPublishMode": {
+        "enum": [
+          "Ingress",
+          "Host"
+        ],
+        "default": "Ingress"
+      },
+      "SwarmServiceProgressItem": {
+        "required": [
+          "serviceId",
+          "operationId",
+          "stage",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "isCompleted": {
+            "type": "boolean",
+            "default": false
+          },
+          "isWarning": {
+            "type": "boolean",
+            "default": false
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SwarmServiceResources": {
+        "type": "object",
+        "properties": {
+          "limitNanoCpus": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "limitMemoryBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "reservationNanoCpus": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "reservationMemoryBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SwarmServiceRestartCondition": {
+        "enum": [
+          "None",
+          "OnFailure",
+          "Any"
+        ],
+        "default": "Any"
+      },
+      "SwarmServiceRestartPolicy": {
+        "type": "object",
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/SwarmServiceRestartCondition"
+          },
+          "delayNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "maximumAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "windowNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SwarmServiceSchedulingMode": {
+        "enum": [
+          "Replicated",
+          "Global"
+        ]
+      },
+      "SwarmServiceSecretReference": {
+        "required": [
+          "secretId",
+          "secretName",
+          "targetName"
+        ],
+        "type": "object",
+        "properties": {
+          "secretId": {
+            "type": "string"
+          },
+          "secretName": {
+            "type": "string"
+          },
+          "targetName": {
+            "type": "string"
+          }
+        }
+      },
+      "SwarmServiceSpec": {
+        "required": [
+          "image"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/SwarmServiceImageInfo"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
+          },
+          "schedulingMode": {
+            "$ref": "#/components/schemas/SwarmServiceSchedulingMode"
+          },
+          "replicas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "user": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workingDirectory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "healthCheck": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceHealthCheck"
+              }
+            ]
+          },
+          "stopGracePeriodNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmServicePort"
+            }
+          },
+          "networkIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceMount"
+            }
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceSecretReference"
+            }
+          },
+          "configs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceConfigReference"
+            }
+          },
+          "resources": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceResources"
+              }
+            ]
+          },
+          "placementConstraints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "restartPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceRestartPolicy"
+              }
+            ]
+          },
+          "updatePolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SwarmServiceUpdatePolicy"
+              }
+            ]
+          }
+        }
+      },
+      "SwarmServiceSynchronizationState": {
+        "enum": [
+          "NeverApplied",
+          "DesiredChangesPending",
+          "InSync",
+          "Drifted",
+          "RuntimeMissing",
+          "OutcomeUnknown",
+          "OwnershipConflict"
+        ]
+      },
+      "SwarmServiceUpdateFailureAction": {
+        "enum": [
+          "Pause",
+          "Continue",
+          "Rollback"
+        ],
+        "default": "Pause"
+      },
+      "SwarmServiceUpdateOrder": {
+        "enum": [
+          "StopFirst",
+          "StartFirst"
+        ],
+        "default": "StopFirst"
+      },
+      "SwarmServiceUpdatePolicy": {
+        "type": "object",
+        "properties": {
+          "parallelism": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
+          },
+          "delayNanoseconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "order": {
+            "$ref": "#/components/schemas/SwarmServiceUpdateOrder"
+          },
+          "failureAction": {
+            "$ref": "#/components/schemas/SwarmServiceUpdateFailureAction"
+          }
+        }
       },
       "SwarmServiceView": {
         "required": [
@@ -58692,6 +61041,26 @@
           }
         }
       },
+      "UpdateSwarmServiceInput": {
+        "required": [
+          "spec",
+          "rowVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/SwarmServiceSpec"
+          },
+          "rowVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "UpdateVaultKvV2SecretProviderInput": {
         "required": [
           "name",
@@ -59445,6 +61814,9 @@
     },
     {
       "name": "Deployments"
+    },
+    {
+      "name": "SwarmServices"
     },
     {
       "name": "Stacks"

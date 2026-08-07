@@ -50,6 +50,25 @@ function EventSubscriber({ name }: { name: string }) {
   );
 }
 
+function MultiGroupEventSubscriber({ names }: { names: string[] }) {
+  const [message, setMessage] = useState('waiting');
+  const handleEvent = useCallback((value: string) => setMessage(value), []);
+  const setupEventListeners = useCallback((hub: HubConnection) => hub.on('StreamEvent', handleEvent), [handleEvent]);
+  const removeEventListeners = useCallback((hub: HubConnection) => hub.off('StreamEvent', handleEvent), [handleEvent]);
+  const { isConnected } = useSignalRGroup({
+    groupName: names,
+    setupEventListeners,
+    removeEventListeners,
+  });
+
+  return (
+    <>
+      <span>{isConnected ? 'connected' : 'disconnected'}</span>
+      <span>{message}</span>
+    </>
+  );
+}
+
 function SignalRTestRoot({
   children,
   fake,
@@ -508,6 +527,42 @@ describe('SignalRProvider', () => {
     });
 
     expect(await screen.findByText('streamed')).toBeInTheDocument();
+  });
+
+  it('uses one listener while joining and leaving multiple groups', async () => {
+    const fake = new FakeHubConnection();
+    const names = ['swarm-services:platform-1', 'swarm-services:platform-2'];
+
+    function ToggleSubscriber() {
+      const [visible, setVisible] = useState(true);
+      return (
+        <>
+          {visible && <MultiGroupEventSubscriber names={names} />}
+          <button onClick={() => setVisible(false)}>remove multi-group subscriber</button>
+        </>
+      );
+    }
+
+    render(
+      <SignalRTestRoot fake={fake}>
+        <ToggleSubscriber />
+      </SignalRTestRoot>,
+    );
+
+    await screen.findByText('connected');
+    expect(fake.listenerCount('StreamEvent')).toBe(1);
+    expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', names[0]);
+    expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', names[1]);
+
+    act(() => fake.emit('StreamEvent', 'multi-group-event'));
+    expect(await screen.findByText('multi-group-event')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove multi-group subscriber' }));
+    await waitFor(() => {
+      expect(fake.invoke).toHaveBeenCalledWith('LeaveGroup', names[0]);
+      expect(fake.invoke).toHaveBeenCalledWith('LeaveGroup', names[1]);
+    });
+    expect(fake.listenerCount('StreamEvent')).toBe(0);
   });
 });
 

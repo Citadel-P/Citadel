@@ -61,6 +61,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
             .DeploymentConfiguration()
+            .SwarmServiceConfiguration()
             .ImageConfiguration()
             .AutomationActionConfiguration()
             .ActionRunConfiguration()
@@ -143,6 +144,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         {
             ResourceType.Platform,
             ResourceType.Deployment,
+            ResourceType.SwarmService,
             ResourceType.Stack,
             ResourceType.Registry,
             ResourceType.GitRepository,
@@ -2095,6 +2097,76 @@ internal static class Configuration
         return builder;
     }
 
+    public static ModelBuilder SwarmServiceConfiguration(this ModelBuilder builder)
+    {
+        const string tableName = "SwarmServices";
+        var service = builder.Entity("SwarmService");
+
+        service.ToTable(tableName);
+        service.Property<Guid>("Id").IsRequired();
+        service.HasKey("Id");
+        service.Property<Guid>("PlatformId").IsRequired();
+        service.Property<string>("Name").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        service.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        service.Property<string>("DockerName").HasColumnType(Text).HasMaxLength(63).IsRequired();
+        service.Property<string>("DockerServiceId").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("Spec").HasColumnType(JsonB).IsRequired();
+        service.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType(Timestamp).IsRequired(false);
+        service.Property<string>("AutoUpdateState_Status").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType(Text).IsRequired(false);
+        service.Property<string>("AutoUpdateState_RemoteDigest").HasColumnType(Text).IsRequired(false);
+        service.Property<string>("AutoUpdateState_LastError").HasColumnType(Text).HasMaxLength(2000).IsRequired(false);
+        service.Property<string>("Health").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        service.Property<string>("SynchronizationState").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        service.Property<string>("DesiredSpecHash").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        service.Property<string>("LastAppliedDesiredSpecHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("LastAppliedRuntimeHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("AppliedImageDigest").HasColumnType(Text).HasMaxLength(1000).IsRequired(false);
+        service.Property<long?>("DockerVersionIndex").HasColumnType(BigInt).IsRequired(false);
+        service.Property<Guid?>("OperationId").IsRequired(false);
+        service.Property<string>("OperationKind").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("OperationState").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<long?>("BaseDockerVersion").HasColumnType(BigInt).IsRequired(false);
+        service.Property<string>("TargetDesiredSpecHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<string>("TargetRuntimeHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<long?>("TargetRowVersion").HasColumnType(BigInt).IsRequired(false);
+        service.Property<long?>("ExpectedForceUpdate").HasColumnType(BigInt).IsRequired(false);
+        service.Property<DateTime?>("PreparedAt").HasColumnType(Timestamp).IsRequired(false);
+        service.Property<DateTime?>("AttemptedAt").HasColumnType(Timestamp).IsRequired(false);
+        service.Property<DateTime?>("CompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        service.Property<long?>("ObservedDockerVersion").HasColumnType(BigInt).IsRequired(false);
+        service.Property<string>("ResultCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        service.Property<string>("OperationClusterId").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
+        service.Property<Guid?>("OperationActorId").IsRequired(false);
+        service.Property<string>("Warnings").HasColumnType(JsonB).IsRequired(false);
+        service.Property<string>("ResultMessage").HasColumnType(Text).HasMaxLength(2000).IsRequired(false);
+        service.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired();
+
+        service.AddReconcilableMember(requireControlState: true).AddAuditedMemebers();
+        service.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Restrict);
+        service.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
+        service.HasIndex("DockerName", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_DockerName_PlatformId");
+        service.HasIndex("PlatformId", "DockerServiceId").IsUnique()
+            .HasFilter("\"dockerserviceid\" IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_PlatformId_DockerServiceId");
+        service.HasIndex("OperationState", "PreparedAt").HasDatabaseName($"IX_{tableName}_RecoverableOperation");
+        service.HasCheckConstraint(
+            $"CK_{tableName}_OperationFields",
+            "(operationid IS NULL AND operationkind IS NULL AND operationstate IS NULL AND basedockerversion IS NULL " +
+            "AND targetdesiredspechash IS NULL AND targetruntimehash IS NULL AND targetrowversion IS NULL " +
+            "AND expectedforceupdate IS NULL AND preparedat IS NULL AND attemptedat IS NULL AND completedat IS NULL " +
+            "AND observeddockerversion IS NULL AND resultcode IS NULL AND warnings IS NULL AND resultmessage IS NULL " +
+            "AND operationclusterid IS NULL AND operationactorid IS NULL) " +
+            "OR (operationid IS NOT NULL AND operationkind IS NOT NULL AND operationstate IS NOT NULL " +
+            "AND targetdesiredspechash IS NOT NULL AND targetrowversion IS NOT NULL AND preparedat IS NOT NULL " +
+            "AND operationclusterid IS NOT NULL AND operationactorid IS NOT NULL)");
+        service.HasCheckConstraint(
+            $"CK_{tableName}_CanceledOperation",
+            "operationstate <> 'Canceled' OR (attemptedat IS NULL AND completedat IS NOT NULL)");
+        ConfigureGlobalSearchIndex(service, tableName, "Name");
+        return builder;
+    }
+
     public static ModelBuilder SwarmNodeProjectionConfiguration(this ModelBuilder builder)
     {
         var tableName = "SwarmNodeProjections";
@@ -2157,6 +2229,10 @@ internal static class Configuration
             .HasDefaultValue(nameof(SwarmServiceOwnership.Unmanaged));
         service.Property<string>("DockerStackNamespace").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         service.Property<string>("OwnershipDiagnostic").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
+        service.Property<Guid?>("SwarmServiceId").IsRequired(false);
+        service.Property<string>("LiveRuntimeHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        service.Property<long>("ForceUpdate").HasDefaultValue(0L);
+        service.HasIndex("SwarmServiceId").HasDatabaseName("IX_SwarmServiceProjections_SwarmServiceId");
         AddSwarmObservationFields(service);
         AddSwarmPlatformRelationship(service);
         return builder;

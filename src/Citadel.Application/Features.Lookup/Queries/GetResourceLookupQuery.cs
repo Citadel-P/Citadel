@@ -100,6 +100,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Stack, LookupResourceType.Registry) => await GetStackRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.GitRepository) => await GetStackGitRepositoryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.ResourceBinding) => await GetResourceBindingLookupAsync(ResourceBindingScope.Stack, sourceId, cancellationToken),
+            (LookupResourceType.SwarmService, LookupResourceType.ResourceBinding) => await GetResourceBindingLookupAsync(ResourceBindingScope.SwarmService, sourceId, cancellationToken),
             (LookupResourceType.User, LookupResourceType.Team) => await GetTeamLookupAsync(cancellationToken),
             (LookupResourceType.User, LookupResourceType.Role) => await GetRoleLookupAsync(cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Deployment) => await GetPlatformDeploymentLookupAsync(sourceId, userId, cancellationToken),
@@ -135,6 +136,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.BuildAgentPool) => await GetBuildAgentPoolLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.SwarmService) => await GetSwarmServiceLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
             (null, LookupResourceType.ResourceBinding) => await GetGlobalResourceBindingLookupAsync(cancellationToken),
             (null, LookupResourceType.License) => await GetLicenseLookupAsync(cancellationToken),
@@ -157,6 +159,8 @@ internal sealed class GetResourceLookupQueryHandler(
             LookupResourceType.Stack => await unitOfWork.Stacks.CanAccessAsync(userId, sourceId, cancellationToken),
             LookupResourceType.User => await unitOfWork.Users.CanAccessAsync(userId, sourceId, cancellationToken),
             LookupResourceType.Platform => await unitOfWork.Platforms.CanAccessAsync(userId, sourceId, cancellationToken),
+            LookupResourceType.SwarmService => await unitOfWork.SwarmServices.CanAccessAsync(
+                userId, sourceId, PermissionLevel.Read, SpecificPermission.None, cancellationToken),
             LookupResourceType.Alert => await unitOfWork.AlertRules.CanAccessAsync(userId, sourceId, cancellationToken),
             _ => false
         };
@@ -428,6 +432,16 @@ internal sealed class GetResourceLookupQueryHandler(
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetSwarmServiceLookupAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.SwarmServices.GetAuthorizedInfoAsync(
+                userId,
+                PermissionLevel.Read,
+                SpecificPermission.None,
+                cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackLookupAsync(Guid userId, CancellationToken cancellationToken)

@@ -3,7 +3,7 @@ import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { useSignalRContext } from '@/lib/context/signalr-context';
 
 type UseSignalRGroupOpts = {
-  groupName?: string;
+  groupName?: string | readonly string[];
   setupEventListeners: (hub: HubConnection) => void;
   removeEventListeners?: (hub: HubConnection) => void;
   onJoinedGroup?: (hub: HubConnection) => void;
@@ -24,18 +24,12 @@ export const useSignalRGroup = ({
   const [isConnected, setIsConnected] = useState(false);
 
   const onJoinedRef = useRef(onJoinedGroup);
-  const activeSetupRef = useRef(setupEventListeners);
-  const effectGenerationRef = useRef(0);
 
   const lastStateRef = useRef({ isLoading: false, isConnected: false });
 
   useEffect(() => {
     onJoinedRef.current = onJoinedGroup;
   }, [onJoinedGroup]);
-
-  useEffect(() => {
-    activeSetupRef.current = setupEventListeners;
-  }, [setupEventListeners]);
 
   const state = connectionState;
 
@@ -53,39 +47,54 @@ export const useSignalRGroup = ({
       }
     };
 
-    if (skip || !enabled || !groupName || !connection || state !== HubConnectionState.Connected) {
+    const groupNames = typeof groupName === 'string' ? [groupName] : groupName ?? [];
+    if (skip || !enabled || !groupNames.length || !connection || state !== HubConnectionState.Connected) {
+      setLoading(false);
       setConnected(false);
       return;
     }
 
-    const generation = ++effectGenerationRef.current;
-    let joined = false;
+    const joined: string[] = [];
+    let releasedCount = 0;
+    let listenersRemoved = false;
     let disposed = false;
+
+    const removeListeners = () => {
+      if (listenersRemoved) return;
+      listenersRemoved = true;
+      removeEventListeners?.(connection);
+    };
+
+    const leaveJoinedGroups = async () => {
+      const groups = joined.slice(releasedCount);
+      releasedCount = joined.length;
+      await Promise.all(groups.map((currentGroupName) => leaveGroup(currentGroupName)));
+    };
 
     const run = async () => {
       try {
         setLoading(true);
-        await joinGroup(groupName, setupEventListeners);
+        setupEventListeners(connection);
+        for (const currentGroupName of groupNames) {
+          await joinGroup(currentGroupName);
+          joined.push(currentGroupName);
+          if (disposed) break;
+        }
 
         if (disposed) {
-          const replayedWithSameListeners =
-            generation !== effectGenerationRef.current &&
-            activeSetupRef.current === setupEventListeners;
-
-          await leaveGroup(
-            groupName,
-            replayedWithSameListeners ? undefined : removeEventListeners,
-          );
+          await leaveJoinedGroups();
+          removeListeners();
           return;
         }
 
-        joined = true;
         setConnected(true);
         setLoading(false);
 
         onJoinedRef.current?.(connection);
       } catch (err) {
         console.error('[SignalR] join failed', err);
+        await leaveJoinedGroups();
+        removeListeners();
         setConnected(false);
         setLoading(false);
       }
@@ -95,9 +104,8 @@ export const useSignalRGroup = ({
 
     return () => {
       disposed = true;
-      if (joined) {
-        leaveGroup(groupName, removeEventListeners).catch(console.warn);
-      }
+      removeListeners();
+      leaveJoinedGroups().catch(console.warn);
     };
   }, [
     groupName,

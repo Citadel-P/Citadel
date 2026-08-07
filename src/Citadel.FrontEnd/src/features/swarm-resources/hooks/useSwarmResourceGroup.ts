@@ -15,6 +15,7 @@ export const useLiveSwarmItems = <T extends LiveSwarmResource>(
   queryArgs: object,
   query: QueryState<SwarmCollection<T>>,
   select: (inventory: SwarmInventoryUpdate) => T[],
+  onInventoryUpdated?: (inventory: SwarmInventoryUpdate) => void,
 ) => {
   const queryClient = useQueryClient();
   const onSwarmInventoryUpdated = useCallback(
@@ -29,13 +30,12 @@ export const useLiveSwarmItems = <T extends LiveSwarmResource>(
       }));
       queryClient.setQueryData<CachedResponse<SwarmCollection<T>>>(
         queryKey,
-        previous
-          ? { ...previous, data: { ...previous.data, items } }
-          : { data: { items } },
+        previous ? { ...previous, data: { ...previous.data, items } } : { data: { items } },
       );
       void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
+      onInventoryUpdated?.(inventory);
     },
-    [platformId, queryArgs, queryClient, queryName, select],
+    [onInventoryUpdated, platformId, queryArgs, queryClient, queryName, select],
   );
 
   useDockerDaemonGroup(platformId, { onSwarmInventoryUpdated });

@@ -81,6 +81,14 @@ internal sealed class SignalRGroupAuthorizationService(
                 userId,
                 target.ResourceId!.Value,
                 cancellationToken),
+            TargetKind.SwarmService => await HasSwarmServicePermissionAsync(
+                userId,
+                target.ResourceId!.Value,
+                cancellationToken),
+            TargetKind.SwarmServicesForPlatform => await HasSwarmServicesPlatformPermissionAsync(
+                userId,
+                target.ResourceId!.Value,
+                cancellationToken),
             // Alert dispatch already selects database-authorized user IDs and sends
             // only to user-specific groups.
             TargetKind.AlertEvents => true,
@@ -128,6 +136,28 @@ internal sealed class SignalRGroupAuthorizationService(
             specificPermission,
             cancellationToken);
     }
+
+    private async Task<bool> HasSwarmServicePermissionAsync(
+        Guid userId,
+        Guid serviceId,
+        CancellationToken cancellationToken)
+    {
+        var service = await unitOfWork.SwarmServices.GetAsync(serviceId, cancellationToken);
+        return service is not null
+            && await HasPermissionAsync(
+                userId, ResourceType.SwarmService, serviceId, SpecificPermission.None, cancellationToken)
+            && await HasPermissionAsync(
+                userId, ResourceType.Platform, service.PlatformId, SpecificPermission.None, cancellationToken);
+    }
+
+    private async Task<bool> HasSwarmServicesPlatformPermissionAsync(
+        Guid userId,
+        Guid platformId,
+        CancellationToken cancellationToken) =>
+        await HasPermissionAsync(
+            userId, ResourceType.SwarmService, null, SpecificPermission.None, cancellationToken)
+        && await HasPermissionAsync(
+            userId, ResourceType.Platform, platformId, SpecificPermission.None, cancellationToken);
 
     private async Task<bool> HasBackupRunPermissionAsync(
         Guid userId,
@@ -229,6 +259,8 @@ internal sealed class SignalRGroupAuthorizationService(
                 "stack" or "stack-info" => Permission(ResourceType.Stack, resourceId),
                 "stack-log" => Permission(ResourceType.Stack, resourceId, SpecificPermission.Logs),
                 "deployment" => Permission(ResourceType.Deployment, resourceId),
+                "swarm-service" => new AuthorizationTarget(TargetKind.SwarmService, ResourceId: resourceId),
+                "swarm-services" => new AuthorizationTarget(TargetKind.SwarmServicesForPlatform, ResourceId: resourceId),
                 "git-repo" => Permission(ResourceType.GitRepository, resourceId),
                 "backup-repository" => Permission(ResourceType.BackupRepository, resourceId),
                 "backup-policy" or "backup-runs" => Permission(ResourceType.BackupPolicy, resourceId),
@@ -309,6 +341,7 @@ internal sealed class SignalRGroupAuthorizationService(
             ActivityResourceType.BuildAgentPool => Permission(ResourceType.BuildAgentPool, resourceId),
             ActivityResourceType.Volume => Permission(ResourceType.Platform, resourceId),
             ActivityResourceType.BackupPolicy => Permission(ResourceType.BackupPolicy, resourceId),
+            ActivityResourceType.SwarmService => Permission(ResourceType.SwarmService, resourceId),
             _ => default
         };
 
@@ -343,6 +376,8 @@ internal sealed class SignalRGroupAuthorizationService(
         BackupRun,
         BackupRestoreRun,
         BuildRun,
+        SwarmService,
+        SwarmServicesForPlatform,
         AlertEvents,
         AdminOnly
     }

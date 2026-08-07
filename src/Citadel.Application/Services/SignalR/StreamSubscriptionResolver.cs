@@ -25,6 +25,8 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["containers"] = typeof(ContainerStreamManager),
         ["deployment"] = typeof(DeploymentStreamManager),
         ["deployments"] = typeof(DeploymentStreamManager),
+        ["swarm-service"] = typeof(SwarmServiceStreamManager),
+        ["swarm-services"] = typeof(SwarmServiceStreamManager),
         ["git-repo"] = typeof(GitRepositoryStreamManager),
         ["git-repositories"] = typeof(GitRepositoryStreamManager),
         ["backup-repository"] = typeof(BackupRepositoryStreamManager),

@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -37,6 +38,13 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
             platform.Id, "task-1", 3, "web.1", "service-1", "web", 1, "node-1",
             "manager-1", "Running", "Running", null, null, "nginx:latest", ["80/tcp"],
             observedAt, observedAt, observedAt, observedAt, false);
+        var otherTask = task with
+        {
+            DockerTaskId = "task-2",
+            Name = "worker.1",
+            DockerServiceId = "service-2",
+            ServiceName = "worker"
+        };
         var network = new SwarmNetworkProjection(
             platform.Id, "network-1", "frontend", "Swarm", "overlay", true, false, false,
             true, false, ["10.0.0.0/24"], ["web"],
@@ -52,13 +60,18 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
 
         await uow.Swarm.ReplaceAsync(
             platform.Id,
-            new SwarmProjectionSnapshot([node], [service], [task], [network], [secret], [config]),
+            new SwarmProjectionSnapshot([node], [service], [task, otherTask], [network], [secret], [config]),
             cancellationToken);
         await uow.CommitAsync(cancellationToken);
 
         var storedNode = Assert.Single(await uow.Swarm.GetNodesAsync(platform.Id, cancellationToken));
         var storedService = Assert.Single(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
-        var storedTask = Assert.Single(await uow.Swarm.GetTasksAsync(platform.Id, 10, cancellationToken));
+        Assert.Equal(2, (await uow.Swarm.GetTasksAsync(platform.Id, 10, cancellationToken)).Count);
+        var storedTask = Assert.Single(await uow.Swarm.GetTasksAsync(
+            platform.Id,
+            10,
+            cancellationToken,
+            "service-1"));
         var storedNetwork = Assert.Single(await uow.Swarm.GetNetworksAsync(platform.Id, cancellationToken));
         var storedSecret = Assert.Single(await uow.Swarm.GetSecretsAsync(platform.Id, cancellationToken));
         var storedConfig = Assert.Single(await uow.Swarm.GetConfigsAsync(platform.Id, cancellationToken));
@@ -189,6 +202,91 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(PlatformType.DockerSwarm, storedPlatform?.PlatformDescriptor.Type);
         Assert.Equal(PlatformType.DockerSwarm, storedDeployment?.Platform?.PlatformDescriptor.Type);
         Assert.Equal(PlatformType.DockerSwarm, storedStack?.CurrentStackRelease?.Platform?.PlatformDescriptor.Type);
+    }
+
+    [Fact]
+    public async Task ManagedServiceRepository_ShouldPersistOperationRecoveryIdentity()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("managed-operation", "cluster-managed-operation");
+        var actorId = Constants.SystemId;
+        var service = new SwarmService(
+            "managed-operation",
+            platform.Id,
+            actorId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.SwarmServices.AddAsync(service, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        Assert.True(service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            actorId,
+            targetRuntimeHash: "runtime-hash",
+            clusterId: platform.ClusterId));
+        service.MarkOperationAttempted();
+        Assert.Equal(1, await uow.SwarmServices.UpdateAsync(service, cancellationToken));
+        Assert.Equal(1, service.RowVersion);
+        await uow.CommitAsync(cancellationToken);
+
+        var stored = await uow.SwarmServices.GetAsync(service.Id, cancellationToken);
+
+        Assert.Equal("cluster-managed-operation", stored?.CurrentOperation?.ClusterId);
+        Assert.Equal(actorId, stored?.CurrentOperation?.ActorId);
+        Assert.Equal(SwarmServiceOperationState.PendingAcceptance, stored?.CurrentOperation?.State);
+    }
+
+    [Fact]
+    public async Task ManagedServiceRepository_ShouldReturnOnlyStaleActiveOperations()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("stuck-operation", "cluster-stuck-operation");
+        var service = new SwarmService(
+            "stuck-operation",
+            platform.Id,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.SwarmServices.AddAsync(service, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        Assert.True(service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash",
+            clusterId: platform.ClusterId));
+        service.MarkOperationAttempted();
+        Assert.Equal(1, await uow.SwarmServices.UpdateAsync(service, cancellationToken));
+        await uow.CommitAsync(cancellationToken);
+
+        Assert.Empty(await uow.SwarmServices.GetStuckOperationsAsync(cancellationToken: cancellationToken));
+        Assert.Contains(
+            await uow.SwarmServices.GetStuckOperationsAsync(-1, cancellationToken),
+            candidate => candidate.Id == service.Id);
+
+        service.CompleteOperation(SwarmServiceOperationState.Completed, runtimeHash: "runtime-hash");
+        Assert.Equal(1, await uow.SwarmServices.UpdateAsync(service, cancellationToken));
+        await uow.CommitAsync(cancellationToken);
+
+        Assert.DoesNotContain(
+            await uow.SwarmServices.GetStuckOperationsAsync(-1, cancellationToken),
+            candidate => candidate.Id == service.Id);
     }
 
     [Fact]

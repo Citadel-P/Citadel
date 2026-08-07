@@ -19,7 +19,8 @@ public sealed record GetSwarmServices(Guid PlatformId) : IQuery<Result<IReadOnly
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetSwarmService(Guid PlatformId, string ResourceId) : IQuery<Result<SwarmServiceProjection>>;
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
-public sealed record GetSwarmTasks(Guid PlatformId, int Limit = 50) : IQuery<Result<IReadOnlyList<SwarmTaskProjection>>>
+public sealed record GetSwarmTasks(Guid PlatformId, int Limit = 50, string? ServiceId = null)
+    : IQuery<Result<IReadOnlyList<SwarmTaskProjection>>>
 {
     internal sealed class Validator : AbstractValidator<GetSwarmTasks>
     {
@@ -27,6 +28,7 @@ public sealed record GetSwarmTasks(Guid PlatformId, int Limit = 50) : IQuery<Res
         {
             RuleFor(query => query.PlatformId).NotEmpty();
             RuleFor(query => query.Limit).InclusiveBetween(1, 200);
+            RuleFor(query => query.ServiceId).MaximumLength(64);
         }
     }
 }
@@ -93,7 +95,13 @@ internal sealed class GetSwarmTasksHandler(IUnitOfWork unitOfWork, ISwarmReconci
     public async ValueTask<Result<IReadOnlyList<SwarmTaskProjection>>> Handle(GetSwarmTasks query, CancellationToken ct)
     {
         var error = await SwarmQuery.ValidateAndEnsureInitializedAsync(unitOfWork, reconciliationCoordinator, query.PlatformId, ct);
-        return error is null ? Result.Success(await unitOfWork.Swarm.GetTasksAsync(query.PlatformId, query.Limit, ct)) : Result.Failure<IReadOnlyList<SwarmTaskProjection>>(error);
+        return error is null
+            ? Result.Success(await unitOfWork.Swarm.GetTasksAsync(
+                query.PlatformId,
+                query.Limit,
+                ct,
+                query.ServiceId))
+            : Result.Failure<IReadOnlyList<SwarmTaskProjection>>(error);
     }
 }
 internal sealed class GetSwarmTaskHandler(IUnitOfWork unitOfWork, ISwarmReconciliationCoordinator reconciliationCoordinator) : IQueryHandler<GetSwarmTask, Result<SwarmTaskProjection>>

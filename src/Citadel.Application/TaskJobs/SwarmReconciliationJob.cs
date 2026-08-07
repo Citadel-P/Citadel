@@ -3,7 +3,10 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Swarm;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
+using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,13 +127,17 @@ internal sealed class SwarmReconciliationJob(
                 timeout.CancelAfter(RefreshTimeout);
                 var connector = connectorFactory.GetConnector(platform.ConnectorType);
                 var nodesTask = connector.ListNodesAsync(
-                    new ListSwarmNodesCommand(platform.Address, SwarmInventoryLimits.MaximumItems, IncludeTaskCounts: true),
+                    new ListSwarmNodesCommand(platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems, IncludeTaskCounts: true),
                     timeout.Token);
-                var servicesTask = connector.ListServicesAsync(new ListSwarmServicesCommand(platform.Address), timeout.Token);
+                var servicesTask = connector.ListServicesAsync(new ListSwarmServicesCommand(
+                    platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems), timeout.Token);
                 var tasksTask = connector.ListTasksAsync(new ListSwarmTasksCommand(platform.Address), timeout.Token);
-                var networksTask = connector.ListNetworksAsync(new ListSwarmNetworksCommand(platform.Address), timeout.Token);
-                var secretsTask = connector.ListSecretsAsync(new ListSwarmSecretsCommand(platform.Address), timeout.Token);
-                var configsTask = connector.ListConfigsAsync(new ListSwarmConfigsCommand(platform.Address), timeout.Token);
+                var networksTask = connector.ListNetworksAsync(new ListSwarmNetworksCommand(
+                    platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems), timeout.Token);
+                var secretsTask = connector.ListSecretsAsync(new ListSwarmSecretsCommand(
+                    platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems), timeout.Token);
+                var configsTask = connector.ListConfigsAsync(new ListSwarmConfigsCommand(
+                    platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems), timeout.Token);
                 await Task.WhenAll(nodesTask, servicesTask, tasksTask, networksTask, secretsTask, configsTask);
 
                 var nodesResult = await nodesTask;
@@ -417,14 +424,18 @@ internal sealed class SwarmReconciliationJob(
         SwarmProjectionSnapshot? snapshot,
         CancellationToken cancellationToken)
     {
-        var workItem = new PersistSwarmSnapshotWorkItem(platformId, snapshot);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platformId,
+            snapshot,
+            timeProvider.GetUtcNow());
         await dbQueue.EnqueueAndWaitAsync(workItem, cancellationToken);
-        await TryNotifyAsync(platformId, workItem.Current, cancellationToken);
+        await TryNotifyAsync(platformId, workItem.Current, workItem.ManagedChanges, cancellationToken);
     }
 
     private async Task TryNotifyAsync(
         Guid platformId,
         SwarmProjectionSnapshot snapshot,
+        IReadOnlyList<ManagedSwarmServiceChange> managedChanges,
         CancellationToken cancellationToken)
     {
         try
@@ -432,7 +443,8 @@ internal sealed class SwarmReconciliationJob(
             using var enqueueTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             enqueueTimeout.CancelAfter(NotificationEnqueueTimeout);
             await notificationQueue.EnqueueAsync(
-                new SwarmInventoryUpdatedNotificationWorkItem(hubDispatcher, platformId, snapshot),
+                new SwarmInventoryUpdatedNotificationWorkItem(
+                    hubDispatcher, platformId, snapshot, managedChanges),
                 enqueueTimeout.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -499,9 +511,14 @@ internal sealed class SwarmReconciliationJob(
 
 internal sealed class PersistSwarmSnapshotWorkItem(
     Guid platformId,
-    SwarmProjectionSnapshot? snapshot) : IDbWorkItem
+    SwarmProjectionSnapshot? snapshot,
+    DateTimeOffset? reconciliationCompletedAt = null) : IDbWorkItem
 {
+    private static readonly TimeSpan OutcomeUnknownGrace = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan PendingAcceptanceGrace = TimeSpan.FromMinutes(2.5);
+    private static readonly TimeSpan AcceptedObservationGrace = TimeSpan.FromMinutes(2.5);
     public SwarmProjectionSnapshot Current { get; private set; } = null!;
+    public IReadOnlyList<ManagedSwarmServiceChange> ManagedChanges { get; private set; } = [];
 
     public async Task ExecuteAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
     {
@@ -518,19 +535,465 @@ internal sealed class PersistSwarmSnapshotWorkItem(
         }
         else
         {
-            await unitOfWork.Swarm.ReplaceAsync(platformId, snapshot, cancellationToken);
-            Current = snapshot;
+            Current = await NormalizeManagedServicesAsync(unitOfWork, snapshot, cancellationToken);
+            await unitOfWork.Swarm.ReplaceAsync(platformId, Current, cancellationToken);
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
+
+    private async Task<SwarmProjectionSnapshot> NormalizeManagedServicesAsync(
+        IUnitOfWork unitOfWork,
+        SwarmProjectionSnapshot source,
+        CancellationToken cancellationToken)
+    {
+        var changes = new List<ManagedSwarmServiceChange>();
+        var managed = await unitOfWork.SwarmServices.GetByPlatformAsync(platformId, cancellationToken);
+        var clusterId = managed.Count == 0
+            ? null
+            : (await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken))?.ClusterId;
+        var completedAt = reconciliationCompletedAt ?? DateTimeOffset.UtcNow;
+        var byId = managed.ToDictionary(static service => service.Id);
+        var claimed = source.Services
+            .Where(static service => service.SwarmServiceId is not null)
+            .GroupBy(static service => service.SwarmServiceId!.Value)
+            .ToDictionary(static group => group.Key, static group => group.ToArray());
+        var normalized = new SwarmServiceProjection[source.Services.Count];
+
+        for (var index = 0; index < source.Services.Count; index++)
+        {
+            var projection = source.Services[index];
+            if (projection.SwarmServiceId is not Guid serviceId)
+            {
+                normalized[index] = projection;
+                continue;
+            }
+
+            if (!byId.TryGetValue(serviceId, out var owner))
+            {
+                normalized[index] = projection with
+                {
+                    Ownership = SwarmServiceOwnership.OwnershipConflict,
+                    OwnershipDiagnostic = "The Citadel Service ownership label does not resolve on this platform."
+                };
+                continue;
+            }
+
+            var duplicate = claimed[serviceId].Length != 1;
+            var idMismatch = owner.DockerServiceId is not null
+                && !string.Equals(owner.DockerServiceId, projection.DockerServiceId, StringComparison.Ordinal);
+            normalized[index] = duplicate || idMismatch
+                ? projection with
+                {
+                    Ownership = SwarmServiceOwnership.OwnershipConflict,
+                    OwnershipDiagnostic = duplicate
+                        ? "Multiple Docker Services claim this Citadel Service."
+                        : "The Docker Service identity does not match the Citadel Service."
+                }
+                : projection with
+                {
+                    Ownership = SwarmServiceOwnership.CitadelService,
+                    OwnershipDiagnostic = null
+                };
+        }
+
+        var normalizedClaims = normalized
+            .Where(static item => item.SwarmServiceId is not null)
+            .GroupBy(static item => item.SwarmServiceId!.Value)
+            .ToDictionary(static group => group.Key, static group => group.ToArray());
+
+        foreach (var service in managed)
+        {
+            var previousHealth = service.Health;
+            var previousSynchronization = service.SynchronizationState;
+            var previousDockerServiceId = service.DockerServiceId;
+            var previousDockerVersion = service.DockerVersionIndex;
+            var previousControlState = service.ControlState;
+            var previousOperation = service.CurrentOperation;
+            ActivityEvent? operationActivity = null;
+            var matches = normalizedClaims.TryGetValue(service.Id, out var observed) ? observed : [];
+            var live = matches.Length == 1 ? matches[0] : null;
+            if (matches.Length > 1)
+                live = matches[0] with { Ownership = SwarmServiceOwnership.OwnershipConflict };
+
+            var operation = service.CurrentOperation;
+            if (operation?.State == SwarmServiceOperationState.Prepared && operation.AttemptedAt is null)
+            {
+                service.CompleteOperation(
+                    SwarmServiceOperationState.Canceled,
+                    resultCode: "UndispatchedOperation",
+                    resultMessage: "The undispatched operation was canceled during reconciliation.");
+                operationActivity = CreateFailureActivity(
+                    service,
+                    operation,
+                    "The undispatched operation was canceled during reconciliation.");
+            }
+            else if (operation is not null
+                && live?.Ownership == SwarmServiceOwnership.OwnershipConflict
+                && !IsTerminal(operation.State))
+            {
+                service.ApplyObservation(live);
+                service.CompleteOperation(
+                    SwarmServiceOperationState.OwnershipConflict,
+                    resultCode: "OwnershipConflict",
+                    resultMessage: live.OwnershipDiagnostic ?? "Docker Service ownership is ambiguous.");
+                operationActivity = CreateFailureActivity(
+                    service,
+                    operation,
+                    live.OwnershipDiagnostic ?? "Docker Service ownership is ambiguous.");
+            }
+            else if (operation is not null
+                && operation.State is (SwarmServiceOperationState.PendingAcceptance
+                    or SwarmServiceOperationState.Accepted
+                    or SwarmServiceOperationState.OutcomeUnknown)
+                && live is not null
+                && live.Labels.TryGetValue("com.citadel.operation-id", out var operationLabel)
+                && Guid.TryParse(operationLabel, out var observedOperationId)
+                && observedOperationId == operation.Id
+                && operation.Kind != SwarmServiceOperationKind.Delete
+                && (operation.BaseDockerVersion is null || live.VersionIndex > operation.BaseDockerVersion)
+                && (operation.Kind != SwarmServiceOperationKind.ForceUpdate
+                    || operation.ExpectedForceUpdate is null
+                    || live.ForceUpdate >= operation.ExpectedForceUpdate))
+            {
+                service.MarkOperationAccepted(live.DockerServiceId, live.VersionIndex);
+                service.ApplyObservation(live);
+                var targetObserved = string.Equals(
+                    live.LiveRuntimeHash,
+                    operation.TargetRuntimeHash,
+                    StringComparison.Ordinal);
+                if (TryGetRolloutFailure(live, source.Tasks, out var resultCode, out var reason))
+                {
+                    service.CompleteOperation(
+                        SwarmServiceOperationState.Rejected,
+                        resultCode: resultCode,
+                        resultMessage: reason);
+                    operationActivity = CreateFailureActivity(service, operation, reason);
+                }
+                else if (targetObserved && IsRolloutComplete(live))
+                {
+                    service.CompleteOperation(
+                        SwarmServiceOperationState.Completed,
+                        live.LiveRuntimeHash,
+                        ExtractDigest(live.Image));
+                    operationActivity = CreateSuccessActivity(service, operation);
+                }
+                else if (!targetObserved
+                    && TryGetUnresolvedOperationFailure(
+                        operation,
+                        live,
+                        clusterId,
+                        completedAt,
+                        out resultCode,
+                        out reason))
+                {
+                    service.CompleteOperation(
+                        SwarmServiceOperationState.Rejected,
+                        resultCode: resultCode,
+                        resultMessage: reason);
+                    operationActivity = CreateFailureActivity(service, operation, reason);
+                }
+            }
+            else
+            {
+                service.ApplyObservation(live);
+                if (operation is not null
+                    && CanProveNotAccepted(operation, live, clusterId, completedAt))
+                {
+                    const string notAcceptedReason = "A complete Swarm observation proved that Docker did not accept the operation.";
+                    service.CompleteOperation(
+                        SwarmServiceOperationState.NotAccepted,
+                        resultCode: "NotAccepted",
+                        resultMessage: notAcceptedReason);
+                    operationActivity = CreateFailureActivity(service, operation, notAcceptedReason);
+                }
+                else if (operation is not null
+                    && TryGetUnresolvedOperationFailure(operation, live, clusterId, completedAt, out var resultCode, out var reason))
+                {
+                    service.CompleteOperation(
+                        SwarmServiceOperationState.Rejected,
+                        resultCode: resultCode,
+                        resultMessage: reason);
+                    operationActivity = CreateFailureActivity(service, operation, reason);
+                }
+            }
+
+            if (operation is not null && IsDeleteSatisfied(operation, live))
+            {
+                service.CompleteOperation(SwarmServiceOperationState.Completed);
+                if (await unitOfWork.SwarmServices.RemoveAsync(
+                        service.Id, service.RowVersion, cancellationToken) > 0)
+                {
+                    await unitOfWork.ActivityEventRepository.AddAsync(new ActivityEvent(
+                        service.PlatformId,
+                        service.Id,
+                        operation.ActorId ?? Constants.SystemId,
+                        service.Name,
+                        ActivityEventType.SwarmServiceDeleted,
+                        ActivityStatus.Information,
+                        new SwarmServiceDeleted(service.ToActivitySnapshot())), cancellationToken);
+                    changes.Add(new ManagedSwarmServiceChange(service, "delete"));
+                }
+                continue;
+            }
+
+            if (previousHealth != service.Health
+                || previousSynchronization != service.SynchronizationState
+                || previousDockerServiceId != service.DockerServiceId
+                || previousDockerVersion != service.DockerVersionIndex
+                || previousControlState != service.ControlState
+                || previousOperation != service.CurrentOperation)
+            {
+                if (await unitOfWork.SwarmServices.UpdateAsync(service, cancellationToken) > 0)
+                {
+                    if (operationActivity is not null)
+                        await unitOfWork.ActivityEventRepository.AddAsync(operationActivity, cancellationToken);
+                    changes.Add(new ManagedSwarmServiceChange(service, "update"));
+                }
+            }
+        }
+
+        ManagedChanges = changes;
+        return source with { Services = normalized };
+    }
+
+    internal static bool CanProveNotAccepted(
+        SwarmServiceOperation operation,
+        SwarmServiceProjection? live,
+        string? clusterId,
+        DateTimeOffset completedAt)
+    {
+        if (string.IsNullOrWhiteSpace(operation.ClusterId)
+            || !string.Equals(operation.ClusterId, clusterId, StringComparison.Ordinal)
+            || operation.AttemptedAt is not DateTime attemptedAt)
+            return false;
+
+        var barrier = operation.State switch
+        {
+            SwarmServiceOperationState.OutcomeUnknown when operation.CompletedAt is DateTime outcomeAt =>
+                new DateTimeOffset(outcomeAt, TimeSpan.Zero) + OutcomeUnknownGrace,
+            SwarmServiceOperationState.PendingAcceptance =>
+                new DateTimeOffset(attemptedAt, TimeSpan.Zero) + PendingAcceptanceGrace,
+            _ => DateTimeOffset.MaxValue
+        };
+        if (completedAt < barrier)
+            return false;
+
+        if (operation.Kind == SwarmServiceOperationKind.Delete)
+            return live is not null
+                && operation.BaseDockerVersion is long deleteVersion
+                && live.VersionIndex == deleteVersion;
+
+        if (operation.BaseDockerVersion is null)
+            return live is null;
+
+        return live is not null
+            && live.VersionIndex == operation.BaseDockerVersion
+            && (!live.Labels.TryGetValue("com.citadel.operation-id", out var operationLabel)
+                || !Guid.TryParse(operationLabel, out var observedOperationId)
+                || observedOperationId != operation.Id);
+    }
+
+    internal static bool TryGetUnresolvedOperationFailure(
+        SwarmServiceOperation operation,
+        SwarmServiceProjection? live,
+        string? clusterId,
+        DateTimeOffset completedAt,
+        out string resultCode,
+        out string reason)
+    {
+        resultCode = string.Empty;
+        reason = string.Empty;
+        if (operation.AttemptedAt is not DateTime attemptedAt
+            || string.IsNullOrWhiteSpace(operation.ClusterId)
+            || !string.Equals(operation.ClusterId, clusterId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var barrier = operation.State switch
+        {
+            SwarmServiceOperationState.PendingAcceptance or SwarmServiceOperationState.Accepted =>
+                new DateTimeOffset(attemptedAt, TimeSpan.Zero) + AcceptedObservationGrace,
+            SwarmServiceOperationState.OutcomeUnknown when operation.CompletedAt is DateTime outcomeAt =>
+                new DateTimeOffset(outcomeAt, TimeSpan.Zero) + AcceptedObservationGrace,
+            _ => DateTimeOffset.MaxValue
+        };
+        if (completedAt < barrier)
+            return false;
+
+        if (operation.Kind == SwarmServiceOperationKind.Delete)
+        {
+            if (live is null)
+                return false;
+
+            resultCode = "DeleteStillPresentAfterAcceptance";
+            reason = "Docker accepted the delete, but the Service is still present after the observation grace period.";
+            return true;
+        }
+
+        if (live is null)
+        {
+            resultCode = "RuntimeMissingAfterAcceptance";
+            reason = "Docker accepted the operation, but the Service was not present after the observation grace period.";
+            return true;
+        }
+
+        if (!live.Labels.TryGetValue("com.citadel.operation-id", out var operationLabel)
+            || !Guid.TryParse(operationLabel, out var observedOperationId)
+            || observedOperationId != operation.Id)
+        {
+            resultCode = "AcceptanceCouldNotBeObserved";
+            reason = "Docker accepted the operation, but the observed Service does not contain its operation identity.";
+            return true;
+        }
+
+        resultCode = "AcceptedRuntimeMismatch";
+        reason = "Docker accepted the operation, but the observed Service configuration does not match the requested configuration.";
+        return true;
+    }
+
+    internal static bool IsDeleteSatisfied(
+        SwarmServiceOperation operation,
+        SwarmServiceProjection? live) =>
+        operation.Kind == SwarmServiceOperationKind.Delete
+        && operation.State is (SwarmServiceOperationState.PendingAcceptance
+            or SwarmServiceOperationState.Accepted
+            or SwarmServiceOperationState.OutcomeUnknown)
+        && live is null;
+
+    internal static bool TryGetRolloutFailure(
+        SwarmServiceProjection service,
+        IReadOnlyList<SwarmTaskProjection> tasks,
+        out string resultCode,
+        out string reason)
+    {
+        var paused = service.UpdateState.Equals("Paused", StringComparison.OrdinalIgnoreCase)
+            || service.UpdateState.Equals("RollbackPaused", StringComparison.OrdinalIgnoreCase)
+            || service.UpdateState.Equals("RollbackCompleted", StringComparison.OrdinalIgnoreCase)
+            || service.UpdateState.Equals("rollback_paused", StringComparison.OrdinalIgnoreCase)
+            || service.UpdateState.Equals("rollback_completed", StringComparison.OrdinalIgnoreCase);
+        if (paused)
+        {
+            resultCode = "RolloutPaused";
+            reason = GetTaskFailure(service.DockerServiceId, tasks)
+                ?? service.UpdateMessage
+                ?? $"Docker paused the Service rollout in state '{service.UpdateState}'.";
+            return true;
+        }
+
+        if (IsRolloutCompleteState(service.UpdateState)
+            && service.RunningTaskCount < service.DesiredTaskCount
+            && GetTaskFailure(service.DockerServiceId, tasks) is { } taskFailure)
+        {
+            resultCode = "TaskFailed";
+            reason = taskFailure;
+            return true;
+        }
+
+        resultCode = string.Empty;
+        reason = string.Empty;
+        return false;
+    }
+
+    internal static bool IsRolloutComplete(SwarmServiceProjection service) =>
+        IsRolloutCompleteState(service.UpdateState)
+        && service.RunningTaskCount >= service.DesiredTaskCount;
+
+    private static bool IsRolloutCompleteState(string state) =>
+        state.Equals("None", StringComparison.OrdinalIgnoreCase)
+        || state.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+
+    private static string? GetTaskFailure(
+        string dockerServiceId,
+        IReadOnlyList<SwarmTaskProjection> tasks)
+    {
+        foreach (var task in tasks)
+        {
+            if (!task.IsStale
+                && task.DockerServiceId.Equals(dockerServiceId, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(task.Error))
+                return task.Error;
+        }
+
+        return null;
+    }
+
+    private static bool IsTerminal(SwarmServiceOperationState state) => state is
+        SwarmServiceOperationState.Canceled
+        or SwarmServiceOperationState.Rejected
+        or SwarmServiceOperationState.NotAccepted
+        or SwarmServiceOperationState.Completed
+        or SwarmServiceOperationState.OwnershipConflict;
+
+    private static ActivityEvent CreateFailureActivity(
+        SwarmService service,
+        SwarmServiceOperation operation,
+        string reason) =>
+        new(
+            service.PlatformId,
+            service.Id,
+            operation.ActorId ?? Constants.SystemId,
+            service.Name,
+            ActivityEventType.SwarmServiceOperationFailed,
+            ActivityStatus.Failure,
+            new SwarmServiceOperationFailed(operation.Id, operation.Kind, reason));
+
+    private static ActivityEvent CreateSuccessActivity(
+        SwarmService service,
+        SwarmServiceOperation operation)
+    {
+        var (eventType, info) = operation.Kind switch
+        {
+            SwarmServiceOperationKind.Scale => (
+                ActivityEventType.SwarmServiceScaled,
+                (ActivityEventInfo)new SwarmServiceScaled(
+                    operation.Id,
+                    service.Spec.Replicas ?? 0,
+                    operation.Warnings ?? [])),
+            SwarmServiceOperationKind.ForceUpdate => (
+                ActivityEventType.SwarmServiceForceUpdated,
+                new SwarmServiceForceUpdated(operation.Id, operation.Warnings ?? [])),
+            _ => (
+                ActivityEventType.SwarmServiceApplied,
+                new SwarmServiceApplied(operation.Id, operation.Warnings ?? []))
+        };
+        return new ActivityEvent(
+            service.PlatformId,
+            service.Id,
+            operation.ActorId ?? Constants.SystemId,
+            service.Name,
+            eventType,
+            ActivityStatus.Success,
+            info);
+    }
+
+    private static string? ExtractDigest(string image)
+    {
+        var separator = image.LastIndexOf('@');
+        return separator >= 0 && separator < image.Length - 1
+            ? image[(separator + 1)..]
+            : null;
+    }
 }
+
+internal sealed record ManagedSwarmServiceChange(SwarmService Service, string Action);
 
 internal sealed class SwarmInventoryUpdatedNotificationWorkItem(
     IApplicationHubDispatcher hubDispatcher,
     Guid platformId,
-    SwarmProjectionSnapshot snapshot) : INotificationWorkItem
+    SwarmProjectionSnapshot snapshot,
+    IReadOnlyList<ManagedSwarmServiceChange> managedChanges) : INotificationWorkItem
 {
-    public Task ExecuteAsync(CancellationToken cancellationToken) =>
-        hubDispatcher.SendSwarmInventory(platformId, snapshot, cancellationToken);
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        var notifications = new Task[managedChanges.Count + 1];
+        notifications[0] = hubDispatcher.SendSwarmInventory(platformId, snapshot, cancellationToken);
+        for (var index = 0; index < managedChanges.Count; index++)
+        {
+            var change = managedChanges[index];
+            notifications[index + 1] = hubDispatcher.SendSwarmServiceInfo(change.Service, change.Action);
+        }
+        return Task.WhenAll(notifications);
+    }
 }

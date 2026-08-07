@@ -4,6 +4,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +24,8 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
 
     private Guid _deploymentId;
     private Guid _platformId;
+    private Guid _swarmServiceId;
+    private Guid _swarmPlatformId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -49,13 +53,19 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
     {
         var platform = Fakes.GetDummyPlatform();
         var deployment = CreateDeployment(platform.Id, UpdateBehavior.Notify, "old-digest");
+        var swarmPlatform = CreateSwarmPlatform();
+        var swarmService = CreateAppliedSwarmService(swarmPlatform.Id);
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
+        await uow.SwarmServices.AddAsync(swarmService, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _deploymentId = deployment.Id;
         _platformId = platform.Id;
+        _swarmServiceId = swarmService.Id;
+        _swarmPlatformId = swarmPlatform.Id;
     }
 
     [Fact]
@@ -128,6 +138,26 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
         Assert.Equal("auto-deploy-error", deployment.AutoUpdateState.LastError);
     }
 
+    [Fact]
+    public async Task AutoUpdateJob_Should_Mark_ManagedSwarmService_UpdateAvailable_When_Notify()
+    {
+        var cache = Services.GetRequiredService<ImageDigestCache>();
+        cache.Set(new ImageKey(Constants.DefaultRegistryId, "nginx", "latest"), "new-digest");
+
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var service = await uow.SwarmServices.GetAsync(_swarmServiceId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(service);
+        Assert.Equal(AutoUpdateStatus.UpdateAvailable, service.AutoUpdateState.Status);
+        Assert.Equal("old-digest", service.AutoUpdateState.CurrentDigest);
+        Assert.Equal("new-digest", service.AutoUpdateState.RemoteDigest);
+    }
+
     private async Task UpdateDeploymentBehaviorAsync(UpdateBehavior updateBehavior, CancellationToken cancellationToken)
     {
         await using var scope = Services.CreateAsyncScope();
@@ -144,6 +174,7 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
     {
         Services.GetRequiredService<ISyncBarrier>().MarkSynced<DeploymentImageScannerJob>(_platformId);
+        Services.GetRequiredService<ISyncBarrier>().MarkSynced<DeploymentImageScannerJob>(_swarmPlatformId);
         var job = Services.GetServices<IHostedService>()
             .OfType<DeploymentAutoUpdateJob>()
             .Single();
@@ -165,4 +196,49 @@ public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : Integra
             spec: new DeploymentSpec(
                 UpdateBehavior: updateBehavior,
                 Image: new ExternalImage(Constants.DefaultRegistryId, "nginx:latest", resolvedDigest)));
+
+    private static SwarmService CreateAppliedSwarmService(Guid platformId)
+    {
+        var service = new SwarmService(
+            "managed-swarm-service",
+            platformId,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                UpdateBehavior = UpdateBehavior.Notify,
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
+        service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash");
+        service.MarkOperationAttempted();
+        service.MarkOperationAccepted("docker-service", 1);
+        service.CompleteOperation(
+            SwarmServiceOperationState.Completed,
+            "runtime-hash",
+            "old-digest");
+        return service;
+    }
+
+    private static Platform CreateSwarmPlatform() => new(
+        name: "auto-update-swarm",
+        address: "https://auto-update-swarm.test",
+        networkCount: 0,
+        volumeCount: 0,
+        imageCount: 0,
+        cpuCount: 1,
+        memTotal: 1024,
+        serverVersion: null,
+        agentVersion: null,
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            "node", "10.0.0.1", "Active", true, 1, 1,
+            "auto-update-swarm-daemon", 0, 0, 0, 0,
+            ClusterId: "auto-update-swarm-cluster"),
+        clusterId: "auto-update-swarm-cluster");
 }

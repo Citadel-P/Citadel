@@ -1,10 +1,14 @@
 ﻿using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Licensing;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
+using Hosting.Common.ErrorTypes;
+using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,6 +25,8 @@ internal sealed class DeploymentAutoUpdateJob(
     IDelayWithJitterService delayWithJitterService,
     ILicenseEntitlementService entitlementService,
     DeploymentUpdateEvaluator updateEvaluator,
+    ISwarmServiceStreamManager swarmServiceStreamManager,
+    INotificationQueue notificationQueue,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 2;
@@ -76,7 +82,114 @@ internal sealed class DeploymentAutoUpdateJob(
                     deploymentCheck.Deployment.Id);
             }
         }
+
+        var serviceChecks = await imageScanScheduler.LoadSwarmServiceChecksAsync(cancellationToken);
+        foreach (var serviceCheck in serviceChecks)
+        {
+            try
+            {
+                await syncBarrier.WaitForAsync<DeploymentImageScannerJob>(
+                    serviceCheck.Service.PlatformId,
+                    cancellationToken);
+                await CheckSwarmServiceAsync(serviceCheck, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Auto-update failed for managed Swarm Service {ServiceId}",
+                    serviceCheck.Service.Id);
+            }
+        }
     }
+
+    private async Task CheckSwarmServiceAsync(
+        SwarmServiceImageCheck check,
+        CancellationToken cancellationToken)
+    {
+        if (!imageDigestCache.TryGet(check.Key, out var digestEntry)
+            || string.IsNullOrWhiteSpace(check.Service.AppliedImageDigest))
+            return;
+
+        var currentDigest = check.Service.AppliedImageDigest;
+        var remoteDigest = digestEntry.Digest;
+        var now = DateTime.UtcNow;
+        var evaluation = updateEvaluator.Evaluate(currentDigest, remoteDigest, now);
+
+        if (!evaluation.UpdateAvailable
+            || check.Service.Spec.UpdateBehavior == UpdateBehavior.Notify
+            || !await entitlementService.IsEnabledAsync(
+                LicenseCapability.OperationalGuardrails,
+                cancellationToken))
+        {
+            await QueueSwarmServiceStateAsync(check, evaluation.State, cancellationToken);
+            return;
+        }
+
+        var applied = await TryAutoDeploySwarmServiceAsync(check, currentDigest, cancellationToken);
+        if (!applied.IsSuccess(out var service, out var error))
+        {
+            await QueueSwarmServiceStateAsync(
+                check,
+                new AutoUpdateState(
+                    now,
+                    AutoUpdateStatus.Failed,
+                    currentDigest,
+                    remoteDigest,
+                    error!.Message),
+                cancellationToken);
+            return;
+        }
+
+        var appliedDigest = service.AppliedImageDigest;
+        var state = string.Equals(appliedDigest, remoteDigest, StringComparison.OrdinalIgnoreCase)
+            ? new AutoUpdateState(now, AutoUpdateStatus.UpToDate, appliedDigest, remoteDigest)
+            : evaluation.State;
+        await QueueSwarmServiceStateAsync(check, state, cancellationToken);
+    }
+
+    private async Task<Result<SwarmService>> TryAutoDeploySwarmServiceAsync(
+        SwarmServiceImageCheck check,
+        string expectedAppliedDigest,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var current = await unitOfWork.SwarmServices.GetAsync(check.Service.Id, cancellationToken);
+        if (current is null)
+            return Result.Failure<SwarmService>(new NotFoundError("The managed Swarm Service no longer exists."));
+        if (current.Spec.UpdateBehavior != UpdateBehavior.AutoDeploy
+            || current.Spec.Image is not SwarmExternalImage image
+            || image.RegistryId != check.Key.RegistryId
+            || !Helpers.TrySplitImageTag(image.ImageTag, out var repository, out var tag)
+            || !string.Equals(repository, check.Key.Repository, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(tag, check.Key.Tag, StringComparison.Ordinal)
+            || !string.Equals(current.AppliedImageDigest, expectedAppliedDigest, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<SwarmService>(new ConflictError(
+                "The Service update policy or image changed before AutoDeploy started."));
+        }
+
+        var mutationService = scope.ServiceProvider.GetRequiredService<ISwarmServiceMutationService>();
+        return await mutationService.ApplyAsync(current.Id, Constants.SystemId, cancellationToken);
+    }
+
+    private ValueTask QueueSwarmServiceStateAsync(
+        SwarmServiceImageCheck check,
+        AutoUpdateState state,
+        CancellationToken cancellationToken) =>
+        dbWorkQueue.EnqueueAsync(
+            new SwarmServiceAutoUpdateStateWorkItem(
+                check.Service.Id,
+                check.Key,
+                state,
+                swarmServiceStreamManager,
+                notificationQueue),
+            cancellationToken);
 
     private async Task<IDbWorkItem?> CheckDeploymentAsync(
         DeploymentImageCheck deploymentCheck,
@@ -262,4 +375,41 @@ internal sealed class DeploymentAutoUpdateFailedWorkItem(
         await uow.Deployments.UpdateAutoUpdateStateAsync(deploymentId, state, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }
+}
+
+internal sealed class SwarmServiceAutoUpdateStateWorkItem(
+    Guid serviceId,
+    ImageKey imageKey,
+    AutoUpdateState state,
+    ISwarmServiceStreamManager streamManager,
+    INotificationQueue notificationQueue) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+    {
+        var service = await uow.SwarmServices.GetAsync(serviceId, cancellationToken);
+        if (service is null
+            || service.Spec.Image is not SwarmExternalImage image
+            || image.RegistryId != imageKey.RegistryId
+            || !Helpers.TrySplitImageTag(image.ImageTag, out var repository, out var tag)
+            || !string.Equals(repository, imageKey.Repository, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(tag, imageKey.Tag, StringComparison.Ordinal))
+            return;
+
+        service.SetAutoUpdateState(state);
+        if (await uow.SwarmServices.UpdateAsync(service, cancellationToken) == 0)
+            return;
+
+        await uow.CommitAsync(cancellationToken);
+        await notificationQueue.EnqueueAsync(
+            new SwarmServiceNotificationWorkItem(streamManager, service),
+            cancellationToken);
+    }
+}
+
+internal sealed class SwarmServiceNotificationWorkItem(
+    ISwarmServiceStreamManager streamManager,
+    SwarmService service) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken) =>
+        streamManager.SendSwarmServiceInfo(service);
 }

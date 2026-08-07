@@ -49,6 +49,7 @@ public static class ResourceBindings
         {
             ResourceBindingScope.Stack => await mediator.Send(new GetStackResourceBindings(resourceId), cancellationToken),
             ResourceBindingScope.Deployment => await mediator.Send(new GetDeploymentResourceBindings(resourceId), cancellationToken),
+            ResourceBindingScope.SwarmService => await mediator.Send(new GetSwarmServiceResourceBindings(resourceId), cancellationToken),
             ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
             _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
@@ -67,6 +68,7 @@ public static class ResourceBindings
         {
             ResourceBindingScope.Stack => await mediator.Send(new CreateStackResourceBinding(resourceId, input), cancellationToken),
             ResourceBindingScope.Deployment => await mediator.Send(new CreateDeploymentResourceBinding(resourceId, input), cancellationToken),
+            ResourceBindingScope.SwarmService => await mediator.Send(new CreateSwarmServiceResourceBinding(resourceId, input), cancellationToken),
             ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
             _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
@@ -116,6 +118,7 @@ public static class ResourceBindings
                 (null, null) => await mediator.Send(new GetSecretDefinitions(), cancellationToken),
                 (ResourceBindingScope.Stack, { } id) => await mediator.Send(new GetStackSecretDefinitions(id), cancellationToken),
                 (ResourceBindingScope.Deployment, { } id) => await mediator.Send(new GetDeploymentSecretDefinitions(id), cancellationToken),
+                (ResourceBindingScope.SwarmService, { } id) => await mediator.Send(new GetSwarmServiceSecretDefinitions(id), cancellationToken),
                 (ResourceBindingScope.Global, _) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("Global resource bindings do not target a resource.")),
                 ({ }, null) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("resourceId must be provided when scope is provided.")),
                 _ => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
@@ -324,6 +327,7 @@ public static class ResourceBindings
         {
             ResourceBindingScope.Stack => await mediator.Send(new UpdateStackResourceBinding(resourceId, ToCommandInput(input)), cancellationToken),
             ResourceBindingScope.Deployment => await mediator.Send(new UpdateDeploymentResourceBinding(resourceId, ToCommandInput(input)), cancellationToken),
+            ResourceBindingScope.SwarmService => await mediator.Send(new UpdateSwarmServiceResourceBinding(resourceId, ToCommandInput(input)), cancellationToken),
             ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
             _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
@@ -342,6 +346,7 @@ public static class ResourceBindings
         {
             ResourceBindingScope.Stack => await mediator.Send(new DeleteStackResourceBinding(resourceId, id), cancellationToken),
             ResourceBindingScope.Deployment => await mediator.Send(new DeleteDeploymentResourceBinding(resourceId, id), cancellationToken),
+            ResourceBindingScope.SwarmService => await mediator.Send(new DeleteSwarmServiceResourceBinding(resourceId, id), cancellationToken),
             ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
             _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };

@@ -18,6 +18,7 @@ export type ResourceType =
   | 'Registry'
   | 'Platform'
   | 'Deployment'
+  | 'SwarmService'
   | 'Activity'
   | 'AlertRule'
   | 'AlertChannel'
@@ -53,6 +54,7 @@ export const PluralResourceMap = {
   Registry: 'Registries',
   Platform: 'Platforms',
   Deployment: 'Deployments',
+  SwarmService: 'SwarmServices',
   Activity: 'Activities',
   AlertRule: 'AlertRules',
   Alert: 'Alerts',

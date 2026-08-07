@@ -3,13 +3,88 @@ using Application.Features.ResourceBindings.Models;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Pipelines.Interfaces;
 using LightResults;
 
 namespace Application.Features.ResourceBindings;
 
 internal static class ResourceBindingsFeatureHelpers
 {
+    public static async Task<Result<IReadOnlyList<ResourceBinding>>> GetDuplicateEntriesAsync(
+        IUnitOfWork unitOfWork,
+        IPermissionService permissionService,
+        IUserContext user,
+        ResourceType resourceType,
+        ResourceBindingScope scope,
+        Guid sourceResourceId,
+        CancellationToken cancellationToken)
+    {
+        var entries = (await unitOfWork.ResourceBindings.GetEntriesAsync(
+            scope,
+            sourceResourceId,
+            cancellationToken)).ToArray();
+
+        if (entries.Length == 0 || user.IsAdmin || user.ActorId == Constants.SystemId)
+            return Result.Success<IReadOnlyList<ResourceBinding>>(entries);
+
+        var sourcePermissions = await permissionService.ResolvePermissionsAsync(
+            user.UserId,
+            resourceType,
+            sourceResourceId,
+            cancellationToken);
+        if (!sourcePermissions.Has(PermissionLevel.Read, SpecificPermission.ResourceBindings))
+        {
+            return Result.Failure<IReadOnlyList<ResourceBinding>>(
+                new ForbiddenError("Missing permission [Resource Bindings] on the duplicate source."));
+        }
+
+        var targetPermissions = await permissionService.ResolvePermissionsAsync(
+            user.UserId,
+            resourceType,
+            resourceId: null,
+            cancellationToken);
+        if (!targetPermissions.Has(PermissionLevel.Write, SpecificPermission.ResourceBindings))
+        {
+            return Result.Failure<IReadOnlyList<ResourceBinding>>(
+                new ForbiddenError("Missing permission [Resource Bindings] for new resources."));
+        }
+
+        return Result.Success<IReadOnlyList<ResourceBinding>>(entries);
+    }
+
+    public static async Task CopyDuplicateEntriesAsync(
+        IUnitOfWork unitOfWork,
+        ResourceBindingScope scope,
+        Guid targetResourceId,
+        IReadOnlyCollection<ResourceBinding> sourceEntries,
+        CancellationToken cancellationToken)
+    {
+        if (sourceEntries.Count == 0)
+            return;
+
+        var copies = sourceEntries
+            .Select(entry => new ResourceBinding(
+                Name: entry.Name,
+                Kind: entry.Kind,
+                Scope: scope,
+                ResourceId: targetResourceId,
+                Value: entry.Value,
+                SecretId: entry.SecretId,
+                SecretDeliveryMode: entry.SecretDeliveryMode,
+                TargetPath: entry.TargetPath))
+            .ToArray();
+
+        await unitOfWork.ResourceBindings.ReplaceResourceEntriesAsync(
+            scope,
+            targetResourceId,
+            copies,
+            cancellationToken);
+    }
+
     public static async Task<Result<ResourceBindingsResult>> CreateEntryAsync(
         IUnitOfWork unitOfWork,
         ResourceBindingScope scope,

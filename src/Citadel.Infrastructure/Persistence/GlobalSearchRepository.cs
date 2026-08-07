@@ -80,6 +80,34 @@ internal sealed class GlobalSearchRepository(
             ORDER BY MatchRank, lower(deployment.Name), deployment.Id
             LIMIT @LimitPerType
         ),
+        SwarmServiceCandidates AS (
+            SELECT
+                service.Id,
+                CASE
+                    WHEN lower(service.Name) = lower(@Query) THEN 0
+                    WHEN service.Name ILIKE @PrefixPattern ESCAPE E'\\' THEN 1
+                    ELSE 2
+                END AS MatchRank
+            FROM SwarmServices service
+            WHERE @SwarmServiceType = ANY(@ResourceTypes)
+              AND service.Name ILIKE @ContainsPattern ESCAPE E'\\'
+              AND (
+                  @IsAdmin
+                  OR EXISTS (
+                      SELECT 1
+                      FROM AuthorizedResources access
+                      WHERE access.ResourceType = @SwarmServiceType
+                        AND (access.ResourceId IS NULL OR access.ResourceId = service.Id)))
+              AND (
+                  @IsAdmin
+                  OR EXISTS (
+                      SELECT 1
+                      FROM AuthorizedResources platformAccess
+                      WHERE platformAccess.ResourceType = @PlatformType
+                        AND (platformAccess.ResourceId IS NULL OR platformAccess.ResourceId = service.PlatformId)))
+            ORDER BY MatchRank, lower(service.Name), service.Id
+            LIMIT @LimitPerType
+        ),
         GitRepositoryCandidates AS (
             SELECT
                 repository.Id,
@@ -369,6 +397,46 @@ internal sealed class GlobalSearchRepository(
             FROM DeploymentCandidates candidate
             JOIN Deployments deployment ON deployment.Id = candidate.Id
             LEFT JOIN Platforms platform ON platform.Id = deployment.PlatformId
+
+            UNION ALL
+
+            SELECT
+                service.Id,
+                @SwarmServiceType AS ResourceType,
+                service.Name,
+                CASE WHEN (
+                    @IsAdmin
+                    OR EXISTS (
+                        SELECT 1 FROM AuthorizedResources parentAccess
+                        WHERE parentAccess.ResourceType = @PlatformType
+                          AND (parentAccess.ResourceId IS NULL OR parentAccess.ResourceId = platform.Id)))
+                    THEN platform.Name ELSE NULL END AS SecondaryText,
+                service.Health AS Status,
+                CASE WHEN (
+                    @IsAdmin
+                    OR EXISTS (
+                        SELECT 1 FROM AuthorizedResources parentAccess
+                        WHERE parentAccess.ResourceType = @PlatformType
+                          AND (parentAccess.ResourceId IS NULL OR parentAccess.ResourceId = platform.Id)))
+                    THEN platform.Id ELSE NULL END AS ParentId,
+                CASE WHEN (
+                    @IsAdmin
+                    OR EXISTS (
+                        SELECT 1 FROM AuthorizedResources parentAccess
+                        WHERE parentAccess.ResourceType = @PlatformType
+                          AND (parentAccess.ResourceId IS NULL OR parentAccess.ResourceId = platform.Id)))
+                    THEN @PlatformType ELSE NULL END AS ParentResourceType,
+                CASE WHEN (
+                    @IsAdmin
+                    OR EXISTS (
+                        SELECT 1 FROM AuthorizedResources parentAccess
+                        WHERE parentAccess.ResourceType = @PlatformType
+                          AND (parentAccess.ResourceId IS NULL OR parentAccess.ResourceId = platform.Id)))
+                    THEN platform.Name ELSE NULL END AS ParentName,
+                candidate.MatchRank
+            FROM SwarmServiceCandidates candidate
+            JOIN SwarmServices service ON service.Id = candidate.Id
+            JOIN Platforms platform ON platform.Id = service.PlatformId
 
             UNION ALL
 
@@ -694,7 +762,8 @@ internal sealed class GlobalSearchRepository(
                 BackupPolicyType = (int)ResourceType.BackupPolicy,
                 BackupRepositoryType = (int)ResourceType.BackupRepository,
                 BuildType = (int)ResourceType.Build,
-                BuildAgentPoolType = (int)ResourceType.BuildAgentPool
+                BuildAgentPoolType = (int)ResourceType.BuildAgentPool,
+                SwarmServiceType = (int)ResourceType.SwarmService
             },
             transaction: tx());
         return [.. rows

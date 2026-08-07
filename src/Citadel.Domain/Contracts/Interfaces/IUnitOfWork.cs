@@ -21,6 +21,7 @@ using Domain.Entities.Oidc;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.Models;
@@ -79,6 +80,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IInstanceSetupStateRepository InstanceSetupState { get; }
     IPlatformStatRepository PlatformStats { get; }
     ISwarmProjectionRepository Swarm { get; }
+    ISwarmServiceRepository SwarmServices { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
     IGlobalSearchRepository GlobalSearch { get; }
@@ -1005,7 +1007,11 @@ public interface ISwarmProjectionRepository
     Task<SwarmNodeProjection?> GetNodeAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmServiceProjection>> GetServicesAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmServiceProjection?> GetServiceAsync(Guid platformId, string dockerServiceId, CancellationToken cancellationToken);
-    Task<IReadOnlyList<SwarmTaskProjection>> GetTasksAsync(Guid platformId, int limit, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmTaskProjection>> GetTasksAsync(
+        Guid platformId,
+        int limit,
+        CancellationToken cancellationToken,
+        string? dockerServiceId = null);
     Task<SwarmTaskProjection?> GetTaskAsync(Guid platformId, string dockerTaskId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmNetworkProjection>> GetNetworksAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmNetworkProjection?> GetNetworkAsync(Guid platformId, string dockerNetworkId, CancellationToken cancellationToken);
@@ -1273,4 +1279,41 @@ public interface IAlertEventRepository
     Task<int> BulkUpdateAsync(IEnumerable<AlertEvent> alertEvents, CancellationToken cancellationToken);
     Task<int> CountUnresolvedAsync(CancellationToken cancellationToken);
     Task<int> CountAuthorizedUnresolvedAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+}
+
+public interface ISwarmServiceRepository
+{
+    Task<SwarmService?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmService>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmService>> GetByPlatformAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<SwarmService>> GetInfoAsync(
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? platformId = null);
+    Task<IEnumerable<SwarmService>> GetAuthorizedInfoAsync(
+        Guid userId,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? platformId = null);
+    Task<bool> ExistsAsync(Guid platformId, string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, Guid platformId, string name, CancellationToken cancellationToken);
+    Task<bool> DockerNameExistsAsync(Guid platformId, string dockerName, CancellationToken cancellationToken);
+    Task<int> AddAsync(
+        SwarmService service,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? tagCreatedByActorId = null);
+    Task<int> UpdateAsync(SwarmService service, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(
+        Guid userId,
+        Guid serviceId,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken);
+    Task<int> RemoveAsync(Guid id, long rowVersion, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmService>> GetStuckOperationsAsync(
+        int staleAfterSeconds = 300,
+        CancellationToken cancellationToken = default);
 }

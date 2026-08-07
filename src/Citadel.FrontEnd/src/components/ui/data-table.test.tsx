@@ -57,6 +57,27 @@ describe('DataTable nested row selection', () => {
 
     await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([child]));
   });
+
+  it('can keep non-resource child rows out of resource selection', async () => {
+    const onSelectionChange = vi.fn();
+    const parent = { id: 'parent', name: 'Service', children: [{ id: 'child', name: 'Task' }] };
+
+    render(
+      <DataTable
+        columns={columns}
+        data={[parent]}
+        isLoading={false}
+        getSubRows={(row) => row.children}
+        enableRowSelection={(row) => row.id === 'parent'}
+        enableSubRowSelection={false}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Service' }));
+
+    await waitFor(() => expect(onSelectionChange).toHaveBeenLastCalledWith([parent]));
+  });
 });
 
 describe('DataTable styling', () => {

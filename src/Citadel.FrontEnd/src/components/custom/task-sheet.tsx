@@ -56,6 +56,8 @@ import {
   StackReleaseSource,
   StackSnapshot,
   StackStreamItem,
+  ScaleSwarmServiceInput,
+  SwarmServiceProgressItem,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
@@ -75,6 +77,12 @@ interface PullImageParams {
 }
 
 type DeployParams = { name: string } & ApplyDeploymentInput;
+type SwarmServiceMutationParams = {
+  id: string;
+  name: string;
+  action: 'apply' | 'scale' | 'force-update';
+  replicas?: number;
+};
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
 type BackupRunParams = { id: string; name: string } & QueueBackupRunInput;
@@ -106,6 +114,7 @@ type BackupRestoreRunStreamItem = {
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
   | { kind: 'deploy'; payload: DeployParams }
+  | { kind: 'swarmService'; payload: SwarmServiceMutationParams }
   | { kind: 'activity'; payload: Pick<ActivityView, 'id'> }
   | { kind: 'alertEvent'; payload: Pick<AlertEventView, 'id'> }
   | { kind: 'build'; payload: Record<string, unknown> }
@@ -353,6 +362,13 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
       <DuplicateSource source={info.source} />
       <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Duplicated configuration" />
+    </div>
+  ),
+
+  SwarmServiceDuplicated: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <DuplicateSource source={info.source} />
+      <SpecViewer spec={info.service} resourceId={activity.resourceId} title="Duplicated configuration" />
     </div>
   ),
 
@@ -1082,6 +1098,17 @@ function ApplyDeployTaskRenderer({ payload, type }: { payload: DeployParams; typ
   return <TaskStreamLayout title="Deploy" refName={payload.name} type={type} state={state as any} />;
 }
 
+function SwarmServiceTaskRenderer({ payload, type }: { payload: SwarmServiceMutationParams; type: ResourceType }) {
+  const state = useSwarmServiceProgress(payload);
+  const title =
+    payload.action === 'scale'
+      ? 'Scale Service'
+      : payload.action === 'force-update'
+        ? 'Restart Tasks'
+        : 'Apply Service';
+  return <TaskStreamLayout title={title} refName={payload.name} type={type} state={state as any} />;
+}
+
 function ApplyStackTaskRenderer({ payload, type }: { payload: StackDeployParams; type: ResourceType }) {
   const state = useApplyStackProgress(payload);
   return <TaskStreamLayout title="Stack" refName={payload.name} type={type} state={state as any} />;
@@ -1157,6 +1184,7 @@ function AlertEventTaskRenderer({ payload }: { payload: Pick<AlertEventView, 'id
 const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }) => ReactNode> = {
   pull: PullImageTaskRenderer,
   deploy: ApplyDeployTaskRenderer,
+  swarmService: SwarmServiceTaskRenderer,
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
   backupRun: BackupRunTaskRenderer,
@@ -1270,6 +1298,23 @@ function useApplyDeploymentProgress(params: DeployParams) {
     successMessage: 'Deployment applied successfully',
     errorMessageDefault: 'Failed to deploy',
     getError: (item) => item.errorMessage,
+  });
+}
+
+function useSwarmServiceProgress(params: SwarmServiceMutationParams) {
+  const request: ScaleSwarmServiceInput | Record<string, never> = useMemo(
+    () => (params.action === 'scale' ? { replicas: params.replicas ?? 0 } : {}),
+    [params.action, params.replicas],
+  );
+
+  return useStreamProgress<ScaleSwarmServiceInput | Record<string, never>, SwarmServiceProgressItem>({
+    endpoint: `api/v1/swarmServices/${params.id}/${params.action}`,
+    request,
+    successMessage: 'Swarm Service operation completed successfully',
+    errorMessageDefault: 'Swarm Service operation failed',
+    getError: (item) => item.errorMessage,
+    getMessageSeverity: (item) => (item.isWarning ? 'warning' : item.isCompleted ? 'success' : undefined),
+    getIsComplete: (item) => item.isCompleted === true,
   });
 }
 

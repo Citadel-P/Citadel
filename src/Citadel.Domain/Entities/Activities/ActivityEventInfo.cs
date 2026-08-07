@@ -8,6 +8,7 @@ using Domain.Entities.Automation;
 using Domain.Entities.Builds;
 using Domain.Entities.Licensing;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -119,6 +120,15 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(BackupPolicyUpdated), nameof(ActivityEventType.BackupPolicyUpdated))]
 [JsonDerivedType(typeof(BackupPolicyRenamed), nameof(ActivityEventType.BackupPolicyRenamed))]
 [JsonDerivedType(typeof(BackupPolicyArchived), nameof(ActivityEventType.BackupPolicyArchived))]
+[JsonDerivedType(typeof(SwarmServiceCreated), nameof(ActivityEventType.SwarmServiceCreated))]
+[JsonDerivedType(typeof(SwarmServiceUpdated), nameof(ActivityEventType.SwarmServiceUpdated))]
+[JsonDerivedType(typeof(SwarmServiceRenamed), nameof(ActivityEventType.SwarmServiceRenamed))]
+[JsonDerivedType(typeof(SwarmServiceDeleted), nameof(ActivityEventType.SwarmServiceDeleted))]
+[JsonDerivedType(typeof(SwarmServiceApplied), nameof(ActivityEventType.SwarmServiceApplied))]
+[JsonDerivedType(typeof(SwarmServiceScaled), nameof(ActivityEventType.SwarmServiceScaled))]
+[JsonDerivedType(typeof(SwarmServiceForceUpdated), nameof(ActivityEventType.SwarmServiceForceUpdated))]
+[JsonDerivedType(typeof(SwarmServiceOperationFailed), nameof(ActivityEventType.SwarmServiceOperationFailed))]
+[JsonDerivedType(typeof(SwarmServiceDuplicated), nameof(ActivityEventType.SwarmServiceDuplicated))]
 
 public abstract record ActivityEventInfo;
 
@@ -128,6 +138,39 @@ public sealed record ActivitySourceResource(
     string ResourceName);
 
 public sealed record ActivityChangedField(string Name, string? OldValue, string? NewValue);
+
+public sealed record SwarmServiceActivitySnapshot(
+    Guid Id,
+    Guid PlatformId,
+    string Name,
+    string? Description,
+    string DockerName,
+    string? DockerServiceId,
+    SwarmServiceSpec Spec);
+
+public sealed record SwarmServiceCreated(SwarmServiceActivitySnapshot Service) : ActivityEventInfo;
+public sealed record SwarmServiceDuplicated(
+    SwarmServiceActivitySnapshot Service,
+    ActivitySourceResource Source) : ActivityEventInfo;
+public sealed record SwarmServiceUpdated(SwarmServiceActivitySnapshot OldService, SwarmServiceActivitySnapshot NewService) : ActivityEventInfo;
+public sealed record SwarmServiceRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record SwarmServiceDeleted(SwarmServiceActivitySnapshot Service) : ActivityEventInfo;
+public sealed record SwarmServiceApplied(Guid OperationId, IReadOnlyList<string> Warnings) : ActivityEventInfo;
+public sealed record SwarmServiceScaled(Guid OperationId, int Replicas, IReadOnlyList<string> Warnings) : ActivityEventInfo;
+public sealed record SwarmServiceForceUpdated(Guid OperationId, IReadOnlyList<string> Warnings) : ActivityEventInfo;
+public sealed record SwarmServiceOperationFailed(Guid OperationId, SwarmServiceOperationKind Kind, string Reason) : ActivityEventInfo;
+
+public static class SwarmServiceActivityExtensions
+{
+    public static SwarmServiceActivitySnapshot ToActivitySnapshot(this SwarmService service) => new(
+        service.Id,
+        service.PlatformId,
+        service.Name,
+        service.Description,
+        service.DockerName,
+        service.DockerServiceId,
+        service.Spec);
+}
 
 public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;
 public sealed record DeploymentDuplicated(DeploymentSnapshot Deployment, ActivitySourceResource Source) : ActivityEventInfo;

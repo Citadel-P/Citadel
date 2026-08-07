@@ -11,7 +11,10 @@ public sealed record SwarmServiceProjection(
     DateTimeOffset? DockerUpdatedAt, DateTimeOffset ObservedAt, bool IsStale,
     SwarmServiceOwnership Ownership = SwarmServiceOwnership.Unmanaged,
     string? DockerStackNamespace = null,
-    string? OwnershipDiagnostic = null)
+    string? OwnershipDiagnostic = null,
+    Guid? SwarmServiceId = null,
+    string? LiveRuntimeHash = null,
+    long ForceUpdate = 0)
 {
     public static SwarmServiceProjection FromObservation(Guid platformId, SwarmServiceResult value, DateTimeOffset observedAt) =>
         new(platformId, value.Id, value.VersionIndex, value.Name, value.Mode, value.Image,
@@ -20,7 +23,10 @@ public sealed record SwarmServiceProjection(
             value.CreatedAt, value.UpdatedAt, observedAt, false,
             SwarmServiceOwnershipClassifier.Classify(value.Labels),
             SwarmServiceOwnershipClassifier.GetDockerStackNamespace(value.Labels),
-            SwarmServiceOwnershipClassifier.GetDiagnostic(value.Labels));
+            SwarmServiceOwnershipClassifier.GetDiagnostic(value.Labels),
+            SwarmServiceOwnershipClassifier.GetSwarmServiceId(value.Labels),
+            value.RuntimeHash,
+            value.ForceUpdate);
 }
 
 internal static class SwarmServiceOwnershipClassifier
@@ -29,20 +35,51 @@ internal static class SwarmServiceOwnershipClassifier
     private const string ManagedLabel = CitadelPrefix + "managed";
     private const string DeploymentIdLabel = CitadelPrefix + "deployment-id";
     private const string StackIdLabel = CitadelPrefix + "stack-id";
+    private const string ServiceIdLabel = CitadelPrefix + "service-id";
     private const string DockerStackNamespaceLabel = "com.docker.stack.namespace";
 
-    public static SwarmServiceOwnership Classify(IReadOnlyDictionary<string, string> labels) =>
-        GetDockerStackNamespace(labels) is not null || HasOrphanedStackMetadata(labels)
+    public static SwarmServiceOwnership Classify(IReadOnlyDictionary<string, string> labels)
+    {
+        if (!IsCitadelManaged(labels))
+            return GetDockerStackNamespace(labels) is null
+                ? SwarmServiceOwnership.Unmanaged
+                : SwarmServiceOwnership.DockerStackExternal;
+
+        var hasService = labels.ContainsKey(ServiceIdLabel);
+        var hasOtherOwner = labels.ContainsKey(DeploymentIdLabel) || labels.ContainsKey(StackIdLabel);
+        if (hasService)
+        {
+            return hasOtherOwner || GetSwarmServiceId(labels) is null
+                ? SwarmServiceOwnership.OwnershipConflict
+                : SwarmServiceOwnership.CitadelService;
+        }
+
+        return GetDockerStackNamespace(labels) is not null || HasOrphanedStackMetadata(labels)
             ? SwarmServiceOwnership.DockerStackExternal
             : SwarmServiceOwnership.Unmanaged;
+    }
+
+    public static Guid? GetSwarmServiceId(IReadOnlyDictionary<string, string> labels) =>
+        labels.TryGetValue(ServiceIdLabel, out var value) && Guid.TryParse(value, out var id)
+            ? id
+            : null;
 
     public static string? GetDockerStackNamespace(IReadOnlyDictionary<string, string> labels) =>
         labels.TryGetValue(DockerStackNamespaceLabel, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : null;
 
-    public static string? GetDiagnostic(IReadOnlyDictionary<string, string> labels) =>
-        HasCitadelOwnerMetadata(labels) ? "Orphaned Citadel metadata" : null;
+    public static string? GetDiagnostic(IReadOnlyDictionary<string, string> labels)
+    {
+        if (!IsCitadelManaged(labels))
+            return null;
+        if (labels.ContainsKey(ServiceIdLabel) && GetSwarmServiceId(labels) is null)
+            return "Invalid Citadel Service ownership label";
+        if (labels.ContainsKey(ServiceIdLabel)
+            && (labels.ContainsKey(DeploymentIdLabel) || labels.ContainsKey(StackIdLabel)))
+            return "Conflicting Citadel ownership labels";
+        return HasCitadelOwnerMetadata(labels) ? "Orphaned Citadel metadata" : null;
+    }
 
     private static bool HasOrphanedStackMetadata(IReadOnlyDictionary<string, string> labels) =>
         IsCitadelManaged(labels) && labels.ContainsKey(StackIdLabel);

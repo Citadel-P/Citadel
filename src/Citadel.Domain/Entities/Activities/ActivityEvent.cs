@@ -195,6 +195,17 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.BackupPolicyArchived
                 => ActivityResourceType.BackupPolicy,
 
+            ActivityEventType.SwarmServiceCreated
+            or ActivityEventType.SwarmServiceUpdated
+            or ActivityEventType.SwarmServiceRenamed
+            or ActivityEventType.SwarmServiceDeleted
+            or ActivityEventType.SwarmServiceApplied
+            or ActivityEventType.SwarmServiceScaled
+            or ActivityEventType.SwarmServiceForceUpdated
+            or ActivityEventType.SwarmServiceOperationFailed
+            or ActivityEventType.SwarmServiceDuplicated
+                => ActivityResourceType.SwarmService,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -364,6 +375,16 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.BackupPolicyUpdated, BackupPolicyUpdated) => true,
             (ActivityEventType.BackupPolicyRenamed, BackupPolicyRenamed) => true,
             (ActivityEventType.BackupPolicyArchived, BackupPolicyArchived) => true,
+
+            (ActivityEventType.SwarmServiceCreated, SwarmServiceCreated) => true,
+            (ActivityEventType.SwarmServiceUpdated, SwarmServiceUpdated) => true,
+            (ActivityEventType.SwarmServiceRenamed, SwarmServiceRenamed) => true,
+            (ActivityEventType.SwarmServiceDeleted, SwarmServiceDeleted) => true,
+            (ActivityEventType.SwarmServiceApplied, SwarmServiceApplied) => true,
+            (ActivityEventType.SwarmServiceScaled, SwarmServiceScaled) => true,
+            (ActivityEventType.SwarmServiceForceUpdated, SwarmServiceForceUpdated) => true,
+            (ActivityEventType.SwarmServiceOperationFailed, SwarmServiceOperationFailed) => true,
+            (ActivityEventType.SwarmServiceDuplicated, SwarmServiceDuplicated) => true,
 
             _ => false
         };

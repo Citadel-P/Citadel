@@ -51,9 +51,10 @@ public static class SwarmInventory
         IPermissionEvaluator permissionEvaluator,
         Guid platformId,
         int limit = 50,
+        string? serviceId = null,
         CancellationToken ct = default) =>
         await EndpointHandlers.HandleResult(
-            await mediator.Send(new GetSwarmTasks(platformId, limit), ct),
+            await mediator.Send(new GetSwarmTasks(platformId, limit, serviceId), ct),
             permissionEvaluator,
             (values, evaluator) => SwarmTasksView.Map(values, platformId, evaluator));
     public static async Task<Results<Ok<SwarmTaskView>, ProblemHttpResult>> GetTask(

@@ -2,6 +2,7 @@ using Domain;
 using Domain.Entities.Deployments;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -19,6 +20,7 @@ internal interface IImageCheckBuilder
 {
     Result<DeploymentImageCheck> BuildDeploymentCheck(Deployment deployment, ImageCheckMode mode);
     Result<IReadOnlyList<ManualStackImageCheck>> BuildManualStackChecks(Stack stack, ImageCheckMode mode);
+    Result<SwarmServiceImageCheck> BuildSwarmServiceCheck(SwarmService service, ImageCheckMode mode);
     Result<ImageScanTask> BuildScanTask(ImageKey key, Guid platformId, Registry registry);
 }
 
@@ -164,6 +166,53 @@ internal sealed class ImageCheckBuilder : IImageCheckBuilder
         return Result.Success<IReadOnlyList<ManualStackImageCheck>>(checks);
     }
 
+    public Result<SwarmServiceImageCheck> BuildSwarmServiceCheck(
+        SwarmService service,
+        ImageCheckMode mode)
+    {
+        if (service.ControlState == ResourceControlState.Processing)
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new ConflictError("The Service is currently processing another operation."));
+        }
+
+        if (mode == ImageCheckMode.Scheduled
+            && service.Spec.UpdateBehavior == UpdateBehavior.Disabled)
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new BadRequestError("Scheduled update checks are disabled for this Service."));
+        }
+
+        if (service.Spec.Image is not SwarmExternalImage image)
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new BadRequestError("Only external tagged images support update checks."));
+        }
+
+        if (image.RegistryId == Guid.Empty)
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new BadRequestError("The Service has no Registry configured."));
+        }
+
+        if (!Helpers.TrySplitImageTag(image.ImageTag, out var repository, out var tag))
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new BadRequestError("The Service image must use a supported tagged reference."));
+        }
+
+        if (string.IsNullOrWhiteSpace(service.AppliedImageDigest))
+        {
+            return Result.Failure<SwarmServiceImageCheck>(
+                new ConflictError("The Service has no applied image digest to compare."));
+        }
+
+        return Result.Success(new SwarmServiceImageCheck(
+            service,
+            image,
+            new ImageKey(image.RegistryId, repository, tag)));
+    }
+
     public Result<ImageScanTask> BuildScanTask(ImageKey key, Guid platformId, Registry registry)
     {
         if (registry.Status != RegistryStatus.Active)
@@ -200,4 +249,9 @@ internal sealed record ManualStackImageCheck(
     Stack Stack,
     string ServiceName,
     string ImageName,
+    ImageKey Key);
+
+internal sealed record SwarmServiceImageCheck(
+    SwarmService Service,
+    SwarmExternalImage Image,
     ImageKey Key);

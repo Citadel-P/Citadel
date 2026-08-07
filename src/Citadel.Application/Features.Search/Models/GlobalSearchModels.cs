@@ -11,7 +11,8 @@ public enum GlobalSearchResourceType
     BackupPolicy,
     BackupRepository,
     Build,
-    BuildAgentPool
+    BuildAgentPool,
+    SwarmService
 }
 
 public enum GlobalSearchCategory
@@ -23,7 +24,8 @@ public enum GlobalSearchCategory
     Registries,
     Automations,
     Backups,
-    Builds
+    Builds,
+    SwarmServices
 }
 
 public enum SearchStatusTone

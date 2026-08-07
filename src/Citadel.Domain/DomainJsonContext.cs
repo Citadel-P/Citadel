@@ -15,6 +15,7 @@ using Domain.Entities.Licensing;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Domain.Entities.Tags;
 using Hosting.Common;
 using System.Text.Json.Serialization;
@@ -126,6 +127,35 @@ public partial class DeploymentJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
+        typeof(JsonStringEnumConverter<UpdateBehavior>),
+        typeof(JsonStringEnumConverter<AutoUpdateStatus>),
+        typeof(JsonStringEnumConverter<ResourceControlState>),
+        typeof(JsonStringEnumConverter<SwarmServiceSchedulingMode>),
+        typeof(JsonStringEnumConverter<SwarmServicePortPublishMode>),
+        typeof(JsonStringEnumConverter<SwarmServiceMountKind>),
+        typeof(JsonStringEnumConverter<SwarmServiceRestartCondition>),
+        typeof(JsonStringEnumConverter<SwarmServiceUpdateOrder>),
+        typeof(JsonStringEnumConverter<SwarmServiceUpdateFailureAction>),
+        typeof(JsonStringEnumConverter<SwarmServiceHealth>),
+        typeof(JsonStringEnumConverter<SwarmServiceSynchronizationState>),
+        typeof(JsonStringEnumConverter<SwarmServiceOperationKind>),
+        typeof(JsonStringEnumConverter<SwarmServiceOperationState>)
+    })]
+[JsonSerializable(typeof(SwarmService))]
+[JsonSerializable(typeof(SwarmServiceSpec))]
+[JsonSerializable(typeof(SwarmServiceImageInfo))]
+[JsonSerializable(typeof(SwarmExternalImage))]
+[JsonSerializable(typeof(SwarmBuildImage))]
+[JsonSerializable(typeof(SwarmServiceOperation))]
+public partial class SwarmServiceJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
         typeof(JsonStringEnumConverter<ResourceBindingKind>),
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
@@ -166,6 +196,16 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
 [JsonSerializable(typeof(ActivityEventInfo))]
+[JsonSerializable(typeof(SwarmServiceActivitySnapshot))]
+[JsonSerializable(typeof(SwarmServiceCreated))]
+[JsonSerializable(typeof(SwarmServiceDuplicated))]
+[JsonSerializable(typeof(SwarmServiceUpdated))]
+[JsonSerializable(typeof(SwarmServiceRenamed))]
+[JsonSerializable(typeof(SwarmServiceDeleted))]
+[JsonSerializable(typeof(SwarmServiceApplied))]
+[JsonSerializable(typeof(SwarmServiceScaled))]
+[JsonSerializable(typeof(SwarmServiceForceUpdated))]
+[JsonSerializable(typeof(SwarmServiceOperationFailed))]
 [JsonSerializable(typeof(ActivitySourceResource))]
 [JsonSerializable(typeof(ActivityChangedField))]
 [JsonSerializable(typeof(DeploymentCreated))]

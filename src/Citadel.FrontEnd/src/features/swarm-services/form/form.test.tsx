@@ -1,0 +1,242 @@
+import {
+  ManagedSwarmServiceView,
+  PlatformType,
+  SwarmServiceResources,
+  SwarmNetworkView,
+  SwarmServiceSpec,
+} from '@/api/generated/api.types';
+import { renderCitadel } from '@/test/render-citadel';
+import { screen } from '@testing-library/react';
+import { Route, Routes } from 'react-router';
+import {
+  getServiceNetworkOptions,
+  getSwarmResourceProfile,
+  getSwarmResourcesForProfile,
+  prepareSwarmServiceSpecForWrite,
+  SwarmServiceForm,
+} from './form';
+
+const platformId = '00000000-0000-0000-0000-000000000200';
+
+vi.mock('@/lib/hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/hooks')>();
+  return {
+    ...actual,
+    useMutate: () => ({ mutateAsync: vi.fn() }),
+    useSaveResource: () => ({ save: vi.fn(), isPending: false }),
+    useRead: (resource: string) => {
+      if (resource === 'listPlatforms') {
+        return {
+          data: {
+            data: {
+              platforms: [
+                { id: platformId, name: 'Production Swarm', type: PlatformType.DockerSwarm, status: 'Online' },
+                { id: 'standalone', name: 'Standalone', type: PlatformType.Docker, status: 'Online' },
+              ],
+            },
+          },
+          isLoading: false,
+        };
+      }
+
+      if (resource === 'listRegistries') {
+        return {
+          data: { data: { registries: [{ id: 'registry-1', name: 'Docker Hub', registryHost: 'docker.io' }] } },
+          isLoading: false,
+        };
+      }
+
+      if (resource === 'listBuildProjects') {
+        return { data: { data: { projects: [] } }, isLoading: false };
+      }
+
+      if (resource === 'getSwarmServiceDuplicateDraft') {
+        return {
+          data: {
+            data: {
+              draft: {
+                name: 'redis-service-copy',
+                platformId,
+                description: 'Copied service',
+                spec: {
+                  image: { $type: 'External', registryId: 'registry-1', imageTag: 'redis' },
+                  schedulingMode: 'Replicated',
+                  replicas: 1,
+                },
+                tagIds: [],
+                duplicateSource: {
+                  resourceType: 'SwarmService',
+                  resourceId: 'source-service-id',
+                  resourceName: 'redis-service',
+                },
+              },
+              warnings: [],
+            },
+          },
+          isFetching: false,
+        };
+      }
+
+      if (resource === 'lookup') {
+        return { data: { data: [{ id: 'binding-1', name: 'LOG_LEVEL' }] }, isLoading: false };
+      }
+
+      return { data: { data: { items: [] } }, isLoading: false };
+    },
+  };
+});
+
+vi.mock('@/features/license/use-license-entitlements', () => ({
+  useLicenseEntitlements: () => ({ hasCapability: () => true }),
+}));
+
+vi.mock('@/features/tags/components', () => ({
+  ResourceTagSelector: () => <div>Tag selector</div>,
+}));
+
+vi.mock('@/lib/monaco', () => ({
+  MonacoToArrayEditor: ({
+    helperText,
+    validateItem,
+  }: {
+    helperText?: string;
+    validateItem?: (value: string) => string | null;
+  }) => (
+    <div>
+      <textarea aria-label={helperText ?? 'Editor'} />
+      {helperText === '# LOG_LEVEL=${LOG_LEVEL}' && (
+        <span data-testid="environment-diagnostic">{validateItem?.('LOG_LEVEL=${LOG_LEVELs}')}</span>
+      )}
+    </div>
+  ),
+  MonacoDiff: () => null,
+}));
+
+describe('SwarmServiceForm', () => {
+  it('writes the polymorphic image discriminator before image properties', () => {
+    const image = { registryId: 'registry-1', imageTag: 'redis', $type: 'External' } as const;
+    const spec = { image } as SwarmServiceSpec;
+
+    const result = prepareSwarmServiceSpecForWrite(spec);
+
+    expect(Object.keys(result.image)[0]).toBe('$type');
+    expect(result.image).toEqual(image);
+    expect(JSON.stringify(result)).toContain('"image":{"$type":"External"');
+  });
+
+  it('restores a missing image discriminator from the selected image shape', () => {
+    const spec = {
+      image: { registryId: 'registry-1', imageTag: 'redis' },
+    } as unknown as SwarmServiceSpec;
+
+    expect(prepareSwarmServiceSpecForWrite(spec).image.$type).toBe('External');
+  });
+
+  it('excludes ingress from new selections but keeps an existing selection removable', () => {
+    const networks = [
+      { id: 'overlay', name: 'application', scope: 'Swarm', isIngress: false },
+      { id: 'ingress', name: 'ingress', scope: 'Swarm', isIngress: true },
+      { id: 'bridge', name: 'bridge', scope: 'Local', isIngress: false },
+    ] as SwarmNetworkView[];
+
+    expect(getServiceNetworkOptions(networks).map((network) => network.id)).toEqual(['overlay']);
+    expect(getServiceNetworkOptions(networks, ['ingress']).map((network) => network.id)).toEqual([
+      'overlay',
+      'ingress',
+    ]);
+  });
+
+  it('maps shared resource profiles to Swarm limits without inventing reservations', () => {
+    const resources = getSwarmResourcesForProfile('xsmall');
+
+    expect(resources).toEqual({
+      limitNanoCpus: 250_000_000,
+      limitMemoryBytes: 268_435_456,
+      reservationNanoCpus: null,
+      reservationMemoryBytes: null,
+    });
+    expect(getSwarmResourceProfile(resources)).toBe('xsmall');
+    expect(getSwarmResourcesForProfile('automatic')).toBeNull();
+  });
+
+  it('shows Automatic when existing values do not match a preset', () => {
+    const resources: SwarmServiceResources = {
+      limitNanoCpus: 750_000_000,
+      limitMemoryBytes: 768 * 1024 * 1024,
+      reservationNanoCpus: 250_000_000,
+    };
+
+    expect(getSwarmResourceProfile(resources)).toBe('automatic');
+  });
+
+  it('uses the standard Citadel form sections and the platform from the route', () => {
+    renderCitadel(
+      <Routes>
+        <Route path="/platforms/:platformId/services/add" element={<SwarmServiceForm mode="add" />} />
+      </Routes>,
+      { route: `/platforms/${platformId}/services/add` },
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Description' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Platform' })).toHaveTextContent('Production Swarm');
+    expect(screen.getAllByText('Scheduling').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Image').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Networks').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Advanced').length).toBeGreaterThan(0);
+    expect(screen.getByText('Task Resources')).toBeVisible();
+    const resourceProfile = screen.getByRole('combobox', { name: 'Profile' });
+    expect(resourceProfile).toHaveTextContent('Automatic');
+    expect(screen.queryByRole('spinbutton', { name: 'CPU Reservation' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Health Check').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Rolling Update').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('environment-diagnostic')).toHaveTextContent(
+      'LOG_LEVELs is not defined in Service or global variables.',
+    );
+  });
+
+  it('hydrates an external registry and image reference when editing', () => {
+    const resource = {
+      id: 'service-id',
+      name: 'redis-service',
+      platformId,
+      rowVersion: 1,
+      tags: [],
+      spec: {
+        image: {
+          $type: 'External',
+          registryId: 'registry-1',
+          imageTag: 'redis',
+        },
+      },
+    } as ManagedSwarmServiceView;
+
+    renderCitadel(
+      <Routes>
+        <Route
+          path="/platforms/:platformId/services/edit/:id"
+          element={<SwarmServiceForm mode="edit" resource={resource} />}
+        />
+      </Routes>,
+      { route: `/platforms/${platformId}/services/edit/${resource.id}` },
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Registry' })).toHaveTextContent('Docker Hub');
+    expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('redis');
+  });
+
+  it('loads a duplicate draft into the add form', async () => {
+    renderCitadel(
+      <Routes>
+        <Route path="/platforms/:platformId/services/add" element={<SwarmServiceForm mode="add" />} />
+      </Routes>,
+      { route: `/platforms/${platformId}/services/add?duplicateFrom=source-service-id` },
+    );
+
+    expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('redis-service-copy');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('Copied service');
+    expect(screen.getByRole('combobox', { name: 'Registry' })).toHaveTextContent('Docker Hub');
+    expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('redis');
+    expect(screen.getByText(/No Service has been created yet/)).toBeVisible();
+  });
+});

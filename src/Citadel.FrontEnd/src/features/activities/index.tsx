@@ -27,6 +27,7 @@ const activityResourceIcons = {
   [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
   [ActivityResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
+  [ActivityResourceType.SwarmService]: CitadelIcons.SwarmService,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -44,6 +45,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
   [ActivityResourceType.BackupPolicy]: 'BackupPolicy',
+  [ActivityResourceType.SwarmService]: 'SwarmService',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityResourceLabels: Partial<Record<ActivityResourceType, string>> = {
@@ -66,6 +68,7 @@ const activityLookupTargets = {
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
   [ActivityResourceType.BackupPolicy]: LookupResourceType.BackupPolicy,
+  [ActivityResourceType.SwarmService]: LookupResourceType.SwarmService,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {

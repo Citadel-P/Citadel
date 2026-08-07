@@ -14,13 +14,16 @@ export const TasksTable = ({
   isLoading,
   showService = true,
   showNode = true,
+  platformId: platformIdOverride,
 }: {
   items: SwarmTaskView[];
   isLoading: boolean;
   showService?: boolean;
   showNode?: boolean;
+  platformId?: string;
 }) => {
-  const { platformId = '' } = useParams<{ platformId: string }>();
+  const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
+  const platformId = platformIdOverride ?? routePlatformId;
   const columns = useMemo<ColumnDef<SwarmTaskView>[]>(() => {
     const result: ColumnDef<SwarmTaskView>[] = [
       {

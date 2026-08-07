@@ -35,6 +35,7 @@ import {
   ProblemDetails,
   PullImageInput,
   RollbackStackInput,
+  ScaleSwarmServiceInput,
 } from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
@@ -173,6 +174,7 @@ export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType
   if (type === 'backup-repositories') return { type: 'BackupRepository' };
   if (type === 'backup-policies') return { type: 'BackupPolicy' };
   if (type === 'build-pools') return { type: 'BuildAgentPool' };
+  if (type === 'swarm-services') return { type: 'SwarmService' };
   if (type === 'access') return { type: 'Access' };
 
   const typePlural = matchPlural(type);
@@ -393,9 +395,15 @@ type PulledStreamProps =
   | RollbackStackInput
   | RunAutomationActionInput
   | QueueBackupRunInput
-  | TestAutomationActionInput;
+  | TestAutomationActionInput
+  | ScaleSwarmServiceInput
+  | Record<string, never>;
 
-const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
+const usePulledStream = (
+  onChunkReceived: (chunk: string) => boolean | void,
+  endpoint: string,
+  onMutate?: () => void,
+) => {
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
 
@@ -428,6 +436,7 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
 
     const decoder = new TextDecoder('utf-8');
     let done = false;
+    let stoppedEarly = false;
 
     try {
       while (!done) {
@@ -436,13 +445,19 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
 
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
-          onChunkReceived(chunk);
+          if (onChunkReceived(chunk)) {
+            await reader.cancel();
+            stoppedEarly = true;
+            done = true;
+          }
         }
       }
 
-      const finalChunk = decoder.decode();
-      if (finalChunk) {
-        onChunkReceived(finalChunk);
+      if (!stoppedEarly) {
+        const finalChunk = decoder.decode();
+        if (finalChunk) {
+          onChunkReceived(finalChunk);
+        }
       }
     } catch (error) {
       console.error('Error while reading stream:', error);
@@ -490,6 +505,7 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   // A predicate to check if an item in the stream represents an error
   getError?: (item: TItem) => string | undefined | null;
   getMessageSeverity?: (item: TItem) => StreamLogSeverity | undefined | null;
+  getIsComplete?: (item: TItem) => boolean;
 }
 
 const formatBytes = (bytes: number) => {
@@ -665,6 +681,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   streamFieldIsMetadata,
   getError,
   getMessageSeverity,
+  getIsComplete,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<StreamLogEntry[]>([]);
   const [activeItems, setActiveItems] = useState<Map<string, string>>(new Map());
@@ -689,6 +706,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       const activeKeysToDelete = new Set<string>();
       const activePrefixesToDelete = new Set<string>();
       let clearComposeActiveItems = false;
+      let isComplete = false;
       const addText = (value: string | undefined | null, severity?: StreamLogSeverity | null) => {
         if (!value) return false;
         if (!compactDockerComposeOutput) {
@@ -781,6 +799,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
               const { id, status, progress, progressMessage, stream, message, type } = item;
               const errorMessage = getError?.(item);
               const messageSeverity = normalizeStreamLogSeverity(item.severity) ?? getMessageSeverity?.(item);
+              isComplete ||= getIsComplete?.(item) === true;
 
               if (errorMessage) {
                 if (compactDockerComposeOutput) {
@@ -858,7 +877,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
         bufferRef.current = '';
         setInternalError('Stream output exceeded the maximum buffered message size.');
         abortControllerRef.current?.abort();
-        return;
+        return false;
       }
 
       if (newHistory.length > 0) {
@@ -886,8 +905,10 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
           return next;
         });
       }
+
+      return isComplete;
     },
-    [compactDockerComposeOutput, getError, getMessageSeverity, streamFieldIsMetadata],
+    [compactDockerComposeOutput, getError, getIsComplete, getMessageSeverity, streamFieldIsMetadata],
   );
 
   const resetTimer = useCallback(() => {

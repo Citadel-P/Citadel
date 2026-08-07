@@ -2,12 +2,12 @@
 
 Docker Swarm support is included with Citadel and does not require a feature
 flag. Citadel can register an existing manager, show persisted cluster
-inventory, inspect resources, retrieve bounded Service and Task logs, and
-manage standalone Swarm Secrets and Configs.
+inventory, inspect resources, retrieve bounded Service and Task logs, manage
+standalone Swarm Secrets and Configs, and create first-class managed Swarm
+Services.
 
-Service, Task, Node, and Swarm workload mutations remain unavailable. Citadel
-does not yet Apply Deployments or Stacks to Swarm; those actions remain blocked
-until their transactional recovery paths are implemented.
+Task and Node scheduler mutations remain unavailable. Citadel Deployments stay
+Docker Standalone workloads, and Citadel does not yet Apply Stacks to Swarm.
 
 ## Before You Begin
 
@@ -57,7 +57,8 @@ Selecting a Swarm Platform opens its Swarm navigation:
 - **Nodes** shows manager/worker role, readiness, availability, reachability,
   Engine details, labels, and Task counts.
 - **Services** shows mode, image, replica counts, update state, ports, labels,
-  and ownership classification.
+  and ownership classification. Select **Add** to create a Citadel-managed
+  Service on the current Swarm.
 - **Tasks** shows current and recent scheduler attempts, including Service,
   Node, desired/current state, image, and Docker error details. A running Task
   can open a terminal when its container is on the connected manager.
@@ -129,26 +130,82 @@ value or Config data is not available because payload changes require a new
 version and coordinated Service replacement. Delete and recreate manually only
 after reviewing every consumer.
 
+## Manage A Swarm Service
+
+Open a Swarm Platform, select **Services**, then select **Add**. Configure the
+image, task command and environment, replicated or global mode, networks,
+published ports, storage, Swarm Secrets and Configs, placement, resources,
+health, restart, and rolling-update policy. Saving creates Citadel desired
+state; it does not contact Docker until you select **Deploy**.
+
+The Environment editor supports Citadel variables and environment-delivered
+secrets. Use `KEY` to inject a binding with the same name, or
+`KEY=${OTHER_KEY}` to map another binding. Unknown references are marked in the
+editor and Apply rejects them before contacting Docker. Only referenced
+bindings are injected into the Service tasks. The Apply progress sheet reports
+when binding resolution starts and summarizes the variables and secrets used;
+secret values are never displayed.
+
+Do not add Docker's reserved `ingress` Network to a Service. Swarm manages it
+automatically for ports published in Ingress mode. Citadel excludes it from
+new Network selections; if an older saved Service contains it, remove it from
+the configuration before applying.
+
+After the first Deploy, use:
+
+- **Duplicate Config** to open a new Service form prefilled from the current
+  configuration; review and save it as a separate Service. Service-scoped
+  variables and secret references are copied when it is saved, while global
+  bindings remain inherited;
+- **Apply** to send the complete saved configuration to Docker;
+- **Scale** to change the replica count of a replicated Service;
+- **Restart Tasks** to recreate the Service's Tasks without changing its image
+  or configuration;
+- **Check for updates** to compare an applied external tagged image with its
+  Registry digest;
+- **Delete** to remove the Docker Service and then its Citadel record.
+
+Global Services cannot be scaled by replica count. Scheduling mode cannot be
+changed after the first successful Deploy; create another Service when you
+need to change between replicated and global mode.
+
+The Config tab stores desired state. Runtime shows the current Service summary,
+bounded Tasks, logs, Task terminal access, and inspect data. Bindings and
+Activities use the same Citadel controls as other managed resources. Service
+statistics are not shown because a manager cannot truthfully provide aggregate
+worker-node statistics.
+
+External tagged images support **Disabled**, **Notify only**, and **Auto
+deploy** update behavior. Disabled Services are not scanned in the background,
+but an authorized manual check remains available after the first Deploy.
+Digest-pinned and build-produced images do not support Registry update checks.
+Auto deploy requires the Operational Guardrails license capability.
+
+Scale and Restart Tasks keep the currently applied image even if its source tag
+has moved. Apply resolves the current tag digest and performs the image update.
+
 ## Understand Service Ownership
 
 The Services page distinguishes:
 
 - **Unmanaged** Services;
 - Services belonging to an **External Docker Stack**;
+- **Citadel Service** observations linked to a managed Service;
 - Services carrying stale Citadel ownership labels with no verified Citadel
   owner.
 
 Observed Docker labels never grant Citadel write ownership by themselves. A
 Service with unverified Citadel labels is kept read-only and displays an
-orphaned-metadata diagnostic. Citadel Deployment and Stack ownership will only
-become writable after those aggregates have durable Swarm runtime links in the
-future workload milestone.
+orphaned-metadata diagnostic. Only a verified first-class Citadel Service can
+be changed through the managed Service actions. Stack-owned Services remain
+read-only until Swarm Stack management is implemented.
 
 ## View Service And Task Logs
 
 Open a Service or Task detail page to view its latest Docker log tail. Log
-access requires Platform Read plus the Logs permission, and the Platform must
-be online.
+access for inventory resources requires Platform Read plus Logs. A managed
+Service requires Service Read plus Service Logs and visibility of its Platform.
+The Platform must be online.
 
 The current viewer is a snapshot, not a follow stream. Citadel requests at most
 200 lines and materializes at most 1 MiB for one response. It closes the Docker
@@ -167,6 +224,10 @@ open the terminal only when the Task is running on the manager connected to the
 Platform. Tasks on another manager or worker remain visible, but their terminal
 cannot be opened through this connection.
 
+The same Task selector is available in a managed Service's **Runtime** tab.
+Tasks on the connected manager can be selected; running Tasks on worker nodes
+are shown but disabled.
+
 ## Permissions
 
 - Platform Read: view the Swarm overview and persisted inventory.
@@ -177,6 +238,13 @@ cannot be opened through this connection.
   connected manager.
 - Platform Write: register or edit the Platform connection and create, edit
   labels on, or delete unused Secrets and Configs.
+- Swarm Service Write plus Platform visibility: create or edit managed Service
+  desired state.
+- Swarm Service Read plus Apply and Platform visibility: Deploy, Apply, or
+  restart a managed Service's Tasks.
+- Swarm Service Write plus Apply and Platform visibility: Scale a replicated
+  managed Service.
+- Swarm Service Execute plus Platform visibility: delete a managed Service.
 
 All checks are enforced by the API. Hidden or disabled UI controls are not the
 authorization boundary.
@@ -210,10 +278,10 @@ driver supports retrieval.
 The current Swarm milestone does not provide:
 
 - Swarm initialization, join/leave, token, CA, unlock, or quorum management;
-- Node, Service, Network, or Task mutations;
+- Node, Network, or Task mutations;
 - in-place Secret value or Config data replacement;
 - Swarm Deployment or Stack create/Apply/delete operations;
-- Service or Docker Stack import/adoption;
+- unmanaged Service or Docker Stack import/adoption;
 - cluster-wide image distribution, volume semantics, backup, or restore;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.

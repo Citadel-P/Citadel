@@ -176,6 +176,7 @@ internal sealed class GetGlobalSearchQueryHandler(
             GlobalSearchResourceType.BackupRepository => ResourceType.BackupRepository,
             GlobalSearchResourceType.Build => ResourceType.Build,
             GlobalSearchResourceType.BuildAgentPool => ResourceType.BuildAgentPool,
+            GlobalSearchResourceType.SwarmService => ResourceType.SwarmService,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
@@ -192,6 +193,7 @@ internal sealed class GetGlobalSearchQueryHandler(
             ResourceType.BackupRepository => GlobalSearchResourceType.BackupRepository,
             ResourceType.Build => GlobalSearchResourceType.Build,
             ResourceType.BuildAgentPool => GlobalSearchResourceType.BuildAgentPool,
+            ResourceType.SwarmService => GlobalSearchResourceType.SwarmService,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
@@ -208,6 +210,7 @@ internal sealed class GetGlobalSearchQueryHandler(
                 GlobalSearchResourceType.BackupRepository => GlobalSearchCategory.Backups,
             GlobalSearchResourceType.Build or
                 GlobalSearchResourceType.BuildAgentPool => GlobalSearchCategory.Builds,
+            GlobalSearchResourceType.SwarmService => GlobalSearchCategory.SwarmServices,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 

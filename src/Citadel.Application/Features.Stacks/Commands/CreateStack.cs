@@ -6,11 +6,14 @@ using Domain.Entities.Stacks;
 using Application.Services.Builds;
 using Application.Services.SignalR;
 using Application.Services.Licensing;
+using Application.Features.ResourceBindings;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Pipelines.Interfaces;
+using Domain.Entities.ResourceBindings;
 using LightResults;
 using Mediator;
 
@@ -49,7 +52,8 @@ internal sealed class CreateStackHandler(
     IUnitOfWork unitOfWork,
     IPlatformStreamManager platformHub,
     IUserContextAccessor userContext,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateStack, Result<Stack>>
+    ILicenseEntitlementService entitlementService,
+    IPermissionService permissionService) : ICommandHandler<CreateStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(CreateStack command, CancellationToken cancellationToken)
     {
@@ -122,6 +126,23 @@ internal sealed class CreateStackHandler(
             return Result.Failure<Stack>(duplicateSourceResult.Errors);
         }
 
+        IReadOnlyList<ResourceBinding> duplicateBindings = [];
+        if (duplicateSource is not null)
+        {
+            var bindingsResult = await ResourceBindingsFeatureHelpers.GetDuplicateEntriesAsync(
+                unitOfWork,
+                permissionService,
+                user,
+                ResourceType.Stack,
+                ResourceBindingScope.Stack,
+                duplicateSource.ResourceId,
+                cancellationToken);
+            if (bindingsResult.IsFailure(out var bindingError, out var entries))
+                return Result.Failure<Stack>(bindingError);
+
+            duplicateBindings = entries ?? [];
+        }
+
         var stack = Stack.Create(
             name: command.Name,
             createdByActorId: actorId,
@@ -134,6 +155,13 @@ internal sealed class CreateStackHandler(
         var result = await unitOfWork.Stacks.AddAsync(stack, cancellationToken, command.TagIds, actorId);
         if (result == 0)
             return Result.Failure<Stack>(new BadRequestError("One or more tags do not exist."));
+
+        await ResourceBindingsFeatureHelpers.CopyDuplicateEntriesAsync(
+            unitOfWork,
+            ResourceBindingScope.Stack,
+            stack.Id,
+            duplicateBindings,
+            cancellationToken);
 
         var eventType = duplicateSource is null
             ? ActivityEventType.StackCreated

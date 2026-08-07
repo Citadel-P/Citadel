@@ -44,6 +44,7 @@ export const Router = () => {
 
                 <Route path="platforms">
                   <Route index element={<Resources />} />
+                  <Route path=":platformId/:type/edit/:id" element={<ResourceForm mode="edit" />} />
                   <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
                   <Route path=":platformId/:type/:resourceId?" element={<PlatformResource />} />
                 </Route>

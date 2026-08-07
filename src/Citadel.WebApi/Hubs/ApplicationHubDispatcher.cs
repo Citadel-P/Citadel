@@ -13,6 +13,7 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
@@ -27,6 +28,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Swarm;
+using ManagedSwarmServiceView = WebApi.Routes.Endpoints.Resources.SwarmServices.ManagedSwarmServiceView;
 
 namespace WebApi.Hubs;
 
@@ -260,6 +262,20 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
             .SendAsync("NetworkEventReceived", network, @event, actorId);
+    #endregion
+
+    #region Managed Swarm Services
+    public Task SendSwarmServiceInfo(SwarmService service, string action)
+    {
+        var view = ManagedSwarmServiceView.Map(service);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.SwarmServiceGroup(service.Id))
+                .SendAsync("SwarmServiceInfoUpdated", view, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.SwarmServicesGroupForPlatform(service.PlatformId))
+                .SendAsync("SwarmServiceInfoUpdated", view, action));
+    }
     #endregion
 
     #region Deployments

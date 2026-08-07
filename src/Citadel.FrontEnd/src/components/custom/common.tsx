@@ -423,6 +423,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   targetType,
   selected,
   onSelect,
+  items: providedItems,
   disabled,
   placeholder,
   platformId,
@@ -436,6 +437,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   targetType: LookupResourceType;
   selected?: string[] | T[];
   onSelect?: (items: T[]) => void;
+  items?: T[];
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
@@ -457,10 +459,10 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
         PlatformId: platformId,
       },
     },
-    { enabled: queryEnabled },
+    { enabled: queryEnabled && providedItems === undefined },
   );
 
-  const items = useMemo<T[]>(() => {
+  const lookupItems = useMemo<T[]>(() => {
     const lookupData = read.data?.data as unknown;
     if (Array.isArray(lookupData)) return lookupData as T[];
 
@@ -471,6 +473,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
 
     return [];
   }, [read.data?.data]);
+  const items = providedItems ?? lookupItems;
 
   const getValue = useCallback((item: T) => (valueKey === 'name' ? item.name : item.id), [valueKey]);
 
@@ -511,8 +514,10 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
       options={options}
       defaultValue={selectedIds}
       onValueChange={handleValueChange}
-      placeholder={read.isLoading ? 'Loading...' : (placeholder ?? `Select ${resourceName}...`)}
-      disabled={disabled || read.isLoading}
+      placeholder={
+        read.isLoading && providedItems === undefined ? 'Loading...' : (placeholder ?? `Select ${resourceName}...`)
+      }
+      disabled={disabled || (read.isLoading && providedItems === undefined)}
       maxWidth="400px"
       className={cn(
         'flex justify-between w-full text-sm bg-background font-normal hover:bg-background shadow-xs border',
@@ -884,6 +889,7 @@ export const QuickAction = ({ label, icon, active, disabled, side = 'left', onCl
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          aria-label={label}
           disabled={disabled}
           size="icon-sm"
           variant={active ? 'secondary' : 'outline'}
@@ -980,6 +986,7 @@ function LogContainerFilter({
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
               <Button
+                aria-label="Container filter"
                 size="icon-sm"
                 variant={active ? 'secondary' : 'outline'}
                 className="h-7 w-7 rounded-full shadow-sm">

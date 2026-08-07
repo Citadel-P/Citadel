@@ -14,6 +14,7 @@ internal sealed record SwarmServiceProjectionDto(
     string Image, int RunningTaskCount, int DesiredTaskCount, string UpdateState,
     string? UpdateMessage, string Ports, string NetworkIds, string SecretIds, string ConfigIds,
     string Labels, string Ownership, string? DockerStackNamespace, string? OwnershipDiagnostic,
+    Guid? SwarmServiceId, string? LiveRuntimeHash, long ForceUpdate,
     DateTime? DockerCreatedAt, DateTime? DockerUpdatedAt,
     DateTime ObservedAt, bool IsStale);
 

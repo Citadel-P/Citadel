@@ -1,3 +1,4 @@
+using Application.Features.SwarmServices;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Tags;
@@ -36,6 +37,9 @@ public sealed record ReplaceBuildTags(Guid Id, IReadOnlyCollection<Guid>? TagIds
 
 [RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
 public sealed record ReplaceBuildAgentPoolTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
+
+[RequirePermission(ResourceType.SwarmService, PermissionLevel.Write, ResourceIdProperty = nameof(Id))]
+public sealed record ReplaceSwarmServiceTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
 
 internal sealed class ReplaceDeploymentTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
@@ -160,6 +164,25 @@ internal sealed class ReplaceBuildAgentPoolTagsHandler(IUnitOfWork unitOfWork, I
             command.TagIds,
             async () => await unitOfWork.BuildAgentPools.GetAsync(command.Id, cancellationToken) is not null,
             "Build pool",
+            cancellationToken);
+}
+
+internal sealed class ReplaceSwarmServiceTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext)
+    : ICommandHandler<ReplaceSwarmServiceTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceSwarmServiceTags command, CancellationToken cancellationToken)
+        => await ResourceTagReplace.ReplaceAsync(
+            unitOfWork,
+            userContext,
+            TaggableResourceType.SwarmService,
+            command.Id,
+            command.TagIds,
+            async () => await SwarmServiceValidation.ExistsAndCanAccessAsync(
+                command.Id,
+                unitOfWork,
+                userContext,
+                cancellationToken),
+            "Swarm Service",
             cancellationToken);
 }
 

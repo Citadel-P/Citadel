@@ -76,7 +76,8 @@ public class DeploymentDuplicateTests(PostgresTestFixture fixture) : Integration
         Assert.Equal(_tagId, draft["tagIds"]!.AsArray()[0]!.GetValue<Guid>());
         Assert.Equal("External", image["$type"]!.GetValue<string>());
         Assert.True(!image.TryGetPropertyValue("resolvedDigest", out var resolvedDigest) || resolvedDigest is null);
-        AssertHasWarning(warnings, "RESOURCE_BINDINGS_NOT_COPIED");
+        Assert.DoesNotContain(warnings, warning =>
+            warning?["code"]?.GetValue<string>() == "RESOURCE_BINDINGS_NOT_COPIED");
         AssertHasWarning(warnings, "HOST_BIND_MOUNT");
 
         var createResponse = await Client.PostAsync(
@@ -98,6 +99,19 @@ public class DeploymentDuplicateTests(PostgresTestFixture fixture) : Integration
         var externalImage = Assert.IsType<ExternalImage>(created.Spec!.Image);
         Assert.Null(externalImage.ResolvedDigest);
         Assert.Equal(_tagId, Assert.Single(created.Tags).Id);
+
+        var copiedBinding = Assert.Single(await uow.ResourceBindings.GetEntriesAsync(
+            ResourceBindingScope.Deployment,
+            createdDeploymentId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal("api_key", copiedBinding.Name);
+        Assert.Equal("secret-value", copiedBinding.Value);
+        Assert.Equal(createdDeploymentId, copiedBinding.ResourceId);
+        var sourceBinding = Assert.Single(await uow.ResourceBindings.GetEntriesAsync(
+            ResourceBindingScope.Deployment,
+            _sourceDeploymentId,
+            TestContext.Current.CancellationToken));
+        Assert.NotEqual(sourceBinding.Id, copiedBinding.Id);
 
         var activities = await uow.ActivityEventRepository.GetPagedAsync(
             createdDeploymentId,

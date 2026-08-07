@@ -6,6 +6,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,12 +70,14 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
             swarmPlatform.Id,
             "swarm-deployment",
             "redis:latest");
+        var managedSwarmService = CreateAppliedSwarmService(swarmPlatform.Id, "traefik:latest");
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment1, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment2, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(swarmDeployment, TestContext.Current.CancellationToken);
+        await uow.SwarmServices.AddAsync(managedSwarmService, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;
@@ -98,7 +101,9 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
         await RunScannerJobOnceAsync(TestContext.Current.CancellationToken);
 
         _imageConnectorMock.Verify(
-            x => x.DistributionInspectAsync(It.IsAny<DistributionInspectCommand>(), It.IsAny<CancellationToken>()),
+            x => x.DistributionInspectAsync(
+                It.Is<DistributionInspectCommand>(command => command.ImageName == "nginx:latest"),
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -112,6 +117,18 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
                 It.Is<DistributionInspectCommand>(command => command.ImageName == "redis:latest"),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task Scanner_Should_Inspect_ManagedSwarmServiceImages()
+    {
+        await RunScannerJobOnceAsync(TestContext.Current.CancellationToken);
+
+        _imageConnectorMock.Verify(
+            x => x.DistributionInspectAsync(
+                It.Is<DistributionInspectCommand>(command => command.ImageName == "traefik:latest"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private async Task RunScannerJobOnceAsync(CancellationToken cancellationToken)
@@ -161,4 +178,28 @@ public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : Integ
             "scanner-swarm-daemon", 0, 0, 0, 0,
             ClusterId: "scanner-swarm-cluster"),
         clusterId: "scanner-swarm-cluster");
+
+    private static SwarmService CreateAppliedSwarmService(Guid platformId, string imageTag)
+    {
+        var service = new SwarmService(
+            "scanner-managed-service",
+            platformId,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, imageTag),
+                UpdateBehavior = UpdateBehavior.Notify,
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
+        service.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash");
+        service.MarkOperationAttempted();
+        service.MarkOperationAccepted("docker-service", 1);
+        service.CompleteOperation(SwarmServiceOperationState.Completed, "runtime-hash", "old-digest");
+        return service;
+    }
 }

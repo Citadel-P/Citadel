@@ -84,7 +84,42 @@ export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');
 
-export const formatActivityEvent = (event: string) => event.replace(/([a-z])([A-Z])/g, '$1 $2');
+export const formatActivityEvent = (event: string) =>
+  event === 'SwarmServiceForceUpdated' ? 'Swarm Service Tasks Restarted' : event.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const environmentReferencePattern = /\$\{([^}]+)\}/g;
+
+export const createEnvironmentVariableValidator = (configurationNames: Iterable<string>, resourceLabel: string) => {
+  const knownNames = new Set(configurationNames);
+
+  return (line: string): string | null => {
+    const separator = line.indexOf('=');
+    const key = (separator < 0 ? line : line.slice(0, separator)).trim();
+
+    if (!environmentNamePattern.test(key)) {
+      return `${key || 'Environment key'} is not a valid environment key.`;
+    }
+
+    if (separator < 0) {
+      return knownNames.has(key) ? null : `${key} is not defined in ${resourceLabel} or global variables.`;
+    }
+
+    const value = line.slice(separator + 1);
+    for (const match of value.matchAll(environmentReferencePattern)) {
+      const name = match[1]?.trim() ?? '';
+      if (!environmentNamePattern.test(name)) {
+        return `${match[0]} is not a supported variable reference.`;
+      }
+
+      if (!knownNames.has(name)) {
+        return `${name} is not defined in ${resourceLabel} or global variables.`;
+      }
+    }
+
+    return null;
+  };
+};
 
 export const serializeData = (data: unknown, format: 'json' | 'yaml' = 'yaml') => {
   try {

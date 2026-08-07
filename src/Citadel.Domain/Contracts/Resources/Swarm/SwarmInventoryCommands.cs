@@ -1,12 +1,17 @@
 namespace Domain.Contracts.Resources.Swarm;
 
+using Domain.Entities.SwarmServices;
+
 public static class SwarmInventoryLimits
 {
     public const int MaximumItems = 500;
+    public const int AuthoritativeSnapshotItems = int.MaxValue;
     public const int DefaultLogLines = 100;
     public const int MaximumLogLines = 200;
 
     public static int Normalize(int requested) => Math.Clamp(requested, 1, MaximumItems);
+    public static int NormalizeConnectorLimit(int requested) =>
+        requested == AuthoritativeSnapshotItems ? AuthoritativeSnapshotItems : Normalize(requested);
     public static int NormalizeLogLines(int requested) => Math.Clamp(requested, 1, MaximumLogLines);
 }
 
@@ -50,3 +55,32 @@ public sealed record UpdateSwarmConfigLabelsCommand(
     long VersionIndex,
     IReadOnlyDictionary<string, string> Labels);
 public sealed record DeleteSwarmConfigCommand(string PlatformAddress, string ConfigId);
+
+public sealed record CreateManagedSwarmServiceCommand(
+    string PlatformAddress,
+    Guid OperationId,
+    string DockerName,
+    SwarmServiceSpec Spec,
+    string ResolvedImage,
+    IReadOnlyDictionary<string, string> Labels,
+    string? RegistryAuth);
+
+public sealed record UpdateManagedSwarmServiceCommand(
+    string PlatformAddress,
+    Guid OperationId,
+    string ServiceId,
+    long VersionIndex,
+    SwarmServiceSpec Spec,
+    string ResolvedImage,
+    IReadOnlyDictionary<string, string> Labels,
+    string? RegistryAuth,
+    int ForceUpdate = 0);
+
+public sealed record DeleteManagedSwarmServiceCommand(
+    string PlatformAddress,
+    Guid OperationId,
+    string ServiceId);
+
+public sealed record ManagedSwarmServiceMutationResult(
+    string? ServiceId,
+    IReadOnlyList<string> Warnings);

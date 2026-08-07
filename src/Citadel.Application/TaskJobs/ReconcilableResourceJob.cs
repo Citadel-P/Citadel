@@ -34,6 +34,7 @@ internal class ReconcilableResourceJob(
     IDockerDaemonStreamManager dockerDaemonHub,
     IDelayWithJitterService delayWithJitterService,
     IContainerEventBroadcaster containerEventBroadcaster,
+    ISwarmReconciliationCoordinator swarmReconciliationCoordinator,
     ILogger<ReconcilableResourceJob> logger) : BackgroundService
 {
     private static readonly TimeSpan SyncInterval = TimeSpan.FromMinutes(5);
@@ -151,6 +152,8 @@ internal class ReconcilableResourceJob(
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
+
+                await ReconcileStuckSwarmServicesAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -158,6 +161,30 @@ internal class ReconcilableResourceJob(
             }
 
             await Task.Delay(SyncInterval, cancellationToken);
+        }
+    }
+
+    internal async Task ReconcileStuckSwarmServicesAsync(CancellationToken cancellationToken)
+    {
+        Guid[] platformIds;
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            platformIds = (await uow.SwarmServices
+                    .GetStuckOperationsAsync(cancellationToken: cancellationToken))
+                .Select(static service => service.PlatformId)
+                .Distinct()
+                .ToArray();
+        }
+
+        foreach (var platformId in platformIds)
+        {
+            var result = await swarmReconciliationCoordinator.RefreshAsync(platformId, cancellationToken);
+            if (result.IsFailure(out var error))
+                logger.LogWarning(
+                    "Stuck Swarm Service recovery failed for platform {PlatformId}: {Error}",
+                    platformId,
+                    error?.Message);
         }
     }
 

@@ -1,9 +1,18 @@
-import { SwarmServiceOwnership, SwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
+import {
+  ManagedSwarmServiceView,
+  ResourceControlState,
+  SwarmServiceHealth,
+  SwarmServiceOwnership,
+  SwarmServiceSynchronizationState,
+  SwarmServiceView,
+  SwarmTaskView,
+  UpdateBehavior,
+} from '@/api/generated/api.types';
 import { RegularResourceView } from '@/pages/regular-resource';
 import { FakeHubConnection } from '@/test/fakes/signalr';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router';
 import { ServiceComponents } from '.';
@@ -22,6 +31,12 @@ describe('ServiceComponents', () => {
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
         HttpResponse.json({ items: [task()] }),
       ),
+      http.get('http://localhost/api/v1/swarmServices', () =>
+        HttpResponse.json({
+          swarmServices: [],
+          capabilities: { canRead: true, canWrite: true, canExecute: true },
+        }),
+      ),
     );
 
     renderCitadel(
@@ -30,6 +45,7 @@ describe('ServiceComponents', () => {
           path="/platforms/:platformId/services"
           element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
         />
+        <Route path="/platforms/:platformId/services/add" element={<span>add-service-route</span>} />
       </Routes>,
       {
         route: `/platforms/${platformId}/services`,
@@ -67,7 +83,91 @@ describe('ServiceComponents', () => {
 
     expect(await screen.findByRole('link', { name: 'web.2' })).toBeVisible();
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Service' }));
+    expect(await screen.findByText('add-service-route')).toBeVisible();
   });
+
+  it('shows a managed Service before its first deployment', async () => {
+    const fake = new FakeHubConnection();
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
+        HttpResponse.json({ items: [] }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
+        HttpResponse.json({ items: [] }),
+      ),
+      http.get('http://localhost/api/v1/swarmServices', () =>
+        HttpResponse.json({
+          swarmServices: [managedService()],
+          capabilities: { canRead: true, canWrite: true, canExecute: true },
+        }),
+      ),
+    );
+
+    renderCitadel(
+      <Routes>
+        <Route
+          path="/platforms/:platformId/services"
+          element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
+        />
+      </Routes>,
+      {
+        route: `/platforms/${platformId}/services`,
+        signalR: {
+          connectionFactory: () => fake.asHubConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+
+    expect(await screen.findByRole('link', { name: 'draft-web' })).toHaveAttribute(
+      'href',
+      `/platforms/${platformId}/services/edit/managed-service-1`,
+    );
+    expect(screen.getByText('Citadel Service')).toBeVisible();
+  });
+});
+
+const managedService = (): ManagedSwarmServiceView => ({
+  id: 'managed-service-1',
+  platformId,
+  name: 'draft-web',
+  description: null,
+  dockerName: 'draft-web-managed-service-1',
+  dockerServiceId: null,
+  spec: {
+    image: { $type: 'External', registryId: 'registry-1', imageTag: 'nginx:latest' },
+    updateBehavior: UpdateBehavior.Disabled,
+    schedulingMode: 'Replicated',
+    replicas: 2,
+    command: [],
+    arguments: [],
+    environment: [],
+    ports: [],
+    networkIds: [],
+    mounts: [],
+    secrets: [],
+    configs: [],
+    placementConstraints: [],
+  },
+  health: SwarmServiceHealth.Unknown,
+  synchronizationState: SwarmServiceSynchronizationState.NeverApplied,
+  controlState: ResourceControlState.Idle,
+  autoUpdateState: { lastCheckedAt: '0001-01-01T00:00:00Z', status: 'Unknown' },
+  appliedImageDigest: null,
+  hasPendingDesiredChanges: true,
+  hasRuntimeDrift: false,
+  rowVersion: 0,
+  createdAt: '2026-08-06T12:00:00Z',
+  updatedAt: '2026-08-06T12:00:00Z',
+  platformName: 'Swarm',
+  platformStatus: 'Online',
+  runningTaskCount: null,
+  desiredTaskCount: null,
+  updateState: null,
+  currentOperation: null,
+  tags: [],
 });
 
 const service = (overrides: Partial<SwarmServiceView> = {}): SwarmServiceView => ({

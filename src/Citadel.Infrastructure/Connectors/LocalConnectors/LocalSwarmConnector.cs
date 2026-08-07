@@ -32,6 +32,12 @@ internal sealed class LocalSwarmConnector(ISwarmService swarmService) : ISwarmCo
         => ServiceResultHandlers.HandleResult(await swarmService.ListServicesAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.InspectServiceAsync(command.ServiceId, cancellationToken), SwarmMappers.Map);
+    public async Task<Result<ManagedSwarmServiceMutationResult>> CreateServiceAsync(CreateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default)
+        => ServiceResultHandlers.HandleResult(await swarmService.CreateServiceAsync(SwarmServiceMutationMappers.Map(command), cancellationToken), SwarmServiceMutationMappers.Map);
+    public async Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(UpdateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default)
+        => ServiceResultHandlers.HandleResult(await swarmService.UpdateServiceAsync(SwarmServiceMutationMappers.Map(command), cancellationToken), SwarmServiceMutationMappers.Map);
+    public Task<Result> DeleteServiceAsync(DeleteManagedSwarmServiceCommand command, CancellationToken cancellationToken = default)
+        => swarmService.DeleteServiceAsync(SwarmServiceMutationMappers.Map(command), cancellationToken);
     public async Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.GetServiceLogsAsync(command.ServiceId, command.Tail, cancellationToken), SwarmMappers.Map);
     public async Task<Result<IReadOnlyList<SwarmTaskResult>>> ListTasksAsync(ListSwarmTasksCommand command, CancellationToken cancellationToken = default)

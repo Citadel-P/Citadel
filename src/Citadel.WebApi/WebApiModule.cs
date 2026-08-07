@@ -152,6 +152,7 @@ internal static class WebApiModule
             DerivedTypeUnions =
             [
                 DerivedTypesMapping.DeploymentImageInfoMappings,
+                DerivedTypesMapping.SwarmServiceImageInfoMappings,
                 DerivedTypesMapping.PlatformDescriptorMappings,
                 DerivedTypesMapping.BackupRepositorySpecMappings,
                 DerivedTypesMapping.BackupSourceSpecMappings,

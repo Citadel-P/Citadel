@@ -12,6 +12,7 @@ using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Nerdbank.MessagePack;
 using PolyType;
 using WebApi.Routes.Endpoints.Resources.Activities;
@@ -26,6 +27,7 @@ using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Swarm;
+using ManagedSwarmServiceView = WebApi.Routes.Endpoints.Resources.SwarmServices.ManagedSwarmServiceView;
 
 namespace WebApi.Hubs;
 
@@ -61,6 +63,11 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<SwarmConfigsView>]
 [GenerateShapeFor<IReadOnlyList<SwarmConfigView>>]
 [GenerateShapeFor<SwarmInventoryView>]
+[GenerateShapeFor<ManagedSwarmServiceView>]
+[GenerateShapeFor<SwarmServiceSpec>]
+[GenerateShapeFor<SwarmServiceImageInfo>]
+[GenerateShapeFor<SwarmExternalImage>]
+[GenerateShapeFor<SwarmBuildImage>]
 [GenerateShapeFor<List<SwarmPeerView>>]
 [GenerateShapeFor<PlatformsView>]
 [GenerateShapeFor<PlatformStatsBatchView>]
@@ -92,6 +99,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<StackBuildImageBinding>]
 [GenerateShapeFor<IReadOnlyList<StackBuildImageBinding>>]
 [GenerateShapeFor<ActivityView>]
+[GenerateShapeFor<ActivityEventInfo>]
 [GenerateShapeFor<AlertEventView>]
 [GenerateShapeFor<List<AlertEventView>>]
 [GenerateShapeFor<PlatformDiskHighAlertInfo>]
@@ -180,6 +188,16 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DeploymentPaused>]
 [GenerateShapeFor<DeploymentApplied>]
 [GenerateShapeFor<DeploymentDegraded>]
+[GenerateShapeFor<SwarmServiceActivitySnapshot>]
+[GenerateShapeFor<SwarmServiceCreated>]
+[GenerateShapeFor<SwarmServiceDuplicated>]
+[GenerateShapeFor<SwarmServiceUpdated>]
+[GenerateShapeFor<SwarmServiceRenamed>]
+[GenerateShapeFor<SwarmServiceDeleted>]
+[GenerateShapeFor<SwarmServiceApplied>]
+[GenerateShapeFor<SwarmServiceScaled>]
+[GenerateShapeFor<SwarmServiceForceUpdated>]
+[GenerateShapeFor<SwarmServiceOperationFailed>]
 [GenerateShapeFor<StackCreated>]
 [GenerateShapeFor<StackDuplicated>]
 [GenerateShapeFor<StackImported>]
@@ -272,6 +290,12 @@ internal static class DerivedTypesMapping
         [nameof(ImageSource.Build)] = typeof(BuildImage),
     };
 
+    internal static DerivedTypeMapping<SwarmServiceImageInfo> SwarmServiceImageInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
+    {
+        ["External"] = typeof(SwarmExternalImage),
+        ["Build"] = typeof(SwarmBuildImage),
+    };
+
     internal static DerivedTypeMapping<PlatformDescriptor> PlatformDescriptorMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
         [nameof(PlatformType.Docker)] = typeof(DockerPlatformDescriptor),
@@ -331,6 +355,15 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.DeploymentPaused)] = typeof(DeploymentPaused),
         [nameof(ActivityEventType.DeploymentApplied)] = typeof(DeploymentApplied),
         [nameof(ActivityEventType.DeploymentDegraded)] = typeof(DeploymentDegraded),
+        [nameof(ActivityEventType.SwarmServiceCreated)] = typeof(SwarmServiceCreated),
+        [nameof(ActivityEventType.SwarmServiceDuplicated)] = typeof(SwarmServiceDuplicated),
+        [nameof(ActivityEventType.SwarmServiceUpdated)] = typeof(SwarmServiceUpdated),
+        [nameof(ActivityEventType.SwarmServiceRenamed)] = typeof(SwarmServiceRenamed),
+        [nameof(ActivityEventType.SwarmServiceDeleted)] = typeof(SwarmServiceDeleted),
+        [nameof(ActivityEventType.SwarmServiceApplied)] = typeof(SwarmServiceApplied),
+        [nameof(ActivityEventType.SwarmServiceScaled)] = typeof(SwarmServiceScaled),
+        [nameof(ActivityEventType.SwarmServiceForceUpdated)] = typeof(SwarmServiceForceUpdated),
+        [nameof(ActivityEventType.SwarmServiceOperationFailed)] = typeof(SwarmServiceOperationFailed),
         [nameof(ActivityEventType.AlertRuleCreated)] = typeof(AlertRuleCreated),
         [nameof(ActivityEventType.AlertRuleUpdated)] = typeof(AlertRuleUpdated),
         [nameof(ActivityEventType.AlertRuleDeleted)] = typeof(AlertRuleDeleted),

@@ -66,11 +66,87 @@ export enum UpdateBehavior {
   AutoDeploy = "AutoDeploy",
 }
 
+/** @default "StopFirst" */
+export enum SwarmServiceUpdateOrder {
+  StopFirst = "StopFirst",
+  StartFirst = "StartFirst",
+}
+
+/** @default "Pause" */
+export enum SwarmServiceUpdateFailureAction {
+  Pause = "Pause",
+  Continue = "Continue",
+  Rollback = "Rollback",
+}
+
+export enum SwarmServiceSynchronizationState {
+  NeverApplied = "NeverApplied",
+  DesiredChangesPending = "DesiredChangesPending",
+  InSync = "InSync",
+  Drifted = "Drifted",
+  RuntimeMissing = "RuntimeMissing",
+  OutcomeUnknown = "OutcomeUnknown",
+  OwnershipConflict = "OwnershipConflict",
+}
+
+export enum SwarmServiceSchedulingMode {
+  Replicated = "Replicated",
+  Global = "Global",
+}
+
+/** @default "Any" */
+export enum SwarmServiceRestartCondition {
+  None = "None",
+  OnFailure = "OnFailure",
+  Any = "Any",
+}
+
+/** @default "Ingress" */
+export enum SwarmServicePortPublishMode {
+  Ingress = "Ingress",
+  Host = "Host",
+}
+
 export enum SwarmServiceOwnership {
   Unmanaged = "Unmanaged",
   DockerStackExternal = "DockerStackExternal",
   CitadelDeployment = "CitadelDeployment",
   CitadelStack = "CitadelStack",
+  CitadelService = "CitadelService",
+  OwnershipConflict = "OwnershipConflict",
+}
+
+export enum SwarmServiceOperationState {
+  Prepared = "Prepared",
+  Canceled = "Canceled",
+  PendingAcceptance = "PendingAcceptance",
+  Accepted = "Accepted",
+  Rejected = "Rejected",
+  NotAccepted = "NotAccepted",
+  OutcomeUnknown = "OutcomeUnknown",
+  Completed = "Completed",
+  OwnershipConflict = "OwnershipConflict",
+}
+
+export enum SwarmServiceOperationKind {
+  Apply = "Apply",
+  Scale = "Scale",
+  ForceUpdate = "ForceUpdate",
+  Delete = "Delete",
+}
+
+export enum SwarmServiceMountKind {
+  Volume = "Volume",
+  Bind = "Bind",
+}
+
+export enum SwarmServiceHealth {
+  Unknown = "Unknown",
+  Healthy = "Healthy",
+  Progressing = "Progressing",
+  Degraded = "Degraded",
+  Failed = "Failed",
+  Created = "Created",
 }
 
 export enum StopSignal {
@@ -202,6 +278,7 @@ export enum ResourceType {
   Volume = "Volume",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
+  SwarmService = "SwarmService",
 }
 
 export enum ResourceControlState {
@@ -213,6 +290,7 @@ export enum ResourceBindingScope {
   Global = "Global",
   Stack = "Stack",
   Deployment = "Deployment",
+  SwarmService = "SwarmService",
 }
 
 export enum ResourceBindingKind {
@@ -298,6 +376,7 @@ export enum LookupResourceType {
   BackupPolicy = "BackupPolicy",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
+  SwarmService = "SwarmService",
 }
 
 export enum LoginNextStep {
@@ -337,6 +416,7 @@ export enum GlobalSearchResourceType {
   BackupRepository = "BackupRepository",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
+  SwarmService = "SwarmService",
 }
 
 export enum GlobalSearchCategory {
@@ -348,6 +428,7 @@ export enum GlobalSearchCategory {
   Automations = "Automations",
   Backups = "Backups",
   Builds = "Builds",
+  SwarmServices = "SwarmServices",
 }
 
 export enum GitTransport {
@@ -712,6 +793,7 @@ export enum ActivityResourceType {
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
   BackupPolicy = "BackupPolicy",
+  SwarmService = "SwarmService",
 }
 
 export enum ActivityEventType {
@@ -819,6 +901,15 @@ export enum ActivityEventType {
   BackupPolicyUpdated = "BackupPolicyUpdated",
   BackupPolicyRenamed = "BackupPolicyRenamed",
   BackupPolicyArchived = "BackupPolicyArchived",
+  SwarmServiceCreated = "SwarmServiceCreated",
+  SwarmServiceUpdated = "SwarmServiceUpdated",
+  SwarmServiceRenamed = "SwarmServiceRenamed",
+  SwarmServiceDeleted = "SwarmServiceDeleted",
+  SwarmServiceApplied = "SwarmServiceApplied",
+  SwarmServiceScaled = "SwarmServiceScaled",
+  SwarmServiceForceUpdated = "SwarmServiceForceUpdated",
+  SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
+  SwarmServiceDuplicated = "SwarmServiceDuplicated",
 }
 
 export enum ActionRunTrigger {
@@ -837,6 +928,18 @@ export enum ActionRunStatus {
   Cancelled = "Cancelled",
   Rejected = "Rejected",
 }
+
+export type SwarmServiceImageInfo = BaseSwarmServiceImageInfo &
+  (
+    | BaseSwarmServiceImageInfoTypeMapping<
+        "External",
+        SwarmServiceImageInfoSwarmExternalImage
+      >
+    | BaseSwarmServiceImageInfoTypeMapping<
+        "Build",
+        SwarmServiceImageInfoSwarmBuildImage
+      >
+  );
 
 export type StackUpdateState = BaseStackUpdateState &
   (
@@ -1549,6 +1652,42 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "BackupPolicyArchived",
         ActivityEventInfoBackupPolicyArchived
       >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceCreated",
+        ActivityEventInfoSwarmServiceCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceUpdated",
+        ActivityEventInfoSwarmServiceUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceRenamed",
+        ActivityEventInfoSwarmServiceRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceDeleted",
+        ActivityEventInfoSwarmServiceDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceApplied",
+        ActivityEventInfoSwarmServiceApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceScaled",
+        ActivityEventInfoSwarmServiceScaled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceForceUpdated",
+        ActivityEventInfoSwarmServiceForceUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceOperationFailed",
+        ActivityEventInfoSwarmServiceOperationFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceDuplicated",
+        ActivityEventInfoSwarmServiceDuplicated
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -2198,6 +2337,68 @@ export interface ActivityEventInfoStackWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoSwarmServiceApplied {
+  $type?: "SwarmServiceApplied";
+  /** @format uuid */
+  operationId: string;
+  warnings: string[];
+}
+
+export interface ActivityEventInfoSwarmServiceCreated {
+  $type?: "SwarmServiceCreated";
+  service: SwarmServiceActivitySnapshot;
+}
+
+export interface ActivityEventInfoSwarmServiceDeleted {
+  $type?: "SwarmServiceDeleted";
+  service: SwarmServiceActivitySnapshot;
+}
+
+export interface ActivityEventInfoSwarmServiceDuplicated {
+  $type?: "SwarmServiceDuplicated";
+  service: SwarmServiceActivitySnapshot;
+  source: ActivitySourceResource;
+}
+
+export interface ActivityEventInfoSwarmServiceForceUpdated {
+  $type?: "SwarmServiceForceUpdated";
+  /** @format uuid */
+  operationId: string;
+  warnings: string[];
+}
+
+export interface ActivityEventInfoSwarmServiceOperationFailed {
+  $type?: "SwarmServiceOperationFailed";
+  /** @format uuid */
+  operationId: string;
+  kind: SwarmServiceOperationKind;
+  reason: string;
+}
+
+export interface ActivityEventInfoSwarmServiceRenamed {
+  $type?: "SwarmServiceRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoSwarmServiceScaled {
+  $type?: "SwarmServiceScaled";
+  /** @format uuid */
+  operationId: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  replicas: number | string;
+  warnings: string[];
+}
+
+export interface ActivityEventInfoSwarmServiceUpdated {
+  $type?: "SwarmServiceUpdated";
+  oldService: SwarmServiceActivitySnapshot;
+  newService: SwarmServiceActivitySnapshot;
 }
 
 export interface ActivityEventInfoUserMfaDisabled {
@@ -4497,6 +4698,16 @@ export interface CreateSwarmSecretInput {
   labels?: null | Record<string, string>;
 }
 
+export interface CreateSwarmServiceInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  spec: SwarmServiceSpec;
+  tagIds?: null | string[];
+  duplicateSource?: null | DuplicateSourceInput;
+}
+
 export interface CreateTagInput {
   name: string;
   color: string;
@@ -5737,6 +5948,57 @@ export interface LoginResponse {
   nextStep: LoginNextStep;
 }
 
+export interface ManagedSwarmServiceView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  platformId: string;
+  name: string;
+  description: null | string;
+  dockerName: string;
+  dockerServiceId: null | string;
+  spec: SwarmServiceSpec;
+  health: SwarmServiceHealth;
+  synchronizationState: SwarmServiceSynchronizationState;
+  controlState: ResourceControlState;
+  autoUpdateState: AutoUpdateState;
+  appliedImageDigest: null | string;
+  hasPendingDesiredChanges: boolean;
+  hasRuntimeDrift: boolean;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  platformName: null | string;
+  platformStatus: PlatformStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  runningTaskCount: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  desiredTaskCount: null | number | string;
+  updateState: null | string;
+  updateMessage: null | string;
+  currentOperation: null | SwarmServiceOperationView;
+  tags: TagSummaryView[];
+  tasks?: null | SwarmTaskView[];
+  capabilities?: null | SwarmServiceCapabilities;
+}
+
+export interface ManagedSwarmServicesView {
+  swarmServices: ManagedSwarmServiceView[];
+  capabilities: ResourceCapabilities;
+}
+
 export interface MandatoryMfaSetupCompleteView {
   accessToken: string;
   recoveryCodes: string[];
@@ -6866,6 +7128,14 @@ export interface RunAutomationActionInput {
   timeoutSeconds: null | number | string;
 }
 
+export interface ScaleSwarmServiceInput {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  replicas: number | string;
+}
+
 export interface SecretDefinitionView {
   /** @format uuid */
   id: string;
@@ -7507,6 +7777,81 @@ export interface SwarmSecretsView {
   capabilities: PlatformCapabilities;
 }
 
+export interface SwarmServiceActivitySnapshot {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  platformId: string;
+  name: string;
+  description: null | string;
+  dockerName: string;
+  dockerServiceId: null | string;
+  spec: SwarmServiceSpec;
+}
+
+export interface SwarmServiceCapabilities {
+  canViewLogs: boolean;
+  canInspect: boolean;
+  canApply: boolean;
+  canViewResourceBindings: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
+export interface SwarmServiceConfigReference {
+  configId: string;
+  configName: string;
+  targetName: string;
+}
+
+export interface SwarmServiceDuplicateDraftView {
+  draft: CreateSwarmServiceInput;
+  warnings: DuplicateDraftWarningView[];
+}
+
+export interface SwarmServiceHealthCheck {
+  test: string[];
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  intervalNanoseconds?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutNanoseconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retries?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  startPeriodNanoseconds?: null | number | string;
+}
+
+export interface SwarmServiceImageInfoSwarmBuildImage {
+  $type?: "Build";
+  /** @format uuid */
+  buildProjectId: string;
+  resolvedImageReference?: null | string;
+  resolvedDigest?: null | string;
+  /** @format uuid */
+  resolvedBuildRunId?: null | string;
+}
+
+export interface SwarmServiceImageInfoSwarmExternalImage {
+  $type?: "External";
+  /** @format uuid */
+  registryId: string;
+  imageTag: string;
+  resolvedDigest?: null | string;
+}
+
 export interface SwarmServiceInspectView {
   id: string;
   /**
@@ -7538,6 +7883,155 @@ export interface SwarmServiceInspectView {
   createdAt: null | string;
   /** @format date-time */
   updatedAt: null | string;
+}
+
+export interface SwarmServiceMount {
+  kind: SwarmServiceMountKind;
+  source: string;
+  target: string;
+  /** @default false */
+  readOnly?: boolean;
+}
+
+export interface SwarmServiceOperationView {
+  /** @format uuid */
+  id: string;
+  kind: SwarmServiceOperationKind;
+  state: SwarmServiceOperationState;
+  /** @format date-time */
+  preparedAt: any;
+  /** @format date-time */
+  attemptedAt: any;
+  /** @format date-time */
+  completedAt: any;
+  resultCode: null | string;
+  warnings: string[];
+  resultMessage: null | string;
+}
+
+export interface SwarmServicePort {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  targetPort: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  publishedPort?: null | number | string;
+  /** @default "tcp" */
+  protocol?: string;
+  publishMode?: SwarmServicePortPublishMode;
+}
+
+export interface SwarmServiceProgressItem {
+  /** @format uuid */
+  serviceId: string;
+  /** @format uuid */
+  operationId: null | string;
+  stage: string;
+  message: string;
+  /** @default false */
+  isCompleted?: boolean;
+  /** @default false */
+  isWarning?: boolean;
+  errorMessage?: null | string;
+}
+
+export interface SwarmServiceResources {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  limitNanoCpus?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  limitMemoryBytes?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  reservationNanoCpus?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  reservationMemoryBytes?: null | number | string;
+}
+
+export interface SwarmServiceRestartPolicy {
+  condition?: SwarmServiceRestartCondition;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  delayNanoseconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumAttempts?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  windowNanoseconds?: null | number | string;
+}
+
+export interface SwarmServiceSecretReference {
+  secretId: string;
+  secretName: string;
+  targetName: string;
+}
+
+export interface SwarmServiceSpec {
+  image: SwarmServiceImageInfo;
+  updateBehavior?: UpdateBehavior;
+  schedulingMode?: SwarmServiceSchedulingMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  replicas?: null | number | string;
+  command?: string[];
+  arguments?: string[];
+  environment?: string[];
+  user?: null | string;
+  workingDirectory?: null | string;
+  healthCheck?: null | SwarmServiceHealthCheck;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopGracePeriodNanoseconds?: null | number | string;
+  ports?: SwarmServicePort[];
+  networkIds?: string[];
+  mounts?: SwarmServiceMount[];
+  secrets?: SwarmServiceSecretReference[];
+  configs?: SwarmServiceConfigReference[];
+  resources?: null | SwarmServiceResources;
+  placementConstraints?: string[];
+  restartPolicy?: null | SwarmServiceRestartPolicy;
+  updatePolicy?: null | SwarmServiceUpdatePolicy;
+}
+
+export interface SwarmServiceUpdatePolicy {
+  /**
+   * @format int32
+   * @default 1
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  parallelism?: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  delayNanoseconds?: null | number | string;
+  order?: SwarmServiceUpdateOrder;
+  failureAction?: SwarmServiceUpdateFailureAction;
 }
 
 export interface SwarmServiceView {
@@ -7982,6 +8476,15 @@ export interface UpdateSwarmResourceLabelsInput {
   labels?: null | Record<string, string>;
 }
 
+export interface UpdateSwarmServiceInput {
+  spec: SwarmServiceSpec;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+}
+
 export interface UpdateVaultKvV2SecretProviderInput {
   name: null | string;
   address: null | string;
@@ -8168,6 +8671,12 @@ export interface VolumesView {
   volumes: DockerVolumeResultView[];
   capabilities: ResourceCapabilities;
 }
+
+type BaseSwarmServiceImageInfo = object;
+
+type BaseSwarmServiceImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
 
 type BaseStackUpdateState = object;
 
@@ -10913,6 +11422,7 @@ export class Api<
          * @pattern ^-?(?:0|[1-9]\d*)$
          */
         limit?: number | string;
+        serviceId?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -14336,6 +14846,398 @@ export class Api<
         path: `/api/v1/deployments/${id}/inspect`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name ListManagedSwarmServices
+     * @summary List managed Docker Swarm Services
+     * @request GET:/api/v1/swarmServices
+     * @response `200` `ManagedSwarmServicesView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listManagedSwarmServices: (
+      query?: {
+        tags?: string[];
+        /** @format uuid */
+        platformId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ManagedSwarmServicesView, ProblemDetails>({
+        path: `/api/v1/swarmServices`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name CreateSwarmService
+     * @summary Create a managed Docker Swarm Service
+     * @request POST:/api/v1/swarmServices
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createSwarmService: (
+      data: CreateSwarmServiceInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ManagedSwarmServiceView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/swarmServices`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name DeleteSwarmServices
+     * @summary Delete managed Docker Swarm Services
+     * @request DELETE:/api/v1/swarmServices
+     * @response `204` `void` No Content
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSwarmServices: (data: string[], params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/swarmServices`,
+        method: "DELETE",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name GetManagedSwarmService
+     * @summary Get a managed Docker Swarm Service
+     * @request GET:/api/v1/swarmServices/{id}
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getManagedSwarmService: (id: string, params: RequestParams = {}) =>
+      this.request<ManagedSwarmServiceView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name UpdateSwarmService
+     * @summary Update managed Docker Swarm Service configuration
+     * @request PATCH:/api/v1/swarmServices/{id}
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmService: (
+      id: string,
+      data: UpdateSwarmServiceInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ManagedSwarmServiceView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/swarmServices/${id}`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name GetSwarmServiceDuplicateDraft
+     * @summary Get managed Docker Swarm Service duplicate draft
+     * @request GET:/api/v1/swarmServices/{id}/duplicate-draft
+     * @secure
+     * @response `200` `SwarmServiceDuplicateDraftView` OK
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmServiceDuplicateDraft: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmServiceDuplicateDraftView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/duplicate-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name RenameSwarmService
+     * @summary Rename a managed Docker Swarm Service
+     * @request POST:/api/v1/swarmServices/rename
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameSwarmService: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        ManagedSwarmServiceView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/swarmServices/rename`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name GetSwarmServiceTags
+     * @summary Get managed Docker Swarm Service tags
+     * @request GET:/api/v1/swarmServices/{id}/tags
+     * @response `200` `ResourceTagsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmServiceTags: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/tags`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name ReplaceSwarmServiceTags
+     * @summary Replace managed Docker Swarm Service tags
+     * @request PUT:/api/v1/swarmServices/{id}/tags
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceSwarmServiceTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/swarmServices/${id}/tags`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name UpdateSwarmServiceMetadata
+     * @summary Update managed Docker Swarm Service metadata
+     * @request PATCH:/api/v1/swarmServices/{id}/_metadata
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmServiceMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ManagedSwarmServiceView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/swarmServices/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name CheckSwarmServiceUpdates
+     * @summary Check a managed Docker Swarm Service image for updates
+     * @request POST:/api/v1/swarmServices/{id}/check-updates
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    checkSwarmServiceUpdates: (id: string, params: RequestParams = {}) =>
+      this.request<ManagedSwarmServiceView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/check-updates`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name ApplySwarmService
+     * @summary Apply a managed Docker Swarm Service and stream progress
+     * @request POST:/api/v1/swarmServices/{id}/apply
+     * @response `200` `(SwarmServiceProgressItem)[]` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    applySwarmService: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmServiceProgressItem[], ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/apply`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name ScaleSwarmService
+     * @summary Scale a managed Docker Swarm Service and stream progress
+     * @request POST:/api/v1/swarmServices/{id}/scale
+     * @response `200` `(SwarmServiceProgressItem)[]` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    scaleSwarmService: (
+      id: string,
+      data: ScaleSwarmServiceInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmServiceProgressItem[], ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/scale`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name ForceUpdateSwarmService
+     * @summary Force a managed Docker Swarm Service task update and stream progress
+     * @request POST:/api/v1/swarmServices/{id}/force-update
+     * @response `200` `(SwarmServiceProgressItem)[]` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    forceUpdateSwarmService: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmServiceProgressItem[], ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/force-update`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name InspectManagedSwarmService
+     * @summary Inspect the Docker runtime for a managed Swarm Service
+     * @request GET:/api/v1/swarmServices/{id}/inspect
+     * @response `200` `SwarmServiceInspectView` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    inspectManagedSwarmService: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmServiceInspectView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/inspect`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name GetManagedSwarmServiceLogs
+     * @summary Get bounded logs for a managed Swarm Service
+     * @request GET:/api/v1/swarmServices/{id}/logs
+     * @response `200` `SwarmLogsView` OK
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getManagedSwarmServiceLogs: (
+      id: string,
+      query?: {
+        /**
+         * @format int32
+         * @default 100
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        tail?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmLogsView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/logs`,
+        method: "GET",
+        query: query,
         format: "json",
         ...params,
       }),

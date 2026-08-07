@@ -241,6 +241,9 @@ export const FieldInput = ({
   onKeyDown,
   placeholder,
   type,
+  min,
+  max,
+  step,
   disabled,
   readOnly,
   className,
@@ -253,6 +256,9 @@ export const FieldInput = ({
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   placeholder?: string;
   type?: string;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
   disabled?: boolean;
   readOnly?: boolean;
   className?: string;
@@ -266,6 +272,9 @@ export const FieldInput = ({
       disabled={disabled}
       readOnly={readOnly}
       type={type}
+      min={min}
+      max={max}
+      step={step}
       ref={ref}
       autoFocus={autoFocus}
       value={value ?? ''}

@@ -13,6 +13,7 @@ using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.MergePatch;
+using Hosting.Common.Pipelines.Interfaces;
 using Moq;
 
 namespace Tests.Unit.Application.Features;
@@ -40,7 +41,8 @@ public sealed class WorkloadPlatformAuthorizationTests
             Mock.Of<INotificationQueue>(),
             Mock.Of<IActivityStreamManager>(),
             CreateUserContext(userId),
-            Mock.Of<ILicenseEntitlementService>());
+            Mock.Of<ILicenseEntitlementService>(),
+            Mock.Of<IPermissionService>());
 
         var result = await handler.Handle(
             new CreateDeployment(
@@ -83,7 +85,8 @@ public sealed class WorkloadPlatformAuthorizationTests
             uow.Object,
             Mock.Of<IPlatformStreamManager>(),
             CreateUserContext(userId),
-            Mock.Of<ILicenseEntitlementService>());
+            Mock.Of<ILicenseEntitlementService>(),
+            Mock.Of<IPermissionService>());
 
         var result = await handler.Handle(
             new CreateStack(

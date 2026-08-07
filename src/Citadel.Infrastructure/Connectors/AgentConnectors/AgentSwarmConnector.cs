@@ -23,7 +23,7 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
                 (await client.ListNodesAsync(
                     new ListSwarmNodesRequest
                     {
-                        MaxItems = SwarmInventoryLimits.Normalize(command.Limit),
+                        MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit),
                         IncludeTaskCounts = command.IncludeTaskCounts
                     },
                     cancellationToken: cancellationToken)).Map());
@@ -70,9 +70,15 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
     }
 
     public Task<Result<IReadOnlyList<SwarmServiceResult>>> ListServicesAsync(ListSwarmServicesCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListServicesAsync(new ListSwarmServicesRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "services", cancellationToken);
+        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListServicesAsync(new ListSwarmServicesRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "services", cancellationToken);
     public Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectServiceAsync(new InspectSwarmServiceRequest { ServiceId = command.ServiceId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "service", cancellationToken);
+    public Task<Result<ManagedSwarmServiceMutationResult>> CreateServiceAsync(CreateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, SwarmServiceTransportMappers.Map, "service mutation", cancellationToken);
+    public Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(UpdateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, SwarmServiceTransportMappers.Map, "service mutation", cancellationToken);
+    public Task<Result> DeleteServiceAsync(DeleteManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, "service", cancellationToken);
     public Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).GetServiceLogsAsync(new SwarmLogsRequest { ResourceId = command.ServiceId, Tail = SwarmInventoryLimits.NormalizeLogLines(command.Tail) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "service logs", cancellationToken);
     public Task<Result<IReadOnlyList<SwarmTaskResult>>> ListTasksAsync(ListSwarmTasksCommand command, CancellationToken cancellationToken = default) =>
@@ -82,11 +88,11 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
     public Task<Result<SwarmLogsResult>> GetTaskLogsAsync(GetSwarmTaskLogsCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).GetTaskLogsAsync(new SwarmLogsRequest { ResourceId = command.TaskId, Tail = SwarmInventoryLimits.NormalizeLogLines(command.Tail) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "task logs", cancellationToken);
     public Task<Result<IReadOnlyList<SwarmNetworkResult>>> ListNetworksAsync(ListSwarmNetworksCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListNetworksAsync(new ListSwarmNetworksRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "networks", cancellationToken);
+        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListNetworksAsync(new ListSwarmNetworksRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "networks", cancellationToken);
     public Task<Result<SwarmNetworkResult>> InspectNetworkAsync(InspectSwarmNetworkCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectNetworkAsync(new InspectSwarmNetworkRequest { NetworkId = command.NetworkId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "network", cancellationToken);
     public Task<Result<IReadOnlyList<SwarmSecretResult>>> ListSecretsAsync(ListSwarmSecretsCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListSecretsAsync(new ListSwarmSecretsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secrets", cancellationToken);
+        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListSecretsAsync(new ListSwarmSecretsRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secrets", cancellationToken);
     public Task<Result<SwarmSecretResult>> InspectSecretAsync(InspectSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectSecretAsync(new InspectSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secret", cancellationToken);
     public Task<Result> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
@@ -108,7 +114,7 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
             new DeleteSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken: cancellationToken).ResponseAsync,
             "secret", cancellationToken);
     public Task<Result<IReadOnlyList<SwarmConfigResult>>> ListConfigsAsync(ListSwarmConfigsCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListConfigsAsync(new ListSwarmConfigsRequest { MaxItems = SwarmInventoryLimits.Normalize(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "configs", cancellationToken);
+        ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListConfigsAsync(new ListSwarmConfigsRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "configs", cancellationToken);
     public Task<Result<SwarmConfigResult>> InspectConfigAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectConfigAsync(new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "config", cancellationToken);
     public Task<Result<byte[]>> GetConfigDataAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>

@@ -143,7 +143,9 @@ const ServiceNameCell = ({ row, platformId }: { row: Row<ServiceTableRow>; platf
   }
 
   const service = row.original.service;
-  const availability = getServiceAvailability(service);
+  const availability = service.isManagedDraft
+    ? { status: 'Unknown', tooltip: 'This managed Service has not been deployed yet.' }
+    : getServiceAvailability(service);
   const expanded = row.getIsExpanded();
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -159,7 +161,11 @@ const ServiceNameCell = ({ row, platformId }: { row: Row<ServiceTableRow>; platf
         <span className="h-5 w-5 shrink-0" />
       )}
       <StateIndicator value={availability.status} tooltip={availability.tooltip} />
-      <Link className="table-link truncate" to={`/platforms/${platformId}/services/${service.id}`}>
+      <Link
+        className="table-link truncate"
+        to={service.managedServiceId
+          ? `/platforms/${platformId}/services/edit/${service.managedServiceId}`
+          : `/platforms/${platformId}/services/${service.id}`}>
         {service.name || service.id.slice(0, 12)}
       </Link>
       {service.isStale && <Badge variant="secondary">Stale</Badge>}

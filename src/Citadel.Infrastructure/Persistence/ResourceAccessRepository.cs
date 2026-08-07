@@ -40,6 +40,8 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 SELECT Id, @BuildResourceType, Name FROM BuildProjects
                 UNION ALL
                 SELECT Id, @BuildAgentPoolResourceType, Name FROM BuildAgentPools
+                UNION ALL
+                SELECT Id, @SwarmServiceResourceType, Name FROM SwarmServices
             )
             SELECT
                 ra.Id,
@@ -74,6 +76,7 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 AutomationActionResourceType = (int)ResourceType.AutomationAction,
                 BuildResourceType = (int)ResourceType.Build,
                 BuildAgentPoolResourceType = (int)ResourceType.BuildAgentPool,
+                SwarmServiceResourceType = (int)ResourceType.SwarmService,
             },
             transaction: tx());
 

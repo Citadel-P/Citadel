@@ -12,6 +12,7 @@ using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 
 namespace Application.Services.Abstractions;
 
@@ -59,6 +60,10 @@ public interface IApplicationHubDispatcher
         Guid platformId,
         SwarmProjectionSnapshot snapshot,
         CancellationToken cancellationToken = default);
+    #endregion
+
+    #region Managed Swarm Services
+    Task SendSwarmServiceInfo(SwarmService service, string action);
     #endregion
 
     #region Deployments

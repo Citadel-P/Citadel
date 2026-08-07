@@ -97,6 +97,8 @@ export const swarmOwnershipLabel = (value: SwarmServiceOwnership) => {
   if (value === SwarmServiceOwnership.CitadelDeployment) return 'Citadel Deployment';
   if (value === SwarmServiceOwnership.CitadelStack) return 'Citadel Stack';
   if (value === SwarmServiceOwnership.DockerStackExternal) return 'External Docker Stack';
+  if (value === SwarmServiceOwnership.CitadelService) return 'Citadel Service';
+  if (value === SwarmServiceOwnership.OwnershipConflict) return 'Ownership Conflict';
   return 'Unmanaged';
 };
 

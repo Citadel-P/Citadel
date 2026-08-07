@@ -78,7 +78,8 @@ public class StackDuplicateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(_tagId, draft["tagIds"]!.AsArray()[0]!.GetValue<Guid>());
         Assert.Equal("WebEditor", spec["$type"]!.GetValue<string>());
         Assert.Contains("nginx:latest", spec["composeFile"]!.GetValue<string>());
-        AssertHasWarning(warnings, "RESOURCE_BINDINGS_NOT_COPIED");
+        Assert.DoesNotContain(warnings, warning =>
+            warning?["code"]?.GetValue<string>() == "RESOURCE_BINDINGS_NOT_COPIED");
         AssertHasWarning(warnings, "EXTERNAL_NETWORK");
 
         var createResponse = await Client.PostAsync(
@@ -100,6 +101,19 @@ public class StackDuplicateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(StackSource.WebEditor, created.StackSource);
         Assert.Contains("nginx:latest", Assert.IsType<ManualStack>(created.CurrentStackRelease!.Spec).ComposeFile);
         Assert.Equal(_tagId, Assert.Single(created.Tags).Id);
+
+        var copiedBinding = Assert.Single(await uow.ResourceBindings.GetEntriesAsync(
+            ResourceBindingScope.Stack,
+            createdStackId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal("stack_var", copiedBinding.Name);
+        Assert.Equal("stack-value", copiedBinding.Value);
+        Assert.Equal(createdStackId, copiedBinding.ResourceId);
+        var sourceBinding = Assert.Single(await uow.ResourceBindings.GetEntriesAsync(
+            ResourceBindingScope.Stack,
+            _sourceStackId,
+            TestContext.Current.CancellationToken));
+        Assert.NotEqual(sourceBinding.Id, copiedBinding.Id);
 
         var activities = await uow.ActivityEventRepository.GetPagedAsync(
             createdStackId,

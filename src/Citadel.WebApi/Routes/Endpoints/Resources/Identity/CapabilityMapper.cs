@@ -89,6 +89,16 @@ public sealed record DeploymentCapabilities(
     CanWrite,
     CanExecute);
 
+public sealed record SwarmServiceCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanViewLogs,
+    bool CanInspect,
+    bool CanApply,
+    bool CanViewResourceBindings
+) : ResourceCapabilities(CanRead, CanWrite, CanExecute);
+
 public sealed record StackCapabilities(
     bool CanRead,
     bool CanWrite,
@@ -248,6 +258,19 @@ public static class CapabilityMapper
                 common.CanRead &&
                 (permission.SpecificPermissions & SpecificPermission.ResourceBindings) != 0
         );
+    }
+
+    public static SwarmServiceCapabilities ToSwarmServiceCapabilities(PermissionMetadata permission)
+    {
+        var common = ToResourceCapabilities(permission);
+        return new SwarmServiceCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+            CanViewLogs: common.CanRead && (permission.SpecificPermissions & SpecificPermission.Logs) != 0,
+            CanInspect: common.CanRead && (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+            CanApply: common.CanRead && (permission.SpecificPermissions & SpecificPermission.Apply) != 0,
+            CanViewResourceBindings: common.CanRead && (permission.SpecificPermissions & SpecificPermission.ResourceBindings) != 0);
     }
 
     public static StackCapabilities ToStackCapabilities(

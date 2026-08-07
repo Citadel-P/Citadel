@@ -4,8 +4,9 @@ import { ContainerExec } from '@/features/docker-resources/containers/container-
 import { useRead } from '@/lib/hooks';
 import Loader from '@/components/ui/loader';
 import type { SwarmTaskInfoView } from '../hooks/useTasksGroup';
+import type { ReactNode } from 'react';
 
-export const TaskTerminal = ({ task }: { task: SwarmTaskInfoView }) => {
+export const TaskTerminal = ({ task, toolbarStart }: { task: SwarmTaskInfoView; toolbarStart?: ReactNode }) => {
   const query = useRead(
     'getSwarmTaskTerminalTarget',
     { platformId: task.platformId, resourceId: task.id },
@@ -32,5 +33,5 @@ export const TaskTerminal = ({ task }: { task: SwarmTaskInfoView }) => {
     );
   }
 
-  return <ContainerExec containerId={containerId} />;
+  return <ContainerExec containerId={containerId} toolbarStart={toolbarStart} />;
 };

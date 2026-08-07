@@ -375,7 +375,10 @@ public enum EdgeAgentCommandKind
     SwarmConfigCreate = 107,
     SwarmConfigUpdate = 108,
     SwarmConfigDelete = 109,
-    SwarmConfigData = 110
+    SwarmConfigData = 110,
+    SwarmServiceCreate = 111,
+    SwarmServiceUpdate = 112,
+    SwarmServiceDelete = 113
 }
 
 public enum SwarmServiceOwnership
@@ -383,7 +386,89 @@ public enum SwarmServiceOwnership
     Unmanaged = 0,
     DockerStackExternal,
     CitadelDeployment,
-    CitadelStack
+    CitadelStack,
+    CitadelService,
+    OwnershipConflict
+}
+
+public enum SwarmServiceHealth
+{
+    Unknown,
+    Healthy,
+    Progressing,
+    Degraded,
+    Failed,
+    Created
+}
+
+public enum SwarmServiceSynchronizationState
+{
+    NeverApplied,
+    DesiredChangesPending,
+    InSync,
+    Drifted,
+    RuntimeMissing,
+    OutcomeUnknown,
+    OwnershipConflict
+}
+
+public enum SwarmServiceOperationKind
+{
+    Apply,
+    Scale,
+    ForceUpdate,
+    Delete
+}
+
+public enum SwarmServiceOperationState
+{
+    Prepared,
+    Canceled,
+    PendingAcceptance,
+    Accepted,
+    Rejected,
+    NotAccepted,
+    OutcomeUnknown,
+    Completed,
+    OwnershipConflict
+}
+
+public enum SwarmServiceSchedulingMode
+{
+    Replicated,
+    Global
+}
+
+public enum SwarmServicePortPublishMode
+{
+    Ingress,
+    Host
+}
+
+public enum SwarmServiceMountKind
+{
+    Volume,
+    Bind
+}
+
+public enum SwarmServiceRestartCondition
+{
+    None,
+    OnFailure,
+    Any
+}
+
+public enum SwarmServiceUpdateOrder
+{
+    StopFirst,
+    StartFirst
+}
+
+public enum SwarmServiceUpdateFailureAction
+{
+    Pause,
+    Continue,
+    Rollback
 }
 
 public enum ContainerRestartPolicy
@@ -692,7 +777,8 @@ public enum ActivityResourceType
     Build,
     BuildAgentPool,
     Volume,
-    BackupPolicy
+    BackupPolicy,
+    SwarmService
 }
 
 public enum ActivityEventType
@@ -838,6 +924,18 @@ public enum ActivityEventType
     BackupPolicyUpdated,
     BackupPolicyRenamed,
     BackupPolicyArchived,
+    #endregion
+
+    #region Managed Swarm Service Events
+    SwarmServiceCreated,
+    SwarmServiceUpdated,
+    SwarmServiceRenamed,
+    SwarmServiceDeleted,
+    SwarmServiceApplied,
+    SwarmServiceScaled,
+    SwarmServiceForceUpdated,
+    SwarmServiceOperationFailed,
+    SwarmServiceDuplicated,
     #endregion
 }
 
@@ -1042,6 +1140,7 @@ public enum LookupResourceType
     BackupPolicy,
     Build,
     BuildAgentPool,
+    SwarmService,
 }
 
 public enum StackApplyEventType
@@ -1068,7 +1167,8 @@ public enum ResourceBindingScope
 {
     Global,
     Stack,
-    Deployment
+    Deployment,
+    SwarmService
 }
 
 public enum TaggableResourceType
@@ -1081,7 +1181,8 @@ public enum TaggableResourceType
     AutomationAction,
     BackupPolicy,
     Build,
-    BuildAgentPool
+    BuildAgentPool,
+    SwarmService
 }
 
 public enum SecretDeliveryMode

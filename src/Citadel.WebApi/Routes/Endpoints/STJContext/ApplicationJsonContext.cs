@@ -29,6 +29,7 @@ using Domain.Entities.Licensing;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
@@ -81,6 +82,16 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<ActionRunTrigger>),
         typeof(JsonStringEnumConverter<ActionRunStatus>),
         typeof(JsonStringEnumConverter<ResourceControlState>),
+        typeof(JsonStringEnumConverter<SwarmServiceHealth>),
+        typeof(JsonStringEnumConverter<SwarmServiceSynchronizationState>),
+        typeof(JsonStringEnumConverter<SwarmServiceOperationKind>),
+        typeof(JsonStringEnumConverter<SwarmServiceOperationState>),
+        typeof(JsonStringEnumConverter<SwarmServiceSchedulingMode>),
+        typeof(JsonStringEnumConverter<SwarmServicePortPublishMode>),
+        typeof(JsonStringEnumConverter<SwarmServiceMountKind>),
+        typeof(JsonStringEnumConverter<SwarmServiceRestartCondition>),
+        typeof(JsonStringEnumConverter<SwarmServiceUpdateOrder>),
+        typeof(JsonStringEnumConverter<SwarmServiceUpdateFailureAction>),
         typeof(JsonStringEnumConverter<ResourceBindingKind>),
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
@@ -654,6 +665,19 @@ namespace Application.Models;
 [JsonSerializable(typeof(ReplaceResourceTagsInput))]
 [JsonSerializable(typeof(CreateTagInput))]
 [JsonSerializable(typeof(PatchTagInput))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.CreateSwarmServiceInput))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.UpdateSwarmServiceInput))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.ScaleSwarmServiceInput))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.ManagedSwarmServiceView))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.ManagedSwarmServicesView))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.SwarmServiceDuplicateDraftView))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.Identity.SwarmServiceCapabilities))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.SwarmServices.SwarmServiceProgressItem))]
+[JsonSerializable(typeof(IAsyncEnumerable<Domain.Contracts.Resources.SwarmServices.SwarmServiceProgressItem>))]
+[JsonSerializable(typeof(SwarmServiceSpec))]
+[JsonSerializable(typeof(SwarmExternalImage))]
+[JsonSerializable(typeof(SwarmBuildImage))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.SwarmServiceOperationView))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

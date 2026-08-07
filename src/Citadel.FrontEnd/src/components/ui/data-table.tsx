@@ -28,6 +28,8 @@ interface DataTableProps<TData, TValue> {
   isLoading: boolean;
   getRowId?: (row: TData) => string;
   getSubRows?: (row: TData) => TData[] | undefined;
+  enableRowSelection?: (row: TData) => boolean;
+  enableSubRowSelection?: boolean;
   onSelectionChange?: (selectedRows: TData[]) => void;
   emptyState?: DataTableEmptyState;
 }
@@ -40,6 +42,8 @@ export function DataTable<TData extends Identifiable, TValue>({
   isLoading,
   getRowId,
   getSubRows,
+  enableRowSelection,
+  enableSubRowSelection,
   onSelectionChange,
   emptyState,
 }: DataTableProps<TData, TValue>) {
@@ -54,6 +58,8 @@ export function DataTable<TData extends Identifiable, TValue>({
     columns,
     getRowId: (row) => (getRowId ? getRowId(row) : row.id!),
     getSubRows,
+    enableRowSelection: enableRowSelection ? (row) => enableRowSelection(row.original) : undefined,
+    enableSubRowSelection,
     getCoreRowModel: getCoreRowModel(),
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,

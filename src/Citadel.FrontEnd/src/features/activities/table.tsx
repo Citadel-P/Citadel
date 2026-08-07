@@ -144,6 +144,7 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
         .join(' - ');
     case 'DeploymentDuplicated':
     case 'StackDuplicated':
+    case 'SwarmServiceDuplicated':
       return `from ${info.source.resourceName}`;
     case 'BuildAgentPoolCreated':
     case 'BuildAgentPoolDeleted':

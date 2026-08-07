@@ -57,6 +57,8 @@ import { ConfigComponents } from './swarm-resources/configs';
 import { ConfigInfoComponents } from './swarm-resources/configs/config-info';
 import { SecretFormComponents } from './swarm-resources/secrets/form';
 import { ConfigFormComponents } from './swarm-resources/configs/form';
+import { SwarmServiceComponents } from './swarm-services';
+import { SwarmServiceFormComponents } from './swarm-services/form';
 
 export const SwarmResourceComponents: {
   [key in SwarmResourceType]: RegularResourceComponents;
@@ -80,6 +82,7 @@ export const ResourceComponents: {
   Platform: PlatformComponents,
   Registry: RegistryComponents,
   Deployment: DeploymentComponents,
+  SwarmService: SwarmServiceComponents,
   Stack: StackComponents,
   Activity: ActivityComponents,
   AlertRule: AlertRuleComponents,
@@ -116,6 +119,7 @@ export const ResourceFormComponents: {
 
   Registry: RegistryFormComponents,
   Deployment: DeploymentFormComponents,
+  SwarmService: SwarmServiceFormComponents,
   AlertRule: AlertRuleFormComponents,
   Activity: undefined,
   Alert: undefined,

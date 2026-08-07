@@ -73,4 +73,39 @@ describe('createActionsBuilder', () => {
       'Update checks are only available for external tagged images.',
     );
   });
+
+  it('renders a disabled grouped toggle action with its reason', async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    const { group } = createActionsBuilder<{ name: string }>()
+      .addAction({
+        key: 'lifecycle',
+        type: 'toggle',
+        predicate: () => false,
+        primary: {
+          title: 'Start',
+          icon: RefreshCw,
+          useHandler: () => ({
+            canExecute: false,
+            disabledReason: 'The selected container cannot be started yet.',
+            run,
+          }),
+        },
+        secondary: {
+          title: 'Stop',
+          icon: RefreshCw,
+          useHandler: () => ({ canExecute: true, run }),
+        },
+      })
+      .build();
+    const Action = group.lifecycle;
+
+    render(<Action resources={[{ name: 'demo' }]} />);
+
+    const button = screen.getByRole('button', { name: /start/i });
+    expect(button).toBeDisabled();
+    await user.hover(button.parentElement!);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('The selected container cannot be started yet.');
+  });
 });

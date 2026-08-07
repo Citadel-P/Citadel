@@ -39,6 +39,7 @@ public static class PermissionMatrixView
             ResourceType.BackupPolicy => "Backups",
             ResourceType.Build => "Builds",
             ResourceType.BuildAgentPool => "Build Pools",
+            ResourceType.SwarmService => "Swarm Services",
             _ => resourceType.ToString(),
         };
 

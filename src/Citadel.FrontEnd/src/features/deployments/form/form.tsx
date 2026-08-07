@@ -7,7 +7,6 @@ import {
   DeploymentImageInfoLocalImage,
   DockerNetworkResultView,
   ContainerRestartPolicy,
-  ResourceSpec,
   StopSignal,
   UpdateBehavior,
   DeploymentConfigView,
@@ -46,21 +45,18 @@ import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { KeyRound, PackagePlus } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { getDeploymentConfigurationNames } from './adoption-configuration-names';
+import { createEnvironmentVariableValidator } from '@/lib/utils';
 import { portsAfterImageSourceChange, shouldApplyLocalImagePortDefaults } from './image-port-defaults';
+import {
+  findResourceProfile,
+  ResourceProfileSelector,
+  resourceProfiles,
+} from '@/components/custom/resource-profile-selector';
 
 const enum ImageSource {
   local = 'Local',
   external = 'External',
   build = 'Build',
-}
-
-const enum ResourceProfile {
-  automatic,
-  xsmall,
-  small,
-  medium,
-  large,
-  xlarge,
 }
 
 const update_behaviors = {
@@ -109,39 +105,6 @@ const restart_policies = {
   },
 };
 
-const resource_profiles = {
-  [ResourceProfile.automatic]: {
-    label: 'Automatic',
-    description: 'Resources will be allocated automatically by the platform',
-    spec: null,
-  },
-  [ResourceProfile.xsmall]: {
-    label: 'X-Small',
-    description: '0.25 CPU - 256 MB RAM',
-    spec: { nanoCpus: 0.25, memoryLimit: 256 },
-  },
-  [ResourceProfile.small]: {
-    label: 'Small',
-    description: '0.5 CPU - 512 MB RAM',
-    spec: { nanoCpus: 0.5, memoryLimit: 512 },
-  },
-  [ResourceProfile.medium]: {
-    label: 'Medium',
-    description: '0.5 CPU - 1 GB RAM',
-    spec: { nanoCpus: 0.5, memoryLimit: 1024 },
-  },
-  [ResourceProfile.large]: {
-    label: 'Large',
-    description: '1.0 CPU - 2 GB RAM',
-    spec: { nanoCpus: 1, memoryLimit: 2048 },
-  },
-  [ResourceProfile.xlarge]: {
-    label: 'X-Large',
-    description: '2.0 CPU - 4 GB RAM',
-    spec: { nanoCpus: 2, memoryLimit: 4096 },
-  },
-};
-
 const stop_signals = {
   [StopSignal.SIGTERM]: {
     label: StopSignal.SIGTERM,
@@ -165,37 +128,6 @@ type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
 const EMPTY_ADOPTION_ISSUES: ContainerAdoptionIssueView[] = [];
-const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const environmentReferencePattern = /\$\{([^}]+)\}/g;
-
-const validateDeploymentEnvironmentVariable = (line: string, configurationNames: string[]) => {
-  const separator = line.indexOf('=');
-  const key = (separator < 0 ? line : line.slice(0, separator)).trim();
-
-  if (!environmentNamePattern.test(key)) {
-    return `${key || 'Environment key'} is not a valid environment key.`;
-  }
-
-  const knownNames = new Set(configurationNames);
-  if (separator < 0) {
-    return knownNames.has(key) ? null : `${key} is not defined in deployment or global variables.`;
-  }
-
-  const value = line.slice(separator + 1);
-  for (const match of value.matchAll(environmentReferencePattern)) {
-    const name = match[1]?.trim() ?? '';
-    if (!environmentNamePattern.test(name)) {
-      return `${match[0]} is not a supported variable reference.`;
-    }
-
-    if (!knownNames.has(name)) {
-      return `${name} is not defined in deployment or global variables.`;
-    }
-  }
-
-  return null;
-};
-
 export const DeploymentForm = ({
   mode,
   metadataChanged,
@@ -346,6 +278,10 @@ export const DeploymentForm = ({
         importSensitiveEnvironmentAsSecrets,
       ),
     [effectiveResourceBindings, adoptionIssues, importSensitiveEnvironmentAsSecrets],
+  );
+  const validateDeploymentEnvironmentVariable = useMemo(
+    () => createEnvironmentVariableValidator(effectiveConfigurationNames, 'deployment'),
+    [effectiveConfigurationNames],
   );
 
   const localImageId = (currentImage as DeploymentImageInfoLocalImage | undefined)?.imageId;
@@ -852,7 +788,7 @@ export const DeploymentForm = ({
                 language="key_value"
                 completionItems={effectiveConfigurationNames}
                 completionItemDetail="Citadel variable or secret"
-                validateItem={(line) => validateDeploymentEnvironmentVariable(line, effectiveConfigurationNames)}
+                validateItem={validateDeploymentEnvironmentVariable}
                 onChange={(environmentVariables: string[] | undefined) =>
                   set((prev) => ({
                     spec: {
@@ -917,25 +853,25 @@ export const DeploymentForm = ({
             label: 'Resources',
             description: 'Choose how much CPU and memory to allocate to this deployment.',
             render: (value, set) => {
-              const toProfile = (spec: ResourceSpec | undefined) => {
-                return (
-                  Object.entries(resource_profiles).find(
-                    ([_, p]) => p.spec?.nanoCpus === spec?.nanoCpus && p.spec?.memoryLimit === spec?.memoryLimit,
-                  )?.[0] ?? 'automatic'
-                );
-              };
+              const profile = findResourceProfile(
+                value?.nanoCpus == null ? null : Number(value.nanoCpus),
+                value?.memoryLimit == null ? null : Number(value.memoryLimit),
+              );
               return (
-                <ItemSelector
-                  collection={resource_profiles}
-                  value={toProfile(value)}
-                  onChange={(profile: ResourceProfile) =>
+                <ResourceProfileSelector
+                  value={profile}
+                  onChange={(nextProfile) => {
+                    const limits = resourceProfiles[nextProfile];
                     set((prev) => ({
                       spec: {
                         ...(prev.spec as DeploymentInput['spec']),
-                        resourceSpec: resource_profiles[profile]?.spec ?? null,
+                        resourceSpec:
+                          limits.cpuCores == null || limits.memoryMiB == null
+                            ? null
+                            : { nanoCpus: limits.cpuCores, memoryLimit: limits.memoryMiB },
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
               );
             },
@@ -1073,6 +1009,7 @@ export const DeploymentForm = ({
       mode,
       id,
       effectiveConfigurationNames,
+      validateDeploymentEnvironmentVariable,
       disabled,
       adoptFrom,
       buildProjects,

@@ -16,7 +16,6 @@ using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 
 namespace Application.Services;
 
@@ -25,7 +24,7 @@ internal interface IApplyDeploymentService
     IAsyncEnumerable<DeploymentStreamItem> ApplyAsync(Guid deploymentId, Guid actorId, bool recreate, CancellationToken ct);
 }
 
-internal sealed partial class ApplyDeploymentService(
+internal sealed class ApplyDeploymentService(
     IDbWorkQueue dbWorkQueue,
     IServiceScopeFactory scopeFactory,
     IPullImageService pullImageService,
@@ -196,8 +195,13 @@ internal sealed partial class ApplyDeploymentService(
             yield break;
         }
 
-        var injectedConfiguration = resolvedConfiguration.SelectEntries(GetReferencedConfigurationNames(deployment.Spec.EnvironmentVariables ?? []));
-        var environmentResult = BuildDeploymentEnvironmentVariables(deployment, injectedConfiguration);
+        var configuredEnvironment = deployment.Spec.EnvironmentVariables ?? [];
+        var injectedConfiguration = resolvedConfiguration.SelectEntries(
+            EnvironmentVariableResolver.GetReferencedNames(configuredEnvironment));
+        var environmentResult = EnvironmentVariableResolver.Build(
+            configuredEnvironment,
+            injectedConfiguration,
+            "Deployment");
         if (environmentResult.IsFailure(out var environmentError, out var environmentVariables))
         {
             var safeMessage = environmentError.Message;
@@ -292,102 +296,6 @@ internal sealed partial class ApplyDeploymentService(
 
         return alertService.ProcessAsync(AlertType.DeploymentConfigurationResolutionFailed, context, ct);
     }
-
-    private static Result<IReadOnlyList<string>> BuildDeploymentEnvironmentVariables(
-        Deployment deployment,
-        ResolvedResourceBindings configuration)
-    {
-        var configured = deployment.Spec?.EnvironmentVariables ?? [];
-        if (configured.Count == 0)
-            return Array.Empty<string>();
-
-        var values = configuration.ToValueDictionary();
-        var result = new List<string>(configured.Count);
-
-        foreach (var rawLine in configured)
-        {
-            var line = rawLine.Trim();
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
-                continue;
-
-            var separator = line.IndexOf('=');
-            if (separator < 0)
-            {
-                if (!IsValidEnvironmentName(line))
-                    return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{line}' is not valid.");
-
-                if (!values.TryGetValue(line, out var value))
-                    return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{line}' is not defined in Variables.");
-
-                result.Add($"{line}={value}");
-                continue;
-            }
-
-            var name = line[..separator].Trim();
-            var template = line[(separator + 1)..];
-            if (!IsValidEnvironmentName(name))
-                return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{name}' is not valid.");
-
-            var valueResult = InterpolateEnvironmentTemplate(template, values);
-            if (valueResult.IsFailure(out var interpolationError, out var interpolatedValue))
-                return Result.Failure<IReadOnlyList<string>>(interpolationError.Message);
-
-            result.Add($"{name}={interpolatedValue}");
-        }
-
-        return result;
-    }
-
-    private static IEnumerable<string> GetReferencedConfigurationNames(IEnumerable<string> configured)
-    {
-        foreach (var rawLine in configured)
-        {
-            var line = rawLine.Trim();
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
-                continue;
-
-            var separator = line.IndexOf('=');
-            if (separator < 0)
-            {
-                yield return line;
-                continue;
-            }
-
-            foreach (Match match in EnvironmentReferenceRegex().Matches(line[(separator + 1)..]))
-            {
-                yield return match.Groups["name"].Value;
-            }
-        }
-    }
-
-    private static Result<string> InterpolateEnvironmentTemplate(string template, IReadOnlyDictionary<string, string> values)
-    {
-        var missingName = string.Empty;
-        var interpolated = EnvironmentReferenceRegex().Replace(template, match =>
-        {
-            var name = match.Groups["name"].Value;
-            if (!values.TryGetValue(name, out var value))
-            {
-                missingName = name;
-                return match.Value;
-            }
-
-            return value;
-        });
-
-        return string.IsNullOrEmpty(missingName)
-            ? interpolated
-            : Result.Failure<string>($"Deployment environment reference '{missingName}' is not defined in Variables.");
-    }
-
-    private static bool IsValidEnvironmentName(string name)
-        => EnvironmentNameRegex().IsMatch(name);
-
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled)]
-    private static partial Regex EnvironmentNameRegex();
-
-    [GeneratedRegex(@"\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)\}", RegexOptions.Compiled)]
-    private static partial Regex EnvironmentReferenceRegex();
 
     private static DeploymentStreamItem Info(string message)
         => new(ProgressMessage: message);

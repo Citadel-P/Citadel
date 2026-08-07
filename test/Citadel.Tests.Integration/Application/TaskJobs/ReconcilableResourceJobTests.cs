@@ -10,12 +10,15 @@ using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
+using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using Npgsql;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -30,17 +33,20 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     private readonly Mock<IBackupRepositoryStreamManager> backupRepositoryStreamManagerMock = new();
     private readonly Mock<IBackupPolicyStreamManager> backupPolicyStreamManagerMock = new();
     private readonly Mock<IAutomationActionStreamManager> automationActionStreamManagerMock = new();
+    private readonly Mock<ISwarmReconciliationCoordinator> swarmReconciliationCoordinatorMock = new();
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<INotificationQueue> notificationMock = new();
     private Guid platformId;
     private Guid backupRepositoryId;
     private Guid backupPolicyId;
     private Guid automationActionId;
+    private Guid swarmServiceId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();
         services.RemoveAll<IDelayWithJitterService>();
+        services.RemoveAll<ISwarmReconciliationCoordinator>();
 
         services.AddSingleton(streamManagerMock.Object);
         services.AddSingleton(stackStreamManagerMock.Object);
@@ -49,6 +55,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(backupRepositoryStreamManagerMock.Object);
         services.AddSingleton(backupPolicyStreamManagerMock.Object);
         services.AddSingleton(automationActionStreamManagerMock.Object);
+        services.AddSingleton(swarmReconciliationCoordinatorMock.Object);
         services.AddSingleton(notificationMock.Object);
         services.AddSingleton(_ => _delayWithJitter.Object);
 
@@ -57,6 +64,10 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
                                                It.IsAny<TimeSpan>(),
                                                It.IsAny<CancellationToken>()))
          .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((_, _, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct));
+
+        swarmReconciliationCoordinatorMock
+            .Setup(x => x.RefreshAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -148,10 +159,21 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             alertOnFailure: true,
             runAsActorId: Constants.SystemId,
             createdByActorId: Constants.SystemId);
+        var swarmService = new SwarmService(
+            "Reconcilable service",
+            platform.Id,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
 
         backupRepositoryId = backupRepository.Id;
         backupPolicyId = backupPolicy.Id;
         automationActionId = automationAction.Id;
+        swarmServiceId = swarmService.Id;
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
@@ -165,6 +187,16 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         await uow.BackupRepositories.AddAsync(backupRepository, TestContext.Current.CancellationToken);
         await uow.BackupPolicies.AddAsync(backupPolicy, TestContext.Current.CancellationToken);
         await uow.AutomationActions.AddAsync(automationAction, TestContext.Current.CancellationToken);
+        await uow.SwarmServices.AddAsync(swarmService, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        Assert.True(swarmService.TryPrepareOperation(
+            SwarmServiceOperationKind.Apply,
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            targetRuntimeHash: "runtime-hash",
+            clusterId: "reconcilable-cluster"));
+        swarmService.MarkOperationAttempted();
+        Assert.Equal(1, await uow.SwarmServices.UpdateAsync(swarmService, TestContext.Current.CancellationToken));
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -289,6 +321,28 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(ResourceControlState.Idle, action.ControlState);
         Assert.Null(action.CurrentRunId);
         Assert.Null(action.ControlStartedAt);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_ShouldReconcilePlatformWithStuckSwarmServiceOperation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using (var connection = new NpgsqlConnection(ConnectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE SwarmServices SET ControlStartedAt = @startedAt WHERE Id = @id";
+            command.Parameters.AddWithValue("startedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() - StaleResourceAgeSeconds);
+            command.Parameters.AddWithValue("id", swarmServiceId);
+            Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        }
+
+        var job = ActivatorUtilities.CreateInstance<ReconcilableResourceJob>(Services);
+        await job.ReconcileStuckSwarmServicesAsync(cancellationToken);
+
+        swarmReconciliationCoordinatorMock.Verify(
+            coordinator => coordinator.RefreshAsync(platformId, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]

@@ -23,9 +23,13 @@ import { hasCapability } from '@/lib/resource-capabilities';
 
 export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const { type, tab } = useResourceParamType();
+  const { platformId } = useParams();
   if (!type) return <NotFound />;
 
-  const resolvedType = tab ?? type;
+  const routeType = tab ?? type;
+  const resolvedType = platformId && routeType === 'Service'
+    ? 'SwarmService'
+    : routeType;
   const formComponents = ResourceFormComponents[resolvedType];
 
   return (
@@ -56,7 +60,23 @@ const EditFormPage = ({ type, skipMetadataUpdate = false }: { type: ResourceType
   const { id } = useParams();
 
   const Components = ResourceFormComponents[type]?.EditForm;
-  const formData = Components?.useData?.(id!);
+  if (!Components?.useData) return <NotFound />;
+
+  return <EditFormData id={id!} type={type} Components={Components} skipMetadataUpdate={skipMetadataUpdate} />;
+};
+
+const EditFormData = ({
+  id,
+  type,
+  Components,
+  skipMetadataUpdate,
+}: {
+  id: string;
+  type: ResourceType;
+  Components: any;
+  skipMetadataUpdate: boolean;
+}) => {
+  const formData = Components.useData(id!);
 
   const { item, isLoading } = formData ?? {};
 

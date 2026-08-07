@@ -1,7 +1,9 @@
+using Application.Features.SwarmServices;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Tags;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -35,6 +37,9 @@ public sealed record GetBuildTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSumm
 
 [RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Read)]
 public sealed record GetBuildAgentPoolTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
+
+[RequirePermission(ResourceType.SwarmService, PermissionLevel.Read, ResourceIdProperty = nameof(Id))]
+public sealed record GetSwarmServiceTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
 
 internal sealed class GetDeploymentTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
@@ -141,6 +146,23 @@ internal sealed class GetBuildAgentPoolTagsHandler(IUnitOfWork unitOfWork) : IQu
             query.Id,
             async () => await unitOfWork.BuildAgentPools.GetAsync(query.Id, cancellationToken) is not null,
             "Build pool",
+            cancellationToken);
+}
+
+internal sealed class GetSwarmServiceTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext)
+    : IQueryHandler<GetSwarmServiceTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetSwarmServiceTags query, CancellationToken cancellationToken)
+        => await ResourceTagResourceAccess.GetAsync(
+            unitOfWork,
+            TaggableResourceType.SwarmService,
+            query.Id,
+            async () => await SwarmServiceValidation.ExistsAndCanAccessAsync(
+                query.Id,
+                unitOfWork,
+                userContext,
+                cancellationToken),
+            "Swarm Service",
             cancellationToken);
 }
 

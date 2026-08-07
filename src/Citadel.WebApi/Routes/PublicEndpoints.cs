@@ -51,6 +51,7 @@ public static class PublicEndpoints
     const string GitRepositoriesName = nameof(GitRepositories);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
+    const string SwarmServicesName = nameof(SwarmServices);
     const string StacksName = nameof(Stacks);
     const string ResourceBindingsName = nameof(ResourceBindings);
     const string OidcProvidersName = "OidcProviders";
@@ -146,6 +147,10 @@ public static class PublicEndpoints
             var deployments = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization();
             {
                 MapDeploymentEndpoints(deployments);
+            }
+            var swarmServices = group.MapGroup("/swarmServices").WithTags(SwarmServicesName).RequireAuthorization();
+            {
+                MapSwarmServiceEndpoints(swarmServices);
             }
             var stacks = group.MapGroup("/stacks").WithTags(StacksName).RequireAuthorization();
             {
@@ -2432,6 +2437,93 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("deleteVolumes");
+    }
+
+    private static void MapSwarmServiceEndpoints(RouteGroupBuilder services)
+    {
+        services.MapGet("/", SwarmServices.List)
+            .WithSummary("List managed Docker Swarm Services")
+            .WithName("listManagedSwarmServices");
+
+        services.MapGet("/{id:guid}", SwarmServices.Get)
+            .WithSummary("Get a managed Docker Swarm Service")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getManagedSwarmService");
+
+        services.MapGet("/{id:guid}/duplicate-draft", SwarmServices.GetDuplicateDraft)
+            .WithSummary("Get managed Docker Swarm Service duplicate draft")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getSwarmServiceDuplicateDraft");
+
+        services.MapPost("/", SwarmServices.Create)
+            .WithSummary("Create a managed Docker Swarm Service")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createSwarmService");
+
+        services.MapPatch("/{id:guid}", SwarmServices.Update)
+            .WithSummary("Update managed Docker Swarm Service configuration")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateSwarmService");
+
+        services.MapPost("/rename", SwarmServices.Rename)
+            .WithSummary("Rename a managed Docker Swarm Service")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameSwarmService");
+
+        services.MapGet("/{id:guid}/tags", Tags.GetSwarmServiceTags)
+            .WithSummary("Get managed Docker Swarm Service tags")
+            .WithName("getSwarmServiceTags");
+
+        services.MapPut("/{id:guid}/tags", Tags.ReplaceSwarmServiceTags)
+            .WithSummary("Replace managed Docker Swarm Service tags")
+            .ProducesValidationProblem()
+            .WithName("replaceSwarmServiceTags");
+
+        services.MapPatch("/{id:guid}/_metadata", SwarmServices.UpdateMetadata)
+            .WithSummary("Update managed Docker Swarm Service metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateSwarmServiceMetadata");
+
+        services.MapPost("/{id:guid}/check-updates", SwarmServices.CheckUpdates)
+            .WithSummary("Check a managed Docker Swarm Service image for updates")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("checkSwarmServiceUpdates");
+
+        services.MapPost("/{id:guid}/apply", SwarmServices.Apply)
+            .WithSummary("Apply a managed Docker Swarm Service and stream progress")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("applySwarmService");
+
+        services.MapPost("/{id:guid}/scale", SwarmServices.Scale)
+            .WithSummary("Scale a managed Docker Swarm Service and stream progress")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("scaleSwarmService");
+
+        services.MapPost("/{id:guid}/force-update", SwarmServices.ForceUpdate)
+            .WithSummary("Force a managed Docker Swarm Service task update and stream progress")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("forceUpdateSwarmService");
+
+        services.MapGet("/{id:guid}/inspect", SwarmServices.Inspect)
+            .WithSummary("Inspect the Docker runtime for a managed Swarm Service")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("inspectManagedSwarmService");
+
+        services.MapGet("/{id:guid}/logs", SwarmServices.GetLogs)
+            .WithSummary("Get bounded logs for a managed Swarm Service")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("getManagedSwarmServiceLogs");
+
+        services.MapDelete("/", SwarmServices.Delete)
+            .WithSummary("Delete managed Docker Swarm Services")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("deleteSwarmServices");
     }
 
     private static void MapDeploymentEndpoints(RouteGroupBuilder deployment)

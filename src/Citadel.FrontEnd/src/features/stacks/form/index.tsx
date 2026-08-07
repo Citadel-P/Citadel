@@ -41,9 +41,8 @@ import { formatId } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StackLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { StackInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
-import { StackExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { StackExec, TerminalTargetSelect } from '@/features/docker-resources/containers/container-info/container-exec';
 import { StackStats } from '@/features/docker-resources/containers/container-info/stack-stats';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import {
@@ -781,20 +780,16 @@ const StackTerminalContainerSelect = ({
   onSelectContainer: (containerId: string) => void;
 }) => {
   return (
-    <Select value={selectedContainer.id} onValueChange={onSelectContainer}>
-      <SelectTrigger className="h-8 min-w-42 rounded-sm bg-background shadow-xs">
-        <SelectValue placeholder="Select a container" />
-      </SelectTrigger>
-      <SelectContent className="bg-background">
-        <SelectGroup>
-          {containers.map((container) => (
-            <SelectItem key={container.id} value={container.id}>
-              {getStackContainerLabel(container)}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <TerminalTargetSelect
+      value={selectedContainer.id}
+      options={containers.map((container) => ({
+        value: container.id,
+        label: getStackContainerLabel(container),
+      }))}
+      placeholder="Select a container"
+      ariaLabel="Container"
+      onValueChange={onSelectContainer}
+    />
   );
 };
 

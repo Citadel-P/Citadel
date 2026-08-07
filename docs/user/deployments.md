@@ -234,7 +234,7 @@ The duplicate flow:
 
 Runtime state, container IDs, history, generated credentials, and resolved secret values are not copied.
 
-Resource bindings are not copied. If the source deployment used deployment-scoped bindings, recreate those bindings on the new deployment before deploying it.
+Deployment-scoped variables and secret references are copied when you save the duplicate. Global bindings continue to be inherited. You need permission to view and manage resource bindings to copy them.
 
 ## Adopt An Existing Container
 

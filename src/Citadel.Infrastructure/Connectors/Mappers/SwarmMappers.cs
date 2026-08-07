@@ -80,14 +80,15 @@ internal static class SwarmMappers
         source.Id, source.VersionIndex, source.Name, source.Mode, source.Image,
         source.RunningTaskCount, source.DesiredTaskCount, source.UpdateState, source.UpdateMessage,
         source.Ports, source.NetworkIds, source.SecretIds, source.ConfigIds, source.Labels,
-        source.CreatedAt, source.UpdatedAt);
+        source.CreatedAt, source.UpdatedAt, source.RuntimeHash, source.ForceUpdate);
     public static IReadOnlyList<DomainSwarmService> Map(this IReadOnlyList<HostingSwarmService> source) => MapList(source, static value => value.Map());
     public static DomainSwarmService Map(this SwarmServiceMessage source) => new(
         source.Id, checked((long)source.VersionIndex), source.Name, source.Mode, source.Image,
         source.RunningTaskCount, source.DesiredTaskCount, source.UpdateState,
         EmptyToNull(source.UpdateMessage), source.Ports.ToArray(), source.NetworkIds.ToArray(),
         source.SecretIds.ToArray(), source.ConfigIds.ToArray(), source.Labels,
-        source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset());
+        source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset(), source.RuntimeHash,
+        source.ForceUpdate);
     public static IReadOnlyList<DomainSwarmService> Map(this ListSwarmServicesResponse source) => MapList(source.Services, static value => value.Map());
 
     public static DomainSwarmTask Map(this HostingSwarmTask source) => new(

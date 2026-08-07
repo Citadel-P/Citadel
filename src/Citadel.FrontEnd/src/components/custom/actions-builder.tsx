@@ -59,6 +59,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
     run: () => void | Promise<void>;
     canExecute?: boolean;
     isPending?: boolean;
+    disabledReason?: string;
   };
   onSuccess?: (ctx: { resources: R | R[] }) => (() => void) | void;
   invalidate?: K;
@@ -240,7 +241,12 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
   const Group: ButtonGroupComponent<R> = ({ resources }) => {
     const config = useActiveConfig(resources);
     const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
-    const { run, isPending, canExecute } = useUnifiedExecutor(config, resources, config.title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(
+      config,
+      resources,
+      config.title,
+      showToast,
+    );
 
     if (config.confirm || config.destructive) {
       return (
@@ -265,6 +271,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         variant={variant}
         onClick={run}
         disabled={!canExecute || isPending}
+        disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
       />
     );
@@ -273,7 +280,12 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
   const Info: ButtonActionComponent<R> = ({ resource }) => {
     const config = useActiveConfig(resource);
     const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
-    const { run, isPending, canExecute } = useUnifiedExecutor(config, resource, config.title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(
+      config,
+      resource,
+      config.title,
+      showToast,
+    );
 
     if (config.confirm || config.destructive) {
       return (
@@ -297,6 +309,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         icon={<config.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
       />
     );

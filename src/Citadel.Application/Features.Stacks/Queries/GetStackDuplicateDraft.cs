@@ -38,15 +38,6 @@ internal sealed class GetStackDuplicateDraftHandler(IUnitOfWork unitOfWork)
             return Result.Failure<StackDuplicateDraft>(new BadRequestError("Stack has no current release configuration to duplicate."));
 
         var warnings = new List<DuplicateDraftWarning>();
-        var resourceBindings = await unitOfWork.ResourceBindings.GetEntriesAsync(ResourceBindingScope.Stack, stack.Id, cancellationToken);
-        if (resourceBindings.Any())
-        {
-            warnings.Add(new DuplicateDraftWarning(
-                "RESOURCE_BINDINGS_NOT_COPIED",
-                "This stack has resource-scoped configuration bindings. Recreate them after saving the duplicate.",
-                "resourceBindings"));
-        }
-
         var sanitizedSpec = SanitizeSpec(release.Spec, warnings);
         if (HasExternalNetworkHint(sanitizedSpec))
         {

@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
@@ -26,6 +27,7 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
     private readonly List<HubConnection> connections = [];
     private Guid platformId;
     private string containerId = string.Empty;
+    private Guid swarmServiceId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -44,13 +46,23 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
             platform.Id,
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             ContainerStateStatus.Running);
+        var swarmService = new SwarmService(
+            "signalr-managed-service",
+            platform.Id,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Guid.CreateVersion7(), "nginx:latest")
+            });
 
         await unitOfWork.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await unitOfWork.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+        await unitOfWork.SwarmServices.AddAsync(swarmService, TestContext.Current.CancellationToken);
         await unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
         containerId = container.DockerContainerId[..12];
+        swarmServiceId = swarmService.Id;
     }
 
     protected async Task RunRepresentativePermissionMatrixScenarioAsync()
@@ -131,6 +143,41 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
         await AssertAuthorizationAllowedAsync(
             terminalUser,
             Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, "terminal-session"));
+    }
+
+    protected async Task RunSwarmServiceParentVisibilityScenarioAsync()
+    {
+        var serviceOnly = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.SwarmService, swarmServiceId, PermissionLevel.Read)
+            ]);
+        var platformOnly = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)
+            ]);
+        var visible = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.SwarmService, swarmServiceId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)
+            ]);
+        var globalViewer = await CreateAuthorizationSubjectAsync(directRoleId: ViewerRoleId);
+
+        await AssertAuthorizationDeniedAsync(
+            serviceOnly,
+            Constants.WellKnownSignalRGroups.SwarmServiceGroup(swarmServiceId));
+        await AssertAuthorizationDeniedAsync(
+            platformOnly,
+            Constants.WellKnownSignalRGroups.SwarmServiceGroup(swarmServiceId));
+        await AssertAuthorizationAllowedAsync(
+            visible,
+            Constants.WellKnownSignalRGroups.SwarmServiceGroup(swarmServiceId));
+        await AssertAuthorizationAllowedAsync(
+            globalViewer,
+            Constants.WellKnownSignalRGroups.SwarmServicesGroupForPlatform(platformId));
+        await AssertAuthorizationDeniedAsync(globalViewer, Constants.WellKnownSignalRGroups.SwarmServicesGroup);
     }
 
     protected async Task RunProtectedGroupDeliveryScenarioAsync()
@@ -383,6 +430,14 @@ public sealed class ApplicationHubAuthorizationTestsSpecificPermission(PostgresT
     [Fact]
     public Task JoinGroup_RequiresSpecificLogAndTerminalPermissions()
         => RunSpecificPermissionScenarioAsync();
+}
+
+public sealed class ApplicationHubAuthorizationTestsSwarmService(PostgresTestFixture fixture)
+    : ApplicationHubAuthorizationTestBase(fixture)
+{
+    [Fact]
+    public Task JoinGroup_RequiresManagedServiceAndParentPlatformVisibility()
+        => RunSwarmServiceParentVisibilityScenarioAsync();
 }
 
 public sealed class ApplicationHubAuthorizationTestsProtectedGroup(PostgresTestFixture fixture)

@@ -8,13 +8,13 @@ export const ServiceComponents: RegularResourceComponents<SwarmServiceListView> 
   header: {
     title: 'Services',
     subtitle: 'Swarm services and current replica state.',
-    showAdd: false,
+    showAdd: true,
     showSearch: true,
   },
   Content: ({ items, isLoading }) => <ServicesTable items={items} isLoading={isLoading} />,
   useData: (platformId) => {
-    const { items, isLoading } = useServicesGroup(platformId);
-    return { items, isLoading, capabilities: undefined };
+    const { items, capabilities, isLoading } = useServicesGroup(platformId);
+    return { items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

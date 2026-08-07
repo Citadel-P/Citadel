@@ -1,4 +1,5 @@
 import type { ActivityView } from '@/api/generated/api.types';
+import { formatActivityEvent } from '@/lib/utils';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { ActivitiesTable } from './table';
@@ -8,6 +9,10 @@ vi.mock('@/lib/use-profile-date-time', () => ({
 }));
 
 describe('ActivitiesTable', () => {
+  it('describes a Swarm task restart without exposing Docker force-update terminology', () => {
+    expect(formatActivityEvent('SwarmServiceForceUpdated')).toBe('Swarm Service Tasks Restarted');
+  });
+
   it('constrains a long activity summary without hiding its full value', () => {
     const summary =
       "Could not connect to repository. Check your URL and credentials. Error: fatal: unable to access 'http://host.docker.internal3222/admin01/test/': Could not resolve host: host.docker.internal3222 (Domain name not found)";

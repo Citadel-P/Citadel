@@ -19,6 +19,15 @@ public interface ISwarmConnector
     Task<Result<SwarmServiceResult>> InspectServiceAsync(
         InspectSwarmServiceCommand command,
         CancellationToken cancellationToken = default);
+    Task<Result<ManagedSwarmServiceMutationResult>> CreateServiceAsync(
+        CreateManagedSwarmServiceCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(
+        UpdateManagedSwarmServiceCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> DeleteServiceAsync(
+        DeleteManagedSwarmServiceCommand command,
+        CancellationToken cancellationToken = default);
     Task<Result<SwarmLogsResult>> GetServiceLogsAsync(
         GetSwarmServiceLogsCommand command,
         CancellationToken cancellationToken = default);

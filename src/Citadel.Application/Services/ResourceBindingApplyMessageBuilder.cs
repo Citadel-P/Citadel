@@ -49,6 +49,17 @@ internal static class ResourceBindingApplyMessageBuilder
             : $"Injected {FormatEntryGroups(entries)} into the deployment environment.";
     }
 
+    public static string BuildServiceEnvironmentMessage(ResolvedResourceBindings configuration)
+    {
+        var entries = configuration.Entries
+            .OrderBy(entry => entry.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        return entries.Length == 0
+            ? "No Citadel variables or secrets were referenced by this Service."
+            : $"Injected {FormatEntryGroups(entries)} into the Service environment.";
+    }
+
     private static string FormatEntryGroups(IReadOnlyCollection<ResolvedResourceBinding> entries)
     {
         var variables = entries

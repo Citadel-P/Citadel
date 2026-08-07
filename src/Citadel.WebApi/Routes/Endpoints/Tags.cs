@@ -68,6 +68,25 @@ public static class Tags
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
 
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetSwarmServiceTags(
+        IMediator mediator,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetSwarmServiceTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceSwarmServiceTags(
+        IMediator mediator,
+        Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceSwarmServiceTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
     public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetStackTags(
         IMediator mediator,
         [FromRoute][Description("Stack ID")] Guid stackId,

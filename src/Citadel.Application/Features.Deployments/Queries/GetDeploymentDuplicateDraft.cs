@@ -35,15 +35,6 @@ internal sealed class GetDeploymentDuplicateDraftHandler(IUnitOfWork unitOfWork)
             return Result.Failure<DeploymentDuplicateDraft>(new BadRequestError("Deployment has no configuration to duplicate."));
 
         var warnings = new List<DuplicateDraftWarning>();
-        var resourceBindings = await unitOfWork.ResourceBindings.GetEntriesAsync(ResourceBindingScope.Deployment, deployment.Id, cancellationToken);
-        if (resourceBindings.Any())
-        {
-            warnings.Add(new DuplicateDraftWarning(
-                "RESOURCE_BINDINGS_NOT_COPIED",
-                "This deployment has resource-scoped configuration bindings. Recreate them after saving the duplicate.",
-                "resourceBindings"));
-        }
-
         if (HasLikelyHostBindMount(deployment.Spec.Volumes))
         {
             warnings.Add(new DuplicateDraftWarning(

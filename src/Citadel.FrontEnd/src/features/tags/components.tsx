@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router';
 import { getTagTextColor } from './tag-colors';
 import { toast } from 'sonner';
 import { OverflowCountBadge } from '@/components/custom/common';
+import { KnownResourceName } from '@/api/types';
 
 const TAG_QUERY_KEY = 'tags';
 const normalizeTagName = (name: string) => name.trim().toLowerCase();
@@ -218,7 +219,8 @@ type EditableResourceType =
   | 'AutomationAction'
   | 'Build'
   | 'BuildAgentPool'
-  | 'BackupPolicy';
+  | 'BackupPolicy'
+  | 'SwarmService';
 
 const replaceTagEndpoint = {
   Deployment: 'replaceDeploymentTags',
@@ -230,7 +232,8 @@ const replaceTagEndpoint = {
   Build: 'replaceBuildTags',
   BuildAgentPool: 'replaceBuildAgentPoolTags',
   BackupPolicy: 'replaceBackupPolicyTags',
-} as const;
+  SwarmService: 'replaceSwarmServiceTags',
+} as const satisfies Record<EditableResourceType, KnownResourceName>;
 
 export const ResourceHeaderTagsEditor = ({
   resourceType,
@@ -353,7 +356,15 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
     case 'Registry':
     case 'AutomationAction':
     case 'Build':
+    case 'BuildAgentPool':
     case 'BackupPolicy':
+    case 'SwarmService':
       return { id: resourceId, data };
+    default:
+      return assertUnknownEditableResource(resourceType);
   }
+};
+
+const assertUnknownEditableResource = (resourceType: never): never => {
+  throw new Error(`Unsupported editable tag resource: ${resourceType}`);
 };

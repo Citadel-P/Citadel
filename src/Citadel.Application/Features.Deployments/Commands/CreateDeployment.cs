@@ -2,18 +2,21 @@ using Application.Features.Deployments.Notifications;
 using Application.Services.Builds;
 using Application.Services.SignalR;
 using Application.Services.Licensing;
+using Application.Features.ResourceBindings;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
+using Domain.Entities.ResourceBindings;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
+using Hosting.Common.Pipelines.Interfaces;
 using LightResults;
 using Mediator;
 
@@ -46,7 +49,8 @@ internal class CreateDeploymentHandler(
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
     IUserContextAccessor userContext,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateDeployment, Result<Deployment>>
+    ILicenseEntitlementService entitlementService,
+    IPermissionService permissionService) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
@@ -117,6 +121,23 @@ internal class CreateDeploymentHandler(
             return Result.Failure<Deployment>(duplicateSourceResult.Errors);
         }
 
+        IReadOnlyList<ResourceBinding> duplicateBindings = [];
+        if (duplicateSource is not null)
+        {
+            var bindingsResult = await ResourceBindingsFeatureHelpers.GetDuplicateEntriesAsync(
+                unitOfWork,
+                permissionService,
+                user,
+                ResourceType.Deployment,
+                ResourceBindingScope.Deployment,
+                duplicateSource.ResourceId,
+                cancellationToken);
+            if (bindingsResult.IsFailure(out var bindingError, out var entries))
+                return Result.Failure<Deployment>(bindingError);
+
+            duplicateBindings = entries ?? [];
+        }
+
         var deployment = new Deployment(
             name: command.Name,
             description: command.Description,
@@ -127,6 +148,13 @@ internal class CreateDeploymentHandler(
         var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken, command.TagIds, actorId);
         if (result == 0)
             return Result.Failure<Deployment>(new BadRequestError("One or more tags do not exist."));
+
+        await ResourceBindingsFeatureHelpers.CopyDuplicateEntriesAsync(
+            unitOfWork,
+            ResourceBindingScope.Deployment,
+            deployment.Id,
+            duplicateBindings,
+            cancellationToken);
 
         var eventType = duplicateSource is null
             ? ActivityEventType.DeploymentCreated
