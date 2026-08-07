@@ -196,6 +196,7 @@ public sealed class ActivityEvent : IAuditedEntity
                 => ActivityResourceType.BackupPolicy,
 
             ActivityEventType.SwarmServiceCreated
+            or ActivityEventType.SwarmServiceAdopted
             or ActivityEventType.SwarmServiceUpdated
             or ActivityEventType.SwarmServiceRenamed
             or ActivityEventType.SwarmServiceDeleted
@@ -378,6 +379,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.BackupPolicyArchived, BackupPolicyArchived) => true,
 
             (ActivityEventType.SwarmServiceCreated, SwarmServiceCreated) => true,
+            (ActivityEventType.SwarmServiceAdopted, SwarmServiceAdopted) => true,
             (ActivityEventType.SwarmServiceUpdated, SwarmServiceUpdated) => true,
             (ActivityEventType.SwarmServiceRenamed, SwarmServiceRenamed) => true,
             (ActivityEventType.SwarmServiceDeleted, SwarmServiceDeleted) => true,

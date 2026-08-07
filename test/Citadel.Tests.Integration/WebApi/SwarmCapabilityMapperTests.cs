@@ -35,7 +35,7 @@ public sealed class SwarmCapabilityMapperTests
     }
 
     [Fact]
-    public void ToSwarmCapabilities_ShouldNotAdvertiseUnimplementedMutations()
+    public void ToSwarmCapabilities_ShouldAdvertiseOnlyImplementedMutations()
     {
         var platform = CreatePlatform(CreateSwarmDescriptor("1.49"));
 
@@ -46,8 +46,8 @@ public sealed class SwarmCapabilityMapperTests
         Assert.False(capabilities.SupportsServiceStatus);
         Assert.False(capabilities.CanManageNodes);
         Assert.False(capabilities.CanManageNetworks);
-        Assert.False(capabilities.CanManageSecrets);
-        Assert.False(capabilities.CanManageConfigs);
+        Assert.True(capabilities.CanManageSecrets);
+        Assert.True(capabilities.CanManageConfigs);
         Assert.False(capabilities.SupportsDeploymentApply);
         Assert.False(capabilities.SupportsStackApply);
         Assert.False(capabilities.SupportsClusterVolumes);

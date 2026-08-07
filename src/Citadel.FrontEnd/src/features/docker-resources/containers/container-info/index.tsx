@@ -12,13 +12,27 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
-import { Unlink } from 'lucide-react';
 import { isUnmanagedContainer } from '@/lib/utils';
 import { SystemContainerBadge } from '../system-container-badge';
+import { useAppContext } from '@/lib/context/app-context';
+import { UnmanagedResourceIcon } from '@/components/custom/common';
 
 const groupedContainerInfoActions = Object.values(ContainerInfoActions).filter(
   (action) => action !== ContainerInfoActions.adopt && action !== ContainerInfoActions.importStack,
 );
+
+const ContainerInfoActionButtons = ({ resource }: { resource: ContainerDetailsView }) => {
+  const { currentPlatform } = useAppContext();
+  const managementAction = getContainerManagementAction(resource, currentPlatform?.type);
+
+  return (
+    <GenericActionBarButtons
+      resource={resource}
+      actions={groupedContainerInfoActions}
+      standaloneActions={managementAction ? [managementAction] : []}
+    />
+  );
+};
 
 export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDetailsView> = {
   Header: {
@@ -35,23 +49,9 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
       resource.isSystem ? (
         <SystemContainerBadge role={resource.systemRole} />
       ) : isUnmanagedContainer(resource) ? (
-        <span
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
-          title="Unmanaged container">
-          <Unlink className="h-3.5 w-3.5" />
-          <span className="sr-only">Unmanaged container</span>
-        </span>
+        <UnmanagedResourceIcon title={'Unmanaged Container'} />
       ) : null,
-    ActionButtons: ({ resource }) => {
-      const managementAction = getContainerManagementAction(resource);
-      return (
-        <GenericActionBarButtons
-          resource={resource}
-          actions={groupedContainerInfoActions}
-          standaloneActions={managementAction ? [managementAction] : []}
-        />
-      );
-    },
+    ActionButtons: ContainerInfoActionButtons,
   },
   SubHeader: ({ resource }) => {
     return (

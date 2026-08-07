@@ -11,7 +11,8 @@ internal sealed record CandidateApplicationOptions(
     int HttpTimeoutSeconds = 30,
     string? BootstrapAdminName = null,
     string? BootstrapAdminEmail = null,
-    string? BootstrapAdminPasswordFile = null)
+    string? BootstrapAdminPasswordFile = null,
+    string? DockerHost = null)
 {
     public static CandidateApplicationOptions FileBackedRecoveryAssets { get; } =
         new(JwtKey: null, SecretEncryptionKey: null);
@@ -111,6 +112,7 @@ internal sealed class CandidateApplicationProcess : IAsyncDisposable
         startInfo.Environment["Jwt__Key"] = options.JwtKey ?? string.Empty;
         startInfo.Environment["Secrets__EncryptionKey"] =
             options.SecretEncryptionKey ?? string.Empty;
+        SetOptionalEnvironment(startInfo, "DOCKER_HOST", options.DockerHost);
         SetOptionalEnvironment(
             startInfo,
             "BOOTSTRAP__ADMINNAME",

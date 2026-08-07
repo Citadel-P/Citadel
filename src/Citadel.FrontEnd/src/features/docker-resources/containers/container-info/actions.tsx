@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { containsSystemContainer, createContainerActions, isAdoptableContainer, isImportableStack } from '../actions';
-import { ResourceControlState } from '@/api/generated/api.types';
+import { PlatformType, ResourceControlState } from '@/api/generated/api.types';
 import type { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
 
 const useVariables = (resources: ContainerDetailsView | ContainerDetailsView[]) =>
@@ -24,9 +24,13 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
     requiredCapabilities: ['canInspect'],
     useHandler: ({ resources }) => {
       const navigate = useNavigate();
+      const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const canExecute =
-        !!selected && isAdoptableContainer(selected) && selected.controlState !== ResourceControlState.Processing;
+        currentPlatform?.type === PlatformType.Docker &&
+        !!selected &&
+        isAdoptableContainer(selected) &&
+        selected.controlState !== ResourceControlState.Processing;
 
       return {
         canExecute,
@@ -46,9 +50,13 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
     requiredCapabilities: ['canInspect'],
     useHandler: ({ resources }) => {
       const navigate = useNavigate();
+      const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const canExecute =
-        !!selected && isImportableStack(selected) && selected.controlState !== ResourceControlState.Processing;
+        currentPlatform?.type === PlatformType.Docker &&
+        !!selected &&
+        isImportableStack(selected) &&
+        selected.controlState !== ResourceControlState.Processing;
 
       return {
         canExecute,
@@ -90,7 +98,8 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
   })
   .build();
 
-export const getContainerManagementAction = (resource: ContainerDetailsView) => {
+export const getContainerManagementAction = (resource: ContainerDetailsView, platformType?: PlatformType) => {
+  if (platformType !== PlatformType.Docker) return undefined;
   if (isAdoptableContainer(resource)) return ContainerInfoActions.adopt;
   if (isImportableStack(resource)) return ContainerInfoActions.importStack;
   return undefined;

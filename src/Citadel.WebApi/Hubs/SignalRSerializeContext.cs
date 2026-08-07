@@ -192,6 +192,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DeploymentDegraded>]
 [GenerateShapeFor<SwarmServiceActivitySnapshot>]
 [GenerateShapeFor<SwarmServiceCreated>]
+[GenerateShapeFor<SwarmServiceAdopted>]
 [GenerateShapeFor<SwarmServiceDuplicated>]
 [GenerateShapeFor<SwarmServiceUpdated>]
 [GenerateShapeFor<SwarmServiceRenamed>]
@@ -358,6 +359,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.DeploymentApplied)] = typeof(DeploymentApplied),
         [nameof(ActivityEventType.DeploymentDegraded)] = typeof(DeploymentDegraded),
         [nameof(ActivityEventType.SwarmServiceCreated)] = typeof(SwarmServiceCreated),
+        [nameof(ActivityEventType.SwarmServiceAdopted)] = typeof(SwarmServiceAdopted),
         [nameof(ActivityEventType.SwarmServiceDuplicated)] = typeof(SwarmServiceDuplicated),
         [nameof(ActivityEventType.SwarmServiceUpdated)] = typeof(SwarmServiceUpdated),
         [nameof(ActivityEventType.SwarmServiceRenamed)] = typeof(SwarmServiceRenamed),

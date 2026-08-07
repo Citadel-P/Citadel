@@ -1893,12 +1893,36 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("inspectSwarmService");
+        platforms.MapGet("{platformId:guid}/swarm/services/{resourceId}/adoption-draft", SwarmServices.GetAdoptionDraft)
+            .WithSummary("Get a managed Service draft for an unmanaged Docker Swarm Service")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmServiceAdoptionDraft");
+        platforms.MapPost("{platformId:guid}/swarm/services/{resourceId}/adopt", SwarmServices.Adopt)
+            .WithSummary("Adopt an unmanaged Docker Swarm Service")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("adoptSwarmService");
         platforms.MapGet("{platformId:guid}/swarm/services/{resourceId}/logs", SwarmInventory.GetServiceLogs)
             .WithSummary("Get a bounded tail of Docker Swarm service logs")
             .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmServiceLogs");
+        platforms.MapPost("{platformId:guid}/swarm/services/{resourceId}/restart", SwarmInventory.RestartService)
+            .WithSummary("Restart every task of a Docker Swarm service")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("restartSwarmService");
+        platforms.MapDelete("{platformId:guid}/swarm/services", SwarmInventory.DeleteServices)
+            .WithSummary("Delete Docker Swarm services")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteSwarmInventoryServices");
         platforms.MapGet("{platformId:guid}/swarm/tasks", SwarmInventory.ListTasks)
             .WithSummary("List a bounded set of persisted Docker Swarm tasks")
             .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)

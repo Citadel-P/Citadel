@@ -475,6 +475,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainerAdoptionSourceView))]
 [JsonSerializable(typeof(ContainerAdoptionIssueView))]
 [JsonSerializable(typeof(AdoptContainerInput))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.SwarmServiceAdoptionDraftView))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.AdoptSwarmServiceInput))]
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
 [JsonSerializable(typeof(RegistryConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]

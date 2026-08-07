@@ -62,7 +62,7 @@ const getDefaultStyle = (value: string) => {
   if (['failed', 'failure', 'error', 'rejected', 'timedout', 'interrupted', 'offline'].includes(value)) {
     return styles.danger;
   }
-  if (['warning', 'degraded', 'queued'].includes(value)) return styles.warning;
+  if (['warning', 'degraded', 'paused', 'queued'].includes(value)) return styles.warning;
   if (['cancelled', 'canceled', 'disabled', 'unknown'].includes(value)) return styles.muted;
   return styles.info;
 };

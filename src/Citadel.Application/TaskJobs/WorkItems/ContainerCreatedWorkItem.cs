@@ -74,7 +74,7 @@ internal sealed class ContainerCreatedWorkItem(
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
 
-            if (!container.IsSystem && !container.HasCitadelOwnershipLabels)
+            if (!container.IsSystem && !container.HasCitadelOwnershipLabels && !eventInfo.Container.IsSwarmTask)
             {
                 await unmanagedContainerAlertWriter.WriteAsync(
                         new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),

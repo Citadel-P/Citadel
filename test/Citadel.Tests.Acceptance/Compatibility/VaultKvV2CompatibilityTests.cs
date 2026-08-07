@@ -29,16 +29,21 @@ public sealed class VaultKvV2CompatibilityTests(
         string? containerId = null;
         string? projectName = null;
         CandidateApplicationProcess? candidate = null;
+        StandaloneDockerDaemon? dockerDaemon = null;
 
         try
         {
             await using var vault =
                 await VaultInstance.StartAsync(cancellationToken);
+            dockerDaemon = await StandaloneDockerDaemon.StartAsync(
+                cancellationToken);
             candidate = await CandidateApplicationProcess.StartAsync(
                 connectionString,
                 candidateDirectory,
                 cancellationToken,
-                new CandidateApplicationOptions(HttpTimeoutSeconds: 120));
+                new CandidateApplicationOptions(
+                    HttpTimeoutSeconds: 120,
+                    DockerHost: dockerDaemon.DockerHost));
             await candidate.AuthenticateAsAdminAsync(cancellationToken);
 
             await AssertConnectionAsync(
@@ -157,6 +162,7 @@ public sealed class VaultKvV2CompatibilityTests(
                 stackId,
                 cancellationToken);
             await AssertContainerReceivedSecretAsync(
+                dockerDaemon,
                 containerId,
                 cancellationToken);
             await DeleteStackBindingAsync(
@@ -176,18 +182,25 @@ public sealed class VaultKvV2CompatibilityTests(
         }
         finally
         {
-            if (candidate is not null)
+            try
             {
-                await CleanupApiResourcesAsync(
-                    candidate.Client,
-                    providerId,
-                    secretId,
-                    platformId,
-                    stackId);
-                await candidate.DisposeAsync();
+                if (candidate is not null)
+                {
+                    await CleanupApiResourcesAsync(
+                        candidate.Client,
+                        providerId,
+                        secretId,
+                        platformId,
+                        stackId);
+                    await candidate.DisposeAsync();
+                }
+            }
+            finally
+            {
+                if (dockerDaemon is not null)
+                    await dockerDaemon.DisposeAsync();
             }
 
-            await CleanupDockerResourcesAsync(containerId, projectName);
             await postgres.DropDatabaseAsync(
                 connectionString,
                 CancellationToken.None);
@@ -539,11 +552,13 @@ public sealed class VaultKvV2CompatibilityTests(
     }
 
     private static async Task AssertContainerReceivedSecretAsync(
+        StandaloneDockerDaemon dockerDaemon,
         string containerId,
         CancellationToken cancellationToken)
     {
-        var environment = await RunDockerAsync(
+        var environment = await dockerDaemon.RunAsync(
             cancellationToken,
+            throwOnFailure: true,
             "inspect",
             "--format",
             "{{range .Config.Env}}{{println .}}{{end}}",
@@ -558,8 +573,9 @@ public sealed class VaultKvV2CompatibilityTests(
                     StringComparer.Ordinal),
             "The deployed container did not receive the resolved Vault secret.");
 
-        var logs = await RunDockerAsync(
+        var logs = await dockerDaemon.RunAsync(
             cancellationToken,
+            throwOnFailure: true,
             "logs",
             containerId);
         AssertDoesNotContainSecret(logs);
@@ -740,31 +756,6 @@ public sealed class VaultKvV2CompatibilityTests(
         }
     }
 
-    private static async Task CleanupDockerResourcesAsync(
-        string? containerId,
-        string? projectName)
-    {
-        if (containerId is not null)
-        {
-            await RunDockerAsync(
-                CancellationToken.None,
-                throwOnFailure: false,
-                "rm",
-                "--force",
-                containerId);
-        }
-
-        if (projectName is not null)
-        {
-            await RunDockerAsync(
-                CancellationToken.None,
-                throwOnFailure: false,
-                "network",
-                "rm",
-                $"{projectName}_default");
-        }
-    }
-
     private static async Task TryDeleteAsync(
         HttpClient client,
         string path,
@@ -790,49 +781,6 @@ public sealed class VaultKvV2CompatibilityTests(
                 or ObjectDisposedException)
         {
         }
-    }
-
-    private static async Task<string> RunDockerAsync(
-        CancellationToken cancellationToken,
-        params string[] arguments)
-        => await RunDockerAsync(
-            cancellationToken,
-            throwOnFailure: true,
-            arguments);
-
-    private static async Task<string> RunDockerAsync(
-        CancellationToken cancellationToken,
-        bool throwOnFailure,
-        params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo("docker")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start Docker.");
-        var outputTask = process.StandardOutput.ReadToEndAsync(
-            cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(
-            cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (throwOnFailure)
-        {
-            Assert.True(
-                process.ExitCode == 0,
-                $"docker {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {error}");
-        }
-
-        return string.Concat(output, error);
     }
 
     private static async Task DeleteDirectoryAsync(string path)

@@ -121,6 +121,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(BackupPolicyRenamed), nameof(ActivityEventType.BackupPolicyRenamed))]
 [JsonDerivedType(typeof(BackupPolicyArchived), nameof(ActivityEventType.BackupPolicyArchived))]
 [JsonDerivedType(typeof(SwarmServiceCreated), nameof(ActivityEventType.SwarmServiceCreated))]
+[JsonDerivedType(typeof(SwarmServiceAdopted), nameof(ActivityEventType.SwarmServiceAdopted))]
 [JsonDerivedType(typeof(SwarmServiceUpdated), nameof(ActivityEventType.SwarmServiceUpdated))]
 [JsonDerivedType(typeof(SwarmServiceRenamed), nameof(ActivityEventType.SwarmServiceRenamed))]
 [JsonDerivedType(typeof(SwarmServiceDeleted), nameof(ActivityEventType.SwarmServiceDeleted))]
@@ -150,6 +151,7 @@ public sealed record SwarmServiceActivitySnapshot(
     SwarmServiceSpec Spec);
 
 public sealed record SwarmServiceCreated(SwarmServiceActivitySnapshot Service) : ActivityEventInfo;
+public sealed record SwarmServiceAdopted(SwarmServiceActivitySnapshot Service, string DockerServiceId) : ActivityEventInfo;
 public sealed record SwarmServiceDuplicated(
     SwarmServiceActivitySnapshot Service,
     ActivitySourceResource Source) : ActivityEventInfo;

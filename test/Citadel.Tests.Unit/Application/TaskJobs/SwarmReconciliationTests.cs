@@ -636,6 +636,50 @@ public sealed class SwarmReconciliationTests
         Assert.Equal(ActivityStatus.Success, activity.Status);
     }
 
+    [Fact]
+    public async Task AdoptedServiceWithoutOwnershipLabels_ShouldRemainLinkedByDockerIdentity()
+    {
+        var platform = CreatePlatform();
+        var spec = new SwarmServiceSpec
+        {
+            Image = new SwarmExternalImage(Guid.CreateVersion7(), "nginx:latest"),
+            SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+            Replicas = 1
+        };
+        var service = SwarmService.AdoptExisting(
+            "adopted-service",
+            "Adopted from Docker Swarm Service service.",
+            platform.Id,
+            Constants.SystemId,
+            "service",
+            "docker-service",
+            4,
+            "old-runtime",
+            spec);
+        var live = CreateServiceProjection(5) with
+        {
+            PlatformId = platform.Id,
+            Ownership = SwarmServiceOwnership.Unmanaged,
+            SwarmServiceId = null,
+            Labels = new Dictionary<string, string>()
+        };
+        var activities = new List<ActivityEvent>();
+        var unitOfWork = CreateManagedUnitOfWork(platform, service, activities);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [live], [], [], [], []));
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var associated = Assert.Single(workItem.Current.Services);
+        Assert.Equal(service.Id, associated.SwarmServiceId);
+        Assert.Equal(SwarmServiceOwnership.CitadelService, associated.Ownership);
+        Assert.Same(associated, service.Projection);
+        Assert.Equal(SwarmServiceHealth.Healthy, service.Health);
+        Assert.Equal(SwarmServiceSynchronizationState.DesiredChangesPending, service.SynchronizationState);
+        Assert.Empty(activities);
+    }
+
     [Theory]
     [InlineData(SwarmServiceOperationState.PendingAcceptance)]
     [InlineData(SwarmServiceOperationState.OutcomeUnknown)]

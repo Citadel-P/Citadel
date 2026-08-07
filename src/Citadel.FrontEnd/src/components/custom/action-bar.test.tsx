@@ -66,6 +66,24 @@ describe('GenericActionBar', () => {
     expect(screen.getByRole('button', { name: 'Start' }).closest('[role="group"]')).not.toBeNull();
   });
 
+  it('uses a resource-aware selected count when provided', () => {
+    const Action = () => <button type="button">Action</button>;
+
+    render(
+      <LayoutContext.Provider value={layoutContext}>
+        <GenericActionBar
+          selectedItems={[{ id: 'stack' }]}
+          selectedCount={2}
+          allItems={[{ id: 'one' }, { id: 'two' }]}
+          resource="Container"
+          actions={[Action]}
+        />
+      </LayoutContext.Provider>,
+    );
+
+    expect(screen.getByText('2 of 2 container(s) selected.')).toBeVisible();
+  });
+
   it.each([
     [false, 'lg:left-[var(--sidebar-width)]'],
     [true, 'lg:left-[var(--sidebar-width-icon)]'],

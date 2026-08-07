@@ -35,6 +35,21 @@ internal sealed class SwarmServiceRepository(IDbConnection db, Func<IDbTransacti
         return value?.ToDomain();
     }
 
+    public async Task<SwarmService?> GetByDockerServiceIdAsync(
+        Guid platformId,
+        string dockerServiceId,
+        CancellationToken cancellationToken)
+    {
+        var sql = BaseSelect + " WHERE s.PlatformId = @PlatformId AND s.DockerServiceId = @DockerServiceId LIMIT 1";
+        var value = await db.QuerySingleOrDefaultAsync<SwarmServiceDto>(sql, new
+        {
+            PlatformId = platformId,
+            DockerServiceId = dockerServiceId,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.SwarmService)
+        }, transaction: tx());
+        return value?.ToDomain();
+    }
+
     public async Task<IReadOnlyList<SwarmService>> GetAllAsync(CancellationToken cancellationToken)
     {
         var sql = BaseSelect + " ORDER BY s.CreatedAt";

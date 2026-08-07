@@ -4,10 +4,13 @@ import {
   ContainerStateStatus,
   ContainerSystemRole,
   ContainerView,
+  PlatformType,
+  PlatformView,
   ResourceControlState,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
 import {
+  ContainerDropdownActions,
   ContainerGroupActions,
   type ContainerStackGroupResource,
   containsSystemContainer,
@@ -18,6 +21,31 @@ import {
 } from './actions';
 import { SystemContainerBadge } from './system-container-badge';
 import { isUnmanagedContainer } from '@/lib/utils';
+import { AppContext } from '@/lib/context/app-context';
+import type { ReactNode } from 'react';
+
+const ContainerActionsContext = ({
+  children,
+  platformType = PlatformType.Docker,
+}: {
+  children: ReactNode;
+  platformType?: PlatformType;
+}) => (
+  <AppContext.Provider
+    value={{
+      isLoading: false,
+      currentPlatform: { id: 'platform-id', type: platformType } as PlatformView,
+      platforms: [],
+      unresolvedAlertCount: 0,
+      liveAlertEvents: {},
+      receivedAlertEventIds: [],
+    }}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </AppContext.Provider>
+);
+
+const renderActions = (children: ReactNode, platformType = PlatformType.Docker) =>
+  render(<ContainerActionsContext platformType={platformType}>{children}</ContainerActionsContext>);
 
 type TestContainer = {
   name: string;
@@ -158,21 +186,23 @@ describe('unmanaged container import actions', () => {
   });
 
   it('shows the applicable action in the single-selection action bar', () => {
-    const { rerender } = render(
-      <MemoryRouter>
+    const { rerender } = renderActions(
+      <>
         <ContainerGroupActions.adopt resources={[standalone]} />
         <ContainerGroupActions.importStack resources={[standalone]} />
-      </MemoryRouter>,
+      </>,
     );
 
     expect(screen.getByRole('button', { name: 'Adopt Container' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Import Stack' })).not.toBeInTheDocument();
 
     rerender(
-      <MemoryRouter>
-        <ContainerGroupActions.adopt resources={[composeContainer]} />
-        <ContainerGroupActions.importStack resources={[composeContainer]} />
-      </MemoryRouter>,
+      <ContainerActionsContext>
+        <>
+          <ContainerGroupActions.adopt resources={[composeContainer]} />
+          <ContainerGroupActions.importStack resources={[composeContainer]} />
+        </>
+      </ContainerActionsContext>,
     );
 
     expect(screen.queryByRole('button', { name: 'Adopt Container' })).not.toBeInTheDocument();
@@ -183,18 +213,14 @@ describe('unmanaged container import actions', () => {
     expect(isImportableStackSelection([composeRoot])).toBe(true);
     expect(isImportableStackSelection([composeContainer, composeSibling])).toBe(true);
 
-    const { rerender } = render(
-      <MemoryRouter>
-        <ContainerGroupActions.importStack resources={[composeRoot]} />
-      </MemoryRouter>,
-    );
+    const { rerender } = renderActions(<ContainerGroupActions.importStack resources={[composeRoot]} />);
 
     expect(screen.getByRole('button', { name: 'Import Stack' })).toBeInTheDocument();
 
     rerender(
-      <MemoryRouter>
+      <ContainerActionsContext>
         <ContainerGroupActions.importStack resources={[composeContainer, composeSibling]} />
-      </MemoryRouter>,
+      </ContainerActionsContext>,
     );
 
     expect(screen.getByRole('button', { name: 'Import Stack' })).toBeInTheDocument();
@@ -205,12 +231,23 @@ describe('unmanaged container import actions', () => {
 
     expect(isImportableStackSelection([composeContainer, otherProject])).toBe(false);
 
-    render(
-      <MemoryRouter>
-        <ContainerGroupActions.importStack resources={[composeContainer, otherProject]} />
-      </MemoryRouter>,
+    renderActions(<ContainerGroupActions.importStack resources={[composeContainer, otherProject]} />);
+
+    expect(screen.queryByRole('button', { name: 'Import Stack' })).not.toBeInTheDocument();
+  });
+
+  it('hides standalone adoption and Compose import on a Swarm platform', () => {
+    renderActions(
+      <>
+        <ContainerGroupActions.adopt resources={[standalone]} />
+        <ContainerGroupActions.importStack resources={[composeContainer]} />
+        <ContainerDropdownActions.adopt resource={standalone} />
+        <ContainerDropdownActions.importStack resource={composeContainer} />
+      </>,
+      PlatformType.DockerSwarm,
     );
 
+    expect(screen.queryByRole('button', { name: 'Adopt Container' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Import Stack' })).not.toBeInTheDocument();
   });
 });

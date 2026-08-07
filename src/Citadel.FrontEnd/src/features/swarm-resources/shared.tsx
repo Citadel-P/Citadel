@@ -102,6 +102,8 @@ export const swarmOwnershipLabel = (value: SwarmServiceOwnership) => {
   return 'Unmanaged';
 };
 
+export const isServiceUpdatePaused = (updateState: string) => updateState.toLowerCase().includes('paused');
+
 export const getServiceAvailability = (
   service: Pick<SwarmServiceView, 'desiredTaskCount' | 'isStale' | 'runningTaskCount' | 'updateState'>,
 ) => {
@@ -111,10 +113,10 @@ export const getServiceAvailability = (
 
   if (service.isStale) return { status: StackReleaseStatus.Unknown, tooltip: `Last-known state: ${tasks}` };
   if (desired === 0) return { status: StackReleaseStatus.Stopped, tooltip: 'No active tasks requested' };
-  if (service.updateState.toLowerCase().includes('paused')) {
+  if (running >= desired) return { status: StackReleaseStatus.Healthy, tooltip: tasks };
+  if (isServiceUpdatePaused(service.updateState)) {
     return { status: StackReleaseStatus.Degraded, tooltip: `Service update paused; ${tasks}` };
   }
-  if (running >= desired) return { status: StackReleaseStatus.Healthy, tooltip: tasks };
   if (running > 0) return { status: StackReleaseStatus.Degraded, tooltip: tasks };
   return { status: StackReleaseStatus.Failed, tooltip: tasks };
 };

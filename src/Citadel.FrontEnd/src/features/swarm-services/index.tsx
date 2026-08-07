@@ -6,6 +6,7 @@ import { SwarmServicesTable } from './table';
 import { useSwarmServicesGroup } from './hooks/useSwarmServicesGroup';
 
 const EMPTY: never[] = [];
+const { duplicate, checkUpdates, ...groupedServiceActions } = SwarmServiceGroupActions;
 
 export const SwarmServiceComponents: RequiredComponents = {
   Icon: CitadelIcons.SwarmService,
@@ -20,7 +21,12 @@ export const SwarmServiceComponents: RequiredComponents = {
   Content: SwarmServicesTable,
   DropdownActions: SwarmServiceDropdownActions,
   GroupActions: ({ items }) => (
-    <ActionBar type="SwarmService" items={items} actions={Object.values(SwarmServiceGroupActions)} />
+    <ActionBar
+      type="SwarmService"
+      items={items}
+      actions={Object.values(groupedServiceActions)}
+      standaloneActions={[duplicate, checkUpdates]}
+    />
   ),
   useData: (): ResourceDataHookResult<any> => {
     const { services, capabilities, isLoading } = useSwarmServicesGroup();

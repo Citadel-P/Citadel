@@ -42,17 +42,24 @@ public sealed partial class PublicEndpointContractTests(PostgresTestFixture fixt
         foreach (var endpoint in endpoints)
         {
             using var request = CreateRequest(endpoint);
+            using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(
+                TestContext.Current.CancellationToken);
+            requestTimeout.CancelAfter(TimeSpan.FromSeconds(10));
             try
             {
                 using var response = await client.SendAsync(
                     request,
                     HttpCompletionOption.ResponseHeadersRead,
-                    TestContext.Current.CancellationToken);
+                    requestTimeout.Token);
                 if ((int)response.StatusCode >= 500)
                 {
                     failures.Add(
                         $"{endpoint.Method} {endpoint.Route} ({endpoint.Name}) returned {(int)response.StatusCode} {response.StatusCode}.");
                 }
+            }
+            catch (OperationCanceledException) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
+            {
+                failures.Add($"{endpoint.Method} {endpoint.Route} ({endpoint.Name}) did not return response headers within 10 seconds.");
             }
             catch (Exception exception)
             {
@@ -73,6 +80,8 @@ public sealed partial class PublicEndpointContractTests(PostgresTestFixture fixt
     [InlineData("DELETE", "/api/v1/platforms/")]
     [InlineData("POST", "/api/v1/platforms/")]
     [InlineData("PATCH", "/api/v1/platforms/ffffffff-ffff-ffff-ffff-ffffffffffff")]
+    [InlineData("DELETE", "/api/v1/platforms/ffffffff-ffff-ffff-ffff-ffffffffffff/swarm/configs")]
+    [InlineData("DELETE", "/api/v1/platforms/ffffffff-ffff-ffff-ffff-ffffffffffff/swarm/secrets")]
     public async Task MalformedInput_ShouldNotReturnServerError(string method, string path)
     {
         using var client = Factory.CreateClient(new WebApplicationFactoryClientOptions

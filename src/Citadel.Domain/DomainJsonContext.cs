@@ -201,6 +201,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(ActivityEventInfo))]
 [JsonSerializable(typeof(SwarmServiceActivitySnapshot))]
 [JsonSerializable(typeof(SwarmServiceCreated))]
+[JsonSerializable(typeof(SwarmServiceAdopted))]
 [JsonSerializable(typeof(SwarmServiceDuplicated))]
 [JsonSerializable(typeof(SwarmServiceUpdated))]
 [JsonSerializable(typeof(SwarmServiceRenamed))]

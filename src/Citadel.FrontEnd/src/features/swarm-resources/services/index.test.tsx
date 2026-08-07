@@ -12,7 +12,8 @@ import { RegularResourceView } from '@/pages/regular-resource';
 import { FakeHubConnection } from '@/test/fakes/signalr';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { LayoutContext } from '@/lib/context/layout-context';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router';
 import { ServiceComponents } from '.';
@@ -20,13 +21,32 @@ import { ServiceComponents } from '.';
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => null }));
 
 const platformId = '00000000-0000-0000-0000-000000000200';
+const layoutContext = {
+  theme: { mode: 'light' as const },
+  sidebarMinimized: false,
+  mobileMenuVisible: false,
+  toggleSidebar: vi.fn(),
+  setSidebarOpen: vi.fn(),
+  toggleMobileMenu: vi.fn(),
+  toggleThemeColor: vi.fn(),
+  setThemeMode: vi.fn(),
+};
 
 describe('ServiceComponents', () => {
   it('expands service tasks and keeps them synchronized through SignalR', async () => {
     const fake = new FakeHubConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
-        HttpResponse.json({ items: [service()] }),
+        HttpResponse.json({
+          items: [
+            service({
+              runningTaskCount: 2,
+              desiredTaskCount: 2,
+              updateState: 'Paused',
+              updateMessage: 'update paused after a transient task failure',
+            }),
+          ],
+        }),
       ),
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
         HttpResponse.json({ items: [task()] }),
@@ -40,13 +60,15 @@ describe('ServiceComponents', () => {
     );
 
     renderCitadel(
-      <Routes>
-        <Route
-          path="/platforms/:platformId/services"
-          element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
-        />
-        <Route path="/platforms/:platformId/services/add" element={<span>add-service-route</span>} />
-      </Routes>,
+      <LayoutContext.Provider value={layoutContext}>
+        <Routes>
+          <Route
+            path="/platforms/:platformId/services"
+            element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
+          />
+          <Route path="/platforms/:platformId/services/add" element={<span>Adopt Service form</span>} />
+        </Routes>
+      </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
         signalR: {
@@ -58,7 +80,8 @@ describe('ServiceComponents', () => {
 
     const serviceLink = await screen.findByRole('link', { name: 'web' });
     expect(serviceLink).toHaveAttribute('href', `/platforms/${platformId}/services/service-1`);
-    expect(serviceLink.parentElement?.querySelector('.bg-orange-500')).not.toBeNull();
+    expect(serviceLink.parentElement?.querySelector('.bg-green-500')).not.toBeNull();
+    expect(screen.getByText('Paused')).toHaveClass('text-orange-500');
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
 
     await act(async () => screen.getByRole('button', { name: 'Expand service web' }).click());
@@ -84,8 +107,19 @@ describe('ServiceComponents', () => {
     expect(await screen.findByRole('link', { name: 'web.2' })).toBeVisible();
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Service' }));
-    expect(await screen.findByText('add-service-route')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add Service' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Unmanaged Service')).toBeVisible();
+
+    await act(async () => screen.getByRole('checkbox', { name: 'Select Service web' }).click());
+    expect(screen.getByRole('button', { name: 'View' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Restart Service' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await act(async () => screen.getByRole('button', { name: 'Delete' }).click());
+    const confirmation = screen.getByRole('dialog');
+    expect(within(confirmation).getByRole('listitem')).toHaveTextContent('web');
+    await act(async () => within(confirmation).getByRole('button', { name: 'Close' }).click());
+    await act(async () => screen.getByRole('button', { name: 'Adopt Service' }).click());
+    expect(await screen.findByText('Adopt Service form')).toBeVisible();
   });
 
   it('shows a managed Service before its first deployment', async () => {
@@ -94,9 +128,7 @@ describe('ServiceComponents', () => {
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
         HttpResponse.json({ items: [] }),
       ),
-      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
-        HttpResponse.json({ items: [] }),
-      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
       http.get('http://localhost/api/v1/swarmServices', () =>
         HttpResponse.json({
           swarmServices: [managedService()],
@@ -106,12 +138,14 @@ describe('ServiceComponents', () => {
     );
 
     renderCitadel(
-      <Routes>
-        <Route
-          path="/platforms/:platformId/services"
-          element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
-        />
-      </Routes>,
+      <LayoutContext.Provider value={layoutContext}>
+        <Routes>
+          <Route
+            path="/platforms/:platformId/services"
+            element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
+          />
+        </Routes>
+      </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
         signalR: {
@@ -123,13 +157,63 @@ describe('ServiceComponents', () => {
 
     expect(await screen.findByRole('link', { name: 'draft-web' })).toHaveAttribute(
       'href',
-      `/platforms/${platformId}/services/edit/managed-service-1`,
+      '/swarm-services/edit/managed-service-1',
     );
     expect(screen.getByText('Citadel Service')).toBeVisible();
+    expect(screen.queryByLabelText('Unmanaged Service')).not.toBeInTheDocument();
+  });
+
+  it('uses the persisted Docker Service link before ownership labels are applied', async () => {
+    const fake = new FakeHubConnection();
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
+        HttpResponse.json({ items: [service()] }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
+      http.get('http://localhost/api/v1/swarmServices', () =>
+        HttpResponse.json({
+          swarmServices: [managedService({ dockerServiceId: 'service-1' })],
+          capabilities: { canRead: true, canWrite: true, canExecute: true },
+        }),
+      ),
+    );
+
+    renderCitadel(
+      <LayoutContext.Provider value={layoutContext}>
+        <Routes>
+          <Route
+            path="/platforms/:platformId/services"
+            element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
+          />
+        </Routes>
+      </LayoutContext.Provider>,
+      {
+        route: `/platforms/${platformId}/services`,
+        signalR: {
+          connectionFactory: () => fake.asHubConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+
+    expect(await screen.findByRole('link', { name: 'web' })).toHaveAttribute(
+      'href',
+      `/platforms/${platformId}/services/service-1`,
+    );
+    expect(screen.getByText('Citadel Service')).toBeVisible();
+    expect(screen.queryByLabelText('Unmanaged Service')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adopt Service' })).not.toBeInTheDocument();
+
+    await act(async () => screen.getByRole('checkbox', { name: 'Select Service web' }).click());
+
+    expect(screen.getByRole('button', { name: 'View' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Restart Service' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Adopt Service' })).toBeDisabled();
   });
 });
 
-const managedService = (): ManagedSwarmServiceView => ({
+const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): ManagedSwarmServiceView => ({
   id: 'managed-service-1',
   platformId,
   name: 'draft-web',
@@ -168,6 +252,7 @@ const managedService = (): ManagedSwarmServiceView => ({
   updateState: null,
   currentOperation: null,
   tags: [],
+  ...overrides,
 });
 
 const service = (overrides: Partial<SwarmServiceView> = {}): SwarmServiceView => ({

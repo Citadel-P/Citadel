@@ -598,7 +598,8 @@ internal static class ContainerMappers
             StackId: ParseStackId(container.StackId),
             IsSystem: container.IsSystem,
             SystemRole: MapSystemRole(container.IsSystem, container.SystemRole),
-            HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels
+            HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            IsSwarmTask: container.IsSwarmTask
         );
 
     internal static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -743,7 +744,8 @@ internal static class ContainerMappers
             StackId: container?.StackId,
             IsSystem: container?.IsSystem ?? false,
             SystemRole: MapSystemRole(container?.IsSystem ?? false, container?.SystemRole),
-            HasCitadelOwnershipLabels: container?.HasCitadelOwnershipLabels ?? false
+            HasCitadelOwnershipLabels: container?.HasCitadelOwnershipLabels ?? false,
+            IsSwarmTask: container?.IsSwarmTask ?? false
         );
 
     private static ContainerSystemRole? MapSystemRole(bool isSystem, string? role)

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import {
+  AdoptSwarmServiceInput,
   CreateSwarmServiceInput,
   LicenseCapability,
   LookupResourceType,
@@ -45,6 +46,8 @@ import {
   resourceProfiles,
   type ResourceProfile,
 } from '@/components/custom/resource-profile-selector';
+import { ActionWithDialog } from '@/components/custom/action-with-dialog';
+import { PackagePlus } from 'lucide-react';
 
 type FormValue = CreateSwarmServiceInput & { rowVersion?: number | string };
 
@@ -144,8 +147,14 @@ export const SwarmServiceForm = ({
   const { id, platformId } = useParams();
   const [searchParams] = useSearchParams();
   const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const adoptFrom = mode === 'add' ? searchParams.get('adoptFrom') : null;
+  const requestedPlatformId = platformId ?? searchParams.get('platformId') ?? '';
   const duplicateDraftLoadedRef = useRef<string | null>(null);
+  const adoptionDraftLoadedRef = useRef<string | null>(null);
+  const adoptionConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const [adoptionConfirmationOpen, setAdoptionConfirmationOpen] = useState(false);
   const create = useMutate('createSwarmService');
+  const adopt = useMutate('adoptSwarmService');
   const updateService = useMutate('updateSwarmService');
   const [update, setUpdate] = useState<Partial<FormValue>>({});
   const platformsQuery = useRead('listPlatforms');
@@ -162,6 +171,11 @@ export const SwarmServiceForm = ({
     'getSwarmServiceDuplicateDraft',
     { id: duplicateFrom ?? '' },
     { enabled: mode === 'add' && !!duplicateFrom },
+  );
+  const { data: adoptionDraftData, isFetching: isAdoptionDraftLoading } = useRead(
+    'getSwarmServiceAdoptionDraft',
+    { platformId: requestedPlatformId, resourceId: adoptFrom ?? '' },
+    { enabled: mode === 'add' && !!requestedPlatformId && !!adoptFrom },
   );
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
@@ -187,9 +201,10 @@ export const SwarmServiceForm = ({
     [registriesQuery.data?.data.registries],
   );
   const builds = useMemo(() => buildsQuery.data?.data.projects ?? [], [buildsQuery.data?.data.projects]);
-  const requestedPlatformId = platformId ?? searchParams.get('platformId') ?? '';
   const duplicateDraft = duplicateDraftData?.data;
+  const adoptionDraft = adoptionDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const adoptionIssues = adoptionDraft?.issues ?? [];
   const original = useMemo<FormValue>(
     () => ({
       name: resource?.name ?? '',
@@ -212,6 +227,28 @@ export const SwarmServiceForm = ({
     duplicateDraftLoadedRef.current = duplicateFrom;
     setUpdate(duplicateDraft.draft as Partial<FormValue>);
   }, [duplicateFrom, duplicateDraft?.draft]);
+
+  useEffect(() => {
+    if (!adoptFrom || !adoptionDraft?.draft || adoptionDraftLoadedRef.current === adoptFrom) return;
+
+    adoptionDraftLoadedRef.current = adoptFrom;
+    setUpdate(adoptionDraft.draft as Partial<FormValue>);
+  }, [adoptFrom, adoptionDraft?.draft]);
+
+  const resolveAdoptionConfirmation = useCallback((confirmed: boolean) => {
+    const resolver = adoptionConfirmationResolver.current;
+    adoptionConfirmationResolver.current = null;
+    setAdoptionConfirmationOpen(false);
+    resolver?.(confirmed);
+  }, []);
+  const confirmAdoption = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        adoptionConfirmationResolver.current = resolve;
+        setAdoptionConfirmationOpen(true);
+      }),
+    [],
+  );
 
   const currentSpec = { ...original.spec, ...(update.spec ?? {}) } as SwarmServiceSpec;
   const currentPlatformId = String(update.platformId ?? original.platformId ?? '');
@@ -257,7 +294,16 @@ export const SwarmServiceForm = ({
     mode,
     basePath: currentPlatformId ? `platforms/${currentPlatformId}/services` : 'swarm-services',
     entityName: 'Swarm Service',
-    onCreate: (payload) => create.mutateAsync({ data: toCreateInput(payload) }),
+    onCreate: (payload) => {
+      if (adoptFrom && adoptionDraft) {
+        return adopt.mutateAsync({
+          platformId: currentPlatformId,
+          resourceId: adoptFrom,
+          data: toAdoptInput(payload, adoptionDraft.previewFingerprint),
+        });
+      }
+      return create.mutateAsync({ data: toCreateInput(payload) });
+    },
     onUpdate: (payload) =>
       updateService.mutateAsync({
         id: id!,
@@ -318,7 +364,7 @@ export const SwarmServiceForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: mode === 'edit',
+            disabled: mode === 'edit' || !!adoptFrom,
             description:
               mode === 'edit'
                 ? 'The Swarm platform cannot be changed after this Service is created.'
@@ -400,6 +446,7 @@ export const SwarmServiceForm = ({
                 key: 'spec.image.$type',
                 label: 'Image Source',
                 required: true,
+                disabled: !!adoptFrom,
                 description: 'Select where Citadel obtains the Service image.',
                 render: (value, set) => (
                   <ItemSelector
@@ -432,13 +479,15 @@ export const SwarmServiceForm = ({
                           label: 'Registry',
                           required: true,
                           description: 'Select the Registry used to pull this image.',
-                          validate: (value) => (value ? null : 'Registry is required.'),
+                          validate: (value) =>
+                            registries.some((registry) => registry.id === value) ? null : 'Registry is required.',
                           render: (value, set) => (
                             <ResourceSelectorField
                               sourceType={LookupResourceType.SwarmService}
                               targetType={LookupResourceType.Registry}
                               selected={value}
                               items={registries}
+                              className='w-100'
                               onSelect={(selected) =>
                                 set((previous) => ({
                                   spec: {
@@ -642,6 +691,7 @@ export const SwarmServiceForm = ({
             key: 'spec.updateBehavior',
             label: 'Auto Update',
             description: 'Define how Citadel handles a new image digest.',
+            disabled: !!adoptFrom,
             render: (value, set) => (
               <div className="flex flex-col gap-2">
                 <ItemSelector
@@ -1182,6 +1232,7 @@ export const SwarmServiceForm = ({
     }),
     [
       builds,
+      adoptFrom,
       automatedOperationsEnabled,
       configurationNames,
       configOptions,
@@ -1208,7 +1259,11 @@ export const SwarmServiceForm = ({
     ],
   );
 
-  const formDraftKey = duplicateFrom ? `swarm-service:duplicate:${duplicateFrom}` : `SwarmService:${id ?? 'new'}`;
+  const formDraftKey = adoptFrom
+    ? `swarm-service:adopt:${adoptFrom}`
+    : duplicateFrom
+      ? `swarm-service:duplicate:${duplicateFrom}`
+      : `SwarmService:${id ?? 'new'}`;
 
   return (
     <div className="flex flex-col gap-3">
@@ -1222,6 +1277,17 @@ export const SwarmServiceForm = ({
           {warning.message}
         </AlertMessage>
       ))}
+      {adoptFrom && (
+        <AlertMessage type="info" title={isAdoptionDraftLoading ? 'Inspecting Service' : 'Adopt Service'}>
+          Citadel will not change Docker now. Review the imported configuration and select the Registry used by the
+          current image.
+        </AlertMessage>
+      )}
+      {adoptionIssues.map((issue) => (
+        <AlertMessage key={issue.code} type="warning" title="Review required">
+          {issue.message}
+        </AlertMessage>
+      ))}
       <FormShell
         schema={schema}
         original={original}
@@ -1231,8 +1297,22 @@ export const SwarmServiceForm = ({
         pending={isPending}
         disabled={disabled}
         mode={mode}
+        saveDisabled={!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft)}
+        saveLabel={adoptFrom ? 'Adopt Service' : 'Save'}
+        confirmSave={adoptFrom ? confirmAdoption : undefined}
         draftKey={formDraftKey}
         draftVersion={resource?.rowVersion}
+      />
+      <ActionWithDialog
+        renderTrigger={false}
+        open={adoptionConfirmationOpen}
+        onOpenChange={(open) => !open && resolveAdoptionConfirmation(false)}
+        name={adoptionDraft?.source.name ?? ''}
+        title="Adopt"
+        icon={<PackagePlus className="h-4 w-4" />}
+        disabled={!adoptionDraft}
+        onClick={() => resolveAdoptionConfirmation(true)}
+        description="Citadel will manage this existing Docker Swarm Service without changing it now. Future Apply operations will update the same Service from the reviewed configuration."
       />
     </div>
   );
@@ -1309,6 +1389,14 @@ const toCreateInput = (value: FormValue): CreateSwarmServiceInput => ({
   spec: prepareSwarmServiceSpecForWrite(value.spec),
   tagIds: value.tagIds,
   duplicateSource: value.duplicateSource,
+});
+
+const toAdoptInput = (value: FormValue, previewFingerprint: string): AdoptSwarmServiceInput => ({
+  name: value.name.trim(),
+  description: value.description?.trim() || null,
+  spec: prepareSwarmServiceSpecForWrite(value.spec),
+  previewFingerprint,
+  tagIds: value.tagIds,
 });
 
 export const prepareSwarmServiceSpecForWrite = (spec: SwarmServiceSpec): SwarmServiceSpec => {

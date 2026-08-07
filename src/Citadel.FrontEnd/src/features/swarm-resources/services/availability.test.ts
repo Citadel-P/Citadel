@@ -11,9 +11,15 @@ describe('getServiceAvailability', () => {
     expect(getServiceAvailability(service(counts)).status).toBe(expected);
   });
 
-  it('does not report a paused update as healthy', () => {
+  it('reports current availability independently from a previous paused update', () => {
     expect(
       getServiceAvailability(service({ runningTaskCount: 2, desiredTaskCount: 2, updateState: 'Paused' })).status,
+    ).toBe(StackReleaseStatus.Healthy);
+  });
+
+  it('keeps a paused update degraded while replicas are unavailable', () => {
+    expect(
+      getServiceAvailability(service({ runningTaskCount: 1, desiredTaskCount: 2, updateState: 'Paused' })).status,
     ).toBe(StackReleaseStatus.Degraded);
   });
 

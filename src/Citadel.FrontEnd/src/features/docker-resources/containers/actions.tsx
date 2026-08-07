@@ -3,6 +3,7 @@ import {
   type ContainerView,
   type ContainerDataView,
   ContainerStateStatus,
+  PlatformType,
   ResourceControlState,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
@@ -157,9 +158,7 @@ export const isImportableStack = (resource: ContainerActionResource | ContainerD
     !!resource.stack &&
     !resource.stackId &&
     containers.length > 0 &&
-    containers.every(
-      (container) => !container.isSystem && !container.deploymentId && !container.stackId,
-    )
+    containers.every((container) => !container.isSystem && !container.deploymentId && !container.stackId)
   );
 };
 
@@ -219,8 +218,13 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
       requiredCapabilities: ['canInspect'],
       useHandler: ({ resources }) => {
         const navigate = useNavigate();
+        const { currentPlatform } = useAppContext();
         const selected = Array.isArray(resources) ? resources[0] : resources;
-        const canExecute = !!selected && isAdoptableContainer(selected) && !isProcessing(selected);
+        const canExecute =
+          currentPlatform?.type === PlatformType.Docker &&
+          !!selected &&
+          isAdoptableContainer(selected) &&
+          !isProcessing(selected);
 
         return {
           canExecute,
@@ -241,6 +245,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
       requiredCapabilities: ['canInspect'],
       useHandler: ({ resources }) => {
         const navigate = useNavigate();
+        const { currentPlatform } = useAppContext();
         const selection = Array.isArray(resources) ? resources : [resources];
         const selected = selection[0];
         const projectName = selected?.stack;
@@ -248,6 +253,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
           isContainerStackGroup(resource) ? resource.containers : [resource],
         );
         const canExecute =
+          currentPlatform?.type === PlatformType.Docker &&
           !!selected &&
           isImportableStackSelection(selection) &&
           !isProcessing(selected) &&
@@ -329,16 +335,32 @@ const ImportStackAction = baseContainerDropdownActions.importStack;
 const AdoptGroupAction = baseContainerGroupActions.adopt;
 const ImportStackGroupAction = baseContainerGroupActions.importStack;
 
+const useStandaloneContainerManagement = () => useAppContext().currentPlatform?.type === PlatformType.Docker;
+
+const ContainerAdoptDropdownAction: typeof AdoptAction = (props) =>
+  useStandaloneContainerManagement() && isAdoptableContainer(props.resource) ? <AdoptAction {...props} /> : null;
+
+const ContainerImportStackDropdownAction: typeof ImportStackAction = (props) =>
+  useStandaloneContainerManagement() && isImportableStack(props.resource) ? <ImportStackAction {...props} /> : null;
+
+const ContainerAdoptGroupAction: typeof AdoptGroupAction = (props) =>
+  useStandaloneContainerManagement() && props.resources.length === 1 && isAdoptableContainer(props.resources[0]) ? (
+    <AdoptGroupAction {...props} />
+  ) : null;
+
+const ContainerImportStackGroupAction: typeof ImportStackGroupAction = (props) =>
+  useStandaloneContainerManagement() && isImportableStackSelection(props.resources) ? (
+    <ImportStackGroupAction {...props} />
+  ) : null;
+
 export const ContainerDropdownActions = {
   ...baseContainerDropdownActions,
-  adopt: (props) => (isAdoptableContainer(props.resource) ? <AdoptAction {...props} /> : null),
-  importStack: (props) => (isImportableStack(props.resource) ? <ImportStackAction {...props} /> : null),
+  adopt: ContainerAdoptDropdownAction,
+  importStack: ContainerImportStackDropdownAction,
 } satisfies typeof baseContainerDropdownActions;
 
 export const ContainerGroupActions = {
   ...baseContainerGroupActions,
-  adopt: (props) =>
-    props.resources.length === 1 && isAdoptableContainer(props.resources[0]) ? <AdoptGroupAction {...props} /> : null,
-  importStack: (props) =>
-    isImportableStackSelection(props.resources) ? <ImportStackGroupAction {...props} /> : null,
+  adopt: ContainerAdoptGroupAction,
+  importStack: ContainerImportStackGroupAction,
 } satisfies typeof baseContainerGroupActions;

@@ -80,6 +80,49 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
         };
       }
 
+      if (resource === 'getSwarmServiceAdoptionDraft') {
+        return {
+          data: {
+            data: {
+              source: {
+                dockerServiceId: 'service-1',
+                name: 'external-web',
+                platformId,
+                platformName: 'Production Swarm',
+              },
+              draft: {
+                name: 'external-web',
+                platformId,
+                description: 'Adopted from Docker Swarm Service external-web.',
+                spec: {
+                  image: {
+                    $type: 'External',
+                    registryId: '00000000-0000-0000-0000-000000000000',
+                    imageTag: 'nginx:1.27',
+                  },
+                  updateBehavior: 'Disabled',
+                  schedulingMode: 'Replicated',
+                  replicas: 2,
+                  command: [],
+                  arguments: [],
+                  environment: [],
+                  ports: [],
+                  networkIds: [],
+                  mounts: [],
+                  secrets: [],
+                  configs: [],
+                  placementConstraints: [],
+                },
+                tagIds: [],
+              },
+              issues: [{ code: 'unsupported-1', message: 'Custom Service labels are not represented.' }],
+              previewFingerprint: 'a'.repeat(64),
+            },
+          },
+          isFetching: false,
+        };
+      }
+
       if (resource === 'lookup') {
         return { data: { data: [{ id: 'binding-1', name: 'LOG_LEVEL' }] }, isLoading: false };
       }
@@ -288,5 +331,32 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByRole('combobox', { name: 'Registry' })).toHaveTextContent('Docker Hub');
     expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('redis');
     expect(screen.getByText(/No Service has been created yet/)).toBeVisible();
+  });
+
+  it('loads an unmanaged Service adoption draft for review', async () => {
+    const { user } = renderCitadel(
+      <Routes>
+        <Route path="/platforms/:platformId/services/add" element={<SwarmServiceForm mode="add" />} />
+      </Routes>,
+      { route: `/platforms/${platformId}/services/add?adoptFrom=service-1` },
+    );
+
+    expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('external-web');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue(
+      'Adopted from Docker Swarm Service external-web.',
+    );
+    expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('nginx:1.27');
+    expect(screen.getByRole('combobox', { name: 'Platform' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Image Source' })).toBeDisabled();
+    expect(screen.getByText('Custom Service labels are not represented.')).toBeVisible();
+    const adoptButtons = screen.getAllByRole('button', { name: 'Adopt Service' });
+    expect(adoptButtons).not.toHaveLength(0);
+    expect(adoptButtons.every((button) => button.hasAttribute('disabled'))).toBe(true);
+
+    await user.click(screen.getByRole('combobox', { name: 'Registry' }));
+    await user.click(screen.getByText('Docker Hub'));
+
+    expect(screen.getAllByRole('button', { name: 'Adopt Service' }).every((button) => !button.hasAttribute('disabled')))
+      .toBe(true);
   });
 });

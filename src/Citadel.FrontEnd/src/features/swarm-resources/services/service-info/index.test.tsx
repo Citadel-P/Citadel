@@ -19,7 +19,12 @@ describe('ServiceInfoComponents', () => {
     const fake = new FakeHubConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services/service-1`, () =>
-        HttpResponse.json(service()),
+        HttpResponse.json(
+          service({
+            updateState: 'Paused',
+            updateMessage: 'update paused after a transient task failure',
+          }),
+        ),
       ),
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
         HttpResponse.json({
@@ -38,6 +43,12 @@ describe('ServiceInfoComponents', () => {
             canOpenTerminal: false,
             canPull: false,
           },
+        }),
+      ),
+      http.get('http://localhost/api/v1/swarmServices', () =>
+        HttpResponse.json({
+          swarmServices: [],
+          capabilities: { canRead: true, canWrite: true, canExecute: false },
         }),
       ),
     );
@@ -63,6 +74,8 @@ describe('ServiceInfoComponents', () => {
     expect(screen.getByText('1/1')).toBeVisible();
     expect(screen.getByText('80/tcp')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    expect(screen.getByText('Service update paused')).toBeVisible();
+    expect(screen.getByText('update paused after a transient task failure')).toBeVisible();
     expect(screen.queryByRole('link', { name: 'other.1' })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Service' })).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Node' })).toBeVisible();
@@ -70,10 +83,15 @@ describe('ServiceInfoComponents', () => {
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeDisabled();
     expect(screen.getByRole('tab', { name: 'Inspect' })).toBeDisabled();
     expect(screen.queryByRole('tab', { name: 'Stats' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adopt Service' })).toBeVisible();
+    const actionGroup = screen.getByRole('group');
+    expect(actionGroup).toContainElement(screen.getByRole('button', { name: 'Restart Service' }));
+    expect(actionGroup).toContainElement(screen.getByRole('button', { name: 'Delete' }));
   });
 });
 
-const service = () => ({
+const service = (overrides: Record<string, unknown> = {}) => ({
   id: 'service-1',
   versionIndex: 1,
   name: 'web',
@@ -95,6 +113,7 @@ const service = () => ({
   updatedAt: '2026-08-04T12:00:00Z',
   observedAt: '2026-08-04T12:00:00Z',
   isStale: false,
+  ...overrides,
 });
 
 const task = (overrides: Record<string, unknown> = {}) => ({

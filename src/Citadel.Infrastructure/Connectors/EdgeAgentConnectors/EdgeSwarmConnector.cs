@@ -65,6 +65,12 @@ internal sealed class EdgeSwarmConnector(IEdgeAgentCommandRouter commandRouter) 
         SendServiceMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceCreate, SwarmServiceTransportMappers.Map(command), command.OperationId, cancellationToken);
     public Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(UpdateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         SendServiceMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceUpdate, SwarmServiceTransportMappers.Map(command), command.OperationId, cancellationToken);
+    public Task<Result> RestartServiceAsync(RestartSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceRestart,
+            new RestartSwarmServiceRequest { ServiceId = command.ServiceId }, cancellationToken);
+    public Task<Result> DeleteInventoryServiceAsync(DeleteSwarmInventoryServiceCommand command, CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceDelete,
+            new DeleteManagedSwarmServiceRequest { ServiceId = command.ServiceId }, cancellationToken);
     public Task<Result> DeleteServiceAsync(DeleteManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceDelete, SwarmServiceTransportMappers.Map(command), cancellationToken, command.OperationId);
     public Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default) =>

@@ -25,6 +25,12 @@ public interface ISwarmConnector
     Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(
         UpdateManagedSwarmServiceCommand command,
         CancellationToken cancellationToken = default);
+    Task<Result> RestartServiceAsync(
+        RestartSwarmServiceCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result> DeleteInventoryServiceAsync(
+        DeleteSwarmInventoryServiceCommand command,
+        CancellationToken cancellationToken = default);
     Task<Result> DeleteServiceAsync(
         DeleteManagedSwarmServiceCommand command,
         CancellationToken cancellationToken = default);

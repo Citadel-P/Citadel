@@ -21,8 +21,8 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
-import { ChevronDown, ChevronRight, Unlink } from 'lucide-react';
+import { CPUCell, MemoryUsageCell, UnmanagedResourceIcon } from '@/components/custom/common';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { ContainerActionResource, ContainerStackGroupResource, isContainerStackGroup } from './actions';
 import { useAppContext } from '@/lib/context/app-context';
 import { SystemContainerBadge } from './system-container-badge';
@@ -224,14 +224,7 @@ const ContainerNameCell = ({
         {row.isSystem ? (
           <SystemContainerBadge stack />
         ) : (
-          !row.stackId && (
-            <span
-              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
-              title="Unmanaged stack">
-              <Unlink className="h-3 w-3" />
-              <span className="sr-only">Unmanaged stack</span>
-            </span>
-          )
+          !row.stackId && <UnmanagedResourceIcon title={'Unmanaged stack'} />
         )}
       </div>
     );
@@ -250,14 +243,7 @@ const ContainerNameCell = ({
       {row.isSystem ? (
         <SystemContainerBadge role={row.systemRole} />
       ) : (
-        isUnmanagedContainer(row) && (
-          <span
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
-            title="Unmanaged container">
-            <Unlink className="h-3 w-3" />
-            <span className="sr-only">Unmanaged container</span>
-          </span>
-        )
+        isUnmanagedContainer(row) && <UnmanagedResourceIcon title={'Unmanaged Container'} />
       )}
     </div>
   );

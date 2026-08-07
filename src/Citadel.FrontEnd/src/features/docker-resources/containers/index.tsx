@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import { isUnmanagedContainer } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { countSelectedContainers } from './selection';
 
 const EMPTY_CONTAINERS: never[] = [];
 const standaloneContainerActions = [ContainerGroupActions.adopt, ContainerGroupActions.importStack];
@@ -88,6 +89,7 @@ export const ContainerComponents: RequiredComponents = {
       items={items}
       actions={groupedContainerActions}
       standaloneActions={standaloneContainerActions}
+      getSelectedCount={countSelectedContainers}
     />
   ),
 

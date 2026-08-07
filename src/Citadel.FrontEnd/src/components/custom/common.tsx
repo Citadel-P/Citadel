@@ -42,6 +42,7 @@ import {
   Settings,
   Tags,
   User,
+  Unlink,
 } from 'lucide-react';
 import { cn, filterBySplit, normalizeDockerId, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap } from '@/api/types';
@@ -92,7 +93,7 @@ import { getContainerSeriesColor } from './container-series-colors';
 import { useFormFieldAccessibility } from './form-field-accessibility';
 
 export const PageContainer = ({ className, children, ...props }: ComponentProps<'div'>) => (
-  <div className="mx-auto w-full max-w-[var(--layout-content-width)] px-4 py-4 sm:px-6">
+  <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
     <div className={cn('w-full rounded-md border-border bg-background p-4 shadow-sm', className)} {...props}>
       {children}
     </div>
@@ -1710,6 +1711,14 @@ export function SelectField({
         </SelectContent>
       </Select>
     </div>
+  );
+}
+
+export function UnmanagedResourceIcon({ title }: { title: string }) {
+  return (
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500" title={title}>
+      <Unlink className="h-3 w-3" aria-label={title} />
+    </span>
   );
 }
 

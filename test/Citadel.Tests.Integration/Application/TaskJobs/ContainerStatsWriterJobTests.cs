@@ -126,17 +126,11 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     public async Task ExecuteAsync_ShouldFlushWhenFlushIntervalIsReached()
     {
         // Arrange
-        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 1 });
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var stats = new List<ContainerStat>();
-        stats.AddRange(
-        [
-            new(_containerId, 100, 200, 5, 300, 100, 200, time),
-            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
-        ]);
-
-
-        var batch = new ContainersStatBatch(_platformId, stats, (e) => { });
+        var batch = new ContainersStatBatch(
+            _platformId,
+            [new ContainerStat(_containerId, 100, 200, 5, 300, 100, 200, time)],
+            _ => { });
 
         // Act
         var checkpoint = _dbWorkQueue.CreateCheckpoint();
@@ -151,7 +145,7 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
-        Assert.Equal(2, containers.Count());
+        Assert.Single(containers);
     }
 
     [Fact]

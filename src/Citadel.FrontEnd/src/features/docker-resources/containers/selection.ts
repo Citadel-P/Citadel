@@ -18,3 +18,9 @@ export const normalizeContainerSelection = (selectedRows: ContainerActionResourc
     return true;
   });
 };
+
+export const countSelectedContainers = (selectedResources: ContainerActionResource[]) =>
+  selectedResources.reduce(
+    (count, resource) => count + (isContainerStackGroup(resource) ? resource.containers.length : 1),
+    0,
+  );

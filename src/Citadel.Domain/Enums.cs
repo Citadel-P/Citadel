@@ -378,7 +378,8 @@ public enum EdgeAgentCommandKind
     SwarmConfigData = 110,
     SwarmServiceCreate = 111,
     SwarmServiceUpdate = 112,
-    SwarmServiceDelete = 113
+    SwarmServiceDelete = 113,
+    SwarmServiceRestart = 114
 }
 
 public enum SwarmServiceOwnership
@@ -931,6 +932,7 @@ public enum ActivityEventType
 
     #region Managed Swarm Service Events
     SwarmServiceCreated,
+    SwarmServiceAdopted,
     SwarmServiceUpdated,
     SwarmServiceRenamed,
     SwarmServiceDeleted,

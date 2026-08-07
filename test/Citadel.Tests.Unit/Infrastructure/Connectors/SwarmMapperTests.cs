@@ -67,7 +67,12 @@ public sealed class SwarmMapperTests
 
         var service = new SwarmServiceResult(
             "service-1", 2, "web", "Replicated", "nginx:latest", 2, 3, "Completed", null,
-            ["8080:80/tcp"], ["network-1"], ["secret-1"], ["config-1"], labels, timestamp, timestamp);
+            ["8080:80/tcp"], ["network-1"], ["secret-1"], ["config-1"], labels, timestamp, timestamp,
+            Definition: new SwarmServiceMutationSpec(
+                "nginx:latest", "Replicated", 3, ["nginx"], ["-g", "daemon off;"], ["APP_ENV=test"],
+                "101", "/srv/app", null, null, [new SwarmPortSpec(80, 8080, "tcp", "Ingress")],
+                ["network-1"], [], [], [], null, [], null, null),
+            AdoptionWarnings: ["Custom log driver settings are not represented by managed Services."]);
         var serviceMessage = new SwarmServiceMessage
         {
             Id = service.Id,
@@ -83,8 +88,28 @@ public sealed class SwarmMapperTests
             SecretIds = { service.SecretIds },
             ConfigIds = { service.ConfigIds },
             CreatedAt = Timestamp.FromDateTimeOffset(timestamp),
-            UpdatedAt = Timestamp.FromDateTimeOffset(timestamp)
+            UpdatedAt = Timestamp.FromDateTimeOffset(timestamp),
+            Definition = new SwarmServiceMutationSpecMessage
+            {
+                Image = "nginx:latest",
+                SchedulingMode = "Replicated",
+                Replicas = 3,
+                User = "101",
+                WorkingDirectory = "/srv/app"
+            }
         };
+        serviceMessage.Definition.Command.Add("nginx");
+        serviceMessage.Definition.Arguments.Add(["-g", "daemon off;"]);
+        serviceMessage.Definition.Environment.Add("APP_ENV=test");
+        serviceMessage.Definition.NetworkIds.Add("network-1");
+        serviceMessage.Definition.Ports.Add(new SwarmPortSpecMessage
+        {
+            TargetPort = 80,
+            PublishedPort = 8080,
+            Protocol = "tcp",
+            PublishMode = "Ingress"
+        });
+        serviceMessage.AdoptionWarnings.Add(service.AdoptionWarnings);
         AddLabels(serviceMessage.Labels, labels);
         Assert.Equivalent(service.Map(), serviceMessage.Map(), strict: true);
 

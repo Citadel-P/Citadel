@@ -75,7 +75,9 @@ Selecting a Swarm Platform opens its Swarm navigation:
 Containers, Images, and Volumes visible through the same manager remain
 manager-local Docker resources. They are not cluster inventory. An Image on
 the manager may be absent from a worker, and same-named local Volumes on two
-Nodes may contain different data.
+Nodes may contain different data. Container adoption and Compose-project import
+are available only on Docker Standalone Platforms; Swarm Task containers must
+be managed through their Service or Stack.
 
 ## Understand Health And Freshness
 
@@ -202,6 +204,16 @@ The Services page distinguishes:
 - **Citadel Service** observations linked to a managed Service;
 - Services carrying stale Citadel ownership labels with no verified Citadel
   owner.
+
+This Platform page is observed inventory, so it does not show an **Add Service**
+button. Create a new managed Service from Citadel's main **Services** page.
+
+An unmanaged Service displays an unlink icon and offers **Adopt Service** from
+its row, detail page, and the bottom action bar. Adoption opens a reviewed
+managed-Service draft and links the saved Citadel Service to the existing
+Docker Service without changing Docker. The first later Apply updates the same
+Docker Service and establishes Citadel ownership labels. Services belonging to
+an external Docker Stack cannot be adopted individually.
 
 Observed Docker labels never grant Citadel write ownership by themselves. A
 Service with unverified Citadel labels is kept read-only and displays an

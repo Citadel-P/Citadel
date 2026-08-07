@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Entities.SwarmServices;
 
 namespace Domain.Contracts.Resources.Swarm;
 
@@ -8,7 +9,8 @@ public sealed record SwarmServiceResult(
     IReadOnlyList<string> Ports, IReadOnlyList<string> NetworkIds,
     IReadOnlyList<string> SecretIds, IReadOnlyList<string> ConfigIds,
     IReadOnlyDictionary<string, string> Labels, DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt,
-    string RuntimeHash = "", long ForceUpdate = 0);
+    string RuntimeHash = "", long ForceUpdate = 0, SwarmServiceSpec? Definition = null,
+    IReadOnlyList<string>? AdoptionWarnings = null);
 
 public sealed record SwarmTaskResult(
     string Id, long VersionIndex, string Name, string ServiceId, int? Slot, string NodeId,

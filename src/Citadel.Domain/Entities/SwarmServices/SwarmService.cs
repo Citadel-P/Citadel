@@ -118,6 +118,28 @@ public sealed class SwarmService : IAuditedEntity, IReconcilableResource
         };
     }
 
+    public static SwarmService AdoptExisting(
+        string name,
+        string? description,
+        Guid platformId,
+        Guid createdByActorId,
+        string dockerName,
+        string dockerServiceId,
+        long dockerVersionIndex,
+        string runtimeHash,
+        SwarmServiceSpec spec)
+    {
+        var service = new SwarmService(name, platformId, createdByActorId, spec, description)
+        {
+            DockerName = dockerName,
+            DockerServiceId = dockerServiceId,
+            DockerVersionIndex = dockerVersionIndex,
+            LastAppliedRuntimeHash = runtimeHash,
+            SynchronizationState = SwarmServiceSynchronizationState.DesiredChangesPending
+        };
+        return service;
+    }
+
     public bool UpdateSpec(SwarmServiceSpec spec)
     {
         if (LastAppliedDesiredSpecHash is not null && spec.SchedulingMode != Spec.SchedulingMode)

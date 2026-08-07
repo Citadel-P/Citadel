@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
-import { ContainerStateStatus, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, PlatformType, PlatformView, ResourceControlState } from '@/api/generated/api.types';
 import type { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
 import { ContainerInfoActions, getContainerManagementAction } from './actions';
+import { AppContext } from '@/lib/context/app-context';
+import type { ReactNode } from 'react';
 
 const standaloneContainer: ContainerDetailsView = {
   resourceId: '019f0000-0000-7000-8000-000000000001',
@@ -26,15 +28,35 @@ const LocationProbe = () => {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 };
 
+const ContainerActionContext = ({
+  children,
+  platformType = PlatformType.Docker,
+}: {
+  children: ReactNode;
+  platformType?: PlatformType;
+}) => (
+  <AppContext.Provider
+    value={{
+      isLoading: false,
+      currentPlatform: { id: standaloneContainer.platformId, type: platformType } as PlatformView,
+      platforms: [],
+      unresolvedAlertCount: 0,
+      liveAlertEvents: {},
+      receivedAlertEventIds: [],
+    }}>
+    <MemoryRouter>{children}</MemoryRouter>
+  </AppContext.Provider>
+);
+
 describe('container detail management action', () => {
   it('opens deployment adoption with the persisted container id', async () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter>
+      <ContainerActionContext>
         <ContainerInfoActions.adopt resource={standaloneContainer} />
         <LocationProbe />
-      </MemoryRouter>,
+      </ContainerActionContext>,
     );
 
     await user.click(screen.getByRole('button', { name: 'Adopt Container' }));
@@ -47,9 +69,13 @@ describe('container detail management action', () => {
   it('selects stack import only for an unmanaged Compose container', () => {
     const composeContainer = { ...standaloneContainer, stack: 'demo-project' };
 
-    expect(getContainerManagementAction(standaloneContainer)).toBe(ContainerInfoActions.adopt);
-    expect(getContainerManagementAction(composeContainer)).toBe(ContainerInfoActions.importStack);
-    expect(getContainerManagementAction({ ...standaloneContainer, deploymentId: 'deployment-id' })).toBeUndefined();
+    expect(getContainerManagementAction(standaloneContainer, PlatformType.Docker)).toBe(ContainerInfoActions.adopt);
+    expect(getContainerManagementAction(composeContainer, PlatformType.Docker)).toBe(ContainerInfoActions.importStack);
+    expect(
+      getContainerManagementAction({ ...standaloneContainer, deploymentId: 'deployment-id' }, PlatformType.Docker),
+    ).toBeUndefined();
+    expect(getContainerManagementAction(standaloneContainer, PlatformType.DockerSwarm)).toBeUndefined();
+    expect(getContainerManagementAction(composeContainer, PlatformType.DockerSwarm)).toBeUndefined();
   });
 
   it('opens stack import with the container platform and Compose project', async () => {
@@ -57,10 +83,10 @@ describe('container detail management action', () => {
     const composeContainer = { ...standaloneContainer, stack: 'demo project' };
 
     render(
-      <MemoryRouter>
+      <ContainerActionContext>
         <ContainerInfoActions.importStack resource={composeContainer} />
         <LocationProbe />
-      </MemoryRouter>,
+      </ContainerActionContext>,
     );
 
     await user.click(screen.getByRole('button', { name: 'Import Stack' }));
@@ -68,5 +94,15 @@ describe('container detail management action', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000002&importProject=demo+project',
     );
+  });
+
+  it('disables direct adoption actions on a Swarm platform', () => {
+    render(
+      <ContainerActionContext platformType={PlatformType.DockerSwarm}>
+        <ContainerInfoActions.adopt resource={standaloneContainer} />
+      </ContainerActionContext>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Adopt Container' })).toBeDisabled();
   });
 });

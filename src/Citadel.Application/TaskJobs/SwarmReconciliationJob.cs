@@ -554,15 +554,31 @@ internal sealed class PersistSwarmSnapshotWorkItem(
             : (await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken))?.ClusterId;
         var completedAt = reconciliationCompletedAt ?? DateTimeOffset.UtcNow;
         var byId = managed.ToDictionary(static service => service.Id);
-        var claimed = source.Services
+        var byDockerId = managed
+            .Where(static service => service.DockerServiceId is not null)
+            .ToDictionary(static service => service.DockerServiceId!, StringComparer.Ordinal);
+        var associated = source.Services
+            .Select(projection =>
+                projection.SwarmServiceId is null
+                && projection.Ownership == SwarmServiceOwnership.Unmanaged
+                && byDockerId.TryGetValue(projection.DockerServiceId, out var owner)
+                    ? projection with
+                    {
+                        SwarmServiceId = owner.Id,
+                        Ownership = SwarmServiceOwnership.CitadelService,
+                        OwnershipDiagnostic = null
+                    }
+                    : projection)
+            .ToArray();
+        var claimed = associated
             .Where(static service => service.SwarmServiceId is not null)
             .GroupBy(static service => service.SwarmServiceId!.Value)
             .ToDictionary(static group => group.Key, static group => group.ToArray());
-        var normalized = new SwarmServiceProjection[source.Services.Count];
+        var normalized = new SwarmServiceProjection[associated.Length];
 
-        for (var index = 0; index < source.Services.Count; index++)
+        for (var index = 0; index < associated.Length; index++)
         {
-            var projection = source.Services[index];
+            var projection = associated[index];
             if (projection.SwarmServiceId is not Guid serviceId)
             {
                 normalized[index] = projection;

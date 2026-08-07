@@ -1,14 +1,20 @@
 # Adopting Existing Docker Workloads
 
-Citadel can bring containers that are already running on a Docker Platform
-under management without stopping or recreating them.
+Citadel can bring existing Docker Standalone containers, Compose projects, and
+individual Docker Swarm Services under management without changing them during
+adoption.
 
 Use:
 
-- **Adopt as Deployment** for one standalone container
-- **Import Compose project as Stack** for containers started by Docker Compose
+- **Adopt Container** for one standalone container
+- **Import Stack** for containers started by Docker Compose
+- **Adopt Service** for one unmanaged Docker Swarm Service
 
 Adoption is available in every Citadel edition.
+
+This workflow does not apply to Docker Swarm Task containers. Swarm workloads
+are owned at the Service or Stack level, so the manager-local Containers page
+does not offer these actions on a Swarm Platform.
 
 ## What Adoption Changes
 
@@ -34,7 +40,7 @@ configuration.
 On the **Containers** page:
 
 1. Open the actions for an unmanaged standalone container.
-2. Select **Adopt as Deployment**.
+2. Select **Adopt Container**.
 3. Review the generated Deployment configuration.
 4. Resolve any warnings or required values.
 5. Select **Adopt Container** and confirm.
@@ -114,7 +120,7 @@ services, networks, and volumes remain a coherent unit.
 
 From a Compose container or unmanaged project group:
 
-1. Select **Import Compose project as Stack**.
+1. Select **Import Stack**.
 2. Choose **Web Editor** or **Git** as the authoritative Compose source.
 3. Supply the Compose file or select the repository and Compose paths.
 4. Review the detected and defined services.
@@ -127,6 +133,31 @@ configuration, comments, and other source details reliably.
 The imported Stack keeps the detected Docker Compose project name. This allows
 a later Apply to target the existing project instead of creating a second set
 of containers.
+
+## Adopt A Docker Swarm Service
+
+On a Swarm Platform's **Services** page, an unlink icon identifies a Service
+that is not managed by Citadel. Select that Service and choose **Adopt Service**
+from its row, detail page, or bottom action bar.
+
+Citadel opens the standard Service form with the current Docker configuration
+pre-filled. Review the generated settings and warnings, then select the
+Registry Citadel should use for the existing external image. The selected image
+must refer to the same repository as the running Service image.
+
+Citadel masks environment values whose names look sensitive. Replace each
+masked value with an intentional value or Citadel binding before confirming;
+the original Docker value is never sent to the browser.
+
+Confirming adoption creates the Citadel Service and links it to the exact Docker
+Service ID. It does not update, relabel, restart, or recreate the Docker Service.
+The first later **Apply** updates that same Service and establishes Citadel's
+normal ownership labels.
+
+Citadel does not offer **Adopt Service** for stale inventory, Services already
+managed by Citadel, Services with conflicting ownership metadata, or Services
+that belong to a Docker Stack. A Stack-owned Service must be imported with its
+complete Stack; that workflow is not currently available.
 
 ## Safe Initial Settings
 
@@ -151,6 +182,9 @@ container from the saved Deployment definition.
 The first later **Apply** of an imported Stack may update or recreate
 containers so they match the authoritative Compose source.
 
+The first later **Apply** of an adopted Swarm Service may roll out Tasks so the
+running Service matches the reviewed Citadel configuration.
+
 Before the first Redeploy or Apply:
 
 1. Review images, ports, mounts, networks, variables, and lifecycle settings.
@@ -170,6 +204,10 @@ Citadel offers adoption only when:
 - the Docker Platform is connected
 - the current user can inspect the Platform and create the target resource
 - the runtime configuration can be represented safely
+
+For a Swarm Service, the inventory must also be current, the Service must not
+belong to a Docker Stack, and no Citadel Service may already own its Docker
+Service ID.
 
 Citadel Core, PostgreSQL, Agent, and Edge Agent containers are System
 containers and cannot be adopted.
@@ -210,6 +248,14 @@ Compose import requires:
 - Platform Read permission
 - Platform Inspect permission
 - access to the selected Git Repository and other referenced resources
+
+Swarm Service adoption requires:
+
+- Swarm Service Write permission
+- Platform Read permission
+- Platform Inspect permission
+- access to referenced Registries, Networks, Secrets, Configs, tags, variables,
+  and secrets
 
 Apply permission is not required merely to adopt or import because the
 operation does not change Docker runtime resources.

@@ -77,6 +77,14 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, SwarmServiceTransportMappers.Map, "service mutation", cancellationToken);
     public Task<Result<ManagedSwarmServiceMutationResult>> UpdateServiceAsync(UpdateManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, SwarmServiceTransportMappers.Map, "service mutation", cancellationToken);
+    public Task<Result> RestartServiceAsync(RestartSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).RestartServiceAsync(
+            new RestartSwarmServiceRequest { ServiceId = command.ServiceId },
+            cancellationToken: cancellationToken).ResponseAsync, "service", cancellationToken);
+    public Task<Result> DeleteInventoryServiceAsync(DeleteSwarmInventoryServiceCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteServiceAsync(
+            new DeleteManagedSwarmServiceRequest { ServiceId = command.ServiceId },
+            cancellationToken: cancellationToken).ResponseAsync, "service", cancellationToken);
     public Task<Result> DeleteServiceAsync(DeleteManagedSwarmServiceCommand command, CancellationToken cancellationToken = default) =>
         ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken).ResponseAsync, "service", cancellationToken);
     public Task<Result<SwarmLogsResult>> GetServiceLogsAsync(GetSwarmServiceLogsCommand command, CancellationToken cancellationToken = default) =>

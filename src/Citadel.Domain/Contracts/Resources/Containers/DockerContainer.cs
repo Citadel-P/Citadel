@@ -17,7 +17,8 @@ public sealed record DockerContainer(
     Guid? StackId = null,
     bool IsSystem = false,
     ContainerSystemRole? SystemRole = null,
-    bool HasCitadelOwnershipLabels = false
+    bool HasCitadelOwnershipLabels = false,
+    bool IsSwarmTask = false
     );
 
 public record struct DockerContainerStat(

@@ -46,6 +46,29 @@ public static class SwarmServices
         return EndpointHandlers.HandleResult(result, draft => SwarmServiceDuplicateDraftView.Map(draft, id));
     }
 
+    public static async Task<Results<Ok<SwarmServiceAdoptionDraftView>, ProblemHttpResult>> GetAdoptionDraft(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetSwarmServiceAdoptionDraft(platformId, resourceId),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, SwarmServiceAdoptionDraftView.Map);
+    }
+
+    public static async Task<Results<Ok<ManagedSwarmServiceView>, ProblemHttpResult>> Adopt(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        [FromBody] AdoptSwarmServiceInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(platformId, resourceId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ManagedSwarmServiceView.Map);
+    }
+
     public static async Task<Results<Ok<ManagedSwarmServiceView>, ProblemHttpResult>> Create(
         IMediator mediator,
         [FromBody] CreateSwarmServiceInput input,

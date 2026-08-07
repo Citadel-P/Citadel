@@ -1,3 +1,4 @@
+using Application.Features.Swarm.Commands;
 using Application.Features.Swarm.Queries;
 using Application.Permissions;
 using Hosting.Extensions;
@@ -46,6 +47,20 @@ public static class SwarmInventory
         EndpointHandlers.HandleResult(await mediator.Send(new InspectSwarmService(platformId, resourceId), ct), SwarmServiceInspectView.Map);
     public static async Task<Results<Ok<SwarmLogsView>, ProblemHttpResult>> GetServiceLogs(IMediator mediator, Guid platformId, string resourceId, int tail = 100, CancellationToken ct = default) =>
         EndpointHandlers.HandleResult(await mediator.Send(new GetSwarmServiceLogs(platformId, resourceId, tail), ct), SwarmLogsView.Map);
+    public static async Task<Results<NoContent, ProblemHttpResult>> RestartService(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(new RestartSwarmService(platformId, resourceId), ct));
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteServices(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] DeleteSwarmResourcesInput request,
+        CancellationToken ct) =>
+        EndpointHandlers.HandleResultForNoContent(
+            await mediator.Send(request.ToServiceCommand(platformId), ct));
     public static async Task<Results<Ok<SwarmTasksView>, ProblemHttpResult>> ListTasks(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,

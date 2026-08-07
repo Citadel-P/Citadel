@@ -29,12 +29,16 @@ public sealed class ForgejoGitWebhookTests(AcceptancePostgresFixture postgres)
 
         try
         {
+            await using var dockerDaemon =
+                await StandaloneDockerDaemon.StartAsync(cancellationToken);
             await using var candidate =
                 await CandidateApplicationProcess.StartAsync(
                     connectionString,
                     candidateDirectory,
                     cancellationToken,
-                    new CandidateApplicationOptions(HttpTimeoutSeconds: 120));
+                    new CandidateApplicationOptions(
+                        HttpTimeoutSeconds: 120,
+                        DockerHost: dockerDaemon.DockerHost));
             await candidate.AuthenticateAsAdminAsync(cancellationToken);
 
             var candidatePort = checked(

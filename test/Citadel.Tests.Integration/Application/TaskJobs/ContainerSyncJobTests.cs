@@ -589,6 +589,44 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     }
 
     [Fact]
+    public async Task CreatedEvent_ShouldSkipUnmanagedAlertForSwarmTaskContainer()
+    {
+        var dockerContainer = new DockerContainer(
+            Name: "/nginx.1.task-id",
+            Image: "nginx:latest",
+            ImageId: "sha256:nginx",
+            Id: "swarm-task-container-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            IsSwarmTask: true);
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        var unmanagedAlerts = Channel.CreateUnbounded<UnmanagedContainerAlertRequest>();
+
+        await using (var syncScope = Services.CreateAsyncScope())
+        {
+            var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new ContainerCreatedWorkItem(
+                new DaemonContainerEventInfo("create", dockerContainer.Id, dockerContainer),
+                platformId,
+                notificationQueue.Object,
+                unmanagedAlerts.Writer,
+                Mock.Of<IDockerDaemonStreamManager>(),
+                cache,
+                Mock.Of<IContainerEventBroadcaster>(),
+                Mock.Of<ILogger<ContainerCreatedWorkItem>>());
+
+            await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
+        }
+
+        Assert.False(unmanagedAlerts.Reader.TryRead(out _));
+    }
+
+    [Fact]
     public async Task UpdatedEvent_ShouldRefreshSystemClassification()
     {
         const string containerId = "system-classification-update-id";

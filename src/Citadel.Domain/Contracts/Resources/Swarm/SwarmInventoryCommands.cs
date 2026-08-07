@@ -17,6 +17,8 @@ public static class SwarmInventoryLimits
 
 public sealed record ListSwarmServicesCommand(string PlatformAddress, int Limit = SwarmInventoryLimits.MaximumItems);
 public sealed record InspectSwarmServiceCommand(string PlatformAddress, string ServiceId);
+public sealed record RestartSwarmServiceCommand(string PlatformAddress, string ServiceId);
+public sealed record DeleteSwarmInventoryServiceCommand(string PlatformAddress, string ServiceId);
 public sealed record GetSwarmServiceLogsCommand(
     string PlatformAddress,
     string ServiceId,

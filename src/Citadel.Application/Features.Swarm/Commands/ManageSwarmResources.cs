@@ -14,6 +14,34 @@ using static Hosting.Common.Validators;
 
 namespace Application.Features.Swarm.Commands;
 
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
+public sealed record RestartSwarmService(Guid PlatformId, string ServiceId) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<RestartSwarmService>
+    {
+        public Validator()
+        {
+            RuleFor(value => value.PlatformId).NotEmpty();
+            RuleFor(value => value.ServiceId).NotEmpty().MaximumLength(255);
+        }
+    }
+}
+
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
+public sealed record DeleteSwarmServices(Guid PlatformId, IReadOnlyList<string> ServiceIds) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<DeleteSwarmServices>
+    {
+        public Validator()
+        {
+            RuleFor(value => value.PlatformId).NotEmpty();
+            RuleFor(value => value.ServiceIds).NotEmpty().Must(static values => values is null || values.Count <= 100)
+                .WithMessage("At most 100 services can be deleted at once.");
+            RuleForEach(value => value.ServiceIds).NotEmpty().MaximumLength(255);
+        }
+    }
+}
+
 [RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record CreateSwarmSecret(
     Guid PlatformId,
@@ -63,7 +91,7 @@ public sealed record DeleteSwarmSecrets(Guid PlatformId, IReadOnlyList<string> S
         public Validator()
         {
             RuleFor(value => value.PlatformId).NotEmpty();
-            RuleFor(value => value.SecretIds).NotEmpty().Must(static values => values.Count <= 100)
+            RuleFor(value => value.SecretIds).NotEmpty().Must(static values => values is null || values.Count <= 100)
                 .WithMessage("At most 100 secrets can be deleted at once.");
             RuleForEach(value => value.SecretIds).NotEmpty().MaximumLength(255);
         }
@@ -118,7 +146,7 @@ public sealed record DeleteSwarmConfigs(Guid PlatformId, IReadOnlyList<string> C
         public Validator()
         {
             RuleFor(value => value.PlatformId).NotEmpty();
-            RuleFor(value => value.ConfigIds).NotEmpty().Must(static values => values.Count <= 100)
+            RuleFor(value => value.ConfigIds).NotEmpty().Must(static values => values is null || values.Count <= 100)
                 .WithMessage("At most 100 configs can be deleted at once.");
             RuleForEach(value => value.ConfigIds).NotEmpty().MaximumLength(255);
         }
@@ -143,6 +171,115 @@ internal sealed class CreateSwarmSecretHandler(
                 cancellationToken),
             reconciliationCoordinator,
             command.PlatformId);
+    }
+}
+
+internal sealed class RestartSwarmServiceHandler(
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmReconciliationCoordinator reconciliationCoordinator)
+    : ICommandHandler<RestartSwarmService, Result>
+{
+    public async ValueTask<Result> Handle(RestartSwarmService command, CancellationToken cancellationToken)
+    {
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        if (!context.IsSuccess(out var value, out var error))
+            return Result.Failure(error!);
+
+        var validation = await NativeSwarmServiceValidation.ValidateAsync(
+            unitOfWork, command.PlatformId, command.ServiceId, cancellationToken);
+        if (validation.IsFailure(out error))
+            return Result.Failure(error!);
+
+        return await SwarmMutationExecution.ExecuteAndRefreshAsync(
+            () => value.Connector.RestartServiceAsync(
+                new RestartSwarmServiceCommand(value.Platform.Address, command.ServiceId),
+                cancellationToken),
+            reconciliationCoordinator,
+            command.PlatformId);
+    }
+}
+
+internal sealed class DeleteSwarmServicesHandler(
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmReconciliationCoordinator reconciliationCoordinator)
+    : ICommandHandler<DeleteSwarmServices, Result>
+{
+    public async ValueTask<Result> Handle(DeleteSwarmServices command, CancellationToken cancellationToken)
+    {
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        if (!context.IsSuccess(out var value, out var error))
+            return Result.Failure(error!);
+
+        var ids = command.ServiceIds.Distinct(StringComparer.Ordinal).ToArray();
+        foreach (var id in ids)
+        {
+            var validation = await NativeSwarmServiceValidation.ValidateAsync(
+                unitOfWork, command.PlatformId, id, cancellationToken);
+            if (validation.IsFailure(out error))
+                return Result.Failure(error!);
+        }
+
+        var deleted = 0;
+        foreach (var id in ids)
+        {
+            Result result;
+            try
+            {
+                result = await value.Connector.DeleteInventoryServiceAsync(
+                    new DeleteSwarmInventoryServiceCommand(value.Platform.Address, id),
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await reconciliationCoordinator.RefreshAsync(command.PlatformId, CancellationToken.None);
+                throw;
+            }
+
+            if (result.IsFailure(out error))
+            {
+                if (error is NotFoundError)
+                {
+                    deleted++;
+                    continue;
+                }
+
+                await reconciliationCoordinator.RefreshAsync(command.PlatformId, CancellationToken.None);
+                return deleted == 0
+                    ? Result.Failure(error!)
+                    : Result.Failure(new ConflictError(
+                        $"Deleted {deleted} of {ids.Length} services before Docker rejected the operation: {error!.Message}"));
+            }
+
+            deleted++;
+        }
+
+        await reconciliationCoordinator.RefreshAsync(command.PlatformId, CancellationToken.None);
+        return Result.Success();
+    }
+}
+
+internal static class NativeSwarmServiceValidation
+{
+    internal static async Task<Result> ValidateAsync(
+        IUnitOfWork unitOfWork,
+        Guid platformId,
+        string serviceId,
+        CancellationToken cancellationToken)
+    {
+        var projected = await unitOfWork.Swarm.GetServiceAsync(platformId, serviceId, cancellationToken);
+        if (projected is null)
+            return Result.Failure(new NotFoundError($"Swarm service '{serviceId}' does not exist."));
+        if (projected.IsStale)
+            return Result.Failure(new ConflictError($"Service '{projected.Name}' is stale and cannot be changed."));
+
+        var managed = await unitOfWork.SwarmServices.GetByDockerServiceIdAsync(
+            platformId, serviceId, cancellationToken);
+        return managed is null
+            ? Result.Success()
+            : Result.Failure(new ConflictError(
+                $"Service '{projected.Name}' is managed by Citadel and must be changed through its managed Service."));
     }
 }
 

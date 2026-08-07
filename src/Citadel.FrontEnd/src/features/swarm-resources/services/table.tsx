@@ -3,14 +3,20 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { StateBadge } from '@/components/custom/state-badge';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { getTaskName } from '@/lib/utils';
+import { useSelectedResources } from '@/lib/atoms';
+import { DropdownActionComponent } from '@/pages/types';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router';
-import { getServiceAvailability, swarmOwnershipLabel } from '../shared';
+import { getServiceAvailability, isServiceUpdatePaused, swarmOwnershipLabel } from '../shared';
 import { SwarmServiceListView } from './hooks/useServicesGroup';
+import { UnmanagedResourceIcon } from '@/components/custom/common';
+import { getServiceViewRoute } from './actions';
 
 type ServiceRow = {
   id: string;
@@ -29,8 +35,17 @@ type ServiceTableRow = ServiceRow | TaskRow;
 
 const isServiceRow = (row: ServiceTableRow): row is ServiceRow => row.kind === 'service';
 
-export const ServicesTable = ({ items, isLoading }: { items: SwarmServiceListView[]; isLoading: boolean }) => {
+export const ServicesTable = ({
+  items,
+  isLoading,
+  actions,
+}: {
+  items: SwarmServiceListView[];
+  isLoading: boolean;
+  actions: Record<string, DropdownActionComponent<SwarmServiceListView>>;
+}) => {
   const { platformId = '' } = useParams<{ platformId: string }>();
+  const [, setSelectedResources] = useSelectedResources<SwarmServiceListView>('Service');
   const rows = useMemo<ServiceTableRow[]>(
     () =>
       items.map((service) => ({
@@ -44,6 +59,26 @@ export const ServicesTable = ({ items, isLoading }: { items: SwarmServiceListVie
   const getSubRows = useCallback((row: ServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
   const columns = useMemo<ColumnDef<ServiceTableRow>[]>(
     () => [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all Services"
+          />
+        ),
+        cell: ({ row }) =>
+          isServiceRow(row.original) ? (
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label={`Select Service ${row.original.service.name}`}
+            />
+          ) : null,
+        enableSorting: false,
+        enableHiding: false,
+      },
       {
         id: 'name',
         accessorFn: (row) => (isServiceRow(row) ? row.service.name : getTaskName(row.task)),
@@ -61,9 +96,14 @@ export const ServicesTable = ({ items, isLoading }: { items: SwarmServiceListVie
         header: 'Runtime',
         cell: ({ row }) =>
           isServiceRow(row.original) ? (
-            <span title={`Update: ${row.original.service.updateState}`}>
-              {row.original.service.runningTaskCount}/{row.original.service.desiredTaskCount} replicas
-            </span>
+            <div className="flex items-center gap-2">
+              <span>
+                {row.original.service.runningTaskCount}/{row.original.service.desiredTaskCount} replicas
+              </span>
+              {isServiceUpdatePaused(row.original.service.updateState) && (
+                <StateBadge value={row.original.service.updateState} />
+              )}
+            </div>
           ) : (
             <StateBadge value={row.original.task.desiredState} kind="swarmTask" />
           ),
@@ -110,8 +150,13 @@ export const ServicesTable = ({ items, isLoading }: { items: SwarmServiceListVie
             '-'
           ),
       },
+      {
+        id: 'actions',
+        cell: ({ row }) =>
+          isServiceRow(row.original) ? <RowActionMenu resource={row.original.service} actions={actions} /> : null,
+      },
     ],
-    [platformId],
+    [actions, platformId],
   );
 
   return (
@@ -120,6 +165,9 @@ export const ServicesTable = ({ items, isLoading }: { items: SwarmServiceListVie
       data={rows}
       isLoading={isLoading}
       getSubRows={getSubRows}
+      enableRowSelection={(row) => isServiceRow(row)}
+      enableSubRowSelection={false}
+      onSelectionChange={(selected) => setSelectedResources(selected.filter(isServiceRow).map((row) => row.service))}
       emptyState={{ title: 'No services found.', description: 'No services were returned by the Swarm manager.' }}
     />
   );
@@ -161,13 +209,15 @@ const ServiceNameCell = ({ row, platformId }: { row: Row<ServiceTableRow>; platf
         <span className="h-5 w-5 shrink-0" />
       )}
       <StateIndicator value={availability.status} tooltip={availability.tooltip} />
+
       <Link
         className="table-link truncate"
-        to={service.managedServiceId
-          ? `/platforms/${platformId}/services/edit/${service.managedServiceId}`
-          : `/platforms/${platformId}/services/${service.id}`}>
+        to={getServiceViewRoute(service, platformId)}>
         {service.name || service.id.slice(0, 12)}
       </Link>
+      {!service.managedServiceId && service.ownership === 'Unmanaged' && (
+        <UnmanagedResourceIcon title={'Unmanaged Service'} />
+      )}
       {service.isStale && <Badge variant="secondary">Stale</Badge>}
     </div>
   );

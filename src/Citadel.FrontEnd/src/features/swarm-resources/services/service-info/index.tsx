@@ -1,11 +1,12 @@
 import { AlertMessage } from '@/components/custom/alert-message';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredSwarmInfoComponents } from '@/pages/types';
+import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import {
   Detail,
   displayList,
   getServiceAvailability,
-  NoResourceActions,
+  isServiceUpdatePaused,
   StaleBadge,
   StaleWarning,
   SwarmLogs,
@@ -13,6 +14,10 @@ import {
 import { TasksTable } from '../../tasks/table';
 import { SwarmServiceInfoView, useServiceInfoGroup } from '../hooks/useServicesGroup';
 import { ServiceInspect } from './inspect';
+import { ServiceInfoActions } from '../actions';
+import { UnmanagedResourceIcon } from '@/components/custom/common';
+
+const { view: _view, adopt, ...groupedServiceInfoActions } = ServiceInfoActions;
 
 export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfoView> = {
   Header: {
@@ -20,12 +25,28 @@ export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfo
       const availability = getServiceAvailability(resource);
       return <StateIndicator value={availability.status} tooltip={availability.tooltip} />;
     },
-    NameSuffix: StaleBadge,
-    ActionButtons: NoResourceActions,
+    NameSuffix: ({ resource }) => (
+      <>
+        <StaleBadge resource={resource} />
+        {resource.ownership === 'Unmanaged' && <UnmanagedResourceIcon title={'Unmanaged Service'} />}
+      </>
+    ),
+    ActionButtons: ({ resource }) => (
+      <GenericActionBarButtons
+        resource={resource}
+        actions={Object.values(groupedServiceInfoActions)}
+        standaloneActions={[adopt]}
+      />
+    ),
   },
   SubHeader: ({ resource }) => (
     <div className="flex flex-col gap-3">
       <StaleWarning resource={resource} />
+      {isServiceUpdatePaused(resource.updateState) && (
+        <AlertMessage title="Service update paused" type="warning">
+          {resource.updateMessage ?? 'Docker paused the most recent Service update.'}
+        </AlertMessage>
+      )}
       {resource.ownershipDiagnostic && (
         <AlertMessage title="Service ownership" type="info">
           {resource.ownershipDiagnostic}

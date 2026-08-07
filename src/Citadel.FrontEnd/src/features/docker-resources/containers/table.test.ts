@@ -5,7 +5,7 @@ import {
   type ContainerView,
 } from '@/api/generated/api.types';
 import type { ContainerStackGroupResource } from './actions';
-import { normalizeContainerSelection } from './selection';
+import { countSelectedContainers, normalizeContainerSelection } from './selection';
 
 const container = (containerId: string): ContainerView =>
   ({
@@ -56,5 +56,9 @@ describe('normalizeContainerSelection', () => {
 
   it('preserves individually selected child containers when the root is not selected', () => {
     expect(normalizeContainerSelection([first, second])).toEqual([first, second]);
+  });
+
+  it('counts the containers represented by a selected stack root', () => {
+    expect(countSelectedContainers([group])).toBe(2);
   });
 });

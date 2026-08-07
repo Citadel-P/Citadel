@@ -20,6 +20,11 @@ describe('StateBadge', () => {
     expect(screen.getByText('false')).toHaveClass('text-muted-foreground');
   });
 
+  it('shows a paused state as a warning', () => {
+    render(<StateBadge value="Paused" />);
+    expect(screen.getByText('Paused')).toHaveClass('text-orange-500');
+  });
+
   it.each([
     ['activity', 'Information', 'Info', 'text-blue-700'],
     ['activity', 'Failure', 'Failure', 'text-red-700'],

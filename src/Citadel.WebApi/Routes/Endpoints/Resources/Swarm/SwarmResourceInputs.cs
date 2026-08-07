@@ -33,6 +33,8 @@ public sealed record UpdateSwarmResourceLabelsInput(
 
 public sealed record DeleteSwarmResourcesInput(string[] Ids)
 {
+    internal DeleteSwarmServices ToServiceCommand(Guid platformId) => new(platformId, Ids);
+
     internal DeleteSwarmSecrets ToSecretCommand(Guid platformId) => new(platformId, Ids);
 
     internal DeleteSwarmConfigs ToConfigCommand(Guid platformId) => new(platformId, Ids);

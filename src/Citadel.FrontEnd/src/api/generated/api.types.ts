@@ -904,6 +904,7 @@ export enum ActivityEventType {
   BackupPolicyRenamed = "BackupPolicyRenamed",
   BackupPolicyArchived = "BackupPolicyArchived",
   SwarmServiceCreated = "SwarmServiceCreated",
+  SwarmServiceAdopted = "SwarmServiceAdopted",
   SwarmServiceUpdated = "SwarmServiceUpdated",
   SwarmServiceRenamed = "SwarmServiceRenamed",
   SwarmServiceDeleted = "SwarmServiceDeleted",
@@ -1660,6 +1661,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoSwarmServiceCreated
       >
     | BaseActivityEventInfoTypeMapping<
+        "SwarmServiceAdopted",
+        ActivityEventInfoSwarmServiceAdopted
+      >
+    | BaseActivityEventInfoTypeMapping<
         "SwarmServiceUpdated",
         ActivityEventInfoSwarmServiceUpdated
       >
@@ -2346,6 +2351,12 @@ export interface ActivityEventInfoStackWebhookReceived {
   dispatchedCommitSha?: null | string;
 }
 
+export interface ActivityEventInfoSwarmServiceAdopted {
+  $type?: "SwarmServiceAdopted";
+  service: SwarmServiceActivitySnapshot;
+  dockerServiceId: string;
+}
+
 export interface ActivityEventInfoSwarmServiceApplied {
   $type?: "SwarmServiceApplied";
   /** @format uuid */
@@ -2558,6 +2569,14 @@ export interface AdoptContainerInput {
   tagIds?: null | string[];
   /** @default false */
   importSensitiveEnvironmentAsSecrets?: boolean;
+}
+
+export interface AdoptSwarmServiceInput {
+  name: string;
+  description: null | string;
+  spec: SwarmServiceSpec;
+  previewFingerprint: string;
+  tagIds?: null | string[];
 }
 
 export interface AdoptionIssue {
@@ -7807,6 +7826,26 @@ export interface SwarmServiceActivitySnapshot {
   spec: SwarmServiceSpec;
 }
 
+export interface SwarmServiceAdoptionDraftView {
+  source: SwarmServiceAdoptionSourceView;
+  draft: CreateSwarmServiceInput;
+  issues: SwarmServiceAdoptionIssueView[];
+  previewFingerprint: string;
+}
+
+export interface SwarmServiceAdoptionIssueView {
+  code: string;
+  message: string;
+}
+
+export interface SwarmServiceAdoptionSourceView {
+  dockerServiceId: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+}
+
 export interface SwarmServiceCapabilities {
   canViewLogs: boolean;
   canInspect: boolean;
@@ -11331,6 +11370,37 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name DeleteSwarmInventoryServices
+     * @summary Delete Docker Swarm services
+     * @request DELETE:/api/v1/platforms/{platformId}/swarm/services
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSwarmInventoryServices: (
+      platformId: string,
+      data: DeleteSwarmResourcesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmService
      * @summary Get a persisted Docker Swarm service
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}
@@ -11390,6 +11460,69 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name GetSwarmServiceAdoptionDraft
+     * @summary Get a managed Service draft for an unmanaged Docker Swarm Service
+     * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adoption-draft
+     * @secure
+     * @response `200` `SwarmServiceAdoptionDraftView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmServiceAdoptionDraft: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmServiceAdoptionDraftView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/adoption-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name AdoptSwarmService
+     * @summary Adopt an unmanaged Docker Swarm Service
+     * @request POST:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adopt
+     * @secure
+     * @response `200` `ManagedSwarmServiceView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    adoptSwarmService: (
+      platformId: string,
+      resourceId: string,
+      data: AdoptSwarmServiceInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ManagedSwarmServiceView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/adopt`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmServiceLogs
      * @summary Get a bounded tail of Docker Swarm service logs
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs
@@ -11422,6 +11555,35 @@ export class Api<
         query: query,
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RestartSwarmService
+     * @summary Restart every task of a Docker Swarm service
+     * @request POST:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    restartSwarmService: (
+      platformId: string,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/restart`,
+        method: "POST",
+        secure: true,
         ...params,
       }),
 

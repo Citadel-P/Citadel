@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Application.Services;
 using Application.TaskJobs;
 using Domain;
@@ -82,7 +83,54 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             platform.Id,
             new SwarmProjectionSnapshot(
                 [],
-                [],
+                [
+                    new SwarmServiceProjection(
+                        platform.Id,
+                        "external-service",
+                        7,
+                        "external-web",
+                        "Replicated",
+                        "nginx:1.27",
+                        2,
+                        2,
+                        "Completed",
+                        null,
+                        ["8080:80/tcp (ingress)"],
+                        ["overlay-network"],
+                        [],
+                        [],
+                        new Dictionary<string, string>(),
+                        observedAt,
+                        observedAt,
+                        observedAt,
+                        false,
+                        LiveRuntimeHash: "external-runtime-hash"),
+                    new SwarmServiceProjection(
+                        platform.Id,
+                        "stack-service",
+                        3,
+                        "sample_web",
+                        "Replicated",
+                        "nginx:latest",
+                        1,
+                        1,
+                        "Completed",
+                        null,
+                        [],
+                        ["overlay-network"],
+                        [],
+                        [],
+                        new Dictionary<string, string>
+                        {
+                            ["com.docker.stack.namespace"] = "sample"
+                        },
+                        observedAt,
+                        observedAt,
+                        observedAt,
+                        false,
+                        SwarmServiceOwnership.DockerStackExternal,
+                        "sample")
+                ],
                 [],
                 [
                     new SwarmNetworkProjection(
@@ -235,6 +283,173 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         await using var verificationScope = Services.CreateAsyncScope();
         Assert.Null(await verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
             .SwarmServices.GetAsync(id, cancellationToken));
+    }
+
+    [Fact]
+    public async Task AdoptEndpoints_ShouldClaimUnmanagedServiceWithoutMutatingDocker()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        connector.Setup(value => value.InspectServiceAsync(
+                It.Is<InspectSwarmServiceCommand>(command => command.ServiceId == "external-service"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmServiceResult(
+                "external-service",
+                7,
+                "external-web",
+                "Replicated",
+                "nginx:1.27",
+                2,
+                2,
+                "Completed",
+                null,
+                ["8080:80/tcp (ingress)"],
+                ["overlay-network"],
+                [],
+                [],
+                new Dictionary<string, string>(),
+                DateTimeOffset.UtcNow.AddMinutes(-5),
+                DateTimeOffset.UtcNow,
+                "external-runtime-hash",
+                Definition: new SwarmServiceSpec
+                {
+                    Image = new SwarmExternalImage(Guid.Empty, "nginx:1.27"),
+                    SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                    Replicas = 2,
+                    Command = ["nginx"],
+                    Environment = ["APP_ENV=production", "PASSWORD=original-secret"],
+                    NetworkIds = ["overlay-network"],
+                    Ports = [new SwarmServicePort(80, 8080)]
+                })));
+
+        using var draftResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/external-service/adoption-draft",
+            cancellationToken);
+        draftResponse.EnsureSuccessStatusCode();
+        var draftJson = await draftResponse.Content.ReadAsStringAsync(cancellationToken);
+        Assert.DoesNotContain("original-secret", draftJson, StringComparison.Ordinal);
+        var draft = JsonNode.Parse(draftJson)!.AsObject();
+        var fingerprint = draft["previewFingerprint"]!.GetValue<string>();
+        var spec = draft["draft"]!["spec"]!.DeepClone();
+        spec["image"]!["registryId"] = registryId;
+        Assert.Contains(
+            spec["environment"]!.AsArray(),
+            value => value?.GetValue<string>() == $"PASSWORD={ContainerInspectionRedactor.RedactedValue}");
+
+        using (var unchangedSecretResponse = await Client.PostAsJsonAsync(
+                   $"/api/v1/platforms/{platformId:D}/swarm/services/external-service/adopt",
+                   new
+                   {
+                       name = "adopted-external-web",
+                       description = "Adopted in integration test",
+                       spec,
+                       previewFingerprint = fingerprint,
+                       tagIds = Array.Empty<Guid>()
+                   },
+                   cancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, unchangedSecretResponse.StatusCode);
+        }
+
+        await using (var rejectionScope = Services.CreateAsyncScope())
+        {
+            Assert.Null(await rejectionScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+                .SwarmServices.GetByDockerServiceIdAsync(platformId, "external-service", cancellationToken));
+        }
+
+        spec["environment"]![1] = "PASSWORD=replaced-during-review";
+
+        var adoptRequest = new
+        {
+            name = "adopted-external-web",
+            description = "Adopted in integration test",
+            spec,
+            previewFingerprint = fingerprint,
+            tagIds = Array.Empty<Guid>()
+        };
+        using var adoptResponse = await Client.PostAsJsonAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/external-service/adopt",
+            adoptRequest,
+            cancellationToken);
+        adoptResponse.EnsureSuccessStatusCode();
+        using var adoptedJson = await JsonDocument.ParseAsync(
+            await adoptResponse.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        var adoptedId = adoptedJson.RootElement.GetProperty("id").GetGuid();
+        Assert.Equal("external-service", adoptedJson.RootElement.GetProperty("dockerServiceId").GetString());
+        Assert.Equal("DesiredChangesPending", adoptedJson.RootElement.GetProperty("synchronizationState").GetString());
+        Assert.Equal("Disabled", adoptedJson.RootElement.GetProperty("spec").GetProperty("updateBehavior").GetString());
+
+        await using var scope = Services.CreateAsyncScope();
+        var persisted = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetByDockerServiceIdAsync(platformId, "external-service", cancellationToken);
+        Assert.NotNull(persisted);
+        Assert.Equal(adoptedId, persisted.Id);
+        Assert.Equal("external-runtime-hash", persisted.LastAppliedRuntimeHash);
+        Assert.True(persisted.HasPendingChanges);
+        var activities = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .ActivityEventRepository.GetPagedAsync(
+                adoptedId,
+                ActivityResourceType.SwarmService,
+                ActivityEventType.SwarmServiceAdopted,
+                1,
+                10,
+                cancellationToken);
+        var activity = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .ActivityEventRepository.GetByIdAsync(Assert.Single(activities.Items).Id, cancellationToken);
+        var adoptedInfo = Assert.IsType<SwarmServiceAdopted>(activity?.Info);
+        Assert.Equal("external-service", adoptedInfo.DockerServiceId);
+
+        using var duplicateResponse = await Client.PostAsJsonAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/external-service/adopt",
+            adoptRequest,
+            cancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+        Assert.Single(
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+                .SwarmServices.GetByPlatformAsync(platformId, cancellationToken),
+            service => service.DockerServiceId == "external-service");
+
+        connector.Verify(value => value.CreateServiceAsync(
+            It.IsAny<CreateManagedSwarmServiceCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(value => value.UpdateServiceAsync(
+            It.IsAny<UpdateManagedSwarmServiceCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdoptionDraft_ShouldRejectStackOwnedServiceBeforeDockerInspection()
+    {
+        using var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/stack-service/adoption-draft",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        connector.Verify(value => value.InspectServiceAsync(
+            It.IsAny<InspectSwarmServiceCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdoptionDraft_ShouldRequireSwarmServiceWritePermission()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Platform,
+                    platformId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Inspect)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        using var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/external-service/adoption-draft",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        connector.Verify(value => value.InspectServiceAsync(
+            It.IsAny<InspectSwarmServiceCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

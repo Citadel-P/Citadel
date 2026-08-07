@@ -1,4 +1,5 @@
 using Citadel.Swarm.V1;
+using Domain;
 using DomainSwarmNode = Domain.Contracts.Resources.Swarm.SwarmNodeResult;
 using HostingSwarmNode = Hosting.DockerClient.Models.Swarm.SwarmNodeResult;
 using DomainSwarmService = Domain.Contracts.Resources.Swarm.SwarmServiceResult;
@@ -13,6 +14,8 @@ using HostingSwarmSecret = Hosting.DockerClient.Models.Swarm.SwarmSecretResult;
 using HostingSwarmConfig = Hosting.DockerClient.Models.Swarm.SwarmConfigResult;
 using DomainSwarmLogs = Domain.Contracts.Resources.Swarm.SwarmLogsResult;
 using HostingSwarmLogs = Hosting.DockerClient.Models.Swarm.SwarmLogsResult;
+using HostingSwarmServiceSpec = Hosting.DockerClient.Models.Swarm.SwarmServiceMutationSpec;
+using Domain.Entities.SwarmServices;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -80,7 +83,8 @@ internal static class SwarmMappers
         source.Id, source.VersionIndex, source.Name, source.Mode, source.Image,
         source.RunningTaskCount, source.DesiredTaskCount, source.UpdateState, source.UpdateMessage,
         source.Ports, source.NetworkIds, source.SecretIds, source.ConfigIds, source.Labels,
-        source.CreatedAt, source.UpdatedAt, source.RuntimeHash, source.ForceUpdate);
+        source.CreatedAt, source.UpdatedAt, source.RuntimeHash, source.ForceUpdate,
+        MapDefinition(source.Definition), source.AdoptionWarnings ?? []);
     public static IReadOnlyList<DomainSwarmService> Map(this IReadOnlyList<HostingSwarmService> source) => MapList(source, static value => value.Map());
     public static DomainSwarmService Map(this SwarmServiceMessage source) => new(
         source.Id, checked((long)source.VersionIndex), source.Name, source.Mode, source.Image,
@@ -88,7 +92,7 @@ internal static class SwarmMappers
         EmptyToNull(source.UpdateMessage), source.Ports.ToArray(), source.NetworkIds.ToArray(),
         source.SecretIds.ToArray(), source.ConfigIds.ToArray(), source.Labels,
         source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset(), source.RuntimeHash,
-        source.ForceUpdate);
+        source.ForceUpdate, MapDefinition(source.Definition), source.AdoptionWarnings.ToArray());
     public static IReadOnlyList<DomainSwarmService> Map(this ListSwarmServicesResponse source) => MapList(source.Services, static value => value.Map());
 
     public static DomainSwarmTask Map(this HostingSwarmTask source) => new(
@@ -142,4 +146,111 @@ internal static class SwarmMappers
     }
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static SwarmServiceSpec? MapDefinition(HostingSwarmServiceSpec? source) => source is null
+        ? null
+        : new SwarmServiceSpec
+        {
+            Image = new SwarmExternalImage(Guid.Empty, source.Image),
+            SchedulingMode = Parse(source.SchedulingMode, SwarmServiceSchedulingMode.Replicated),
+            Replicas = source.Replicas,
+            Command = source.Command,
+            Arguments = source.Arguments,
+            Environment = source.Environment,
+            User = EmptyToNull(source.User),
+            WorkingDirectory = EmptyToNull(source.WorkingDirectory),
+            HealthCheck = source.HealthCheck is null ? null : new SwarmServiceHealthCheck(
+                source.HealthCheck.Test,
+                source.HealthCheck.IntervalNanoseconds,
+                source.HealthCheck.TimeoutNanoseconds,
+                source.HealthCheck.Retries,
+                source.HealthCheck.StartPeriodNanoseconds),
+            StopGracePeriodNanoseconds = source.StopGracePeriodNanoseconds,
+            Ports = source.Ports.Select(static value => new SwarmServicePort(
+                value.TargetPort,
+                value.PublishedPort,
+                value.Protocol,
+                Parse(value.PublishMode, SwarmServicePortPublishMode.Ingress))).ToArray(),
+            NetworkIds = source.NetworkIds,
+            Mounts = source.Mounts.Select(static value => new SwarmServiceMount(
+                Parse(value.Kind, SwarmServiceMountKind.Volume),
+                value.Source,
+                value.Target,
+                value.ReadOnly)).ToArray(),
+            Secrets = source.Secrets.Select(static value => new SwarmServiceSecretReference(
+                value.Id, value.Name, value.TargetName)).ToArray(),
+            Configs = source.Configs.Select(static value => new SwarmServiceConfigReference(
+                value.Id, value.Name, value.TargetName)).ToArray(),
+            Resources = source.Resources is null ? null : new SwarmServiceResources(
+                source.Resources.LimitNanoCpus,
+                source.Resources.LimitMemoryBytes,
+                source.Resources.ReservationNanoCpus,
+                source.Resources.ReservationMemoryBytes),
+            PlacementConstraints = source.PlacementConstraints,
+            RestartPolicy = source.RestartPolicy is null ? null : new SwarmServiceRestartPolicy(
+                Parse(source.RestartPolicy.Condition, SwarmServiceRestartCondition.Any),
+                source.RestartPolicy.DelayNanoseconds,
+                source.RestartPolicy.MaximumAttempts,
+                source.RestartPolicy.WindowNanoseconds),
+            UpdatePolicy = source.UpdatePolicy is null ? null : new SwarmServiceUpdatePolicy(
+                source.UpdatePolicy.Parallelism,
+                source.UpdatePolicy.DelayNanoseconds,
+                Parse(source.UpdatePolicy.Order, SwarmServiceUpdateOrder.StopFirst),
+                Parse(source.UpdatePolicy.FailureAction, SwarmServiceUpdateFailureAction.Pause))
+        };
+
+    private static SwarmServiceSpec? MapDefinition(SwarmServiceMutationSpecMessage? source) => source is null
+        ? null
+        : new SwarmServiceSpec
+        {
+            Image = new SwarmExternalImage(Guid.Empty, source.Image),
+            SchedulingMode = Parse(source.SchedulingMode, SwarmServiceSchedulingMode.Replicated),
+            Replicas = source.HasReplicas ? source.Replicas : null,
+            Command = source.Command.ToArray(),
+            Arguments = source.Arguments.ToArray(),
+            Environment = source.Environment.ToArray(),
+            User = EmptyToNull(source.User),
+            WorkingDirectory = EmptyToNull(source.WorkingDirectory),
+            HealthCheck = source.HealthCheck is null ? null : new SwarmServiceHealthCheck(
+                source.HealthCheck.Test.ToArray(),
+                source.HealthCheck.HasIntervalNanoseconds ? source.HealthCheck.IntervalNanoseconds : null,
+                source.HealthCheck.HasTimeoutNanoseconds ? source.HealthCheck.TimeoutNanoseconds : null,
+                source.HealthCheck.HasRetries ? source.HealthCheck.Retries : null,
+                source.HealthCheck.HasStartPeriodNanoseconds ? source.HealthCheck.StartPeriodNanoseconds : null),
+            StopGracePeriodNanoseconds = source.HasStopGracePeriodNanoseconds ? source.StopGracePeriodNanoseconds : null,
+            Ports = source.Ports.Select(static value => new SwarmServicePort(
+                value.TargetPort,
+                value.HasPublishedPort ? value.PublishedPort : null,
+                value.Protocol,
+                Parse(value.PublishMode, SwarmServicePortPublishMode.Ingress))).ToArray(),
+            NetworkIds = source.NetworkIds.ToArray(),
+            Mounts = source.Mounts.Select(static value => new SwarmServiceMount(
+                Parse(value.Kind, SwarmServiceMountKind.Volume),
+                value.Source,
+                value.Target,
+                value.ReadOnly)).ToArray(),
+            Secrets = source.Secrets.Select(static value => new SwarmServiceSecretReference(
+                value.Id, value.Name, value.TargetName)).ToArray(),
+            Configs = source.Configs.Select(static value => new SwarmServiceConfigReference(
+                value.Id, value.Name, value.TargetName)).ToArray(),
+            Resources = source.Resources is null ? null : new SwarmServiceResources(
+                source.Resources.HasLimitNanoCpus ? source.Resources.LimitNanoCpus : null,
+                source.Resources.HasLimitMemoryBytes ? source.Resources.LimitMemoryBytes : null,
+                source.Resources.HasReservationNanoCpus ? source.Resources.ReservationNanoCpus : null,
+                source.Resources.HasReservationMemoryBytes ? source.Resources.ReservationMemoryBytes : null),
+            PlacementConstraints = source.PlacementConstraints.ToArray(),
+            RestartPolicy = source.RestartPolicy is null ? null : new SwarmServiceRestartPolicy(
+                Parse(source.RestartPolicy.Condition, SwarmServiceRestartCondition.Any),
+                source.RestartPolicy.HasDelayNanoseconds ? source.RestartPolicy.DelayNanoseconds : null,
+                source.RestartPolicy.HasMaximumAttempts ? source.RestartPolicy.MaximumAttempts : null,
+                source.RestartPolicy.HasWindowNanoseconds ? source.RestartPolicy.WindowNanoseconds : null),
+            UpdatePolicy = source.UpdatePolicy is null ? null : new SwarmServiceUpdatePolicy(
+                source.UpdatePolicy.Parallelism,
+                source.UpdatePolicy.HasDelayNanoseconds ? source.UpdatePolicy.DelayNanoseconds : null,
+                Parse(source.UpdatePolicy.Order, SwarmServiceUpdateOrder.StopFirst),
+                Parse(source.UpdatePolicy.FailureAction, SwarmServiceUpdateFailureAction.Pause))
+        };
+
+    private static T Parse<T>(string? value, T fallback) where T : struct, Enum =>
+        Enum.TryParse<T>(value, ignoreCase: true, out var parsed) ? parsed : fallback;
 }

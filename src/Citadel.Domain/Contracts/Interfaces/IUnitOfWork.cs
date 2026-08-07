@@ -1284,6 +1284,7 @@ public interface IAlertEventRepository
 public interface ISwarmServiceRepository
 {
     Task<SwarmService?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<SwarmService?> GetByDockerServiceIdAsync(Guid platformId, string dockerServiceId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmService>> GetAllAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmService>> GetByPlatformAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<SwarmService>> GetInfoAsync(
