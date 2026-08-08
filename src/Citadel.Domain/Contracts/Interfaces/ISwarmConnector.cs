@@ -12,6 +12,9 @@ public interface ISwarmConnector
     Task<Result<SwarmNodeResult>> InspectNodeAsync(
         InspectSwarmNodeCommand command,
         CancellationToken cancellationToken = default);
+    Task<Result> UpdateNodeAsync(
+        UpdateSwarmNodeCommand command,
+        CancellationToken cancellationToken = default);
 
     Task<Result<IReadOnlyList<SwarmServiceResult>>> ListServicesAsync(
         ListSwarmServicesCommand command,

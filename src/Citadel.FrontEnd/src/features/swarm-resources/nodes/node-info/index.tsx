@@ -1,17 +1,27 @@
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { DockerLabelsSection } from '@/components/custom/common';
+import { GenericActionBarButtons } from '@/components/custom/action-bar';
+import { getSwarmNodeIndicatorValue, StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredSwarmInfoComponents } from '@/pages/types';
-import { Detail, NoResourceActions, StaleBadge, StaleWarning } from '../../shared';
+import { Detail, StaleBadge, StaleWarning } from '../../shared';
 import { TasksTable } from '../../tasks/table';
 import { SwarmNodeInfoView, useNodeInfoGroup } from '../hooks/useNodesGroup';
 import { NodeInspect } from './inspect';
+import { NodeEditInfoAction } from '../node-edit-dialog';
+import { NodeInfoActions } from '../actions';
+
+const NodeActionButtons = ({ resource }: { resource: SwarmNodeInfoView }) => (
+  <GenericActionBarButtons
+    resource={resource}
+    actions={Object.values(NodeInfoActions)}
+    standaloneActions={[NodeEditInfoAction]}
+  />
+);
 
 export const NodeInfoComponents: RequiredSwarmInfoComponents<SwarmNodeInfoView> = {
   Header: {
-    Indicator: ({ resource }) => (
-      <StateIndicator value={resource.isStale ? 'unknown' : resource.status} kind="swarmNode" />
-    ),
+    Indicator: ({ resource }) => <StateIndicator value={getSwarmNodeIndicatorValue(resource)} kind="swarmNode" />,
     NameSuffix: StaleBadge,
-    ActionButtons: NoResourceActions,
+    ActionButtons: NodeActionButtons,
   },
   SubHeader: ({ resource }) => (
     <div className="flex flex-col gap-3">
@@ -28,6 +38,7 @@ export const NodeInfoComponents: RequiredSwarmInfoComponents<SwarmNodeInfoView> 
       </div>
     </div>
   ),
+  Footer: ({ resource }) => <DockerLabelsSection labels={resource.labels} />,
   Tabs: [
     {
       label: 'Inspect',

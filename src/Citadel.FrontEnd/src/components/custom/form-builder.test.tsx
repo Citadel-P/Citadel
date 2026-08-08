@@ -220,6 +220,19 @@ describe('FormShell', () => {
     expect(window.location.hash).toBe('#name');
   });
 
+  it('keeps desktop actions outside the scrollable section navigation', async () => {
+    const { user } = renderCitadel(<FormHarness onSave={vi.fn().mockResolvedValue(undefined)} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Description input' }), ' updated');
+
+    const navigation = screen.getByRole('navigation', { name: 'Configuration sections' });
+    const actions = document.querySelector('[data-slot="form-sidebar-actions"]');
+
+    expect(navigation).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+    expect(actions).toHaveClass('shrink-0');
+    expect(actions?.parentElement).toBe(navigation.parentElement);
+  });
+
   it('shows a license indicator beside a licensed group description', () => {
     renderCitadel(<FormHarness formSchema={licensedSchema} onSave={vi.fn().mockResolvedValue(undefined)} />);
 

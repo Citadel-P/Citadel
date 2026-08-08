@@ -274,7 +274,7 @@ internal sealed class SwarmServiceMutationService(
         if (!attempted.IsSuccess(out service, out error))
             return Result.Failure<SwarmService>(error!);
 
-        var labels = CreateLabels(service.Id, operationId);
+        var labels = CreateLabels(effectiveSpec.Labels, service.Id, operationId);
         using var dispatch = CreateDispatchToken();
         Result<ManagedSwarmServiceMutationResult> mutation;
         try
@@ -531,12 +531,17 @@ internal sealed class SwarmServiceMutationService(
         return source;
     }
 
-    private static Dictionary<string, string> CreateLabels(Guid serviceId, Guid operationId) => new(StringComparer.Ordinal)
+    private static Dictionary<string, string> CreateLabels(
+        IReadOnlyDictionary<string, string> configuredLabels,
+        Guid serviceId,
+        Guid operationId)
     {
-        ["com.citadel.managed"] = "true",
-        ["com.citadel.service-id"] = serviceId.ToString(),
-        ["com.citadel.operation-id"] = operationId.ToString()
-    };
+        var labels = configuredLabels.ToDictionary(StringComparer.Ordinal);
+        labels["com.citadel.managed"] = "true";
+        labels["com.citadel.service-id"] = serviceId.ToString();
+        labels["com.citadel.operation-id"] = operationId.ToString();
+        return labels;
+    }
 
     private static string Sanitize(string message) => message.Length <= 1000 ? message : message[..1000];
 

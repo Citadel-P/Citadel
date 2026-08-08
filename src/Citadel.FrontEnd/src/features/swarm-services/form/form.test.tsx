@@ -106,6 +106,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
                   command: [],
                   arguments: [],
                   environment: [],
+                  labels: { team: 'platform' },
                   ports: [],
                   networkIds: [],
                   mounts: [],
@@ -115,7 +116,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
                 },
                 tagIds: [],
               },
-              issues: [{ code: 'unsupported-1', message: 'Custom Service labels are not represented.' }],
+              issues: [],
               previewFingerprint: 'a'.repeat(64),
             },
           },
@@ -154,6 +155,9 @@ vi.mock('@/lib/monaco', () => ({
         <span data-testid="environment-diagnostic">{validateItem?.('LOG_LEVEL=${LOG_LEVELs}')}</span>
       )}
     </div>
+  ),
+  MonacoToDictionaryEditor: ({ helperText, value }: { helperText?: string; value?: Record<string, string> }) => (
+    <textarea aria-label={helperText ?? 'Dictionary editor'} value={JSON.stringify(value ?? {})} readOnly />
   ),
   MonacoDiff: () => null,
 }));
@@ -226,20 +230,28 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeVisible();
     expect(screen.getByRole('textbox', { name: 'Description' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Platform' })).toHaveTextContent('Production Swarm');
-    expect(screen.getAllByText('Scheduling').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Platform and Scheduling').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Image').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Networks').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Storage').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Configuration').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Advanced').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Resources').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Resources and Placement').length).toBeGreaterThan(0);
     const resourceProfile = screen.getByRole('combobox', { name: 'Resources' });
     expect(resourceProfile).toHaveTextContent('Automatic');
     expect(screen.queryByRole('spinbutton', { name: 'CPU Reservation' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Health Check').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Rolling Update').length).toBeGreaterThan(0);
+    expect(screen.getByRole('textbox', { name: '# KEY=value' })).toBeVisible();
     const form = screen.getByRole('main');
     const advancedHeading = within(form).getByText('Advanced');
     const webhookHeading = within(form).getByRole('heading', { name: 'Webhook' });
     expect(advancedHeading.compareDocumentPosition(webhookHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const navigation = screen.getByRole('navigation', { name: 'Form sections' });
+    expect(within(navigation).getAllByRole('link')).toHaveLength(12);
+    expect(within(navigation).queryByRole('link', { name: 'Mounts' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Auto Update' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Placement Constraints' })).not.toBeInTheDocument();
     expect(screen.getByTestId('environment-diagnostic')).toHaveTextContent(
       'LOG_LEVELs is not defined in Service or global variables.',
     );
@@ -348,7 +360,7 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('nginx:1.27');
     expect(screen.getByRole('combobox', { name: 'Platform' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Image Source' })).toBeDisabled();
-    expect(screen.getByText('Custom Service labels are not represented.')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: '# KEY=value' })).toHaveValue('{"team":"platform"}');
     const adoptButtons = screen.getAllByRole('button', { name: 'Adopt Service' });
     expect(adoptButtons).not.toHaveLength(0);
     expect(adoptButtons.every((button) => button.hasAttribute('disabled'))).toBe(true);

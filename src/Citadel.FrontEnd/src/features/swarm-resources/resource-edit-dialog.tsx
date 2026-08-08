@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, ReactNode, Suspense, useState } from 'react';
 import { Pencil, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProblemDetails, SwarmConfigView, SwarmSecretView } from '@/api/generated/api.types';
@@ -82,9 +82,6 @@ export const SwarmResourceEditDialog = ({
   onOpenChange: (open: boolean) => void;
 }) => {
   const { platformId = '' } = useParams<{ platformId: string }>();
-  const [labels, setLabels] = useState<KVPair[]>(() =>
-    Object.entries(resource.labels).map(([key, value]) => ({ key, value })),
-  );
   const configMutation = useMutate('updateSwarmConfigLabels');
   const secretMutation = useMutate('updateSwarmSecretLabels');
   const canInspect = hasCapability(resource, 'canInspect');
@@ -93,16 +90,13 @@ export const SwarmResourceEditDialog = ({
     { platformId, resourceId: resource.id },
     { enabled: open && kind === 'config' && canInspect },
   );
-  const normalized = labels.map(({ key, value }) => ({ key: key.trim(), value }));
-  const keys = normalized.map(({ key }) => key);
-  const labelsInvalid = keys.some((key) => !key) || new Set(keys).size !== keys.length;
   const pending = configMutation.isPending || secretMutation.isPending;
   const problem = (contentQuery.error as { error?: ProblemDetails } | undefined)?.error;
 
-  const save = async () => {
+  const save = async (labels: Record<string, string>) => {
     const data = {
       versionIndex: resource.versionIndex,
-      labels: Object.fromEntries(normalized.map(({ key, value }) => [key, value])),
+      labels,
     };
 
     if (kind === 'config') await configMutation.mutateAsync({ platformId, resourceId: resource.id, data });
@@ -113,45 +107,86 @@ export const SwarmResourceEditDialog = ({
   };
 
   return (
+    <SwarmLabelsEditDialog
+      title={`Edit ${kind === 'config' ? 'config' : 'secret'}`}
+      description={
+        kind === 'config'
+          ? 'Config data is immutable and shown read-only. Labels can be changed.'
+          : 'Docker never returns the stored secret value. Only labels can be changed.'
+      }
+      initialLabels={resource.labels}
+      open={open}
+      pending={pending}
+      onOpenChange={onOpenChange}
+      onSave={save}>
+      {kind === 'config' && (
+        <div className="flex w-full min-w-0 flex-col gap-2">
+          <span className="text-sm font-medium">Data</span>
+          {!canInspect && (
+            <AlertMessage title="Config data unavailable" type="info">
+              Inspect permission is required to view this Config&apos;s data.
+            </AlertMessage>
+          )}
+          {problem && (
+            <AlertMessage title={problem.title ?? 'Unable to load config data'} type="error">
+              {problem.detail ?? 'Docker could not return this Config data.'}
+            </AlertMessage>
+          )}
+          {canInspect && !problem && (
+            <div className="w-full min-w-0 overflow-hidden rounded-md border bg-muted/20">
+              <Suspense fallback={<div className="h-55" />}>
+                <MonacoEditor
+                  value={contentQuery.data?.data.content ?? ''}
+                  language="plaintext"
+                  readOnly
+                  minHeight={220}
+                  className="m-0"
+                />
+              </Suspense>
+            </div>
+          )}
+        </div>
+      )}
+    </SwarmLabelsEditDialog>
+  );
+};
+
+export const SwarmLabelsEditDialog = ({
+  title,
+  description,
+  initialLabels,
+  open,
+  pending,
+  onOpenChange,
+  onSave,
+  children,
+}: {
+  title: string;
+  description: string;
+  initialLabels: Record<string, string>;
+  open: boolean;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (labels: Record<string, string>) => Promise<void>;
+  children?: ReactNode;
+}) => {
+  const [labels, setLabels] = useState<KVPair[]>(() =>
+    Object.entries(initialLabels).map(([key, value]) => ({ key, value })),
+  );
+
+  const normalized = labels.map(({ key, value }) => ({ key: key.trim(), value }));
+  const keys = normalized.map(({ key }) => key);
+  const labelsInvalid = keys.some((key) => !key) || new Set(keys).size !== keys.length;
+
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Edit {kind === 'config' ? 'config' : 'secret'}</DialogTitle>
-          <DialogDescription>
-            {kind === 'config'
-              ? 'Config data is immutable and shown read-only. Labels can be changed.'
-              : 'Docker never returns the stored secret value. Only labels can be changed.'}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {kind === 'config' && (
-          <div className="flex w-full min-w-0 flex-col gap-2">
-            <span className="text-sm font-medium">Data</span>
-            {!canInspect && (
-              <AlertMessage title="Config data unavailable" type="info">
-                Inspect permission is required to view this Config&apos;s data.
-              </AlertMessage>
-            )}
-            {problem && (
-              <AlertMessage title={problem.title ?? 'Unable to load config data'} type="error">
-                {problem.detail ?? 'Docker could not return this Config data.'}
-              </AlertMessage>
-            )}
-            {canInspect && !problem && (
-              <div className="w-full min-w-0 overflow-hidden rounded-md border bg-muted/20">
-                <Suspense fallback={<div className="h-55" />}>
-                  <MonacoEditor
-                    value={contentQuery.data?.data.content ?? ''}
-                    language="plaintext"
-                    readOnly
-                    minHeight={220}
-                    className="m-0"
-                  />
-                </Suspense>
-              </div>
-            )}
-          </div>
-        )}
+        {children}
 
         <div className="min-w-0">
           <KeyValuePairInput label="Labels" value={labels} onChange={setLabels} addButtonLabel="Add label" />
@@ -159,7 +194,9 @@ export const SwarmResourceEditDialog = ({
         {labelsInvalid && <p className="text-xs text-destructive">Label keys must be non-empty and unique.</p>}
 
         <DialogFooter className="w-full flex-row justify-end">
-          <Button onClick={save} disabled={labelsInvalid || pending}>
+          <Button
+            onClick={() => onSave(Object.fromEntries(normalized.map(({ key, value }) => [key, value])))}
+            disabled={labelsInvalid || pending}>
             <Save className="h-3.5 w-3.5" /> Save
           </Button>
         </DialogFooter>

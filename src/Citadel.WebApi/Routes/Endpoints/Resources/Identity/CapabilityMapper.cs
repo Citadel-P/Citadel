@@ -197,9 +197,9 @@ public static class CapabilityMapper
         var common = ToResourceCapabilities(permission);
         return new SwarmCapabilities(
             CanViewCluster: common.CanRead,
-            CanManageNodes: false,
+            CanManageNodes: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             CanViewServices: common.CanRead,
-            CanManageNetworks: false,
+            CanManageNetworks: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             CanManageSecrets: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             CanManageConfigs: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             SupportsDeploymentApply: false,

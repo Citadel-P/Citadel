@@ -2,6 +2,9 @@ import { RegularResourceComponents } from '@/pages/types';
 import { Network } from 'lucide-react';
 import { SwarmNodeListView, useNodesGroup } from './hooks/useNodesGroup';
 import { NodesTable } from './table';
+import { NodeEditDropdownAction } from './node-edit-dialog';
+import { ActionBar } from '@/components/custom/action-bar';
+import { NodeGroupActions } from './actions';
 
 export const NodeComponents: RegularResourceComponents<SwarmNodeListView> = {
   Icon: Network,
@@ -11,7 +14,9 @@ export const NodeComponents: RegularResourceComponents<SwarmNodeListView> = {
     showAdd: false,
     showSearch: true,
   },
-  Content: ({ items, isLoading }) => <NodesTable items={items} isLoading={isLoading} />,
+  Content: ({ items, actions, isLoading }) => <NodesTable items={items} actions={actions} isLoading={isLoading} />,
+  DropdownActions: { edit: NodeEditDropdownAction },
+  GroupActions: ({ items }) => <ActionBar type="Node" items={items} actions={Object.values(NodeGroupActions)} />,
   useData: (platformId) => {
     const { items, isLoading } = useNodesGroup(platformId);
     return { items, isLoading, capabilities: undefined };

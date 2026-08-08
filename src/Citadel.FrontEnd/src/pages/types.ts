@@ -94,6 +94,8 @@ export interface RequiredDockerInfoComponents<T = any> {
   };
   /** Optional subheader */
   SubHeader?: React.FC<{ resource: T }>;
+  /** Optional content rendered below the resource tabs. */
+  Footer?: React.FC<{ resource: T }>;
   /** Tabs configuration for tabbed resources */
   Tabs: ResourceTabElement<T>[];
   /** Data hook for this resource */

@@ -219,14 +219,34 @@ const getSwarmTaskStatusStyle = (value: StateValue): StatusStyle => {
 
 const getSwarmNodeStatusStyle = (value: StateValue): StatusStyle => {
   switch (String(value).toLowerCase()) {
+    case 'ready:active':
     case 'ready':
-      return { colorClass: 'bg-green-500', tooltip: 'Ready' };
+      return { colorClass: 'bg-green-500', tooltip: 'Ready · Active' };
+    case 'ready:pause':
+      return { colorClass: 'bg-orange-500', tooltip: 'Ready · Scheduling paused' };
+    case 'ready:drain':
+      return { colorClass: 'bg-gray-500', tooltip: 'Ready · Drained' };
     case 'down':
     case 'disconnected':
       return { colorClass: 'bg-red-500', tooltip: String(value) };
     default:
       return { colorClass: 'bg-orange-400', tooltip: String(value || 'Unknown') };
   }
+};
+
+export const getSwarmNodeIndicatorValue = ({
+  status,
+  availability,
+  isStale,
+}: {
+  status: string;
+  availability: string;
+  isStale: boolean;
+}) => {
+  if (isStale) return 'unknown';
+  const normalizedStatus = status.toLowerCase();
+  if (normalizedStatus === 'down' || normalizedStatus === 'disconnected') return normalizedStatus;
+  return normalizedStatus === 'ready' ? `ready:${availability.toLowerCase()}` : normalizedStatus;
 };
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIndicatorKind) => {

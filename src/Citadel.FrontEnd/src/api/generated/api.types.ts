@@ -7664,6 +7664,15 @@ export interface SwarmNetworksView {
   capabilities: PlatformCapabilities;
 }
 
+export interface SwarmNodeAvailabilityTargetInput {
+  nodeId: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+}
+
 export interface SwarmNodeInspectView {
   id: string;
   /**
@@ -8056,6 +8065,7 @@ export interface SwarmServiceSpec {
   command?: string[];
   arguments?: string[];
   environment?: string[];
+  labels?: Record<string, string>;
   user?: null | string;
   workingDirectory?: null | string;
   healthCheck?: null | SwarmServiceHealthCheck;
@@ -8532,6 +8542,21 @@ export interface UpdateResourceBindingInput {
   secretId: null | string;
   secretDeliveryMode?: any;
   targetPath?: null | string;
+}
+
+export interface UpdateSwarmNodeInput {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionIndex: number | string;
+  availability: string;
+  labels?: null | Record<string, string>;
+}
+
+export interface UpdateSwarmNodesAvailabilityInput {
+  nodes: null | SwarmNodeAvailabilityTargetInput[];
+  availability: string;
 }
 
 export interface UpdateSwarmResourceLabelsInput {
@@ -11315,6 +11340,38 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name UpdateSwarmNode
+     * @summary Update Docker Swarm node availability and labels
+     * @request PATCH:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmNode: (
+      platformId: string,
+      nodeId: string,
+      data: UpdateSwarmNodeInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/nodes/${nodeId}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name InspectSwarmNode
      * @summary Inspect a live Docker Swarm node
      * @request GET:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect
@@ -11338,6 +11395,37 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name UpdateSwarmNodesAvailability
+     * @summary Update availability for selected Docker Swarm nodes
+     * @request PATCH:/api/v1/platforms/{platformId}/swarm/nodes/availability
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateSwarmNodesAvailability: (
+      platformId: string,
+      data: UpdateSwarmNodesAvailabilityInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/nodes/availability`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

@@ -1877,6 +1877,20 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("inspectSwarmNode");
 
+        platforms.MapPatch("{platformId:guid}/swarm/nodes/{nodeId}", SwarmNodes.Update)
+            .WithSummary("Update Docker Swarm node availability and labels")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateSwarmNode");
+
+        platforms.MapPatch("{platformId:guid}/swarm/nodes/availability", SwarmNodes.UpdateAvailability)
+            .WithSummary("Update availability for selected Docker Swarm nodes")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateSwarmNodesAvailability");
+
         platforms.MapGet("{platformId:guid}/swarm/services", SwarmInventory.ListServices)
             .WithSummary("List the persisted services observed on a Docker Swarm platform")
             .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)

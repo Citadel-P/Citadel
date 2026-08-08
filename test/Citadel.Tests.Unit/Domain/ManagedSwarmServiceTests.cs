@@ -76,6 +76,32 @@ public sealed class ManagedSwarmServiceTests
     }
 
     [Fact]
+    public void DesiredAndRuntimeHashes_ShouldTrackUserDefinedLabelsRegardlessOfOrder()
+    {
+        var first = CreateSpec(new SwarmExternalImage(Guid.CreateVersion7(), "nginx:1.27")) with
+        {
+            Labels = new Dictionary<string, string> { ["team"] = "platform", ["tier"] = "web" }
+        };
+        var reordered = first with
+        {
+            Labels = new Dictionary<string, string> { ["tier"] = "web", ["team"] = "platform" }
+        };
+        var changed = first with
+        {
+            Labels = new Dictionary<string, string> { ["team"] = "operations", ["tier"] = "web" }
+        };
+
+        Assert.Equal(SwarmServiceSpecHasher.Hash(first), SwarmServiceSpecHasher.Hash(reordered));
+        Assert.NotEqual(SwarmServiceSpecHasher.Hash(first), SwarmServiceSpecHasher.Hash(changed));
+        Assert.Equal(
+            SwarmServiceRuntimeHasher.Hash(first, "nginx@sha256:applied"),
+            SwarmServiceRuntimeHasher.Hash(reordered, "nginx@sha256:applied"));
+        Assert.NotEqual(
+            SwarmServiceRuntimeHasher.Hash(first, "nginx@sha256:applied"),
+            SwarmServiceRuntimeHasher.Hash(changed, "nginx@sha256:applied"));
+    }
+
+    [Fact]
     public void RuntimeHash_ShouldUseResolvedImageAndCanonicalizeSetLikeFields()
     {
         var registryId = Guid.CreateVersion7();

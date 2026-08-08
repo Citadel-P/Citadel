@@ -3,6 +3,7 @@ using Application.Permissions;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Routes.Endpoints;
@@ -41,5 +42,26 @@ public static class SwarmNodes
     {
         var result = await mediator.Send(new InspectSwarmNode(platformId, nodeId), cancellationToken);
         return EndpointHandlers.HandleResult(result, SwarmNodeInspectView.Map);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Update(
+        IMediator mediator,
+        Guid platformId,
+        string nodeId,
+        [FromBody] UpdateSwarmNodeInput request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(platformId, nodeId), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> UpdateAvailability(
+        IMediator mediator,
+        Guid platformId,
+        [FromBody] UpdateSwarmNodesAvailabilityInput request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(platformId), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
     }
 }

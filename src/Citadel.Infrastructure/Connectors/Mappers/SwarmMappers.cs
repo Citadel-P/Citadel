@@ -84,7 +84,7 @@ internal static class SwarmMappers
         source.RunningTaskCount, source.DesiredTaskCount, source.UpdateState, source.UpdateMessage,
         source.Ports, source.NetworkIds, source.SecretIds, source.ConfigIds, source.Labels,
         source.CreatedAt, source.UpdatedAt, source.RuntimeHash, source.ForceUpdate,
-        MapDefinition(source.Definition), source.AdoptionWarnings ?? []);
+        MapDefinition(source.Definition, source.Labels), source.AdoptionWarnings ?? []);
     public static IReadOnlyList<DomainSwarmService> Map(this IReadOnlyList<HostingSwarmService> source) => MapList(source, static value => value.Map());
     public static DomainSwarmService Map(this SwarmServiceMessage source) => new(
         source.Id, checked((long)source.VersionIndex), source.Name, source.Mode, source.Image,
@@ -92,7 +92,7 @@ internal static class SwarmMappers
         EmptyToNull(source.UpdateMessage), source.Ports.ToArray(), source.NetworkIds.ToArray(),
         source.SecretIds.ToArray(), source.ConfigIds.ToArray(), source.Labels,
         source.CreatedAt?.ToDateTimeOffset(), source.UpdatedAt?.ToDateTimeOffset(), source.RuntimeHash,
-        source.ForceUpdate, MapDefinition(source.Definition), source.AdoptionWarnings.ToArray());
+        source.ForceUpdate, MapDefinition(source.Definition, source.Labels), source.AdoptionWarnings.ToArray());
     public static IReadOnlyList<DomainSwarmService> Map(this ListSwarmServicesResponse source) => MapList(source.Services, static value => value.Map());
 
     public static DomainSwarmTask Map(this HostingSwarmTask source) => new(
@@ -147,7 +147,9 @@ internal static class SwarmMappers
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static SwarmServiceSpec? MapDefinition(HostingSwarmServiceSpec? source) => source is null
+    private static SwarmServiceSpec? MapDefinition(
+        HostingSwarmServiceSpec? source,
+        IReadOnlyDictionary<string, string> labels) => source is null
         ? null
         : new SwarmServiceSpec
         {
@@ -157,6 +159,7 @@ internal static class SwarmMappers
             Command = source.Command,
             Arguments = source.Arguments,
             Environment = source.Environment,
+            Labels = CopyConfiguredLabels(labels),
             User = EmptyToNull(source.User),
             WorkingDirectory = EmptyToNull(source.WorkingDirectory),
             HealthCheck = source.HealthCheck is null ? null : new SwarmServiceHealthCheck(
@@ -199,7 +202,9 @@ internal static class SwarmMappers
                 Parse(source.UpdatePolicy.FailureAction, SwarmServiceUpdateFailureAction.Pause))
         };
 
-    private static SwarmServiceSpec? MapDefinition(SwarmServiceMutationSpecMessage? source) => source is null
+    private static SwarmServiceSpec? MapDefinition(
+        SwarmServiceMutationSpecMessage? source,
+        IEnumerable<KeyValuePair<string, string>> labels) => source is null
         ? null
         : new SwarmServiceSpec
         {
@@ -209,6 +214,7 @@ internal static class SwarmMappers
             Command = source.Command.ToArray(),
             Arguments = source.Arguments.ToArray(),
             Environment = source.Environment.ToArray(),
+            Labels = CopyConfiguredLabels(labels),
             User = EmptyToNull(source.User),
             WorkingDirectory = EmptyToNull(source.WorkingDirectory),
             HealthCheck = source.HealthCheck is null ? null : new SwarmServiceHealthCheck(
@@ -250,6 +256,12 @@ internal static class SwarmMappers
                 Parse(source.UpdatePolicy.Order, SwarmServiceUpdateOrder.StopFirst),
                 Parse(source.UpdatePolicy.FailureAction, SwarmServiceUpdateFailureAction.Pause))
         };
+
+    private static IReadOnlyDictionary<string, string> CopyConfiguredLabels(
+        IEnumerable<KeyValuePair<string, string>> labels) =>
+        labels
+            .Where(static pair => !pair.Key.StartsWith("com.citadel.", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
 
     private static T Parse<T>(string? value, T fallback) where T : struct, Enum =>
         Enum.TryParse<T>(value, ignoreCase: true, out var parsed) ? parsed : fallback;

@@ -55,6 +55,7 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
                   resource={resource as any}
                   tabs={Components.Tabs}
                 />
+                {Components.Footer && <Components.Footer resource={resource} />}
               </>
             )
           )}

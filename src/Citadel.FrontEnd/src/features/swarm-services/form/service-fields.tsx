@@ -32,7 +32,7 @@ export const ServicePortsField = ({
   return (
     <div className="space-y-2">
       {value.map((port, index) => (
-        <div key={index} className="grid grid-cols-[1fr_1fr_7rem_8rem_auto] gap-2">
+        <div key={index} className="flex flex-row gap-4">
           <Input
             aria-label={`Target port ${index + 1}`}
             type="number"
@@ -41,6 +41,7 @@ export const ServicePortsField = ({
             value={port.targetPort}
             disabled={disabled}
             placeholder="Target"
+            className="w-100"
             onChange={(event) => update(index, { targetPort: Number(event.target.value) })}
           />
           <Input
@@ -51,6 +52,7 @@ export const ServicePortsField = ({
             value={port.publishedPort ?? ''}
             disabled={disabled}
             placeholder="Published"
+            className="w-100"
             onChange={(event) =>
               update(index, { publishedPort: event.target.value ? Number(event.target.value) : null })
             }
@@ -62,7 +64,7 @@ export const ServicePortsField = ({
             <SelectTrigger aria-label={`Protocol ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-background">
               <SelectItem value="tcp">TCP</SelectItem>
               <SelectItem value="udp">UDP</SelectItem>
               <SelectItem value="sctp">SCTP</SelectItem>
@@ -75,7 +77,7 @@ export const ServicePortsField = ({
             <SelectTrigger aria-label={`Publish mode ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-background">
               <SelectItem value={SwarmServicePortPublishMode.Ingress}>Ingress</SelectItem>
               <SelectItem value={SwarmServicePortPublishMode.Host}>Host</SelectItem>
             </SelectContent>
@@ -127,24 +129,13 @@ export const ServiceMountsField = ({
   return (
     <div className="space-y-2">
       {value.map((mount, index) => (
-        <div key={index} className="grid grid-cols-[8rem_1fr_1fr_6rem_auto] items-center gap-2">
-          <Select
-            value={mount.kind}
-            disabled={disabled}
-            onValueChange={(kind: SwarmServiceMountKind) => update(index, { kind })}>
-            <SelectTrigger aria-label={`Mount type ${index + 1}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SwarmServiceMountKind.Volume}>Volume</SelectItem>
-              <SelectItem value={SwarmServiceMountKind.Bind}>Bind</SelectItem>
-            </SelectContent>
-          </Select>
+        <div key={index} className="flex flex-row items-center gap-4">
           <Input
             aria-label={`Mount source ${index + 1}`}
             value={mount.source}
             disabled={disabled}
             placeholder="Source"
+            className="bg-background w-100"
             onChange={(event) => update(index, { source: event.target.value })}
           />
           <Input
@@ -152,8 +143,21 @@ export const ServiceMountsField = ({
             value={mount.target}
             disabled={disabled}
             placeholder="/container/path"
+            className="bg-background w-100"
             onChange={(event) => update(index, { target: event.target.value })}
           />
+          <Select
+            value={mount.kind}
+            disabled={disabled}
+            onValueChange={(kind: SwarmServiceMountKind) => update(index, { kind })}>
+            <SelectTrigger className='w-30' aria-label={`Mount type ${index + 1}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value={SwarmServiceMountKind.Volume}>Volume</SelectItem>
+              <SelectItem value={SwarmServiceMountKind.Bind}>Bind</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Switch
               aria-label={`Read-only mount ${index + 1}`}

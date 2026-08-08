@@ -40,7 +40,7 @@ import { ServiceTerminal } from './service-terminal';
 import { AlertMessage } from '@/components/custom/alert-message';
 
 export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServiceView> = {
-  AddForm: { Content: () => <SwarmServiceForm mode="add" /> },
+  AddForm: { Header : {title : 'Swarm Service'}, Content: () => <SwarmServiceForm mode="add" /> },
   EditForm: {
     Header: {
       Indicator: ({ resource }) => (

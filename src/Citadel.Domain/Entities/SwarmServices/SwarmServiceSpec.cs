@@ -13,6 +13,7 @@ public sealed record SwarmServiceSpec
     public IReadOnlyList<string> Command { get; init; } = [];
     public IReadOnlyList<string> Arguments { get; init; } = [];
     public IReadOnlyList<string> Environment { get; init; } = [];
+    public IReadOnlyDictionary<string, string> Labels { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
     public string? User { get; init; }
     public string? WorkingDirectory { get; init; }
     public SwarmServiceHealthCheck? HealthCheck { get; init; }

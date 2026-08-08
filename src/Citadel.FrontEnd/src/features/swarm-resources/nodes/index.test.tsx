@@ -7,17 +7,28 @@ import { screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router';
 import { NodeComponents } from '.';
+import { LayoutContext } from '@/lib/context/layout-context';
 
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => null }));
 
 const platformId = '00000000-0000-0000-0000-000000000200';
+const layoutContext = {
+  theme: { mode: 'light' as const },
+  sidebarMinimized: false,
+  mobileMenuVisible: false,
+  toggleSidebar: vi.fn(),
+  setSidebarOpen: vi.fn(),
+  toggleMobileMenu: vi.fn(),
+  toggleThemeColor: vi.fn(),
+  setThemeMode: vi.fn(),
+};
 
 describe('NodeComponents', () => {
   it('uses expandable task rows without duplicating the indicated node status', async () => {
     const fake = new FakeHubConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes`, () =>
-        HttpResponse.json({ items: [node()] }),
+        HttpResponse.json({ items: [node({ availability: 'Pause' })] }),
       ),
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
         HttpResponse.json({ items: [task()] }),
@@ -25,12 +36,14 @@ describe('NodeComponents', () => {
     );
 
     const { user } = renderCitadel(
-      <Routes>
-        <Route
-          path="/platforms/:platformId/nodes"
-          element={<RegularResourceView Components={NodeComponents} type="Node" showTaskSheet={false} />}
-        />
-      </Routes>,
+      <LayoutContext.Provider value={layoutContext}>
+        <Routes>
+          <Route
+            path="/platforms/:platformId/nodes"
+            element={<RegularResourceView Components={NodeComponents} type="Node" showTaskSheet={false} />}
+          />
+        </Routes>
+      </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/nodes`,
         signalR: {
@@ -42,9 +55,15 @@ describe('NodeComponents', () => {
 
     const nodeLink = await screen.findByRole('link', { name: 'manager-1' });
     expect(nodeLink).toHaveAttribute('href', `/platforms/${platformId}/nodes/node-1`);
-    expect(nodeLink.parentElement?.querySelector('.bg-green-500')).not.toBeNull();
+    expect(nodeLink.parentElement?.querySelector('.bg-orange-500')).not.toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Node manager-1' }));
+    expect(screen.getByText('1 of 1 node(s) selected.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Active' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Drain' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Expand node manager-1' }));
 
@@ -80,6 +99,15 @@ const node = (overrides: Partial<SwarmNodeView> = {}): SwarmNodeView => ({
   updatedAt: null,
   observedAt: '2026-08-05T08:00:00Z',
   isStale: false,
+  capabilities: {
+    canRead: true,
+    canWrite: true,
+    canExecute: false,
+    canViewLogs: false,
+    canInspect: true,
+    canOpenTerminal: false,
+    canPull: false,
+  },
   ...overrides,
 });
 

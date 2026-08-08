@@ -33,7 +33,7 @@ import {
 } from '@/components/custom/form-builder';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { MonacoToArrayEditor } from '@/lib/monaco';
+import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
@@ -119,6 +119,7 @@ const defaultSpec = (): SwarmServiceSpec => ({
   command: [],
   arguments: [],
   environment: [],
+  labels: {},
   ports: [],
   networkIds: [],
   mounts: [],
@@ -360,34 +361,34 @@ export const SwarmServiceForm = ({
                 }),
               ]
             : []),
-          defineField<FormValue, 'platformId'>({
-            key: 'platformId',
-            label: 'Platform',
-            required: true,
-            disabled: mode === 'edit' || !!adoptFrom,
-            description:
-              mode === 'edit'
-                ? 'The Swarm platform cannot be changed after this Service is created.'
-                : 'Select the Docker Swarm platform that will run this Service.',
-            validate: (value) => (value ? null : 'A Swarm platform is required.'),
-            render: (value, set) => (
-              <ResourceSelectorField
-                sourceType={LookupResourceType.SwarmService}
-                targetType={LookupResourceType.Platform}
-                selected={value}
-                items={swarmPlatforms}
-                onSelect={(selected) => set({ platformId: selected?.id ?? '' })}
-                placeholder="Select Swarm platform"
-                allowClear={false}
-              />
-            ),
-          }),
           defineGroupField<FormValue>({
             id: 'scheduling',
-            label: 'Scheduling',
-            title: 'Scheduling',
-            description: 'Choose how Swarm places and maintains Service tasks.',
+            label: 'Platform and Scheduling',
+            title: 'Platform and Scheduling',
+            description: 'Choose where and how Swarm runs the Service tasks.',
             items: [
+              defineField<FormValue, 'platformId'>({
+                key: 'platformId',
+                label: 'Platform',
+                required: true,
+                disabled: mode === 'edit' || !!adoptFrom,
+                description:
+                  mode === 'edit'
+                    ? 'The Swarm platform cannot be changed after this Service is created.'
+                    : 'Select the Docker Swarm platform that will run this Service.',
+                validate: (value) => (value ? null : 'A Swarm platform is required.'),
+                render: (value, set) => (
+                  <ResourceSelectorField
+                    sourceType={LookupResourceType.SwarmService}
+                    targetType={LookupResourceType.Platform}
+                    selected={value}
+                    items={swarmPlatforms}
+                    onSelect={(selected) => set({ platformId: selected?.id ?? '' })}
+                    placeholder="Select Swarm platform"
+                    allowClear={false}
+                  />
+                ),
+              }),
               defineField<FormValue, 'spec.schedulingMode'>({
                 key: 'spec.schedulingMode',
                 label: 'Mode',
@@ -565,6 +566,38 @@ export const SwarmServiceForm = ({
                       ),
                     }),
                   ]),
+              defineField<FormValue, 'spec.updateBehavior'>({
+                key: 'spec.updateBehavior',
+                label: 'Auto Update',
+                description: 'Define how Citadel handles a new image digest.',
+                disabled: !!adoptFrom,
+                render: (value, set) => (
+                  <div className="flex flex-col gap-2">
+                    <ItemSelector
+                      value={value}
+                      disabled={updateBehaviorUnavailable}
+                      collection={licensedUpdateBehaviors}
+                      onChange={(updateBehavior: UpdateBehavior) =>
+                        set((previous) => ({
+                          spec: {
+                            ...previous.spec!,
+                            updateBehavior,
+                            webhook:
+                              updateBehavior === UpdateBehavior.Disabled && previous.spec?.webhook?.enabled
+                                ? { ...previous.spec.webhook, enabled: false }
+                                : previous.spec?.webhook,
+                          },
+                        }))
+                      }
+                    />
+                    {updateBehaviorUnavailable && (
+                      <AlertMessage type="warning" title="">
+                        {updateBehaviorWarning}
+                      </AlertMessage>
+                    )}
+                  </div>
+                ),
+              }),
             ],
           }),
           defineGroupField<FormValue>({
@@ -613,47 +646,29 @@ export const SwarmServiceForm = ({
               }),
             ],
           }),
-          defineField<FormValue, 'spec.mounts'>({
-            key: 'spec.mounts',
-            label: 'Mounts',
-            description: 'Bind paths must exist on every eligible node. Local-driver volumes are node-local.',
-            validate: validateMounts,
-            render: (value, set) => (
-              <ServiceMountsField
-                value={value ?? []}
-                disabled={disabled}
-                onChange={(mounts) => set((previous) => ({ spec: { ...previous.spec!, mounts } }))}
-              />
-            ),
-          }),
-          defineField<FormValue, 'spec.environment'>({
-            key: 'spec.environment',
-            label: 'Environment',
-            description:
-              'Select the environment keys injected into each task. Use KEY for a matching Citadel variable or KEY=${OTHER_KEY} to map a value.',
-            render: (value, set) => (
-              <MonacoToArrayEditor
-                value={value ?? []}
-                helperText="# LOG_LEVEL=${LOG_LEVEL}"
-                language="key_value"
-                completionItems={configurationNames}
-                completionItemDetail="Citadel variable or secret"
-                validateItem={validateServiceEnvironmentVariable}
-                onChange={(environment) =>
-                  set((previous) => ({ spec: { ...previous.spec!, environment: environment ?? [] } }))
-                }
-              />
-            ),
-          }),
           defineGroupField<FormValue>({
-            id: 'swarm-data',
-            label: 'Secrets and Configs',
-            title: 'Secrets and Configs',
-            description: 'Docker Swarm Secrets and Configs are separate from Citadel encrypted bindings.',
+            id: 'storage',
+            label: 'Storage',
+            title: 'Storage',
+            description: 'Configure task mounts and Swarm-managed data files.',
             items: [
+              defineField<FormValue, 'spec.mounts'>({
+                key: 'spec.mounts',
+                label: 'Mounts',
+                description: 'Bind paths must exist on every eligible node. Local-driver volumes are node-local.',
+                validate: validateMounts,
+                render: (value, set) => (
+                  <ServiceMountsField
+                    value={value ?? []}
+                    disabled={disabled}
+                    onChange={(mounts) => set((previous) => ({ spec: { ...previous.spec!, mounts } }))}
+                  />
+                ),
+              }),
               defineField<FormValue, 'spec.secrets'>({
                 key: 'spec.secrets',
                 label: 'Secrets',
+                description: 'Mount an existing Docker Swarm Secret into each task.',
                 render: (value, set) => (
                   <ServiceReferencesField
                     kind="secret"
@@ -671,6 +686,7 @@ export const SwarmServiceForm = ({
               defineField<FormValue, 'spec.configs'>({
                 key: 'spec.configs',
                 label: 'Configs',
+                description: 'Mount an existing Docker Swarm Config into each task.',
                 render: (value, set) => (
                   <ServiceReferencesField
                     kind="config"
@@ -687,58 +703,93 @@ export const SwarmServiceForm = ({
               }),
             ],
           }),
-          defineField<FormValue, 'spec.updateBehavior'>({
-            key: 'spec.updateBehavior',
-            label: 'Auto Update',
-            description: 'Define how Citadel handles a new image digest.',
-            disabled: !!adoptFrom,
-            render: (value, set) => (
-              <div className="flex flex-col gap-2">
-                <ItemSelector
-                  value={value}
-                  disabled={updateBehaviorUnavailable}
-                  collection={licensedUpdateBehaviors}
-                  onChange={(updateBehavior: UpdateBehavior) =>
-                    set((previous) => ({
-                      spec: {
-                        ...previous.spec!,
-                        updateBehavior,
-                        webhook:
-                          updateBehavior === UpdateBehavior.Disabled && previous.spec?.webhook?.enabled
-                            ? { ...previous.spec.webhook, enabled: false }
-                            : previous.spec?.webhook,
-                      },
-                    }))
-                  }
-                />
-                {updateBehaviorUnavailable && (
-                  <AlertMessage type="warning" title="">
-                    {updateBehaviorWarning}
-                  </AlertMessage>
-                )}
-              </div>
-            ),
+          defineGroupField<FormValue>({
+            id: 'configuration',
+            label: 'Configuration',
+            title: 'Configuration',
+            description: 'Configure the task environment and Docker Service metadata.',
+            items: [
+              defineField<FormValue, 'spec.environment'>({
+                key: 'spec.environment',
+                label: 'Environment',
+                description:
+                  'Select the environment keys injected into each task. Use KEY for a matching Citadel variable or KEY=${OTHER_KEY} to map a value.',
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value ?? []}
+                    helperText="# LOG_LEVEL=${LOG_LEVEL}"
+                    language="key_value"
+                    completionItems={configurationNames}
+                    completionItemDetail="Citadel variable or secret"
+                    validateItem={validateServiceEnvironmentVariable}
+                    onChange={(environment) =>
+                      set((previous) => ({ spec: { ...previous.spec!, environment: environment ?? [] } }))
+                    }
+                  />
+                ),
+              }),
+              defineField<FormValue, 'spec.labels'>({
+                key: 'spec.labels',
+                label: 'Labels',
+                description: 'User-defined key/value metadata applied to the Docker Service.',
+                render: (value, set) => (
+                  <MonacoToDictionaryEditor
+                    value={value ?? {}}
+                    helperText="# KEY=value"
+                    language="key_value"
+                    onChange={(labels) =>
+                      set((previous) => ({ spec: { ...previous.spec!, labels: labels ?? {} } }))
+                    }
+                  />
+                ),
+              }),
+            ],
           }),
         ],
       }),
       Advanced: defineSection<FormValue>({
         title: 'Advanced',
         items: [
-          defineField<FormValue, 'spec.resources'>({
-            key: 'spec.resources',
-            label: 'Resources',
-            description: 'Choose how much CPU and memory to allocate to each task.',
-            render: (value, set) => (
-              <ResourceProfileSelector
-                value={getSwarmResourceProfile(value)}
-                disabled={disabled}
-                onChange={(profile) =>
-                  set((previous) => ({
-                    spec: { ...previous.spec!, resources: getSwarmResourcesForProfile(profile) },
-                  }))
-                }
-              />
-            ),
+          defineGroupField<FormValue>({
+            id: 'resources',
+            label: 'Resources and Placement',
+            title: 'Resources and Placement',
+            description: 'Set task resource limits and control which nodes can run the Service.',
+            items: [
+              defineField<FormValue, 'spec.resources'>({
+                key: 'spec.resources',
+                label: 'Resources',
+                description: 'Choose how much CPU and memory to allocate to each task.',
+                render: (value, set) => (
+                  <ResourceProfileSelector
+                    value={getSwarmResourceProfile(value)}
+                    disabled={disabled}
+                    onChange={(profile) =>
+                      set((previous) => ({
+                        spec: { ...previous.spec!, resources: getSwarmResourcesForProfile(profile) },
+                      }))
+                    }
+                  />
+                ),
+              }),
+              defineField<FormValue, 'spec.placementConstraints'>({
+                key: 'spec.placementConstraints',
+                label: 'Placement Constraints',
+                description: 'Configure one Docker placement constraint per line.',
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value ?? []}
+                    helperText="# node.labels.region==eu-west"
+                    language="string_list"
+                    onChange={(placementConstraints) =>
+                      set((previous) => ({
+                        spec: { ...previous.spec!, placementConstraints: placementConstraints ?? [] },
+                      }))
+                    }
+                  />
+                ),
+              }),
+            ],
           }),
           ...(imageType === 'External'
             ? [
@@ -781,23 +832,6 @@ export const SwarmServiceForm = ({
                 }),
               ]
             : []),
-          defineField<FormValue, 'spec.placementConstraints'>({
-            key: 'spec.placementConstraints',
-            label: 'Placement Constraints',
-            description: 'Configure one Docker placement constraint per line.',
-            render: (value, set) => (
-              <MonacoToArrayEditor
-                value={value ?? []}
-                helperText="# node.labels.region==eu-west"
-                language="string_list"
-                onChange={(placementConstraints) =>
-                  set((previous) => ({
-                    spec: { ...previous.spec!, placementConstraints: placementConstraints ?? [] },
-                  }))
-                }
-              />
-            ),
-          }),
           defineGroupField<FormValue>({
             id: 'process',
             label: 'Process',

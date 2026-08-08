@@ -28,6 +28,17 @@ internal sealed class LocalSwarmConnector(ISwarmService swarmService) : ISwarmCo
         return ServiceResultHandlers.HandleResult(result, SwarmMappers.Map);
     }
 
+    public Task<Result> UpdateNodeAsync(
+        UpdateSwarmNodeCommand command,
+        CancellationToken cancellationToken = default) =>
+        swarmService.UpdateNodeAsync(
+            new Hosting.DockerClient.Models.Swarm.UpdateSwarmNodeCommand(
+                command.NodeId,
+                command.VersionIndex,
+                command.Availability,
+                command.Labels),
+            cancellationToken);
+
     public async Task<Result<IReadOnlyList<SwarmServiceResult>>> ListServicesAsync(ListSwarmServicesCommand command, CancellationToken cancellationToken = default)
         => ServiceResultHandlers.HandleResult(await swarmService.ListServicesAsync(command.Limit, cancellationToken), SwarmMappers.Map);
     public async Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default)

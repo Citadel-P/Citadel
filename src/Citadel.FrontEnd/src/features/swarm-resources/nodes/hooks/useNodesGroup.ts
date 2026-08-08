@@ -6,7 +6,7 @@ import { useContext, useMemo } from 'react';
 import { useLiveSwarmItems, useLiveSwarmResource } from '../../hooks/useSwarmResourceGroup';
 import { useTasksGroup } from '../../tasks/hooks/useTasksGroup';
 
-export type SwarmNodeListView = SwarmNodeView & { tasks: SwarmTaskView[] };
+export type SwarmNodeListView = SwarmNodeView & { name: string; tasks: SwarmTaskView[] };
 
 export type SwarmNodeInfoView = SwarmNodeView & {
   name: string;
@@ -24,7 +24,7 @@ export const useNodesGroup = (platformId: string) => {
   const taskGroup = useTasksGroup(platformId);
   const tasksByNode = useMemo(() => groupTasksByNode(taskGroup.items), [taskGroup.items]);
   const items = useMemo<SwarmNodeListView[]>(
-    () => nodes.map((node) => ({ ...node, tasks: tasksByNode.get(node.id) ?? [] })),
+    () => nodes.map((node) => ({ ...node, name: node.hostname || node.id, tasks: tasksByNode.get(node.id) ?? [] })),
     [nodes, tasksByNode],
   );
   return { items, isLoading: query.isLoading || taskGroup.isLoading };

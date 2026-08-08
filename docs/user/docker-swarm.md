@@ -4,10 +4,12 @@ Docker Swarm support is included with Citadel and does not require a feature
 flag. Citadel can register an existing manager, show persisted cluster
 inventory, inspect resources, retrieve bounded Service and Task logs, manage
 standalone Swarm Secrets and Configs, and create first-class managed Swarm
-Services.
+Services. Operators can also change Node availability and labels, and create or
+safely delete overlay Networks.
 
-Task and Node scheduler mutations remain unavailable. Citadel Deployments stay
-Docker Standalone workloads, and Citadel does not yet Apply Stacks to Swarm.
+Task mutations and destructive Node administration remain unavailable. Citadel
+Deployments stay Docker Standalone workloads, and Citadel does not yet create,
+Apply, delete, or import Stacks on Swarm.
 
 ## Before You Begin
 
@@ -57,8 +59,8 @@ Selecting a Swarm Platform opens its Swarm navigation:
 - **Nodes** shows manager/worker role, readiness, availability, reachability,
   Engine details, labels, and Task counts.
 - **Services** shows mode, image, replica counts, update state, ports, labels,
-  and ownership classification. Select **Add** to create a Citadel-managed
-  Service on the current Swarm.
+  and ownership classification. Eligible unmanaged Services can be adopted;
+  create new managed Services from Citadel's main **Services** page.
 - **Tasks** shows current and recent scheduler attempts, including Service,
   Node, desired/current state, image, and Docker error details. A running Task
   can open a terminal when its container is on the connected manager.
@@ -101,6 +103,40 @@ Network, Secret, or Config changes. A bounded reconciliation also runs every
 Multiple events for one Platform are coalesced so they do not create an
 unbounded queue of refresh jobs.
 
+## Manage Nodes
+
+Platform Write permission allows you to edit a Node's availability and labels.
+Open a Node and use the grouped scheduling actions:
+
+- **Active** to allow the scheduler to assign new Tasks;
+- **Pause** to prevent new assignments without moving existing Tasks;
+- **Drain** to move eligible Service Tasks away from the Node and prevent new
+  assignments.
+
+Use the separate **Edit** action to change Node labels. The current labels are
+shown at the bottom of the Node page.
+
+You can also select one or more Nodes in the Nodes table and set their
+availability from the bottom action bar. Draining requires confirmation. Node
+indicators remain green while ready and active, turn orange while scheduling is
+paused, and turn gray when drained; a down or disconnected Node remains red.
+
+Citadel preserves the Node's name and manager/worker role. It rejects an edit
+if the Node observation is stale or Docker's Node version changed after the
+form was opened. Citadel does not promote, demote, join, remove, or leave Nodes.
+
+## Manage Overlay Networks
+
+Use the Swarm Platform's **Networks** page to create an overlay Network. The
+form supports attachable and internal modes, IPAM settings, IPv6 where Docker
+supports it, driver options, and labels. Swarm scope requires the overlay
+driver and a Docker Swarm Platform.
+
+Deleting a Network requires Platform Execute permission. Citadel refuses to
+delete Docker system Networks, Stack-owned Networks, Networks with connected
+Containers, Networks referenced by a Service, or Networks whose inventory is
+stale. Docker performs the final check if usage changes concurrently.
+
 ## Manage Secrets And Configs
 
 Platform Write permission is required for all mutations. Select **Add** on the
@@ -134,10 +170,13 @@ after reviewing every consumer.
 
 ## Manage A Swarm Service
 
-Open a Swarm Platform, select **Services**, then select **Add**. Configure the
-image, task command and environment, replicated or global mode, networks,
+Open Citadel's main **Services** page, select **Add**, then choose a Docker
+Swarm Platform. Configure the image, task command and environment, replicated
+or global mode, networks,
 published ports, storage, Swarm Secrets and Configs, placement, resources,
-health, restart, and rolling-update policy. Saving creates Citadel desired
+health, restart, rolling-update policy, and Docker Service labels. Enter labels
+as `KEY=value`, one per line. The `com.citadel.*` namespace is reserved for
+Citadel ownership and operation metadata. Saving creates Citadel desired
 state; it does not contact Docker until you select **Deploy**.
 
 The Environment editor supports Citadel variables and environment-delivered
@@ -299,10 +338,11 @@ driver supports retrieval.
 The current Swarm milestone does not provide:
 
 - Swarm initialization, join/leave, token, CA, unlock, or quorum management;
-- Node, Network, or Task mutations;
+- Node role changes/removal and Task mutations;
+- overlay Network updates after creation;
 - in-place Secret value or Config data replacement;
 - Swarm Deployment or Stack create/Apply/delete operations;
-- unmanaged Service or Docker Stack import/adoption;
+- Docker Stack import/adoption;
 - cluster-wide image distribution, volume semantics, backup, or restore;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.

@@ -1,15 +1,20 @@
 import { SwarmTaskView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateBadge } from '@/components/custom/state-badge';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { getSwarmNodeIndicatorValue, StateIndicator } from '@/components/custom/state-indicator';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { getTaskName } from '@/lib/utils';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { SwarmNodeListView } from './hooks/useNodesGroup';
+import { DropdownActionComponent } from '@/pages/types';
+import { NodeEditDialog } from './node-edit-dialog';
+import { useSelectedResources } from '@/lib/atoms';
 
 type NodeRow = {
   id: string;
@@ -28,8 +33,18 @@ type NodeTableRow = NodeRow | TaskRow;
 
 const isNodeRow = (row: NodeTableRow): row is NodeRow => row.kind === 'node';
 
-export const NodesTable = ({ items, isLoading }: { items: SwarmNodeListView[]; isLoading: boolean }) => {
+export const NodesTable = ({
+  items,
+  actions,
+  isLoading,
+}: {
+  items: SwarmNodeListView[];
+  actions: Record<string, DropdownActionComponent<SwarmNodeListView>>;
+  isLoading: boolean;
+}) => {
   const { platformId = '' } = useParams<{ platformId: string }>();
+  const [, setSelectedResources] = useSelectedResources<SwarmNodeListView>('Node');
+  const [editing, setEditing] = useState<SwarmNodeListView | null>(null);
   const rows = useMemo<NodeTableRow[]>(
     () =>
       items.map((node) => ({
@@ -43,6 +58,26 @@ export const NodesTable = ({ items, isLoading }: { items: SwarmNodeListView[]; i
   const getSubRows = useCallback((row: NodeTableRow) => (isNodeRow(row) ? row.tasks : undefined), []);
   const columns = useMemo<ColumnDef<NodeTableRow>[]>(
     () => [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all Nodes"
+          />
+        ),
+        cell: ({ row }) =>
+          isNodeRow(row.original) ? (
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label={`Select Node ${row.original.node.name}`}
+            />
+          ) : null,
+        enableSorting: false,
+        enableHiding: false,
+      },
       {
         id: 'name',
         accessorFn: (row) => (isNodeRow(row) ? row.node.hostname : getTaskName(row.task)),
@@ -105,18 +140,37 @@ export const NodesTable = ({ items, isLoading }: { items: SwarmNodeListView[]; i
         header: ({ column }) => <SortableCell cellName="Address" column={column} />,
         cell: ({ row }) => (isNodeRow(row.original) ? row.original.node.address || '-' : '-'),
       },
+      {
+        id: 'actions',
+        cell: ({ row }) =>
+          isNodeRow(row.original) ? (
+            <RowActionMenu
+              resource={row.original.node}
+              actions={actions}
+              onAction={({ key }) => key === 'edit' && setEditing(row.original.node)}
+            />
+          ) : null,
+        enableSorting: false,
+        enableHiding: false,
+      },
     ],
-    [platformId],
+    [actions, platformId],
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={rows}
-      isLoading={isLoading}
-      getSubRows={getSubRows}
-      emptyState={{ title: 'No nodes found.', description: 'No nodes were returned by the Swarm manager.' }}
-    />
+    <>
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={isLoading}
+        getSubRows={getSubRows}
+        enableRowSelection={(row) => isNodeRow(row)}
+        enableSubRowSelection={false}
+        onSelectionChange={(selected) => setSelectedResources(selected.filter(isNodeRow).map((row) => row.node))}
+        emptyState={{ title: 'No nodes found.', description: 'No nodes were returned by the Swarm manager.' }}
+      />
+      {editing && <NodeEditDialog resource={editing} open onOpenChange={(open) => !open && setEditing(null)} />}
+    </>
   );
 };
 
@@ -152,7 +206,7 @@ const NodeNameCell = ({ row, platformId }: { row: Row<NodeTableRow>; platformId:
       ) : (
         <span className="h-5 w-5 shrink-0" />
       )}
-      <StateIndicator value={node.isStale ? 'unknown' : node.status} kind="swarmNode" />
+      <StateIndicator value={getSwarmNodeIndicatorValue(node)} kind="swarmNode" />
       <Link className="table-link truncate" to={`/platforms/${platformId}/nodes/${node.id}`}>
         {node.hostname || node.id.slice(0, 12)}
       </Link>

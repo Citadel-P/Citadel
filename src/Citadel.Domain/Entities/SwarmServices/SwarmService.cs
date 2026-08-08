@@ -430,6 +430,7 @@ public static class SwarmServiceSpecHasher
         AppendSequence(value, spec.PlacementConstraints, preserveOrder: false);
         AppendRestart(value, spec.RestartPolicy);
         AppendUpdate(value, spec.UpdatePolicy);
+        AppendLabels(value, spec.Labels);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value.ToString())));
     }
 
@@ -498,6 +499,19 @@ public static class SwarmServiceSpecHasher
     private static string FormatConfig(SwarmServiceConfigReference value) =>
         $"{value.ConfigId}/{value.ConfigName}/{value.TargetName}";
 
+    private static void AppendLabels(StringBuilder builder, IReadOnlyDictionary<string, string> labels)
+    {
+        if (labels is null || labels.Count == 0)
+            return;
+
+        foreach (var (key, value) in labels.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+        {
+            Append(builder, key);
+            Append(builder, value);
+        }
+        builder.Append('|');
+    }
+
     private static void AppendSequence(StringBuilder builder, IEnumerable<string> values, bool preserveOrder)
     {
         var normalized = preserveOrder ? values : values.Order(StringComparer.Ordinal);
@@ -550,5 +564,6 @@ public static class SwarmServiceRuntimeHasher
             spec.UpdatePolicy?.Parallelism,
             spec.UpdatePolicy?.DelayNanoseconds,
             spec.UpdatePolicy?.Order.ToString(),
-            spec.UpdatePolicy?.FailureAction.ToString()));
+            spec.UpdatePolicy?.FailureAction.ToString(),
+            spec.Labels));
 }

@@ -379,7 +379,8 @@ public enum EdgeAgentCommandKind
     SwarmServiceCreate = 111,
     SwarmServiceUpdate = 112,
     SwarmServiceDelete = 113,
-    SwarmServiceRestart = 114
+    SwarmServiceRestart = 114,
+    SwarmNodeUpdate = 115
 }
 
 public enum SwarmServiceOwnership

@@ -14,6 +14,65 @@ using static Hosting.Common.Validators;
 
 namespace Application.Features.Swarm.Commands;
 
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
+public sealed record UpdateSwarmNode(
+    Guid PlatformId,
+    string NodeId,
+    long VersionIndex,
+    string Availability,
+    IReadOnlyDictionary<string, string> Labels) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<UpdateSwarmNode>
+    {
+        private static readonly string[] SupportedAvailability = ["Active", "Pause", "Drain"];
+
+        public Validator()
+        {
+            RuleFor(value => value.PlatformId).NotEmpty();
+            RuleFor(value => value.NodeId).NotEmpty().MaximumLength(255);
+            RuleFor(value => value.VersionIndex).GreaterThanOrEqualTo(0);
+            RuleFor(value => value.Availability)
+                .Must(static value => SupportedAvailability.Contains(value, StringComparer.OrdinalIgnoreCase))
+                .WithMessage("Availability must be Active, Pause, or Drain.");
+            RuleForEach(value => value.Labels).SetValidator(new KeyPairValidator());
+        }
+    }
+}
+
+public sealed record SwarmNodeAvailabilityTarget(string NodeId, long VersionIndex);
+
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
+public sealed record UpdateSwarmNodesAvailability(
+    Guid PlatformId,
+    IReadOnlyList<SwarmNodeAvailabilityTarget> Nodes,
+    string Availability) : ICommand<Result>
+{
+    internal sealed class Validator : AbstractValidator<UpdateSwarmNodesAvailability>
+    {
+        private static readonly string[] SupportedAvailability = ["Active", "Pause", "Drain"];
+
+        public Validator()
+        {
+            RuleFor(value => value.PlatformId).NotEmpty();
+            RuleFor(value => value.Nodes)
+                .NotEmpty()
+                .Must(static nodes => nodes is null || nodes.Count <= 100)
+                .WithMessage("At most 100 nodes can be updated at once.")
+                .Must(static nodes => nodes is null
+                    || nodes.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() == nodes.Count)
+                .WithMessage("Each node can only be selected once.");
+            RuleForEach(value => value.Nodes).ChildRules(node =>
+            {
+                node.RuleFor(value => value.NodeId).NotEmpty().MaximumLength(255);
+                node.RuleFor(value => value.VersionIndex).GreaterThanOrEqualTo(0);
+            });
+            RuleFor(value => value.Availability)
+                .Must(static value => SupportedAvailability.Contains(value, StringComparer.OrdinalIgnoreCase))
+                .WithMessage("Availability must be Active, Pause, or Drain.");
+        }
+    }
+}
+
 [RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record RestartSwarmService(Guid PlatformId, string ServiceId) : ICommand<Result>
 {
@@ -171,6 +230,104 @@ internal sealed class CreateSwarmSecretHandler(
                 cancellationToken),
             reconciliationCoordinator,
             command.PlatformId);
+    }
+}
+
+internal sealed class UpdateSwarmNodeHandler(
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmReconciliationCoordinator reconciliationCoordinator)
+    : ICommandHandler<UpdateSwarmNode, Result>
+{
+    public async ValueTask<Result> Handle(UpdateSwarmNode command, CancellationToken cancellationToken)
+    {
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        if (!context.IsSuccess(out var value, out var error))
+            return Result.Failure(error!);
+
+        var projected = await unitOfWork.Swarm.GetNodeAsync(command.PlatformId, command.NodeId, cancellationToken);
+        if (projected is null)
+            return Result.Failure(new NotFoundError($"Swarm node '{command.NodeId}' does not exist."));
+        if (projected.IsStale)
+            return Result.Failure(new ConflictError($"Node '{projected.Hostname}' is stale and cannot be changed."));
+        if (projected.VersionIndex != command.VersionIndex)
+            return Result.Failure(new ConflictError($"Node '{projected.Hostname}' changed. Reload it before saving."));
+
+        return await SwarmMutationExecution.ExecuteAndRefreshAsync(
+            () => value.Connector.UpdateNodeAsync(
+                new UpdateSwarmNodeCommand(
+                    value.Platform.Address,
+                    command.NodeId,
+                    command.VersionIndex,
+                    command.Availability,
+                    command.Labels),
+                cancellationToken),
+            reconciliationCoordinator,
+            command.PlatformId);
+    }
+}
+
+internal sealed class UpdateSwarmNodesAvailabilityHandler(
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmReconciliationCoordinator reconciliationCoordinator)
+    : ICommandHandler<UpdateSwarmNodesAvailability, Result>
+{
+    public async ValueTask<Result> Handle(UpdateSwarmNodesAvailability command, CancellationToken cancellationToken)
+    {
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        if (!context.IsSuccess(out var value, out var error))
+            return Result.Failure(error!);
+
+        var updates = new List<UpdateSwarmNodeCommand>(command.Nodes.Count);
+        foreach (var target in command.Nodes)
+        {
+            var projected = await unitOfWork.Swarm.GetNodeAsync(command.PlatformId, target.NodeId, cancellationToken);
+            if (projected is null)
+                return Result.Failure(new NotFoundError($"Swarm node '{target.NodeId}' does not exist."));
+            if (projected.IsStale)
+                return Result.Failure(new ConflictError($"Node '{projected.Hostname}' is stale and cannot be changed."));
+            if (projected.VersionIndex != target.VersionIndex)
+                return Result.Failure(new ConflictError($"Node '{projected.Hostname}' changed. Reload it before saving."));
+            if (string.Equals(projected.Availability, command.Availability, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            updates.Add(new UpdateSwarmNodeCommand(
+                value.Platform.Address,
+                target.NodeId,
+                target.VersionIndex,
+                command.Availability,
+                projected.Labels));
+        }
+
+        if (updates.Count == 0)
+            return Result.Success();
+
+        var updated = 0;
+        try
+        {
+            foreach (var update in updates)
+            {
+                var result = await value.Connector.UpdateNodeAsync(update, cancellationToken);
+                if (result.IsSuccess())
+                {
+                    updated++;
+                    continue;
+                }
+
+                result.IsFailure(out error);
+                return updated == 0
+                    ? Result.Failure(error!)
+                    : Result.Failure(new ConflictError(
+                        $"Updated {updated} of {updates.Count} nodes before Docker rejected the operation: {error!.Message}"));
+            }
+
+            return Result.Success();
+        }
+        finally
+        {
+            await reconciliationCoordinator.RefreshAsync(command.PlatformId, CancellationToken.None);
+        }
     }
 }
 

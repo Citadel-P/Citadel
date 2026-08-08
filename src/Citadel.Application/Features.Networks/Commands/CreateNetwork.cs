@@ -6,6 +6,9 @@ using Hosting.Common;
 using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
+using Application.TaskJobs;
+using Domain.Entities.Platforms;
+using Hosting.Common.ErrorTypes;
 using static Hosting.Common.Validators;
 
 namespace Application.Features.Networks.Commands;
@@ -222,7 +225,11 @@ public sealed record IPAM(
 public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
-internal sealed class CreateNetworkHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory)
+internal sealed class CreateNetworkHandler(
+    IPlatformContainerCache platformContainerCache,
+    IConnectorFactory<INetworkConnector> connectorFactory,
+    IUnitOfWork unitOfWork,
+    ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<CreateNetwork, Result<CreateDockerNetworkResult>>
 {
     public async ValueTask<Result<CreateDockerNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
@@ -232,7 +239,23 @@ internal sealed class CreateNetworkHandler(IPlatformContainerCache platformConta
             return Result.Failure<CreateDockerNetworkResult>(error);
         }
 
+        if (request.Scope == "swarm")
+        {
+            var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(request.PlatformId, cancellationToken);
+            if (persistedPlatform?.PlatformDescriptor is not DockerSwarmPlatformDescriptor)
+                return Result.Failure<CreateDockerNetworkResult>(
+                    new BadRequestError("Swarm-scoped overlay networks require a Docker Swarm platform."));
+        }
+
         var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await networkConnector.CreateNetworkAsync(request.ToCommand(platform.Address), cancellationToken);
+        try
+        {
+            return await networkConnector.CreateNetworkAsync(request.ToCommand(platform.Address), cancellationToken);
+        }
+        finally
+        {
+            if (request.Scope == "swarm")
+                await reconciliationCoordinator.RefreshAsync(request.PlatformId, CancellationToken.None);
+        }
     }
 }

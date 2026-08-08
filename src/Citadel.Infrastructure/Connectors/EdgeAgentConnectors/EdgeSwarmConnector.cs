@@ -57,6 +57,18 @@ internal sealed class EdgeSwarmConnector(IEdgeAgentCommandRouter commandRouter) 
                 EdgeConnectorHelpers.CommandFailure(EdgeAgentCommandKind.SwarmNodeInspect, response));
     }
 
+    public Task<Result> UpdateNodeAsync(
+        UpdateSwarmNodeCommand command,
+        CancellationToken cancellationToken = default) =>
+        SendMutationAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmNodeUpdate,
+            new UpdateSwarmNodeRequest
+            {
+                NodeId = command.NodeId,
+                VersionIndex = checked((ulong)command.VersionIndex),
+                Availability = command.Availability,
+                Labels = { command.Labels.ToDictionary() }
+            }, cancellationToken);
+
     public Task<Result<IReadOnlyList<SwarmServiceResult>>> ListServicesAsync(ListSwarmServicesCommand command, CancellationToken cancellationToken = default) =>
         SendAsync(command.PlatformAddress, EdgeAgentCommandKind.SwarmServiceList, new ListSwarmServicesRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, ListSwarmServicesResponse.Parser, static value => value.Map(), cancellationToken);
     public Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default) =>

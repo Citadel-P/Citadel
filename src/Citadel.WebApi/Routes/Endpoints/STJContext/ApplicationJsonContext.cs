@@ -169,6 +169,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(SwarmNodeView))]
 [JsonSerializable(typeof(SwarmNodesView))]
 [JsonSerializable(typeof(SwarmNodeInspectView))]
+[JsonSerializable(typeof(UpdateSwarmNodeInput))]
+[JsonSerializable(typeof(UpdateSwarmNodesAvailabilityInput))]
 [JsonSerializable(typeof(SwarmServiceView))]
 [JsonSerializable(typeof(SwarmServicesView))]
 [JsonSerializable(typeof(SwarmServiceInspectView))]

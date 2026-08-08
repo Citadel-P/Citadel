@@ -56,12 +56,22 @@ describe('NodeInfoComponents', () => {
     expect(await screen.findByRole('link', { name: 'web.1' })).toBeVisible();
     expect(screen.queryByRole('link', { name: 'other.1' })).not.toBeInTheDocument();
     expect(screen.getByText('Manager')).toBeVisible();
-    expect(screen.getByText('Active')).toBeVisible();
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('29.0')).toBeVisible();
     expect(screen.getByText('10.0.0.1')).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Service' })).toBeVisible();
     expect(screen.queryByRole('columnheader', { name: 'Node' })).not.toBeInTheDocument();
+    expect(screen.getByText('Labels')).toBeVisible();
+    expect(screen.getByText('zone')).toBeVisible();
+    expect(screen.getByText('primary')).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Inspect' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Active' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Drain' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(
+      screen.getByRole('tab', { name: 'Inspect' }).compareDocumentPosition(screen.getByText('Labels')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });
 
@@ -79,13 +89,22 @@ const node = {
   operatingSystem: 'linux',
   architecture: 'x86_64',
   address: '10.0.0.1',
-  labels: {},
+  labels: { zone: 'primary' },
   runningTaskCount: 1,
   desiredTaskCount: 1,
   createdAt: null,
   updatedAt: null,
   observedAt: '2026-08-05T08:00:00Z',
   isStale: false,
+  capabilities: {
+    canRead: true,
+    canWrite: false,
+    canExecute: false,
+    canViewLogs: false,
+    canInspect: false,
+    canOpenTerminal: false,
+    canPull: false,
+  },
 };
 
 const task = (overrides: Record<string, unknown> = {}) => ({

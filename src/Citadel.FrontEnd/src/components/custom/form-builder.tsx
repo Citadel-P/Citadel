@@ -1171,32 +1171,36 @@ export function FormShell<T>({
       <div className="flex gap-6">
         {/* Sidebar (xl and up) */}
         <aside className="hidden xl:block relative pr-6 border-r">
-          <div className="sticky top-26 hidden xl:flex flex-col gap-8 w-35 h-fit pb-24">
-            {title && <p className="text-sm font-semibold text-muted-foreground mb-2">{title}</p>}
+          <div className="sticky top-26 hidden max-h-[calc(100dvh-11rem)] min-h-0 w-35 flex-col xl:flex">
+            {title && <p className="mb-4 shrink-0 text-sm font-semibold text-muted-foreground">{title}</p>}
 
-            {navigationSections.map((section) => {
-              return (
-                <div key={section.key} className="flex flex-col gap-2">
-                  {section.title && (
-                    <p className="uppercase text-xs mb-1 text-muted-foreground text-right">{section.title}</p>
-                  )}
+            <nav
+              aria-label={`${title ?? 'Form'} sections`}
+              className="min-h-0 flex-1 space-y-8 overflow-y-auto overscroll-contain pr-2">
+              {navigationSections.map((section) => {
+                return (
+                  <div key={section.key} className="flex flex-col gap-2">
+                    {section.title && (
+                      <p className="uppercase text-xs mb-1 text-muted-foreground text-right">{section.title}</p>
+                    )}
 
-                  {section.items.map((item) => {
-                    return (
-                      <FormNavigationLink
-                        key={`${section.key}:${item.id}`}
-                        item={item}
-                        variant="sidebar"
-                        onSelect={handleNavigationSelect}
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
+                    {section.items.map((item) => {
+                      return (
+                        <FormNavigationLink
+                          key={`${section.key}:${item.id}`}
+                          item={item}
+                          variant="sidebar"
+                          onSelect={handleNavigationSelect}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </nav>
 
             {hasChanges && (
-              <div className="mt-2 flex flex-col items-center gap-2">
+              <div data-slot="form-sidebar-actions" className="mt-4 flex shrink-0 flex-col items-center gap-2">
                 {mode === 'edit' && (
                   <>
                     <Button

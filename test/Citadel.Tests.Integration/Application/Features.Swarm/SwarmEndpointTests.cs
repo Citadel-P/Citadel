@@ -5,6 +5,8 @@ using System.Threading.Channels;
 using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
 using Domain.Entities.Platforms;
@@ -20,11 +22,18 @@ namespace Tests.Integration.Application.Features.Swarm;
 public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<ISwarmConnector> connector = new(MockBehavior.Strict);
+    private readonly Mock<INetworkConnector> networkConnector = new(MockBehavior.Strict);
     private Guid platformId;
     private Guid taskContainerId;
     private Guid otherPlatformId;
     private Guid standalonePlatformId;
     private bool secretDeleteReportsNotFound;
+    private readonly List<SwarmNodeResult> liveNodes =
+    [
+        new("primary-node", 1, "primary-manager", "Manager", true, "Reachable", "Ready", null,
+            "Active", "28.0", "linux", "x86_64", "10.0.0.1",
+            new Dictionary<string, string> { ["zone"] = "primary" }, 1, 1, null, null)
+    ];
     private readonly List<SwarmSecretResult> liveSecrets =
     [
         new("primary-secret", 3, "primary-secret-name", null,
@@ -39,23 +48,37 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         new("primary-unused-config", 1, "primary-unused-config", null,
             new Dictionary<string, string>(), null, null)
     ];
+    private readonly List<SwarmNetworkResult> liveNetworks =
+    [
+        new("primarynetwork", "primary-overlay", "Swarm", "overlay", true, false, false, true,
+            false, ["10.0.0.0/24"], new Dictionary<string, string> { ["network"] = "primary" }, null)
+    ];
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         connector
             .Setup(value => value.ListNodesAsync(It.IsAny<ListSwarmNodesCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNodeResult>>(
-            [
-                new("primary-node", 1, "primary-manager", "Manager", true, "Reachable", "Ready", null,
-                    "Active", "28.0", "linux", "x86_64", "10.0.0.1",
-                    new Dictionary<string, string> { ["zone"] = "primary" }, 1, 1, null, null)
-            ]));
+            .ReturnsAsync(() => Result.Success<IReadOnlyList<SwarmNodeResult>>(liveNodes.ToArray()));
+        connector
+            .Setup(value => value.UpdateNodeAsync(It.IsAny<UpdateSwarmNodeCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UpdateSwarmNodeCommand command, CancellationToken _) =>
+            {
+                var index = liveNodes.FindIndex(value => value.Id == command.NodeId);
+                var current = liveNodes[index];
+                liveNodes[index] = current with
+                {
+                    VersionIndex = current.VersionIndex + 1,
+                    Availability = command.Availability,
+                    Labels = command.Labels
+                };
+                return Result.Success();
+            });
         connector
             .Setup(value => value.ListServicesAsync(It.IsAny<ListSwarmServicesCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>(
             [
                 new("primary-service", 2, "primary-web", "Replicated", "nginx:primary", 1, 1,
-                    "Completed", null, ["80:80/tcp"], ["primary-network"], ["primary-secret"],
+                    "Completed", null, ["80:80/tcp"], ["primarynetwork"], ["primary-secret"],
                     ["primary-config"], new Dictionary<string, string> { ["app"] = "primary" }, null, null)
             ]));
         connector
@@ -68,11 +91,39 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             ]));
         connector
             .Setup(value => value.ListNetworksAsync(It.IsAny<ListSwarmNetworksCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNetworkResult>>(
-            [
-                new("primary-network", "primary-overlay", "Swarm", "overlay", true, false, false, true,
-                    false, ["10.0.0.0/24"], new Dictionary<string, string> { ["network"] = "primary" }, null)
-            ]));
+            .ReturnsAsync(() => Result.Success<IReadOnlyList<SwarmNetworkResult>>(liveNetworks.ToArray()));
+        networkConnector
+            .Setup(value => value.CreateNetworkAsync(It.IsAny<CreateDockerNetworkCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CreateDockerNetworkCommand command, CancellationToken _) =>
+            {
+                var id = $"network{command.Name.Replace("-", string.Empty, StringComparison.Ordinal)}";
+                liveNetworks.Add(new SwarmNetworkResult(
+                    id, command.Name, "Swarm", command.Driver ?? "overlay", command.Attachable ?? false,
+                    command.Internal ?? false, command.Ingress ?? false, false,
+                    command.EnableIPv6 ?? false,
+                    (command.Ipam?.Config ?? []).Select(value => value.Subnet).OfType<string>().Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(),
+                    command.Labels, null));
+                return Result.Success(new CreateDockerNetworkResult(id));
+            });
+        networkConnector
+            .Setup(value => value.InspectNetworkAsync(It.IsAny<InspectNetworkCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectNetworkCommand command, CancellationToken _) =>
+            {
+                var network = liveNetworks.Single(value => value.Id == command.NetworkId);
+                return Result.Success(new DockerNetworkDetails(
+                    network.Name, network.Id, string.Empty, network.Driver, network.Scope,
+                    true, network.EnableIPv6, network.IsInternal, network.IsAttachable,
+                    network.IsIngress, false, null, null, new Dictionary<string, string>(),
+                    network.Labels, new Dictionary<string, NetworkConnectedContainer>(), []));
+            });
+        networkConnector
+            .Setup(value => value.DeleteNetworkAsync(It.IsAny<DeleteDockerNetworkCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DeleteDockerNetworkCommand command, CancellationToken _) =>
+            {
+                foreach (var id in command.Ids)
+                    liveNetworks.RemoveAll(value => value.Id == id);
+                return Result.Success();
+            });
         connector
             .Setup(value => value.ListSecretsAsync(It.IsAny<ListSwarmSecretsCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => Result.Success<IReadOnlyList<SwarmSecretResult>>(liveSecrets.ToArray()));
@@ -177,7 +228,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                     "Completed",
                     null,
                     ["80/tcp"],
-                    ["primary-network"],
+                    ["primarynetwork"],
                     ["primary-secret"],
                     ["primary-config"],
                     new Dictionary<string, string> { ["environment"] = "test" },
@@ -217,6 +268,20 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                     ContainerId: $"container-{command.TaskId}")));
         services.ReplaceService<IConnectorFactory<ISwarmConnector>>(
             new FakeConnectorFactory(connector.Object));
+        services.ReplaceService<IConnectorFactory<INetworkConnector>>(
+            new FakeNetworkConnectorFactory(networkConnector.Object));
+        var platformCache = new Mock<IPlatformContainerCache>();
+        var cacheEntry = new PlatformCacheEntry(
+            Guid.Empty,
+            "https://swarm-endpoints.test",
+            PlatformConnectorType.Agent,
+            []);
+        Error? cacheError = null;
+        platformCache
+            .Setup(value => value.TryGetCacheEntry(
+                It.IsAny<Guid>(), out cacheEntry, out cacheError))
+            .Returns(true);
+        services.ReplaceService<IPlatformContainerCache>(platformCache.Object);
         services.RemoveService<IDbWorkQueue>();
         services.AddSingleton<IDbWorkQueue, InlineDbWorkQueue>();
     }
@@ -265,7 +330,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     [InlineData("nodes", "primary-node", "hostname", "primary-manager")]
     [InlineData("services", "primary-service", "image", "nginx:primary")]
     [InlineData("tasks", "primary-task-1", "nodeHostname", "primary-manager")]
-    [InlineData("networks", "primary-network", "driver", "overlay")]
+    [InlineData("networks", "primarynetwork", "driver", "overlay")]
     [InlineData("secrets", "primary-secret", "name", "primary-secret-name")]
     [InlineData("configs", "primary-config", "name", "primary-config-name")]
     public async Task ListAndDetailEndpoints_ShouldReturnPersistedProjection(
@@ -302,7 +367,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     [InlineData("nodes", "primary-node")]
     [InlineData("services", "primary-service")]
     [InlineData("tasks", "primary-task-1")]
-    [InlineData("networks", "primary-network")]
+    [InlineData("networks", "primarynetwork")]
     [InlineData("secrets", "primary-secret")]
     [InlineData("configs", "primary-config")]
     public async Task ListAndDetailEndpoints_ShouldReturnCallerPlatformCapabilities(
@@ -436,6 +501,258 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.Equal("primary-secret", document.RootElement.GetProperty("id").GetString());
         Assert.False(document.RootElement.TryGetProperty("data", out _));
         Assert.False(document.RootElement.TryGetProperty("value", out _));
+    }
+
+    [Fact]
+    public async Task NodeUpdate_ShouldPersistReconciledAvailabilityAndLabels()
+    {
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node",
+            JsonContent("""{"versionIndex":1,"availability":"Drain","labels":{"zone":"maintenance"}}"""),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        connector.Verify(value => value.UpdateNodeAsync(
+            It.Is<UpdateSwarmNodeCommand>(command =>
+                command.PlatformAddress == "https://swarm-endpoints.test"
+                && command.NodeId == "primary-node"
+                && command.VersionIndex == 1
+                && command.Availability == "Drain"
+                && command.Labels["zone"] == "maintenance"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        var detail = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node",
+            TestContext.Current.CancellationToken);
+        detail.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(detail);
+        Assert.Equal("Drain", document.RootElement.GetProperty("availability").GetString());
+        Assert.Equal("maintenance", document.RootElement.GetProperty("labels").GetProperty("zone").GetString());
+        Assert.Equal(2, document.RootElement.GetProperty("versionIndex").GetInt64());
+    }
+
+    [Fact]
+    public async Task NodeUpdate_ShouldRequireWriteAccessAndCurrentVersion()
+    {
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var denied = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node",
+            JsonContent("""{"versionIndex":1,"availability":"Pause","labels":{}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        var deniedBulk = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/availability",
+            JsonContent("""{"availability":"Pause","nodes":[{"nodeId":"primary-node","versionIndex":1}]}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedBulk.StatusCode);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
+        var stale = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/primary-node",
+            JsonContent("""{"versionIndex":99,"availability":"Pause","labels":{}}"""),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+    }
+
+    [Fact]
+    public async Task NodeAvailabilityUpdate_ShouldUpdateAllSelectedNodesAndPersistReconciliation()
+    {
+        var worker = new SwarmNodeResult(
+            "worker-node", 4, "worker-1", "Worker", false, "", "Ready", null,
+            "Active", "28.0", "linux", "x86_64", "10.0.0.2",
+            new Dictionary<string, string> { ["zone"] = "worker" }, 0, 0, null, null);
+        liveNodes.Add(worker);
+
+        var snapshot = CreateSnapshot(platformId, "primary", taskCount: 3);
+        var observedAt = snapshot.Nodes[0].ObservedAt;
+        var workerProjection = new SwarmNodeProjection(
+            platformId, worker.Id, worker.VersionIndex, worker.Hostname, worker.Role, worker.IsLeader,
+            worker.Reachability, worker.Status, worker.StatusMessage, worker.Availability,
+            worker.EngineVersion, worker.OperatingSystem, worker.Architecture, worker.Address,
+            worker.Labels, worker.RunningTaskCount, worker.DesiredTaskCount,
+            worker.CreatedAt, worker.UpdatedAt, observedAt, false);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await unitOfWork.Swarm.ReplaceAsync(
+                platformId,
+                snapshot with { Nodes = [.. snapshot.Nodes, workerProjection] },
+                TestContext.Current.CancellationToken);
+            await unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/availability",
+            JsonContent("""
+                {
+                  "availability":"Pause",
+                  "nodes":[
+                    {"nodeId":"primary-node","versionIndex":1},
+                    {"nodeId":"worker-node","versionIndex":4}
+                  ]
+                }
+                """),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        connector.Verify(value => value.UpdateNodeAsync(
+            It.Is<UpdateSwarmNodeCommand>(command =>
+                command.NodeId == "primary-node"
+                && command.Availability == "Pause"
+                && command.Labels["zone"] == "primary"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        connector.Verify(value => value.UpdateNodeAsync(
+            It.Is<UpdateSwarmNodeCommand>(command =>
+                command.NodeId == "worker-node"
+                && command.Availability == "Pause"
+                && command.Labels["zone"] == "worker"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        var nodes = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes",
+            TestContext.Current.CancellationToken);
+        nodes.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(nodes);
+        Assert.All(
+            document.RootElement.GetProperty("items").EnumerateArray(),
+            node => Assert.Equal("Pause", node.GetProperty("availability").GetString()));
+    }
+
+    [Fact]
+    public async Task NodeAvailabilityUpdate_ShouldPreflightEveryNodeBeforeChangingDocker()
+    {
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/availability",
+            JsonContent("""
+                {
+                  "availability":"Drain",
+                  "nodes":[
+                    {"nodeId":"primary-node","versionIndex":1},
+                    {"nodeId":"missing-node","versionIndex":1}
+                  ]
+                }
+                """),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        connector.Verify(
+            value => value.UpdateNodeAsync(It.IsAny<UpdateSwarmNodeCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task NodeAvailabilityUpdate_ShouldRejectAnEmptySelection()
+    {
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}/swarm/nodes/availability",
+            JsonContent("""{"availability":"Pause"}"""),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        connector.Verify(
+            value => value.UpdateNodeAsync(It.IsAny<UpdateSwarmNodeCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task OverlayNetworkLifecycle_ShouldCreatePersistAndDeleteAnUnusedNetwork()
+    {
+        var create = await Client.PostAsync(
+            "/api/v1/networks/",
+            System.Net.Http.Json.JsonContent.Create(new
+            {
+                PlatformId = platformId,
+                Name = "metrics-overlay",
+                Driver = "overlay",
+                Scope = "swarm",
+                EnableIPv4 = true,
+                EnableIPv6 = false,
+                Internal = false,
+                Attachable = true,
+                Ingress = false,
+                ConfigOnly = false,
+                Ipam = new
+                {
+                    Driver = "default",
+                    Config = new[]
+                    {
+                        new { Subnet = "10.22.0.0/24", IpRange = "", Gateway = "" },
+                        new { Subnet = "", IpRange = "", Gateway = "" }
+                    }
+                },
+                Labels = new Dictionary<string, string> { ["team"] = "ops" }
+            }),
+            TestContext.Current.CancellationToken);
+        Assert.True(
+            create.IsSuccessStatusCode,
+            await create.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        var projected = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/networks/networkmetricsoverlay",
+            TestContext.Current.CancellationToken);
+        projected.EnsureSuccessStatusCode();
+        using (var document = await ReadJsonAsync(projected))
+        {
+            Assert.Equal("metrics-overlay", document.RootElement.GetProperty("name").GetString());
+            Assert.Empty(document.RootElement.GetProperty("serviceNames").EnumerateArray());
+        }
+
+        var delete = await SendDeleteAsync(
+            "/api/v1/networks",
+            $$"""{"platformId":"{{platformId}}","ids":["networkmetricsoverlay"]}""");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var afterDelete = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/networks/networkmetricsoverlay",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, afterDelete.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteOverlayNetwork_ShouldRejectReferencedNetworkBeforeDockerMutation()
+    {
+        var response = await SendDeleteAsync(
+            "/api/v1/networks",
+            $$"""{"platformId":"{{platformId}}","ids":["primarynetwork"]}""");
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Conflict,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        networkConnector.Verify(value => value.DeleteNetworkAsync(
+            It.IsAny<DeleteDockerNetworkCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteOverlayNetwork_ShouldRejectStackOwnedNetworkBeforeDockerMutation()
+    {
+        liveNetworks.Add(new SwarmNetworkResult(
+            "stacknetwork",
+            "external-stack_default",
+            "Swarm",
+            "overlay",
+            true,
+            false,
+            false,
+            false,
+            false,
+            [],
+            new Dictionary<string, string> { ["com.docker.stack.namespace"] = "external-stack" },
+            null));
+
+        var response = await SendDeleteAsync(
+            "/api/v1/networks",
+            $$"""{"platformId":"{{platformId}}","ids":["stacknetwork"]}""");
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Conflict,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        networkConnector.Verify(value => value.DeleteNetworkAsync(
+            It.IsAny<DeleteDockerNetworkCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Theory]
@@ -1036,7 +1353,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             observedAt.AddDays(-1), observedAt, observedAt, false);
         var service = new SwarmServiceProjection(
             selectedPlatformId, $"{prefix}-service", 2, $"{prefix}-web", "Replicated", $"nginx:{prefix}",
-            taskCount, taskCount, "Completed", null, ["80:80/tcp"], [$"{prefix}-network"],
+            taskCount, taskCount, "Completed", null, ["80:80/tcp"], [$"{prefix}network"],
             [$"{prefix}-secret"], [$"{prefix}-config"], new Dictionary<string, string> { ["app"] = prefix },
             observedAt.AddDays(-1), observedAt, observedAt, false,
             SwarmServiceOwnership.DockerStackExternal,
@@ -1051,7 +1368,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                 observedAt, false))
             .ToArray();
         var network = new SwarmNetworkProjection(
-            selectedPlatformId, $"{prefix}-network", $"{prefix}-overlay", "Swarm", "overlay",
+            selectedPlatformId, $"{prefix}network", $"{prefix}-overlay", "Swarm", "overlay",
             true, false, false, true, false, ["10.0.0.0/24"], [service.Name],
             new Dictionary<string, string> { ["network"] = prefix }, observedAt, observedAt, false);
         var secret = new SwarmSecretProjection(
@@ -1121,6 +1438,11 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     private sealed class FakeConnectorFactory(ISwarmConnector value) : IConnectorFactory<ISwarmConnector>
     {
         public ISwarmConnector GetConnector(PlatformConnectorType type) => value;
+    }
+
+    private sealed class FakeNetworkConnectorFactory(INetworkConnector value) : IConnectorFactory<INetworkConnector>
+    {
+        public INetworkConnector GetConnector(PlatformConnectorType type) => value;
     }
 
     private sealed class InlineDbWorkQueue(IServiceScopeFactory scopeFactory) : IDbWorkQueue

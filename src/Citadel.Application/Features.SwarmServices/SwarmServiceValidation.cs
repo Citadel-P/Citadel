@@ -47,6 +47,7 @@ internal static class SwarmServiceValidation
             || spec.Command is null
             || spec.Arguments is null
             || spec.Environment is null
+            || spec.Labels is null
             || spec.Ports is null
             || spec.NetworkIds is null
             || spec.Mounts is null
@@ -61,6 +62,14 @@ internal static class SwarmServiceValidation
             || spec.Configs.Any(static value => value is null)
             || spec.HealthCheck is { Test: null })
             return Result.Failure<Platform>(new BadRequestError("The Service configuration contains an invalid entry."));
+
+        if (spec.Labels.Count > 100
+            || spec.Labels.Any(static label => string.IsNullOrWhiteSpace(label.Key) || label.Value is null))
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service labels require a non-empty key and are limited to 100 entries."));
+        if (spec.Labels.Keys.Any(static key => key.StartsWith("com.citadel.", StringComparison.OrdinalIgnoreCase)))
+            return Result.Failure<Platform>(new BadRequestError(
+                "Service labels in the com.citadel namespace are reserved."));
 
         var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
         if (platform is null

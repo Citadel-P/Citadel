@@ -69,6 +69,19 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         }
     }
 
+    public Task<Result> UpdateNodeAsync(
+        UpdateSwarmNodeCommand command,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateNodeAsync(
+            new UpdateSwarmNodeRequest
+            {
+                NodeId = command.NodeId,
+                VersionIndex = checked((ulong)command.VersionIndex),
+                Availability = command.Availability,
+                Labels = { command.Labels.ToDictionary() }
+            },
+            cancellationToken: cancellationToken).ResponseAsync, "node", cancellationToken);
+
     public Task<Result<IReadOnlyList<SwarmServiceResult>>> ListServicesAsync(ListSwarmServicesCommand command, CancellationToken cancellationToken = default) =>
         ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListServicesAsync(new ListSwarmServicesRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "services", cancellationToken);
     public Task<Result<SwarmServiceResult>> InspectServiceAsync(InspectSwarmServiceCommand command, CancellationToken cancellationToken = default) =>

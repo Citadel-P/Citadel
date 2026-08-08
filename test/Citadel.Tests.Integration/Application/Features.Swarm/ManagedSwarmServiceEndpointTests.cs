@@ -208,6 +208,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.Equal("Created", created.RootElement.GetProperty("health").GetString());
         Assert.Equal("NeverApplied", created.RootElement.GetProperty("synchronizationState").GetString());
         Assert.Equal(2, created.RootElement.GetProperty("spec").GetProperty("replicas").GetInt32());
+        Assert.Equal("platform", created.RootElement.GetProperty("spec").GetProperty("labels").GetProperty("team").GetString());
         Assert.Contains(
             created.RootElement.GetProperty("tags").EnumerateArray(),
             value => value.GetProperty("id").GetGuid() == tagId);
@@ -270,6 +271,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             Assert.Equal("/data", Assert.Single(service.Spec.Mounts).Target);
             Assert.Equal(2_000_000_000, service.Spec.Resources?.LimitNanoCpus);
             Assert.Equal(2, service.Spec.UpdatePolicy?.Parallelism);
+            Assert.Equal("platform", service.Spec.Labels["team"]);
             Assert.Contains(service.Tags, tag => tag.Id == tagId);
         }
 
@@ -283,6 +285,24 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         await using var verificationScope = Services.CreateAsyncScope();
         Assert.Null(await verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
             .SwarmServices.GetAsync(id, cancellationToken));
+    }
+
+    [Fact]
+    public async Task Create_ShouldRejectReservedCitadelLabels()
+    {
+        using var response = await Client.PostAsJsonAsync(
+            "/api/v1/swarmServices",
+            new
+            {
+                name = "reserved-label-service",
+                platformId,
+                spec = CreateSpec(
+                    replicas: 1,
+                    labels: new Dictionary<string, string> { ["com.citadel.managed"] = "false" })
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -1001,6 +1021,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.Equal(
             submitted.OperationId.ToString(),
             submitted.Labels["com.citadel.operation-id"]);
+        Assert.Equal("platform", submitted.Labels["team"]);
         connector.Verify(value => value.CreateServiceAsync(
             It.IsAny<CreateManagedSwarmServiceCommand>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -1441,7 +1462,8 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         string[]? networkIds = null,
         string[]? environment = null,
         object? webhook = null,
-        string updateBehavior = "Notify") => new
+        string updateBehavior = "Notify",
+        Dictionary<string, string>? labels = null) => new
     {
         image = new Dictionary<string, object?>
         {
@@ -1457,6 +1479,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         command = new[] { "/docker-entrypoint.sh" },
         arguments = new[] { "nginx", "-g", "daemon off;" },
         environment = environment ?? ["APP_ENV=integration"],
+        labels = labels ?? new Dictionary<string, string> { ["team"] = "platform" },
         user = "101",
         workingDirectory = "/srv/app",
         healthCheck = new
