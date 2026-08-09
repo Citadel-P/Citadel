@@ -9,6 +9,51 @@ namespace Tests.Integration.Infrastructure.Persistence;
 public sealed class EdgeAgentRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
+    public async Task PlatformState_ShouldPreserveSwarmIdentityAndPruningSetting()
+    {
+        var platform = new Platform(
+            name: $"edge-swarm-{Guid.CreateVersion7():N}",
+            address: $"edge://{Guid.CreateVersion7():N}",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1,
+            serverVersion: null,
+            agentVersion: null,
+            status: PlatformStatus.Offline,
+            connectorType: PlatformConnectorType.EdgeAgent,
+            platformDescriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "manager-1",
+                NodeAddr: "10.0.0.1",
+                LocalNodeState: "active",
+                ControlAvailable: true,
+                Nodes: 1,
+                Managers: 1,
+                DaemonId: "daemon-1",
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0,
+                ClusterId: "cluster-1"),
+            clusterId: "cluster-1",
+            pruneHistoricalSwarmTaskContainers: false);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var state = await uow.EdgeAgents.GetPlatformStateByPlatformIdAsync(
+            platform.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(state);
+        Assert.Equal("cluster-1", state.Platform.ClusterId);
+        Assert.False(state.Platform.PruneHistoricalSwarmTaskContainers);
+    }
+
+    [Fact]
     public async Task BuildPoolBindings_ShouldAllowMultipleResourcesWithEmptyPlatformId()
     {
         var first = CreateBuildPoolBinding(Guid.CreateVersion7());

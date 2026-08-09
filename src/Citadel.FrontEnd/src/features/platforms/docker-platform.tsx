@@ -5,6 +5,7 @@ import {
   PlatformStatus,
   PlatformType,
   PlatformView,
+  PlatformWorkloadStatusCountsView,
   TagSummaryView,
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
@@ -23,11 +24,13 @@ import { byteTransform } from '@/lib/bytes.helper';
 import {
   getContainerStates,
   getDeploymentStates,
+  getServiceStates,
   getStackStates,
   PLATFORM_WORKLOAD_ICON_CLASS_NAMES,
   WorkloadState,
   WorkloadStatusBreakdown,
 } from './platform-workload-status';
+import { useSwarmOverview } from '@/features/swarm/hooks/useSwarmOverview';
 
 export const DockerPlatform = ({
   platform,
@@ -38,6 +41,54 @@ export const DockerPlatform = ({
     string,
     React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
+}) =>
+  platform.type === PlatformType.DockerSwarm ? (
+    <LiveSwarmPlatform platform={platform} actions={actions} />
+  ) : (
+    <DockerPlatformCard platform={platform} actions={actions} />
+  );
+
+const LiveSwarmPlatform = ({
+  platform,
+  actions,
+}: {
+  platform: PlatformView;
+  actions: Record<
+    string,
+    React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
+  const { overview } = useSwarmOverview(platform.id);
+  const descriptor = platform.platformDescriptor as PlatformDescriptorDockerSwarmPlatformDescriptor;
+  const livePlatform = overview
+    ? {
+        ...platform,
+        platformDescriptor: {
+          ...descriptor,
+          nodes: overview.nodeCount,
+          managers: overview.managerCount,
+          serviceCount: overview.serviceCount,
+          runningTaskCount: overview.runningTaskCount,
+        },
+      }
+    : platform;
+
+  return (
+    <DockerPlatformCard platform={livePlatform} actions={actions} serviceStatusCounts={overview?.serviceStatusCounts} />
+  );
+};
+
+const DockerPlatformCard = ({
+  platform,
+  actions,
+  serviceStatusCounts,
+}: {
+  platform: PlatformView;
+  actions: Record<
+    string,
+    React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+  serviceStatusCounts?: PlatformWorkloadStatusCountsView;
 }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
   const isSwarm = platform.type === PlatformType.DockerSwarm;
@@ -131,14 +182,23 @@ export const DockerPlatform = ({
                   <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.nodes, 'node')}
                   </Link>
-                  <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
-                    {formatCount(swarmDescriptor.managers, 'manager')}
-                  </Link>
                   <Link to={`/platforms/${platform.id}/services`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.serviceCount, 'service')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/tasks`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.runningTaskCount, 'running task')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
+                    {formatCount(swarmDescriptor.containerCount, 'container')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/volumes`} className="hover:text-foreground hover:underline">
+                    {formatCount(platform.volumeCount, 'volume')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
+                    {formatCount(platform.networkCount, 'network')}
+                  </Link>
+                  <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
+                    {formatCount(platform.imageCount, 'image')}
                   </Link>
                 </>
               ) : (
@@ -187,10 +247,11 @@ export const DockerPlatform = ({
             {swarmDescriptor ? (
               <WorkloadMetric
                 icon={Workflow}
-                label="Running tasks"
-                total={swarmDescriptor.runningTaskCount}
-                to={`/platforms/${platform.id}/tasks`}
+                label="Services"
+                total={swarmDescriptor.serviceCount}
+                to={`/platforms/${platform.id}/services`}
                 iconClassName="text-sky-500"
+                states={getServiceStates(serviceStatusCounts)}
               />
             ) : (
               <WorkloadMetric

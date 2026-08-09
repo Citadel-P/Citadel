@@ -19,6 +19,7 @@ internal static class CitadelLabels
     public const string StackId = Prefix + "stack-id";
     public const string ReleaseId = Prefix + "release-id";
     public const string ServiceHash = Prefix + "service-hash";
+    public const string StackServiceCount = Prefix + "stack-service-count";
 }
 
 internal static class StackContainerOwnership
@@ -158,6 +159,16 @@ internal static class StackContainerOwnership
 internal static class StackComposeLabelInjector
 {
     public static string Inject(string composeFile, Guid stackId, Guid releaseId)
+        => Inject(composeFile, stackId, releaseId, includeSwarmServiceLabels: false);
+
+    public static string InjectSwarm(string composeFile, Guid stackId, Guid releaseId)
+        => Inject(composeFile, stackId, releaseId, includeSwarmServiceLabels: true);
+
+    private static string Inject(
+        string composeFile,
+        Guid stackId,
+        Guid releaseId,
+        bool includeSwarmServiceLabels)
     {
         using var reader = new StringReader(composeFile);
         var yaml = new YamlStream();
@@ -173,6 +184,7 @@ internal static class StackComposeLabelInjector
             return composeFile;
         }
 
+        var serviceCount = services.Children.Count;
         foreach (var (_, value) in services.Children)
         {
             if (value is not YamlMappingNode service)
@@ -183,10 +195,14 @@ internal static class StackComposeLabelInjector
             var labels = GetOrCreateNormalizedLabels(service);
             var serviceHash = HashService(service);
 
-            SetMappingValue(labels, CitadelLabels.Managed, "true");
-            SetMappingValue(labels, CitadelLabels.StackId, StackContainerOwnership.FormatStackId(stackId));
-            SetMappingValue(labels, CitadelLabels.ReleaseId, releaseId.ToString("D"));
-            SetMappingValue(labels, CitadelLabels.ServiceHash, serviceHash);
+            SetCitadelLabels(labels, stackId, releaseId, serviceHash, serviceCount);
+
+            if (includeSwarmServiceLabels)
+            {
+                var deploy = GetOrCreateMapping(service, "deploy");
+                var serviceLabels = GetOrCreateNormalizedLabels(deploy);
+                SetCitadelLabels(serviceLabels, stackId, releaseId, serviceHash, serviceCount);
+            }
         }
 
         using var writer = new StringWriter();
@@ -195,6 +211,16 @@ internal static class StackComposeLabelInjector
     }
 
     public static string CreateLabelsOverride(IEnumerable<string> composeFiles, Guid stackId, Guid releaseId)
+        => CreateLabelsOverride(composeFiles, stackId, releaseId, includeSwarmServiceLabels: false);
+
+    public static string CreateSwarmLabelsOverride(IEnumerable<string> composeFiles, Guid stackId, Guid releaseId)
+        => CreateLabelsOverride(composeFiles, stackId, releaseId, includeSwarmServiceLabels: true);
+
+    private static string CreateLabelsOverride(
+        IEnumerable<string> composeFiles,
+        Guid stackId,
+        Guid releaseId,
+        bool includeSwarmServiceLabels)
     {
         var serviceHashes = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -242,18 +268,38 @@ internal static class StackComposeLabelInjector
         {
             var serviceOverride = new YamlMappingNode();
             var labels = new YamlMappingNode();
-            SetMappingValue(labels, CitadelLabels.Managed, "true");
-            SetMappingValue(labels, CitadelLabels.StackId, StackContainerOwnership.FormatStackId(stackId));
-            SetMappingValue(labels, CitadelLabels.ReleaseId, releaseId.ToString("D"));
-            SetMappingValue(labels, CitadelLabels.ServiceHash, HashServiceDefinitions(serviceDefinitions));
+            var serviceHash = HashServiceDefinitions(serviceDefinitions);
+            SetCitadelLabels(labels, stackId, releaseId, serviceHash, serviceHashes.Count);
 
             serviceOverride.Add("labels", labels);
+            if (includeSwarmServiceLabels)
+            {
+                var deploy = new YamlMappingNode();
+                var serviceLabels = new YamlMappingNode();
+                SetCitadelLabels(serviceLabels, stackId, releaseId, serviceHash, serviceHashes.Count);
+                deploy.Add("labels", serviceLabels);
+                serviceOverride.Add("deploy", deploy);
+            }
             servicesOverride.Add(serviceName, serviceOverride);
         }
 
         using var writer = new StringWriter();
         new YamlStream(new YamlDocument(rootOverride)).Save(writer, assignAnchors: false);
         return writer.ToString();
+    }
+
+    private static void SetCitadelLabels(
+        YamlMappingNode labels,
+        Guid stackId,
+        Guid releaseId,
+        string serviceHash,
+        int serviceCount)
+    {
+        SetMappingValue(labels, CitadelLabels.Managed, "true");
+        SetMappingValue(labels, CitadelLabels.StackId, StackContainerOwnership.FormatStackId(stackId));
+        SetMappingValue(labels, CitadelLabels.ReleaseId, releaseId.ToString("D"));
+        SetMappingValue(labels, CitadelLabels.ServiceHash, serviceHash);
+        SetMappingValue(labels, CitadelLabels.StackServiceCount, serviceCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static YamlMappingNode GetOrCreateNormalizedLabels(YamlMappingNode service)
@@ -276,6 +322,22 @@ internal static class StackComposeLabelInjector
 
         service.Children[labelKey] = labels;
         return labels;
+    }
+
+    private static YamlMappingNode GetOrCreateMapping(YamlMappingNode parent, string key)
+    {
+        var existingKey = FindKey(parent, key);
+        if (existingKey is null)
+        {
+            var mapping = new YamlMappingNode();
+            parent.Add(key, mapping);
+            return mapping;
+        }
+
+        if (parent.Children[existingKey] is not YamlMappingNode existing)
+            throw new InvalidOperationException($"Compose service '{key}' must be a mapping.");
+
+        return existing;
     }
 
     private static void ValidateExistingLabels(YamlMappingNode service)
@@ -377,13 +439,17 @@ internal static class StackComposeLabelInjector
 
     private static void SetMappingValue(YamlMappingNode node, string key, string value)
     {
+        var scalar = new YamlScalarNode(value)
+        {
+            Style = YamlDotNet.Core.ScalarStyle.DoubleQuoted
+        };
         var existing = FindKey(node, key);
         if (existing is not null)
         {
-            node.Children[existing] = new YamlScalarNode(value);
+            node.Children[existing] = scalar;
             return;
         }
 
-        node.Add(key, value);
+        node.Add(new YamlScalarNode(key), scalar);
     }
 }

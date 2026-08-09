@@ -5,6 +5,7 @@ using Application.Permissions;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Swarm;
 
@@ -14,6 +15,7 @@ public sealed record SwarmServiceView(
     IReadOnlyList<string> Ports, IReadOnlyList<string> NetworkIds, IReadOnlyList<string> SecretIds,
     IReadOnlyList<string> ConfigIds, IReadOnlyDictionary<string, string> Labels,
     SwarmServiceOwnership Ownership, string? DockerStackNamespace, string? OwnershipDiagnostic,
+    Guid? StackId,
     DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt, DateTimeOffset ObservedAt, bool IsStale,
     PlatformCapabilities? Capabilities = null)
 {
@@ -21,7 +23,7 @@ public sealed record SwarmServiceView(
         value.DockerServiceId, value.VersionIndex, value.Name, value.Mode, value.Image,
         value.RunningTaskCount, value.DesiredTaskCount, value.UpdateState, value.UpdateMessage,
         value.Ports, value.NetworkIds, value.SecretIds, value.ConfigIds, value.Labels,
-        value.Ownership, value.DockerStackNamespace, value.OwnershipDiagnostic,
+        value.Ownership, value.DockerStackNamespace, value.OwnershipDiagnostic, value.StackId,
         value.DockerCreatedAt, value.DockerUpdatedAt, value.ObservedAt, value.IsStale);
 
     public static async Task<SwarmServiceView> Map(
@@ -273,6 +275,7 @@ public sealed record SwarmOverviewView(
     int NodeCount,
     int ManagerCount,
     int ServiceCount,
+    PlatformWorkloadStatusCountsView ServiceStatusCounts,
     int RunningTaskCount,
     int DesiredTaskCount,
     int NetworkCount,
@@ -305,6 +308,7 @@ public sealed record SwarmOverviewView(
             summary.NodeCount,
             summary.ManagerCount,
             summary.ServiceCount,
+            PlatformWorkloadStatusCountsView.Map(summary.ServiceStatusCounts),
             summary.RunningTaskCount,
             summary.DesiredTaskCount,
             summary.NetworkCount,

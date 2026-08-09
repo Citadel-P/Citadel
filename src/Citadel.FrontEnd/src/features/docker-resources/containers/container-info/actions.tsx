@@ -2,8 +2,13 @@ import { FolderInput, PackagePlus, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { containsSystemContainer, createContainerActions, isAdoptableContainer, isImportableStack } from '../actions';
-import { PlatformType, ResourceControlState } from '@/api/generated/api.types';
+import {
+  containsSystemContainer,
+  createContainerActions,
+  isContainerAdoptionAvailable,
+  isImportableStack,
+} from '../actions';
+import { PlatformType, ResourceControlState, StackImportKind } from '@/api/generated/api.types';
 import type { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
 
 const useVariables = (resources: ContainerDetailsView | ContainerDetailsView[]) =>
@@ -27,9 +32,8 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const canExecute =
-        currentPlatform?.type === PlatformType.Docker &&
         !!selected &&
-        isAdoptableContainer(selected) &&
+        isContainerAdoptionAvailable(selected, currentPlatform?.type) &&
         selected.controlState !== ResourceControlState.Processing;
 
       return {
@@ -53,8 +57,9 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources[0] : resources;
       const canExecute =
-        currentPlatform?.type === PlatformType.Docker &&
+        (currentPlatform?.type === PlatformType.Docker || currentPlatform?.type === PlatformType.DockerSwarm) &&
         !!selected &&
+        !selected.isSwarmTask &&
         isImportableStack(selected) &&
         selected.controlState !== ResourceControlState.Processing;
 
@@ -66,6 +71,7 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
           const query = new URLSearchParams({
             importPlatform: selected.platformId,
             importProject: selected.stack,
+            importKind: selected.isSwarmTask ? StackImportKind.SwarmStack : StackImportKind.ComposeProject,
           });
           navigate(`/stacks/add?${query.toString()}`);
         },
@@ -99,8 +105,9 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
   .build();
 
 export const getContainerManagementAction = (resource: ContainerDetailsView, platformType?: PlatformType) => {
-  if (platformType !== PlatformType.Docker) return undefined;
-  if (isAdoptableContainer(resource)) return ContainerInfoActions.adopt;
+  if (platformType !== PlatformType.Docker && platformType !== PlatformType.DockerSwarm) return undefined;
+  if (isContainerAdoptionAvailable(resource, platformType)) return ContainerInfoActions.adopt;
+  if (resource.isSwarmTask) return undefined;
   if (isImportableStack(resource)) return ContainerInfoActions.importStack;
   return undefined;
 };

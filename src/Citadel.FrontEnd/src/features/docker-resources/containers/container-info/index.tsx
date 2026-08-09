@@ -12,7 +12,6 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
-import { isUnmanagedContainer } from '@/lib/utils';
 import { SystemContainerBadge } from '../system-container-badge';
 import { useAppContext } from '@/lib/context/app-context';
 import { UnmanagedResourceIcon } from '@/components/custom/common';
@@ -34,6 +33,15 @@ const ContainerInfoActionButtons = ({ resource }: { resource: ContainerDetailsVi
   );
 };
 
+const ContainerNameSuffix = ({ resource }: { resource: ContainerDetailsView }) => {
+  const { currentPlatform } = useAppContext();
+
+  if (resource.isSystem) return <SystemContainerBadge role={resource.systemRole} />;
+  if (getContainerManagementAction(resource, currentPlatform?.type) !== ContainerInfoActions.adopt) return null;
+
+  return <UnmanagedResourceIcon title="Unmanaged Container" />;
+};
+
 export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDetailsView> = {
   Header: {
     Indicator: ({ resource }) => {
@@ -45,12 +53,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
         />
       );
     },
-    NameSuffix: ({ resource }) =>
-      resource.isSystem ? (
-        <SystemContainerBadge role={resource.systemRole} />
-      ) : isUnmanagedContainer(resource) ? (
-        <UnmanagedResourceIcon title={'Unmanaged Container'} />
-      ) : null,
+    NameSuffix: ContainerNameSuffix,
     ActionButtons: ContainerInfoActionButtons,
   },
   SubHeader: ({ resource }) => {

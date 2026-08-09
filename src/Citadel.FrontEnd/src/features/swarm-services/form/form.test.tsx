@@ -98,7 +98,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
                   image: {
                     $type: 'External',
                     registryId: '00000000-0000-0000-0000-000000000000',
-                    imageTag: 'nginx:1.27',
+                    imageTag: 'redis@sha256:344e3945a0b431c8ff1eecd58c5573538126bd756f02fc7e218ddf1fc2546366',
                   },
                   updateBehavior: 'Disabled',
                   schedulingMode: 'Replicated',
@@ -357,7 +357,11 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue(
       'Adopted from Docker Swarm Service external-web.',
     );
-    expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('nginx:1.27');
+    const imageReference = screen.getByRole('textbox', { name: 'Image Reference' });
+    const autoUpdate = screen.getByRole('combobox', { name: 'Auto Update' });
+    expect(imageReference).toHaveValue('redis@sha256:344e3945a0b431c8ff1eecd58c5573538126bd756f02fc7e218ddf1fc2546366');
+    expect(autoUpdate).toBeDisabled();
+    expect(screen.getByText('Auto update is unavailable for an image pinned by digest.')).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Platform' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Image Source' })).toBeDisabled();
     expect(screen.getByRole('textbox', { name: '# KEY=value' })).toHaveValue('{"team":"platform"}');
@@ -365,10 +369,20 @@ describe('SwarmServiceForm', () => {
     expect(adoptButtons).not.toHaveLength(0);
     expect(adoptButtons.every((button) => button.hasAttribute('disabled'))).toBe(true);
 
+    await user.clear(imageReference);
+    await user.type(imageReference, 'redis');
+
+    expect(autoUpdate).toBeEnabled();
+    expect(screen.queryByText('Auto update is unavailable for an image pinned by digest.')).not.toBeInTheDocument();
+    await user.click(autoUpdate);
+    await user.click(screen.getByText('Notify only'));
+    expect(autoUpdate).toHaveTextContent('Notify only');
+
     await user.click(screen.getByRole('combobox', { name: 'Registry' }));
     await user.click(screen.getByText('Docker Hub'));
 
-    expect(screen.getAllByRole('button', { name: 'Adopt Service' }).every((button) => !button.hasAttribute('disabled')))
-      .toBe(true);
+    expect(
+      screen.getAllByRole('button', { name: 'Adopt Service' }).every((button) => !button.hasAttribute('disabled')),
+    ).toBe(true);
   });
 });

@@ -89,10 +89,12 @@ public sealed class StackRelease : IAuditedEntity
         Spec = spec;
     }
 
-    public void UpdateDefinition(Guid platformId, StackSpec spec)
+    public void UpdateDefinition(Guid platformId, StackSpec spec, Platform? platform = null)
     {
         PlatformId = platformId;
         Spec = spec;
+        if (platform is not null)
+            Platform = platform;
     }
 
     public void UpdateSource(StackReleaseSource source)

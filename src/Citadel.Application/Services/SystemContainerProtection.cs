@@ -6,8 +6,10 @@ internal static class SystemContainerProtection
 {
     internal const string ErrorMessage =
         "Citadel system containers cannot be managed from Citadel. Manage them from the Docker host.";
+    internal const string SwarmTaskErrorMessage =
+        "Docker Swarm task containers cannot be managed directly. Manage their Service or Stack instead.";
 
-    internal static async Task<bool> ContainsSystemContainerAsync(
+    internal static async Task<string?> GetErrorAsync(
         IUnitOfWork unitOfWork,
         IEnumerable<string> containerIds,
         CancellationToken cancellationToken)
@@ -18,9 +20,13 @@ internal static class SystemContainerProtection
             .ToArray();
 
         if (ids.Length == 0)
-            return false;
+            return null;
 
         var containers = await unitOfWork.Containers.GetByIdsAsync(ids, cancellationToken);
-        return containers.Any(container => container.IsSystem);
+        if (containers.Any(container => container.IsSystem))
+            return ErrorMessage;
+        return containers.Any(container => container.IsSwarmTask)
+            ? SwarmTaskErrorMessage
+            : null;
     }
 }

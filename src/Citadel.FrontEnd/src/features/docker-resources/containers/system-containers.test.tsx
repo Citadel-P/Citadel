@@ -16,13 +16,21 @@ import {
   containsSystemContainer,
   createContainerActions,
   isAdoptableContainer,
+  isContainerAdoptionAvailable,
   isImportableStack,
   isImportableStackSelection,
 } from './actions';
 import { SystemContainerBadge } from './system-container-badge';
 import { isUnmanagedContainer } from '@/lib/utils';
 import { AppContext } from '@/lib/context/app-context';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { ReactNode } from 'react';
+import { ContainersTable } from './table';
+
+vi.mock('@/lib/monaco', () => ({
+  MonacoEditor: () => null,
+}));
+vi.mock('monaco-editor', () => ({ MarkerSeverity: { Warning: 4 } }));
 
 const ContainerActionsContext = ({
   children,
@@ -52,6 +60,7 @@ type TestContainer = {
   state: ContainerStateStatus;
   controlState: ResourceControlState;
   isSystem: boolean;
+  isSwarmTask?: boolean;
 };
 
 const normalContainer: TestContainer = {
@@ -89,6 +98,10 @@ describe('system containers', () => {
     expect(isUnmanagedContainer({ isSystem: false, deploymentId: null, stackId: null })).toBe(true);
   });
 
+  it('does not classify Swarm task containers as unmanaged', () => {
+    expect(isUnmanagedContainer({ isSystem: false, isSwarmTask: true, deploymentId: null, stackId: null })).toBe(false);
+  });
+
   it('does not classify containers with orphaned Citadel ownership labels as unmanaged', () => {
     expect(
       isUnmanagedContainer({
@@ -111,6 +124,16 @@ describe('system containers', () => {
     expect(actions.restartAction.canExecute?.([normalContainer, systemContainer])).toBe(false);
     expect(containsSystemContainer([normalContainer, systemContainer])).toBe(true);
   });
+
+  it('blocks direct lifecycle actions for Swarm task containers', () => {
+    const actions = createContainerActions<TestContainer>(() => []);
+    const taskContainer = { ...normalContainer, isSwarmTask: true };
+
+    expect(actions.startAction.canExecute?.({ ...taskContainer, state: ContainerStateStatus.Exited })).toBe(false);
+    expect(actions.stopAction.canExecute?.(taskContainer)).toBe(false);
+    expect(actions.pauseAction.primary.canExecute?.(taskContainer)).toBe(false);
+    expect(actions.restartAction.canExecute?.(taskContainer)).toBe(false);
+  });
 });
 
 describe('unmanaged container import actions', () => {
@@ -122,6 +145,7 @@ describe('unmanaged container import actions', () => {
     state: ContainerStateStatus.Running,
     controlState: ResourceControlState.Idle,
     isSystem: false,
+    isSwarmTask: false,
     deploymentId: null,
     stackId: null,
     stack: null,
@@ -153,6 +177,7 @@ describe('unmanaged container import actions', () => {
     ports: {},
     deploymentId: null,
     isSystem: false,
+    isSwarmTask: false,
     systemRole: null,
     imageView: null,
     displayStatus: StackReleaseStatus.Healthy,
@@ -162,7 +187,36 @@ describe('unmanaged container import actions', () => {
 
   it('shows only adoption for a standalone unmanaged container', () => {
     expect(isAdoptableContainer(standalone)).toBe(true);
+    expect(isContainerAdoptionAvailable(standalone, PlatformType.Docker)).toBe(true);
+    expect(isContainerAdoptionAvailable(standalone, PlatformType.DockerSwarm)).toBe(false);
     expect(isImportableStack(standalone)).toBe(false);
+  });
+
+  it('shows the unmanaged marker only where direct container adoption is available', () => {
+    const swarmView = renderActions(
+      <ContainersTable items={[standalone]} isLoading={false} actions={{}} />,
+      PlatformType.DockerSwarm,
+    );
+
+    expect(screen.queryByLabelText('Unmanaged Container')).not.toBeInTheDocument();
+
+    swarmView.unmount();
+    renderActions(<ContainersTable items={[standalone]} isLoading={false} actions={{}} />);
+
+    expect(screen.getByLabelText('Unmanaged Container')).toBeInTheDocument();
+  });
+
+  it('does not show an ownership marker on an individual Swarm task', () => {
+    const swarmTask = {
+      ...standalone,
+      name: 'redis.1.dwqiy5esa0jswywy',
+      isSwarmTask: true,
+    } as ContainerView;
+
+    renderActions(<ContainersTable items={[swarmTask]} isLoading={false} actions={{}} />, PlatformType.DockerSwarm);
+
+    expect(screen.queryByLabelText('Swarm Task')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Unmanaged Container')).not.toBeInTheDocument();
   });
 
   it('shows only stack import for an unmanaged Compose container', () => {
@@ -236,18 +290,54 @@ describe('unmanaged container import actions', () => {
     expect(screen.queryByRole('button', { name: 'Import Stack' })).not.toBeInTheDocument();
   });
 
-  it('hides standalone adoption and Compose import on a Swarm platform', () => {
+  it('hides container adoption but offers Compose-to-Swarm import on a Swarm platform', () => {
     renderActions(
       <>
         <ContainerGroupActions.adopt resources={[standalone]} />
         <ContainerGroupActions.importStack resources={[composeContainer]} />
-        <ContainerDropdownActions.adopt resource={standalone} />
-        <ContainerDropdownActions.importStack resource={composeContainer} />
+        <DropdownMenu open>
+          <DropdownMenuTrigger>Actions</DropdownMenuTrigger>
+          <DropdownMenuContent forceMount>
+            <ContainerDropdownActions.adopt resource={standalone} />
+            <ContainerDropdownActions.importStack resource={composeContainer} />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </>,
       PlatformType.DockerSwarm,
     );
 
     expect(screen.queryByRole('button', { name: 'Adopt Container' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Import Stack' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Import Stack')).toHaveLength(2);
+    expect(screen.getByRole('menuitem', { name: 'Import Stack' })).toBeInTheDocument();
+  });
+
+  it('offers namespace import from a Swarm Stack root but not from an individual task', () => {
+    const swarmTask = {
+      ...composeContainer,
+      name: 'redis-test_web.1.task-id',
+      stack: 'redis-test',
+      isSwarmTask: true,
+    } as ContainerView;
+    const swarmRoot = {
+      ...composeRoot,
+      id: 'stack:redis-test',
+      name: 'redis-test',
+      stack: 'redis-test',
+      isSwarmTask: true,
+      containers: [swarmTask],
+    } as ContainerStackGroupResource;
+
+    renderActions(
+      <>
+        <ContainerGroupActions.adopt resources={[swarmRoot]} />
+        <ContainerGroupActions.importStack resources={[swarmRoot]} />
+        <ContainerDropdownActions.adopt resource={swarmTask} />
+        <ContainerDropdownActions.importStack resource={swarmTask} />
+      </>,
+      PlatformType.DockerSwarm,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Adopt Container' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import Stack' })).toBeInTheDocument();
   });
 });

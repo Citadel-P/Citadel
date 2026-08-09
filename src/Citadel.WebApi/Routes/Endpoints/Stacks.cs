@@ -1,6 +1,7 @@
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
 using Application.Permissions;
+using Domain;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Stacks;
 using Hosting.Common.MergePatch;
@@ -59,10 +60,11 @@ public static class Stacks
         IMediator mediator,
         [Description("Platform id")] Guid platformId,
         [Description("Docker Compose project name")] string projectName,
+        [FromQuery] StackImportKind? importKind,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new GetComposeProjectImportDraft(platformId, projectName),
+            new GetComposeProjectImportDraft(platformId, projectName, importKind),
             cancellationToken);
         return EndpointHandlers.HandleResult(result, ComposeProjectImportDraftView.Map);
     }
@@ -114,6 +116,15 @@ public static class Stacks
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<SwarmStackCompatibilityReport>, ProblemHttpResult>> PreflightSwarm(
+        IMediator mediator,
+        [FromBody] SwarmStackPreflightInput request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToQuery(), cancellationToken);
+        return EndpointHandlers.HandleResult(result);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)

@@ -1,9 +1,9 @@
-import { ResourceControlState, SwarmServiceOwnership } from '@/api/generated/api.types';
+import { ResourceControlState, StackImportKind, SwarmServiceOwnership } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { Eye, PackagePlus, RefreshCw, Trash } from 'lucide-react';
+import { Eye, Layers3, PackagePlus, RefreshCw, Trash } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { SwarmServiceListView } from './hooks/useServicesGroup';
@@ -14,6 +14,11 @@ export const isAdoptableService = (service: SwarmServiceListView) =>
   !service.isManagedDraft &&
   !service.isStale &&
   service.ownership === SwarmServiceOwnership.Unmanaged;
+
+export const isImportableStackService = (service: SwarmServiceListView) =>
+  !service.isStale &&
+  service.ownership === SwarmServiceOwnership.DockerStackExternal &&
+  Boolean(service.dockerStackNamespace);
 
 const isManagedService = (service: SwarmServiceListView) => !!service.managedServiceId;
 const isIdleManagedService = (service: SwarmServiceListView) =>
@@ -69,6 +74,31 @@ const serviceActions = createActionsBuilder<SwarmServiceListView>()
         run: () => {
           if (!canExecute || !platformId) return;
           navigate(`/platforms/${platformId}/services/add?adoptFrom=${encodeURIComponent(service.id)}`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'importStack',
+    title: 'Import Stack',
+    type: 'command',
+    icon: Layers3,
+    requiredCapabilities: ['canInspect'],
+    useHandler: ({ resources }) => {
+      const navigate = useNavigate();
+      const { platformId } = useParams<{ platformId: string }>();
+      const selection = asSelection(resources);
+      const service = selection[0];
+      const canExecute = !!platformId && selection.length === 1 && !!service && isImportableStackService(service);
+      return {
+        canExecute,
+        disabledReason: canExecute ? undefined : 'Select one unmanaged Docker Stack Service to import its Stack.',
+        isPending: false,
+        run: () => {
+          if (!canExecute || !platformId || !service.dockerStackNamespace) return;
+          navigate(
+            `/stacks/add?importPlatform=${encodeURIComponent(platformId)}&importProject=${encodeURIComponent(service.dockerStackNamespace)}&importKind=${StackImportKind.SwarmStack}`,
+          );
         },
       };
     },

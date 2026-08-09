@@ -3,6 +3,8 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Stacks;
+using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
@@ -41,6 +43,7 @@ public sealed record ComposeProjectStackDraft(
     IReadOnlyCollection<Guid> TagIds);
 
 public sealed record ComposeProjectImportDraft(
+    StackImportKind ImportKind,
     ComposeProjectImportSource Source,
     ComposeProjectStackDraft Draft,
     IReadOnlyCollection<AdoptionIssue> Issues,
@@ -56,23 +59,53 @@ public sealed record ComposeProjectServiceComparison(
 public sealed record ComposeProjectImportValidation(
     IReadOnlyList<ComposeProjectServiceComparison> Services,
     IReadOnlyCollection<AdoptionIssue> Issues,
-    string PreviewFingerprint);
+    string PreviewFingerprint,
+    IReadOnlyList<string> ImportableSensitiveEnvironmentNames,
+    bool CanImportSensitiveEnvironmentValues);
 
 [RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
-public sealed record GetComposeProjectImportDraft(Guid PlatformId, string ProjectName)
+public sealed record GetComposeProjectImportDraft(
+    Guid PlatformId,
+    string ProjectName,
+    StackImportKind? ImportKind = null)
     : IQuery<Result<ComposeProjectImportDraft>>;
 
 internal sealed class GetComposeProjectImportDraftHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<IContainerConnector> connectorFactory,
     IContainerAuthorizationService containerAuthorizationService,
-    IAdoptionFingerprintService fingerprintService)
+    IAdoptionFingerprintService fingerprintService,
+    IConnectorFactory<ISwarmConnector> swarmConnectorFactory,
+    IPermissionService permissionService,
+    IUserContextAccessor userContext)
     : IQueryHandler<GetComposeProjectImportDraft, Result<ComposeProjectImportDraft>>
 {
     public async ValueTask<Result<ComposeProjectImportDraft>> Handle(
         GetComposeProjectImportDraft query,
         CancellationToken cancellationToken)
     {
+        var platform = await unitOfWork.Platforms.GetByIdAsync(query.PlatformId, cancellationToken);
+        var importKind = ResolveImportKind(platform, query.ImportKind);
+        if (importKind.IsFailure(out var importKindError, out var resolvedImportKind))
+            return Result.Failure<ComposeProjectImportDraft>(importKindError);
+
+        if (resolvedImportKind == StackImportKind.SwarmStack)
+        {
+            var swarmContextResult = await SwarmStackImportDraftFactory.LoadContextAsync(
+                query.PlatformId,
+                query.ProjectName,
+                unitOfWork,
+                swarmConnectorFactory,
+                permissionService,
+                userContext,
+                cancellationToken);
+            if (!swarmContextResult.IsSuccess(out var swarmContext))
+                return Result.Failure<ComposeProjectImportDraft>(swarmContextResult.Errors);
+
+            var swarmName = await GetAvailableNameAsync(query.ProjectName, cancellationToken);
+            return SwarmStackImportDraftFactory.Create(swarmContext, swarmName, fingerprintService);
+        }
+
         var contextResult = await ComposeProjectImportDraftFactory.LoadContextAsync(
             query.PlatformId,
             query.ProjectName,
@@ -85,6 +118,25 @@ internal sealed class GetComposeProjectImportDraftHandler(
 
         var name = await GetAvailableNameAsync(query.ProjectName, cancellationToken);
         return ComposeProjectImportDraftFactory.Create(context, name, fingerprintService);
+    }
+
+    private static Result<StackImportKind> ResolveImportKind(Platform? platform, StackImportKind? requested)
+    {
+        if (platform is null)
+            return Result.Failure<StackImportKind>(new NotFoundError("Platform does not exist."));
+
+        var kind = requested
+            ?? (platform.PlatformDescriptor.Type == PlatformType.DockerSwarm
+                ? StackImportKind.SwarmStack
+                : StackImportKind.ComposeProject);
+        if (kind == StackImportKind.SwarmStack
+            && platform.PlatformDescriptor.Type != PlatformType.DockerSwarm)
+        {
+            return Result.Failure<StackImportKind>(
+                new BadRequestError("Docker Stack import requires a Docker Swarm platform."));
+        }
+
+        return kind;
     }
 
     private async Task<string> GetAvailableNameAsync(
@@ -126,7 +178,18 @@ internal sealed record ComposeProjectImportContext(
 internal sealed record ComposeProjectSourceAnalysis(
     StackSpec SafeSpec,
     IReadOnlyDictionary<string, StackComposeService> Services,
-    string SourceDigest);
+    string SourceDigest,
+    IReadOnlyList<string> ComposeFiles,
+    SwarmStackCompatibilityReport? SwarmCompatibility = null);
+
+internal sealed record ComposeProjectSensitiveBinding(string Name, string Value);
+
+internal sealed record ComposeProjectSensitiveBindingAnalysis(
+    IReadOnlyList<ComposeProjectSensitiveBinding> Bindings,
+    IReadOnlyList<AdoptionIssue> Issues)
+{
+    public bool CanImport => Bindings.Count > 0 && Issues.Count == 0;
+}
 
 internal static class ComposeProjectImportDraftFactory
 {
@@ -153,13 +216,20 @@ internal static class ComposeProjectImportDraftFactory
         var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
         if (platform is null)
             return Result.Failure<ComposeProjectImportContext>(new NotFoundError("Platform does not exist."));
-        if (platform.PlatformDescriptor.Type != PlatformType.Docker)
+        if (platform.PlatformDescriptor.Type is not PlatformType.Docker and not PlatformType.DockerSwarm)
         {
             return Result.Failure<ComposeProjectImportContext>(
-                new BadRequestError("Only Compose projects on Docker Standalone platforms can be imported as stacks."));
+                new BadRequestError("Compose project import requires a Docker Standalone or Docker Swarm platform."));
         }
         if (platform.Status != PlatformStatus.Online)
             return Result.Failure<ComposeProjectImportContext>(new ConflictError("Platform is offline."));
+        if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor swarm
+            && (!swarm.ControlAvailable
+                || !string.Equals(swarm.LocalNodeState, "active", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Result.Failure<ComposeProjectImportContext>(
+                new ConflictError("Compose-to-Swarm import requires a connected Swarm manager with control available."));
+        }
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -191,6 +261,11 @@ internal static class ComposeProjectImportDraftFactory
         }
 
         var containers = runtime.Select(container => persisted[container.Id]).ToArray();
+        if (containers.Any(static container => container.IsSwarmTask))
+        {
+            return Result.Failure<ComposeProjectImportContext>(
+                new BadRequestError("Docker Stack task containers must be imported as a native Swarm Stack."));
+        }
         if (containers.Any(container => container.IsSystem))
             return Result.Failure<ComposeProjectImportContext>(new ConflictError("System containers cannot be imported."));
         if (containers.Any(container => container.DeploymentId is not null || container.StackId is not null))
@@ -315,9 +390,17 @@ internal static class ComposeProjectImportDraftFactory
         string name,
         IAdoptionFingerprintService fingerprintService)
     {
-        var issues = GetRuntimeIssues(context);
+        var issues = GetRuntimeIssues(context).ToList();
+        if (context.Platform.PlatformDescriptor.Type == PlatformType.DockerSwarm)
+        {
+            issues.Add(new AdoptionIssue(
+                "COMPOSE_TO_SWARM_CONVERSION",
+                "This Docker Compose project will be converted to a native Docker Swarm Stack on first Apply.",
+                AdoptionIssueSeverity.Warning));
+        }
         var services = GetRuntimeServices(context);
         return new ComposeProjectImportDraft(
+            StackImportKind.ComposeProject,
             new ComposeProjectImportSource(
                 context.Platform.Id,
                 context.Platform.Name,
@@ -328,7 +411,9 @@ internal static class ComposeProjectImportDraftFactory
             new ComposeProjectStackDraft(
                 name,
                 context.Platform.Id,
-                $"Imported from Docker Compose project {context.ProjectName}.",
+                context.Platform.PlatformDescriptor.Type == PlatformType.DockerSwarm
+                    ? $"Imported from Docker Compose project {context.ProjectName} for conversion to Docker Swarm."
+                    : $"Imported from Docker Compose project {context.ProjectName}.",
                 StackDriftPolicy.Disabled,
                 []),
             issues,
@@ -341,6 +426,16 @@ internal static class ComposeProjectImportDraftFactory
         IAdoptionFingerprintService fingerprintService)
     {
         var issues = GetRuntimeIssues(context).ToList();
+        var sensitiveBindings = GetSensitiveBindingAnalysis(context, source);
+        issues.AddRange(sensitiveBindings.Issues);
+        if (context.Platform.PlatformDescriptor.Type == PlatformType.DockerSwarm)
+        {
+            issues.Add(new AdoptionIssue(
+                "COMPOSE_TO_SWARM_CONVERSION",
+                "First Apply will stop the Compose project without deleting its volumes, then deploy it as a native Docker Swarm Stack.",
+                AdoptionIssueSeverity.Warning));
+            AddSwarmCompatibilityIssues(source, issues);
+        }
         var runtimeServices = GetRuntimeServices(context);
         var comparisons = runtimeServices
             .Select(runtime =>
@@ -407,7 +502,86 @@ internal static class ComposeProjectImportDraftFactory
         return new ComposeProjectImportValidation(
             comparisons.OrderBy(comparison => comparison.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
             issues,
-            ComputePreviewFingerprint(context, source.SourceDigest, fingerprintService));
+            ComputePreviewFingerprint(context, source.SourceDigest, fingerprintService),
+            sensitiveBindings.CanImport
+                ? sensitiveBindings.Bindings.Select(static binding => binding.Name).ToArray()
+                : [],
+            sensitiveBindings.CanImport);
+    }
+
+    internal static ComposeProjectSensitiveBindingAnalysis GetSensitiveBindingAnalysis(
+        ComposeProjectImportContext context,
+        ComposeProjectSourceAnalysis source)
+    {
+        var bindings = new Dictionary<string, string>(StringComparer.Ordinal);
+        var issues = new List<AdoptionIssue>();
+        var references = StackComposeParser.ParseEnvironmentBindingReferences(source.ComposeFiles)
+            .Where(reference => ContainerInspectionRedactor.IsSensitiveEnvironmentName(reference.EnvironmentName));
+
+        foreach (var reference in references)
+        {
+            var containers = context.ManagedContainers
+                .Where(container => string.Equals(
+                    container.ServiceName,
+                    reference.ServiceName,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var runtimeValues = containers
+                .Select(container => GetEnvironmentValue(container.Inspection, reference.EnvironmentName))
+                .ToArray();
+            var values = runtimeValues
+                .Where(static value => value is not null)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            var fieldPath = $"spec.environment.{reference.ServiceName}.{reference.EnvironmentName}";
+            if (containers.Length == 0
+                || runtimeValues.Any(static value => string.IsNullOrEmpty(value)
+                                                    || string.Equals(
+                                                        value,
+                                                        ContainerInspectionRedactor.RedactedValue,
+                                                        StringComparison.Ordinal)))
+            {
+                issues.Add(new AdoptionIssue(
+                    "SENSITIVE_BINDING_VALUE_UNAVAILABLE",
+                    $"Sensitive binding '{reference.BindingName}' could not be imported from the running service '{reference.ServiceName}'.",
+                    AdoptionIssueSeverity.Warning,
+                    fieldPath));
+                continue;
+            }
+
+            if (values.Length > 1
+                || (bindings.TryGetValue(reference.BindingName, out var currentValue)
+                    && !string.Equals(currentValue, values[0], StringComparison.Ordinal)))
+            {
+                issues.Add(new AdoptionIssue(
+                    "SENSITIVE_BINDING_VALUE_CONFLICT",
+                    $"Sensitive binding '{reference.BindingName}' resolves to different runtime values and cannot be imported automatically.",
+                    AdoptionIssueSeverity.Warning,
+                    fieldPath));
+                continue;
+            }
+
+            bindings[reference.BindingName] = values[0]!;
+        }
+
+        return new ComposeProjectSensitiveBindingAnalysis(
+            bindings.OrderBy(static binding => binding.Key, StringComparer.Ordinal)
+                .Select(static binding => new ComposeProjectSensitiveBinding(binding.Key, binding.Value))
+                .ToArray(),
+            issues);
+    }
+
+    private static string? GetEnvironmentValue(ContainerInspectionInfo inspection, string name)
+    {
+        foreach (var entry in inspection.Config?.Env ?? [])
+        {
+            var separator = entry.IndexOf('=');
+            if (separator > 0 && string.Equals(entry[..separator], name, StringComparison.Ordinal))
+                return entry[(separator + 1)..];
+        }
+
+        return null;
     }
 
     internal static async Task<Result<ComposeProjectSourceAnalysis>> AnalyzeSourceAsync(
@@ -420,8 +594,31 @@ internal static class ComposeProjectImportDraftFactory
         IPermissionService permissionService,
         IUserContextAccessor userContext,
         CancellationToken cancellationToken)
+        => await AnalyzeSourceAsync(
+            context.Platform,
+            context.ProjectName,
+            stackName,
+            stackSource,
+            spec,
+            unitOfWork,
+            gitStackMaterializer,
+            permissionService,
+            userContext,
+            cancellationToken);
+
+    internal static async Task<Result<ComposeProjectSourceAnalysis>> AnalyzeSourceAsync(
+        Platform platform,
+        string projectName,
+        string stackName,
+        StackSource stackSource,
+        StackSpec spec,
+        IUnitOfWork unitOfWork,
+        IGitStackMaterializer gitStackMaterializer,
+        IPermissionService permissionService,
+        IUserContextAccessor userContext,
+        CancellationToken cancellationToken)
     {
-        var safeSpec = NormalizeImportSpec(context.ProjectName, spec);
+        var safeSpec = NormalizeImportSpec(projectName, spec);
         if (!IsCompatible(stackSource, safeSpec))
         {
             return Result.Failure<ComposeProjectSourceAnalysis>(
@@ -433,7 +630,8 @@ internal static class ComposeProjectImportDraftFactory
             return AnalyzeComposeFiles(
                 safeSpec,
                 [manual.ComposeFile],
-                ComputeSourceDigest(safeSpec, "web", [manual.ComposeFile]));
+                ComputeSourceDigest(safeSpec, "web", [manual.ComposeFile]),
+                platform.PlatformDescriptor.Type == PlatformType.DockerSwarm);
         }
 
         var git = (GitStack)safeSpec;
@@ -466,7 +664,7 @@ internal static class ComposeProjectImportDraftFactory
             stackName,
             user.ActorId,
             StackSource.Git,
-            context.Platform.Id,
+            platform.Id,
             safeSpec,
             driftPolicy: StackDriftPolicy.Disabled);
         try
@@ -487,7 +685,11 @@ internal static class ComposeProjectImportDraftFactory
                 safeSpec,
                 $"git:{source.ResolvedCommitSha}",
                 composeFiles);
-            return AnalyzeComposeFiles(safeSpec, composeFiles, sourceDigest);
+            return AnalyzeComposeFiles(
+                safeSpec,
+                composeFiles,
+                sourceDigest,
+                platform.PlatformDescriptor.Type == PlatformType.DockerSwarm);
         }
         catch (YamlException)
         {
@@ -531,7 +733,8 @@ internal static class ComposeProjectImportDraftFactory
     private static Result<ComposeProjectSourceAnalysis> AnalyzeComposeFiles(
         StackSpec safeSpec,
         IReadOnlyList<string> composeFiles,
-        string sourceDigest)
+        string sourceDigest,
+        bool analyzeSwarmCompatibility)
     {
         if (composeFiles.Count == 0 || composeFiles.All(string.IsNullOrWhiteSpace))
         {
@@ -550,7 +753,15 @@ internal static class ComposeProjectImportDraftFactory
                     new BadRequestError("The selected Compose source does not define any services."));
             }
 
-            return new ComposeProjectSourceAnalysis(safeSpec, services, sourceDigest);
+            var swarmCompatibility = analyzeSwarmCompatibility
+                ? StackComposeParser.AnalyzeSwarmCompatibility(composeFiles, safeSpec.BuildImageBindings)
+                : null;
+            return new ComposeProjectSourceAnalysis(
+                safeSpec,
+                services,
+                sourceDigest,
+                composeFiles.ToArray(),
+                swarmCompatibility);
         }
         catch (YamlException)
         {
@@ -624,10 +835,46 @@ internal static class ComposeProjectImportDraftFactory
         return issues;
     }
 
+    internal static void AddSwarmCompatibilityIssues(
+        ComposeProjectSourceAnalysis source,
+        ICollection<AdoptionIssue> issues)
+    {
+        if (source.SwarmCompatibility is null)
+            return;
+
+        foreach (var issue in source.SwarmCompatibility.Issues)
+        {
+            issues.Add(new AdoptionIssue(
+                $"SWARM_{issue.Code.ToUpperInvariant()}",
+                issue.Message,
+                issue.Severity == SwarmStackCompatibilitySeverity.Error
+                    ? AdoptionIssueSeverity.Blocker
+                    : AdoptionIssueSeverity.Warning,
+                issue.FieldPath));
+        }
+
+        foreach (var issue in SwarmStackConfigurationPolicy.GetIssues(source.SafeSpec, StackDriftPolicy.Disabled))
+        {
+            issues.Add(new AdoptionIssue(
+                $"SWARM_{issue.Code.ToUpperInvariant()}",
+                issue.Message,
+                issue.Severity == SwarmStackCompatibilitySeverity.Error
+                    ? AdoptionIssueSeverity.Blocker
+                    : AdoptionIssueSeverity.Warning,
+                issue.FieldPath));
+        }
+    }
+
     private static string? GetRuntimeImage(ComposeProjectContainerContext container)
-        => container.Inspection.Config?.Labels.TryGetValue(ComposeImageLabel, out var image) == true
-            ? image
-            : container.Inspection.Config?.Image;
+    {
+        var configuredImage = container.Inspection.Config?.Image;
+        if (!string.IsNullOrWhiteSpace(configuredImage))
+            return configuredImage;
+
+        return container.Inspection.Config?.Labels.TryGetValue(ComposeImageLabel, out var composeImage) == true
+            ? composeImage
+            : null;
+    }
 
     private static string GetServiceName(ContainerInspectionInfo inspection)
         => inspection.Config?.Labels.TryGetValue(ComposeLabels.Service, out var service) == true

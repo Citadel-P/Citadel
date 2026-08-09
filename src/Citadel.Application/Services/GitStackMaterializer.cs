@@ -15,6 +15,8 @@ internal interface IGitStackMaterializer
 
     Task ActivateCurrentAsync(Guid stackId, string snapshotRoot, CancellationToken cancellationToken);
 
+    Task ActivateReleaseAsync(Guid stackId, Guid releaseId, CancellationToken cancellationToken);
+
     Task DiscardSnapshotAsync(Guid stackId, Guid releaseId, CancellationToken cancellationToken);
 
     Task PruneSnapshotsAsync(Guid stackId, IReadOnlyCollection<Guid> retainedReleaseIds, CancellationToken cancellationToken);
@@ -126,7 +128,9 @@ internal sealed class GitStackMaterializer(
         var labelsOverrideFilePath = Path.Combine(generatedFilesDirectory, "citadel.labels.yml");
         await File.WriteAllTextAsync(
             labelsOverrideFilePath,
-            StackComposeLabelInjector.CreateLabelsOverride(composeContents, stack.Id, stack.CurrentStackReleaseId),
+            stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == Domain.PlatformType.DockerSwarm
+                ? StackComposeLabelInjector.CreateSwarmLabelsOverride(composeContents, stack.Id, stack.CurrentStackReleaseId)
+                : StackComposeLabelInjector.CreateLabelsOverride(composeContents, stack.Id, stack.CurrentStackReleaseId),
             cancellationToken);
 
         return Result.Success(new GitStackMaterializationResult(
@@ -172,6 +176,19 @@ internal sealed class GitStackMaterializer(
         DeletePath(currentPath);
         await File.WriteAllTextAsync(tempPointerPath, snapshotRoot, cancellationToken);
         File.Move(tempPointerPath, pointerPath, overwrite: true);
+    }
+
+    public Task ActivateReleaseAsync(Guid stackId, Guid releaseId, CancellationToken cancellationToken)
+    {
+        var snapshotRoot = Path.Combine(
+            GetStackRoot(stackId),
+            "releases",
+            releaseId.ToString("D"),
+            "source");
+        if (!Directory.Exists(snapshotRoot))
+            throw new DirectoryNotFoundException("The recovered Git Stack source snapshot is no longer available.");
+
+        return ActivateCurrentAsync(stackId, snapshotRoot, cancellationToken);
     }
 
     public Task PruneSnapshotsAsync(Guid stackId, IReadOnlyCollection<Guid> retainedReleaseIds, CancellationToken cancellationToken)

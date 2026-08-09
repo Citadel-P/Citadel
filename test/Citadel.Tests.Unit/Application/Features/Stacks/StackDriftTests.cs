@@ -656,6 +656,35 @@ public class StackDriftTests
     }
 
     [Fact]
+    public void StackComposeLabelInjector_SwarmInjectsServiceAndTaskOwnershipLabels()
+    {
+        var stackId = Guid.CreateVersion7();
+        var releaseId = Guid.CreateVersion7();
+        const string compose = "services:\n  api:\n    image: nginx\n    deploy:\n      replicas: 2\n";
+
+        var result = StackComposeLabelInjector.InjectSwarm(compose, stackId, releaseId);
+        var services = ReadServices(result);
+        var service = Assert.IsType<YamlMappingNode>(services.Children[new YamlScalarNode("api")]);
+        var taskLabels = Assert.IsType<YamlMappingNode>(service.Children[new YamlScalarNode("labels")]);
+        var deploy = Assert.IsType<YamlMappingNode>(service.Children[new YamlScalarNode("deploy")]);
+        var serviceLabels = Assert.IsType<YamlMappingNode>(deploy.Children[new YamlScalarNode("labels")]);
+
+        foreach (var labels in new[] { taskLabels, serviceLabels })
+        {
+            var managed = Assert.IsType<YamlScalarNode>(labels.Children[new YamlScalarNode(CitadelLabels.Managed)]);
+            Assert.Equal("true", managed.Value);
+            Assert.Equal(YamlDotNet.Core.ScalarStyle.DoubleQuoted, managed.Style);
+            Assert.Equal(stackId.ToString("D"), Assert.IsType<YamlScalarNode>(labels.Children[new YamlScalarNode(CitadelLabels.StackId)]).Value);
+            Assert.Equal(releaseId.ToString("D"), Assert.IsType<YamlScalarNode>(labels.Children[new YamlScalarNode(CitadelLabels.ReleaseId)]).Value);
+        }
+
+        Assert.Contains("com.citadel.managed: \"true\"", result, StringComparison.Ordinal);
+
+        var gitOverride = StackComposeLabelInjector.CreateSwarmLabelsOverride([compose], stackId, releaseId);
+        Assert.Contains("com.citadel.managed: \"true\"", gitOverride, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StackComposeLabelInjector_rejects_reserved_user_labels()
     {
         const string compose = """

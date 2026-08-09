@@ -3,6 +3,8 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -28,7 +30,9 @@ internal sealed class DeleteStacksHandler(
     IStackStoragePathProvider stackStoragePathProvider,
     IUserContextAccessor userContext,
     IHostApplicationLifetime applicationLifetime,
-    ILogger<DeleteStacksHandler> logger) : ICommandHandler<DeleteStacks, Result>
+    ILogger<DeleteStacksHandler> logger,
+    IConnectorFactory<ISwarmConnector>? swarmConnectorFactory = null,
+    IConnectorFactory<INetworkConnector>? networkConnectorFactory = null) : ICommandHandler<DeleteStacks, Result>
 {
     private static readonly TimeSpan CompletionTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan RollbackTimeout = TimeSpan.FromSeconds(5);
@@ -57,12 +61,13 @@ internal sealed class DeleteStacksHandler(
         var completionToken = completionCancellation.Token;
 
         var deletionCommitted = false;
+        var runtimeMutationStarted = false;
         try
         {
             var plans = new List<StackRuntimeDeletePlan>();
             foreach (var stack in stacks)
             {
-                var planResult = await PrepareRuntimeContainerDeletionAsync(
+                var planResult = await PrepareRuntimeDeletionAsync(
                     stack,
                     previousStatuses[stack.Id],
                     completionToken);
@@ -81,10 +86,11 @@ internal sealed class DeleteStacksHandler(
             // containers produce an empty plan while the database stack still exists.
             foreach (var plan in plans)
             {
-                var cleanupResult = await plan.Connector.DeleteAsync(plan.Command, completionToken);
+                runtimeMutationStarted = true;
+                var cleanupResult = await plan.DeleteAsync(completionToken);
                 if (cleanupResult.IsFailure(out var cleanupError))
                 {
-                    await TryRollbackClaimsAsync(stacks, previousStatuses);
+                    await TryRestoreClaimsAsync(stacks, previousStatuses, runtimeStateUncertain: true);
                     return Result.Failure(cleanupError);
                 }
             }
@@ -100,7 +106,7 @@ internal sealed class DeleteStacksHandler(
             if (deleted != stacks.Length)
             {
                 await unitOfWork.RollbackAsync();
-                await TryRollbackClaimsAsync(stacks, previousStatuses);
+                await TryRestoreClaimsAsync(stacks, previousStatuses, runtimeStateUncertain: runtimeMutationStarted);
                 return Result.Failure(new ConflictError("The stack set changed while deletion was in progress."));
             }
 
@@ -136,7 +142,7 @@ internal sealed class DeleteStacksHandler(
         catch
         {
             if (!deletionCommitted)
-                await TryRollbackClaimsAsync(stacks, previousStatuses);
+                await TryRestoreClaimsAsync(stacks, previousStatuses, runtimeMutationStarted);
             throw;
         }
     }
@@ -144,15 +150,21 @@ internal sealed class DeleteStacksHandler(
     private async Task TryRollbackClaimsAsync(
         IReadOnlyCollection<Stack> stacks,
         IReadOnlyDictionary<Guid, StackReleaseStatus> previousStatuses)
+        => await TryRestoreClaimsAsync(stacks, previousStatuses, runtimeStateUncertain: false);
+
+    private async Task TryRestoreClaimsAsync(
+        IReadOnlyCollection<Stack> stacks,
+        IReadOnlyDictionary<Guid, StackReleaseStatus> previousStatuses,
+        bool runtimeStateUncertain)
     {
         using var rollbackCancellation = new CancellationTokenSource(RollbackTimeout);
         try
         {
-            await RollbackClaimsAsync(stacks, previousStatuses, rollbackCancellation.Token);
+            await RestoreClaimsAsync(stacks, previousStatuses, runtimeStateUncertain, rollbackCancellation.Token);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to roll back stack deletion claims");
+            logger.LogError(ex, "Failed to restore stack deletion claims");
         }
     }
 
@@ -221,18 +233,21 @@ internal sealed class DeleteStacksHandler(
         }
     }
 
-    private async Task RollbackClaimsAsync(
+    private async Task RestoreClaimsAsync(
         IReadOnlyCollection<Stack> stacks,
         IReadOnlyDictionary<Guid, StackReleaseStatus> previousStatuses,
+        bool runtimeStateUncertain,
         CancellationToken cancellationToken)
     {
         foreach (var stack in stacks)
         {
-            var previousStatus = previousStatuses[stack.Id];
-            stack.ReleaseProcessing(previousStatus);
+            var restoredStatus = runtimeStateUncertain
+                ? StackReleaseStatus.Unknown
+                : previousStatuses[stack.Id];
+            stack.ReleaseProcessing(restoredStatus);
             var restored = await unitOfWork.Stacks.UpdateProcessingAsync(
                 stack.Id,
-                previousStatus,
+                restoredStatus,
                 stack.ControlState,
                 stack.ControlStartedAt,
                 stack.RowVersion + 1,
@@ -330,6 +345,14 @@ internal sealed class DeleteStacksHandler(
         return builder.Length == 0 ? "stack" : builder.ToString();
     }
 
+    private Task<Result<StackRuntimeDeletePlan?>> PrepareRuntimeDeletionAsync(
+        Stack stack,
+        StackReleaseStatus previousStatus,
+        CancellationToken cancellationToken)
+        => stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm
+            ? PrepareSwarmRuntimeDeletionAsync(stack, previousStatus, cancellationToken)
+            : PrepareRuntimeContainerDeletionAsync(stack, previousStatus, cancellationToken);
+
     private async Task<Result<StackRuntimeDeletePlan?>> PrepareRuntimeContainerDeletionAsync(
         Stack stack,
         StackReleaseStatus previousStatus,
@@ -389,14 +412,243 @@ internal sealed class DeleteStacksHandler(
         }
 
         return Result.Success<StackRuntimeDeletePlan?>(new StackRuntimeDeletePlan(
-            connector,
-            new DeleteContainerCommand(
-                containerIds,
-                platform.Address,
-                Volume: false,
-                Force: true,
-                Link: false)));
+            token => connector.DeleteAsync(
+                new DeleteContainerCommand(
+                    containerIds,
+                    platform.Address,
+                    Volume: false,
+                    Force: true,
+                    Link: false),
+                token)));
     }
+
+    private async Task<Result<StackRuntimeDeletePlan?>> PrepareSwarmRuntimeDeletionAsync(
+        Stack stack,
+        StackReleaseStatus previousStatus,
+        CancellationToken cancellationToken)
+    {
+        if (stack.CurrentStackRelease is null || previousStatus == StackReleaseStatus.Created)
+            return Result.Success<StackRuntimeDeletePlan?>(null);
+
+        if (swarmConnectorFactory is null || networkConnectorFactory is null)
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(
+                new BadRequestError("Swarm Stack deletion is not available for this connector."));
+        }
+
+        if (!platformCache.TryGetCacheEntry(stack.CurrentStackRelease.PlatformId, out var platform, out var platformError))
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(
+                new NotFoundError(platformError?.Message ?? "Platform not found or disconnected."));
+        }
+
+        string stackNamespace;
+        try
+        {
+            stackNamespace = StackProjectNameResolver.Resolve(stack);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(new BadRequestError(ex.Message));
+        }
+
+        var reservation = await unitOfWork.Stacks.GetSwarmNamespaceReservationAsync(stack.Id, cancellationToken);
+        if (reservation is not null
+            && (reservation.PlatformId != platform.Id
+                || !string.Equals(reservation.Namespace, stackNamespace, StringComparison.Ordinal)))
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(new ConflictError(
+                "The Stack configuration no longer matches its reserved Swarm namespace."));
+        }
+
+        if (reservation is null)
+        {
+            var reserved = await unitOfWork.Stacks.TryReserveSwarmNamespaceAsync(
+                stack.Id,
+                platform.Id,
+                stackNamespace,
+                cancellationToken);
+            if (!reserved)
+            {
+                return Result.Failure<StackRuntimeDeletePlan?>(new ConflictError(
+                    $"Swarm namespace '{stackNamespace}' is reserved by another Stack."));
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+
+        var swarmConnector = swarmConnectorFactory.GetConnector(platform.ConnectorType);
+        var servicesResult = await swarmConnector.ListServicesAsync(
+            new ListSwarmServicesCommand(platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems),
+            cancellationToken);
+        if (servicesResult.IsFailure(out var serviceError, out var services))
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(
+                new BadRequestError($"Unable to inspect the Swarm Stack before deletion: {serviceError.Message}"));
+        }
+
+        var namespaceServices = services.Where(service => HasNamespace(service.Labels, stackNamespace)).ToArray();
+        var expectedStackId = stack.Id.ToString("D");
+        var linkedServiceIds = (await unitOfWork.Swarm.GetServicesAsync(platform.Id, cancellationToken))
+            .Where(service => service.StackId == stack.Id
+                              && string.Equals(
+                                  service.DockerStackNamespace,
+                                  stackNamespace,
+                                  StringComparison.Ordinal))
+            .Select(static service => service.DockerServiceId)
+            .ToHashSet(StringComparer.Ordinal);
+        var foreignService = namespaceServices.FirstOrDefault(service =>
+            !IsOwnedByStack(service.Labels, expectedStackId)
+            && !(linkedServiceIds.Contains(service.Id) && !HasAnyCitadelOwnershipLabel(service.Labels)));
+        if (foreignService is not null)
+        {
+            return Result.Failure<StackRuntimeDeletePlan?>(new ConflictError(
+                $"Swarm namespace '{stackNamespace}' contains Service '{foreignService.Name}' that is not owned by this Stack."));
+        }
+
+        var networksResult = await swarmConnector.ListNetworksAsync(
+            new ListSwarmNetworksCommand(platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems),
+            cancellationToken);
+        if (networksResult.IsFailure(out var networkError, out var networks))
+            return Result.Failure<StackRuntimeDeletePlan?>(new BadRequestError($"Unable to inspect Swarm Networks before deletion: {networkError.Message}"));
+
+        var secretsResult = await swarmConnector.ListSecretsAsync(
+            new ListSwarmSecretsCommand(platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems),
+            cancellationToken);
+        if (secretsResult.IsFailure(out var secretError, out var secrets))
+            return Result.Failure<StackRuntimeDeletePlan?>(new BadRequestError($"Unable to inspect Swarm Secrets before deletion: {secretError.Message}"));
+
+        var configsResult = await swarmConnector.ListConfigsAsync(
+            new ListSwarmConfigsCommand(platform.Address, SwarmInventoryLimits.AuthoritativeSnapshotItems),
+            cancellationToken);
+        if (configsResult.IsFailure(out var configError, out var configs))
+            return Result.Failure<StackRuntimeDeletePlan?>(new BadRequestError($"Unable to inspect Swarm Configs before deletion: {configError.Message}"));
+
+        var referencedNetworks = namespaceServices.SelectMany(static service => service.NetworkIds).ToHashSet(StringComparer.Ordinal);
+        var referencedSecrets = namespaceServices.SelectMany(static service => service.SecretIds).ToHashSet(StringComparer.Ordinal);
+        var referencedConfigs = namespaceServices.SelectMany(static service => service.ConfigIds).ToHashSet(StringComparer.Ordinal);
+
+        var networkIds = GetOwnedNamespaceResourceIds(networks.Select(static value => (value.Id, value.Labels)), stackNamespace, expectedStackId, referencedNetworks);
+        var secretIds = GetOwnedNamespaceResourceIds(secrets.Select(static value => (value.Id, value.Labels)), stackNamespace, expectedStackId, referencedSecrets);
+        var configIds = GetOwnedNamespaceResourceIds(configs.Select(static value => (value.Id, value.Labels)), stackNamespace, expectedStackId, referencedConfigs);
+        var networkConnector = networkConnectorFactory.GetConnector(platform.ConnectorType);
+
+        return Result.Success<StackRuntimeDeletePlan?>(new StackRuntimeDeletePlan(token => DeleteSwarmRuntimeAsync(
+            swarmConnector,
+            networkConnector,
+            platform.Address,
+            stackNamespace,
+            namespaceServices.Select(static service => service.Id).ToArray(),
+            networkIds,
+            secretIds,
+            configIds,
+            token)));
+    }
+
+    private static async Task<Result> DeleteSwarmRuntimeAsync(
+        ISwarmConnector swarmConnector,
+        INetworkConnector networkConnector,
+        string platformAddress,
+        string stackNamespace,
+        IReadOnlyList<string> serviceIds,
+        IReadOnlyList<string> networkIds,
+        IReadOnlyList<string> secretIds,
+        IReadOnlyList<string> configIds,
+        CancellationToken cancellationToken)
+    {
+        foreach (var serviceId in serviceIds)
+        {
+            var deleteResult = await swarmConnector.DeleteInventoryServiceAsync(
+                new DeleteSwarmInventoryServiceCommand(platformAddress, serviceId),
+                cancellationToken);
+            if (deleteResult.IsFailure(out var deleteError))
+                return Result.Failure(new BadRequestError($"Unable to delete Swarm Service '{serviceId}': {deleteError.Message}"));
+        }
+
+        IReadOnlyList<SwarmServiceResult> remainingServices = [];
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var servicesResult = await swarmConnector.ListServicesAsync(
+                new ListSwarmServicesCommand(platformAddress, SwarmInventoryLimits.AuthoritativeSnapshotItems),
+                cancellationToken);
+            if (servicesResult.IsFailure(out var listError, out var currentServices))
+                return Result.Failure(new BadRequestError($"Unable to verify Swarm Service deletion: {listError.Message}"));
+
+            remainingServices = currentServices;
+
+            if (!remainingServices.Any(service => HasNamespace(service.Labels, stackNamespace)))
+                break;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        }
+
+        if (remainingServices.Any(service => HasNamespace(service.Labels, stackNamespace)))
+        {
+            return Result.Failure(new ConflictError(
+                $"Swarm namespace '{stackNamespace}' still contains Services after Docker accepted their deletion."));
+        }
+
+        var referencedNetworks = remainingServices.SelectMany(static service => service.NetworkIds).ToHashSet(StringComparer.Ordinal);
+        var referencedSecrets = remainingServices.SelectMany(static service => service.SecretIds).ToHashSet(StringComparer.Ordinal);
+        var referencedConfigs = remainingServices.SelectMany(static service => service.ConfigIds).ToHashSet(StringComparer.Ordinal);
+
+        var deletableNetworks = networkIds.Where(id => !referencedNetworks.Contains(id)).ToArray();
+        if (deletableNetworks.Length > 0)
+        {
+            var deleteNetworksResult = await networkConnector.DeleteNetworkAsync(
+                new DeleteDockerNetworkCommand(platformAddress, deletableNetworks),
+                cancellationToken);
+            if (deleteNetworksResult.IsFailure(out var networkError))
+                return Result.Failure(new BadRequestError($"Unable to delete Swarm Stack Networks: {networkError.Message}"));
+        }
+
+        foreach (var secretId in secretIds.Where(id => !referencedSecrets.Contains(id)))
+        {
+            var deleteResult = await swarmConnector.DeleteSecretAsync(
+                new DeleteSwarmSecretCommand(platformAddress, secretId),
+                cancellationToken);
+            if (deleteResult.IsFailure(out var secretError))
+                return Result.Failure(new BadRequestError($"Unable to delete Swarm Stack Secret '{secretId}': {secretError.Message}"));
+        }
+
+        foreach (var configId in configIds.Where(id => !referencedConfigs.Contains(id)))
+        {
+            var deleteResult = await swarmConnector.DeleteConfigAsync(
+                new DeleteSwarmConfigCommand(platformAddress, configId),
+                cancellationToken);
+            if (deleteResult.IsFailure(out var configError))
+                return Result.Failure(new BadRequestError($"Unable to delete Swarm Stack Config '{configId}': {configError.Message}"));
+        }
+
+        return Result.Success();
+    }
+
+    private static IReadOnlyList<string> GetOwnedNamespaceResourceIds(
+        IEnumerable<(string Id, IReadOnlyDictionary<string, string> Labels)> resources,
+        string stackNamespace,
+        string expectedStackId,
+        IReadOnlySet<string> referencedByOwnedServices)
+        => resources
+            .Where(resource => HasNamespace(resource.Labels, stackNamespace))
+            .Where(resource => IsOwnedByStack(resource.Labels, expectedStackId)
+                               || referencedByOwnedServices.Contains(resource.Id)
+                               && !HasAnyCitadelOwnershipLabel(resource.Labels))
+            .Select(static resource => resource.Id)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private static bool HasNamespace(IReadOnlyDictionary<string, string> labels, string stackNamespace)
+        => labels.TryGetValue("com.docker.stack.namespace", out var value)
+           && string.Equals(value, stackNamespace, StringComparison.Ordinal);
+
+    private static bool IsOwnedByStack(IReadOnlyDictionary<string, string> labels, string expectedStackId)
+        => labels.TryGetValue(CitadelLabels.Managed, out var managed)
+           && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase)
+           && labels.TryGetValue(CitadelLabels.StackId, out var stackId)
+           && string.Equals(stackId, expectedStackId, StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasAnyCitadelOwnershipLabel(IReadOnlyDictionary<string, string> labels)
+        => labels.Keys.Any(static key => key.StartsWith(CitadelLabels.Prefix, StringComparison.OrdinalIgnoreCase));
 
     private static async Task<Result<IReadOnlyCollection<string>>> GetOwnedContainerIdsByStackLabelsAsync(
         IContainerConnector connector,
@@ -462,7 +714,5 @@ internal sealed class DeleteStacksHandler(
             ownedContainerIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
-    private sealed record StackRuntimeDeletePlan(
-        IContainerConnector Connector,
-        DeleteContainerCommand Command);
+    private sealed record StackRuntimeDeletePlan(Func<CancellationToken, Task<Result>> DeleteAsync);
 }

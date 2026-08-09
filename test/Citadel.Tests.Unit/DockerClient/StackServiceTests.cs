@@ -6,6 +6,358 @@ namespace Tests.Unit.DockerClient;
 public class StackServiceTests
 {
     [Fact]
+    public async Task ApplyStreamAsync_ComposeToSwarmConversion_StopsComposeBeforeDeploying()
+    {
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var command = CreateConversionCommand();
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        Assert.Collection(
+            executor.Invocations,
+            invocation => Assert.Equal("down", invocation.Arguments[^1]),
+            invocation => Assert.Equal(["stack", "deploy"], invocation.Arguments[..2]));
+        Assert.Contains(results, result => result.Message?.Contains("without deleting its volumes", StringComparison.Ordinal) == true);
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 0);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_ComposeToSwarmConversion_WhenDeployIsRejected_RestoresCompose()
+    {
+        var executor = new CapturingCommandExecutor(exitCodes: [0, 1, 0]);
+        var service = CreateStackService(executor);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(CreateConversionCommand(), TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        Assert.Collection(
+            executor.Invocations,
+            invocation => Assert.Equal("down", invocation.Arguments[^1]),
+            invocation => Assert.Equal(["stack", "deploy"], invocation.Arguments[..2]),
+            invocation => Assert.Equal(["up", "-d"], invocation.Arguments[^2..]));
+        Assert.Contains(results, result => result.Message == "The original Docker Compose project was restored.");
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 1);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_ComposeToSwarmConversion_WhenShutdownIsIncomplete_RestoresCompose()
+    {
+        var executor = new CapturingCommandExecutor(exitCodes: [1, 0]);
+        var service = CreateStackService(executor);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(CreateConversionCommand(), TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        Assert.Collection(
+            executor.Invocations,
+            invocation => Assert.Equal("down", invocation.Arguments[^1]),
+            invocation => Assert.Equal(["up", "-d"], invocation.Arguments[^2..]));
+        Assert.Contains(results, result => result.Message == "The Docker Compose project was restored.");
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 1);
+    }
+
+    private static StackApplyCommand CreateConversionCommand()
+        => new(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: "services:\n  api:\n    image: nginx\n",
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm,
+            ConvertComposeProjectToSwarm: true);
+
+    [Fact]
+    public async Task ApplyStreamAsync_SwarmStack_UsesBoundedDeployCommandAndIsolatedDockerConfig()
+    {
+        using var temp = new TempDirectory();
+        var generatedDirectory = Path.Combine(temp.Path, "generated");
+        Directory.CreateDirectory(generatedDirectory);
+        var staleRunDirectory = Path.Combine(
+            Hosting.Common.Constants.StacksDir,
+            "runs",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staleRunDirectory);
+        File.WriteAllText(Path.Combine(staleRunDirectory, "stale"), string.Empty);
+        Directory.SetLastWriteTimeUtc(staleRunDirectory, DateTime.UtcNow.AddHours(-1));
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "Demo Stack",
+            ComposeFileContent: "services:\n  api:\n    image: nginx\n",
+            ProjectName: "demo-stack",
+            EnvironmentFilePath: null,
+            RegistryAuth: "registry-token",
+            RegistryName: "registry",
+            RegistryHost: "https://registry.example.test",
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: ["APP_ENV=prod"],
+            PreDeploy: null,
+            PostDeploy: null,
+            PullImages: true,
+            GeneratedFilesDirectory: generatedDirectory,
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        var invocation = Assert.Single(executor.Invocations);
+        var workingDirectory = Assert.IsType<string>(invocation.WorkingDirectory);
+        Assert.Equal("docker", invocation.FileName);
+        Assert.Equal("prod", invocation.EnvironmentVariables["APP_ENV"]);
+        Assert.Equal(
+            [
+                "stack", "deploy",
+                "--compose-file", Path.Combine(workingDirectory, "compose.yml"),
+                "--prune",
+                "--resolve-image", "always",
+                "--with-registry-auth",
+                "--detach=true",
+                "demo-stack"
+            ],
+            invocation.Arguments);
+        Assert.NotEqual(generatedDirectory, workingDirectory);
+        Assert.NotNull(invocation.DockerConfigDirectory);
+        Assert.False(Directory.Exists(invocation.DockerConfigDirectory));
+        Assert.False(Directory.Exists(workingDirectory));
+        Assert.False(Directory.Exists(staleRunDirectory));
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 0);
+        Assert.Empty(executor.ExecuteInvocations);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_TransportedSwarmSource_StagesRelativeFilesAndCleansRunDirectory()
+    {
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: null,
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            SourceWorkingDirectory: "source/app",
+            SourceComposeFilePaths: ["source/app/compose.yml"],
+            SourceEnvFilePaths: ["source/app/.env"],
+            LabelsOverrideFilePath: "citadel/citadel.labels.yml",
+            GeneratedFilesDirectory: "citadel",
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm,
+            SourceFiles:
+            [
+                new StackSourceFile("source/app/compose.yml", "services:\n  api:\n    image: nginx\n"u8.ToArray()),
+                new StackSourceFile("source/app/.env", "APP_ENV=repo\n"u8.ToArray()),
+                new StackSourceFile("citadel/citadel.labels.yml", "services: {}\n"u8.ToArray())
+            ]);
+
+        await foreach (var _ in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+        }
+
+        var invocation = Assert.Single(executor.Invocations);
+        var workingDirectory = Assert.IsType<string>(invocation.WorkingDirectory);
+        var runRoot = Directory.GetParent(Directory.GetParent(workingDirectory)!.FullName)!.FullName;
+        Assert.Equal("repo", invocation.EnvironmentVariables["APP_ENV"]);
+        Assert.Contains(Path.Combine(runRoot, "source", "app", "compose.yml"), invocation.Arguments);
+        Assert.Contains(Path.Combine(runRoot, "citadel", "citadel.labels.yml"), invocation.Arguments);
+        Assert.False(Directory.Exists(runRoot));
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_TransportedSourceRejectsPathTraversalBeforeStartingDocker()
+    {
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: null,
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            SourceWorkingDirectory: "source",
+            SourceComposeFilePaths: ["source/compose.yml"],
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm,
+            SourceFiles: [new StackSourceFile("../compose.yml", "services: {}\n"u8.ToArray())]);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        Assert.Empty(executor.Invocations);
+        Assert.Contains(results, result => result.Message?.Contains("escapes", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 1);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_TransportedSourceCleansRunDirectoryWhenSetupFails()
+    {
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var marker = $"cleanup-{Guid.NewGuid():N}.txt";
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: null,
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            SourceWorkingDirectory: "source",
+            SourceComposeFilePaths: [$"source/{marker}"],
+            GeneratedFilesDirectory: "citadel",
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm,
+            SourceFiles:
+            [
+                new StackSourceFile($"source/{marker}", "services: {}\n"u8.ToArray()),
+                new StackSourceFile("citadel", "not-a-directory"u8.ToArray())
+            ]);
+
+        await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            await foreach (var _ in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+            {
+            }
+        });
+
+        var runsRoot = Path.Combine(Hosting.Common.Constants.StacksDir, "runs");
+        var remainingMarkers = Directory.Exists(runsRoot)
+            ? Directory.EnumerateFiles(runsRoot, marker, SearchOption.AllDirectories).ToArray()
+            : [];
+        Assert.Empty(remainingMarkers);
+        Assert.Empty(executor.Invocations);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_SwarmStack_UsesNativeSecretOverrideAndDeletesTransientFiles()
+    {
+        using var temp = new TempDirectory();
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: "services:\n  api:\n    image: nginx\n",
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            GeneratedFilesDirectory: temp.Path,
+            SecretFiles: [new StackSecretFile("API_KEY", "/run/secrets/api-key", "secret")],
+            SecretTargetServiceNames: ["api"],
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+            results.Add(result);
+
+        var invocation = Assert.Single(executor.Invocations);
+        var overridePath = invocation.Arguments
+            .Where((argument, index) => index > 0 && invocation.Arguments[index - 1] == "--compose-file")
+            .Last();
+        var secretOverride = executor.CapturedComposeFiles[overridePath];
+        Assert.Contains("secrets:", secretOverride, StringComparison.Ordinal);
+        Assert.Contains("target: 'api-key'", secretOverride, StringComparison.Ordinal);
+        Assert.Contains("file:", secretOverride, StringComparison.Ordinal);
+        Assert.DoesNotContain("volumes:", secretOverride, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret\n", secretOverride, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Assert.IsType<string>(invocation.WorkingDirectory)));
+        Assert.Contains(results, result => result.Type == StackApplyEventType.CommandCompleted && result.ExitCode == 0);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_SwarmRollback_UsesRetainedResourcesWithoutWritingPlaintext()
+    {
+        using var temp = new TempDirectory();
+        var executor = new CapturingCommandExecutor();
+        var service = CreateStackService(executor);
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: "services:\n  api:\n    image: nginx\n",
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            GeneratedFilesDirectory: temp.Path,
+            OrchestrationMode: StackOrchestrationMode.DockerSwarm,
+            RetainedSwarmSecrets:
+            [
+                new StackRetainedSwarmSecret(
+                    "citadel-api-key-v1",
+                    "demo_citadel-api-key-v1",
+                    [new StackRetainedSwarmSecretMount("api", "api-key")])
+            ],
+            RetainedSwarmConfigs:
+            [
+                new StackRetainedSwarmConfig(
+                    "settings-v1",
+                    "demo_settings-v1",
+                    [new StackRetainedSwarmConfigMount("api", "/etc/demo/settings.yml")])
+            ]);
+
+        await foreach (var _ in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+        }
+
+        var invocation = Assert.Single(executor.Invocations);
+        var secretOverride = executor.CapturedComposeFiles.Single(pair =>
+            pair.Key.EndsWith("citadel.secrets.retained.yml", StringComparison.OrdinalIgnoreCase)).Value;
+        Assert.Contains("external: true", secretOverride, StringComparison.Ordinal);
+        Assert.Contains("name: 'demo_citadel-api-key-v1'", secretOverride, StringComparison.Ordinal);
+        Assert.Contains("target: 'api-key'", secretOverride, StringComparison.Ordinal);
+        Assert.DoesNotContain("file:", secretOverride, StringComparison.Ordinal);
+        var configOverride = executor.CapturedComposeFiles.Single(pair =>
+            pair.Key.EndsWith("citadel.configs.retained.yml", StringComparison.OrdinalIgnoreCase)).Value;
+        Assert.Contains("external: true", configOverride, StringComparison.Ordinal);
+        Assert.Contains("name: 'demo_settings-v1'", configOverride, StringComparison.Ordinal);
+        Assert.Contains("target: '/etc/demo/settings.yml'", configOverride, StringComparison.Ordinal);
+        Assert.DoesNotContain("file:", configOverride, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Assert.IsType<string>(invocation.WorkingDirectory)));
+    }
+
+    [Fact]
     public async Task ApplyStreamAsync_SourceBackedStack_UsesOrderedComposeFilesAndProjectDirectory()
     {
         using var temp = new TempDirectory();
@@ -479,7 +831,7 @@ public class StackServiceTests
         Assert.True(File.Exists(previousSecretFile));
         Assert.Equal("old-secret", File.ReadAllText(previousSecretFile));
         Assert.True(File.Exists(previousOverride));
-        Assert.True(Directory.GetFiles(Path.Combine(generatedDirectory, "secrets"), "POSTGRES_PASSWORD", SearchOption.AllDirectories).Length >= 2);
+        Assert.Single(Directory.GetFiles(Path.Combine(generatedDirectory, "secrets"), "POSTGRES_PASSWORD", SearchOption.AllDirectories));
     }
 
     private static async Task<List<StackApplyResult>> ApplyAndCollectStatusAsync(string composePsJson)
@@ -541,10 +893,12 @@ public class StackServiceTests
         string? stdErr = null,
         int executeExitCode = 0,
         string? executeStdOut = null,
-        string? executeStdErr = null) : ICommandExecutor
+        string? executeStdErr = null,
+        IReadOnlyList<int>? exitCodes = null) : ICommandExecutor
     {
         public List<Invocation> Invocations { get; } = [];
         public List<Invocation> ExecuteInvocations { get; } = [];
+        public Dictionary<string, string> CapturedComposeFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public Task<ProcessExecutionResult> ExecuteAsync(
             string fileName,
@@ -597,9 +951,24 @@ public class StackServiceTests
             string? dockerConfigDirectory = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            var argumentArray = arguments.ToArray();
+            for (var index = 1; index < argumentArray.Length; index++)
+            {
+                if (argumentArray[index - 1] is not ("--compose-file" or "-f")
+                    || !File.Exists(argumentArray[index]))
+                {
+                    continue;
+                }
+
+                CapturedComposeFiles[argumentArray[index]] = File.ReadAllText(argumentArray[index]);
+            }
+
+            var invocationExitCode = exitCodes is not null && Invocations.Count < exitCodes.Count
+                ? exitCodes[Invocations.Count]
+                : exitCode;
             Invocations.Add(new Invocation(
                 fileName,
-                [.. arguments],
+                argumentArray,
                 new Dictionary<string, string>(environmentVariables ?? new Dictionary<string, string>()),
                 workingDirectory,
                 dockerConfigDirectory));
@@ -613,7 +982,7 @@ public class StackServiceTests
                 yield return new ProcessOutput(null, stdErr);
             }
 
-            yield return new ProcessOutput(null, null, exitCode);
+            yield return new ProcessOutput(null, null, invocationExitCode);
             await Task.CompletedTask;
         }
     }

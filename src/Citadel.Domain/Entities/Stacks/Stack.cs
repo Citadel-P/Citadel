@@ -187,11 +187,14 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         CurrentStackReleaseId = stackRelease.Id;
     }
 
-    public bool UpdateCurrentStackReleaseDefinition(Guid platformId, StackSpec spec)
+    public bool UpdateCurrentStackReleaseDefinition(
+        Guid platformId,
+        StackSpec spec,
+        Domain.Entities.Platforms.Platform? platform = null)
     {
         if (CurrentStackRelease is null) return false;
 
-        CurrentStackRelease.UpdateDefinition(platformId, spec);
+        CurrentStackRelease.UpdateDefinition(platformId, spec, platform);
         return true;
     }
 

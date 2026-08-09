@@ -46,4 +46,18 @@ public class ContainerSystemMappingTests
 
         Assert.True(result.HasCitadelOwnershipLabels);
     }
+
+    [Fact]
+    public void ContainerMessage_Map_PreservesSwarmTaskAndStackNamespace()
+    {
+        var result = new ContainerMessage
+        {
+            Id = "task-container-id",
+            Stack = "redis-test",
+            IsSwarmTask = true
+        }.Map();
+
+        Assert.True(result.IsSwarmTask);
+        Assert.Equal("redis-test", result.Stack);
+    }
 }

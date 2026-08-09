@@ -122,6 +122,51 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
     }
 
     [Fact]
+    public async Task ProjectionSummary_ShouldClassifyEveryServiceAvailabilityState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("swarm-service-summary", "cluster-service-summary");
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot(
+                [],
+                [
+                    CreateServiceProjection(platform.Id, "healthy", 2, 2),
+                    CreateServiceProjection(platform.Id, "degraded", 1, 2),
+                    CreateServiceProjection(platform.Id, "failed", 0, 1),
+                    CreateServiceProjection(platform.Id, "stopped", 0, 0)
+                ],
+                [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var summary = await uow.Swarm.GetSummaryAsync(platform.Id, cancellationToken);
+
+        Assert.Equal(4, summary.ServiceCount);
+        Assert.Equal(4, summary.ServiceStatusCounts.Total);
+        Assert.Equal(1, summary.ServiceStatusCounts.Healthy);
+        Assert.Equal(1, summary.ServiceStatusCounts.Degraded);
+        Assert.Equal(1, summary.ServiceStatusCounts.Failed);
+        Assert.Equal(1, summary.ServiceStatusCounts.Stopped);
+        Assert.Equal(0, summary.ServiceStatusCounts.Unknown);
+
+        await uow.Swarm.MarkStaleAsync(platform.Id, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        summary = await uow.Swarm.GetSummaryAsync(platform.Id, cancellationToken);
+
+        Assert.Equal(0, summary.ServiceStatusCounts.Healthy);
+        Assert.Equal(0, summary.ServiceStatusCounts.Degraded);
+        Assert.Equal(0, summary.ServiceStatusCounts.Failed);
+        Assert.Equal(0, summary.ServiceStatusCounts.Stopped);
+        Assert.Equal(4, summary.ServiceStatusCounts.Unknown);
+    }
+
+    [Fact]
     public async Task ProjectionRepository_WhenALaterWriteFails_ShouldRollbackEarlierReplacements()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -164,6 +209,172 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(
             "web",
             Assert.Single(await verificationUow.Swarm.GetServicesAsync(platform.Id, cancellationToken)).Name);
+    }
+
+    [Fact]
+    public async Task ProjectionRepository_ImportedStackLink_ShouldBeAtomicAndSurviveReconciliation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("swarm-stack-import", "cluster-stack-import");
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var observedAt = DateTimeOffset.UtcNow;
+        var service = new SwarmServiceProjection(
+            platform.Id,
+            "service-imported",
+            1,
+            "sample_web",
+            "Replicated",
+            "nginx:latest",
+            1,
+            1,
+            "Completed",
+            null,
+            [],
+            [],
+            [],
+            [],
+            new Dictionary<string, string> { ["com.docker.stack.namespace"] = "sample" },
+            observedAt,
+            observedAt,
+            observedAt,
+            false,
+            SwarmServiceOwnership.DockerStackExternal,
+            DockerStackNamespace: "sample");
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [service], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var stack = Stack.Create(
+            "sample",
+            Constants.SystemId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack("services:\n  web:\n    image: nginx:latest", StackUpdateBehavior.Disabled),
+            platform: platform);
+        Assert.True(await uow.Stacks.AddAsync(stack, cancellationToken) > 0);
+        Assert.True(await uow.Stacks.TryReserveSwarmNamespaceAsync(
+            stack.Id,
+            platform.Id,
+            "sample",
+            cancellationToken));
+        Assert.Equal(1, await uow.Swarm.TryAssignStackNamespaceAsync(
+            platform.Id,
+            "sample",
+            [service.DockerServiceId],
+            stack.Id,
+            cancellationToken));
+        Assert.Equal(0, await uow.Swarm.TryAssignStackNamespaceAsync(
+            platform.Id,
+            "sample",
+            [service.DockerServiceId],
+            Guid.CreateVersion7(),
+            cancellationToken));
+        await uow.CommitAsync(cancellationToken);
+
+        var imported = Assert.Single(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
+        Assert.Equal(stack.Id, imported.StackId);
+        Assert.Equal(SwarmServiceOwnership.CitadelStack, imported.Ownership);
+
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var temporarilyMissing = Assert.Single(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
+        Assert.True(temporarilyMissing.IsStale);
+        Assert.Equal(stack.Id, temporarilyMissing.StackId);
+
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [service with { VersionIndex = 2 }], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var reconciled = Assert.Single(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
+        Assert.Equal(2, reconciled.VersionIndex);
+        Assert.Equal(stack.Id, reconciled.StackId);
+        Assert.Equal(SwarmServiceOwnership.CitadelStack, reconciled.Ownership);
+    }
+
+    [Fact]
+    public async Task ProjectionRepository_ShouldPersistAReconciledStackAssociation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("swarm-stack-link", "cluster-stack-link");
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var stack = Stack.Create(
+            "sample",
+            Constants.SystemId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                "services:\n  web:\n    image: nginx:latest",
+                StackUpdateBehavior.Disabled),
+            platform: platform);
+        Assert.True(await uow.Stacks.AddAsync(stack, cancellationToken) > 0);
+        var observedAt = DateTimeOffset.UtcNow;
+        var service = new SwarmServiceProjection(
+            platform.Id,
+            "service-owned",
+            1,
+            "sample_web",
+            "Replicated",
+            "nginx:latest",
+            1,
+            1,
+            "Completed",
+            null,
+            [],
+            [],
+            [],
+            [],
+            new Dictionary<string, string> { ["com.docker.stack.namespace"] = "sample" },
+            observedAt,
+            observedAt,
+            observedAt,
+            false,
+            SwarmServiceOwnership.DockerStackExternal,
+            DockerStackNamespace: "sample");
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [service], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var owned = service with
+        {
+            VersionIndex = 2,
+            Labels = new Dictionary<string, string>
+            {
+                ["com.docker.stack.namespace"] = "sample",
+                ["com.citadel.managed"] = "true",
+                ["com.citadel.stack-id"] = stack.Id.ToString("D")
+            },
+            Ownership = SwarmServiceOwnership.CitadelStack,
+            OwnershipDiagnostic = null,
+            StackId = stack.Id
+        };
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [owned], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var persisted = Assert.Single(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
+        Assert.Equal(2, persisted.VersionIndex);
+        Assert.Equal(stack.Id, persisted.StackId);
+        Assert.Equal(SwarmServiceOwnership.CitadelStack, persisted.Ownership);
     }
 
     [Fact]
@@ -333,4 +544,30 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
             ContainersStopped: 0,
             ClusterId: clusterId),
         clusterId: clusterId);
+
+    private static SwarmServiceProjection CreateServiceProjection(
+        Guid platformId,
+        string name,
+        int runningTaskCount,
+        int desiredTaskCount)
+    {
+        var observedAt = DateTimeOffset.UtcNow;
+        return new SwarmServiceProjection(
+            platformId,
+            $"service-{name}",
+            1,
+            name,
+            "Replicated",
+            "nginx:latest",
+            runningTaskCount,
+            desiredTaskCount,
+            "Completed",
+            null,
+            [], [], [], [],
+            new Dictionary<string, string>(),
+            observedAt,
+            observedAt,
+            observedAt,
+            false);
+    }
 }

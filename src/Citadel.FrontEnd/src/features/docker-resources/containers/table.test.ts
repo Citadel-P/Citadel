@@ -1,3 +1,7 @@
+vi.hoisted(() => {
+  document.queryCommandSupported ??= () => false;
+});
+
 import {
   ContainerStateStatus,
   ResourceControlState,
@@ -5,7 +9,13 @@ import {
   type ContainerView,
 } from '@/api/generated/api.types';
 import type { ContainerStackGroupResource } from './actions';
-import { countSelectedContainers, normalizeContainerSelection } from './selection';
+import { countSelectedContainers, filterVisibleContainers, normalizeContainerSelection } from './selection';
+import { buildContainerRows } from './table';
+
+vi.mock('./actions', () => ({
+  isContainerStackGroup: (resource: { isStackGroup?: boolean }) => resource.isStackGroup === true,
+}));
+vi.mock('./container-info/', () => ({ ImageName: () => null }));
 
 const container = (containerId: string): ContainerView =>
   ({
@@ -20,6 +30,7 @@ const container = (containerId: string): ContainerView =>
     controlState: ResourceControlState.Idle,
     stack: 'demo-project',
     isSystem: false,
+    isSwarmTask: false,
     systemRole: null,
     lastStats: null,
     ports: {},
@@ -43,6 +54,7 @@ describe('normalizeContainerSelection', () => {
     ports: {},
     deploymentId: null,
     isSystem: false,
+    isSwarmTask: false,
     systemRole: null,
     imageView: null,
     displayStatus: StackReleaseStatus.Healthy,
@@ -60,5 +72,44 @@ describe('normalizeContainerSelection', () => {
 
   it('counts the containers represented by a selected stack root', () => {
     expect(countSelectedContainers([group])).toBe(2);
+  });
+});
+
+describe('buildContainerRows', () => {
+  it('groups Swarm task containers under their Docker Stack namespace', () => {
+    const first = { ...container('task-container-1'), stack: 'redis-test', isSwarmTask: true };
+    const second = { ...container('task-container-2'), stack: 'redis-test', isSwarmTask: true };
+    const stoppedTasks = Array.from({ length: 4 }, (_, index) => ({
+      ...container(`old-task-container-${index + 1}`),
+      stack: 'redis-test',
+      isSwarmTask: true,
+      state: ContainerStateStatus.Exited,
+    }));
+
+    const rows = buildContainerRows([first, second, ...stoppedTasks], { memoryTotal: 0, cpuCount: 0 });
+    const visibleContainers = filterVisibleContainers([first, second, ...stoppedTasks]);
+
+    expect(visibleContainers).toEqual([first, second]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      name: 'redis-test',
+      stack: 'redis-test',
+      isStackGroup: true,
+      isSwarmTask: true,
+    });
+    expect((rows[0] as ContainerStackGroupResource).containers).toEqual([first, second]);
+    expect((rows[0] as ContainerStackGroupResource).displayStatus).toBe(StackReleaseStatus.Healthy);
+  });
+
+  it('keeps stopped Docker Compose containers in standalone stack groups', () => {
+    const running = container('compose-container-1');
+    const stopped = { ...container('compose-container-2'), state: ContainerStateStatus.Exited };
+
+    const rows = buildContainerRows([running, stopped], { memoryTotal: 0, cpuCount: 0 });
+
+    expect(filterVisibleContainers([running, stopped])).toEqual([running, stopped]);
+    expect(rows).toHaveLength(1);
+    expect((rows[0] as ContainerStackGroupResource).containers).toEqual([running, stopped]);
+    expect((rows[0] as ContainerStackGroupResource).displayStatus).toBe(StackReleaseStatus.Degraded);
   });
 });

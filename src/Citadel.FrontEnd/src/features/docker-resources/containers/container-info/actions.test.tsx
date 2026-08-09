@@ -75,7 +75,7 @@ describe('container detail management action', () => {
       getContainerManagementAction({ ...standaloneContainer, deploymentId: 'deployment-id' }, PlatformType.Docker),
     ).toBeUndefined();
     expect(getContainerManagementAction(standaloneContainer, PlatformType.DockerSwarm)).toBeUndefined();
-    expect(getContainerManagementAction(composeContainer, PlatformType.DockerSwarm)).toBeUndefined();
+    expect(getContainerManagementAction(composeContainer, PlatformType.DockerSwarm)).toBe(ContainerInfoActions.importStack);
   });
 
   it('opens stack import with the container platform and Compose project', async () => {
@@ -83,7 +83,7 @@ describe('container detail management action', () => {
     const composeContainer = { ...standaloneContainer, stack: 'demo project' };
 
     render(
-      <ContainerActionContext>
+      <ContainerActionContext platformType={PlatformType.DockerSwarm}>
         <ContainerInfoActions.importStack resource={composeContainer} />
         <LocationProbe />
       </ContainerActionContext>,
@@ -92,7 +92,7 @@ describe('container detail management action', () => {
     await user.click(screen.getByRole('button', { name: 'Import Stack' }));
 
     expect(screen.getByTestId('location')).toHaveTextContent(
-      '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000002&importProject=demo+project',
+      '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000002&importProject=demo+project&importKind=ComposeProject',
     );
   });
 

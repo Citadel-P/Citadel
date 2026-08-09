@@ -50,9 +50,10 @@ type ResourceIcon = React.ComponentType<{ className?: string }>;
 
 const createRoleOpenAtom = atom(false);
 
-const ROLE_PERMISSION_RESOURCES = [
+export const ROLE_PERMISSION_RESOURCES = [
   ResourceType.Platform,
   ResourceType.Deployment,
+  ResourceType.SwarmService,
   ResourceType.Stack,
   ResourceType.Registry,
   ResourceType.GitRepository,
@@ -106,6 +107,7 @@ export const AddRoleButton = () => {
 export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = {
   [ResourceType.Platform]: CitadelIcons.Platform,
   [ResourceType.Deployment]: CitadelIcons.Deployment,
+  [ResourceType.SwarmService]: CitadelIcons.SwarmService,
   [ResourceType.Stack]: CitadelIcons.Stack,
   [ResourceType.Registry]: CitadelIcons.Registry,
   [ResourceType.GitRepository]: CitadelIcons.GitRepository,

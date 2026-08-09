@@ -1,4 +1,14 @@
+import { ContainerStateStatus, type ContainerView } from '@/api/generated/api.types';
 import { isContainerStackGroup, type ContainerActionResource } from './actions';
+
+export const isVisibleContainer = (container: Pick<ContainerView, 'isSwarmTask' | 'state'>) =>
+  !container.isSwarmTask ||
+  (container.state !== ContainerStateStatus.Exited &&
+    container.state !== ContainerStateStatus.Dead &&
+    container.state !== ContainerStateStatus.Removing);
+
+export const filterVisibleContainers = <T extends Pick<ContainerView, 'isSwarmTask' | 'state'>>(containers: T[]) =>
+  containers.filter(isVisibleContainer);
 
 export const normalizeContainerSelection = (selectedRows: ContainerActionResource[]) => {
   const groupedContainerIds = new Set(

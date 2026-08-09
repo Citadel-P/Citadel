@@ -34,6 +34,7 @@ public sealed record CreatePlatform(
     string? Description,
     PlatformType Type,
     PlatformConnectorType ConnectorType,
+    bool PruneHistoricalSwarmTaskContainers = true,
     IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<Platform>>
 {
     internal class Validator : AbstractValidator<CreatePlatform>
@@ -135,7 +136,8 @@ internal sealed class CreatePlatformHandler(
                     ContainersStopped: 0),
             serverVersion: null,
             agentVersion: null,
-            description: command.Description);
+            description: command.Description,
+            pruneHistoricalSwarmTaskContainers: command.PruneHistoricalSwarmTaskContainers);
 
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
@@ -199,7 +201,8 @@ internal sealed class CreatePlatformHandler(
 
         platform.PartialUpdate(
             description: command.Description,
-            descriptor: descriptor with { DaemonId = daemonId });
+            descriptor: descriptor with { DaemonId = daemonId },
+            pruneHistoricalSwarmTaskContainers: command.PruneHistoricalSwarmTaskContainers);
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)
@@ -325,7 +328,11 @@ internal sealed class CreatePlatformHandler(
             return null;
         }
 
-        return [.. containers.Values.Map(images, platform.Id)];
+        IEnumerable<DockerContainer> currentContainers = platform.PlatformDescriptor is DockerSwarmPlatformDescriptor
+            ? containers.Values.Where(static container => !container.IsHistoricalSwarmTask())
+            : containers.Values;
+
+        return [.. currentContainers.Map(images, platform.Id)];
     }
 
     private static void ApplyDockerContainerCounts(Platform platform, IReadOnlyCollection<Container> containers)

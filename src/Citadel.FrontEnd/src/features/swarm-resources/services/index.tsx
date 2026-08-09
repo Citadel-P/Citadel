@@ -5,7 +5,7 @@ import { SwarmServiceListView, useServicesGroup } from './hooks/useServicesGroup
 import { ServicesTable } from './table';
 import { ServiceDropdownActions, ServiceGroupActions } from './actions';
 
-const { adopt, ...groupedServiceActions } = ServiceGroupActions;
+const { adopt, importStack, ...groupedServiceActions } = ServiceGroupActions;
 
 export const ServiceComponents: RegularResourceComponents<SwarmServiceListView> = {
   Icon: Boxes,
@@ -22,7 +22,7 @@ export const ServiceComponents: RegularResourceComponents<SwarmServiceListView> 
       type="Service"
       items={items}
       actions={Object.values(groupedServiceActions)}
-      standaloneActions={[adopt]}
+      standaloneActions={[adopt, importStack]}
     />
   ),
   useData: (platformId) => {

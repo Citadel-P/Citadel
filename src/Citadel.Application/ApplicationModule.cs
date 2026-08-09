@@ -82,6 +82,7 @@ public static class ApplicationModule
             .AddSingleton<IContainerProcessingService, ContainerProcessingService>()
             .AddSingleton<IDeploymentProcessingService, DeploymentProcessingService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
+            .AddSingleton<SwarmTaskContainerPruner>()
             .AddSingleton<IVolumePathNormalizer, VolumePathNormalizer>()
             .AddSingleton<IVolumeHelperImageResolver, VolumeHelperImageResolver>()
             .AddSingleton<IAgentRuntimeImageResolver, AgentRuntimeImageResolver>()

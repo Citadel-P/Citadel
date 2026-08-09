@@ -66,6 +66,7 @@ CREATE TABLE platforms (
     name text NOT NULL,
     networkcount integer NOT NULL,
     platformdescriptor json NOT NULL,
+    prunehistoricalswarmtaskcontainers boolean NOT NULL DEFAULT TRUE,
     serverversion text,
     status text NOT NULL,
     volumecount integer NOT NULL,
@@ -362,6 +363,162 @@ CREATE TABLE platformstats (
     CONSTRAINT fk_platformstats_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
+CREATE TABLE swarmconfigprojections (
+    platformid uuid NOT NULL,
+    dockerconfigid text NOT NULL,
+    dockercreatedat timestamp with time zone,
+    dockerupdatedat timestamp with time zone,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    labels jsonb NOT NULL,
+    name text NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    servicenames jsonb NOT NULL,
+    templatingdriver text,
+    versionindex bigint NOT NULL,
+    CONSTRAINT pk_swarmconfigprojections PRIMARY KEY (platformid, dockerconfigid),
+    CONSTRAINT fk_swarmconfigprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnetworkprojections (
+    platformid uuid NOT NULL,
+    dockernetworkid text NOT NULL,
+    dockercreatedat timestamp with time zone,
+    driver text NOT NULL,
+    enableipv6 boolean NOT NULL,
+    isattachable boolean NOT NULL,
+    isencrypted boolean NOT NULL,
+    isingress boolean NOT NULL,
+    isinternal boolean NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    labels jsonb NOT NULL,
+    name text NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    scope text NOT NULL,
+    servicenames jsonb NOT NULL,
+    subnets jsonb NOT NULL,
+    CONSTRAINT pk_swarmnetworkprojections PRIMARY KEY (platformid, dockernetworkid),
+    CONSTRAINT fk_swarmnetworkprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnodeprojections (
+    platformid uuid NOT NULL,
+    dockernodeid text NOT NULL,
+    address text NOT NULL,
+    architecture text NOT NULL,
+    availability text NOT NULL,
+    desiredtaskcount integer NOT NULL,
+    dockercreatedat timestamp with time zone,
+    dockerupdatedat timestamp with time zone,
+    engineversion text NOT NULL,
+    hostname text NOT NULL,
+    isleader boolean NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    labels jsonb NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    operatingsystem text NOT NULL,
+    reachability text NOT NULL,
+    role text NOT NULL,
+    runningtaskcount integer NOT NULL,
+    status text NOT NULL,
+    statusmessage text,
+    versionindex bigint NOT NULL,
+    CONSTRAINT pk_swarmnodeprojections PRIMARY KEY (platformid, dockernodeid),
+    CONSTRAINT fk_swarmnodeprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmsecretprojections (
+    platformid uuid NOT NULL,
+    dockersecretid text NOT NULL,
+    dockercreatedat timestamp with time zone,
+    dockerupdatedat timestamp with time zone,
+    driver text,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    labels jsonb NOT NULL,
+    name text NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    servicenames jsonb NOT NULL,
+    versionindex bigint NOT NULL,
+    CONSTRAINT pk_swarmsecretprojections PRIMARY KEY (platformid, dockersecretid),
+    CONSTRAINT fk_swarmsecretprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmservices (
+    id uuid NOT NULL,
+    appliedimagedigest text,
+    attemptedat timestamp with time zone,
+    autoupdatestate_currentdigest text,
+    autoupdatestate_lastcheckedat timestamp with time zone,
+    autoupdatestate_lasterror text,
+    autoupdatestate_remotedigest text,
+    autoupdatestate_status text,
+    basedockerversion bigint,
+    completedat timestamp with time zone,
+    controlstartedat bigint,
+    controlstate text NOT NULL DEFAULT 'Idle',
+    controltriggeredby uuid,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    description text,
+    desiredspechash text NOT NULL,
+    dockername text NOT NULL,
+    dockerserviceid text,
+    dockerversionindex bigint,
+    expectedforceupdate bigint,
+    health text NOT NULL,
+    lastapplieddesiredspechash text,
+    lastappliedruntimehash text,
+    name text NOT NULL,
+    observeddockerversion bigint,
+    operationactorid uuid,
+    operationclusterid text,
+    operationid uuid,
+    operationkind text,
+    operationstate text,
+    platformid uuid NOT NULL,
+    preparedat timestamp with time zone,
+    resultcode text,
+    resultmessage text,
+    rowversion bigint NOT NULL DEFAULT 0,
+    spec jsonb NOT NULL,
+    synchronizationstate text NOT NULL,
+    targetdesiredspechash text,
+    targetrowversion bigint,
+    targetruntimehash text,
+    updatedat timestamp with time zone NOT NULL,
+    warnings jsonb,
+    CONSTRAINT pk_swarmservices PRIMARY KEY (id),
+    CONSTRAINT "CK_SwarmServices_CanceledOperation" CHECK (operationstate <> 'Canceled' OR (attemptedat IS NULL AND completedat IS NOT NULL)),
+    CONSTRAINT "CK_SwarmServices_OperationFields" CHECK ((operationid IS NULL AND operationkind IS NULL AND operationstate IS NULL AND basedockerversion IS NULL AND targetdesiredspechash IS NULL AND targetruntimehash IS NULL AND targetrowversion IS NULL AND expectedforceupdate IS NULL AND preparedat IS NULL AND attemptedat IS NULL AND completedat IS NULL AND observeddockerversion IS NULL AND resultcode IS NULL AND warnings IS NULL AND resultmessage IS NULL AND operationclusterid IS NULL AND operationactorid IS NULL) OR (operationid IS NOT NULL AND operationkind IS NOT NULL AND operationstate IS NOT NULL AND targetdesiredspechash IS NOT NULL AND targetrowversion IS NOT NULL AND preparedat IS NOT NULL AND operationclusterid IS NOT NULL AND operationactorid IS NOT NULL)),
+    CONSTRAINT fk_swarmservices_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_swarmservices_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_swarmservices_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE swarmtaskprojections (
+    platformid uuid NOT NULL,
+    dockertaskid text NOT NULL,
+    desiredstate text NOT NULL,
+    dockercreatedat timestamp with time zone,
+    dockernodeid text NOT NULL,
+    dockerserviceid text NOT NULL,
+    dockerupdatedat timestamp with time zone,
+    error text,
+    image text NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    name text NOT NULL,
+    nodehostname text NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    ports jsonb NOT NULL,
+    servicename text NOT NULL,
+    slot integer,
+    state text NOT NULL,
+    statusmessage text,
+    statustimestamp timestamp with time zone,
+    versionindex bigint NOT NULL,
+    CONSTRAINT pk_swarmtaskprojections PRIMARY KEY (platformid, dockertaskid),
+    CONSTRAINT fk_swarmtaskprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
 CREATE TABLE actorroles (
     actorid uuid NOT NULL,
     roleid uuid NOT NULL,
@@ -548,6 +705,48 @@ CREATE TABLE stackreleases (
     CONSTRAINT fk_stackreleases_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_stackreleases_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT,
     CONSTRAINT fk_stackreleases_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE CASCADE
+);
+
+CREATE TABLE stackswarmnamespacereservations (
+    stackid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    namespace text NOT NULL,
+    platformid uuid NOT NULL,
+    CONSTRAINT pk_stackswarmnamespacereservations PRIMARY KEY (stackid),
+    CONSTRAINT fk_stackswarmnamespacereservations_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_stackswarmnamespacereservations_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmserviceprojections (
+    platformid uuid NOT NULL,
+    dockerserviceid text NOT NULL,
+    configids jsonb NOT NULL,
+    desiredtaskcount integer NOT NULL,
+    dockercreatedat timestamp with time zone,
+    dockerstacknamespace text,
+    dockerupdatedat timestamp with time zone,
+    forceupdate bigint NOT NULL DEFAULT 0,
+    image text NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    labels jsonb NOT NULL,
+    liveruntimehash text,
+    mode text NOT NULL,
+    name text NOT NULL,
+    networkids jsonb NOT NULL,
+    observedat timestamp with time zone NOT NULL,
+    ownership text NOT NULL DEFAULT 'Unmanaged',
+    ownershipdiagnostic text,
+    ports jsonb NOT NULL,
+    runningtaskcount integer NOT NULL,
+    secretids jsonb NOT NULL,
+    stackid uuid,
+    swarmserviceid uuid,
+    updatemessage text,
+    updatestate text NOT NULL,
+    versionindex bigint NOT NULL,
+    CONSTRAINT pk_swarmserviceprojections PRIMARY KEY (platformid, dockerserviceid),
+    CONSTRAINT fk_swarmserviceprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE,
+    CONSTRAINT fk_swarmserviceprojections_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE SET NULL
 );
 
 CREATE TABLE resourcetags (
@@ -789,6 +988,7 @@ CREATE TABLE containers (
     dockerimageid text NOT NULL,
     hascitadelownershiplabels boolean NOT NULL DEFAULT FALSE,
     imageid uuid,
+    isswarmtask boolean NOT NULL DEFAULT FALSE,
     issystem boolean NOT NULL DEFAULT FALSE,
     name text NOT NULL,
     platformid uuid NOT NULL,
@@ -805,6 +1005,20 @@ CREATE TABLE containers (
     CONSTRAINT fk_containers_images_imageid FOREIGN KEY (imageid) REFERENCES images (id) ON DELETE SET NULL,
     CONSTRAINT fk_containers_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE,
     CONSTRAINT fk_containers_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE SET NULL
+);
+
+CREATE TABLE stackreleaseswarmresources (
+    id uuid NOT NULL,
+    composeresourcename text NOT NULL,
+    dockerresourceid text NOT NULL,
+    dockerresourcename text NOT NULL,
+    kind text NOT NULL,
+    mounts json NOT NULL,
+    platformid uuid NOT NULL,
+    stackreleaseid uuid NOT NULL,
+    CONSTRAINT pk_stackreleaseswarmresources PRIMARY KEY (id),
+    CONSTRAINT fk_stackreleaseswarmresources_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_stackreleaseswarmresources_stackreleases_stackreleaseid FOREIGN KEY (stackreleaseid) REFERENCES stackreleases (id) ON DELETE CASCADE
 );
 
 CREATE TABLE stackreleasevolumebindings (
@@ -1116,11 +1330,15 @@ INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, descri
 VALUES ('019d0000-0001-7000-8001-000000000024', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Disk > 90% - Platform', '[]', 3, 'Critical', 90.0, 'PlatformDiskHigh');
 
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('00389706-8a88-9cfa-583a-1d4b7d2ce63a', 4, 20, '30000000-0000-0000-0000-000000000001', 39);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 1, 1, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('077b64cb-9dc8-4ac2-be0a-81550b977042', 1, 19, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('07b143ad-6b02-c7ff-3d7d-48af137b2bbc', 2, 0, '30000000-0000-0000-0000-000000000002', 27);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('0d39d935-1b2b-bf74-bfb3-51d40c4cfc56', 1, 20, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('102eae03-0582-a53c-2287-ce55c2f222a8', 2, 16, '30000000-0000-0000-0000-000000000002', 128);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1201,6 +1419,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('f1633935-71e7-32f3-4264-d7120dcf22f1', 1, 13, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('f2552404-ef60-5f22-0eaf-fd7db21f2579', 2, 17, '30000000-0000-0000-0000-000000000002', 768);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('f2c76082-b7aa-7bea-bb5f-d22de2632a62', 2, 20, '30000000-0000-0000-0000-000000000002', 39);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('f5794228-f6b6-84fa-4fa3-7324decd3402', 4, 19, '30000000-0000-0000-0000-000000000001', 4);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1571,6 +1791,10 @@ CREATE INDEX ix_stackreleases_platformid ON stackreleases (platformid);
 
 CREATE INDEX ix_stackreleases_stackid ON stackreleases (stackid);
 
+CREATE INDEX ix_stackreleaseswarmresources_platform_kind_name ON stackreleaseswarmresources (platformid, kind, dockerresourcename);
+
+CREATE UNIQUE INDEX ix_stackreleaseswarmresources_release_kind_resourceid ON stackreleaseswarmresources (stackreleaseid, kind, dockerresourceid);
+
 CREATE INDEX ix_stackreleasevolumebindings_platform_volumename ON stackreleasevolumebindings (platformid, volumename);
 
 CREATE UNIQUE INDEX ix_stackreleasevolumebindings_release_volumename ON stackreleasevolumebindings (stackreleaseid, volumename);
@@ -1583,11 +1807,31 @@ CREATE INDEX ix_stacks_currentstackreleaseid ON stacks (currentstackreleaseid);
 
 CREATE INDEX ix_stacks_globalsearch_name_trgm ON stacks USING gin (name gin_trgm_ops);
 
+CREATE UNIQUE INDEX ix_stackswarmnamespacereservations_platform_namespace ON stackswarmnamespacereservations (platformid, namespace);
+
 CREATE INDEX ix_stackwebhookdeployqueue_gitrepositoryid ON stackwebhookdeployqueue (gitrepositoryid);
 
 CREATE INDEX ix_stackwebhookdeployqueue_ready ON stackwebhookdeployqueue (status, availableat, queuedat);
 
 CREATE INDEX ix_stackwebhookdeployqueue_stackid ON stackwebhookdeployqueue (stackid);
+
+CREATE INDEX ix_swarmserviceprojections_stackid ON swarmserviceprojections (stackid);
+
+CREATE INDEX ix_swarmserviceprojections_swarmserviceid ON swarmserviceprojections (swarmserviceid);
+
+CREATE INDEX ix_swarmservices_controltriggeredby ON swarmservices (controltriggeredby);
+
+CREATE INDEX ix_swarmservices_createdbyactorid ON swarmservices (createdbyactorid);
+
+CREATE UNIQUE INDEX ix_swarmservices_dockername_platformid ON swarmservices (dockername, platformid);
+
+CREATE INDEX ix_swarmservices_globalsearch_name_trgm ON swarmservices USING gin (name gin_trgm_ops);
+
+CREATE UNIQUE INDEX ix_swarmservices_name_platformid ON swarmservices (name, platformid);
+
+CREATE UNIQUE INDEX ix_swarmservices_platformid_dockerserviceid ON swarmservices (platformid, dockerserviceid) WHERE "dockerserviceid" IS NOT NULL;
+
+CREATE INDEX ix_swarmservices_recoverableoperation ON swarmservices (operationstate, preparedat);
 
 CREATE INDEX ix_tags_createdbyactorid ON tags (createdbyactorid);
 
@@ -1617,7 +1861,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260803154607_migration0001', '10.0.10');
+VALUES ('20260809140516_migration0001', '10.0.10');
 
 COMMIT;
 

@@ -75,8 +75,10 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AlertChannelConfiguration()
             .StackConfiguration()
             .StackReleaseConfiguration()
+            .StackSwarmNamespaceReservationConfiguration()
             .StackWebhookDeployQueueConfiguration()
             .StackReleaseVolumeBindingConfiguration()
+            .StackReleaseSwarmResourceConfiguration()
             .AlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
@@ -246,6 +248,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000006"), Name = "Image Update Available - Deployment", Type = "DeploymentImageUpdateAvailable", Severity = "Info", CooldownSeconds = 60 * 60 * 24, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000007"), Name = "Auto Deploy Failed - Deployment", Type = "DeploymentAutoDeployFailed", Severity = "Critical", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000008"), Name = "Deployment Auto Updated", Type = "DeploymentAutoUpdated", Severity = "Info", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+
+            // Swarm Service event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000001c"), Name = "Operation Failed - Swarm Service", Type = "SwarmServiceOperationFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
 
             // DockerStack event alerts
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000009"), Name = "Image Update Available - Stack", Type = "StackImageUpdateAvailable", Severity = "Info", CooldownSeconds = 60 * 60 * 24, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
@@ -460,6 +465,7 @@ internal static class Configuration
         container.Property<bool>("IsSystem").IsRequired().HasDefaultValue(false);
         container.Property<string>("SystemRole").HasColumnType(Text).IsRequired(false);
         container.Property<bool>("HasCitadelOwnershipLabels").IsRequired().HasDefaultValue(false);
+        container.Property<bool>("IsSwarmTask").IsRequired().HasDefaultValue(false);
         container.Property<string>("Ports").HasColumnType(Json).IsRequired();
 
         container.AddReconcilableMember();
@@ -616,6 +622,7 @@ internal static class Configuration
         platform.Property<string>("ServerVersion").HasColumnType(Text);
         platform.Property<string>("PlatformDescriptor").HasColumnType(Json).IsRequired();
         platform.Property<string>("ClusterId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        platform.Property<bool>("PruneHistoricalSwarmTaskContainers").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
 
         platform.HasIndex("Address").IsUnique().HasDatabaseName($"IX_{tableName}_Address");
         platform.HasIndex("ClusterId")
@@ -2150,7 +2157,8 @@ internal static class Configuration
             .HasFilter("\"dockerserviceid\" IS NOT NULL")
             .HasDatabaseName($"IX_{tableName}_PlatformId_DockerServiceId");
         service.HasIndex("OperationState", "PreparedAt").HasDatabaseName($"IX_{tableName}_RecoverableOperation");
-        service.HasCheckConstraint(
+
+        service.ToTable(t => t.HasCheckConstraint(
             $"CK_{tableName}_OperationFields",
             "(operationid IS NULL AND operationkind IS NULL AND operationstate IS NULL AND basedockerversion IS NULL " +
             "AND targetdesiredspechash IS NULL AND targetruntimehash IS NULL AND targetrowversion IS NULL " +
@@ -2159,10 +2167,12 @@ internal static class Configuration
             "AND operationclusterid IS NULL AND operationactorid IS NULL) " +
             "OR (operationid IS NOT NULL AND operationkind IS NOT NULL AND operationstate IS NOT NULL " +
             "AND targetdesiredspechash IS NOT NULL AND targetrowversion IS NOT NULL AND preparedat IS NOT NULL " +
-            "AND operationclusterid IS NOT NULL AND operationactorid IS NOT NULL)");
-        service.HasCheckConstraint(
+            "AND operationclusterid IS NOT NULL AND operationactorid IS NOT NULL)"));
+
+        service.ToTable(t => t.HasCheckConstraint(
             $"CK_{tableName}_CanceledOperation",
-            "operationstate <> 'Canceled' OR (attemptedat IS NULL AND completedat IS NOT NULL)");
+            "operationstate <> 'Canceled' OR (attemptedat IS NULL AND completedat IS NOT NULL)"));
+
         ConfigureGlobalSearchIndex(service, tableName, "Name");
         return builder;
     }
@@ -2230,9 +2240,16 @@ internal static class Configuration
         service.Property<string>("DockerStackNamespace").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         service.Property<string>("OwnershipDiagnostic").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         service.Property<Guid?>("SwarmServiceId").IsRequired(false);
+        service.Property<Guid?>("StackId").IsRequired(false);
         service.Property<string>("LiveRuntimeHash").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
         service.Property<long>("ForceUpdate").HasDefaultValue(0L);
         service.HasIndex("SwarmServiceId").HasDatabaseName("IX_SwarmServiceProjections_SwarmServiceId");
+        service.HasIndex("StackId").HasDatabaseName("IX_SwarmServiceProjections_StackId");
+        service
+            .HasOne("Stack")
+            .WithMany()
+            .HasForeignKey("StackId")
+            .OnDelete(DeleteBehavior.SetNull);
         AddSwarmObservationFields(service);
         AddSwarmPlatformRelationship(service);
         return builder;
@@ -2641,6 +2658,76 @@ internal static class Configuration
                 .HasForeignKey("ControlTriggeredBy")
                 .OnDelete(DeleteBehavior.Restrict);
         }
+
+        return builder;
+    }
+
+    public static ModelBuilder StackReleaseSwarmResourceConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "StackReleaseSwarmResources";
+        var resource = builder.Entity("StackReleaseSwarmResource");
+
+        resource.ToTable(tableName);
+        resource.Property<Guid>("Id").IsRequired();
+        resource.HasKey("Id");
+        resource.Property<Guid>("StackReleaseId").IsRequired();
+        resource.Property<Guid>("PlatformId").IsRequired();
+        resource.Property<string>("Kind").HasColumnType(Text).IsRequired();
+        resource.Property<string>("DockerResourceId").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        resource.Property<string>("DockerResourceName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        resource.Property<string>("ComposeResourceName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        resource.Property<string>("Mounts").HasColumnType(Json).IsRequired();
+
+        resource
+            .HasOne("StackRelease")
+            .WithMany()
+            .HasForeignKey("StackReleaseId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        resource
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        resource
+            .HasIndex("StackReleaseId", "Kind", "DockerResourceId")
+            .IsUnique()
+            .HasDatabaseName($"IX_{tableName}_Release_Kind_ResourceId");
+        resource
+            .HasIndex("PlatformId", "Kind", "DockerResourceName")
+            .HasDatabaseName($"IX_{tableName}_Platform_Kind_Name");
+
+        return builder;
+    }
+
+    public static ModelBuilder StackSwarmNamespaceReservationConfiguration(this ModelBuilder builder)
+    {
+        const string tableName = "StackSwarmNamespaceReservations";
+        var reservation = builder.Entity("StackSwarmNamespaceReservation");
+
+        reservation.ToTable(tableName);
+        reservation.Property<Guid>("StackId").IsRequired();
+        reservation.HasKey("StackId");
+        reservation.Property<Guid>("PlatformId").IsRequired();
+        reservation.Property<string>("Namespace").HasColumnType(Text).HasMaxLength(63).IsRequired();
+        reservation.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        reservation
+            .HasOne("Stack")
+            .WithOne()
+            .HasForeignKey("StackSwarmNamespaceReservation", "StackId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        reservation
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        reservation.HasIndex("PlatformId", "Namespace")
+            .IsUnique()
+            .HasDatabaseName($"IX_{tableName}_Platform_Namespace");
 
         return builder;
     }

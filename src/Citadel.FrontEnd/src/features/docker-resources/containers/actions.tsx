@@ -4,6 +4,7 @@ import {
   type ContainerDataView,
   ContainerStateStatus,
   PlatformType,
+  StackImportKind,
   ResourceControlState,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
@@ -19,6 +20,7 @@ interface BaseContainerResource {
   state: ContainerStateStatus;
   controlState: ResourceControlState;
   isSystem: boolean;
+  isSwarmTask?: boolean;
 }
 
 export type ContainerStackGroupResource = {
@@ -35,6 +37,7 @@ export type ContainerStackGroupResource = {
   deploymentId: null;
   isSystem: boolean;
   systemRole: null;
+  isSwarmTask: boolean;
   imageView?: null;
   displayStatus: StackReleaseStatus;
   capabilities?: ContainerView['capabilities'];
@@ -58,6 +61,7 @@ const isProcessing = (r: BaseContainerResource) => r.controlState === ResourceCo
 
 const canStart = (x: BaseContainerResource) =>
   !x.isSystem &&
+  !x.isSwarmTask &&
   x.state !== ContainerStateStatus.Running &&
   x.state !== ContainerStateStatus.Offline &&
   x.state !== ContainerStateStatus.Paused &&
@@ -65,17 +69,19 @@ const canStart = (x: BaseContainerResource) =>
 
 const canStop = (x: BaseContainerResource) =>
   !x.isSystem &&
+  !x.isSwarmTask &&
   (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
   !isProcessing(x);
 
 const canPause = (x: BaseContainerResource) =>
-  !x.isSystem && x.state === ContainerStateStatus.Running && !isProcessing(x);
+  !x.isSystem && !x.isSwarmTask && x.state === ContainerStateStatus.Running && !isProcessing(x);
 
 const canUnpause = (x: BaseContainerResource) =>
-  !x.isSystem && x.state === ContainerStateStatus.Paused && !isProcessing(x);
+  !x.isSystem && !x.isSwarmTask && x.state === ContainerStateStatus.Paused && !isProcessing(x);
 
 const canRestart = (x: BaseContainerResource) =>
   !x.isSystem &&
+  !x.isSwarmTask &&
   (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
   !isProcessing(x);
 
@@ -152,6 +158,11 @@ const getContainers = (resources: ContainerActionResource | ContainerActionResou
 export const isAdoptableContainer = (resource: ContainerActionResource | ContainerDataView) =>
   !isContainerStackGroup(resource) && !resource.stack && isUnmanagedContainer(resource);
 
+export const isContainerAdoptionAvailable = (
+  resource: ContainerActionResource | ContainerDataView,
+  platformType?: PlatformType,
+) => platformType === PlatformType.Docker && isAdoptableContainer(resource);
+
 export const isImportableStack = (resource: ContainerActionResource | ContainerDataView) => {
   const containers = isContainerStackGroup(resource) ? resource.containers : [resource];
   return (
@@ -170,6 +181,21 @@ export const isImportableStackSelection = (resources: ContainerActionResource[])
     (resource) =>
       resource.platformId === first.platformId && resource.stack === first.stack && isImportableStack(resource),
   );
+};
+
+export const isSwarmStackGroup = (resource: ContainerActionResource | ContainerDataView) =>
+  isContainerStackGroup(resource) &&
+  resource.containers.length > 0 &&
+  resource.containers.every((container) => container.isSwarmTask);
+
+const getStackImportKind = (resources: ContainerActionResource | ContainerActionResource[]) => {
+  const selection = Array.isArray(resources) ? resources : [resources];
+  const containers = selection.flatMap((resource) =>
+    isContainerStackGroup(resource) ? resource.containers : [resource],
+  );
+  return containers.length > 0 && containers.every((container) => container.isSwarmTask)
+    ? StackImportKind.SwarmStack
+    : StackImportKind.ComposeProject;
 };
 
 export const containsSystemContainer = (resources: { isSystem: boolean } | { isSystem: boolean }[]) => {
@@ -221,10 +247,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
         const { currentPlatform } = useAppContext();
         const selected = Array.isArray(resources) ? resources[0] : resources;
         const canExecute =
-          currentPlatform?.type === PlatformType.Docker &&
-          !!selected &&
-          isAdoptableContainer(selected) &&
-          !isProcessing(selected);
+          !!selected && isContainerAdoptionAvailable(selected, currentPlatform?.type) && !isProcessing(selected);
 
         return {
           canExecute,
@@ -253,7 +276,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
           isContainerStackGroup(resource) ? resource.containers : [resource],
         );
         const canExecute =
-          currentPlatform?.type === PlatformType.Docker &&
+          (currentPlatform?.type === PlatformType.Docker || currentPlatform?.type === PlatformType.DockerSwarm) &&
           !!selected &&
           isImportableStackSelection(selection) &&
           !isProcessing(selected) &&
@@ -267,6 +290,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
             const query = new URLSearchParams({
               importPlatform: selected.platformId,
               importProject: projectName,
+              importKind: getStackImportKind(selection),
             });
             navigate(`/stacks/add?${query.toString()}`);
           },
@@ -307,7 +331,8 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
       icon: Trash,
       mutateKey: 'deleteContainers',
       canExecute: (r) => {
-        const can = (x: ContainerView) => x.state !== ContainerStateStatus.Offline && !isProcessing(x);
+        const can = (x: ContainerView) =>
+          !x.isSwarmTask && x.state !== ContainerStateStatus.Offline && !isProcessing(x);
         const containers = getContainers(r);
         if (containsSystemContainer(containers)) return false;
         return containers.some(can);
@@ -317,7 +342,8 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
       destructive: true,
       resourceType: 'Container',
       useVariables: (resources) => {
-        const can = (x: ContainerView) => x.state !== ContainerStateStatus.Offline && !isProcessing(x);
+        const can = (x: ContainerView) =>
+          !x.isSwarmTask && x.state !== ContainerStateStatus.Offline && !isProcessing(x);
         const containerIds = Array.from(
           new Set(
             getContainers(resources)
@@ -335,23 +361,33 @@ const ImportStackAction = baseContainerDropdownActions.importStack;
 const AdoptGroupAction = baseContainerGroupActions.adopt;
 const ImportStackGroupAction = baseContainerGroupActions.importStack;
 
-const useStandaloneContainerManagement = () => useAppContext().currentPlatform?.type === PlatformType.Docker;
+const useContainerImportPlatform = () => useAppContext().currentPlatform?.type;
 
 const ContainerAdoptDropdownAction: typeof AdoptAction = (props) =>
-  useStandaloneContainerManagement() && isAdoptableContainer(props.resource) ? <AdoptAction {...props} /> : null;
+  useContainerImportPlatform() === PlatformType.Docker && isAdoptableContainer(props.resource) ? (
+    <AdoptAction {...props} />
+  ) : null;
 
-const ContainerImportStackDropdownAction: typeof ImportStackAction = (props) =>
-  useStandaloneContainerManagement() && isImportableStack(props.resource) ? <ImportStackAction {...props} /> : null;
+const ContainerImportStackDropdownAction: typeof ImportStackAction = (props) => {
+  const platformType = useContainerImportPlatform();
+  const supported =
+    platformType === PlatformType.Docker ||
+    (platformType === PlatformType.DockerSwarm && (!props.resource.isSwarmTask || isSwarmStackGroup(props.resource)));
+  return supported && isImportableStack(props.resource) ? <ImportStackAction {...props} /> : null;
+};
 
 const ContainerAdoptGroupAction: typeof AdoptGroupAction = (props) =>
-  useStandaloneContainerManagement() && props.resources.length === 1 && isAdoptableContainer(props.resources[0]) ? (
+  useContainerImportPlatform() === PlatformType.Docker &&
+  props.resources.length === 1 &&
+  isAdoptableContainer(props.resources[0]) ? (
     <AdoptGroupAction {...props} />
   ) : null;
 
-const ContainerImportStackGroupAction: typeof ImportStackGroupAction = (props) =>
-  useStandaloneContainerManagement() && isImportableStackSelection(props.resources) ? (
-    <ImportStackGroupAction {...props} />
-  ) : null;
+const ContainerImportStackGroupAction: typeof ImportStackGroupAction = (props) => {
+  const platformType = useContainerImportPlatform();
+  const supported = platformType === PlatformType.Docker || platformType === PlatformType.DockerSwarm;
+  return supported && isImportableStackSelection(props.resources) ? <ImportStackGroupAction {...props} /> : null;
+};
 
 export const ContainerDropdownActions = {
   ...baseContainerDropdownActions,

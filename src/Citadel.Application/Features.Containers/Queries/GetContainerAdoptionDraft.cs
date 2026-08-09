@@ -132,6 +132,11 @@ internal static class ContainerAdoptionDraftFactory
 
         if (container.IsSystem)
             return Result.Failure<ContainerAdoptionContext>(new BadRequestError("System containers cannot be adopted."));
+        if (container.IsSwarmTask)
+        {
+            return Result.Failure<ContainerAdoptionContext>(
+                new BadRequestError("Docker Swarm task containers cannot be adopted. Import their Stack instead."));
+        }
 
         if (container.DeploymentId is not null || container.StackId is not null)
             return Result.Failure<ContainerAdoptionContext>(new ConflictError("Container is already managed by Citadel."));

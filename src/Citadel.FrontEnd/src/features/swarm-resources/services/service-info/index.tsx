@@ -17,7 +17,7 @@ import { ServiceInspect } from './inspect';
 import { ServiceInfoActions } from '../actions';
 import { UnmanagedResourceIcon } from '@/components/custom/common';
 
-const { view: _view, adopt, ...groupedServiceInfoActions } = ServiceInfoActions;
+const { view: _view, adopt, importStack, ...groupedServiceInfoActions } = ServiceInfoActions;
 
 export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfoView> = {
   Header: {
@@ -35,7 +35,7 @@ export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfo
       <GenericActionBarButtons
         resource={resource}
         actions={Object.values(groupedServiceInfoActions)}
-        standaloneActions={[adopt]}
+        standaloneActions={[adopt, importStack]}
       />
     ),
   },

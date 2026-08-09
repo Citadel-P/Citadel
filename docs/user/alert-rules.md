@@ -337,6 +337,10 @@ Deployment alerts:
 - `DeploymentAutoDeployFailed`
 - `DeploymentConfigurationResolutionFailed`
 
+Swarm Service alerts:
+
+- `SwarmServiceOperationFailed`
+
 Stack alerts:
 
 - `StackImageUpdateAvailable`
@@ -397,6 +401,13 @@ For deployment or stack failures:
 - Severity: `Critical`
 - Scope: production resources
 - Channels: deployment owners
+
+For failed Swarm Service operations:
+
+- Type: `SwarmServiceOperationFailed`
+- Severity: `Critical`
+- Scope: production Swarm Services
+- Channels: service owners
 
 ## Troubleshooting
 

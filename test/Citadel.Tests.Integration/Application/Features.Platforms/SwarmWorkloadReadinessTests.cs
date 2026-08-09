@@ -1,9 +1,12 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using Hosting.Common;
+using Microsoft.Extensions.DependencyInjection;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Platforms;
@@ -73,7 +76,7 @@ public sealed class SwarmWorkloadReadinessTests(PostgresTestFixture fixture) : I
     }
 
     [Fact]
-    public async Task CreateStack_WhenSwarmApplyIsUnavailable_ReturnsNotFound()
+    public async Task CreateStack_WhenPlatformIsSwarm_CreatesLockedSwarmDraft()
     {
         var json = $$"""
         {
@@ -83,7 +86,8 @@ public sealed class SwarmWorkloadReadinessTests(PostgresTestFixture fixture) : I
           "spec": {
             "$type": "WebEditor",
             "composeFile": "services:\n  web:\n    image: nginx:latest",
-            "updateBehavior": "Disabled"
+            "updateBehavior": "Disabled",
+            "destroyBeforeDeploy": false
           }
         }
         """;
@@ -93,6 +97,94 @@ public sealed class SwarmWorkloadReadinessTests(PostgresTestFixture fixture) : I
             new StringContent(json, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.EnsureSuccessStatusCode();
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("DockerSwarm", body.RootElement.GetProperty("platformType").GetString());
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = Assert.Single(await uow.Stacks.GetInfoAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(platformId, stack.CurrentStackRelease?.PlatformId);
+        Assert.Equal(PlatformType.DockerSwarm, stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type);
+        Assert.Equal(StackReleaseStatus.Created, stack.CurrentStackRelease?.Status);
+    }
+
+    [Fact]
+    public async Task PreflightSwarmStack_WhenComposeIsSupported_ReturnsCompatibleReport()
+    {
+        var json = $$"""
+        {
+          "name": "swarm-stack",
+          "platformId": "{{platformId}}",
+          "stackSource": "WebEditor",
+          "spec": {
+            "$type": "WebEditor",
+            "composeFile": "services:\n  web:\n    image: nginx:latest\n    deploy:\n      replicas: 2",
+            "updateBehavior": "Disabled",
+            "destroyBeforeDeploy": false
+          }
+        }
+        """;
+
+        using var response = await Client.PostAsync(
+            "/api/v1/stacks/preflight/swarm",
+            new StringContent(json, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.True(body.RootElement.GetProperty("isCompatible").GetBoolean());
+        Assert.Empty(body.RootElement.GetProperty("issues").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task PreflightSwarmStack_WhenComposeUsesStandaloneField_ReturnsCompatibilityError()
+    {
+        var json = $$"""
+        {
+          "name": "swarm-stack",
+          "platformId": "{{platformId}}",
+          "stackSource": "WebEditor",
+          "spec": {
+            "$type": "WebEditor",
+            "composeFile": "services:\n  web:\n    image: nginx:latest\n    container_name: fixed-web",
+            "updateBehavior": "Disabled",
+            "destroyBeforeDeploy": false
+          }
+        }
+        """;
+
+        using var response = await Client.PostAsync(
+            "/api/v1/stacks/preflight/swarm",
+            new StringContent(json, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.False(body.RootElement.GetProperty("isCompatible").GetBoolean());
+        Assert.Contains(
+            body.RootElement.GetProperty("issues").EnumerateArray(),
+            issue => issue.GetProperty("code").GetString() == "compose.unsupported_key");
+    }
+
+    [Fact]
+    public async Task StackPlatformLookup_InAddMode_IncludesSwarmPlatforms()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        using var response = await Client.GetAsync(
+            "/api/v1/lookup?sourceResourceType=Stack&targetResourceType=Platform",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Contains(
+            body.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == platformId);
     }
 }

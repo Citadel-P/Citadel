@@ -138,4 +138,15 @@ internal static class StackMappers
 
     internal static IEnumerable<StackReleaseVolumeBinding> ToDomain(this IEnumerable<StackReleaseVolumeBindingDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
+
+    internal static StackReleaseSwarmResource ToDomain(this StackReleaseSwarmResourceDto dto)
+        => StackReleaseSwarmResource.FromPersistence(
+            dto.Id,
+            dto.StackReleaseId,
+            dto.PlatformId,
+            Enum.Parse<StackReleaseSwarmResourceKind>(dto.Kind),
+            dto.DockerResourceId,
+            dto.DockerResourceName,
+            dto.ComposeResourceName,
+            JsonSerializer.Deserialize(dto.Mounts, StackJsonContext.Default.IReadOnlyListStackReleaseSwarmResourceMount));
 }

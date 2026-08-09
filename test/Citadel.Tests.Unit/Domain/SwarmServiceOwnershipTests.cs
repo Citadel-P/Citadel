@@ -46,6 +46,21 @@ public sealed class SwarmServiceOwnershipTests
     }
 
     [Fact]
+    public void FromObservation_ShouldClassifyCitadelStackService()
+    {
+        var projection = CreateProjection(new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "sample",
+            ["com.citadel.managed"] = "true",
+            ["com.citadel.stack-id"] = Guid.CreateVersion7().ToString("D"),
+            ["com.citadel.release-id"] = Guid.CreateVersion7().ToString("D")
+        });
+
+        Assert.Equal(SwarmServiceOwnership.CitadelStack, projection.Ownership);
+        Assert.Null(projection.OwnershipDiagnostic);
+    }
+
+    [Fact]
     public void PlatformJsonContext_ShouldSerializeOwnershipByName()
     {
         IReadOnlyList<SwarmServiceProjection> projections =

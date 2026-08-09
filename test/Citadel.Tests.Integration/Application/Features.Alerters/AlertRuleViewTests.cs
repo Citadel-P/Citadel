@@ -1,4 +1,5 @@
 using Domain.Contracts.Interfaces;
+using Domain;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
@@ -8,6 +9,21 @@ namespace Tests.Integration.Application.Features.Alerters;
 
 public class AlertRuleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    [Fact]
+    public async Task List_AlertRules_Should_Include_Default_SwarmService_Failure_Rule()
+    {
+        var response = await Client.GetAsync("/api/v1/alertRules", TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.GetProperty("alertRules").EnumerateArray();
+        Assert.Contains(items, item =>
+            item.GetProperty("type").GetString() == nameof(AlertType.SwarmServiceOperationFailed));
+    }
+
     [Fact]
     public async Task List_AlertRules_Should_Return_Only_Rules_User_Is_Permitted_To_View()
     {

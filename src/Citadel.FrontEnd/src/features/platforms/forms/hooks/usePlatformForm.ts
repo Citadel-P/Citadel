@@ -27,6 +27,7 @@ export const createDefaultPlatformInput = (
   description: null,
   type: PlatformType.Docker,
   connectorType,
+  pruneHistoricalSwarmTaskContainers: true,
   tagIds: [],
 });
 
@@ -36,6 +37,7 @@ export const platformToFormInput = (platform: PlatformView): PlatformFormInput =
   description: platform.description ?? null,
   type: platform.type,
   connectorType: platform.connectorType,
+  pruneHistoricalSwarmTaskContainers: platform.pruneHistoricalSwarmTaskContainers ?? true,
   tagIds: platform.tags?.map((tag) => tag.id) ?? [],
 });
 
@@ -75,6 +77,7 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
         description: input.description ?? null,
         type: input.type ?? PlatformType.Docker,
         connectorType,
+        pruneHistoricalSwarmTaskContainers: input.pruneHistoricalSwarmTaskContainers ?? true,
       };
 
       if (mode === 'edit') {

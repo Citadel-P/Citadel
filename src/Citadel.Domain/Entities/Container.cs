@@ -18,7 +18,8 @@ public class Container(
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
     bool isSystem = false,
     ContainerSystemRole? systemRole = null,
-    bool hasCitadelOwnershipLabels = false) : IReconcilableResource
+    bool hasCitadelOwnershipLabels = false,
+    bool isSwarmTask = false) : IReconcilableResource
 {
     private readonly List<ContainerStat> stats = [];
     private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
@@ -39,6 +40,7 @@ public class Container(
     public bool IsSystem { get; private set; } = isSystem;
     public ContainerSystemRole? SystemRole { get; private set; } = isSystem ? systemRole : null;
     public bool HasCitadelOwnershipLabels { get; private set; } = hasCitadelOwnershipLabels;
+    public bool IsSwarmTask { get; private set; } = isSwarmTask;
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
@@ -67,7 +69,8 @@ public class Container(
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null,
         bool? isSystem = null,
         ContainerSystemRole? systemRole = null,
-        bool? hasCitadelOwnershipLabels = null)
+        bool? hasCitadelOwnershipLabels = null,
+        bool? isSwarmTask = null)
     {
         if (name != null) Name = name;
         if (dockerImageId != null) DockerImageId = dockerImageId;
@@ -85,6 +88,8 @@ public class Container(
         }
         if (hasCitadelOwnershipLabels is not null)
             HasCitadelOwnershipLabels = hasCitadelOwnershipLabels.Value;
+        if (isSwarmTask is not null)
+            IsSwarmTask = isSwarmTask.Value;
         if (ports != null)
         {
             this.ports.Clear();
@@ -139,7 +144,8 @@ public class Container(
         IReadOnlyCollection<ContainerStat>? stats = null,
         bool isSystem = false,
         ContainerSystemRole? systemRole = null,
-        bool hasCitadelOwnershipLabels = false
+        bool hasCitadelOwnershipLabels = false,
+        bool isSwarmTask = false
         )
     {
         var container = new Container(
@@ -156,7 +162,8 @@ public class Container(
             deploymentId: deploymentId,
             isSystem: isSystem,
             systemRole: systemRole,
-            hasCitadelOwnershipLabels: hasCitadelOwnershipLabels)
+            hasCitadelOwnershipLabels: hasCitadelOwnershipLabels,
+            isSwarmTask: isSwarmTask)
         {
             Id = id,
             Image = image,

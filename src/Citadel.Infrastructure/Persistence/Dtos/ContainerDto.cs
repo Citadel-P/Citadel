@@ -20,7 +20,8 @@ internal record ContainerDto(
     Guid? DeploymentId = null,
     bool IsSystem = false,
     string? SystemRole = null,
-    bool HasCitadelOwnershipLabels = false)
+    bool HasCitadelOwnershipLabels = false,
+    bool IsSwarmTask = false)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 

@@ -24,4 +24,21 @@ public sealed record StackApplyCommand(
     string? LabelsOverrideFilePath = null,
     string? GeneratedFilesDirectory = null,
     IReadOnlyList<StackSecretFile>? SecretFiles = null,
-    IReadOnlyList<string>? SecretTargetServiceNames = null);
+    IReadOnlyList<string>? SecretTargetServiceNames = null,
+    StackOrchestrationMode OrchestrationMode = StackOrchestrationMode.DockerCompose,
+    IReadOnlyList<StackSourceFile>? SourceFiles = null,
+    IReadOnlyList<StackRetainedSwarmSecret>? RetainedSwarmSecrets = null,
+    IReadOnlyList<StackRetainedSwarmConfig>? RetainedSwarmConfigs = null,
+    bool ConvertComposeProjectToSwarm = false);
+
+public sealed record StackSourceFile(string RelativePath, byte[] Content);
+
+public sealed record StackRetainedSwarmSecret(
+    string ComposeResourceName,
+    string DockerResourceName,
+    IReadOnlyList<StackReleaseSwarmResourceMount> Mounts);
+
+public sealed record StackRetainedSwarmConfig(
+    string ComposeResourceName,
+    string DockerResourceName,
+    IReadOnlyList<StackReleaseSwarmResourceMount> Mounts);

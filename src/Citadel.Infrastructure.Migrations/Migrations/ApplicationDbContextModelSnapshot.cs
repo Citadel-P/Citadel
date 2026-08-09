@@ -670,6 +670,18 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000001c"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Operation Failed - Swarm Service",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Status = "Enabled",
+                            Type = "SwarmServiceOperationFailed"
+                        },
+                        new
+                        {
                             Id = new Guid("019d0000-0001-7000-8001-000000000009"),
                             CooldownSeconds = 86400,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -2623,6 +2635,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("imageid");
 
+                    b.Property<bool>("IsSwarmTask")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isswarmtask");
+
                     b.Property<bool>("IsSystem")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -4303,6 +4321,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("json")
                         .HasColumnName("platformdescriptor");
 
+                    b.Property<bool>("PruneHistoricalSwarmTaskContainers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("prunehistoricalswarmtaskcontainers");
+
                     b.Property<string>("ServerVersion")
                         .HasColumnType("text")
                         .HasColumnName("serverversion");
@@ -4979,6 +5003,62 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("stackreleases", (string)null);
                 });
 
+            modelBuilder.Entity("StackReleaseSwarmResource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ComposeResourceName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("composeresourcename");
+
+                    b.Property<string>("DockerResourceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerresourceid");
+
+                    b.Property<string>("DockerResourceName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerresourcename");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Mounts")
+                        .IsRequired()
+                        .HasColumnType("json")
+                        .HasColumnName("mounts");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<Guid>("StackReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackreleaseid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stackreleaseswarmresources");
+
+                    b.HasIndex("PlatformId", "Kind", "DockerResourceName")
+                        .HasDatabaseName("ix_stackreleaseswarmresources_platform_kind_name");
+
+                    b.HasIndex("StackReleaseId", "Kind", "DockerResourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stackreleaseswarmresources_release_kind_resourceid");
+
+                    b.ToTable("stackreleaseswarmresources", (string)null);
+                });
+
             modelBuilder.Entity("StackReleaseVolumeBinding", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5034,6 +5114,38 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_stackreleasevolumebindings_release_volumename");
 
                     b.ToTable("stackreleasevolumebindings", (string)null);
+                });
+
+            modelBuilder.Entity("StackSwarmNamespaceReservation", b =>
+                {
+                    b.Property<Guid>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Namespace")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("text")
+                        .HasColumnName("namespace");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.HasKey("StackId")
+                        .HasName("pk_stackswarmnamespacereservations");
+
+                    b.HasIndex("PlatformId", "Namespace")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stackswarmnamespacereservations_platform_namespace");
+
+                    b.ToTable("stackswarmnamespacereservations", (string)null);
                 });
 
             modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
@@ -5789,6 +5901,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("secretids");
 
+                    b.Property<Guid?>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
                     b.Property<Guid?>("SwarmServiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("swarmserviceid");
@@ -5810,6 +5926,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("PlatformId", "DockerServiceId")
                         .HasName("pk_swarmserviceprojections");
+
+                    b.HasIndex("StackId")
+                        .HasDatabaseName("ix_swarmserviceprojections_stackid");
 
                     b.HasIndex("SwarmServiceId")
                         .HasDatabaseName("ix_swarmserviceprojections_swarmserviceid");
@@ -6937,6 +7056,23 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_stackreleases_stacks_stackid");
                 });
 
+            modelBuilder.Entity("StackReleaseSwarmResource", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackreleaseswarmresources_platforms_platformid");
+
+                    b.HasOne("StackRelease", null)
+                        .WithMany()
+                        .HasForeignKey("StackReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackreleaseswarmresources_stackreleases_stackreleaseid");
+                });
+
             modelBuilder.Entity("StackReleaseVolumeBinding", b =>
                 {
                     b.HasOne("Platform", null)
@@ -6952,6 +7088,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_stackreleasevolumebindings_stackreleases_stackreleaseid");
+                });
+
+            modelBuilder.Entity("StackSwarmNamespaceReservation", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackswarmnamespacereservations_platforms_platformid");
+
+                    b.HasOne("Stack", null)
+                        .WithOne()
+                        .HasForeignKey("StackSwarmNamespaceReservation", "StackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackswarmnamespacereservations_stacks_stackid");
                 });
 
             modelBuilder.Entity("StackWebhookDeployQueueItem", b =>
@@ -7042,6 +7195,12 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_swarmserviceprojections_platforms_platformid");
+
+                    b.HasOne("Stack", null)
+                        .WithMany()
+                        .HasForeignKey("StackId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_swarmserviceprojections_stacks_stackid");
                 });
 
             modelBuilder.Entity("SwarmTaskProjection", b =>

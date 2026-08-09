@@ -46,7 +46,8 @@ internal static class PlatformMappers
             stackCount: platform.StackCount,
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
             stackStatusCounts: MapStackStatusCounts(platform),
-            clusterId: platform.ClusterId);
+            clusterId: platform.ClusterId,
+            pruneHistoricalSwarmTaskContainers: platform.PruneHistoricalSwarmTaskContainers);
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
@@ -78,6 +79,7 @@ internal static class PlatformMappers
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
             stackStatusCounts: MapStackStatusCounts(platform),
             clusterId: platform.ClusterId,
+            pruneHistoricalSwarmTaskContainers: platform.PruneHistoricalSwarmTaskContainers,
             stats: [new PlatformStat(
                 Created: platform?.Stat_Created ?? 0,
                 MemoryUsage: platform?.Stat_MemoryUsage ?? 0,

@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { isUnmanagedContainer } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { countSelectedContainers } from './selection';
+import { countSelectedContainers, filterVisibleContainers } from './selection';
 
 const EMPTY_CONTAINERS: never[] = [];
 const standaloneContainerActions = [ContainerGroupActions.adopt, ContainerGroupActions.importStack];
@@ -66,10 +66,10 @@ export const ContainerComponents: RequiredComponents = {
     const { containersInfo, capabilities, isLoading } = useContainersGroup(platformId);
     const unmanagedOnly = searchParams.get('unmanaged') === 'true';
     const containers = containersInfo?.containers ?? EMPTY_CONTAINERS;
-    const items = useMemo(
-      () => (unmanagedOnly ? containers.filter(isUnmanagedContainer) : containers),
-      [containers, unmanagedOnly],
-    );
+    const items = useMemo(() => {
+      const visibleContainers = filterVisibleContainers(containers);
+      return unmanagedOnly ? visibleContainers.filter(isUnmanagedContainer) : visibleContainers;
+    }, [containers, unmanagedOnly]);
 
     return {
       items,

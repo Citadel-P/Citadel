@@ -191,7 +191,7 @@ public static class CapabilityMapper
         Domain.Entities.Platforms.Platform platform,
         PermissionMetadata permission)
     {
-        if (platform.PlatformDescriptor is not Domain.Entities.Platforms.DockerSwarmPlatformDescriptor)
+        if (platform.PlatformDescriptor is not Domain.Entities.Platforms.DockerSwarmPlatformDescriptor swarmDescriptor)
             return null;
 
         var common = ToResourceCapabilities(permission);
@@ -203,7 +203,7 @@ public static class CapabilityMapper
             CanManageSecrets: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             CanManageConfigs: common.CanWrite && platform.Status == Domain.PlatformStatus.Online,
             SupportsDeploymentApply: false,
-            SupportsStackApply: false,
+            SupportsStackApply: platform.Status == Domain.PlatformStatus.Online && swarmDescriptor.ControlAvailable,
             CanViewManagerLocalResources: common.CanRead,
             SupportsServiceStatus: false,
             SupportsClusterVolumes: false);

@@ -16,6 +16,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(DeploymentImageUpdateAvailableAlertInfo), nameof(AlertType.DeploymentImageUpdateAvailable))]
 [JsonDerivedType(typeof(DeploymentAutoUpdatedAlertInfo), nameof(AlertType.DeploymentAutoUpdated))]
 [JsonDerivedType(typeof(DeploymentAutoDeployFailedAlertInfo), nameof(AlertType.DeploymentAutoDeployFailed))]
+[JsonDerivedType(typeof(SwarmServiceOperationFailedAlertInfo), nameof(AlertType.SwarmServiceOperationFailed))]
 [JsonDerivedType(typeof(StackImageUpdateAvailableAlertInfo), nameof(AlertType.StackImageUpdateAvailable))]
 [JsonDerivedType(typeof(StackAutoUpdatedAlertInfo), nameof(AlertType.StackAutoUpdated))]
 [JsonDerivedType(typeof(StackDeployFailedAlertInfo), nameof(AlertType.StackAutoDeployFailed))]
@@ -98,6 +99,16 @@ public record DeploymentAutoUpdatedAlertInfo(string DeploymentName, string Previ
 public record DeploymentAutoDeployFailedAlertInfo(string DeploymentName, string Reason) : AlertEventInfo
 {
     public override string HumanMessage => $"Deployment '{DeploymentName}' failed: {Reason}";
+}
+
+public sealed record SwarmServiceOperationFailedAlertInfo(
+    string ServiceName,
+    Guid OperationId,
+    SwarmServiceOperationKind OperationKind,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Swarm Service '{ServiceName}' {OperationKind.ToString().ToLowerInvariant()} failed: {Reason}";
 }
 
 public sealed record StackImageUpdateItem(

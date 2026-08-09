@@ -18,6 +18,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
     private Guid stackId;
     private Guid platformId;
     private Guid otherPlatformId;
+    private Guid swarmPlatformId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -40,9 +41,36 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
                 ContainersRunning: 2,
                 ContainersPaused: 2,
                 ContainersStopped: 1));
+        var swarmPlatform = new Platform(
+            name: "Swarm-P-01",
+            address: "https://swarm.address",
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "1.0.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "node-1",
+                NodeAddr: "10.0.0.1",
+                LocalNodeState: "Active",
+                ControlAvailable: true,
+                Nodes: 1,
+                Managers: 1,
+                DaemonId: "swarm-daemon",
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0,
+                ClusterId: "cluster-1"),
+            clusterId: "cluster-1");
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(otherPlatform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
 
         var stack = Stack.Create(
             "stack-1",
@@ -70,6 +98,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         stackId = stack.Id;
         platformId = platform.Id;
         otherPlatformId = otherPlatform.Id;
+        swarmPlatformId = swarmPlatform.Id;
     }
 
     [Fact]
@@ -173,6 +202,71 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Equal("1", rollbackSnapshot.Version);
         Assert.Equal(StackReleaseStatus.Healthy, rollbackSnapshot.Status);
         Assert.Null(Assert.IsType<ManualStack>(rollbackSnapshot.Spec).EnvFilePath);
+    }
+
+    [Fact]
+    public async Task Patch_Stack_Should_Reject_CrossType_Platform_Change()
+    {
+        var patchJson = $$"""
+        {
+          "platformId": "{{swarmPlatformId}}",
+          "spec": {
+            "$type": "WebEditor",
+            "composeFile": "services:\n  web:\n    image: nginx",
+            "destroyBeforeDeploy": false
+          }
+        }
+        """;
+
+        using var response = await Client.PatchAsync(
+            $"/api/v1/stacks/{stackId}",
+            new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+        Assert.Equal(platformId, stack?.CurrentStackRelease?.PlatformId);
+    }
+
+    [Fact]
+    public async Task Patch_NeverApplied_Stack_Should_Move_To_SameType_Platform()
+    {
+        Guid draftId;
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var draft = Stack.Create(
+                "draft-stack",
+                Constants.SystemId,
+                StackSource.WebEditor,
+                platformId,
+                new ManualStack("services:\n  web:\n    image: nginx", StackUpdateBehavior.Disabled));
+            await uow.Stacks.AddAsync(draft, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+            draftId = draft.Id;
+        }
+
+        var patchJson = $$"""
+        {
+          "platformId": "{{otherPlatformId}}"
+        }
+        """;
+
+        using var response = await Client.PatchAsync(
+            $"/api/v1/stacks/{draftId}",
+            new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json"),
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var verifyScope = Services.CreateAsyncScope();
+        var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await verifyUow.Stacks.GetAsync(draftId, TestContext.Current.CancellationToken);
+        Assert.Equal(otherPlatformId, stack?.CurrentStackRelease?.PlatformId);
+        Assert.Equal(PlatformType.Docker, stack?.CurrentStackRelease?.Platform?.PlatformDescriptor.Type);
     }
 
     [Fact]

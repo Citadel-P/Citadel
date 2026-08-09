@@ -18,6 +18,7 @@ import {
   StackSource,
   ActorType,
   ResourceBindingScope,
+  PlatformType,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -73,6 +74,12 @@ import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useNavigate } from 'react-router';
+import { useServicesGroup } from '@/features/swarm-resources/services/hooks/useServicesGroup';
+import { ServicesTable } from '@/features/swarm-resources/services/table';
+import { SwarmLogs } from '@/features/swarm-resources/shared';
+import { ServiceTerminal } from '@/features/swarm-services/form/service-terminal';
+import { MonacoEditor } from '@/lib/monaco';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -287,7 +294,172 @@ const StackLatestActivity = ({
 };
 
 const StackRuntime = ({ stack }: { stack: StackView }) => {
-  const { containersInfo, isLoading, error } = useStackInfoGroup(stack.id, stack.platformId ?? undefined);
+  if (stack.platformType === PlatformType.DockerSwarm) return <SwarmStackRuntime stack={stack} />;
+
+  return <StandaloneStackRuntime stack={stack} />;
+};
+
+const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
+  const platformId = stack.platformId ?? '';
+  const { items, isLoading } = useServicesGroup(platformId);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>();
+  const services = useMemo(
+    () => items.filter((service) => service.labels[STACK_ID_LABEL]?.toLowerCase() === stack.id.toLowerCase()),
+    [items, stack.id],
+  );
+  const selectedService = services.find((service) => service.id === selectedServiceId) ?? services[0];
+  const inspectQuery = useRead(
+    'inspectSwarmService',
+    { platformId, resourceId: selectedService?.id ?? '' },
+    { enabled: Boolean(platformId && selectedService?.id && selectedService.capabilities?.canInspect) },
+  );
+
+  if (!platformId) {
+    return (
+      <AlertMessage type="warning">
+        <div className="truncate">The Stack has no Platform assigned.</div>
+      </AlertMessage>
+    );
+  }
+
+  if (!isLoading && services.length === 0) {
+    return <ImportedComposeStackRuntime stack={stack} />;
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-4">
+      <ServicesTable
+        items={services}
+        isLoading={isLoading}
+        actions={{}}
+        platformId={platformId}
+        selectable={false}
+        showActions={false}
+        emptyState={{
+          title: 'No Stack services found.',
+          description: 'No Services owned by this Stack are present in the latest Swarm inventory.',
+        }}
+      />
+      {selectedService && (
+        <Tabs defaultValue="logs" className="w-full">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <TabsList className="w-fit">
+              <TabsTrigger value="logs" disabled={selectedService.capabilities?.canViewLogs !== true}>
+                Logs
+              </TabsTrigger>
+              <TabsTrigger value="inspect" disabled={selectedService.capabilities?.canInspect !== true}>
+                Inspect
+              </TabsTrigger>
+              <TabsTrigger value="terminal">Terminal</TabsTrigger>
+            </TabsList>
+            <Select value={selectedService.id} onValueChange={setSelectedServiceId}>
+              <SelectTrigger className="w-full sm:w-72" aria-label="Service">
+                <SelectValue placeholder="Select a Service" />
+              </SelectTrigger>
+              <SelectContent>
+                {services.map((service) => (
+                  <SelectItem key={service.id} value={service.id}>
+                    {service.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <TabsContent value="logs" className="mt-2">
+            <SwarmLogs
+              platformId={platformId}
+              resourceId={selectedService.id}
+              resource="service"
+              capabilities={selectedService.capabilities}
+            />
+          </TabsContent>
+          <TabsContent value="inspect" className="mt-2">
+            <MonacoEditor
+              value={JSON.stringify(inspectQuery.data?.data ?? {}, null, 2)}
+              language="json"
+              readOnly
+              minHeight={320}
+            />
+          </TabsContent>
+          <TabsContent value="terminal" className="mt-2">
+            <ServiceTerminal platformId={platformId} tasks={selectedService.tasks} tasksLoading={isLoading} />
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+};
+
+const STACK_ID_LABEL = 'com.citadel.stack-id';
+
+const ImportedComposeStackRuntime = ({ stack }: { stack: StackView }) => {
+  const stackInfo = useStackInfoGroup(stack.id, stack.platformId ?? undefined);
+  const composeContainers = useMemo(
+    () => stackInfo.containersInfo.filter((container) => !container.isSwarmTask),
+    [stackInfo.containersInfo],
+  );
+
+  if (stackInfo.isLoading) {
+    return (
+      <StackContainersRuntime
+        stack={stack}
+        containersInfo={composeContainers}
+        isLoading
+        error={stackInfo.error}
+      />
+    );
+  }
+
+  if (composeContainers.length === 0) {
+    return (
+      <ServicesTable
+        items={[]}
+        isLoading={false}
+        actions={{}}
+        platformId={stack.platformId ?? ''}
+        selectable={false}
+        showActions={false}
+        emptyState={{
+          title: 'No Stack services found.',
+          description: 'No Services owned by this Stack are present in the latest Swarm inventory.',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-4">
+      <AlertMessage type="info" title="Awaiting first Swarm Apply">
+        This imported Compose project is still running as containers. Its first successful Apply will replace it with
+        native Swarm Services.
+      </AlertMessage>
+      <StackContainersRuntime
+        stack={stack}
+        containersInfo={composeContainers}
+        isLoading={false}
+        error={stackInfo.error}
+      />
+    </div>
+  );
+};
+
+const StandaloneStackRuntime = ({ stack }: { stack: StackView }) => {
+  const stackInfo = useStackInfoGroup(stack.id, stack.platformId ?? undefined);
+
+  return <StackContainersRuntime stack={stack} {...stackInfo} />;
+};
+
+const StackContainersRuntime = ({
+  stack,
+  containersInfo,
+  isLoading,
+  error,
+}: {
+  stack: StackView;
+  containersInfo: ContainerDataView[];
+  isLoading: boolean;
+  error: ReturnType<typeof useStackInfoGroup>['error'];
+}) => {
 
   if (error)
     return (
@@ -315,7 +487,9 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
   const { open: openSheet } = useTaskSheet('Stack');
   const [previewRelease, setPreviewRelease] = useState<StackReleaseView | null>(null);
   const releases = data?.data.releases ?? [];
-  const canRollback = hasCapability(stack, 'canApply') && stack.controlState !== ResourceControlState.Processing;
+  const canRollback =
+    hasCapability(stack, 'canApply') &&
+    stack.controlState !== ResourceControlState.Processing;
 
   const columns = useMemo<ColumnDef<StackReleaseView>[]>(
     () => [
@@ -580,12 +754,15 @@ const SourceBadge = ({ value, title }: { value: string; title?: string }) => (
 const isRollbackCandidateRelease = (release: StackReleaseView) => release.status === StackReleaseStatus.Healthy;
 
 const StackDriftPanel = ({ stack }: { stack: StackView }) => {
+  const isSwarmStack = stack.platformType === PlatformType.DockerSwarm;
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
   const driftEligibleStatus =
     stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
-  const queryEnabled = !driftDetectionDisabled && driftEligibleStatus;
+  const queryEnabled = !isSwarmStack && !driftDetectionDisabled && driftEligibleStatus;
   const { data, error } = useRead('getStackDrift', { stackId: stack.id }, { enabled: queryEnabled });
   const report = data?.data;
+
+  if (isSwarmStack) return null;
 
   if (driftDetectionDisabled) {
     return (

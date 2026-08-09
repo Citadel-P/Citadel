@@ -33,9 +33,10 @@ type ResourceItem = {
   name: string;
 };
 
-type OverrideResourceType =
+export type OverrideResourceType =
   | ResourceType.Platform
   | ResourceType.Deployment
+  | ResourceType.SwarmService
   | ResourceType.Stack
   | ResourceType.Registry
   | ResourceType.GitRepository
@@ -69,9 +70,10 @@ type OverrideResourceConfig = {
   getEditPath: (resourceId: string) => string;
 };
 
-const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
+export const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Platform,
   ResourceType.Deployment,
+  ResourceType.SwarmService,
   ResourceType.Stack,
   ResourceType.Registry,
   ResourceType.GitRepository,
@@ -92,7 +94,7 @@ const readItemsFrom =
     return (Array.isArray(raw) ? raw : []) as ResourceItem[];
   };
 
-const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceConfig> = {
+export const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceConfig> = {
   [ResourceType.Platform]: {
     icon: CitadelIcons.Platform,
     listQuery: 'listPlatforms',
@@ -104,6 +106,12 @@ const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceCon
     listQuery: 'listDeployments',
     readItems: readItemsFrom('deployments'),
     getEditPath: (resourceId) => `/deployments/edit/${resourceId}`,
+  },
+  [ResourceType.SwarmService]: {
+    icon: CitadelIcons.SwarmService,
+    listQuery: 'listManagedSwarmServices',
+    readItems: readItemsFrom('swarmServices'),
+    getEditPath: (resourceId) => `/swarm-services/edit/${resourceId}`,
   },
   [ResourceType.Stack]: {
     icon: CitadelIcons.Stack,

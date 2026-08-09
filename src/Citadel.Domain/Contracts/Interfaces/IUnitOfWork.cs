@@ -827,6 +827,11 @@ public interface IStackRepository
     Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IReadOnlyList<StackReleaseVolumeBinding>> GetReleaseVolumeBindingsAsync(Guid releaseId, CancellationToken cancellationToken);
     Task<int> ReplaceReleaseVolumeBindingsAsync(Guid releaseId, IReadOnlyCollection<StackReleaseVolumeBinding> bindings, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StackReleaseSwarmResource>> GetReleaseSwarmResourcesAsync(Guid releaseId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StackReleaseSwarmResource>> GetStackSwarmResourcesAsync(Guid stackId, CancellationToken cancellationToken);
+    Task<int> ReplaceReleaseSwarmResourcesAsync(Guid releaseId, IReadOnlyCollection<StackReleaseSwarmResource> resources, CancellationToken cancellationToken);
+    Task<StackSwarmNamespaceReservation?> GetSwarmNamespaceReservationAsync(Guid stackId, CancellationToken cancellationToken);
+    Task<bool> TryReserveSwarmNamespaceAsync(Guid stackId, Guid platformId, string stackNamespace, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
@@ -1007,6 +1012,7 @@ public interface ISwarmProjectionRepository
     Task<SwarmNodeProjection?> GetNodeAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmServiceProjection>> GetServicesAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmServiceProjection?> GetServiceAsync(Guid platformId, string dockerServiceId, CancellationToken cancellationToken);
+    Task<int> TryAssignStackNamespaceAsync(Guid platformId, string stackNamespace, IReadOnlyCollection<string> dockerServiceIds, Guid stackId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmTaskProjection>> GetTasksAsync(
         Guid platformId,
         int limit,

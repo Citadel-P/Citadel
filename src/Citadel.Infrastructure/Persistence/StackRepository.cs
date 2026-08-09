@@ -563,6 +563,99 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return batch.Length;
     }
 
+    public async Task<IReadOnlyList<StackReleaseSwarmResource>> GetReleaseSwarmResourcesAsync(
+        Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM StackReleaseSwarmResources
+            WHERE StackReleaseId = @ReleaseId
+            ORDER BY Kind ASC, DockerResourceName ASC, Id ASC
+            """;
+        var result = await db.QueryAsync<StackReleaseSwarmResourceDto>(
+            sql,
+            new { ReleaseId = releaseId },
+            transaction: tx());
+        return [.. result.Select(static resource => resource.ToDomain())];
+    }
+
+    public async Task<IReadOnlyList<StackReleaseSwarmResource>> GetStackSwarmResourcesAsync(
+        Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT resource.*
+            FROM StackReleaseSwarmResources resource
+            INNER JOIN StackReleases release ON release.Id = resource.StackReleaseId
+            WHERE release.StackId = @StackId
+            ORDER BY release.CreatedAt DESC, resource.Kind ASC, resource.DockerResourceName ASC
+            """;
+        var result = await db.QueryAsync<StackReleaseSwarmResourceDto>(
+            sql,
+            new { StackId = stackId },
+            transaction: tx());
+        return [.. result.Select(static resource => resource.ToDomain())];
+    }
+
+    public async Task<int> ReplaceReleaseSwarmResourcesAsync(
+        Guid releaseId,
+        IReadOnlyCollection<StackReleaseSwarmResource> resources,
+        CancellationToken cancellationToken)
+    {
+        const string deleteSql = "DELETE FROM StackReleaseSwarmResources WHERE StackReleaseId = @ReleaseId";
+        if (resources.Count == 0)
+            return await db.ExecuteAsync(deleteSql, new { ReleaseId = releaseId }, transaction: tx());
+
+        var batch = resources
+            .GroupBy(static resource => (resource.StackReleaseId, resource.Kind, resource.DockerResourceId))
+            .Select(static group => group.First())
+            .ToArray();
+        const string sql = """
+            DELETE FROM StackReleaseSwarmResources
+            WHERE StackReleaseId = @ReleaseId;
+
+            INSERT INTO StackReleaseSwarmResources (
+                Id, StackReleaseId, PlatformId, Kind, DockerResourceId,
+                DockerResourceName, ComposeResourceName, Mounts)
+            SELECT
+                Id, StackReleaseId, PlatformId, Kind, DockerResourceId,
+                DockerResourceName, ComposeResourceName, Mounts::json
+            FROM unnest(
+                @Ids::uuid[],
+                @StackReleaseIds::uuid[],
+                @PlatformIds::uuid[],
+                @Kinds::text[],
+                @DockerResourceIds::text[],
+                @DockerResourceNames::text[],
+                @ComposeResourceNames::text[],
+                @MountsValues::text[])
+                AS resources(
+                    Id, StackReleaseId, PlatformId, Kind, DockerResourceId,
+                    DockerResourceName, ComposeResourceName, Mounts)
+            """;
+
+        await db.ExecuteAsync(
+            sql,
+            new
+            {
+                ReleaseId = releaseId,
+                Ids = batch.Select(static resource => resource.Id).ToArray(),
+                StackReleaseIds = batch.Select(static resource => resource.StackReleaseId).ToArray(),
+                PlatformIds = batch.Select(static resource => resource.PlatformId).ToArray(),
+                Kinds = batch.Select(static resource => EnumFormatter<StackReleaseSwarmResourceKind>.GetValue(resource.Kind)).ToArray(),
+                DockerResourceIds = batch.Select(static resource => resource.DockerResourceId).ToArray(),
+                DockerResourceNames = batch.Select(static resource => resource.DockerResourceName).ToArray(),
+                ComposeResourceNames = batch.Select(static resource => resource.ComposeResourceName).ToArray(),
+                MountsValues = batch.Select(static resource => JsonSerializer.Serialize(
+                    resource.Mounts,
+                    StackJsonContext.Default.IReadOnlyListStackReleaseSwarmResourceMount)).ToArray()
+            },
+            transaction: tx());
+
+        return batch.Length;
+    }
+
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name)";
@@ -579,6 +672,51 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name AND Id != @Id)";
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id }, transaction: tx());
+    }
+
+    public Task<StackSwarmNamespaceReservation?> GetSwarmNamespaceReservationAsync(
+        Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT StackId, PlatformId, Namespace, CreatedAt
+            FROM StackSwarmNamespaceReservations
+            WHERE StackId = @StackId
+            """;
+
+        return db.QuerySingleOrDefaultAsync<StackSwarmNamespaceReservation>(
+            sql,
+            new { StackId = stackId },
+            transaction: tx());
+    }
+
+    public Task<bool> TryReserveSwarmNamespaceAsync(
+        Guid stackId,
+        Guid platformId,
+        string stackNamespace,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH inserted AS (
+                INSERT INTO StackSwarmNamespaceReservations (StackId, PlatformId, Namespace)
+                VALUES (@StackId, @PlatformId, @Namespace)
+                ON CONFLICT DO NOTHING
+                RETURNING StackId
+            )
+            SELECT EXISTS (SELECT 1 FROM inserted)
+                OR EXISTS (
+                    SELECT 1
+                    FROM StackSwarmNamespaceReservations
+                    WHERE StackId = @StackId
+                      AND PlatformId = @PlatformId
+                      AND Namespace = @Namespace
+                )
+            """;
+
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { StackId = stackId, PlatformId = platformId, Namespace = stackNamespace },
+            transaction: tx());
     }
 
     public async Task<int> AddAsync(Stack stack, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)

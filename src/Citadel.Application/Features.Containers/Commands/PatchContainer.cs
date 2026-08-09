@@ -48,9 +48,10 @@ internal sealed class PatchContainerHandler(
             return Result.Failure(new ForbiddenError("Missing permission [Write] on [Platform]"));
         }
 
-        if (await SystemContainerProtection.ContainsSystemContainerAsync(unitOfWork, request.ContainerIds, ct))
+        var protectionError = await SystemContainerProtection.GetErrorAsync(unitOfWork, request.ContainerIds, ct);
+        if (protectionError is not null)
         {
-            return Result.Failure(new ConflictError(SystemContainerProtection.ErrorMessage));
+            return Result.Failure(new ConflictError(protectionError));
         }
 
         var actorId = userContext.Current.ActorId;

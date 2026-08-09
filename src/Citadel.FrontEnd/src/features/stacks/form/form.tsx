@@ -18,6 +18,11 @@ import {
   ImportComposeProjectInput,
   StackSpec,
   ComposeProjectImportValidation,
+  PlatformType,
+  StackReleaseStatus,
+  SwarmStackCompatibilityReport,
+  SwarmStackCompatibilitySeverity,
+  StackImportKind,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -39,8 +44,9 @@ import { MonacoEditor, MonacoToArrayEditor, type MonacoDiagnostic } from '@/lib/
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { FolderInput, GitBranch, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { FolderInput, GitBranch, KeyRound, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
@@ -50,6 +56,7 @@ import { useLicenseEntitlements } from '@/features/license/use-license-entitleme
 import { getDriftModePreset } from './drift-policy';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { GitRepositoryBrowseAction } from '@/features/git-repos/browser/browser-dialog';
+import { getSwarmComposeDiagnostics } from './swarm-compose-diagnostics';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -135,6 +142,14 @@ const normalizeDriftPolicy = (policy?: Partial<StackDriftPolicy> | null): StackD
 
 const specTypeForSource = (stackSource?: StackSource): 'Git' | 'WebEditor' | undefined =>
   stackSource === StackSource.Git ? 'Git' : stackSource === StackSource.WebEditor ? 'WebEditor' : undefined;
+
+const normalizeStackSpec = (spec: StackSpec, stackSource: StackSource): StackSpec => {
+  const { $type, ...values } = spec as StackSpec & { $type?: 'Git' | 'WebEditor' };
+  return {
+    $type: $type ?? specTypeForSource(stackSource),
+    ...values,
+  } as StackSpec;
+};
 
 const normalizeGitPath = (value: string) => value.trim().replaceAll('\\', '/');
 
@@ -299,11 +314,7 @@ const toPatchStackInput = (patch: Partial<StackInput>, original: StackConfigView
 
   if ('platformId' in normalizedPatch) data.platformId = normalizedPatch.platformId;
   if ('spec' in normalizedPatch && normalizedPatch.spec) {
-    data.spec = {
-      ...normalizedPatch.spec,
-      $type:
-        (normalizedPatch.spec as any).$type ?? (original.spec as any)?.$type ?? specTypeForSource(original.stackSource),
-    } as PatchStackInput['spec'];
+    data.spec = normalizeStackSpec(normalizedPatch.spec, original.stackSource) as PatchStackInput['spec'];
   }
   if ('driftPolicy' in normalizedPatch) data.driftPolicy = normalizedPatch.driftPolicy;
 
@@ -740,18 +751,31 @@ export const StackForm = ({
   const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
   const importPlatform = mode === 'add' ? searchParams.get('importPlatform') : null;
   const importProject = mode === 'add' ? searchParams.get('importProject') : null;
+  const requestedImportKind = mode === 'add' ? searchParams.get('importKind') : null;
+  const importKind =
+    requestedImportKind === StackImportKind.ComposeProject || requestedImportKind === StackImportKind.SwarmStack
+      ? requestedImportKind
+      : undefined;
   const isComposeImport = !!importPlatform && !!importProject;
   const duplicateDraftLoadedRef = useRef<string | null>(null);
   const importDraftLoadedRef = useRef<string | null>(null);
   const validatedImportFingerprintRef = useRef<string | null>(null);
   const importConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const importSensitiveEnvironmentAsSecretsRef = useRef(true);
+  const canImportSensitiveEnvironmentValuesRef = useRef(false);
   const [importConfirmationOpen, setImportConfirmationOpen] = useState(false);
   const [importValidation, setImportValidation] = useState<ComposeProjectImportValidation | null>(null);
+  const [importSensitiveEnvironmentAsSecrets, setImportSensitiveEnvironmentAsSecrets] = useState(true);
+  const [swarmPreflight, setSwarmPreflight] = useState<SwarmStackCompatibilityReport | null>(null);
   const [update, setUpdate] = useState<Partial<StackInput>>({});
   const queryClient = useQueryClient();
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
+  const updateSensitiveEnvironmentImport = useCallback((enabled: boolean) => {
+    importSensitiveEnvironmentAsSecretsRef.current = enabled;
+    setImportSensitiveEnvironmentAsSecrets(enabled);
+  }, []);
 
   const { mutateAsync: createStack } = useMutate('createStack');
   const { mutateAsync: importComposeProject } = useMutate('importComposeProject');
@@ -759,6 +783,8 @@ export const StackForm = ({
     'validateComposeProjectImportDraft',
   );
   const { mutateAsync: updateStack } = useMutate('updateStack');
+  const { mutateAsync: preflightSwarmStack, isPending: isSwarmPreflightPending } = useMutate('preflightSwarmStack');
+  const { data: platformsData } = useRead('listPlatforms');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
   const { data: buildProjectsData, isFetching: buildProjectsLoading } = useRead('listBuildProjects');
   const { data: duplicateDraftData, isFetching: isDuplicateDraftLoading } = useRead(
@@ -771,6 +797,7 @@ export const StackForm = ({
     {
       platformId: importPlatform ?? '',
       projectName: importProject ?? '',
+      query: { importKind: importKind ?? undefined },
     },
     { enabled: mode === 'add' && isComposeImport },
   );
@@ -786,21 +813,72 @@ export const StackForm = ({
   const resource: StackConfigView | undefined = stackCfg?.data;
   const duplicateDraft = duplicateDraftData?.data;
   const importDraft = importDraftData?.data;
+  const isNativeSwarmImport = importDraft?.importKind === StackImportKind.SwarmStack;
+  const importedPlatformId = isComposeImport
+    ? (importDraft?.source.platformId ?? importPlatform ?? undefined)
+    : undefined;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
   const importIssues = [...(importDraft?.issues ?? []), ...(importValidation?.issues ?? [])];
   const hasRuntimeImportBlocker = (importDraft?.issues ?? []).some(
     (issue) => issue.severity === AdoptionIssueSeverity.Blocker,
   );
   const formDraftKey = isComposeImport
-    ? `stack:import:${importPlatform}:${importProject}`
+    ? `stack:import:${importPlatform}:${importProject}:${importKind ?? 'auto'}`
     : duplicateFrom
       ? `stack:duplicate:${duplicateFrom}`
       : `stack:${id ?? 'new'}`;
   const stackView = stackViewData?.data;
   const original = resource ?? EMPTY_STACK_CONFIG;
-  const formOriginal = useMemo(() => normalizeDisabledWebhook(original), [original]);
+  const formOriginal = useMemo(
+    () =>
+      normalizeDisabledWebhook(
+        importedPlatformId ? ({ ...original, platformId: importedPlatformId } as StackConfigView) : original,
+      ),
+    [importedPlatformId, original],
+  );
   const formUpdate = useMemo(() => normalizeDisabledWebhook(update), [update]);
   const currentStackSource = (update as Partial<CreateStackInput>).stackSource ?? original.stackSource;
+  const currentPlatformId = importedPlatformId ?? (update as Partial<StackInput>).platformId ?? original.platformId;
+  const stackPlatforms = useMemo(
+    () =>
+      (platformsData?.data.platforms ?? []).filter(
+        (platform) => platform.type === PlatformType.Docker || platform.type === PlatformType.DockerSwarm,
+      ),
+    [platformsData?.data.platforms],
+  );
+  const lockedPlatformType =
+    mode === 'edit'
+      ? resource?.platformType
+      : duplicateFrom
+        ? stackPlatforms.find((platform) => platform.id === currentPlatformId)?.type
+        : undefined;
+  const selectablePlatforms = useMemo(
+    () =>
+      lockedPlatformType ? stackPlatforms.filter((platform) => platform.type === lockedPlatformType) : stackPlatforms,
+    [lockedPlatformType, stackPlatforms],
+  );
+  const importedPlatformSelection = useMemo(
+    () =>
+      isComposeImport && importDraft?.source
+        ? (stackPlatforms.find((platform) => platform.id === importedPlatformId) ??
+          ({ id: importDraft.source.platformId, name: importDraft.source.platformName } as PlatformView))
+        : undefined,
+    [importDraft, importedPlatformId, isComposeImport, stackPlatforms],
+  );
+  const currentPlatformType =
+    stackPlatforms.find((platform) => platform.id === currentPlatformId)?.type ?? lockedPlatformType;
+  const isSwarmStack = currentPlatformType === PlatformType.DockerSwarm;
+  const boundBuildServices = useMemo(
+    () =>
+      (
+        (formUpdate.spec as StackSpec | undefined)?.buildImageBindings ??
+        (formOriginal.spec as StackSpec | undefined)?.buildImageBindings ??
+        []
+      ).map((binding) => binding.serviceName),
+    [formOriginal.spec, formUpdate.spec],
+  );
+  const canMoveDraftPlatform =
+    mode === 'add' || (stackView?.status === StackReleaseStatus.Created && !stackView.source);
   const currentGitRepoId = (update as any)?.spec?.gitRepoId ?? (original.spec as any)?.gitRepoId ?? null;
   const currentGitBranch = (update as any)?.spec?.branch ?? (original.spec as any)?.branch ?? null;
   const currentPinnedCommit = (update as any)?.spec?.commitSha ?? (original.spec as any)?.commitSha ?? null;
@@ -845,8 +923,18 @@ export const StackForm = ({
   });
   const effectiveResourceBindings = resourceBindingLookupData?.data ?? EMPTY_RESOURCE_BINDING_LOOKUP;
   const effectiveConfigurationNames = useMemo(
-    () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
-    [effectiveResourceBindings],
+    () =>
+      [
+        ...new Set([
+          ...effectiveResourceBindings.map((entry) => entry.name),
+          ...(importSensitiveEnvironmentAsSecrets ? (importValidation?.importableSensitiveEnvironmentNames ?? []) : []),
+        ]),
+      ].sort(),
+    [
+      effectiveResourceBindings,
+      importSensitiveEnvironmentAsSecrets,
+      importValidation?.importableSensitiveEnvironmentNames,
+    ],
   );
   const licensedUpdateBehaviors = useMemo(
     () => ({
@@ -904,8 +992,10 @@ export const StackForm = ({
 
   const setFormUpdate = useCallback(
     (value: Parameters<typeof setUpdate>[0]) => {
+      setSwarmPreflight(null);
       setUpdate((previous) => {
-        const next = typeof value === 'function' ? value(previous) : value;
+        const changed = typeof value === 'function' ? value(previous) : value;
+        const next = importedPlatformId ? { ...changed, platformId: importedPlatformId } : changed;
         if (!isComposeImport || !importProject) return next;
 
         const source = (next as Partial<CreateStackInput>).stackSource;
@@ -925,7 +1015,7 @@ export const StackForm = ({
         };
       });
     },
-    [importProject, isComposeImport],
+    [importProject, isComposeImport, importedPlatformId],
   );
 
   const refreshData = useCallback(() => {
@@ -945,20 +1035,30 @@ export const StackForm = ({
     basePath: 'stacks',
     entityName: 'Stack',
     onCreate: (payload) => {
+      const createPayload = payload as CreateStackInput;
+      const normalizedPayload = {
+        ...createPayload,
+        spec: normalizeStackSpec(createPayload.spec, createPayload.stackSource),
+      };
+
       if (isComposeImport && importDraft && importPlatform && importProject) {
-        const createPayload = payload as CreateStackInput;
         const previewFingerprint = validatedImportFingerprintRef.current;
         if (!previewFingerprint) {
           return Promise.reject(new Error('Validate the Compose source before importing it.'));
         }
 
         const importPayload: ImportComposeProjectInput = {
-          name: createPayload.name,
-          description: createPayload.description,
-          stackSource: createPayload.stackSource,
-          spec: createPayload.spec,
+          name: normalizedPayload.name,
+          description: normalizedPayload.description,
+          stackSource: normalizedPayload.stackSource,
+          spec: normalizedPayload.spec,
           previewFingerprint,
-          tagIds: createPayload.tagIds,
+          tagIds: normalizedPayload.tagIds,
+          importKind: importDraft.importKind,
+          importSensitiveEnvironmentAsSecrets:
+            !isNativeSwarmImport &&
+            canImportSensitiveEnvironmentValuesRef.current &&
+            importSensitiveEnvironmentAsSecretsRef.current,
         };
         return importComposeProject({
           platformId: importPlatform,
@@ -967,7 +1067,7 @@ export const StackForm = ({
         });
       }
 
-      return createStack({ data: payload as CreateStackInput });
+      return createStack({ data: normalizedPayload });
     },
     onUpdate: () =>
       updateStack({
@@ -995,10 +1095,12 @@ export const StackForm = ({
           name: createPayload.name,
           stackSource: createPayload.stackSource,
           spec: createPayload.spec,
+          importKind: importDraft?.importKind,
         },
       });
       const validation = response.data;
       setImportValidation(validation);
+      canImportSensitiveEnvironmentValuesRef.current = validation.canImportSensitiveEnvironmentValues;
       validatedImportFingerprintRef.current = null;
       if (validation.issues.some((issue) => issue.severity === AdoptionIssueSeverity.Blocker)) {
         toast.error('The selected source does not match the running Compose project.');
@@ -1011,7 +1113,51 @@ export const StackForm = ({
         setImportConfirmationOpen(true);
       });
     },
-    [importPlatform, importProject, validateComposeProjectImportDraft],
+    [importDraft?.importKind, importPlatform, importProject, validateComposeProjectImportDraft],
+  );
+
+  const confirmSave = useCallback(
+    async (payload: StackInput) => {
+      if (isComposeImport) return confirmComposeImport(payload);
+
+      const platformType =
+        stackPlatforms.find((platform) => platform.id === payload.platformId)?.type ?? lockedPlatformType;
+      if (platformType !== PlatformType.DockerSwarm) {
+        setSwarmPreflight(null);
+        return true;
+      }
+
+      if (swarmPreflight?.isCompatible && swarmPreflight.issues.length > 0) return true;
+
+      const response = await preflightSwarmStack({
+        data: {
+          name: 'name' in payload ? payload.name : original.name,
+          platformId: payload.platformId,
+          stackSource: 'stackSource' in payload ? payload.stackSource : original.stackSource,
+          spec: normalizeStackSpec(payload.spec, 'stackSource' in payload ? payload.stackSource : original.stackSource),
+          driftPolicy: payload.driftPolicy,
+        },
+      });
+      setSwarmPreflight(response.data);
+      if (!response.data.isCompatible) {
+        toast.error('Resolve the Swarm compatibility errors before saving.');
+      } else if (response.data.issues.length > 0) {
+        toast.warning('Review the Swarm portability warnings, then save again to continue.');
+        return false;
+      }
+
+      return response.data.isCompatible;
+    },
+    [
+      confirmComposeImport,
+      isComposeImport,
+      lockedPlatformType,
+      original.name,
+      original.stackSource,
+      preflightSwarmStack,
+      stackPlatforms,
+      swarmPreflight,
+    ],
   );
 
   const patchDriftPolicy = useCallback(
@@ -1070,19 +1216,45 @@ export const StackForm = ({
             key: 'platformId',
             label: 'Platform',
             required: true,
-            disabled: !!id || isComposeImport,
-            description: id
-              ? 'The platform cannot be changed after the stack is created.'
-              : 'Select the platform to deploy on.',
+            disabled: !canMoveDraftPlatform || isComposeImport,
+            description: !canMoveDraftPlatform
+              ? 'Applied Stacks cannot move platforms in this release.'
+              : lockedPlatformType
+                ? `Select another ${lockedPlatformType === PlatformType.DockerSwarm ? 'Docker Swarm' : 'Docker Standalone'} platform.`
+                : 'Select a Docker Standalone or Docker Swarm platform. The selected type is locked after creation.',
             render: (value, set) => {
               return (
-                <ResourceSelectorField
+                <ResourceSelectorField<PlatformView>
                   sourceType={LookupResourceType.Stack}
                   targetType={LookupResourceType.Platform}
-                  sourceResourceId={id}
-                  selected={value}
-                  onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
+                  selected={importedPlatformSelection ?? value}
+                  items={selectablePlatforms}
+                  renderItem={(platform) => (
+                    <span className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="truncate">{platform.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {platform.type === PlatformType.DockerSwarm ? 'Swarm' : 'Standalone'}
+                      </span>
+                    </span>
+                  )}
+                  onSelect={(platform) =>
+                    set((previous) => ({
+                      platformId: platform?.id,
+                      ...(platform?.type === PlatformType.DockerSwarm
+                        ? {
+                            driftPolicy: DEFAULT_DRIFT_POLICY,
+                            spec: {
+                              ...previous.spec,
+                              destroyBeforeDeploy: false,
+                              preDeploy: null,
+                              postDeploy: null,
+                            } as StackSpec,
+                          }
+                        : {}),
+                    }))
+                  }
                   placeholder="Select Platform"
+                  allowClear={false}
                 />
               );
             },
@@ -1100,7 +1272,12 @@ export const StackForm = ({
                   collection={stack_source}
                   value={val}
                   disabled={disabled || !!currentStackSource}
-                  onChange={(v: StackSource) => set({ stackSource: v })}
+                  onChange={(v: StackSource) =>
+                    set((previous) => ({
+                      stackSource: v,
+                      spec: normalizeStackSpec((previous.spec ?? {}) as StackSpec, v),
+                    }))
+                  }
                 />
               );
             },
@@ -1346,12 +1523,17 @@ export const StackForm = ({
                         render: (value, set) => (
                           <MonacoEditor
                             language="yaml"
-                            filename="compose.yaml"
+                            filename={isSwarmStack ? 'swarm-compose.yaml' : 'compose.yaml'}
                             value={value ?? DEFAULT_STACK_FILE_CONTENTS}
-                            diagnostics={getComposeVariableDiagnostics(
-                              value ?? DEFAULT_STACK_FILE_CONTENTS,
-                              effectiveConfigurationNames,
-                            )}
+                            diagnostics={[
+                              ...getComposeVariableDiagnostics(
+                                value ?? DEFAULT_STACK_FILE_CONTENTS,
+                                effectiveConfigurationNames,
+                              ),
+                              ...(isSwarmStack
+                                ? getSwarmComposeDiagnostics(value ?? DEFAULT_STACK_FILE_CONTENTS, boundBuildServices)
+                                : []),
+                            ]}
                             completionItems={effectiveConfigurationNames}
                             completionItemDetail="Citadel variable or secret"
                             completionMode="variable"
@@ -1600,244 +1782,253 @@ export const StackForm = ({
                       }),
                     ]
                   : []),
-                defineGroupField<StackInput>({
-                  id: 'drift_policy',
-                  label: 'Drift Management',
-                  title: 'Drift Management',
-                  description: isComposeImport
-                    ? 'Disabled during import. Edit the stack after importing it to configure drift management.'
-                    : 'Detect runtime differences between the compose file and the containers currently running on the platform.',
-                  items: [
-                    defineField({
-                      key: 'driftPolicy.mode',
-                      label: 'Mode',
-                      description: 'Choose how this stack handles drift checks.',
-                      disabled: isComposeImport,
-                      render: (value, set) => (
-                        <ItemSelector
-                          collection={licensedDriftModes}
-                          value={value ?? StackDriftMode.Disabled}
-                          disabled={disabled}
-                          onChange={(mode: StackDriftMode) =>
-                            set((prev) => patchDriftPolicy(prev, getDriftModePreset(mode)))
-                          }
-                        />
-                      ),
-                    }),
-                    ...(currentDriftPolicy.mode !== StackDriftMode.Disabled
-                      ? [
-                          defineField<StackInput, 'driftPolicy.alertOnDrift'>({
-                            key: 'driftPolicy.alertOnDrift',
-                            label: 'Alert On Drift',
-                            description: 'Emit a StackDriftDetected alert when drift is detected.',
+                ...(!isSwarmStack
+                  ? [
+                      defineGroupField<StackInput>({
+                        id: 'drift_policy',
+                        label: 'Drift Management',
+                        title: 'Drift Management',
+                        description: isComposeImport
+                          ? 'Disabled during import. Edit the stack after importing it to configure drift management.'
+                          : 'Detect runtime differences between the compose file and the containers currently running on the platform.',
+                        items: [
+                          defineField({
+                            key: 'driftPolicy.mode',
+                            label: 'Mode',
+                            description: 'Choose how this stack handles drift checks.',
+                            disabled: isComposeImport,
                             render: (value, set) => (
-                              <FieldSwitch
-                                id="stack-drift-alert-on-drift"
-                                checked={value ?? currentDriftPolicy.alertOnDrift}
+                              <ItemSelector
+                                collection={licensedDriftModes}
+                                value={value ?? StackDriftMode.Disabled}
                                 disabled={disabled}
-                                onChange={(alertOnDrift) => set((prev) => patchDriftPolicy(prev, { alertOnDrift }))}
-                              />
-                            ),
-                          }),
-                          defineField<StackInput, 'driftPolicy.markDegraded'>({
-                            key: 'driftPolicy.markDegraded',
-                            label: 'Mark Degraded',
-                            description: 'Mark the stack degraded and record an activity event when drift is detected.',
-                            render: (value, set) => (
-                              <FieldSwitch
-                                id="stack-drift-mark-degraded"
-                                checked={value ?? currentDriftPolicy.markDegraded}
-                                disabled={disabled}
-                                onChange={(markDegraded) => set((prev) => patchDriftPolicy(prev, { markDegraded }))}
-                              />
-                            ),
-                          }),
-                        ]
-                      : []),
-                    ...(currentDriftPolicy.mode === StackDriftMode.AutoFix
-                      ? [
-                          defineField<StackInput, 'driftPolicy.autoStartStoppedContainers'>({
-                            key: 'driftPolicy.autoStartStoppedContainers',
-                            label: 'Auto Start Stopped Containers',
-                            description:
-                              'When auto-fix is enabled, start containers that belong to this stack but are stopped.',
-                            render: (value, set) => (
-                              <FieldSwitch
-                                id="stack-drift-auto-start"
-                                checked={value ?? currentDriftPolicy.autoStartStoppedContainers}
-                                disabled={disabled}
-                                onChange={(autoStartStoppedContainers) =>
-                                  set((prev) => patchDriftPolicy(prev, { autoStartStoppedContainers }))
+                                onChange={(mode: StackDriftMode) =>
+                                  set((prev) => patchDriftPolicy(prev, getDriftModePreset(mode)))
                                 }
                               />
                             ),
                           }),
-                          defineField<StackInput, 'driftPolicy.autoResumePausedContainers'>({
-                            key: 'driftPolicy.autoResumePausedContainers',
-                            label: 'Auto Resume Paused Containers',
-                            description:
-                              'When auto-fix is enabled, resume containers that belong to this stack but are paused.',
+                          ...(currentDriftPolicy.mode !== StackDriftMode.Disabled
+                            ? [
+                                defineField<StackInput, 'driftPolicy.alertOnDrift'>({
+                                  key: 'driftPolicy.alertOnDrift',
+                                  label: 'Alert On Drift',
+                                  description: 'Emit a StackDriftDetected alert when drift is detected.',
+                                  render: (value, set) => (
+                                    <FieldSwitch
+                                      id="stack-drift-alert-on-drift"
+                                      checked={value ?? currentDriftPolicy.alertOnDrift}
+                                      disabled={disabled}
+                                      onChange={(alertOnDrift) =>
+                                        set((prev) => patchDriftPolicy(prev, { alertOnDrift }))
+                                      }
+                                    />
+                                  ),
+                                }),
+                                defineField<StackInput, 'driftPolicy.markDegraded'>({
+                                  key: 'driftPolicy.markDegraded',
+                                  label: 'Mark Degraded',
+                                  description:
+                                    'Mark the stack degraded and record an activity event when drift is detected.',
+                                  render: (value, set) => (
+                                    <FieldSwitch
+                                      id="stack-drift-mark-degraded"
+                                      checked={value ?? currentDriftPolicy.markDegraded}
+                                      disabled={disabled}
+                                      onChange={(markDegraded) =>
+                                        set((prev) => patchDriftPolicy(prev, { markDegraded }))
+                                      }
+                                    />
+                                  ),
+                                }),
+                              ]
+                            : []),
+                          ...(currentDriftPolicy.mode === StackDriftMode.AutoFix
+                            ? [
+                                defineField<StackInput, 'driftPolicy.autoStartStoppedContainers'>({
+                                  key: 'driftPolicy.autoStartStoppedContainers',
+                                  label: 'Auto Start Stopped Containers',
+                                  description:
+                                    'When auto-fix is enabled, start containers that belong to this stack but are stopped.',
+                                  render: (value, set) => (
+                                    <FieldSwitch
+                                      id="stack-drift-auto-start"
+                                      checked={value ?? currentDriftPolicy.autoStartStoppedContainers}
+                                      disabled={disabled}
+                                      onChange={(autoStartStoppedContainers) =>
+                                        set((prev) => patchDriftPolicy(prev, { autoStartStoppedContainers }))
+                                      }
+                                    />
+                                  ),
+                                }),
+                                defineField<StackInput, 'driftPolicy.autoResumePausedContainers'>({
+                                  key: 'driftPolicy.autoResumePausedContainers',
+                                  label: 'Auto Resume Paused Containers',
+                                  description:
+                                    'When auto-fix is enabled, resume containers that belong to this stack but are paused.',
+                                  render: (value, set) => (
+                                    <FieldSwitch
+                                      id="stack-drift-auto-resume"
+                                      checked={value ?? currentDriftPolicy.autoResumePausedContainers}
+                                      disabled={disabled}
+                                      onChange={(autoResumePausedContainers) =>
+                                        set((prev) => patchDriftPolicy(prev, { autoResumePausedContainers }))
+                                      }
+                                    />
+                                  ),
+                                }),
+                                defineField<StackInput, 'driftPolicy.removeExtraContainers'>({
+                                  key: 'driftPolicy.removeExtraContainers',
+                                  label: 'Remove Extra Containers',
+                                  description:
+                                    'Reserved for destructive cleanup. It stays off unless explicitly enabled for auto-fix.',
+                                  render: (value, set) => (
+                                    <FieldSwitch
+                                      id="stack-drift-remove-extra"
+                                      checked={value ?? currentDriftPolicy.removeExtraContainers}
+                                      disabled={disabled}
+                                      onChange={(removeExtraContainers) =>
+                                        set((prev) => patchDriftPolicy(prev, { removeExtraContainers }))
+                                      }
+                                    />
+                                  ),
+                                }),
+                              ]
+                            : []),
+                        ],
+                      }),
+                      defineGroupField<StackInput>({
+                        id: 'spec.preDeploy',
+                        label: 'Pre Deploy',
+                        title: 'Pre Deploy',
+                        description:
+                          "Execute a shell command before running docker compose up. The 'path' is relative to the Run Directory",
+                        items: [
+                          defineField({
+                            key: 'spec.preDeploy.path',
+                            label: 'Path',
+                            render: (val, set) => (
+                              <FieldInput
+                                value={val}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      preDeploy: {
+                                        ...(prev.spec?.preDeploy ?? {}),
+                                        path: v,
+                                        commands: prev.spec?.preDeploy?.commands ?? [],
+                                      },
+                                    },
+                                  }))
+                                }
+                                placeholder="Command working directory"
+                              />
+                            ),
+                          }),
+                          defineField({
+                            key: 'spec.preDeploy.commands',
+                            label: 'Commands',
+                            required: false,
                             render: (value, set) => (
-                              <FieldSwitch
-                                id="stack-drift-auto-resume"
-                                checked={value ?? currentDriftPolicy.autoResumePausedContainers}
-                                disabled={disabled}
-                                onChange={(autoResumePausedContainers) =>
-                                  set((prev) => patchDriftPolicy(prev, { autoResumePausedContainers }))
+                              <MonacoToArrayEditor
+                                value={value}
+                                helperText="# Add multiple commands on new lines"
+                                language="string_list"
+                                onChange={(v: string[] | undefined) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      preDeploy: {
+                                        ...(prev.spec?.preDeploy ?? {}),
+                                        commands: v ?? [],
+                                      },
+                                    },
+                                  }))
                                 }
                               />
                             ),
                           }),
-                          defineField<StackInput, 'driftPolicy.removeExtraContainers'>({
-                            key: 'driftPolicy.removeExtraContainers',
-                            label: 'Remove Extra Containers',
-                            description:
-                              'Reserved for destructive cleanup. It stays off unless explicitly enabled for auto-fix.',
+                        ],
+                      }),
+                      defineGroupField<StackInput>({
+                        id: 'spec.postDeploy',
+                        label: 'Post Deploy',
+                        title: 'Post Deploy',
+                        description:
+                          "Execute a shell command after running docker compose up. The 'path' is relative to the Run Directory",
+                        items: [
+                          defineField({
+                            key: 'spec.postDeploy.path',
+                            label: 'Path',
+                            render: (val, set) => (
+                              <FieldInput
+                                value={val}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      postDeploy: {
+                                        ...(prev.spec?.postDeploy ?? {}),
+                                        path: v,
+                                        commands: prev.spec?.postDeploy?.commands ?? [],
+                                      },
+                                    },
+                                  }))
+                                }
+                                placeholder="Command working directory"
+                              />
+                            ),
+                          }),
+                          defineField({
+                            key: 'spec.postDeploy.commands',
+                            label: 'Commands',
+                            required: false,
                             render: (value, set) => (
-                              <FieldSwitch
-                                id="stack-drift-remove-extra"
-                                checked={value ?? currentDriftPolicy.removeExtraContainers}
-                                disabled={disabled}
-                                onChange={(removeExtraContainers) =>
-                                  set((prev) => patchDriftPolicy(prev, { removeExtraContainers }))
+                              <MonacoToArrayEditor
+                                value={value}
+                                helperText="# Add multiple commands on new lines"
+                                language="string_list"
+                                onChange={(v: string[] | undefined) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      postDeploy: {
+                                        ...(prev.spec?.postDeploy ?? {}),
+                                        commands: v ?? [],
+                                      },
+                                    },
+                                  }))
                                 }
                               />
                             ),
                           }),
-                        ]
-                      : []),
-                  ],
-                }),
-                defineGroupField<StackInput>({
-                  id: 'spec.preDeploy',
-                  label: 'Pre Deploy',
-                  title: 'Pre Deploy',
-                  description:
-                    "Execute a shell command before running docker compose up. The 'path' is relative to the Run Directory",
-                  items: [
-                    defineField({
-                      key: 'spec.preDeploy.path',
-                      label: 'Path',
-                      render: (val, set) => (
-                        <FieldInput
-                          value={val}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                preDeploy: {
-                                  ...(prev.spec?.preDeploy ?? {}),
-                                  path: v,
-                                  commands: prev.spec?.preDeploy?.commands ?? [],
-                                },
-                              },
-                            }))
-                          }
-                          placeholder="Command working directory"
-                        />
-                      ),
-                    }),
-                    defineField({
-                      key: 'spec.preDeploy.commands',
-                      label: 'Commands',
-                      required: false,
-                      render: (value, set) => (
-                        <MonacoToArrayEditor
-                          value={value}
-                          helperText="# Add multiple commands on new lines"
-                          language="string_list"
-                          onChange={(v: string[] | undefined) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                preDeploy: {
-                                  ...(prev.spec?.preDeploy ?? {}),
-                                  commands: v ?? [],
-                                },
-                              },
-                            }))
-                          }
-                        />
-                      ),
-                    }),
-                  ],
-                }),
-                defineGroupField<StackInput>({
-                  id: 'spec.postDeploy',
-                  label: 'Post Deploy',
-                  title: 'Post Deploy',
-                  description:
-                    "Execute a shell command after running docker compose up. The 'path' is relative to the Run Directory",
-                  items: [
-                    defineField({
-                      key: 'spec.postDeploy.path',
-                      label: 'Path',
-                      render: (val, set) => (
-                        <FieldInput
-                          value={val}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                postDeploy: {
-                                  ...(prev.spec?.postDeploy ?? {}),
-                                  path: v,
-                                  commands: prev.spec?.postDeploy?.commands ?? [],
-                                },
-                              },
-                            }))
-                          }
-                          placeholder="Command working directory"
-                        />
-                      ),
-                    }),
-                    defineField({
-                      key: 'spec.postDeploy.commands',
-                      label: 'Commands',
-                      required: false,
-                      render: (value, set) => (
-                        <MonacoToArrayEditor
-                          value={value}
-                          helperText="# Add multiple commands on new lines"
-                          language="string_list"
-                          onChange={(v: string[] | undefined) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                postDeploy: {
-                                  ...(prev.spec?.postDeploy ?? {}),
-                                  commands: v ?? [],
-                                },
-                              },
-                            }))
-                          }
-                        />
-                      ),
-                    }),
-                  ],
-                }),
+                        ],
+                      }),
 
-                defineField({
-                  key: 'spec.destroyBeforeDeploy',
-                  label: 'Destroy',
-                  description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
-                  required: false,
-                  disabled: isComposeImport,
-                  render: (value, set) => (
-                    <FieldSwitch
-                      checked={value ?? true}
-                      id="spec.destroyBeforeDeploy"
-                      onChange={(value) =>
-                        set((prev) => ({
-                          spec: {
-                            ...prev.spec!,
-                            destroyBeforeDeploy: value,
-                          },
-                        }))
-                      }
-                    />
-                  ),
-                }),
+                      defineField({
+                        key: 'spec.destroyBeforeDeploy',
+                        label: 'Destroy',
+                        description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
+                        required: false,
+                        disabled: isComposeImport,
+                        render: (value, set) => (
+                          <FieldSwitch
+                            checked={value ?? true}
+                            id="spec.destroyBeforeDeploy"
+                            onChange={(value) =>
+                              set((prev) => ({
+                                spec: {
+                                  ...prev.spec!,
+                                  destroyBeforeDeploy: value,
+                                },
+                              }))
+                            }
+                          />
+                        ),
+                      }),
+                    ]
+                  : []),
               ],
             }),
           }
@@ -1872,7 +2063,13 @@ export const StackForm = ({
       selectedBranchRef?.resolvedCommitSha,
       stackView?.source?.resolvedCommitSha,
       effectiveConfigurationNames,
+      boundBuildServices,
       isComposeImport,
+      isSwarmStack,
+      canMoveDraftPlatform,
+      lockedPlatformType,
+      selectablePlatforms,
+      importedPlatformSelection,
     ],
   );
 
@@ -1891,11 +2088,41 @@ export const StackForm = ({
       {isComposeImport && (
         <AlertMessage
           type="info"
-          title={isImportDraftLoading ? 'Inspecting Compose project' : 'Import Compose project'}>
-          Select the Web Editor or Git source that defines this project. Citadel will compare it with the running
-          services, then attach the containers without applying or restarting them. Drift management can be configured
-          after the import.
+          title={
+            isImportDraftLoading
+              ? importKind === StackImportKind.SwarmStack
+                ? 'Inspecting Docker Stack'
+                : 'Inspecting Compose project'
+              : isNativeSwarmImport
+                ? 'Import Docker Stack'
+                : 'Import Compose project'
+          }>
+          Select the Web Editor or Git source that defines this {isNativeSwarmImport ? 'Docker Stack' : 'project'}.
+          Citadel will compare it with the running services, then associate the existing runtime without applying or
+          restarting it.{' '}
+          {!isNativeSwarmImport && isSwarmStack && 'The first Apply will convert it to a native Docker Swarm Stack.'}
         </AlertMessage>
+      )}
+      {isComposeImport && importDraft && !isNativeSwarmImport && (
+        <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-3">
+          <div className="flex min-w-0 gap-3">
+            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Import detected values as Citadel secrets</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {importValidation?.canImportSensitiveEnvironmentValues
+                  ? `Encrypt and bind ${importValidation.importableSensitiveEnvironmentNames.join(', ')} to this Stack.`
+                  : 'Encrypt and bind matching sensitive values referenced by the reviewed Compose source.'}{' '}
+                The values never leave the server.
+              </div>
+            </div>
+          </div>
+          <Switch
+            checked={importSensitiveEnvironmentAsSecrets}
+            onCheckedChange={updateSensitiveEnvironmentImport}
+            aria-label="Import detected values as Citadel secrets"
+          />
+        </div>
       )}
       {importIssues.map((issue) => (
         <AlertMessage
@@ -1915,6 +2142,26 @@ export const StackForm = ({
           of {importDraft?.source.services.length ?? 0} running services match the selected source.
         </AlertMessage>
       )}
+      {isSwarmStack && !isComposeImport && (
+        <AlertMessage type="info" title="Docker Swarm Stack">
+          Saving validates this Stack for Docker Swarm. Select Apply after saving to deploy it to the cluster.
+        </AlertMessage>
+      )}
+      {swarmPreflight?.issues.map((issue) => (
+        <AlertMessage
+          key={`${issue.code}:${issue.fieldPath ?? ''}`}
+          type={issue.severity === SwarmStackCompatibilitySeverity.Error ? 'error' : 'warning'}
+          title={
+            issue.severity === SwarmStackCompatibilitySeverity.Error ? 'Compatibility error' : 'Portability warning'
+          }>
+          {issue.message}
+        </AlertMessage>
+      ))}
+      {swarmPreflight?.isCompatible && swarmPreflight.issues.length === 0 && (
+        <AlertMessage type="success" title="Swarm compatible">
+          No compatibility issues were found.
+        </AlertMessage>
+      )}
       <FormShell
         mode={mode}
         schema={schema}
@@ -1922,14 +2169,14 @@ export const StackForm = ({
         update={formUpdate}
         setUpdate={setFormUpdate}
         onSave={handleSave}
-        pending={isPending}
+        pending={isPending || isSwarmPreflightPending}
         disabled={disabled}
         saveDisabled={
           isComposeImport &&
           (isImportDraftLoading || isImportValidationPending || !importDraft || hasRuntimeImportBlocker)
         }
-        saveLabel={isComposeImport ? 'Import Project' : 'Save'}
-        confirmSave={isComposeImport ? confirmComposeImport : undefined}
+        saveLabel={isComposeImport ? (isNativeSwarmImport ? 'Import Stack' : 'Import Project') : 'Save'}
+        confirmSave={isComposeImport || isSwarmStack ? confirmSave : undefined}
         draftKey={formDraftKey}
         draftVersion={1}
       />
@@ -1944,9 +2191,13 @@ export const StackForm = ({
         onClick={() => resolveImportConfirmation(true)}
         description={
           <>
-            Citadel will start managing all current project containers as one stack. Docker will not be changed now.
-            Future Apply operations will use the reviewed{' '}
+            Citadel will start managing the existing{' '}
+            {isNativeSwarmImport ? 'Docker Stack Services' : 'project containers'} as one Stack. Docker will not be
+            changed now. Future Apply operations will use the reviewed{' '}
             {currentStackSource === StackSource.Git ? 'Git' : 'Web Editor'} source.
+            {!isNativeSwarmImport && isSwarmStack
+              ? ' On first Apply, Citadel will stop the Compose project without deleting its volumes and deploy it through Docker Swarm.'
+              : ''}
           </>
         }
       />

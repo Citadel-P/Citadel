@@ -64,6 +64,7 @@ public sealed record StackView(
     Guid CreatedByActorId,
     ResourceControlState ControlState,
     Guid CurrentStackReleaseId,
+    PlatformType PlatformType,
     Guid? PlatformId = null,
     string? Version = null,
     StackSpec? Spec = null,
@@ -87,6 +88,8 @@ public sealed record StackView(
         ControlState: stack.ControlState,
         CurrentStackReleaseId: stack.CurrentStackReleaseId,
         PlatformId: stack.CurrentStackRelease?.PlatformId,
+        PlatformType: stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type
+            ?? throw new InvalidDataException($"Stack {stack.Id} has no platform configuration."),
         Status: stack.CurrentStackRelease?.Status != null ? stack.CurrentStackRelease.Status : StackReleaseStatus.Unknown,
         Version: stack.CurrentStackRelease?.Version,
         Spec: stack.CurrentStackRelease?.Spec,
@@ -111,6 +114,7 @@ public sealed record StackConfigView(
     Guid Id,
     string Name,
     Guid PlatformId,
+    PlatformType PlatformType,
     string? Description,
     StackSource StackSource,
     StackSpec Spec,
@@ -121,6 +125,8 @@ public sealed record StackConfigView(
         Id: stack.Id,
         Name: stack.Name,
         PlatformId: stack.CurrentStackRelease?.PlatformId ?? Guid.Empty,
+        PlatformType: stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type
+            ?? throw new InvalidDataException($"Stack {stack.Id} has no platform configuration."),
         Description: stack.Description,
         StackSource: stack.StackSource,
         Spec: stack.CurrentStackRelease?.Spec!,

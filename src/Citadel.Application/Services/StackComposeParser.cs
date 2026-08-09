@@ -3,7 +3,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Application.Services;
 
-internal static class StackComposeParser
+internal static partial class StackComposeParser
 {
     public static IReadOnlyDictionary<string, StackComposeService> ParseServices(
         Guid stackId,
@@ -45,6 +45,112 @@ internal static class StackComposeParser
         }
 
         return services;
+    }
+
+    public static IReadOnlyList<StackComposeEnvironmentBindingReference> ParseEnvironmentBindingReferences(
+        IReadOnlyList<string> composeFiles)
+    {
+        var references = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var composeFile in composeFiles)
+        {
+            if (string.IsNullOrWhiteSpace(composeFile))
+                continue;
+
+            using var reader = new StringReader(composeFile);
+            var yaml = new YamlStream();
+            yaml.Load(reader);
+
+            if (yaml.Documents.Count == 0
+                || yaml.Documents[0].RootNode is not YamlMappingNode root
+                || !TryGetMapping(root, "services", out var servicesNode))
+            {
+                continue;
+            }
+
+            foreach (var (serviceKeyNode, serviceValueNode) in servicesNode.Children)
+            {
+                if (serviceKeyNode is not YamlScalarNode { Value: { Length: > 0 } serviceName }
+                    || serviceValueNode is not YamlMappingNode serviceNode)
+                {
+                    continue;
+                }
+
+                if (!references.TryGetValue(serviceName, out var serviceReferences))
+                {
+                    serviceReferences = new Dictionary<string, string>(StringComparer.Ordinal);
+                    references[serviceName] = serviceReferences;
+                }
+
+                if (TryGetMapping(serviceNode, "environment", out var environmentMapping))
+                {
+                    foreach (var (environmentKeyNode, environmentValueNode) in environmentMapping.Children)
+                    {
+                        if (environmentKeyNode is not YamlScalarNode { Value: { Length: > 0 } environmentName })
+                            continue;
+
+                        var value = (environmentValueNode as YamlScalarNode)?.Value;
+                        SetEnvironmentBindingReference(serviceReferences, environmentName, value);
+                    }
+                }
+                else if (TryGetSequence(serviceNode, "environment", out var environmentSequence))
+                {
+                    foreach (var item in environmentSequence.Children.OfType<YamlScalarNode>())
+                    {
+                        var entry = item.Value;
+                        if (string.IsNullOrWhiteSpace(entry))
+                            continue;
+
+                        var separator = entry.IndexOf('=');
+                        var environmentName = (separator < 0 ? entry : entry[..separator]).Trim();
+                        if (environmentName.Length == 0)
+                            continue;
+
+                        SetEnvironmentBindingReference(
+                            serviceReferences,
+                            environmentName,
+                            separator < 0 ? null : entry[(separator + 1)..]);
+                    }
+                }
+            }
+        }
+
+        return references
+            .SelectMany(service => service.Value.Select(environment =>
+                new StackComposeEnvironmentBindingReference(service.Key, environment.Key, environment.Value)))
+            .OrderBy(reference => reference.ServiceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(reference => reference.EnvironmentName, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void SetEnvironmentBindingReference(
+        IDictionary<string, string> references,
+        string environmentName,
+        string? value)
+    {
+        if (TryGetExactBindingName(value, out var bindingName))
+            references[environmentName] = bindingName;
+        else
+            references.Remove(environmentName);
+    }
+
+    private static bool TryGetExactBindingName(string? value, out string bindingName)
+    {
+        bindingName = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var expression = value.Trim();
+        if (expression.Length >= 4 && expression.StartsWith("${", StringComparison.Ordinal) && expression[^1] == '}')
+            bindingName = expression[2..^1];
+        else if (expression.Length >= 2 && expression[0] == '$')
+            bindingName = expression[1..];
+        else
+            return false;
+
+        return bindingName.Length is > 0 and <= 128
+               && (char.IsAsciiLetter(bindingName[0]) || bindingName[0] == '_')
+               && bindingName.Skip(1).All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
     }
 
     public static StackComposeVolumeResolution ParseVolumes(string composeFile)
@@ -336,6 +442,11 @@ internal sealed record StackComposeService(
     string ServiceName,
     string? Image,
     string? ExpectedConfigHash);
+
+internal sealed record StackComposeEnvironmentBindingReference(
+    string ServiceName,
+    string EnvironmentName,
+    string BindingName);
 
 internal sealed record StackComposeVolumeResolution(
     IReadOnlyList<StackComposeDeclaredVolume> DeclaredVolumes,

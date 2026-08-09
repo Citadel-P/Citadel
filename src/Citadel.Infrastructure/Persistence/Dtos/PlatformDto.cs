@@ -16,6 +16,7 @@ internal record PlatformDto(
     string? AgentVersion,
     string? Description,
     string? ClusterId = null,
+    bool PruneHistoricalSwarmTaskContainers = true,
     long DeploymentCount = 0,
     long StackCount = 0,
     long DeploymentHealthyCount = 0,

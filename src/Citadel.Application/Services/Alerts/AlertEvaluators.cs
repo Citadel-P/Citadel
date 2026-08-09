@@ -266,6 +266,36 @@ public sealed class DeploymentAutoUpdatedEvaluator : IAlertEvaluator
 
 #endregion
 
+#region Swarm Service
+
+[AlertEvaluator(AlertType.SwarmServiceOperationFailed)]
+public sealed class SwarmServiceOperationFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.SwarmServiceOperationFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.SwarmServiceOperationFailures is null)
+            yield break;
+
+        foreach (var failure in context.SwarmServiceOperationFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.SwarmService,
+                new SwarmServiceOperationFailedAlertInfo(
+                    failure.Name,
+                    failure.OperationId,
+                    failure.OperationKind,
+                    failure.Reason),
+                DeduplicationComponent: failure.OperationId.ToString("N"));
+        }
+    }
+}
+
+#endregion
+
 #region Stack
 [AlertEvaluator(AlertType.StackAutoDeployFailed)]
 public sealed class StackDeployFailedEvaluator : IAlertEvaluator

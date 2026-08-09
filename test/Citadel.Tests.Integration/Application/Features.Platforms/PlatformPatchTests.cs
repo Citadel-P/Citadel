@@ -95,6 +95,48 @@ public class PlatformPatchTests(PostgresTestFixture fixture) : IntegrationTestBa
     }
 
     [Fact]
+    public async Task Patch_Platform_ShouldPersistHistoricalSwarmTaskPruningSetting()
+    {
+        platformFactoryMock
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(connector => connector.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
+        healthMonitorMock
+            .Setup(monitor => monitor.UntrackPlatform(
+                "https://original.address",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var content = new StringContent(
+            """
+            {
+              "pruneHistoricalSwarmTaskContainers": false
+            }
+            """,
+            Encoding.UTF8,
+            "application/merge-patch+json");
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/platforms/{platformId}",
+            content,
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+        Assert.NotNull(platform);
+        Assert.False(platform.PruneHistoricalSwarmTaskContainers);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"pruneHistoricalSwarmTaskContainers\":false", responseBody);
+    }
+
+    [Fact]
     public async Task Patch_Platform_Should_Return_Forbidden_If_User_Lacks_Permission()
     {
         // Arrange

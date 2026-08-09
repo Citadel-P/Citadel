@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Entities.Alerts;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 
 namespace Application.Services.Alerts;
 
@@ -19,7 +20,8 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<DeploymentConfigurationResolutionFailureAlertSnapshot>? DeploymentConfigurationFailures = null,
     IReadOnlyCollection<AutomationActionRunFailureAlertSnapshot>? AutomationActionRunFailures = null,
     IReadOnlyCollection<BuildRunFailureAlertSnapshot>? BuildRunFailures = null,
-    IReadOnlyCollection<LicenseAlertSnapshot>? Licenses = null);
+    IReadOnlyCollection<LicenseAlertSnapshot>? Licenses = null,
+    IReadOnlyCollection<SwarmServiceOperationFailureAlertSnapshot>? SwarmServiceOperationFailures = null);
 
 public sealed record AlertMatch(
     Guid ResourceId,
@@ -131,6 +133,13 @@ public sealed record BuildRunFailureAlertSnapshot(
     BuildRunStatus Status,
     int? ExitCode,
     long? DurationMs,
+    string Reason);
+
+public sealed record SwarmServiceOperationFailureAlertSnapshot(
+    Guid Id,
+    string Name,
+    Guid OperationId,
+    SwarmServiceOperationKind OperationKind,
     string Reason);
 
 public sealed record LicenseAlertSnapshot(

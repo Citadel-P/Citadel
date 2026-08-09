@@ -66,7 +66,7 @@ export const getContainerStates = (counts: ContainerWorkloadStatusCounts): Workl
   state('Paused', counts.paused, 'bg-amber-500'),
 ];
 
-export const getDeploymentStates = (counts?: PlatformWorkloadStatusCountsView | null): WorkloadState[] => [
+const getAvailabilityStates = (counts?: PlatformWorkloadStatusCountsView | null): WorkloadState[] => [
   state('Healthy', counts?.healthy, 'bg-emerald-500'),
   state('Degraded', counts?.degraded, 'bg-amber-500'),
   state('Failed', counts?.failed, 'bg-rose-500', false),
@@ -74,6 +74,9 @@ export const getDeploymentStates = (counts?: PlatformWorkloadStatusCountsView | 
   state('In progress', counts?.inProgress, 'bg-sky-500', false),
   state('Unknown', counts?.unknown, 'bg-muted-foreground', false),
 ];
+
+export const getDeploymentStates = getAvailabilityStates;
+export const getServiceStates = getAvailabilityStates;
 
 export const getStackStates = (counts?: PlatformWorkloadStatusCountsView | null): WorkloadState[] => [
   state('Healthy', counts?.healthy, 'bg-emerald-500'),

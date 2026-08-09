@@ -32,6 +32,7 @@ public sealed record PlatformView(
     IEnumerable<PlatformStatView>? Stats,
     PlatformDescriptor? PlatformDescriptor,
     string? ClusterId,
+    bool PruneHistoricalSwarmTaskContainers,
     IReadOnlyList<TagSummaryView> Tags = null!,
     PlatformCapabilities? Capabilities = null,
     SwarmCapabilities? SwarmCapabilities = null
@@ -128,6 +129,7 @@ internal static class PlatformMapperExtension
         AgentVersion: platform.AgentVersion,
         PlatformDescriptor: platform.PlatformDescriptor,
         ClusterId: platform.ClusterId,
+        PruneHistoricalSwarmTaskContainers: platform.PruneHistoricalSwarmTaskContainers,
         Stats: platform.Stats?.Select(Map)?.ToList(),
         Tags: [.. platform.Tags.Select(TagSummaryView.Map)]);
 

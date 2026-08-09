@@ -46,7 +46,7 @@ internal sealed class ContainerDestroyedWorkItem(
                 (deployment, activityEvent) = await UpdateDeploymentStatus(uow, existing.DeploymentId.Value, DeploymentStatus.Degraded, existing.DockerContainerId, cancellationToken);
             }
 
-            if (existing.StackId != null)
+            if (existing.StackId != null && !existing.IsSwarmTask)
             {
                 (stack, activityEvent) = await UpdateStackStatus(
                     uow,

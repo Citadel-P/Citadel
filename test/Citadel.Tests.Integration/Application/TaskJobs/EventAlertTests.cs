@@ -295,6 +295,52 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await _dbWorkQueue.WaitForIdleAfterAsync(checkpoint, cancellationToken);
     }
 
+    [Fact]
+    public async Task SwarmServiceOperationFailure_ShouldPersistServiceScopedAlert()
+    {
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+        var checkpoint = _dbWorkQueue.CreateCheckpoint();
+        var serviceId = Guid.CreateVersion7();
+        var operationId = Guid.CreateVersion7();
+        var alertService = Services.GetRequiredService<IAlertService>();
+
+        await alertService.ProcessAsync(
+            AlertType.SwarmServiceOperationFailed,
+            new AlertEvaluationContext(
+                DateTime.UtcNow,
+                [],
+                [],
+                [],
+                SwarmServiceOperationFailures:
+                [
+                    new SwarmServiceOperationFailureAlertSnapshot(
+                        serviceId,
+                        "redis",
+                        operationId,
+                        SwarmServiceOperationKind.Apply,
+                        "rollout paused")
+                ]),
+            TestContext.Current.CancellationToken);
+        await _dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(
+            null,
+            null,
+            null,
+            1,
+            50,
+            TestContext.Current.CancellationToken);
+
+        var alert = Assert.Single(alertEvents.Items);
+        Assert.Equal(AlertType.SwarmServiceOperationFailed, alert.Type);
+        Assert.Equal(AlertResourceType.SwarmService, alert.ResourceType);
+        Assert.Equal(serviceId, alert.ResourceId);
+        Assert.Equal(operationId, Assert.IsType<SwarmServiceOperationFailedAlertInfo>(alert.Info).OperationId);
+        await WaitForAlertStreamNotificationAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task<int> GetAlertEventCountAsync(CancellationToken cancellationToken)
     {
         await using var scope = Services.CreateAsyncScope();

@@ -22,7 +22,8 @@ public class Platform(
     long stackCount = 0,
     PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
     PlatformWorkloadStatusCounts? stackStatusCounts = null,
-    string? clusterId = null)
+    string? clusterId = null,
+    bool pruneHistoricalSwarmTaskContainers = true)
 {
     private readonly List<PlatformStat> stats = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -46,6 +47,7 @@ public class Platform(
         stackStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public string? ClusterId { get; private set; } = clusterId;
+    public bool PruneHistoricalSwarmTaskContainers { get; private set; } = pruneHistoricalSwarmTaskContainers;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
@@ -69,7 +71,8 @@ public class Platform(
         long stackCount = 0,
         PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
         PlatformWorkloadStatusCounts? stackStatusCounts = null,
-        string? clusterId = null
+        string? clusterId = null,
+        bool pruneHistoricalSwarmTaskContainers = true
         )
     {
         var platform = new Platform(
@@ -90,7 +93,8 @@ public class Platform(
             stackCount: stackCount,
             deploymentStatusCounts: deploymentStatusCounts,
             stackStatusCounts: stackStatusCounts,
-            clusterId: clusterId)
+            clusterId: clusterId,
+            pruneHistoricalSwarmTaskContainers: pruneHistoricalSwarmTaskContainers)
         {
             Id = id,
         };
@@ -116,7 +120,8 @@ public class Platform(
         string? description = null,
         PlatformDescriptor? descriptor = null,
         PlatformStatus? platformStatus = null,
-        string? clusterId = null)
+        string? clusterId = null,
+        bool? pruneHistoricalSwarmTaskContainers = null)
     {
         if (name != null) Name = name;
         if (address != null) Address = address;
@@ -131,6 +136,8 @@ public class Platform(
         if (platformStatus != null) Status = platformStatus.Value;
         if (descriptor != null) PlatformDescriptor = descriptor;
         if (clusterId != null) ClusterId = clusterId;
+        if (pruneHistoricalSwarmTaskContainers != null)
+            PruneHistoricalSwarmTaskContainers = pruneHistoricalSwarmTaskContainers.Value;
     }
 
     public Platform AppendStat(PlatformStat stat)

@@ -113,6 +113,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Alert, LookupResourceType.Deployment) => await GetAlertDeploymentLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.Stack) => await GetAlertStackLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.GitRepository) => await GetAlertGitRepositoryLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.SwarmService) => await GetSwarmServiceLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.AutomationAction) => await GetAlertAutomationActionLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.Build) => await GetBuildLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.AlertChannel) => await GetAlertChannelLookupAsync(userId, cancellationToken),
@@ -216,7 +217,7 @@ internal sealed class GetResourceLookupQueryHandler(
                  PermissionLevel.Read,
                  SpecificPermission.None,
                  cancellationToken))
-             .Where(static item => item.PlatformDescriptor.Type != PlatformType.DockerSwarm)
+             .Where(static item => item.PlatformDescriptor.Type is PlatformType.Docker or PlatformType.DockerSwarm)
              .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)

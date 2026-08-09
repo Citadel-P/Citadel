@@ -68,6 +68,11 @@ export enum UpdateBehavior {
   AutoDeploy = "AutoDeploy",
 }
 
+export enum SwarmStackCompatibilitySeverity {
+  Warning = "Warning",
+  Error = "Error",
+}
+
 /** @default "StopFirst" */
 export enum SwarmServiceUpdateOrder {
   StopFirst = "StopFirst",
@@ -186,6 +191,7 @@ export enum StackReleaseStatus {
   Degraded = "Degraded",
   Failed = "Failed",
   Stopped = "Stopped",
+  TimedOut = "TimedOut",
 }
 
 export enum StackReconciliationStatus {
@@ -201,6 +207,11 @@ export enum StackReconciliationActionType {
   StartContainer = "StartContainer",
   ResumeContainer = "ResumeContainer",
   RemoveContainer = "RemoveContainer",
+}
+
+export enum StackImportKind {
+  ComposeProject = "ComposeProject",
+  SwarmStack = "SwarmStack",
 }
 
 export enum StackDriftMode {
@@ -686,6 +697,7 @@ export enum AlertType {
   DeploymentImageUpdateAvailable = "DeploymentImageUpdateAvailable",
   DeploymentAutoDeployFailed = "DeploymentAutoDeployFailed",
   DeploymentAutoUpdated = "DeploymentAutoUpdated",
+  SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
   StackImageUpdateAvailable = "StackImageUpdateAvailable",
   StackAutoDeployFailed = "StackAutoDeployFailed",
   StackAutoUpdated = "StackAutoUpdated",
@@ -728,6 +740,7 @@ export enum AlertResourceType {
   AutomationAction = "AutomationAction",
   Build = "Build",
   License = "License",
+  SwarmService = "SwarmService",
 }
 
 export enum AlertEventStatus {
@@ -1155,6 +1168,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "DeploymentAutoDeployFailed",
         AlertEventInfoDeploymentAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "SwarmServiceOperationFailed",
+        AlertEventInfoSwarmServiceOperationFailedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
         "StackImageUpdateAvailable",
@@ -2887,6 +2904,16 @@ export interface AlertEventInfoStackServiceAutoUpdatedAlertInfo {
   humanMessage?: null | string;
 }
 
+export interface AlertEventInfoSwarmServiceOperationFailedAlertInfo {
+  $type?: "SwarmServiceOperationFailed";
+  serviceName: string;
+  /** @format uuid */
+  operationId: string;
+  operationKind: SwarmServiceOperationKind;
+  reason: string;
+  humanMessage?: null | string;
+}
+
 export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
   $type?: "UnmanagedContainerCreated";
   platformName: string;
@@ -4255,6 +4282,7 @@ export interface ClusterVolumeInfo {
 }
 
 export interface ComposeProjectImportDraftView {
+  importKind: StackImportKind;
   source: ComposeProjectImportSourceView;
   draft: ComposeProjectStackDraftView;
   issues: ContainerAdoptionIssueView[];
@@ -4275,6 +4303,8 @@ export interface ComposeProjectImportValidation {
   services: ComposeProjectServiceComparison[];
   issues: AdoptionIssue[];
   previewFingerprint: string;
+  importableSensitiveEnvironmentNames: string[];
+  canImportSensitiveEnvironmentValues: boolean;
 }
 
 export interface ComposeProjectRuntimeService {
@@ -4386,6 +4416,7 @@ export interface ContainerDataView {
   isSystem: boolean;
   systemRole: null | ContainerSystemRole;
   hasCitadelOwnershipLabels: boolean;
+  isSwarmTask: boolean;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4567,6 +4598,7 @@ export interface ContainerView {
   isSystem: boolean;
   systemRole: null | ContainerSystemRole;
   hasCitadelOwnershipLabels: boolean;
+  isSwarmTask: boolean;
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
   /** @format uuid */
@@ -4699,6 +4731,8 @@ export interface CreatePlatformInput {
   description?: null | string;
   type?: PlatformType;
   connectorType?: PlatformConnectorType;
+  /** @default true */
+  pruneHistoricalSwarmTaskContainers?: boolean;
   tagIds?: null | string[];
 }
 
@@ -5823,6 +5857,9 @@ export interface ImportComposeProjectInput {
   spec: StackSpec;
   previewFingerprint: string;
   tagIds?: null | string[];
+  importKind?: any;
+  /** @default false */
+  importSensitiveEnvironmentAsSecrets?: boolean;
 }
 
 export interface InitializeCitadelInput {
@@ -6587,6 +6624,8 @@ export interface PlatformInput {
   description?: null | string;
   type?: PlatformType;
   connectorType?: PlatformConnectorType;
+  /** @default true */
+  pruneHistoricalSwarmTaskContainers?: boolean;
 }
 
 export interface PlatformSnapshot {
@@ -6725,6 +6764,7 @@ export interface PlatformView {
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
   clusterId: null | string;
+  pruneHistoricalSwarmTaskContainers: boolean;
   tags?: TagSummaryView[];
   capabilities?: null | PlatformCapabilities;
   swarmCapabilities?: null | SwarmCapabilities;
@@ -7285,6 +7325,7 @@ export interface StackConfigView {
   name: string;
   /** @format uuid */
   platformId: string;
+  platformType: PlatformType;
   description: null | string;
   stackSource: StackSource;
   spec: StackSpec;
@@ -7555,6 +7596,7 @@ export interface StackView {
   controlState: ResourceControlState;
   /** @format uuid */
   currentStackReleaseId: string;
+  platformType: PlatformType;
   /** @format uuid */
   platformId?: null | string;
   version?: null | string;
@@ -7773,6 +7815,7 @@ export interface SwarmOverviewView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   serviceCount: number | string;
+  serviceStatusCounts: PlatformWorkloadStatusCountsView;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -8132,6 +8175,8 @@ export interface SwarmServiceView {
   ownership: SwarmServiceOwnership;
   dockerStackNamespace: null | string;
   ownershipDiagnostic: null | string;
+  /** @format uuid */
+  stackId: null | string;
   /** @format date-time */
   createdAt: null | string;
   /** @format date-time */
@@ -8154,6 +8199,27 @@ export interface SwarmServiceWebhookConfig {
 export interface SwarmServicesView {
   items: SwarmServiceView[];
   capabilities: PlatformCapabilities;
+}
+
+export interface SwarmStackCompatibilityIssue {
+  severity: SwarmStackCompatibilitySeverity;
+  code: string;
+  message: string;
+  fieldPath?: null | string;
+}
+
+export interface SwarmStackCompatibilityReport {
+  isCompatible: boolean;
+  issues: SwarmStackCompatibilityIssue[];
+}
+
+export interface SwarmStackPreflightInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  stackSource: StackSource;
+  spec: StackSpec;
+  driftPolicy?: null | StackDriftPolicy;
 }
 
 export interface SwarmTaskInspectView {
@@ -8654,6 +8720,7 @@ export interface ValidateComposeProjectImportInput {
   name: string;
   stackSource: StackSource;
   spec: StackSpec;
+  importKind?: any;
 }
 
 export interface VerifyAlertChannelInput {
@@ -12280,6 +12347,9 @@ export class Api<
     getComposeProjectImportDraft: (
       platformId: string,
       projectName: string,
+      query?: {
+        importKind?: StackImportKind;
+      },
       params: RequestParams = {},
     ) =>
       this.request<
@@ -12288,6 +12358,7 @@ export class Api<
       >({
         path: `/api/v1/platforms/${platformId}/unmanaged-compose-projects/${projectName}`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -15829,6 +15900,36 @@ export class Api<
         path: `/api/v1/stacks/${stackId}/releases`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name PreflightSwarmStack
+     * @summary Validate a Stack configuration for Docker Swarm
+     * @request POST:/api/v1/stacks/preflight/swarm
+     * @secure
+     * @response `200` `SwarmStackCompatibilityReport` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    preflightSwarmStack: (
+      data: SwarmStackPreflightInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmStackCompatibilityReport, ProblemDetails>({
+        path: `/api/v1/stacks/preflight/swarm`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

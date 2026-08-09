@@ -117,6 +117,7 @@ export const AlertRuleForm = ({
     AlertType.StackDriftAutoReconciled,
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
+    AlertType.SwarmServiceOperationFailed,
     AlertType.AutomationActionRunFailed,
     AlertType.BuildRunFailed,
     AlertType.LicenseEnteredGracePeriod,
@@ -131,6 +132,7 @@ export const AlertRuleForm = ({
     if (merged.type.startsWith('License')) return 'License';
     if (merged.type.startsWith('Build')) return 'Build';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
+    if (merged.type.startsWith('SwarmService')) return 'SwarmService';
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
   }, [merged.type]);

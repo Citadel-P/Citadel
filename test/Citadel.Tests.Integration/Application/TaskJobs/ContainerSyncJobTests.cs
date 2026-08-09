@@ -8,6 +8,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
@@ -119,6 +120,97 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     }
 
     [Fact]
+    public async Task OnlineSync_ShouldPruneOnlyTerminalSwarmTaskContainers_WhenEnabled()
+    {
+        const string historicalTaskId = "historical-task";
+        const string runningTaskId = "running-task";
+        const string stoppedComposeId = "stopped-compose";
+        await ConfigureSwarmPlatformAsync(pruningEnabled: true);
+
+        var containers = new Dictionary<string, DockerContainer>
+        {
+            [historicalTaskId] = new(
+                Name: "/redis.1.old",
+                Image: "redis:latest",
+                Id: historicalTaskId,
+                ImageId: "sha256:redis",
+                State: ContainerStateStatus.Exited,
+                IsSwarmTask: true),
+            [runningTaskId] = new(
+                Name: "/redis.1.current",
+                Image: "redis:latest",
+                Id: runningTaskId,
+                ImageId: "sha256:redis",
+                State: ContainerStateStatus.Running,
+                IsSwarmTask: true),
+            [stoppedComposeId] = new(
+                Name: "/compose-web-1",
+                Image: "nginx:latest",
+                Id: stoppedComposeId,
+                ImageId: "sha256:nginx",
+                State: ContainerStateStatus.Exited,
+                Stack: "compose-project")
+        };
+        SetupOnlineContainerList(containers);
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(
+                It.IsAny<DeleteContainerCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                platformId,
+                "https://original.address",
+                PlatformConnectorType.Agent,
+                IsOnLine: true,
+                IsValidated: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
+
+        containerConnector.Verify(connector => connector.DeleteAsync(
+            It.Is<DeleteContainerCommand>(command =>
+                command.ContainerIds.SequenceEqual(new[] { historicalTaskId })
+                && command.PlatformAddress == "https://original.address"
+                && command.Volume == false
+                && command.Force == false
+                && command.Link == false),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OnlineSync_ShouldKeepHistoricalSwarmTaskContainers_WhenPruningDisabled()
+    {
+        await ConfigureSwarmPlatformAsync(pruningEnabled: false);
+        SetupOnlineContainerList(new Dictionary<string, DockerContainer>
+        {
+            ["historical-task"] = new(
+                Name: "/redis.1.old",
+                Image: "redis:latest",
+                Id: "historical-task",
+                ImageId: "sha256:redis",
+                State: ContainerStateStatus.Dead,
+                IsSwarmTask: true)
+        });
+
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                platformId,
+                "https://original.address",
+                PlatformConnectorType.Agent,
+                IsOnLine: true,
+                IsValidated: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
+
+        containerConnector.Verify(connector => connector.DeleteAsync(
+            It.IsAny<DeleteContainerCommand>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RemovesStaleContainers_WhenNotInFreshList()
     {
         // Arrange: Seed DB with a container that will be missing from the fresh list
@@ -189,6 +281,80 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         Assert.Contains(dbContainers, c => c.DockerContainerId == "new-id");
+    }
+
+    [Fact]
+    public async Task OnlineSync_ShouldRemoveTerminalSwarmTaskHistoryAndKeepStoppedStandaloneContainers()
+    {
+        const string historicalTaskId = "historical-swarm-task-id";
+        const string stoppedComposeContainerId = "stopped-compose-container-id";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = scope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            await uow.Containers.AddAsync(
+                new Container(
+                    name: "/redis-test_web.1.old-task",
+                    dockerImageId: "sha256:redis",
+                    platformId: platformId,
+                    dockerContainerId: historicalTaskId,
+                    state: ContainerStateStatus.Exited,
+                    dockerStack: "redis-test",
+                    isSwarmTask: true),
+                cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(
+                    platformId,
+                    "https://original.address",
+                    PlatformConnectorType.Agent,
+                    IsOnLine: true,
+                    IsValidated: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer>
+                {
+                    [historicalTaskId] = new DockerContainer(
+                        Name: "/redis-test_web.1.old-task",
+                        Image: "redis:latest",
+                        ImageId: "sha256:redis",
+                        Id: historicalTaskId,
+                        State: ContainerStateStatus.Exited,
+                        Stack: "redis-test",
+                        IsSwarmTask: true),
+                    [stoppedComposeContainerId] = new DockerContainer(
+                        Name: "/compose-web-1",
+                        Image: "nginx:latest",
+                        ImageId: "sha256:nginx",
+                        Id: stoppedComposeContainerId,
+                        State: ContainerStateStatus.Exited,
+                        Stack: "compose-project")
+                },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                snapshotStartedAt: DateTimeOffset.UtcNow.AddSeconds(5).ToUnixTimeSeconds(),
+                cacheMutationVersion: cache.GetMutationVersion(platformId),
+                logger: Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(uow, cancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var containers = await assertUow.Containers.GetByPlatformIdAsync(platformId, cancellationToken);
+        Assert.DoesNotContain(containers, container => container.DockerContainerId == historicalTaskId);
+        Assert.Contains(containers, container =>
+            container.DockerContainerId == stoppedComposeContainerId
+            && !container.IsSwarmTask
+            && container.State == ContainerStateStatus.Exited);
     }
 
     [Fact]
@@ -599,6 +765,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
             State: ContainerStateStatus.Running,
             Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             Created: 123456,
+            Stack: "redis-test",
             IsSwarmTask: true);
         var notificationQueue = new Mock<INotificationQueue>();
         notificationQueue
@@ -624,6 +791,13 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         }
 
         Assert.False(unmanagedAlerts.Reader.TryRead(out _));
+        await using var assertScope = Services.CreateAsyncScope();
+        var uow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = Assert.Single(
+            await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken),
+            container => container.DockerContainerId == dockerContainer.Id);
+        Assert.True(persisted.IsSwarmTask);
+        Assert.Equal("redis-test", persisted.DockerStack);
     }
 
     [Fact]
@@ -748,6 +922,45 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         var uow2 = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbContainers = await uow2.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         Assert.All(dbContainers, c => Assert.Equal(ContainerStateStatus.Offline, c.State));
+    }
+
+    private void SetupOnlineContainerList(IReadOnlyDictionary<string, DockerContainer> containers)
+    {
+        syncBarrierMock
+            .Setup(barrier => barrier.WaitForAsync<ImageSyncJob>(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        containerFactoryMock
+            .Setup(factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(containerConnector.Object);
+        containerConnector
+            .Setup(connector => connector.ListContainersAsync(
+                It.IsAny<ContainerFilterCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(containers));
+    }
+
+    private async Task ConfigureSwarmPlatformAsync(bool pruningEnabled)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+        Assert.NotNull(platform);
+        platform.PartialUpdate(
+            descriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "manager-1",
+                NodeAddr: "10.0.0.1",
+                LocalNodeState: "active",
+                ControlAvailable: true,
+                Nodes: 1,
+                Managers: 1,
+                DaemonId: "123456",
+                ContainerCount: 3,
+                ContainersRunning: 1,
+                ContainersPaused: 0,
+                ContainersStopped: 2),
+            pruneHistoricalSwarmTaskContainers: pruningEnabled);
+        await uow.Platforms.UpdateAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 }
 

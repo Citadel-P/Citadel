@@ -90,6 +90,31 @@ internal sealed class RollbackStackHandler(
             return (false, "Only previous healthy releases can be rolled back.", null, null);
         }
 
+        var usesMountedSecrets = release.ResourceBindings?.Any(static binding =>
+                binding.Kind == ResourceBindingKind.Secret
+                && binding.SecretDeliveryMode == SecretDeliveryMode.MountedFile) == true;
+        IReadOnlyList<StackReleaseSwarmResource> retainedSwarmResources = [];
+        var platform = stack.CurrentStackRelease.Platform;
+        if (platform is null && usesMountedSecrets)
+        {
+            platform = await unitOfWork.Platforms.GetByIdAsync(
+                stack.CurrentStackRelease.PlatformId,
+                cancellationToken);
+        }
+        if (platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm)
+        {
+            retainedSwarmResources = await unitOfWork.Stacks.GetReleaseSwarmResourcesAsync(
+                release.Id,
+                cancellationToken) ?? [];
+            if (usesMountedSecrets
+                && !retainedSwarmResources.Any(static resource =>
+                    resource.Kind == StackReleaseSwarmResourceKind.Secret
+                    && resource.Mounts.Count > 0))
+            {
+                return (false, "Exact rollback is unavailable because this release's versioned Docker Secrets are outside the retention window or were not recorded. Create a new reviewed release instead.", null, null);
+            }
+        }
+
         var rollbackSpec = CreateRollbackSpec(release);
         if (rollbackSpec is null)
         {
@@ -103,6 +128,13 @@ internal sealed class RollbackStackHandler(
         }
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
+        if (retainedSwarmResources.Count > 0)
+        {
+            await unitOfWork.Stacks.ReplaceReleaseSwarmResourcesAsync(
+                stack.CurrentStackReleaseId,
+                [.. retainedSwarmResources.Select(resource => resource.ForRelease(stack.CurrentStackReleaseId))],
+                cancellationToken);
+        }
         await unitOfWork.CommitAsync(cancellationToken);
 
         return (true, null, release.Version, previousStackSnapshot);

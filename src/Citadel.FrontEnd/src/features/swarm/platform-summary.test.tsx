@@ -81,6 +81,31 @@ describe('SwarmPlatformSummary', () => {
     expect(updated.health).toBe('Healthy');
     expect(updated.message).toBeNull();
   });
+
+  it('updates service state counts from a SignalR inventory snapshot', () => {
+    const inventory = emptyInventory();
+    inventory.services.items = [
+      service('healthy', 2, 2),
+      service('degraded', 1, 2),
+      service('failed', 0, 1),
+      service('stopped', 0, 0),
+      service('unknown', 1, 1, true),
+    ];
+
+    const updated = applySwarmInventoryToOverview(inventory, overview());
+
+    expect(updated.serviceCount).toBe(5);
+    expect(updated.serviceStatusCounts).toEqual({
+      total: 5,
+      healthy: 1,
+      degraded: 1,
+      failed: 1,
+      stopped: 1,
+      paused: 0,
+      inProgress: 0,
+      unknown: 1,
+    });
+  });
 });
 
 function emptyInventory(): SwarmInventoryUpdate {
@@ -104,8 +129,28 @@ function overview() {
     nodeCount: 0,
     managerCount: 0,
     serviceCount: 0,
+    serviceStatusCounts: {
+      total: 0,
+      healthy: 0,
+      degraded: 0,
+      failed: 0,
+      stopped: 0,
+      paused: 0,
+      inProgress: 0,
+      unknown: 0,
+    },
     runningTaskCount: 0,
     desiredTaskCount: 0,
     networkCount: 0,
   };
+}
+
+function service(id: string, runningTaskCount: number, desiredTaskCount: number, isStale = false) {
+  return {
+    id,
+    runningTaskCount,
+    desiredTaskCount,
+    updateState: 'Completed',
+    isStale,
+  } as SwarmInventoryUpdate['services']['items'][number];
 }

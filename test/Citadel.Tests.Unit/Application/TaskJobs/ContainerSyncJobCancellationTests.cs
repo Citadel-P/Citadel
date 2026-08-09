@@ -7,6 +7,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using System.Collections.Immutable;
 
@@ -49,6 +50,7 @@ public sealed class ContainerSyncJobCancellationTests
             .Setup(value => value.GetConnector(PlatformConnectorType.Local))
             .Returns(connector.Object);
         var broadcaster = new PlatformHealthBroadCaster();
+        var scopeFactory = Mock.Of<IServiceScopeFactory>();
         var job = new ContainerSyncJob(
             Mock.Of<IDbWorkQueue>(),
             barrier.Object,
@@ -59,6 +61,9 @@ public sealed class ContainerSyncJobCancellationTests
             Mock.Of<IStackStreamManager>(),
             broadcaster,
             connectorFactory.Object,
+            new SwarmTaskContainerPruner(
+                scopeFactory,
+                NullLogger<SwarmTaskContainerPruner>.Instance),
             NullLogger<ContainerSyncJob>.Instance);
 
         await job.StartAsync(TestContext.Current.CancellationToken);

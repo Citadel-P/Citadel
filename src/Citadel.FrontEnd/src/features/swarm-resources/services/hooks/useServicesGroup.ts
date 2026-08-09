@@ -24,8 +24,11 @@ export type SwarmServiceListView = Pick<
   | 'runningTaskCount'
   | 'desiredTaskCount'
   | 'updateState'
+  | 'labels'
   | 'ownership'
   | 'ownershipDiagnostic'
+  | 'dockerStackNamespace'
+  | 'stackId'
   | 'isStale'
 > & {
   capabilities?: null | PlatformCapabilities | SwarmServiceCapabilities;
@@ -97,8 +100,11 @@ const toDraftListView = (service: ManagedSwarmServiceView): SwarmServiceListView
   runningTaskCount: service.runningTaskCount ?? 0,
   desiredTaskCount: service.desiredTaskCount ?? service.spec.replicas ?? 0,
   updateState: service.updateState ?? 'Not deployed',
+  labels: {},
   ownership: SwarmServiceOwnership.CitadelService,
   ownershipDiagnostic: null,
+  dockerStackNamespace: null,
+  stackId: null,
   isStale: false,
   capabilities: service.capabilities,
   tasks: [],

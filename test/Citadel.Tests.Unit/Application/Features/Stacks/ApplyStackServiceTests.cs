@@ -7,12 +7,14 @@ using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
+using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.ResourceBindings;
@@ -20,6 +22,7 @@ using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Hosting.Common.ErrorTypes;
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories;
 using LightResults;
@@ -31,7 +34,7 @@ namespace Tests.Unit.Application.Features.Stacks;
 public class ApplyStackServiceTests
 {
     [Fact]
-    public async Task ApplyAsync_SwarmStack_ShouldFailBeforeOpeningContainerOrProcessConnectors()
+    public async Task ApplyAsync_ImportedComposeOnSwarm_ShouldDispatchConversionAndWaitForOwnedServicesToConverge()
     {
         var actorId = Guid.CreateVersion7();
         var platform = CreateSwarmPlatform();
@@ -40,32 +43,169 @@ public class ApplyStackServiceTests
             actorId,
             StackSource.WebEditor,
             platform.Id,
-            new ManualStack("services: {}", StackUpdateBehavior.Disabled),
+            new ManualStack(
+                "services:\n  api:\n    image: nginx\n",
+                StackUpdateBehavior.Disabled,
+                DestroyBeforeDeploy: false),
+            driftPolicy: StackDriftPolicy.Disabled,
             platform: platform);
-        var stacks = new Mock<IStackRepository>();
-        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(stack);
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        var repository = new GitRepository(
+            "unused", null, "https://example.invalid/repo.git", "main", null, actorId);
+        var unitOfWork = CreateApplyUnitOfWork(stack, repository, platform.Id, actorId);
+        Mock.Get(unitOfWork.Object.Stacks)
+            .Setup(x => x.GetContainersAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new Container(
+                    "swarm-stack-api-1",
+                    "sha256:nginx",
+                    platform.Id,
+                    "compose-container-id",
+                    ContainerStateStatus.Running,
+                    dockerStack: "swarm-stack",
+                    stackId: stack.Id)
+            ]);
+        var orphanedOwnerId = Guid.CreateVersion7();
+        var orphanedLabels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "swarm-stack",
+            [CitadelLabels.Managed] = "true",
+            [CitadelLabels.StackId] = orphanedOwnerId.ToString("D")
+        };
+        Mock.Get(unitOfWork.Object.Swarm)
+            .Setup(x => x.GetServicesAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new SwarmServiceProjection(
+                    platform.Id,
+                    "service-id",
+                    1,
+                    "swarm-stack_api",
+                    "replicated",
+                    "nginx",
+                    1,
+                    1,
+                    "Completed",
+                    null,
+                    [],
+                    [],
+                    [],
+                    [],
+                    orphanedLabels,
+                    null,
+                    null,
+                    DateTimeOffset.UtcNow,
+                    false,
+                    SwarmServiceOwnership.CitadelStack,
+                    "swarm-stack",
+                    StackId: stack.Id)
+            ]);
+        Mock.Get(unitOfWork.Object.Stacks)
+            .Setup(x => x.ExistsAsync(orphanedOwnerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var oldResource = new StackReleaseSwarmResource(
+            Guid.CreateVersion7(),
+            platform.Id,
+            StackReleaseSwarmResourceKind.Secret,
+            "old-secret-id",
+            "swarm-stack_secret-old",
+            "secret");
+        var oldConfig = new StackReleaseSwarmResource(
+            Guid.CreateVersion7(),
+            platform.Id,
+            StackReleaseSwarmResourceKind.Config,
+            "old-config-id",
+            "swarm-stack_config-old",
+            "config");
+        Mock.Get(unitOfWork.Object.Stacks)
+            .Setup(x => x.GetStackSwarmResourcesAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([oldResource, oldConfig]);
         var services = new ServiceCollection()
             .AddSingleton(unitOfWork.Object)
             .BuildServiceProvider();
-        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>(MockBehavior.Strict);
+
+        StackApplyCommand? dispatched = null;
+        var stackConnector = new Mock<IStackConnector>();
+        stackConnector
+            .Setup(x => x.StackApplyAsync(It.IsAny<StackApplyCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<StackApplyCommand, CancellationToken>((command, _) => dispatched = command)
+            .Returns(SuccessfulStackApplyStream());
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>();
+        stackConnectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Agent)).Returns(stackConnector.Object);
         var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>(MockBehavior.Strict);
+
+        var serviceLabels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "swarm-stack",
+            [CitadelLabels.Managed] = "true",
+            [CitadelLabels.StackId] = stack.Id.ToString("D"),
+            [CitadelLabels.ReleaseId] = stack.CurrentStackReleaseId.ToString("D")
+        };
+        var swarmConnector = new Mock<ISwarmConnector>();
+        swarmConnector
+            .SetupSequence(x => x.ListServicesAsync(It.IsAny<ListSwarmServicesCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>(
+            [
+                new SwarmServiceResult(
+                    "service-id", 1, "swarm-stack_api", "replicated", "nginx", 1, 1,
+                    "Completed", null, [], [], [], [], orphanedLabels, null, null)
+            ]))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>(
+            [
+                new SwarmServiceResult(
+                    "service-id", 1, "swarm-stack_api", "replicated", "nginx", 1, 1,
+                    "Completed", null, [], [], [], [], serviceLabels, null, null)
+            ]))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>(
+            [
+                new SwarmServiceResult(
+                    "service-id", 1, "swarm-stack_api", "replicated", "nginx", 1, 1,
+                    "Completed", null, [], [], [], [], serviceLabels, null, null)
+            ]));
+        swarmConnector
+            .Setup(x => x.ListTasksAsync(It.IsAny<ListSwarmTasksCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmTaskResult>>([]));
+        swarmConnector
+            .Setup(x => x.ListNetworksAsync(It.IsAny<ListSwarmNetworksCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNetworkResult>>([]));
+        swarmConnector
+            .Setup(x => x.ListSecretsAsync(It.IsAny<ListSwarmSecretsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmSecretResult>>([]));
+        swarmConnector
+            .Setup(x => x.ListConfigsAsync(It.IsAny<ListSwarmConfigsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmConfigResult>>([]));
+        swarmConnector
+            .Setup(x => x.DeleteSecretAsync(It.IsAny<DeleteSwarmSecretCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(new NotFoundError("Secret was already removed.")));
+        swarmConnector
+            .Setup(x => x.DeleteConfigAsync(It.IsAny<DeleteSwarmConfigCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var swarmConnectorFactory = new Mock<IConnectorFactory<ISwarmConnector>>();
+        swarmConnectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Agent)).Returns(swarmConnector.Object);
+        var reconciliationCoordinator = new Mock<ISwarmReconciliationCoordinator>();
+        reconciliationCoordinator
+            .Setup(x => x.RefreshAsync(platform.Id, CancellationToken.None))
+            .ReturnsAsync(Result.Success());
+
+        var dbWorkQueue = new AwaitableOnlyDbWorkQueue(unitOfWork.Object);
         var service = new ApplyStackService(
-            Mock.Of<IDbWorkQueue>(),
+            dbWorkQueue,
             Mock.Of<IStackStreamManager>(),
             services.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<IActivityStreamManager>(),
-            Mock.Of<INotificationQueue>(),
-            Mock.Of<IPlatformContainerCache>(),
+            new TestNotificationQueue(),
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platform.Id,
+                platform.Address,
+                PlatformConnectorType.Agent,
+                ImmutableDictionary<string, Guid>.Empty)),
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             Mock.Of<IGitStackMaterializer>(),
-            Mock.Of<IResourceBindingResolver>(),
-            Mock.Of<ISecretRedactor>(),
+            new EmptyResourceBindingResolver(),
+            new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance,
+            swarmConnectorFactory: swarmConnectorFactory.Object,
+            swarmReconciliationCoordinator: reconciliationCoordinator.Object);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -82,10 +222,22 @@ public class ApplyStackServiceTests
             items.Add(item);
         }
 
-        Assert.Contains(items, item =>
-            item.Type == StackApplyEventType.StdErr
-            && item.Message?.Contains("not available", StringComparison.OrdinalIgnoreCase) == true);
-        stackConnectorFactory.VerifyNoOtherCalls();
+        Assert.True(
+            dispatched is not null,
+            string.Join(" | ", items.Select(item => $"{item.Type}:{item.Message}:{item.ExitCode}")));
+        Assert.Equal(StackOrchestrationMode.DockerSwarm, dispatched.OrchestrationMode);
+        Assert.True(dispatched.ConvertComposeProjectToSwarm);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease?.Status);
+        Assert.Equal(1, dbWorkQueue.AwaitedCount);
+        Assert.Equal(0, dbWorkQueue.FireAndForgetCount);
+        Assert.Contains(items, item => item.ProgressMessage == "Swarm Stack converged successfully.");
+        swarmConnector.Verify(x => x.DeleteSecretAsync(
+            It.Is<DeleteSwarmSecretCommand>(command => command.SecretId == "old-secret-id"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        swarmConnector.Verify(x => x.DeleteConfigAsync(
+            It.Is<DeleteSwarmConfigCommand>(command => command.ConfigId == "old-config-id"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        reconciliationCoordinator.Verify(x => x.RefreshAsync(platform.Id, CancellationToken.None), Times.Once);
         containerConnectorFactory.VerifyNoOtherCalls();
     }
 
@@ -414,6 +566,13 @@ public class ApplyStackServiceTests
         stacks
             .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        stacks
+            .Setup(x => x.TryReserveSwarmNamespaceAsync(
+                stack.Id,
+                platformId,
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
@@ -2261,6 +2420,13 @@ public class ApplyStackServiceTests
         stacks
             .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        stacks
+            .Setup(x => x.TryReserveSwarmNamespaceAsync(
+                stack.Id,
+                platformId,
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
@@ -2291,6 +2457,11 @@ public class ApplyStackServiceTests
             .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Actor?)null);
 
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm
+            .Setup(x => x.GetServicesAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
         unitOfWork.Setup(x => x.GitRepositories).Returns(gitRepos.Object);
@@ -2298,6 +2469,7 @@ public class ApplyStackServiceTests
         unitOfWork.Setup(x => x.Images).Returns(images.Object);
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.Swarm).Returns(swarm.Object);
         unitOfWork
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -2490,6 +2662,25 @@ public class ApplyStackServiceTests
     private sealed class PassThroughSecretRedactor : ISecretRedactor
     {
         public string Redact(string? value, IEnumerable<string> secrets) => value ?? string.Empty;
+    }
+
+    private sealed class AwaitableOnlyDbWorkQueue(IUnitOfWork unitOfWork) : IDbWorkQueue
+    {
+        public int AwaitedCount { get; private set; }
+        public int FireAndForgetCount { get; private set; }
+        public ChannelReader<IDbWorkItem> Reader { get; } = Channel.CreateUnbounded<IDbWorkItem>().Reader;
+
+        public ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken)
+        {
+            FireAndForgetCount++;
+            return ValueTask.CompletedTask;
+        }
+
+        public async ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
+        {
+            AwaitedCount++;
+            await item.ExecuteAsync(unitOfWork, cancellationToken);
+        }
     }
 
     private sealed class EmptyStackBuildImageBindingResolver : IStackBuildImageBindingResolver

@@ -286,9 +286,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         string sql = ResourceTagSql.InputTagsCte + """
             inserted_platform AS (
                 INSERT INTO Platforms (
-                    Id, Name, Address, Description, NetworkCount, VolumeCount, ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor, ClusterId)
+                    Id, Name, Address, Description, NetworkCount, VolumeCount, ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor, ClusterId, PruneHistoricalSwarmTaskContainers)
                 SELECT
-                    @Id, @Name, @Address, @Description, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json, @ClusterId
+                    @Id, @Name, @Address, @Description, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json, @ClusterId, @PruneHistoricalSwarmTaskContainers
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 ON CONFLICT (ClusterId) WHERE ClusterId IS NOT NULL DO NOTHING
                 RETURNING Id
@@ -313,6 +313,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ConnectorType = EnumFormatter<PlatformConnectorType>.GetValue(platform.ConnectorType),
             PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
             platform.ClusterId,
+            platform.PruneHistoricalSwarmTaskContainers,
             CreatedAt = DateTime.UtcNow,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
             TagIds = tagIdArray,
@@ -345,6 +346,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 AgentVersion = @AgentVersion,
                 PlatformDescriptor = @PlatformDescriptor::json,
                 ClusterId = @ClusterId,
+                PruneHistoricalSwarmTaskContainers = @PruneHistoricalSwarmTaskContainers,
                 Status = @Status
             WHERE Id = @Id
          """;
@@ -363,6 +365,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             platform.AgentVersion,
             PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
             platform.ClusterId,
+            platform.PruneHistoricalSwarmTaskContainers,
             Status = EnumFormatter<PlatformStatus>.GetValue(platform.Status),
             Id = platform.Id
         }, transaction: tx());

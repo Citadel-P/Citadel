@@ -276,6 +276,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
 [GenerateShapeFor<WebhookStackGitDeployFailedAlertInfo>]
 [GenerateShapeFor<BuildRunFailedAlertInfo>]
+[GenerateShapeFor<SwarmServiceOperationFailedAlertInfo>]
 [GenerateShapeFor<LicenseEnteredGracePeriodAlertInfo>]
 [GenerateShapeFor<LicenseExpiredAlertInfo>]
 [GenerateShapeFor<TargetResource>]

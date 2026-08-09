@@ -1,4 +1,5 @@
 using Domain;
+using Application.Features.Stacks;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
@@ -110,14 +111,17 @@ internal sealed class CreateStackHandler(
         }
 
         var platformType = platform.PlatformDescriptor.Type;
-        if (platformType == PlatformType.DockerSwarm)
+        if (platformType is not PlatformType.Docker and not PlatformType.DockerSwarm)
         {
-            return Result.Failure<Stack>(new NotFoundError("Docker Swarm stacks are not available yet."));
+            return Result.Failure<Stack>(new BadRequestError("Stacks require a Docker Standalone or Docker Swarm platform."));
         }
 
-        if (platformType != PlatformType.Docker)
+        if (platformType == PlatformType.DockerSwarm)
         {
-            return Result.Failure<Stack>(new BadRequestError("Stacks require a Docker Standalone platform."));
+            var unsupported = SwarmStackConfigurationPolicy.GetIssues(spec, driftPolicy)
+                .FirstOrDefault(static issue => issue.Severity == SwarmStackCompatibilitySeverity.Error);
+            if (unsupported is not null)
+                return Result.Failure<Stack>(new BadRequestError(unsupported.Message));
         }
 
         var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, platformType, cancellationToken);
@@ -150,7 +154,8 @@ internal sealed class CreateStackHandler(
             platformId: command.PlatformId,
             spec: spec,
             description: command.Description,
-            driftPolicy: driftPolicy);
+            driftPolicy: driftPolicy,
+            platform: platform);
 
         var result = await unitOfWork.Stacks.AddAsync(stack, cancellationToken, command.TagIds, actorId);
         if (result == 0)

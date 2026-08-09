@@ -1,4 +1,5 @@
 using Application.Services.Builds;
+using Application.Services.Alerts;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -38,7 +39,8 @@ internal sealed class SwarmServiceMutationService(
     ISwarmReconciliationCoordinator reconciliationCoordinator,
     IHostApplicationLifetime applicationLifetime,
     ISwarmServiceStreamManager streamManager,
-    IUserContextAccessor userContext) : ISwarmServiceMutationService
+    IUserContextAccessor userContext,
+    IAlertService alertService) : ISwarmServiceMutationService
 {
     private static readonly TimeSpan MutationTimeout = TimeSpan.FromMinutes(2);
 
@@ -150,6 +152,7 @@ internal sealed class SwarmServiceMutationService(
             await AddFailureActivityAsync(service, actorId, error.Message, CancellationToken.None);
             if (!await PersistAsync(service, CancellationToken.None))
                 return Result.Failure(new ConflictError("The Service changed while the operation result was being saved."));
+            await ProcessFailureAlertAsync(service, error.Message, CancellationToken.None);
             return Result.Failure(error);
         }
 
@@ -345,6 +348,7 @@ internal sealed class SwarmServiceMutationService(
             await AddFailureActivityAsync(service, actorId, error.Message, CancellationToken.None);
             if (!await PersistAsync(service, CancellationToken.None))
                 return Result.Failure<SwarmService>(new ConflictError("The Service changed while the operation result was being saved."));
+            await ProcessFailureAlertAsync(service, error.Message, CancellationToken.None);
             return Result.Failure<SwarmService>(error);
         }
 
@@ -564,6 +568,31 @@ internal sealed class SwarmServiceMutationService(
             service.PlatformId, service.Id, actorId, service.Name,
             ActivityEventType.SwarmServiceOperationFailed, ActivityStatus.Failure,
             new SwarmServiceOperationFailed(operation.Id, operation.Kind, Sanitize(reason))), cancellationToken);
+    }
+
+    private Task ProcessFailureAlertAsync(
+        SwarmService service,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var operation = service.CurrentOperation!;
+        return alertService.ProcessAsync(
+            AlertType.SwarmServiceOperationFailed,
+            new AlertEvaluationContext(
+                DateTime.UtcNow,
+                [],
+                [],
+                [],
+                SwarmServiceOperationFailures:
+                [
+                    new SwarmServiceOperationFailureAlertSnapshot(
+                        service.Id,
+                        service.Name,
+                        operation.Id,
+                        operation.Kind,
+                        Sanitize(reason))
+                ]),
+            cancellationToken);
     }
 
     private sealed record ResolvedServiceImage(string Reference, string? Digest, string? RegistryAuth);

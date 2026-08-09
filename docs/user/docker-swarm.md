@@ -5,11 +5,12 @@ flag. Citadel can register an existing manager, show persisted cluster
 inventory, inspect resources, retrieve bounded Service and Task logs, manage
 standalone Swarm Secrets and Configs, and create first-class managed Swarm
 Services. Operators can also change Node availability and labels, and create or
-safely delete overlay Networks.
+safely delete overlay Networks. Citadel can also save, validate, and apply
+Docker Swarm Stacks from the Web Editor or a Git source.
 
 Task mutations and destructive Node administration remain unavailable. Citadel
-Deployments stay Docker Standalone workloads, and Citadel does not yet create,
-Apply, delete, or import Stacks on Swarm.
+Deployments stay Docker Standalone workloads. Docker Swarm Stacks support
+reviewed import, Apply, safe rollback, and ownership-checked deletion.
 
 ## Before You Begin
 
@@ -50,6 +51,20 @@ version, or a Cluster ID already registered by another Platform. The Platform
 type cannot be changed after creation. A replacement manager endpoint must
 report the same Cluster ID.
 
+## Clean Up Historical Task Containers
+
+The Swarm Platform **Config** tab includes **Prune historical task containers**.
+It is enabled by default. During container synchronization, Citadel deletes a
+bounded batch of exited or dead Swarm Task containers retained on
+the connected manager. Running Tasks and stopped Docker Standalone or Compose
+containers are never removed by this setting.
+
+Disable the setting if you need Docker Desktop or the Docker CLI to retain the
+manager's stopped Task containers for manual inspection. Citadel still hides
+that terminal history from current Stack membership, counts, and health. A
+manager connection cannot delete container history stored locally on worker
+Nodes.
+
 ## Use The Swarm Pages
 
 Selecting a Swarm Platform opens its Swarm navigation:
@@ -77,9 +92,93 @@ Selecting a Swarm Platform opens its Swarm navigation:
 Containers, Images, and Volumes visible through the same manager remain
 manager-local Docker resources. They are not cluster inventory. An Image on
 the manager may be absent from a worker, and same-named local Volumes on two
-Nodes may contain different data. Container adoption and Compose-project import
-are available only on Docker Standalone Platforms; Swarm Task containers must
-be managed through their Service or Stack.
+Nodes may contain different data. Container adoption remains available only on
+Docker Standalone Platforms. On a Swarm manager, Citadel can import either an
+existing Docker Stack namespace or a regular Docker Compose project. A Docker
+Stack is imported as one complete namespace from **Services** or its parent row
+in **Containers**. A regular Compose project is imported from its parent row in
+**Containers** and converted on its first explicit Apply. Swarm Task containers
+never expose individual adoption actions.
+
+Importing a regular Compose project does not mutate Docker. Citadel validates
+the authoritative Web Editor or Git source against both the running project and
+Swarm compatibility rules. On the first Apply, Citadel stops the Compose
+project without deleting named volumes, then deploys the reviewed source as a
+native Docker Stack under the same project name. This transition has downtime.
+If Compose shutdown is incomplete or Docker rejects the `docker stack deploy`
+command, Citadel restores the Compose project from the reviewed source and
+reports both outcomes in the progress sheet. If Docker accepts the command but
+the later rollout fails, the workload remains a Swarm Stack so its failure can
+be inspected and corrected.
+
+## Create And Apply A Swarm Stack
+
+Open **Stacks**, select **Add**, and choose a Docker Swarm Platform. The Stack
+form removes Docker Standalone-only controls such as container drift repair,
+pre-deploy and post-deploy commands, and destroy-before-deploy.
+
+The Web Editor switches validation with the selected Platform. Docker
+Standalone Stacks use the current Compose Specification; Swarm Stacks use the
+Docker CLI Compose v3.13 syntax plus Citadel compatibility diagnostics. Editor
+squiggles provide early feedback, but saving still runs the authoritative
+server-side compatibility check.
+
+Saving runs a compatibility check first. Errors identify Compose fields that
+Swarm Stacks cannot support, such as `container_name`, standalone restart
+settings, or Citadel ownership labels. Portability warnings call out settings
+that can work but depend on every eligible Node, such as bind mounts, local
+Volumes, and fixed Host-mode ports.
+
+The selected orchestration type is locked after creation. A never-applied draft
+can move to another Platform of the same type. Moving between Docker Standalone
+and Docker Swarm requires duplicating the Stack and reviewing the new draft.
+
+Select **Apply** after reviewing a valid draft. The progress sheet reports
+preflight, Docker CLI output, and rollout observation. Citadel supports this
+flow through Local, regular Agent, and Edge Agent connections.
+
+Docker accepting the Stack definition does not by itself mark the release
+healthy. Citadel observes the Stack Services and their Tasks and reports a
+failed Task error when the rollout cannot converge. A deployment process is
+limited to five minutes and the initial rollout observation is limited to two
+minutes. If the connection or progress stream is interrupted after dispatch,
+the release remains **Unknown** or **Timed out** and background Swarm
+reconciliation can recover it after Docker's state becomes observable.
+
+Stack-owned Services remain visible from the Swarm Platform's **Services** and
+**Tasks** pages. After the first Apply, the Stack's **Services** tab also shows
+only the Services owned by that Stack, with their current Tasks as expandable
+rows. The table follows the live Swarm inventory stream. Select a Service to
+use the bounded log viewer, inspect its Docker definition, or open a terminal
+for a running Task on the connected manager. Citadel does not show aggregate
+Stack statistics because a manager cannot provide truthful worker-wide
+container statistics.
+
+Rollback reapplies a selected healthy release through the same preflight and
+convergence checks. Each successful release records the immutable Docker Secret
+and Config IDs it used. By default, the newest 10 healthy releases retain those
+resources for rollback; administrators can configure a bounded value from 1 to
+50 with `SwarmStacks:RetainedRollbackReleases`. Citadel verifies every retained ID before changing Docker and
+reuses mounted Secrets without resolving a secret provider's current value. If
+a required resource has been removed or is outside the retention window,
+rollback stops before mutation with an explicit error.
+
+Deleting a Swarm Stack first verifies namespace ownership, removes its owned
+Services, waits for their absence, and then removes only unreferenced owned
+Networks, Secrets, and Configs. Named and local Volumes are retained. The Stack
+record is removed only after runtime cleanup is confirmed, so a retry resumes
+from Docker's observed state.
+
+Mounted-file Citadel bindings must target one filename under `/run/secrets/`.
+Citadel delivers them as Docker Swarm Secrets and removes the temporary
+plaintext and generated Compose override after every Apply outcome. After a
+healthy Apply, Citadel removes only older, unreferenced Secret and Config
+versions outside the configured rollback window. Failed, timed-out, unknown, or
+partially observed operations never trigger this cleanup.
+
+For Agent and Edge Agent connections, a Git source snapshot is rejected before
+dispatch when it exceeds 512 files or 12 MiB. Reduce the Stack deployment
+source or move large application data out of the repository before retrying.
 
 ## Understand Health And Freshness
 
@@ -210,6 +309,29 @@ Global Services cannot be scaled by replica count. Scheduling mode cannot be
 changed after the first successful Deploy; create another Service when you
 need to change between replicated and global mode.
 
+### Scale A Replicated Service To Zero
+
+Docker Swarm Services do not have a container-style **Stop** operation. Swarm
+continuously tries to maintain each Service's desired state. To intentionally
+run no Tasks while keeping a replicated Service available for later use, scale
+it to zero replicas.
+
+Scaling to zero stops all active Tasks but keeps the Service definition,
+configuration, ownership, Networks, Secrets, and Config references in Swarm.
+Scale it above zero to let Swarm create Tasks again. Treat this intentional
+state as **Scaled to zero**: it is not a failed Service and it is not the same
+as deleting the Service.
+
+Only replicated Services support this operation. A global Service is scheduled
+once on each eligible active Node and cannot be scaled by replica count. If a
+global Service has no running Tasks, inspect its Nodes, placement constraints,
+and Task errors instead of treating it as intentionally stopped.
+
+Do not confuse a Service scaled to zero with an unhealthy Service whose desired
+replica count is greater than zero. The latter still asks Swarm to run Tasks and
+is reported as progressing, degraded, or failed according to its current Task
+and rollout state.
+
 The Config tab stores desired state. Runtime shows the current Service summary,
 bounded Tasks, logs, Task terminal access, and inspect data. Bindings and
 Activities use the same Citadel controls as other managed resources. Service
@@ -241,8 +363,7 @@ The Services page distinguishes:
 - **Unmanaged** Services;
 - Services belonging to an **External Docker Stack**;
 - **Citadel Service** observations linked to a managed Service;
-- Services carrying stale Citadel ownership labels with no verified Citadel
-  owner.
+- Services carrying invalid or conflicting Citadel ownership labels.
 
 This Platform page is observed inventory, so it does not show an **Add Service**
 button. Create a new managed Service from Citadel's main **Services** page.
@@ -254,11 +375,31 @@ Docker Service without changing Docker. The first later Apply updates the same
 Docker Service and establishes Citadel ownership labels. Services belonging to
 an external Docker Stack cannot be adopted individually.
 
-Observed Docker labels never grant Citadel write ownership by themselves. A
-Service with unverified Citadel labels is kept read-only and displays an
-orphaned-metadata diagnostic. Only a verified first-class Citadel Service can
-be changed through the managed Service actions. Stack-owned Services remain
-read-only until Swarm Stack management is implemented.
+The Containers page groups manager-local Docker Stack Task containers under
+their Stack namespace. The namespace row offers **Import Stack** when the
+Stack is external or its previous Citadel owner no longer exists. Individual
+Task containers remain read-only because Docker Swarm owns their lifecycle.
+
+Citadel shows only current Swarm runtime containers in this view. Docker keeps
+exited Task containers for diagnostic history, so Docker Desktop may show more
+containers than Citadel when automatic pruning is disabled or when the
+containers are local to a worker Node.
+Citadel excludes exited, dead, and removing Swarm Task containers from Stack
+membership and health calculations. The default Platform setting also deletes
+bounded batches of that history from the connected manager during container
+synchronization.
+Stopped Docker Standalone and Compose containers remain visible because they
+are current workloads rather than immutable Swarm Task history.
+
+Observed Docker labels never grant Citadel write ownership by themselves. When
+valid Citadel Service or Stack labels reference an owner that no longer exists
+in the current database, Citadel reports the workload as recoverable and offers
+the normal reviewed **Adopt Service** or **Import Stack** flow. The action checks
+the referenced owner again before saving. Invalid, conflicting, mixed, or
+still-owned metadata remains read-only. The first later Apply replaces the old
+ownership labels with the new Citadel owner. Stack-owned Services remain
+read-only from Platform inventory; change their desired state through the
+owning Stack's Config and Apply workflow.
 
 ## View Service And Task Logs
 
@@ -305,6 +446,10 @@ are shown but disabled.
 - Swarm Service Write plus Apply and Platform visibility: Scale a replicated
   managed Service.
 - Swarm Service Execute plus Platform visibility: delete a managed Service.
+- Stack Write plus Platform Read and Inspect: import an external Docker Stack
+  namespace without changing Docker.
+- Existing Stack Apply, Releases, and Execute permissions plus Platform
+  visibility: Apply, rollback, or delete a managed Swarm Stack.
 
 All checks are enforced by the API. Hidden or disabled UI controls are not the
 authorization boundary.
@@ -341,8 +486,9 @@ The current Swarm milestone does not provide:
 - Node role changes/removal and Task mutations;
 - overlay Network updates after creation;
 - in-place Secret value or Config data replacement;
-- Swarm Deployment or Stack create/Apply/delete operations;
-- Docker Stack import/adoption;
+- Citadel Deployments on Swarm Platforms;
+- rollback of a release whose required versioned Secret or Config is no longer
+  retained;
 - cluster-wide image distribution, volume semantics, backup, or restore;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.

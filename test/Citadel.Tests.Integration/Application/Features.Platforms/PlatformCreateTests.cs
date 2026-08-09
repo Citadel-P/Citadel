@@ -220,6 +220,28 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
     public async Task CreatePlatform_WithSwarmManager_IsAvailableByDefaultAndPersistsClusterIdentity()
     {
         ConfigureEmptyDockerInventory(CreateSwarmPlatformResult("daemon-swarm", "cluster-swarm", controlAvailable: true));
+        containerConnector
+            .Setup(connector => connector.ListContainersAsync(
+                It.IsAny<ContainerFilterCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>
+                {
+                    ["current-task"] = new(
+                        Name: "/redis.1.current",
+                        Image: "redis:latest",
+                        Id: "current-task",
+                        ImageId: "sha256:redis",
+                        State: ContainerStateStatus.Running,
+                        IsSwarmTask: true),
+                    ["historical-task"] = new(
+                        Name: "/redis.1.old",
+                        Image: "redis:latest",
+                        Id: "historical-task",
+                        ImageId: "sha256:redis",
+                        State: ContainerStateStatus.Exited,
+                        IsSwarmTask: true)
+                }));
 
         var response = await Client.PostAsync(
             "/api/v1/platforms",
@@ -242,9 +264,17 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         var platform = await uow.Platforms.GetByNameAsync("SWARM-NEW", TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
+        var containers = await uow.Containers.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
+        Assert.Equal("current-task", Assert.Single(containers).DockerContainerId);
         Assert.Equal("cluster-swarm", platform.ClusterId);
         Assert.Equal(PlatformType.DockerSwarm, platform.PlatformDescriptor.Type);
-        Assert.Equal("cluster-swarm", Assert.IsType<DockerSwarmPlatformDescriptor>(platform.PlatformDescriptor).ClusterId);
+        var swarm = Assert.IsType<DockerSwarmPlatformDescriptor>(platform.PlatformDescriptor);
+        Assert.Equal(1, swarm.ContainerCount);
+        Assert.Equal(1, swarm.ContainersRunning);
+        Assert.Equal(0, swarm.ContainersPaused);
+        Assert.Equal(0, swarm.ContainersStopped);
+        Assert.True(platform.PruneHistoricalSwarmTaskContainers);
+        Assert.Equal("cluster-swarm", swarm.ClusterId);
     }
 
     [Fact]

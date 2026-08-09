@@ -15,7 +15,7 @@ import { server } from '@/test/server';
 import { LayoutContext } from '@/lib/context/layout-context';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { Route, Routes } from 'react-router';
+import { Route, Routes, useLocation } from 'react-router';
 import { ServiceComponents } from '.';
 
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => null }));
@@ -211,7 +211,64 @@ describe('ServiceComponents', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Adopt Service' })).toBeDisabled();
   });
+
+  it('offers namespace import for an external Docker Stack Service', async () => {
+    const fake = new FakeHubConnection();
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
+        HttpResponse.json({
+          items: [
+            service({
+              name: 'redis-test_web',
+              ownership: SwarmServiceOwnership.DockerStackExternal,
+              dockerStackNamespace: 'redis-test',
+              ownershipDiagnostic: 'The Citadel Stack owner no longer exists. This Docker Stack can be imported.',
+            }),
+          ],
+        }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
+      http.get('http://localhost/api/v1/swarmServices', () =>
+        HttpResponse.json({
+          swarmServices: [],
+          capabilities: { canRead: true, canWrite: true, canExecute: true },
+        }),
+      ),
+    );
+
+    renderCitadel(
+      <LayoutContext.Provider value={layoutContext}>
+        <Routes>
+          <Route
+            path="/platforms/:platformId/services"
+            element={<RegularResourceView Components={ServiceComponents} type="Service" showTaskSheet={false} />}
+          />
+          <Route path="/stacks/add" element={<LocationProbe />} />
+        </Routes>
+      </LayoutContext.Provider>,
+      {
+        route: `/platforms/${platformId}/services`,
+        signalR: {
+          connectionFactory: () => fake.asHubConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+
+    await screen.findByRole('link', { name: 'redis-test_web' });
+    await act(async () => screen.getByRole('checkbox', { name: 'Select Service redis-test_web' }).click());
+    await act(async () => screen.getByRole('button', { name: 'Import Stack' }).click());
+
+    expect(await screen.findByTestId('location')).toHaveTextContent(
+      `/stacks/add?importPlatform=${platformId}&importProject=redis-test&importKind=SwarmStack`,
+    );
+  });
 });
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname + location.search}</span>;
+};
 
 const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): ManagedSwarmServiceView => ({
   id: 'managed-service-1',

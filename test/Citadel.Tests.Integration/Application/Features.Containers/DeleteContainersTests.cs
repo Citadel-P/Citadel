@@ -181,4 +181,46 @@ public class DeleteContainersTests(PostgresTestFixture fixture) : IntegrationTes
         Assert.NotNull(persisted);
         Assert.Equal(ResourceControlState.Idle, persisted.ControlState);
     }
+
+    [Fact]
+    public async Task Delete_SwarmTaskContainer_ReturnsConflictAndPreservesTheTask()
+    {
+        var platform = Fakes.GetDummyPlatform();
+        const string containerId = "52ccd07956a652ccd07956a652ccd07956a652ccd07956a652ccd07956a6";
+        var container = new Container(
+            name: "redis-test_web.1.task-id",
+            dockerImageId: "sha256:redis",
+            platformId: platform.Id,
+            dockerContainerId: containerId,
+            state: ContainerStateStatus.Running,
+            dockerStack: "redis-test",
+            isSwarmTask: true);
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var uow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+            await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var response = await Client.SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete, "/api/v1/containers")
+            {
+                Content = new StringContent(
+                    $$"""{"containerIds":["{{containerId[..12]}}"],"force":true}""",
+                    Encoding.UTF8,
+                    "application/json")
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains(
+            "Docker Swarm task containers cannot be managed directly",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Assert.NotNull(await assertUow.Containers.GetByIdAsync(containerId, TestContext.Current.CancellationToken));
+    }
 }

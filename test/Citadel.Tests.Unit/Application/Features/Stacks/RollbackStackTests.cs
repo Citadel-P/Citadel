@@ -2,7 +2,9 @@ using Application.Features.Stacks.Commands;
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common.Abstraction;
 using Moq;
@@ -240,6 +242,175 @@ public class RollbackStackTests
             It.Is<StackSnapshot?>(snapshot => snapshot != null),
             It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RollbackStack_SwarmReleaseWithMountedSecret_ShouldFailClosedWithoutApplying()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platform = new Platform(
+            "swarm",
+            "http://swarm.local",
+            0, 0, 0, 4, 1024, "28.0.0", "1.0.0",
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                "node-1", "10.0.0.1", "Active", true, 1, 1,
+                "daemon-1", 0, 0, 0, 0, "cluster-1"),
+            clusterId: "cluster-1");
+        var stack = Stack.Create(
+            "secret-stack",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                "services:\n  app:\n    image: nginx\n",
+                StackUpdateBehavior.Disabled),
+            platform: platform);
+        stack.CurrentStackRelease!.UpdateResourceBindings(
+        [
+            new ResourceBindingSnapshot(
+                "API_KEY",
+                ResourceBindingKind.Secret,
+                ResourceBindingScope.Stack,
+                "********",
+                Guid.CreateVersion7(),
+                SecretDeliveryMode.MountedFile,
+                "/run/secrets/api-key")
+        ]);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var historical = stack.CurrentStackRelease.CreateSnapshot();
+        Assert.True(stack.PrepareReleaseForApply(actorId));
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(repository => repository.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks.Setup(repository => repository.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack.CurrentStackRelease!, historical]);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(value => value.Stacks).Returns(stacks.Object);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(repository => repository.GetByIdAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platform);
+        unitOfWork.Setup(value => value.Platforms).Returns(platforms.Object);
+        var apply = new Mock<IApplyStackService>();
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext.Setup(value => value.Current).Returns(new TestUserContext(actorId));
+        var handler = new RollbackStackHandler(unitOfWork.Object, apply.Object, userContext.Object);
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in handler.Handle(
+                           new RollbackStack(stack.Id, historical.Id),
+                           TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Contains(items, item => item.Message?.Contains("exact rollback", StringComparison.OrdinalIgnoreCase) == true);
+        apply.VerifyNoOtherCalls();
+        unitOfWork.Verify(value => value.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RollbackStack_SwarmReleaseWithRetainedResources_ShouldCopyIdentitiesAndApply()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platform = new Platform(
+            "swarm",
+            "http://swarm.local",
+            0, 0, 0, 4, 1024, "28.0.0", "1.0.0",
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                "node-1", "10.0.0.1", "Active", true, 1, 1,
+                "daemon-1", 0, 0, 0, 0, "cluster-1"),
+            clusterId: "cluster-1");
+        var stack = Stack.Create(
+            "secret-stack",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack("services:\n  api:\n    image: nginx", StackUpdateBehavior.Disabled));
+        stack.CurrentStackRelease!.UpdateResourceBindings(
+        [
+            new ResourceBindingSnapshot(
+                "API_KEY",
+                ResourceBindingKind.Secret,
+                ResourceBindingScope.Stack,
+                "********",
+                Guid.CreateVersion7(),
+                SecretDeliveryMode.MountedFile,
+                "/run/secrets/api-key")
+        ]);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var historical = stack.CurrentStackRelease.CreateSnapshot();
+        var retained = new StackReleaseSwarmResource(
+            historical.Id,
+            platform.Id,
+            StackReleaseSwarmResourceKind.Secret,
+            "secret-id",
+            "secret-stack_citadel-api-key-v1",
+            "citadel-api-key-v1",
+            [new StackReleaseSwarmResourceMount("api", "api-key")]);
+        var retainedConfig = new StackReleaseSwarmResource(
+            historical.Id,
+            platform.Id,
+            StackReleaseSwarmResourceKind.Config,
+            "config-id",
+            "secret-stack_settings-v1",
+            "settings-v1",
+            [new StackReleaseSwarmResourceMount("api", "/etc/demo/settings.yml")]);
+        Assert.True(stack.PrepareReleaseForApply(actorId));
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        IReadOnlyCollection<StackReleaseSwarmResource>? copied = null;
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(repository => repository.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        stacks.Setup(repository => repository.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack.CurrentStackRelease!, historical]);
+        stacks.Setup(repository => repository.GetReleaseSwarmResourcesAsync(historical.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([retained, retainedConfig]);
+        stacks.Setup(repository => repository.UpdateAsync(stack, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        stacks.Setup(repository => repository.ReplaceReleaseSwarmResourcesAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyCollection<StackReleaseSwarmResource>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, IReadOnlyCollection<StackReleaseSwarmResource>, CancellationToken>((_, resources, _) => copied = resources)
+            .ReturnsAsync(1);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(repository => repository.GetByIdAsync(platform.Id, It.IsAny<CancellationToken>())).ReturnsAsync(platform);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(value => value.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(value => value.Platforms).Returns(platforms.Object);
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var apply = new Mock<IApplyStackService>();
+        apply.Setup(service => service.ApplyAsync(
+                stack.Id,
+                actorId,
+                null,
+                false,
+                false,
+                true,
+                StackApplyOperation.Rollback,
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(SuccessfulApplyStream());
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext.Setup(value => value.Current).Returns(new TestUserContext(actorId));
+        var handler = new RollbackStackHandler(unitOfWork.Object, apply.Object, userContext.Object);
+
+        await foreach (var _ in handler.Handle(
+                           new RollbackStack(stack.Id, historical.Id),
+                           TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Equal(2, copied!.Count);
+        Assert.All(copied, resource => Assert.Equal(stack.CurrentStackReleaseId, resource.StackReleaseId));
+        Assert.Contains(copied, resource => resource.DockerResourceId == retained.DockerResourceId);
+        Assert.Contains(copied, resource => resource.DockerResourceId == retainedConfig.DockerResourceId);
+        apply.VerifyAll();
     }
 
     private static async IAsyncEnumerable<StackStreamItem> SuccessfulApplyStream()

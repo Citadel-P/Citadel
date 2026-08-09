@@ -1,10 +1,13 @@
 using Application.Services.Abstractions;
+using Application.Services;
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Domain.Entities.Stacks;
 using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -33,6 +36,8 @@ internal sealed class SwarmReconciliationJob(
     IDbWorkQueue dbQueue,
     INotificationQueue notificationQueue,
     IApplicationHubDispatcher hubDispatcher,
+    IGitStackMaterializer gitStackMaterializer,
+    IAlertService alertService,
     TimeProvider timeProvider,
     ILogger<SwarmReconciliationJob> logger) : BackgroundService, ISwarmReconciliationCoordinator
 {
@@ -427,15 +432,34 @@ internal sealed class SwarmReconciliationJob(
         var workItem = new PersistSwarmSnapshotWorkItem(
             platformId,
             snapshot,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            gitStackMaterializer);
         await dbQueue.EnqueueAndWaitAsync(workItem, cancellationToken);
-        await TryNotifyAsync(platformId, workItem.Current, workItem.ManagedChanges, cancellationToken);
+        await TryNotifyAsync(
+            platformId,
+            workItem.Current,
+            workItem.ManagedChanges,
+            workItem.RecoveredStacks,
+            cancellationToken);
+        if (workItem.OperationFailures.Count > 0)
+        {
+            await alertService.ProcessAsync(
+                AlertType.SwarmServiceOperationFailed,
+                new AlertEvaluationContext(
+                    timeProvider.GetUtcNow().UtcDateTime,
+                    [],
+                    [],
+                    [],
+                    SwarmServiceOperationFailures: workItem.OperationFailures),
+                cancellationToken);
+        }
     }
 
     private async Task TryNotifyAsync(
         Guid platformId,
         SwarmProjectionSnapshot snapshot,
         IReadOnlyList<ManagedSwarmServiceChange> managedChanges,
+        IReadOnlyList<Stack> recoveredStacks,
         CancellationToken cancellationToken)
     {
         try
@@ -444,7 +468,7 @@ internal sealed class SwarmReconciliationJob(
             enqueueTimeout.CancelAfter(NotificationEnqueueTimeout);
             await notificationQueue.EnqueueAsync(
                 new SwarmInventoryUpdatedNotificationWorkItem(
-                    hubDispatcher, platformId, snapshot, managedChanges),
+                    hubDispatcher, platformId, snapshot, managedChanges, recoveredStacks),
                 enqueueTimeout.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -512,13 +536,16 @@ internal sealed class SwarmReconciliationJob(
 internal sealed class PersistSwarmSnapshotWorkItem(
     Guid platformId,
     SwarmProjectionSnapshot? snapshot,
-    DateTimeOffset? reconciliationCompletedAt = null) : IDbWorkItem
+    DateTimeOffset? reconciliationCompletedAt = null,
+    IGitStackMaterializer? gitStackMaterializer = null) : IDbWorkItem
 {
     private static readonly TimeSpan OutcomeUnknownGrace = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PendingAcceptanceGrace = TimeSpan.FromMinutes(2.5);
     private static readonly TimeSpan AcceptedObservationGrace = TimeSpan.FromMinutes(2.5);
     public SwarmProjectionSnapshot Current { get; private set; } = null!;
     public IReadOnlyList<ManagedSwarmServiceChange> ManagedChanges { get; private set; } = [];
+    public IReadOnlyList<Stack> RecoveredStacks { get; private set; } = [];
+    public IReadOnlyList<SwarmServiceOperationFailureAlertSnapshot> OperationFailures { get; private set; } = [];
 
     public async Task ExecuteAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
     {
@@ -535,20 +562,250 @@ internal sealed class PersistSwarmSnapshotWorkItem(
         }
         else
         {
-            Current = await NormalizeManagedServicesAsync(unitOfWork, snapshot, cancellationToken);
+            var stackRepository = unitOfWork.Stacks;
+            var stacks = stackRepository is null
+                ? []
+                : (await stackRepository.GetInfoAsync(cancellationToken, platformId: platformId) ?? []).ToArray();
+            Current = await NormalizeManagedServicesAsync(unitOfWork, snapshot, stacks, cancellationToken);
+            RecoveredStacks = await ReconcileRecoverableStacksAsync(unitOfWork, Current, stacks, cancellationToken);
             await unitOfWork.Swarm.ReplaceAsync(platformId, Current, cancellationToken);
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
-    private async Task<SwarmProjectionSnapshot> NormalizeManagedServicesAsync(
+    private async Task<IReadOnlyList<Stack>> ReconcileRecoverableStacksAsync(
         IUnitOfWork unitOfWork,
+        SwarmProjectionSnapshot source,
+        IReadOnlyList<Stack> stacks,
+        CancellationToken cancellationToken)
+    {
+        const string managedLabel = "com.citadel.managed";
+        const string stackIdLabel = "com.citadel.stack-id";
+        const string releaseIdLabel = "com.citadel.release-id";
+        const string serviceCountLabel = "com.citadel.stack-service-count";
+        var stackRepository = unitOfWork.Stacks;
+        if (stackRepository is null)
+            return [];
+        var recovered = new List<Stack>();
+
+        foreach (var stack in stacks.Where(static stack =>
+                     stack.CurrentStackRelease?.Status is StackReleaseStatus.TimedOut or StackReleaseStatus.Unknown))
+        {
+            var release = stack.CurrentStackRelease!;
+            var stackId = stack.Id.ToString("D");
+            var releaseId = release.Id.ToString("D");
+            var services = source.Services.Where(service =>
+                    HasLabel(service.Labels, managedLabel, "true")
+                    && HasLabel(service.Labels, stackIdLabel, stackId)
+                    && HasLabel(service.Labels, releaseIdLabel, releaseId))
+                .ToArray();
+            if (services.Length == 0
+                || !TryGetExpectedServiceCount(services, serviceCountLabel, out var expectedServiceCount)
+                || services.Length != expectedServiceCount)
+            {
+                continue;
+            }
+
+            string? failure = null;
+            foreach (var service in services)
+            {
+                if (IsPausedRollout(service.UpdateState))
+                {
+                    failure = FindTaskFailure(source.Tasks, service.DockerServiceId)
+                        ?? service.UpdateMessage
+                        ?? $"Docker paused Service '{service.Name}' in rollout state '{service.UpdateState}'.";
+                    break;
+                }
+
+                if (IsCompletedRollout(service.UpdateState)
+                    && service.RunningTaskCount < service.DesiredTaskCount
+                    && FindTaskFailure(source.Tasks, service.DockerServiceId) is { } taskFailure)
+                {
+                    failure = taskFailure;
+                    break;
+                }
+            }
+
+            var status = failure is not null
+                ? StackReleaseStatus.Failed
+                : services.All(service =>
+                    IsCompletedRollout(service.UpdateState)
+                    && service.RunningTaskCount >= service.DesiredTaskCount)
+                    ? StackReleaseStatus.Healthy
+                    : StackReleaseStatus.Unknown;
+            if (status == StackReleaseStatus.Unknown)
+                continue;
+
+            if (status == StackReleaseStatus.Healthy
+                && !await HasCompleteSwarmReleaseResourcesAsync(
+                    stackRepository,
+                    release.Id,
+                    services,
+                    source,
+                    cancellationToken))
+            {
+                // A deployment interrupted after Docker accepted it may converge before Citadel records
+                // the immutable resource identities required for a safe rollback. Keep the outcome
+                // recoverable instead of claiming a Healthy release that cannot be rolled back exactly.
+                continue;
+            }
+
+            if (status == StackReleaseStatus.Healthy
+                && release.Spec is GitStack
+                && gitStackMaterializer is not null)
+            {
+                try
+                {
+                    await gitStackMaterializer.ActivateReleaseAsync(stack.Id, release.Id, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Keep the release recoverable and retry after the next Swarm observation.
+                    continue;
+                }
+
+                try
+                {
+                    var releases = await stackRepository.GetReleasesByStackIdAsync(stack.Id, cancellationToken);
+                    var retainedReleaseIds = releases
+                        .Where(candidate => candidate.Id == release.Id || candidate.IsRollbackCandidate())
+                        .Select(static candidate => candidate.Id)
+                        .ToArray();
+                    await gitStackMaterializer.PruneSnapshotsAsync(stack.Id, retainedReleaseIds, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Snapshot cleanup is best effort; a later successful apply retries it.
+                }
+            }
+
+            stack.PartialUpdate(status);
+            await stackRepository.UpdateAsync(stack, cancellationToken);
+            recovered.Add(stack);
+        }
+
+        return recovered;
+    }
+
+    private static async Task<bool> HasCompleteSwarmReleaseResourcesAsync(
+        IStackRepository stackRepository,
+        Guid releaseId,
+        IReadOnlyList<SwarmServiceProjection> services,
         SwarmProjectionSnapshot source,
         CancellationToken cancellationToken)
     {
+        const string namespaceLabel = "com.docker.stack.namespace";
+        var namespaces = services
+            .Select(service => service.Labels.GetValueOrDefault(namespaceLabel))
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.Ordinal);
+        if (namespaces.Count == 0)
+            return false;
+
+        var referencedSecretIds = services
+            .SelectMany(static service => service.SecretIds)
+            .ToHashSet(StringComparer.Ordinal);
+        var referencedConfigIds = services
+            .SelectMany(static service => service.ConfigIds)
+            .ToHashSet(StringComparer.Ordinal);
+        var requiredResources = source.Secrets
+            .Where(resource => !resource.IsStale
+                && referencedSecretIds.Contains(resource.DockerSecretId)
+                && resource.Labels.TryGetValue(namespaceLabel, out var value)
+                && namespaces.Contains(value))
+            .Select(static resource => (StackReleaseSwarmResourceKind.Secret, resource.DockerSecretId))
+            .Concat(source.Configs
+                .Where(resource => !resource.IsStale
+                    && referencedConfigIds.Contains(resource.DockerConfigId)
+                    && resource.Labels.TryGetValue(namespaceLabel, out var value)
+                    && namespaces.Contains(value))
+                .Select(static resource => (StackReleaseSwarmResourceKind.Config, resource.DockerConfigId)))
+            .ToHashSet();
+        if (requiredResources.Count == 0)
+            return true;
+
+        var retainedResources = await stackRepository.GetReleaseSwarmResourcesAsync(releaseId, cancellationToken);
+        var retainedResourceIds = retainedResources
+            .Where(static resource => resource.Mounts.Count > 0)
+            .Select(static resource => (resource.Kind, resource.DockerResourceId))
+            .ToHashSet();
+        return requiredResources.IsSubsetOf(retainedResourceIds);
+    }
+
+    private static bool TryGetExpectedServiceCount(
+        IReadOnlyList<SwarmServiceProjection> services,
+        string label,
+        out int count)
+    {
+        count = 0;
+        foreach (var service in services)
+        {
+            if (!service.Labels.TryGetValue(label, out var value)
+                || !int.TryParse(value, out var current)
+                || current <= 0
+                || (count != 0 && count != current))
+            {
+                return false;
+            }
+
+            count = current;
+        }
+
+        return count > 0;
+    }
+
+    private static bool HasLabel(IReadOnlyDictionary<string, string> labels, string name, string expected)
+        => labels.TryGetValue(name, out var value)
+            && string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPausedRollout(string state)
+        => state.Equals("Paused", StringComparison.OrdinalIgnoreCase)
+            || state.Equals("RollbackPaused", StringComparison.OrdinalIgnoreCase)
+            || state.Equals("RollbackCompleted", StringComparison.OrdinalIgnoreCase)
+            || state.Equals("rollback_paused", StringComparison.OrdinalIgnoreCase)
+            || state.Equals("rollback_completed", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCompletedRollout(string state)
+        => string.IsNullOrWhiteSpace(state)
+            || state.Equals("None", StringComparison.OrdinalIgnoreCase)
+            || state.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+
+    private static string? FindTaskFailure(
+        IReadOnlyList<SwarmTaskProjection> tasks,
+        string dockerServiceId)
+        => tasks.FirstOrDefault(task =>
+            !task.IsStale
+            && task.DockerServiceId.Equals(dockerServiceId, StringComparison.Ordinal)
+            && !task.DesiredState.Equals("shutdown", StringComparison.OrdinalIgnoreCase)
+            && !task.DesiredState.Equals("remove", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(task.Error))?.Error;
+
+    private async Task<SwarmProjectionSnapshot> NormalizeManagedServicesAsync(
+        IUnitOfWork unitOfWork,
+        SwarmProjectionSnapshot source,
+        IReadOnlyList<Stack> stacks,
+        CancellationToken cancellationToken)
+    {
         var changes = new List<ManagedSwarmServiceChange>();
+        List<SwarmServiceOperationFailureAlertSnapshot>? operationFailures = null;
         var managed = await unitOfWork.SwarmServices.GetByPlatformAsync(platformId, cancellationToken);
+        var stackNamespaces = stacks.ToDictionary(
+            static stack => stack.Id,
+            static stack => StackProjectNameResolver.Resolve(stack));
+        var persistedStackOwners = stackNamespaces.Count == 0
+            ? new Dictionary<string, Guid>(StringComparer.Ordinal)
+            : (await unitOfWork.Swarm.GetServicesAsync(platformId, cancellationToken) ?? [])
+                .Where(service => service.StackId is { } stackId && stackNamespaces.ContainsKey(stackId))
+                .ToDictionary(static service => service.DockerServiceId, static service => service.StackId!.Value, StringComparer.Ordinal);
         var clusterId = managed.Count == 0
             ? null
             : (await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken))?.ClusterId;
@@ -559,16 +816,23 @@ internal sealed class PersistSwarmSnapshotWorkItem(
             .ToDictionary(static service => service.DockerServiceId!, StringComparer.Ordinal);
         var associated = source.Services
             .Select(projection =>
-                projection.SwarmServiceId is null
-                && projection.Ownership == SwarmServiceOwnership.Unmanaged
-                && byDockerId.TryGetValue(projection.DockerServiceId, out var owner)
+            {
+                projection = NormalizeOrphanedOwnership(
+                    projection,
+                    byId,
+                    stackNamespaces,
+                    persistedStackOwners);
+                return projection.SwarmServiceId is null
+                    && projection.Ownership == SwarmServiceOwnership.Unmanaged
+                    && byDockerId.TryGetValue(projection.DockerServiceId, out var owner)
                     ? projection with
                     {
                         SwarmServiceId = owner.Id,
                         Ownership = SwarmServiceOwnership.CitadelService,
                         OwnershipDiagnostic = null
                     }
-                    : projection)
+                    : projection;
+            })
             .ToArray();
         var claimed = associated
             .Where(static service => service.SwarmServiceId is not null)
@@ -763,14 +1027,92 @@ internal sealed class PersistSwarmSnapshotWorkItem(
                 if (await unitOfWork.SwarmServices.UpdateAsync(service, cancellationToken) > 0)
                 {
                     if (operationActivity is not null)
+                    {
                         await unitOfWork.ActivityEventRepository.AddAsync(operationActivity, cancellationToken);
+                        if (operationActivity.Info is SwarmServiceOperationFailed failure)
+                        {
+                            (operationFailures ??= []).Add(new SwarmServiceOperationFailureAlertSnapshot(
+                                service.Id,
+                                service.Name,
+                                failure.OperationId,
+                                failure.Kind,
+                                failure.Reason));
+                        }
+                    }
                     changes.Add(new ManagedSwarmServiceChange(service, "update"));
                 }
             }
         }
 
         ManagedChanges = changes;
+        OperationFailures = operationFailures ?? [];
         return source with { Services = normalized };
+    }
+
+    private static SwarmServiceProjection NormalizeOrphanedOwnership(
+        SwarmServiceProjection projection,
+        IReadOnlyDictionary<Guid, SwarmService> managedServices,
+        IReadOnlyDictionary<Guid, string> stackNamespaces,
+        IReadOnlyDictionary<string, Guid> persistedStackOwners)
+    {
+        if (persistedStackOwners.TryGetValue(projection.DockerServiceId, out var persistedStackId))
+        {
+            return projection with
+            {
+                StackId = persistedStackId,
+                Ownership = SwarmServiceOwnership.CitadelStack,
+                OwnershipDiagnostic = null
+            };
+        }
+
+        if (projection.Ownership == SwarmServiceOwnership.CitadelStack
+            && TryGetGuidLabel(projection.Labels, "com.citadel.stack-id", out var claimedStackId))
+        {
+            if (!stackNamespaces.TryGetValue(claimedStackId, out var expectedNamespace))
+            {
+                return projection with
+                {
+                    StackId = null,
+                    Ownership = SwarmServiceOwnership.DockerStackExternal,
+                    OwnershipDiagnostic = "The Citadel Stack owner no longer exists. This Docker Stack can be imported."
+                };
+            }
+
+            return string.Equals(
+                    projection.DockerStackNamespace,
+                    expectedNamespace,
+                    StringComparison.Ordinal)
+                ? projection with { StackId = claimedStackId, OwnershipDiagnostic = null }
+                : projection with
+                {
+                    StackId = null,
+                    Ownership = SwarmServiceOwnership.OwnershipConflict,
+                    OwnershipDiagnostic = "The claimed Citadel Stack does not own this Docker Stack namespace."
+                };
+        }
+
+        if (projection.Ownership == SwarmServiceOwnership.CitadelService
+            && projection.SwarmServiceId is { } claimedServiceId
+            && !managedServices.ContainsKey(claimedServiceId))
+        {
+            return projection with
+            {
+                SwarmServiceId = null,
+                Ownership = SwarmServiceOwnership.Unmanaged,
+                OwnershipDiagnostic = "The Citadel Service owner no longer exists. This Service can be adopted."
+            };
+        }
+
+        return projection;
+    }
+
+    private static bool TryGetGuidLabel(
+        IReadOnlyDictionary<string, string> labels,
+        string key,
+        out Guid value)
+    {
+        value = Guid.Empty;
+        return labels.TryGetValue(key, out var text) && Guid.TryParse(text, out value);
     }
 
     internal static bool CanProveNotAccepted(
@@ -999,17 +1341,21 @@ internal sealed class SwarmInventoryUpdatedNotificationWorkItem(
     IApplicationHubDispatcher hubDispatcher,
     Guid platformId,
     SwarmProjectionSnapshot snapshot,
-    IReadOnlyList<ManagedSwarmServiceChange> managedChanges) : INotificationWorkItem
+    IReadOnlyList<ManagedSwarmServiceChange> managedChanges,
+    IReadOnlyList<Stack>? recoveredStacks = null) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var notifications = new Task[managedChanges.Count + 1];
+        var stackChanges = recoveredStacks ?? [];
+        var notifications = new Task[managedChanges.Count + stackChanges.Count + 1];
         notifications[0] = hubDispatcher.SendSwarmInventory(platformId, snapshot, cancellationToken);
         for (var index = 0; index < managedChanges.Count; index++)
         {
             var change = managedChanges[index];
             notifications[index + 1] = hubDispatcher.SendSwarmServiceInfo(change.Service, change.Action);
         }
+        for (var index = 0; index < stackChanges.Count; index++)
+            notifications[managedChanges.Count + index + 1] = hubDispatcher.SendStackInfo(stackChanges[index]);
         return Task.WhenAll(notifications);
     }
 }

@@ -1,10 +1,22 @@
-import { StackDriftMode, StackSource, StackUpdateBehavior } from '@/api/generated/api.types';
+import {
+  LookupResourceType,
+  StackDriftMode,
+  StackImportKind,
+  StackSource,
+  StackUpdateBehavior,
+} from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StackForm } from './form';
 
+const { importComposeProjectMock, useReadMock } = vi.hoisted(() => ({
+  importComposeProjectMock: vi.fn(),
+  useReadMock: vi.fn(),
+}));
+
 const importDraft = {
+  importKind: StackImportKind.ComposeProject,
   source: {
     platformId: '019f0000-0000-7000-8000-000000000001',
     platformName: 'Local',
@@ -51,19 +63,27 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
     ...actual,
     useMutate: (key: string) => ({
       mutateAsync:
-        key === 'validateComposeProjectImportDraft'
-          ? vi.fn().mockResolvedValue({
-              data: {
-                issues: [],
-                previewFingerprint: 'preview-fingerprint',
-                services: [],
-              },
-            })
-          : vi.fn(),
+        key === 'importComposeProject'
+          ? importComposeProjectMock
+          : key === 'validateComposeProjectImportDraft'
+            ? vi.fn().mockResolvedValue({
+                data: {
+                  issues: [],
+                  previewFingerprint: 'preview-fingerprint',
+                  services: [],
+                  importableSensitiveEnvironmentNames: ['BESZEL_AGENT_TOKEN', 'stripe_api_key_1'],
+                  canImportSensitiveEnvironmentValues: true,
+                },
+              })
+            : vi.fn(),
       isPending: false,
     }),
-    useSaveResource: () => ({ save: vi.fn(), isPending: false }),
-    useRead: (key: string) => {
+    useSaveResource: (options: { onCreate: (payload: unknown) => Promise<unknown> }) => ({
+      save: options.onCreate,
+      isPending: false,
+    }),
+    useRead: (key: string, ...args: unknown[]) => {
+      useReadMock(key, ...args);
       switch (key) {
         case 'getComposeProjectImportDraft':
           return { data: { data: importDraft }, isFetching: false };
@@ -103,7 +123,27 @@ vi.mock('@/features/license/use-license-entitlements', () => ({
 }));
 
 vi.mock('@/components/custom/common', () => ({
-  ResourceSelectorField: () => null,
+  ResourceSelectorField: ({
+    selected,
+    items,
+    disabled,
+    targetType,
+  }: {
+    selected?: string | { id: string; name: string };
+    items?: Array<{ id: string; name: string }>;
+    disabled?: boolean;
+    targetType: LookupResourceType;
+  }) => {
+    const selectedItem = typeof selected === 'string' ? items?.find((item) => item.id === selected) : selected;
+    return (
+      <button
+        type="button"
+        aria-label={targetType === LookupResourceType.Platform ? 'Platform selection' : 'Resource selection'}
+        disabled={disabled}>
+        {selectedItem?.name ?? 'Select Platform'}
+      </button>
+    );
+  },
 }));
 
 vi.mock('@/features/tags/components', () => ({
@@ -143,19 +183,38 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
 
   return {
     ...actual,
-    FormShell: ({ schema, confirmSave }: { schema: any; confirmSave?: (payload: any) => Promise<boolean> }) => {
+    FormShell: ({
+      schema,
+      original,
+      update,
+      confirmSave,
+      onSave,
+    }: {
+      schema: any;
+      original: any;
+      update: any;
+      confirmSave?: (payload: any) => Promise<boolean>;
+      onSave: (payload: any) => Promise<unknown>;
+    }) => {
       const autoUpdate = findField(schema, 'spec.updateBehavior');
       const webhook = findField(schema, 'spec.webhook');
       const drift = findField(schema, 'driftPolicy.mode');
       const repository = findField(schema, 'spec.gitRepoId');
+      const platform = findField(schema, 'platformId');
+      const platformId = update.platformId ?? original.platformId;
 
       return (
         <div>
           {repository?.render(importDraft.draft.spec.gitRepoId, vi.fn())}
+          <fieldset disabled={platform?.disabled}>{platform?.render(platformId, vi.fn())}</fieldset>
           <button aria-label="Auto Update setting" disabled={autoUpdate?.disabled} />
           <button aria-label="Webhook setting" disabled={webhook?.disabled} />
           <button aria-label="Drift setting" disabled={drift?.disabled} />
-          <button type="button" onClick={() => void confirmSave?.(importDraft.draft)}>
+          <button
+            type="button"
+            onClick={async () => {
+              if ((await confirmSave?.(importDraft.draft)) !== false) await onSave(importDraft.draft);
+            }}>
             Submit import
           </button>
           <span>{autoUpdate?.description}</span>
@@ -166,6 +225,41 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
 });
 
 describe('Stack Compose import configuration', () => {
+  beforeEach(() => {
+    importComposeProjectMock.mockReset().mockResolvedValue({ data: {} });
+    useReadMock.mockClear();
+  });
+
+  it('sends the selected import kind as an API query parameter', async () => {
+    renderCitadel(<StackForm mode="add" />, {
+      route:
+        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git&importKind=ComposeProject',
+    });
+
+    await waitFor(() =>
+      expect(useReadMock).toHaveBeenCalledWith(
+        'getComposeProjectImportDraft',
+        {
+          platformId: '019f0000-0000-7000-8000-000000000001',
+          projectName: 'beszel-git',
+          query: { importKind: StackImportKind.ComposeProject },
+        },
+        { enabled: true },
+      ),
+    );
+  });
+
+  it('shows and locks the imported platform without waiting for the platform list', async () => {
+    renderCitadel(<StackForm mode="add" />, {
+      route:
+        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git&importKind=ComposeProject',
+    });
+
+    const platform = await screen.findByRole('button', { name: 'Platform selection' });
+    expect(platform).toHaveTextContent('Local');
+    expect(platform).toBeDisabled();
+  });
+
   it('allows reviewed update and webhook settings while keeping drift disabled', async () => {
     renderCitadel(<StackForm mode="add" />, {
       route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git',
@@ -176,7 +270,6 @@ describe('Stack Compose import configuration', () => {
     expect(screen.getByRole('button', { name: 'Webhook setting' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Drift setting' })).toBeDisabled();
     expect(screen.getByText(/Choose how the platform handles new stack versions/i)).toBeInTheDocument();
-    expect(screen.getByText(/Drift management can be configured after the import/i)).toBeInTheDocument();
   });
 
   it('offers the compact repository browser action', async () => {
@@ -194,9 +287,20 @@ describe('Stack Compose import configuration', () => {
       route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git',
     });
 
+    expect(await screen.findByRole('switch', { name: 'Import detected values as Citadel secrets' })).toBeChecked();
+    expect(
+      screen.getByText(/matching sensitive values referenced by the reviewed Compose source/i),
+    ).toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: 'Submit import' }));
 
     expect(await screen.findByRole('heading', { name: 'Confirm Import' })).toBeInTheDocument();
+    expect(screen.getByText(/BESZEL_AGENT_TOKEN, stripe_api_key_1/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).queryByRole('switch', {
+        name: 'Import detected values as Citadel secrets',
+      }),
+    ).not.toBeInTheDocument();
     const confirmButton = screen.getByRole('button', { name: 'Import' });
     expect(confirmButton).toBeDisabled();
 
@@ -205,5 +309,12 @@ describe('Stack Compose import configuration', () => {
     expect(confirmButton).toBeEnabled();
     await user.click(confirmButton);
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Confirm Import' })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(importComposeProjectMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ importSensitiveEnvironmentAsSecrets: true }),
+        }),
+      ),
+    );
   });
 });

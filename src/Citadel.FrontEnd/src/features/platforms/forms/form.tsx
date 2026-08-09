@@ -13,6 +13,7 @@ import {
   defineGroupField,
   defineSection,
   FieldInput,
+  FieldSwitch,
   FieldTextArea,
   FormShell,
 } from '@/components/custom/form-builder';
@@ -108,6 +109,8 @@ export const PlatformForm = ({
     createdPlatform?.connectorType ?? update.connectorType ?? original.connectorType ?? PlatformConnectorType.Local;
   const isAgent = connectorType === PlatformConnectorType.Agent;
   const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
+  const platformType = update.type ?? original.type ?? PlatformType.Docker;
+  const isSwarm = platformType === PlatformType.DockerSwarm;
   const { data: agentSetupData, isLoading: isAgentSetupLoading } = useRead('getAgentSetup', undefined, {
     enabled: isAgent,
   });
@@ -188,6 +191,32 @@ export const PlatformForm = ({
               }),
             ],
           }),
+          ...(isSwarm
+            ? [
+                defineGroupField<PlatformFormInput>({
+                  id: 'maintenance',
+                  label: 'Maintenance',
+                  items: [
+                    defineField({
+                      key: 'pruneHistoricalSwarmTaskContainers',
+                      label: 'Prune historical task containers',
+                      description:
+                        'Delete terminal Swarm task containers retained on the connected manager. Running tasks and standalone or Compose containers are never removed.',
+                      render: (value, set) => (
+                        <FieldSwitch
+                          id="prune-historical-swarm-task-containers"
+                          checked={value !== false}
+                          onChange={(pruneHistoricalSwarmTaskContainers) =>
+                            set({ pruneHistoricalSwarmTaskContainers })
+                          }
+                          disabled={formDisabled}
+                        />
+                      ),
+                    }),
+                  ],
+                }),
+              ]
+            : []),
           defineGroupField<PlatformFormInput>({
             id: 'connector',
             label: 'Connector',
@@ -362,6 +391,7 @@ export const PlatformForm = ({
       regenerateEnrollment,
       rotateAgentHubKey,
       isRotatingAgentHubKey,
+      isSwarm,
     ],
   );
 

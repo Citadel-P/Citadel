@@ -554,13 +554,38 @@ public enum StackReleaseStatus
     Paused,
     Degraded,
     Failed,
-    Stopped
+    Stopped,
+    TimedOut
+}
+
+public enum StackOrchestrationMode
+{
+    DockerCompose = 0,
+    DockerSwarm = 1
+}
+
+public enum StackImportKind
+{
+    ComposeProject = 0,
+    SwarmStack = 1
+}
+
+public enum StackReleaseSwarmResourceKind
+{
+    Secret = 0,
+    Config = 1
 }
 
 public enum StackSource
 {
     WebEditor = 0,
     Git
+}
+
+public enum SwarmStackCompatibilitySeverity
+{
+    Warning,
+    Error
 }
 
 public enum StackDriftMode
@@ -977,6 +1002,10 @@ public enum AlertType
     DeploymentAutoUpdated,
     #endregion
 
+    #region Swarm Service Alerts
+    SwarmServiceOperationFailed,
+    #endregion
+
     #region Stack Alerts
     StackImageUpdateAvailable,
     StackAutoDeployFailed,
@@ -1038,7 +1067,8 @@ public enum AlertResourceType
     Webhook,
     AutomationAction,
     Build,
-    License
+    License,
+    SwarmService
 }
 
 public enum AlertEventStatus

@@ -10501,6 +10501,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "importKind",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/StackImportKind"
+            }
           }
         ],
         "responses": {
@@ -22471,6 +22478,102 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/preflight/swarm": {
+      "post": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Validate a Stack configuration for Docker Swarm",
+        "operationId": "preflightSwarmStack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwarmStackPreflightInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmStackCompatibilityReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -40020,6 +40123,9 @@
             "$ref": "#/components/schemas/AlertEventInfoDeploymentAutoDeployFailedAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoSwarmServiceOperationFailedAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo"
           },
           {
@@ -40092,6 +40198,7 @@
             "DeploymentImageUpdateAvailable": "#/components/schemas/AlertEventInfoDeploymentImageUpdateAvailableAlertInfo",
             "DeploymentAutoUpdated": "#/components/schemas/AlertEventInfoDeploymentAutoUpdatedAlertInfo",
             "DeploymentAutoDeployFailed": "#/components/schemas/AlertEventInfoDeploymentAutoDeployFailedAlertInfo",
+            "SwarmServiceOperationFailed": "#/components/schemas/AlertEventInfoSwarmServiceOperationFailedAlertInfo",
             "StackImageUpdateAvailable": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo",
             "StackAutoUpdated": "#/components/schemas/AlertEventInfoStackAutoUpdatedAlertInfo",
             "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo",
@@ -41033,6 +41140,41 @@
           }
         }
       },
+      "AlertEventInfoSwarmServiceOperationFailedAlertInfo": {
+        "required": [
+          "serviceName",
+          "operationId",
+          "operationKind",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmServiceOperationFailed"
+            ],
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationKind": {
+            "$ref": "#/components/schemas/SwarmServiceOperationKind"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "AlertEventInfoUnmanagedContainerCreatedAlertInfo": {
         "required": [
           "platformName",
@@ -41439,7 +41581,8 @@
           "Webhook",
           "AutomationAction",
           "Build",
-          "License"
+          "License",
+          "SwarmService"
         ]
       },
       "AlertRuleConfigView": {
@@ -41879,6 +42022,7 @@
           "DeploymentImageUpdateAvailable",
           "DeploymentAutoDeployFailed",
           "DeploymentAutoUpdated",
+          "SwarmServiceOperationFailed",
           "StackImageUpdateAvailable",
           "StackAutoDeployFailed",
           "StackAutoUpdated",
@@ -45901,6 +46045,7 @@
       },
       "ComposeProjectImportDraftView": {
         "required": [
+          "importKind",
           "source",
           "draft",
           "issues",
@@ -45908,6 +46053,9 @@
         ],
         "type": "object",
         "properties": {
+          "importKind": {
+            "$ref": "#/components/schemas/StackImportKind"
+          },
           "source": {
             "$ref": "#/components/schemas/ComposeProjectImportSourceView"
           },
@@ -45970,7 +46118,9 @@
         "required": [
           "services",
           "issues",
-          "previewFingerprint"
+          "previewFingerprint",
+          "importableSensitiveEnvironmentNames",
+          "canImportSensitiveEnvironmentValues"
         ],
         "type": "object",
         "properties": {
@@ -45988,6 +46138,15 @@
           },
           "previewFingerprint": {
             "type": "string"
+          },
+          "importableSensitiveEnvironmentNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "canImportSensitiveEnvironmentValues": {
+            "type": "boolean"
           }
         }
       },
@@ -46398,7 +46557,8 @@
           "controlState",
           "isSystem",
           "systemRole",
-          "hasCitadelOwnershipLabels"
+          "hasCitadelOwnershipLabels",
+          "isSwarmTask"
         ],
         "type": "object",
         "properties": {
@@ -46434,6 +46594,9 @@
             ]
           },
           "hasCitadelOwnershipLabels": {
+            "type": "boolean"
+          },
+          "isSwarmTask": {
             "type": "boolean"
           },
           "created": {
@@ -47090,6 +47253,7 @@
           "isSystem",
           "systemRole",
           "hasCitadelOwnershipLabels",
+          "isSwarmTask",
           "lastStats",
           "ports",
           "deploymentId",
@@ -47156,6 +47320,9 @@
             ]
           },
           "hasCitadelOwnershipLabels": {
+            "type": "boolean"
+          },
+          "isSwarmTask": {
             "type": "boolean"
           },
           "lastStats": {
@@ -47733,6 +47900,10 @@
           },
           "connectorType": {
             "$ref": "#/components/schemas/PlatformConnectorType"
+          },
+          "pruneHistoricalSwarmTaskContainers": {
+            "type": "boolean",
+            "default": true
           },
           "tagIds": {
             "type": [
@@ -52220,6 +52391,11 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "importKind": { },
+          "importSensitiveEnvironmentAsSecrets": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -54995,6 +55171,10 @@
           },
           "connectorType": {
             "$ref": "#/components/schemas/PlatformConnectorType"
+          },
+          "pruneHistoricalSwarmTaskContainers": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
@@ -55217,7 +55397,8 @@
           "stackStatusCounts",
           "stats",
           "platformDescriptor",
-          "clusterId"
+          "clusterId",
+          "pruneHistoricalSwarmTaskContainers"
         ],
         "type": "object",
         "properties": {
@@ -55344,6 +55525,9 @@
               "null",
               "string"
             ]
+          },
+          "pruneHistoricalSwarmTaskContainers": {
+            "type": "boolean"
           },
           "tags": {
             "type": "array",
@@ -57326,6 +57510,7 @@
           "id",
           "name",
           "platformId",
+          "platformType",
           "description",
           "stackSource",
           "spec",
@@ -57344,6 +57529,9 @@
           "platformId": {
             "type": "string",
             "format": "uuid"
+          },
+          "platformType": {
+            "$ref": "#/components/schemas/PlatformType"
           },
           "description": {
             "type": [
@@ -57736,6 +57924,12 @@
           }
         }
       },
+      "StackImportKind": {
+        "enum": [
+          "ComposeProject",
+          "SwarmStack"
+        ]
+      },
       "StackReconciliationAction": {
         "required": [
           "containerId",
@@ -57971,7 +58165,8 @@
           "Paused",
           "Degraded",
           "Failed",
-          "Stopped"
+          "Stopped",
+          "TimedOut"
         ]
       },
       "StackReleaseView": {
@@ -58510,7 +58705,8 @@
           "createdAt",
           "createdByActorId",
           "controlState",
-          "currentStackReleaseId"
+          "currentStackReleaseId",
+          "platformType"
         ],
         "type": "object",
         "properties": {
@@ -58552,6 +58748,9 @@
           "currentStackReleaseId": {
             "type": "string",
             "format": "uuid"
+          },
+          "platformType": {
+            "$ref": "#/components/schemas/PlatformType"
           },
           "platformId": {
             "type": [
@@ -59281,6 +59480,7 @@
           "nodeCount",
           "managerCount",
           "serviceCount",
+          "serviceStatusCounts",
           "runningTaskCount",
           "desiredTaskCount",
           "networkCount",
@@ -59327,6 +59527,9 @@
               "string"
             ],
             "format": "int32"
+          },
+          "serviceStatusCounts": {
+            "$ref": "#/components/schemas/PlatformWorkloadStatusCountsView"
           },
           "runningTaskCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -60450,6 +60653,7 @@
           "ownership",
           "dockerStackNamespace",
           "ownershipDiagnostic",
+          "stackId",
           "createdAt",
           "updatedAt",
           "observedAt",
@@ -60547,6 +60751,13 @@
               "string"
             ]
           },
+          "stackId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
           "createdAt": {
             "type": [
               "null",
@@ -60622,6 +60833,89 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/PlatformCapabilities"
+          }
+        }
+      },
+      "SwarmStackCompatibilityIssue": {
+        "required": [
+          "severity",
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "severity": {
+            "$ref": "#/components/schemas/SwarmStackCompatibilitySeverity"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SwarmStackCompatibilityReport": {
+        "required": [
+          "isCompatible",
+          "issues"
+        ],
+        "type": "object",
+        "properties": {
+          "isCompatible": {
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmStackCompatibilityIssue"
+            }
+          }
+        }
+      },
+      "SwarmStackCompatibilitySeverity": {
+        "enum": [
+          "Warning",
+          "Error"
+        ]
+      },
+      "SwarmStackPreflightInput": {
+        "required": [
+          "name",
+          "platformId",
+          "stackSource",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          },
+          "driftPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackDriftPolicy"
+              }
+            ]
           }
         }
       },
@@ -62325,7 +62619,8 @@
           },
           "spec": {
             "$ref": "#/components/schemas/StackSpec"
-          }
+          },
+          "importKind": { }
         }
       },
       "VerifyAlertChannelInput": {

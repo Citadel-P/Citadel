@@ -9,6 +9,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import yamlWorker from './yaml.worker.js?worker';
 import { configureMonacoYaml } from 'monaco-yaml';
 import composeSpecSchema from '@/api/schema/compose-spec.json';
+import dockerStackComposeSchema from '@/api/schema/docker-stack-compose-v3.13.json';
 
 let isPreloaded = false;
 
@@ -70,6 +71,16 @@ export function preloadMonaco() {
         ],
         uri: 'inmemory://schema/compose-spec.json',
         schema: composeSpecSchema as any,
+      },
+      {
+        fileMatch: [
+          'swarm-compose.yml',
+          'swarm-compose.yaml',
+          'file:///swarm-compose.yml',
+          'file:///swarm-compose.yaml',
+        ],
+        uri: 'inmemory://schema/docker-stack-compose-v3.13.json',
+        schema: dockerStackComposeSchema as any,
       },
     ],
   });

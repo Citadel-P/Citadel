@@ -29,6 +29,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
 {
     private const string SecretId = "secret-1";
     private const string ConfigId = "config-1";
+    private static readonly Guid OrphanedServiceOwnerId = Guid.Parse("10000000-0000-0000-0000-000000000001");
     private readonly Mock<IConnectorFactory<ISwarmConnector>> connectorFactory = new();
     private readonly Mock<ISwarmConnector> connector = new();
     private readonly Mock<IImageDigestScanner> imageDigestScanner = new();
@@ -129,7 +130,33 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
                         observedAt,
                         false,
                         SwarmServiceOwnership.DockerStackExternal,
-                        "sample")
+                        "sample"),
+                    new SwarmServiceProjection(
+                        platform.Id,
+                        "orphaned-service",
+                        4,
+                        "orphaned-web",
+                        "Replicated",
+                        "nginx:latest",
+                        1,
+                        1,
+                        "Completed",
+                        null,
+                        [],
+                        ["overlay-network"],
+                        [],
+                        [],
+                        new Dictionary<string, string>
+                        {
+                            ["com.citadel.managed"] = "true",
+                            ["com.citadel.service-id"] = OrphanedServiceOwnerId.ToString("D")
+                        },
+                        observedAt,
+                        observedAt,
+                        observedAt,
+                        false,
+                        SwarmServiceOwnership.Unmanaged,
+                        OwnershipDiagnostic: "The Citadel Service owner no longer exists. This Service can be adopted.")
                 ],
                 [],
                 [
@@ -445,6 +472,80 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         connector.Verify(value => value.InspectServiceAsync(
             It.IsAny<InspectSwarmServiceCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdoptEndpoints_ShouldReclaimOrphanedServiceAndRemoveStaleOwnershipLabels()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var labels = new Dictionary<string, string>
+        {
+            ["com.citadel.managed"] = "true",
+            ["com.citadel.service-id"] = OrphanedServiceOwnerId.ToString("D"),
+            ["team"] = "platform"
+        };
+        connector.Setup(value => value.InspectServiceAsync(
+                It.Is<InspectSwarmServiceCommand>(command => command.ServiceId == "orphaned-service"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new SwarmServiceResult(
+                "orphaned-service",
+                4,
+                "orphaned-web",
+                "Replicated",
+                "nginx:latest",
+                1,
+                1,
+                "Completed",
+                null,
+                [],
+                ["overlay-network"],
+                [],
+                [],
+                labels,
+                DateTimeOffset.UtcNow.AddMinutes(-5),
+                DateTimeOffset.UtcNow,
+                "orphan-runtime-hash",
+                Definition: new SwarmServiceSpec
+                {
+                    Image = new SwarmExternalImage(Guid.Empty, "nginx:latest"),
+                    SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                    Replicas = 1,
+                    Labels = labels,
+                    NetworkIds = ["overlay-network"]
+                })));
+
+        using var draftResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/orphaned-service/adoption-draft",
+            cancellationToken);
+        draftResponse.EnsureSuccessStatusCode();
+        var draft = JsonNode.Parse(await draftResponse.Content.ReadAsStringAsync(cancellationToken))!.AsObject();
+        var spec = draft["draft"]!["spec"]!.DeepClone();
+        var draftLabels = spec["labels"]!.AsObject();
+        Assert.False(draftLabels.ContainsKey("com.citadel.managed"));
+        Assert.False(draftLabels.ContainsKey("com.citadel.service-id"));
+        Assert.Equal("platform", draftLabels["team"]!.GetValue<string>());
+        spec["image"]!["registryId"] = registryId;
+
+        using var adoptResponse = await Client.PostAsJsonAsync(
+            $"/api/v1/platforms/{platformId:D}/swarm/services/orphaned-service/adopt",
+            new
+            {
+                name = "reclaimed-orphaned-web",
+                description = "Reclaimed in integration test",
+                spec,
+                previewFingerprint = draft["previewFingerprint"]!.GetValue<string>(),
+                tagIds = Array.Empty<Guid>()
+            },
+            cancellationToken);
+        adoptResponse.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var persisted = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+            .SwarmServices.GetByDockerServiceIdAsync(platformId, "orphaned-service", cancellationToken);
+        Assert.NotNull(persisted);
+        Assert.Equal("platform", persisted.Spec.Labels["team"]);
+        Assert.DoesNotContain(persisted.Spec.Labels.Keys, key =>
+            key.StartsWith("com.citadel.", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -978,6 +1079,34 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             $"/api/v1/resourceBindings/SwarmService/{id:D}",
             cancellationToken);
         allowedBindings.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task AlertLookup_ShouldReturnOnlyAuthorizedManagedServices()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var visibleId = await CreateServiceAsync(cancellationToken);
+        var hiddenId = await CreateServiceAsync(cancellationToken);
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.SwarmService, visibleId, PermissionLevel.Read)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        using var response = await Client.GetAsync(
+            "/api/v1/lookup?sourceResourceType=Alert&targetResourceType=SwarmService",
+            cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = JsonDocument.Parse(responseBody);
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == visibleId);
+        Assert.DoesNotContain(items, item => item.GetProperty("id").GetGuid() == hiddenId);
     }
 
     [Fact]

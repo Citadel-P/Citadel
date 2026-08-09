@@ -2,6 +2,7 @@
 using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.Hosting;
@@ -26,6 +27,8 @@ internal sealed class DockerDaemonEventJob(
     IImageStreamManager imageStream,
     IDeploymentStreamManager deploymentHub,
     ISwarmReconciliationCoordinator swarmReconciliationCoordinator,
+    IConnectorFactory<IContainerConnector> containerConnectorFactory,
+    SwarmTaskContainerPruner swarmTaskContainerPruner,
     IDbWorkQueue dbWorkQueue) : BackgroundService
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(10);
@@ -113,6 +116,18 @@ internal sealed class DockerDaemonEventJob(
                                     break;
                                 default:
                                     await OnContainerUpdated(containerEvent, cancellationToken);
+                                    if (containerEvent.Container is
+                                        {
+                                            IsSwarmTask: true,
+                                            State: ContainerStateStatus.Exited or ContainerStateStatus.Dead
+                                        } historicalTask)
+                                    {
+                                        await swarmTaskContainerPruner.PruneAsync(
+                                            platform,
+                                            containerConnectorFactory.GetConnector(platform.Type),
+                                            [historicalTask],
+                                            cancellationToken);
+                                    }
                                     break;
                             }
                         }

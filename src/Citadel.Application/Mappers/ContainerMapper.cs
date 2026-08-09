@@ -1,10 +1,17 @@
 ﻿using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain;
 
 namespace Application.Mappers;
 
 internal static class ContainerMapper
 {
+    internal static bool IsHistoricalSwarmTask(this DockerContainer container)
+        => container.IsSwarmTask
+           && container.State is ContainerStateStatus.Exited
+               or ContainerStateStatus.Dead
+               or ContainerStateStatus.Removing;
+
     internal static IEnumerable<Container> Map(this IEnumerable<DockerContainer> containers, IEnumerable<Image> images, Guid platformId)
     {
         foreach (var container in containers)
@@ -29,7 +36,8 @@ internal static class ContainerMapper
             stackId: container.StackId,
             isSystem: container.IsSystem,
             systemRole: container.SystemRole,
-            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            isSwarmTask: container.IsSwarmTask
         );
 
     internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

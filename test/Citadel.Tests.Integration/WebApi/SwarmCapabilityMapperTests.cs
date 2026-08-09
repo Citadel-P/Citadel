@@ -49,7 +49,7 @@ public sealed class SwarmCapabilityMapperTests
         Assert.True(capabilities.CanManageSecrets);
         Assert.True(capabilities.CanManageConfigs);
         Assert.False(capabilities.SupportsDeploymentApply);
-        Assert.False(capabilities.SupportsStackApply);
+        Assert.True(capabilities.SupportsStackApply);
         Assert.False(capabilities.SupportsClusterVolumes);
     }
 

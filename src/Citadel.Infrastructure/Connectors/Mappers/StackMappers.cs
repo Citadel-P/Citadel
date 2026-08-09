@@ -6,6 +6,11 @@ using AgentStackApplyRequest = Citadel.Stacks.V1.StackApplyRequest;
 using AgentStackApplyResponse = Citadel.Stacks.V1.StackApplyResponse;
 using AgentStackCommand = Citadel.Stacks.V1.StackCommand;
 using AgentStackSecretFile = Citadel.Stacks.V1.StackSecretFile;
+using AgentStackSourceFile = Citadel.Stacks.V1.StackSourceFile;
+using AgentStackRetainedSwarmSecret = Citadel.Stacks.V1.StackRetainedSwarmSecret;
+using AgentStackRetainedSwarmSecretMount = Citadel.Stacks.V1.StackRetainedSwarmSecretMount;
+using AgentStackRetainedSwarmConfig = Citadel.Stacks.V1.StackRetainedSwarmConfig;
+using AgentStackRetainedSwarmConfigMount = Citadel.Stacks.V1.StackRetainedSwarmConfigMount;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -37,7 +42,30 @@ internal static class StackMappers
                 secret.Name,
                 secret.TargetPath,
                 secret.Content)).ToArray(),
-            SecretTargetServiceNames: cmd.SecretTargetServiceNames);
+            SecretTargetServiceNames: cmd.SecretTargetServiceNames,
+            OrchestrationMode: cmd.OrchestrationMode == StackOrchestrationMode.DockerSwarm
+                ? Hosting.DockerClient.Models.Stacks.StackOrchestrationMode.DockerSwarm
+                : Hosting.DockerClient.Models.Stacks.StackOrchestrationMode.DockerCompose,
+            SourceFiles: cmd.SourceFiles?.Select(file => new Hosting.DockerClient.Models.Stacks.StackSourceFile(
+                file.RelativePath,
+                file.Content)).ToArray(),
+            RetainedSwarmSecrets: cmd.RetainedSwarmSecrets?.Select(secret =>
+                new Hosting.DockerClient.Models.Stacks.StackRetainedSwarmSecret(
+                    secret.ComposeResourceName,
+                    secret.DockerResourceName,
+                    secret.Mounts.Select(static mount =>
+                        new Hosting.DockerClient.Models.Stacks.StackRetainedSwarmSecretMount(
+                            mount.ServiceName,
+                            mount.TargetName)).ToArray())).ToArray(),
+            RetainedSwarmConfigs: cmd.RetainedSwarmConfigs?.Select(config =>
+                new Hosting.DockerClient.Models.Stacks.StackRetainedSwarmConfig(
+                    config.ComposeResourceName,
+                    config.DockerResourceName,
+                    config.Mounts.Select(static mount =>
+                        new Hosting.DockerClient.Models.Stacks.StackRetainedSwarmConfigMount(
+                            mount.ServiceName,
+                            mount.TargetName)).ToArray())).ToArray(),
+            ConvertComposeProjectToSwarm: cmd.ConvertComposeProjectToSwarm);
     }
 
     public static StackApplyResult Map(this Hosting.DockerClient.Models.Stacks.StackApplyResult result)
@@ -55,7 +83,11 @@ internal static class StackMappers
         {
             StackName = cmd.StackName,
             DestroyBeforeDeploy = cmd.DestroyBeforeDeploy,
-            PullImages = cmd.PullImages
+            PullImages = cmd.PullImages,
+            OrchestrationMode = cmd.OrchestrationMode == StackOrchestrationMode.DockerSwarm
+                ? Citadel.Stacks.V1.StackOrchestrationMode.DockerSwarm
+                : Citadel.Stacks.V1.StackOrchestrationMode.DockerCompose,
+            ConvertComposeProjectToSwarm = cmd.ConvertComposeProjectToSwarm
         };
 
         if (cmd.ComposeFileContent is not null)
@@ -94,6 +126,51 @@ internal static class StackMappers
                 Name = secret.Name,
                 TargetPath = secret.TargetPath,
                 Content = secret.Content
+            }));
+        }
+
+        if (cmd.SourceFiles is not null)
+        {
+            request.SourceFiles.AddRange(cmd.SourceFiles.Select(file => new AgentStackSourceFile
+            {
+                RelativePath = file.RelativePath,
+                Content = Google.Protobuf.ByteString.CopyFrom(file.Content)
+            }));
+        }
+
+        if (cmd.RetainedSwarmSecrets is not null)
+        {
+            request.RetainedSwarmSecrets.AddRange(cmd.RetainedSwarmSecrets.Select(secret =>
+            {
+                var mapped = new AgentStackRetainedSwarmSecret
+                {
+                    ComposeResourceName = secret.ComposeResourceName,
+                    DockerResourceName = secret.DockerResourceName
+                };
+                mapped.Mounts.AddRange(secret.Mounts.Select(static mount => new AgentStackRetainedSwarmSecretMount
+                {
+                    ServiceName = mount.ServiceName,
+                    TargetName = mount.TargetName
+                }));
+                return mapped;
+            }));
+        }
+
+        if (cmd.RetainedSwarmConfigs is not null)
+        {
+            request.RetainedSwarmConfigs.AddRange(cmd.RetainedSwarmConfigs.Select(config =>
+            {
+                var mapped = new AgentStackRetainedSwarmConfig
+                {
+                    ComposeResourceName = config.ComposeResourceName,
+                    DockerResourceName = config.DockerResourceName
+                };
+                mapped.Mounts.AddRange(config.Mounts.Select(static mount => new AgentStackRetainedSwarmConfigMount
+                {
+                    ServiceName = mount.ServiceName,
+                    TargetName = mount.TargetName
+                }));
+                return mapped;
             }));
         }
 

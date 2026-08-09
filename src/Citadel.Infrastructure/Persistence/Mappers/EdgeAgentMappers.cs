@@ -60,7 +60,9 @@ internal static class EdgeAgentMappers
                 dto.PlatformDescriptor,
                 dto.PlatformServerVersion,
                 dto.PlatformAgentVersion,
-                dto.PlatformDescription).ToDomain(),
+                dto.PlatformDescription,
+                ClusterId: dto.PlatformClusterId,
+                PruneHistoricalSwarmTaskContainers: dto.PlatformPruneHistoricalSwarmTaskContainers).ToDomain(),
             dto.BindingId is null
                 ? null
                 : new EdgeAgentBindingDto(

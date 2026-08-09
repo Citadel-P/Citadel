@@ -488,7 +488,7 @@ export const SwarmServiceForm = ({
                               targetType={LookupResourceType.Registry}
                               selected={value}
                               items={registries}
-                              className='w-100'
+                              className="w-100"
                               onSelect={(selected) =>
                                 set((previous) => ({
                                   spec: {
@@ -570,7 +570,6 @@ export const SwarmServiceForm = ({
                 key: 'spec.updateBehavior',
                 label: 'Auto Update',
                 description: 'Define how Citadel handles a new image digest.',
-                disabled: !!adoptFrom,
                 render: (value, set) => (
                   <div className="flex flex-col gap-2">
                     <ItemSelector
@@ -737,9 +736,7 @@ export const SwarmServiceForm = ({
                     value={value ?? {}}
                     helperText="# KEY=value"
                     language="key_value"
-                    onChange={(labels) =>
-                      set((previous) => ({ spec: { ...previous.spec!, labels: labels ?? {} } }))
-                    }
+                    onChange={(labels) => set((previous) => ({ spec: { ...previous.spec!, labels: labels ?? {} } }))}
                   />
                 ),
               }),

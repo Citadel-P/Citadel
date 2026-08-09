@@ -172,7 +172,8 @@ internal class PatchPlatformHandler(
                     agentVersion: platformInfo.AgentVersion,
                     description: patchedPlatform.Description,
                     descriptor: descriptor with { DaemonId = daemonId },
-                    clusterId: clusterId);
+                    clusterId: clusterId,
+                    pruneHistoricalSwarmTaskContainers: patchedPlatform.PruneHistoricalSwarmTaskContainers);
 
                 await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);

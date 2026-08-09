@@ -47,6 +47,8 @@ internal sealed record EdgeAgentPlatformStateDto(
     string? PlatformServerVersion,
     string? PlatformAgentVersion,
     string? PlatformDescription,
+    string? PlatformClusterId,
+    bool PlatformPruneHistoricalSwarmTaskContainers,
     Guid? BindingId,
     Guid? BindingPlatformId,
     string? BindingResourceType,

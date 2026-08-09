@@ -46,5 +46,6 @@
     osVersion: 5.15,
     osType: linux,
     architecture: x86_64
-  }
+  },
+  pruneHistoricalSwarmTaskContainers: true
 }

@@ -134,11 +134,13 @@ export const serializeData = (data: unknown, format: 'json' | 'yaml' = 'yaml') =
 
 export const isUnmanagedContainer = (container: {
   isSystem?: boolean;
+  isSwarmTask?: boolean;
   hasCitadelOwnershipLabels?: boolean;
   deploymentId?: string | null;
   stackId?: string | null;
 }) =>
   container.isSystem !== true &&
+  container.isSwarmTask !== true &&
   container.hasCitadelOwnershipLabels !== true &&
   !container.deploymentId &&
   !container.stackId;

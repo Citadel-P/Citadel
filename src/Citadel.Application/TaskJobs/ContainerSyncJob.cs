@@ -31,6 +31,7 @@ internal sealed class ContainerSyncJob(
     IStackStreamManager stackStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
+    SwarmTaskContainerPruner swarmTaskContainerPruner,
     ILogger<ContainerSyncJob> logger) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
@@ -161,8 +162,8 @@ internal sealed class ContainerSyncJob(
                 PlatformAddress: platformEvent.Address,
                 All: true);
 
-            var result = await connectorFactory
-                .GetConnector(platformEvent.Type)
+            var connector = connectorFactory.GetConnector(platformEvent.Type);
+            var result = await connector
                 .ListContainersAsync(command, cancellationToken: cancellationToken);
 
             if (!result.IsSuccess(out var freshContainers, out var error))
@@ -172,6 +173,12 @@ internal sealed class ContainerSyncJob(
                     platformEvent.Id, platformEvent.Address, error);
                 return;
             }
+
+            await swarmTaskContainerPruner.PruneAsync(
+                platformEvent,
+                connector,
+                freshContainers.Values,
+                cancellationToken);
 
             var workItem = new SyncOnlinePlatformContainersWorkItem(
                 platformEvent,
@@ -205,6 +212,7 @@ internal sealed class ContainerSyncJob(
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
         }
     }
+
 }
 
 internal sealed class SyncOnlinePlatformContainersWorkItem(
@@ -243,9 +251,12 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
 
             var currentActiveContainers = new List<Container>();
             var containersToUpsert = new List<Container>();
+            var currentDockerContainers = freshContainers.Values
+                .Where(static container => !container.IsHistoricalSwarmTask())
+                .ToArray();
 
             // Map fresh containers
-            foreach (var freshContainer in freshContainers.Values)
+            foreach (var freshContainer in currentDockerContainers)
             {
                 Guid? imageId = imageIds.TryGetValue(freshContainer.ImageId, out var resolvedImageId)
                     ? resolvedImageId
@@ -270,7 +281,8 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                         stackId: existingDbContainer.StackId ?? freshContainer.StackId,
                         isSystem: freshContainer.IsSystem,
                         systemRole: freshContainer.SystemRole,
-                        hasCitadelOwnershipLabels: freshContainer.HasCitadelOwnershipLabels);
+                        hasCitadelOwnershipLabels: freshContainer.HasCitadelOwnershipLabels,
+                        isSwarmTask: freshContainer.IsSwarmTask);
 
                     currentActiveContainers.Add(existingDbContainer);
                     containersToUpsert.Add(existingDbContainer);
@@ -288,7 +300,9 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 await uow.Containers.BulkUpsertAsync(containersToUpsert, cancellationToken);
 
             // Remove stale
-            var freshIds = freshContainers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var freshIds = currentDockerContainers
+                .Select(static container => container.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var staleContainers = existingContainersInDb.Values
                 .Where(c => !freshIds.Contains(c.DockerContainerId) && c.Updated < snapshotStartedAt)
                 .ToArray();

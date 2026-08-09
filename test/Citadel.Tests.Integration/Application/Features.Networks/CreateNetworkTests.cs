@@ -1,34 +1,75 @@
 ﻿using System.Text;
 using System.Net;
 using System.Net.Http.Json;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Networks;
+using Domain.Entities.Platforms;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 
 namespace Tests.Integration.Application.Features.Networks;
 
 public class CreateNetworkTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    private static readonly Guid PlatformId = Guid.Parse("0198740b-a501-7ae8-8afc-1e6ce659ee02");
     private readonly Mock<IConnectorFactory<INetworkConnector>> networkFactoryMock = new();
     private readonly Mock<IPlatformContainerCache> platformContainerCacheMock = new();
     private readonly Mock<INetworkConnector> networkConnectorMock = new();
+    private readonly Mock<ISwarmReconciliationCoordinator> reconciliationCoordinatorMock = new();
     protected override void ConfigureTestServices(IServiceCollection services)
     {
+        services.RemoveAll<ISwarmReconciliationCoordinator>();
         services
             .AddSingleton(networkFactoryMock.Object)
             .AddSingleton(networkConnectorMock.Object)
-            .AddSingleton(platformContainerCacheMock.Object);
+            .AddSingleton(platformContainerCacheMock.Object)
+            .AddSingleton(reconciliationCoordinatorMock.Object);
 
         networkFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(networkConnectorMock.Object);
 
-        var cacheEntry = new PlatformCacheEntry(new Guid("0198740b-a501-7ae8-8afc-1e6ce659ee02"), "localhost:9000", PlatformConnectorType.Local, []);
+        var cacheEntry = new PlatformCacheEntry(PlatformId, "localhost:9000", PlatformConnectorType.Local, []);
         var error = null as Error;
         platformContainerCacheMock.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry, out error))
             .Returns(true);
+        reconciliationCoordinatorMock.Setup(x => x.RefreshAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+    }
+
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
+    {
+        var platform = Platform.FromPersistence(
+            PlatformId,
+            "network-create-swarm",
+            "localhost:9000",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 2,
+            memTotal: 2048,
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Local,
+            platformDescriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "network-create-node",
+                NodeAddr: "127.0.0.1",
+                LocalNodeState: "Active",
+                ControlAvailable: true,
+                Nodes: 1,
+                Managers: 1,
+                DaemonId: "network-create-daemon",
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0,
+                ClusterId: "network-create-cluster"),
+            clusterId: "network-create-cluster");
+
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]

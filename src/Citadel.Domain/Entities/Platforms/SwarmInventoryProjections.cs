@@ -14,7 +14,8 @@ public sealed record SwarmServiceProjection(
     string? OwnershipDiagnostic = null,
     Guid? SwarmServiceId = null,
     string? LiveRuntimeHash = null,
-    long ForceUpdate = 0)
+    long ForceUpdate = 0,
+    Guid? StackId = null)
 {
     public static SwarmServiceProjection FromObservation(Guid platformId, SwarmServiceResult value, DateTimeOffset observedAt) =>
         new(platformId, value.Id, value.VersionIndex, value.Name, value.Mode, value.Image,
@@ -54,13 +55,26 @@ internal static class SwarmServiceOwnershipClassifier
                 : SwarmServiceOwnership.CitadelService;
         }
 
-        return GetDockerStackNamespace(labels) is not null || HasOrphanedStackMetadata(labels)
+
+        if (labels.ContainsKey(StackIdLabel))
+        {
+            return GetDockerStackNamespace(labels) is not null && GetStackId(labels) is not null
+                ? SwarmServiceOwnership.CitadelStack
+                : SwarmServiceOwnership.OwnershipConflict;
+        }
+
+        return GetDockerStackNamespace(labels) is not null
             ? SwarmServiceOwnership.DockerStackExternal
             : SwarmServiceOwnership.Unmanaged;
     }
 
     public static Guid? GetSwarmServiceId(IReadOnlyDictionary<string, string> labels) =>
         labels.TryGetValue(ServiceIdLabel, out var value) && Guid.TryParse(value, out var id)
+            ? id
+            : null;
+
+    public static Guid? GetStackId(IReadOnlyDictionary<string, string> labels) =>
+        labels.TryGetValue(StackIdLabel, out var value) && Guid.TryParse(value, out var id)
             ? id
             : null;
 
@@ -78,11 +92,14 @@ internal static class SwarmServiceOwnershipClassifier
         if (labels.ContainsKey(ServiceIdLabel)
             && (labels.ContainsKey(DeploymentIdLabel) || labels.ContainsKey(StackIdLabel)))
             return "Conflicting Citadel ownership labels";
+        if (labels.ContainsKey(StackIdLabel) && GetStackId(labels) is null)
+            return "Invalid Citadel Stack ownership label";
+        if (labels.ContainsKey(StackIdLabel) && GetDockerStackNamespace(labels) is null)
+            return "Citadel Stack ownership is missing the Docker Stack namespace";
+        if (labels.ContainsKey(StackIdLabel))
+            return null;
         return HasCitadelOwnerMetadata(labels) ? "Orphaned Citadel metadata" : null;
     }
-
-    private static bool HasOrphanedStackMetadata(IReadOnlyDictionary<string, string> labels) =>
-        IsCitadelManaged(labels) && labels.ContainsKey(StackIdLabel);
 
     private static bool HasCitadelOwnerMetadata(IReadOnlyDictionary<string, string> labels) =>
         IsCitadelManaged(labels)
@@ -153,6 +170,7 @@ public sealed record SwarmProjectionSummary(
     int NodeCount,
     int ManagerCount,
     int ServiceCount,
+    PlatformWorkloadStatusCounts ServiceStatusCounts,
     int RunningTaskCount,
     int DesiredTaskCount,
     int NetworkCount);

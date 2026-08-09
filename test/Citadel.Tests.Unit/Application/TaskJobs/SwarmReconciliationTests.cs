@@ -1,4 +1,6 @@
 using Application.Services.Abstractions;
+using Application.Services;
+using Application.Services.Alerts;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -6,6 +8,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Domain.Entities.Stacks;
 using Domain.Entities.SwarmServices;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -18,6 +21,166 @@ namespace Tests.Unit.Application.TaskJobs;
 
 public sealed class SwarmReconciliationTests
 {
+    [Fact]
+    public async Task TimedOutStack_ShouldRecoverOnlyAfterAllOwnedServicesConverge()
+    {
+        var platform = CreatePlatform();
+        var stack = Stack.Create(
+            "demo",
+            Constants.SystemId,
+            StackSource.Git,
+            platform.Id,
+            new GitStack(
+                Guid.CreateVersion7(),
+                "main",
+                null,
+                StackUpdateBehavior.Disabled,
+                ProjectName: "demo",
+                ComposePaths: ["compose.yml"],
+                DestroyBeforeDeploy: false),
+            driftPolicy: StackDriftPolicy.Disabled,
+            platform: platform);
+        stack.PartialUpdate(StackReleaseStatus.TimedOut);
+        var labels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "demo",
+            ["com.citadel.managed"] = "true",
+            ["com.citadel.stack-id"] = stack.Id.ToString("D"),
+            ["com.citadel.release-id"] = stack.CurrentStackReleaseId.ToString("D"),
+            ["com.citadel.stack-service-count"] = "1"
+        };
+        var projection = new SwarmServiceProjection(
+            platform.Id, "service-id", 1, "demo_api", "Replicated", "nginx",
+            1, 1, "Completed", null, [], [], [], [], labels, null, null,
+            DateTimeOffset.UtcNow, false, SwarmServiceOwnership.CitadelStack, "demo");
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(repository => repository.GetInfoAsync(
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                platform.Id))
+            .ReturnsAsync([stack]);
+        stacks.Setup(repository => repository.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        stacks.Setup(repository => repository.GetReleasesByStackIdAsync(
+                stack.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack.CurrentStackRelease!]);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm.Setup(repository => repository.ReplaceAsync(
+                platform.Id,
+                It.IsAny<SwarmProjectionSnapshot>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Stacks).Returns(stacks.Object);
+        unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
+        unitOfWork.SetupGet(value => value.SwarmServices).Returns(CreateEmptyManagedServiceRepository());
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var gitMaterializer = new Mock<IGitStackMaterializer>();
+        gitMaterializer.Setup(value => value.ActivateReleaseAsync(
+                stack.Id,
+                stack.CurrentStackReleaseId,
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        gitMaterializer.Setup(value => value.PruneSnapshotsAsync(
+                stack.Id,
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [projection], [], [], [], []),
+            gitStackMaterializer: gitMaterializer.Object);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease?.Status);
+        Assert.Same(stack, Assert.Single(workItem.RecoveredStacks));
+        stacks.Verify(repository => repository.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
+        gitMaterializer.Verify(value => value.ActivateReleaseAsync(
+            stack.Id,
+            stack.CurrentStackReleaseId,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task TimedOutStack_ShouldRemainRecoverableWhenRollbackResourceMetadataIsMissing()
+    {
+        var platform = CreatePlatform();
+        var stack = Stack.Create(
+            "demo",
+            Constants.SystemId,
+            StackSource.Git,
+            platform.Id,
+            new GitStack(
+                Guid.CreateVersion7(),
+                "main",
+                null,
+                StackUpdateBehavior.Disabled,
+                ProjectName: "demo",
+                ComposePaths: ["compose.yml"],
+                DestroyBeforeDeploy: false),
+            driftPolicy: StackDriftPolicy.Disabled,
+            platform: platform);
+        stack.PartialUpdate(StackReleaseStatus.TimedOut);
+        var labels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "demo",
+            ["com.citadel.managed"] = "true",
+            ["com.citadel.stack-id"] = stack.Id.ToString("D"),
+            ["com.citadel.release-id"] = stack.CurrentStackReleaseId.ToString("D"),
+            ["com.citadel.stack-service-count"] = "1"
+        };
+        var projection = new SwarmServiceProjection(
+            platform.Id, "service-id", 1, "demo_api", "Replicated", "nginx",
+            1, 1, "Completed", null, [], [], ["secret-id"], [], labels, null, null,
+            DateTimeOffset.UtcNow, false, SwarmServiceOwnership.CitadelStack, "demo");
+        var secret = new SwarmSecretProjection(
+            platform.Id, "secret-id", 1, "demo_secret", null, ["demo_api"],
+            new Dictionary<string, string> { ["com.docker.stack.namespace"] = "demo" },
+            null, null, DateTimeOffset.UtcNow, false);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(repository => repository.GetInfoAsync(
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                platform.Id))
+            .ReturnsAsync([stack]);
+        stacks.Setup(repository => repository.GetReleaseSwarmResourcesAsync(
+                stack.CurrentStackReleaseId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm.Setup(repository => repository.ReplaceAsync(
+                platform.Id,
+                It.IsAny<SwarmProjectionSnapshot>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Stacks).Returns(stacks.Object);
+        unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
+        unitOfWork.SetupGet(value => value.SwarmServices).Returns(CreateEmptyManagedServiceRepository());
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var gitMaterializer = new Mock<IGitStackMaterializer>();
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [projection], [], [], [secret], []),
+            gitStackMaterializer: gitMaterializer.Object);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Equal(StackReleaseStatus.TimedOut, stack.CurrentStackRelease?.Status);
+        Assert.Empty(workItem.RecoveredStacks);
+        stacks.Verify(repository => repository.UpdateAsync(
+            It.IsAny<Stack>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        gitMaterializer.Verify(value => value.ActivateReleaseAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<Guid>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task PartialConnectorFailure_ShouldKeepThePreviousSnapshotAndMarkItStale()
     {
@@ -579,10 +742,10 @@ public sealed class SwarmReconciliationTests
         var activities = new List<ActivityEvent>();
         var unitOfWork = CreateManagedUnitOfWork(platform, service, activities);
 
-        await new PersistSwarmSnapshotWorkItem(
-                platform.Id,
-                new SwarmProjectionSnapshot([], [live], [task], [], [], []))
-            .ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [live], [task], [], [], []));
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
 
         Assert.Equal(SwarmServiceHealth.Failed, service.Health);
         Assert.Equal(ResourceControlState.Idle, service.ControlState);
@@ -593,6 +756,10 @@ public sealed class SwarmReconciliationTests
         Assert.Equal(ActivityEventType.SwarmServiceOperationFailed, activity.EventType);
         Assert.Equal(ActivityStatus.Failure, activity.Status);
         Assert.Equal(taskError, Assert.IsType<SwarmServiceOperationFailed>(activity.Info).Reason);
+        var alert = Assert.Single(workItem.OperationFailures);
+        Assert.Equal(service.Id, alert.Id);
+        Assert.Equal(service.CurrentOperation?.Id, alert.OperationId);
+        Assert.Equal(taskError, alert.Reason);
     }
 
     [Fact]
@@ -678,6 +845,115 @@ public sealed class SwarmReconciliationTests
         Assert.Equal(SwarmServiceHealth.Healthy, service.Health);
         Assert.Equal(SwarmServiceSynchronizationState.DesiredChangesPending, service.SynchronizationState);
         Assert.Empty(activities);
+    }
+
+    [Fact]
+    public async Task MissingManagedServiceOwner_ShouldBecomeAdoptable()
+    {
+        var platform = CreatePlatform();
+        var orphanedOwnerId = Guid.CreateVersion7();
+        var projection = CreateServiceProjection(1) with
+        {
+            PlatformId = platform.Id,
+            Ownership = SwarmServiceOwnership.CitadelService,
+            SwarmServiceId = orphanedOwnerId,
+            Labels = new Dictionary<string, string>
+            {
+                ["com.citadel.managed"] = "true",
+                ["com.citadel.service-id"] = orphanedOwnerId.ToString("D")
+            }
+        };
+        var unitOfWork = CreateOwnershipUnitOfWork(platform.Id, [], []);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [projection], [], [], [], []));
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var normalized = Assert.Single(workItem.Current.Services);
+        Assert.Equal(SwarmServiceOwnership.Unmanaged, normalized.Ownership);
+        Assert.Null(normalized.SwarmServiceId);
+        Assert.Contains("can be adopted", normalized.OwnershipDiagnostic);
+    }
+
+    [Fact]
+    public async Task MissingStackOwner_ShouldBecomeImportable()
+    {
+        var platform = CreatePlatform();
+        var orphanedOwnerId = Guid.CreateVersion7();
+        var projection = CreateServiceProjection(1) with
+        {
+            PlatformId = platform.Id,
+            Name = "demo_web",
+            Ownership = SwarmServiceOwnership.CitadelStack,
+            DockerStackNamespace = "demo",
+            SwarmServiceId = null,
+            Labels = new Dictionary<string, string>
+            {
+                ["com.docker.stack.namespace"] = "demo",
+                ["com.citadel.managed"] = "true",
+                ["com.citadel.stack-id"] = orphanedOwnerId.ToString("D")
+            }
+        };
+        var unitOfWork = CreateOwnershipUnitOfWork(platform.Id, [], []);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [projection], [], [], [], []));
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var normalized = Assert.Single(workItem.Current.Services);
+        Assert.Equal(SwarmServiceOwnership.DockerStackExternal, normalized.Ownership);
+        Assert.Null(normalized.StackId);
+        Assert.Contains("can be imported", normalized.OwnershipDiagnostic);
+    }
+
+    [Fact]
+    public async Task ImportedStackAssociation_ShouldOverrideStaleDockerOwnerLabel()
+    {
+        var platform = CreatePlatform();
+        var stack = Stack.Create(
+            "demo",
+            Constants.SystemId,
+            StackSource.Git,
+            platform.Id,
+            new GitStack(
+                Guid.CreateVersion7(),
+                "main",
+                null,
+                StackUpdateBehavior.Disabled,
+                ProjectName: "demo",
+                ComposePaths: ["compose.yml"],
+                DestroyBeforeDeploy: false),
+            driftPolicy: StackDriftPolicy.Disabled,
+            platform: platform);
+        var oldOwnerId = Guid.CreateVersion7();
+        var live = CreateServiceProjection(1) with
+        {
+            PlatformId = platform.Id,
+            Name = "demo_web",
+            Ownership = SwarmServiceOwnership.CitadelStack,
+            DockerStackNamespace = "demo",
+            SwarmServiceId = null,
+            Labels = new Dictionary<string, string>
+            {
+                ["com.docker.stack.namespace"] = "demo",
+                ["com.citadel.managed"] = "true",
+                ["com.citadel.stack-id"] = oldOwnerId.ToString("D")
+            }
+        };
+        var persisted = live with { StackId = stack.Id };
+        var unitOfWork = CreateOwnershipUnitOfWork(platform.Id, [persisted], [stack]);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [live], [], [], [], []));
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var normalized = Assert.Single(workItem.Current.Services);
+        Assert.Equal(SwarmServiceOwnership.CitadelStack, normalized.Ownership);
+        Assert.Equal(stack.Id, normalized.StackId);
+        Assert.Null(normalized.OwnershipDiagnostic);
     }
 
     [Theory]
@@ -843,6 +1119,8 @@ public sealed class SwarmReconciliationTests
             provider.GetRequiredService<IDbWorkQueue>(),
             provider.GetRequiredService<INotificationQueue>(),
             Mock.Of<IApplicationHubDispatcher>(),
+            Mock.Of<IGitStackMaterializer>(),
+            Mock.Of<IAlertService>(),
             TimeProvider.System,
             Mock.Of<ILogger<SwarmReconciliationJob>>());
     }
@@ -1000,6 +1278,33 @@ public sealed class SwarmReconciliationTests
         unitOfWork.SetupGet(value => value.SwarmServices).Returns(managedServices.Object);
         unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
         unitOfWork.SetupGet(value => value.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        return unitOfWork;
+    }
+
+    private static Mock<IUnitOfWork> CreateOwnershipUnitOfWork(
+        Guid platformId,
+        IReadOnlyList<SwarmServiceProjection> persistedServices,
+        IReadOnlyList<Stack> stacks)
+    {
+        var stackRepository = new Mock<IStackRepository>();
+        stackRepository.Setup(repository => repository.GetInfoAsync(
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                platformId))
+            .ReturnsAsync(stacks);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm.Setup(repository => repository.GetServicesAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(persistedServices);
+        swarm.Setup(repository => repository.ReplaceAsync(
+                platformId,
+                It.IsAny<SwarmProjectionSnapshot>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Stacks).Returns(stackRepository.Object);
+        unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
+        unitOfWork.SetupGet(value => value.SwarmServices).Returns(CreateEmptyManagedServiceRepository());
         unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         return unitOfWork;
     }

@@ -1,4 +1,5 @@
 using Domain;
+using Application.Features.Stacks;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
@@ -6,6 +7,7 @@ using Domain.Entities.Stacks;
 using Application.Services.Builds;
 using Application.Services.SignalR;
 using Application.Services.Licensing;
+using Application.Services;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -73,12 +75,6 @@ internal sealed class PatchStackHandler(
             return Result.Failure<Stack>(new BadRequestError("PlatformId is required."));
         }
 
-        if (patched.PlatformId.Value != previousPlatformId)
-        {
-            return Result.Failure<Stack>(new BadRequestError(
-                "Changing a stack's platform is not supported. Duplicate it on the target platform instead."));
-        }
-
         if (patched.Spec == null)
         {
             return Result.Failure<Stack>(new BadRequestError("Spec is required."));
@@ -123,6 +119,73 @@ internal sealed class PatchStackHandler(
             return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }
 
+        var targetPlatformType = platform.PlatformDescriptor.Type;
+        var currentPlatformType = stack.CurrentStackRelease.Platform?.PlatformDescriptor.Type;
+        if (currentPlatformType is null && patched.PlatformId.Value == previousPlatformId)
+            currentPlatformType = targetPlatformType;
+
+        if (currentPlatformType is null)
+        {
+            return Result.Failure<Stack>(new BadRequestError("The stack's current platform type could not be determined."));
+        }
+
+        if (targetPlatformType != currentPlatformType)
+        {
+            return Result.Failure<Stack>(new BadRequestError(
+                "A stack cannot change between Docker Standalone and Docker Swarm. Duplicate it on the target platform instead."));
+        }
+
+        var swarmNamespaceReservation = await unitOfWork.Stacks.GetSwarmNamespaceReservationAsync(
+            stack.Id,
+            cancellationToken);
+        if (swarmNamespaceReservation is not null)
+        {
+            string requestedNamespace;
+            try
+            {
+                requestedNamespace = StackProjectNameResolver.Resolve(
+                    patched.Name ?? stack.Name,
+                    stack.Id,
+                    patched.Spec);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<Stack>(new BadRequestError(ex.Message));
+            }
+
+            if (patched.PlatformId.Value != swarmNamespaceReservation.PlatformId
+                || !string.Equals(
+                    requestedNamespace,
+                    swarmNamespaceReservation.Namespace,
+                    StringComparison.Ordinal))
+            {
+                return Result.Failure<Stack>(new BadRequestError(
+                    "The platform and project name are locked after a Swarm namespace has been reserved. Duplicate the Stack to use a different namespace."));
+            }
+        }
+
+        if (patched.PlatformId.Value != previousPlatformId
+            && (stack.CurrentStackRelease.Status != StackReleaseStatus.Created
+                || stack.CurrentStackRelease.Source is not null))
+        {
+            return Result.Failure<Stack>(new BadRequestError(
+                "Changing the platform of an applied stack is not available yet. Duplicate it on the target platform instead."));
+        }
+
+        if (targetPlatformType == PlatformType.DockerSwarm)
+        {
+            var unsupported = SwarmStackConfigurationPolicy.GetIssues(patched.Spec, patched.DriftPolicy)
+                .FirstOrDefault(static issue => issue.Severity == SwarmStackCompatibilitySeverity.Error);
+            if (unsupported is not null)
+                return Result.Failure<Stack>(new BadRequestError(unsupported.Message));
+        }
+
+        if (targetPlatformType is not PlatformType.Docker and not PlatformType.DockerSwarm)
+        {
+            return Result.Failure<Stack>(new BadRequestError(
+                "Stacks require a Docker Standalone or Docker Swarm platform."));
+        }
+
         if (patched.Spec is GitStack gitSpec)
         {
             var gitRepository = await unitOfWork.GitRepositories.GetAsync(gitSpec.GitRepoId, cancellationToken);
@@ -137,7 +200,7 @@ internal sealed class PatchStackHandler(
         if (PatchTouchesReleaseDefinition(command.Patch.Patch))
         {
             await PreserveCurrentReleaseSnapshotAsync(stack, cancellationToken);
-            stack.UpdateCurrentStackReleaseDefinition(patched.PlatformId.Value, patched.Spec);
+            stack.UpdateCurrentStackReleaseDefinition(patched.PlatformId.Value, patched.Spec, platform);
         }
 
         stack.UpdateDetails(driftPolicy: patched.DriftPolicy);

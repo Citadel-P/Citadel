@@ -130,6 +130,7 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BuildAgentPoolValidationStatus>),
         typeof(JsonStringEnumConverter<BuildRunTrigger>),
         typeof(JsonStringEnumConverter<BuildRunStatus>),
+        typeof(JsonStringEnumConverter<StackImportKind>),
         typeof(JsonStringEnumConverter<VolumeFileEntryType>)
     })]
 [JsonSerializable(typeof(string[]))]
@@ -506,6 +507,9 @@ namespace Application.Models;
 [JsonSerializable(typeof(ApplyDeploymentInput))]
 [JsonSerializable(typeof(StackInput))]
 [JsonSerializable(typeof(CreateStackInput))]
+[JsonSerializable(typeof(SwarmStackPreflightInput))]
+[JsonSerializable(typeof(SwarmStackCompatibilityReport))]
+[JsonSerializable(typeof(SwarmStackCompatibilityIssue))]
 [JsonSerializable(typeof(StackDuplicateDraftView))]
 [JsonSerializable(typeof(ComposeProjectImportDraftView))]
 [JsonSerializable(typeof(ComposeProjectImportSourceView))]
@@ -513,6 +517,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ComposeProjectRuntimeService))]
 [JsonSerializable(typeof(ComposeProjectImportValidation))]
 [JsonSerializable(typeof(ComposeProjectServiceComparison))]
+[JsonSerializable(typeof(StackImportKind))]
+[JsonSerializable(typeof(StackImportKind?))]
 [JsonSerializable(typeof(ValidateComposeProjectImportInput))]
 [JsonSerializable(typeof(ImportComposeProjectInput))]
 [JsonSerializable(typeof(PatchStackInput))]
@@ -560,6 +566,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(AlertEventView))]
 [JsonSerializable(typeof(AlertEventsView))]
 [JsonSerializable(typeof(BuildRunFailedAlertInfo))]
+[JsonSerializable(typeof(SwarmServiceOperationFailedAlertInfo))]
 [JsonSerializable(typeof(LicenseEnteredGracePeriodAlertInfo))]
 [JsonSerializable(typeof(LicenseExpiredAlertInfo))]
 [JsonSerializable(typeof(AlertEventFilter))]

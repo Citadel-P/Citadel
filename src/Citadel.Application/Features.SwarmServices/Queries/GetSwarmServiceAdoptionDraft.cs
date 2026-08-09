@@ -129,6 +129,9 @@ internal static class SwarmServiceAdoptionDraftFactory
             return Result.Failure<SwarmServiceAdoptionContext>(new ConflictError(message));
         }
 
+        if (await GetOwnershipConflictAsync(projection.Labels, unitOfWork, cancellationToken) is { } projectionConflict)
+            return Result.Failure<SwarmServiceAdoptionContext>(projectionConflict);
+
         if (await unitOfWork.SwarmServices.GetByDockerServiceIdAsync(platformId, dockerServiceId, cancellationToken) is not null)
             return Result.Failure<SwarmServiceAdoptionContext>(new ConflictError("Swarm Service is already managed by Citadel."));
 
@@ -143,6 +146,14 @@ internal static class SwarmServiceAdoptionDraftFactory
             return Result.Failure<SwarmServiceAdoptionContext>(new BadRequestError("Docker did not return a Service definition that Citadel can adopt."));
         if (service.Name.Length > 63)
             return Result.Failure<SwarmServiceAdoptionContext>(new BadRequestError("Docker Service name is longer than Citadel can manage."));
+        if (service.Labels.TryGetValue("com.docker.stack.namespace", out var stackNamespace)
+            && !string.IsNullOrWhiteSpace(stackNamespace))
+        {
+            return Result.Failure<SwarmServiceAdoptionContext>(
+                new ConflictError("Services owned by a Docker stack must be imported with their stack."));
+        }
+        if (await GetOwnershipConflictAsync(service.Labels, unitOfWork, cancellationToken) is { } inspectedConflict)
+            return Result.Failure<SwarmServiceAdoptionContext>(inspectedConflict);
 
         return Result.Success(new SwarmServiceAdoptionContext(platform, projection, service));
     }
@@ -164,7 +175,10 @@ internal static class SwarmServiceAdoptionDraftFactory
         }
         var spec = context.Service.Definition with
         {
-            Environment = RedactSensitiveEnvironment(context.Service.Definition.Environment)
+            Environment = RedactSensitiveEnvironment(context.Service.Definition.Environment),
+            Labels = context.Service.Definition.Labels
+                .Where(static label => !label.Key.StartsWith("com.citadel.", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(static label => label.Key, static label => label.Value, StringComparer.Ordinal)
         };
         return new SwarmServiceAdoptionDraft(
             new SwarmServiceAdoptionSource(
@@ -217,6 +231,36 @@ internal static class SwarmServiceAdoptionDraftFactory
             .Where(ContainerInspectionRedactor.IsSensitiveEnvironmentName)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+    private static bool HasCitadelLabel(IReadOnlyDictionary<string, string> labels)
+        => labels.Keys.Any(static key => key.StartsWith("com.citadel.", StringComparison.OrdinalIgnoreCase));
+
+    private static async Task<ConflictError?> GetOwnershipConflictAsync(
+        IReadOnlyDictionary<string, string> labels,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (!HasCitadelLabel(labels))
+            return null;
+        if (!TryGetOrphanedServiceOwnerId(labels, out var ownerId))
+            return new ConflictError("Swarm Service has invalid or conflicting Citadel ownership labels.");
+        return await unitOfWork.SwarmServices.GetAsync(ownerId, cancellationToken) is null
+            ? null
+            : new ConflictError("Swarm Service is owned by an existing Citadel Service.");
+    }
+
+    private static bool TryGetOrphanedServiceOwnerId(
+        IReadOnlyDictionary<string, string> labels,
+        out Guid ownerId)
+    {
+        ownerId = Guid.Empty;
+        return labels.TryGetValue("com.citadel.managed", out var managed)
+               && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase)
+               && labels.TryGetValue("com.citadel.service-id", out var value)
+               && Guid.TryParse(value, out ownerId)
+               && !labels.ContainsKey("com.citadel.stack-id")
+               && !labels.ContainsKey("com.citadel.deployment-id");
+    }
 
     internal static string ComputeFingerprint(
         SwarmServiceAdoptionContext context,

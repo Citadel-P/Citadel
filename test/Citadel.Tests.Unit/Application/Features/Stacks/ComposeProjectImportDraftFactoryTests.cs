@@ -8,6 +8,7 @@ using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Moq;
+using System.Text.Json;
 
 namespace Tests.Unit.Application.Features.Stacks;
 
@@ -16,7 +17,7 @@ public sealed class ComposeProjectImportDraftFactoryTests
     private static readonly IAdoptionFingerprintService FingerprintService = TestAdoptionFingerprint.Create();
 
     [Fact]
-    public async Task LoadContext_ShouldRejectSwarmPlatformBeforeCallingConnector()
+    public async Task LoadContext_ShouldRejectSwarmPlatformWithoutManagerControlBeforeCallingConnector()
     {
         var context = CreateContext(("api", false, "nginx:1.27"));
         context.Platform.PartialUpdate(
@@ -24,7 +25,7 @@ public sealed class ComposeProjectImportDraftFactoryTests
                 NodeID: "node-1",
                 NodeAddr: "10.0.0.1",
                 LocalNodeState: "Active",
-                ControlAvailable: true,
+                ControlAvailable: false,
                 Nodes: 1,
                 Managers: 1,
                 DaemonId: "docker",
@@ -50,7 +51,7 @@ public sealed class ComposeProjectImportDraftFactoryTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsFailure(out var error));
-        Assert.Contains("Docker Standalone", error.Message, StringComparison.Ordinal);
+        Assert.Contains("connected Swarm manager", error.Message, StringComparison.Ordinal);
         connectors.Verify(
             factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()),
             Times.Never);
@@ -200,6 +201,30 @@ public sealed class ComposeProjectImportDraftFactoryTests
     }
 
     [Fact]
+    public async Task Validation_ShouldCompareTheConfiguredImageInsteadOfTheComposeContentDigest()
+    {
+        var context = CreateContext(("api", false, "nginx:1.27"));
+        var container = Assert.Single(context.Containers);
+        var labels = new Dictionary<string, string>(container.Inspection.Config!.Labels)
+        {
+            ["com.docker.compose.image"] = "sha256:content-digest"
+        };
+        var inspection = container.Inspection with
+        {
+            Config = container.Inspection.Config with { Labels = labels }
+        };
+        context = new ComposeProjectImportContext(
+            context.Platform,
+            context.ProjectName,
+            [container with { Inspection = inspection }]);
+        var source = await Analyze(context, "nginx:1.27");
+
+        var validation = ComposeProjectImportDraftFactory.CreateValidation(context, source, FingerprintService);
+
+        Assert.DoesNotContain(validation.Issues, issue => issue.Code == "SERVICE_IMAGE_DIFFERS");
+    }
+
+    [Fact]
     public async Task PreviewFingerprint_ShouldChangeWithAuthoritativeSource()
     {
         var context = CreateContext(("api", false, "nginx:1.27"));
@@ -244,6 +269,65 @@ public sealed class ComposeProjectImportDraftFactoryTests
             .PreviewFingerprint;
 
         Assert.NotEqual(firstFingerprint, secondFingerprint);
+    }
+
+    [Fact]
+    public async Task Validation_ShouldOfferSensitiveRuntimeValuesAsStackBindingsWithoutExposingThem()
+    {
+        const string secretValue = "stripe-secret-value";
+        var context = CreateContextWithEnvironment(
+            ("api", "nginx:1.27", ["STRIPE_API_KEY=" + secretValue]),
+            ("agent", "busybox:1.36", ["TOKEN=agent-token-value"]));
+        var source = await Analyze(
+            context,
+            new ManualStack(
+                """
+                services:
+                  api:
+                    image: nginx:1.27
+                    environment:
+                      STRIPE_API_KEY: ${stripe_api_key_1}
+                  agent:
+                    image: busybox:1.36
+                    environment:
+                      - TOKEN=${BESZEL_AGENT_TOKEN}
+                """,
+                StackUpdateBehavior.Disabled));
+
+        var validation = ComposeProjectImportDraftFactory.CreateValidation(context, source, FingerprintService);
+        var sensitiveBindings = ComposeProjectImportDraftFactory.GetSensitiveBindingAnalysis(context, source);
+
+        Assert.True(validation.CanImportSensitiveEnvironmentValues);
+        Assert.Equal(["BESZEL_AGENT_TOKEN", "stripe_api_key_1"], validation.ImportableSensitiveEnvironmentNames);
+        Assert.Equal(
+            ["BESZEL_AGENT_TOKEN", "stripe_api_key_1"],
+            sensitiveBindings.Bindings.Select(static binding => binding.Name));
+        Assert.DoesNotContain(secretValue, JsonSerializer.Serialize(validation), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Validation_ShouldRejectAutomaticImportWhenReplicasDisagreeOnSensitiveValue()
+    {
+        var context = CreateContextWithEnvironment(
+            ("api", "nginx:1.27", ["TOKEN=first"]),
+            ("api", "nginx:1.27", ["TOKEN=second"]));
+        var source = await Analyze(
+            context,
+            new ManualStack(
+                """
+                services:
+                  api:
+                    image: nginx:1.27
+                    environment:
+                      TOKEN: ${API_TOKEN}
+                """,
+                StackUpdateBehavior.Disabled));
+
+        var validation = ComposeProjectImportDraftFactory.CreateValidation(context, source, FingerprintService);
+
+        Assert.False(validation.CanImportSensitiveEnvironmentValues);
+        Assert.Empty(validation.ImportableSensitiveEnvironmentNames);
+        Assert.Contains(validation.Issues, issue => issue.Code == "SENSITIVE_BINDING_VALUE_CONFLICT");
     }
 
     private static async Task<ComposeProjectSourceAnalysis> Analyze(
@@ -322,10 +406,26 @@ public sealed class ComposeProjectImportDraftFactoryTests
         return new ComposeProjectImportContext(platform, "sample", containers);
     }
 
+    private static ComposeProjectImportContext CreateContextWithEnvironment(
+        params (string Service, string Image, string[] Environment)[] services)
+    {
+        var context = CreateContext(services.Select(service => (service.Service, false, service.Image)).ToArray());
+        var containers = context.Containers.Select((container, index) => container with
+        {
+            Inspection = Inspection(
+                container.Container.DockerContainerId,
+                services[index].Image,
+                container.Inspection.Config!.Labels,
+                services[index].Environment)
+        }).ToArray();
+        return new ComposeProjectImportContext(context.Platform, context.ProjectName, containers);
+    }
+
     private static ContainerInspectionInfo Inspection(
         string id,
         string image,
-        IReadOnlyDictionary<string, string> labels)
+        IReadOnlyDictionary<string, string> labels,
+        IReadOnlyList<string>? environment = null)
         => new(
             Id: id,
             Created: "2026-07-29T00:00:00Z",
@@ -361,7 +461,7 @@ public sealed class ComposeProjectImportDraftFactoryTests
                 Tty: null,
                 OpenStdin: null,
                 StdinOnce: null,
-                Env: [],
+                Env: environment ?? [],
                 Cmd: [],
                 Image: image,
                 Volumes: null,

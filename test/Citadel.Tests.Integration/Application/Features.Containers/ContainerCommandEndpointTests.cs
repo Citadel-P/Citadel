@@ -120,6 +120,46 @@ public sealed class ContainerCommandEndpointTests(PostgresTestFixture fixture) :
         connector.VerifyAll();
     }
 
+    [Fact]
+    public async Task ContainerCommandEndpoint_ShouldRejectDirectSwarmTaskMutation()
+    {
+        const string taskContainerId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Containers.AddAsync(
+                Container.FromPersistence(
+                    Guid.NewGuid(),
+                    PlatformId,
+                    taskContainerId,
+                    "sha256:redis",
+                    "redis-test_web.1",
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    rowVersion: 0,
+                    controlStartedAt: null,
+                    controlTriggeredBy: null,
+                    controlState: ResourceControlState.Idle,
+                    state: ContainerStateStatus.Running,
+                    dockerStack: "redis-test",
+                    ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+                    isSwarmTask: true),
+                cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        using var response = await Client.PatchAsJsonAsync(
+            "/api/v1/containers/restart",
+            new[] { taskContainerId[..12] },
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        connector.Verify(
+            value => value.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     private static ContainerInspectionInfo Inspection(ContainerStateStatus state)
         => new(
             Id: DockerContainerId,

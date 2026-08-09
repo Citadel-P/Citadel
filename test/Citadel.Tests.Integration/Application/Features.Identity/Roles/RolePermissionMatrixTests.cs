@@ -66,6 +66,7 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             nameof(ResourceType.Role),
             nameof(ResourceType.Platform),
             nameof(ResourceType.Deployment),
+            nameof(ResourceType.SwarmService),
             nameof(ResourceType.Stack),
             nameof(ResourceType.GitRepository),
             nameof(ResourceType.GitAccount),
@@ -78,6 +79,28 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
         {
             Assert.True(root.TryGetProperty(resourceType, out _), $"Missing resource type: {resourceType}");
         }
+    }
+
+    [Fact]
+    public async Task Get_Permission_Matrix_SwarmService_Contains_Operation_Capabilities()
+    {
+        var response = await Client.GetAsync(
+            "/api/v1/roles/permissions/matrix",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var service = doc.RootElement.GetProperty(nameof(ResourceType.SwarmService));
+        var specifics = service.GetProperty("specificPermissions");
+
+        Assert.Equal(nameof(PermissionLevel.Execute), service.GetProperty("maximumLevel").GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Apply)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Logs)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Inspect)).GetString());
     }
 
     [Fact]

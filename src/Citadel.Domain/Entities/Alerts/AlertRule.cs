@@ -377,6 +377,8 @@ public static class AlertTypeMetadata
         { AlertType.DeploymentAutoUpdated, AlertResourceType.Deployment },
         { AlertType.DeploymentAutoDeployFailed, AlertResourceType.Deployment },
 
+        { AlertType.SwarmServiceOperationFailed, AlertResourceType.SwarmService },
+
         { AlertType.StackImageUpdateAvailable, AlertResourceType.Stack },
         { AlertType.StackAutoUpdated, AlertResourceType.Stack },
         { AlertType.StackAutoDeployFailed, AlertResourceType.Stack },
@@ -424,6 +426,7 @@ public static class AlertTypeMetadata
             (AlertType.DeploymentImageUpdateAvailable, DeploymentImageUpdateAvailableAlertInfo) => true,
             (AlertType.DeploymentAutoUpdated, DeploymentAutoUpdatedAlertInfo) => true,
             (AlertType.DeploymentAutoDeployFailed, DeploymentAutoDeployFailedAlertInfo) => true,
+            (AlertType.SwarmServiceOperationFailed, SwarmServiceOperationFailedAlertInfo) => true,
             (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
             (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
             (AlertType.StackAutoDeployFailed, StackDeployFailedAlertInfo) => true,

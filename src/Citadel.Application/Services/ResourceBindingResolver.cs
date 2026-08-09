@@ -14,7 +14,16 @@ namespace Application.Services;
 
 internal interface IResourceBindingResolver
 {
-    Task<Result<ResolvedResourceBindings>> ResolveAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken);
+    Task<Result<ResolvedResourceBindings>> ResolveAsync(
+        ResourceBindingScope scope,
+        Guid resourceId,
+        CancellationToken cancellationToken);
+
+    Task<Result<ResolvedResourceBindings>> ResolveWithoutMountedSecretsAsync(
+        ResourceBindingScope scope,
+        Guid resourceId,
+        CancellationToken cancellationToken)
+        => ResolveAsync(scope, resourceId, cancellationToken);
 }
 
 internal interface ISecretValueProtector
@@ -35,7 +44,23 @@ internal sealed partial class ResourceBindingResolver(
 {
     private static readonly Regex NameRegex = GetNameRegex();
 
-    public async Task<Result<ResolvedResourceBindings>> ResolveAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken)
+    public Task<Result<ResolvedResourceBindings>> ResolveAsync(
+        ResourceBindingScope scope,
+        Guid resourceId,
+        CancellationToken cancellationToken)
+        => ResolveCoreAsync(scope, resourceId, resolveMountedSecrets: true, cancellationToken);
+
+    public Task<Result<ResolvedResourceBindings>> ResolveWithoutMountedSecretsAsync(
+        ResourceBindingScope scope,
+        Guid resourceId,
+        CancellationToken cancellationToken)
+        => ResolveCoreAsync(scope, resourceId, resolveMountedSecrets: false, cancellationToken);
+
+    private async Task<Result<ResolvedResourceBindings>> ResolveCoreAsync(
+        ResourceBindingScope scope,
+        Guid resourceId,
+        bool resolveMountedSecrets,
+        CancellationToken cancellationToken)
     {
         await using var serviceScope = scopeFactory.CreateAsyncScope();
         var uow = serviceScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -88,6 +113,19 @@ internal sealed partial class ResourceBindingResolver(
             var secret = await uow.SecretDefinitions.GetAsync(entry.SecretId!.Value, cancellationToken);
             if (secret is null)
                 return Result.Failure<ResolvedResourceBindings>($"Secret {entry.Name} is not available.");
+
+            if (!resolveMountedSecrets && entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile)
+            {
+                resolvedEntries.Add(new ResolvedResourceBinding(
+                    entry.Name,
+                    entry.Kind,
+                    string.Empty,
+                    secret.Name,
+                    entry.SecretDeliveryMode,
+                    entry.TargetPath));
+                snapshotEntries.Add(entry.ToSecretSnapshot(secret, provider: null));
+                continue;
+            }
 
             var plaintextResult = await ResolveSecretPlaintextAsync(uow, entry.Name, secret, cancellationToken);
             if (!plaintextResult.IsSuccess(out var resolvedSecret, out var plaintextError))

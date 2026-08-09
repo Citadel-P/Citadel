@@ -23,6 +23,7 @@ public sealed record ComposeProjectStackDraftView(
     IReadOnlyCollection<Guid> TagIds);
 
 public sealed record ComposeProjectImportDraftView(
+    StackImportKind ImportKind,
     ComposeProjectImportSourceView Source,
     ComposeProjectStackDraftView Draft,
     IReadOnlyCollection<ContainerAdoptionIssueView> Issues,
@@ -30,6 +31,7 @@ public sealed record ComposeProjectImportDraftView(
 {
     internal static ComposeProjectImportDraftView Map(ComposeProjectImportDraft draft)
         => new(
+            draft.ImportKind,
             new ComposeProjectImportSourceView(
                 draft.Source.PlatformId,
                 draft.Source.PlatformName,
@@ -54,10 +56,11 @@ public sealed record ComposeProjectImportDraftView(
 public sealed record ValidateComposeProjectImportInput(
     string Name,
     StackSource StackSource,
-    StackSpec Spec)
+    StackSpec Spec,
+    StackImportKind? ImportKind = null)
 {
     internal ValidateComposeProjectImportDraft ToQuery(Guid platformId, string projectName)
-        => new(platformId, projectName, Name, StackSource, Spec);
+        => new(platformId, projectName, Name, StackSource, Spec, ImportKind);
 }
 
 public sealed record ImportComposeProjectInput(
@@ -66,7 +69,9 @@ public sealed record ImportComposeProjectInput(
     StackSource StackSource,
     StackSpec Spec,
     string PreviewFingerprint,
-    IReadOnlyCollection<Guid>? TagIds = null)
+    IReadOnlyCollection<Guid>? TagIds = null,
+    StackImportKind? ImportKind = null,
+    bool ImportSensitiveEnvironmentAsSecrets = false)
 {
     internal ImportComposeProject ToCommand(Guid platformId, string projectName)
         => new(
@@ -77,5 +82,7 @@ public sealed record ImportComposeProjectInput(
             StackSource,
             Spec,
             PreviewFingerprint,
-            TagIds);
+            TagIds,
+            ImportKind,
+            ImportSensitiveEnvironmentAsSecrets);
 }

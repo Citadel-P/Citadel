@@ -927,6 +927,13 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.Equal(1, root.GetProperty("nodeCount").GetInt32());
         Assert.Equal(1, root.GetProperty("managerCount").GetInt32());
         Assert.Equal(1, root.GetProperty("serviceCount").GetInt32());
+        var serviceStatusCounts = root.GetProperty("serviceStatusCounts");
+        Assert.Equal(1, serviceStatusCounts.GetProperty("total").GetInt32());
+        Assert.Equal(1, serviceStatusCounts.GetProperty("healthy").GetInt32());
+        Assert.Equal(0, serviceStatusCounts.GetProperty("degraded").GetInt32());
+        Assert.Equal(0, serviceStatusCounts.GetProperty("failed").GetInt32());
+        Assert.Equal(0, serviceStatusCounts.GetProperty("stopped").GetInt32());
+        Assert.Equal(0, serviceStatusCounts.GetProperty("unknown").GetInt32());
         Assert.Equal(3, root.GetProperty("runningTaskCount").GetInt32());
         Assert.Equal(3, root.GetProperty("desiredTaskCount").GetInt32());
         Assert.Equal(1, root.GetProperty("networkCount").GetInt32());

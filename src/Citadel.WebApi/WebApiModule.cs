@@ -313,6 +313,13 @@ internal static class WebApiModule
             .Validate(options => options.RunRetentionDays > 0, "Builds:RunRetentionDays must be greater than zero.")
             .ValidateOnStart();
         builder.Services
+            .AddOptions<SwarmStackOptions>()
+            .BindConfiguration(SwarmStackOptions.SectionName)
+            .Validate(
+                options => options.RetainedRollbackReleases is >= 1 and <= 50,
+                "SwarmStacks:RetainedRollbackReleases must be between 1 and 50.")
+            .ValidateOnStart();
+        builder.Services
             .AddOptions<BackupOptions>()
             .BindConfiguration(BackupOptions.SectionName)
             .Validate(options => !string.IsNullOrWhiteSpace(options.ResticPath), "Backups:ResticPath is required.")

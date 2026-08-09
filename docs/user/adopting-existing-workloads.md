@@ -1,20 +1,26 @@
 # Adopting Existing Docker Workloads
 
-Citadel can bring existing Docker Standalone containers, Compose projects, and
-individual Docker Swarm Services under management without changing them during
-adoption.
+Citadel can bring existing Docker Standalone containers, Compose projects,
+individual Docker Swarm Services, and complete Docker Stack namespaces under
+management without changing them during adoption or import.
 
 Use:
 
 - **Adopt Container** for one standalone container
 - **Import Stack** for containers started by Docker Compose
 - **Adopt Service** for one unmanaged Docker Swarm Service
+- **Import Stack** for every Service in one external Docker Stack namespace
 
 Adoption is available in every Citadel edition.
 
-This workflow does not apply to Docker Swarm Task containers. Swarm workloads
-are owned at the Service or Stack level, so the manager-local Containers page
-does not offer these actions on a Swarm Platform.
+Individual Docker Swarm Task containers cannot be adopted or managed directly.
+On a Swarm Platform, Citadel groups Task containers by their Docker Stack
+namespace. Select the namespace row to import the complete Stack. Exited Task
+containers retained by Docker are historical and are not included in that
+group. By default, Citadel deletes bounded batches of that history from the
+connected manager during synchronization. Docker Desktop may still display
+worker-local history, or manager-local history when pruning is disabled in the
+Swarm Platform's Config tab.
 
 ## What Adoption Changes
 
@@ -130,9 +136,31 @@ Citadel does not reconstruct Compose YAML from running containers. Docker does
 not retain enough information to recover variables, profiles, anchors, build
 configuration, comments, and other source details reliably.
 
-The imported Stack keeps the detected Docker Compose project name. This allows
-a later Apply to target the existing project instead of creating a second set
-of containers.
+When the reviewed Compose source contains an exact sensitive environment
+binding such as `TOKEN=${APP_TOKEN}`, Citadel can read the resolved value from
+the matching running container and offer **Import detected values as Citadel
+secrets** during confirmation. The option creates encrypted, Stack-scoped
+bindings without sending their values to the browser. It is available only
+when every matching container provides the value and replicas agree.
+
+The imported Stack keeps the detected Docker Compose project name. On a Docker
+Standalone Platform, a later Apply targets the existing Compose project instead
+of creating a second set of containers.
+
+On a Docker Swarm manager, a regular Compose project can also be imported from
+its parent row in **Containers**. Citadel validates the selected source against
+the running project and the Swarm compatibility rules before it creates the
+Stack. The import itself remains database-only and leaves the Compose project
+running.
+
+The first explicit Apply performs the conversion. Citadel stops the Compose
+project without deleting named volumes, then runs `docker stack deploy` with
+the reviewed source and the same project name. Plan for downtime. If Compose
+shutdown is incomplete or Docker rejects the deployment command, Citadel starts
+the original Compose project again from the reviewed source and reports the
+recovery result. If Docker accepts the command but the Swarm rollout later
+fails, Citadel leaves the Swarm Stack in place and reports the failed Service or
+Task for correction.
 
 ## Adopt A Docker Swarm Service
 
@@ -156,8 +184,38 @@ normal ownership labels.
 
 Citadel does not offer **Adopt Service** for stale inventory, Services already
 managed by Citadel, Services with conflicting ownership metadata, or Services
-that belong to a Docker Stack. A Stack-owned Service must be imported with its
-complete Stack; that workflow is not currently available.
+that belong to a Docker Stack. Import a Stack-owned Service with its complete
+namespace instead.
+
+## Import A Docker Swarm Stack
+
+On a Swarm Platform, **Import Stack** is available from either an external
+Docker Stack Service on the **Services** page or its namespace row on the
+**Containers** page. Both entry points open the same namespace-wide review;
+individual Services and Task containers cannot be imported separately.
+
+1. Select **Import Stack** for one external Docker Stack Service or Stack
+   namespace row.
+2. Choose a Web Editor or Git source containing the authoritative Compose
+   definition.
+3. Review the complete Service and resource comparison.
+4. Resolve source mismatches or ownership conflicts.
+5. Confirm the import.
+
+Docker does not retain the original Compose source, interpolation inputs, or
+repository revision, so Citadel never reconstructs them from running Services.
+The selected source is validated with the normal Swarm compatibility checks.
+
+Import reserves the existing Platform and namespace identity and links every
+current Service in one database transaction. It does not run `docker stack
+deploy`, relabel a Service, restart a Task, or change a Docker resource. If the
+namespace changes while the review is open, the import is rejected and no
+partial Stack or ownership link is kept.
+
+The first later **Apply** targets the reserved namespace and establishes normal
+Citadel ownership labels. Review that Apply carefully: the selected Compose
+source is authoritative and may update or remove runtime definitions that do
+not match it.
 
 ## Safe Initial Settings
 
@@ -179,8 +237,10 @@ Adoption and Apply are separate operations.
 The first later **Redeploy** of an adopted Deployment may recreate its
 container from the saved Deployment definition.
 
-The first later **Apply** of an imported Stack may update or recreate
-containers so they match the authoritative Compose source.
+The first later **Apply** of an imported Standalone Stack may update or recreate
+containers so they match the authoritative Compose source. For a regular
+Compose project imported on a Swarm Platform, the first Apply stops Compose and
+deploys the source as a native Swarm Stack as described above.
 
 The first later **Apply** of an adopted Swarm Service may roll out Tasks so the
 running Service matches the reviewed Citadel configuration.
@@ -209,6 +269,11 @@ For a Swarm Service, the inventory must also be current, the Service must not
 belong to a Docker Stack, and no Citadel Service may already own its Docker
 Service ID.
 
+A standalone Swarm Service with valid Citadel Service labels can be recovered
+through **Adopt Service** when the referenced Service no longer exists in the
+current database. Citadel removes the stale reserved labels from the reviewed
+configuration and checks the old owner again before saving.
+
 Citadel Core, PostgreSQL, Agent, and Edge Agent containers are System
 containers and cannot be adopted.
 
@@ -217,6 +282,13 @@ Stack ID can be recovered when that Stack no longer exists in the current
 database. Citadel rejects the import when the referenced Stack still exists,
 the labels are malformed, the project mixes labeled and unlabeled containers,
 or its containers reference different Stack IDs.
+
+Docker Swarm Stacks follow the same rule at Service namespace scope. Every
+Service must reference the same missing Citadel Stack ID, or every Service must
+be unmanaged. Mixed, malformed, conflicting, or still-owned namespaces cannot
+be imported. The first later Apply replaces stale Stack labels on the linked
+Services and permits only their referenced namespace resources during that
+transition.
 
 Standalone containers with Citadel ownership labels remain ownership
 conflicts and cannot be adopted as new Deployments.
@@ -288,6 +360,13 @@ understanding the operational impact.
 Verify the Compose project name and service names. Select the source that
 actually defines the running project; do not use a similar project with a
 different name.
+
+**A Compose project cannot be converted to Swarm**
+
+Resolve every Swarm compatibility error before importing. Settings such as
+`container_name`, standalone restart behavior, and unsupported namespace modes
+cannot be carried into `docker stack deploy`. Portability warnings for bind
+mounts, local Volumes, and fixed Host-mode ports require review on every Node.
 
 For normal Deployment behavior, see `docs/user/deployments.md`.
 

@@ -63,6 +63,7 @@ function SearchSection() {
       [AlertResourceType.GitRepository]: CitadelIcons.GitRepository,
       [AlertResourceType.Platform]: CitadelIcons.Platform,
       [AlertResourceType.Stack]: CitadelIcons.Stack,
+      [AlertResourceType.SwarmService]: CitadelIcons.SwarmService,
       [AlertResourceType.Webhook]: CitadelIcons.Webhook,
       [AlertResourceType.AutomationAction]: CitadelIcons.AutomationAction,
       [AlertResourceType.Build]: CitadelIcons.Build,
@@ -159,6 +160,7 @@ function getAlertTypeResourceType(type: AlertType): AlertResourceType {
   if (type.startsWith('License')) return AlertResourceType.License;
   if (type.startsWith('Build')) return AlertResourceType.Build;
   if (type.startsWith('Deployment')) return AlertResourceType.Deployment;
+  if (type.startsWith('SwarmService')) return AlertResourceType.SwarmService;
   if (type.startsWith('Stack')) return AlertResourceType.Stack;
   return AlertResourceType.Platform;
 }

@@ -36,7 +36,8 @@ internal static class ContainerMappers
             stats: container.Stats?.Select(ToDomain).ToList(),
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
-            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            isSwarmTask: container.IsSwarmTask);
     }
 
     internal static Container? ToDomain(this ContainerWithImageDto? container)
@@ -90,7 +91,8 @@ internal static class ContainerMappers
                 ) : null,
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
-            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            isSwarmTask: container.IsSwarmTask);
     }
 
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerWithLastStatDto> containers)
@@ -174,7 +176,8 @@ internal static class ContainerMappers
                 )],
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
-            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels);
+            hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            isSwarmTask: container.IsSwarmTask);
     }
 
     internal static IEnumerable<ContainerStat> ToDomain(this IEnumerable<ContainerStatDto> stats)

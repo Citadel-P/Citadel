@@ -46,7 +46,8 @@ internal sealed class GetDockerContainerHandler(
             StackId: container.StackId,
             IsSystem: container.IsSystem,
             SystemRole: container.SystemRole,
-            HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels) : null;
+            HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+            IsSwarmTask: container.IsSwarmTask) : null;
         return dockerContainer is not null ? Result.Success((dockerContainer, container?.PlatformId ?? Guid.Empty)) : Result.Failure<(DockerContainer, Guid)>(new NotFoundError("Container does not exist"));
     }
 }

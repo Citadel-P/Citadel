@@ -18,6 +18,7 @@ import {
   StackReconciliationStatus,
   StackSource,
   StackView,
+  PlatformType,
 } from '@/api/generated/api.types';
 import {
   getStackUpdateCheckDisabledReason,
@@ -37,10 +38,11 @@ const everyStack = (resources: StackView | StackView[], predicate: (resource: St
 const hasStatus = (resource: StackView, ...statuses: StackReleaseStatus[]) => statuses.includes(resource.status);
 
 const canControl = (resource: StackView, ...statuses: StackReleaseStatus[]) =>
-  hasStatus(resource, ...statuses) && !isProcessing(resource);
+  resource.platformType !== PlatformType.DockerSwarm && hasStatus(resource, ...statuses) && !isProcessing(resource);
 
 const canCheckDrift = (resource: StackView) =>
-  resource.status === StackReleaseStatus.Healthy || resource.status === StackReleaseStatus.Degraded;
+  resource.platformType !== PlatformType.DockerSwarm &&
+  (resource.status === StackReleaseStatus.Healthy || resource.status === StackReleaseStatus.Degraded);
 
 export const deployAction: ActionConfig<StackView, any> = {
   key: 'deployToggle',
@@ -59,7 +61,10 @@ export const deployAction: ActionConfig<StackView, any> = {
 
       return {
         canExecute:
-          !!selected && selected.status !== StackReleaseStatus.Applying && !isProcessing(selected) && !multiSelect,
+          !!selected &&
+          selected.status !== StackReleaseStatus.Applying &&
+          !isProcessing(selected) &&
+          !multiSelect,
         run: () => openSheet({ kind: 'stack', payload: { id: selected.id, name: selected.name } }),
       };
     },
@@ -77,8 +82,19 @@ export const deployAction: ActionConfig<StackView, any> = {
 
       return {
         canExecute:
-          !!selected && selected.status !== StackReleaseStatus.Applying && !isProcessing(selected) && !multiSelect,
-        run: () => openSheet({ kind: 'stack', payload: { id: selected.id, name: selected.name, recreate: true } }),
+          !!selected &&
+          selected.status !== StackReleaseStatus.Applying &&
+          !isProcessing(selected) &&
+          !multiSelect,
+        run: () =>
+          openSheet({
+            kind: 'stack',
+            payload: {
+              id: selected.id,
+              name: selected.name,
+              recreate: selected.platformType !== PlatformType.DockerSwarm,
+            },
+          }),
       };
     },
   },

@@ -39,12 +39,21 @@ export const ServicesTable = ({
   items,
   isLoading,
   actions,
+  platformId: platformIdProp,
+  selectable = true,
+  showActions = true,
+  emptyState,
 }: {
   items: SwarmServiceListView[];
   isLoading: boolean;
   actions: Record<string, DropdownActionComponent<SwarmServiceListView>>;
+  platformId?: string;
+  selectable?: boolean;
+  showActions?: boolean;
+  emptyState?: { title: string; description: string };
 }) => {
-  const { platformId = '' } = useParams<{ platformId: string }>();
+  const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
+  const platformId = platformIdProp ?? routePlatformId;
   const [, setSelectedResources] = useSelectedResources<SwarmServiceListView>('Service');
   const rows = useMemo<ServiceTableRow[]>(
     () =>
@@ -57,8 +66,8 @@ export const ServicesTable = ({
     [items],
   );
   const getSubRows = useCallback((row: ServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
-  const columns = useMemo<ColumnDef<ServiceTableRow>[]>(
-    () => [
+  const columns = useMemo<ColumnDef<ServiceTableRow>[]>(() => {
+    const allColumns: ColumnDef<ServiceTableRow>[] = [
       {
         id: 'select',
         header: ({ table }) => (
@@ -155,9 +164,14 @@ export const ServicesTable = ({
         cell: ({ row }) =>
           isServiceRow(row.original) ? <RowActionMenu resource={row.original.service} actions={actions} /> : null,
       },
-    ],
-    [actions, platformId],
-  );
+    ];
+
+    return allColumns.filter((column) => {
+      if (column.id === 'select') return selectable;
+      if (column.id === 'actions') return showActions;
+      return true;
+    });
+  }, [actions, platformId, selectable, showActions]);
 
   return (
     <DataTable
@@ -165,10 +179,16 @@ export const ServicesTable = ({
       data={rows}
       isLoading={isLoading}
       getSubRows={getSubRows}
-      enableRowSelection={(row) => isServiceRow(row)}
+      enableRowSelection={selectable ? (row) => isServiceRow(row) : false}
       enableSubRowSelection={false}
-      onSelectionChange={(selected) => setSelectedResources(selected.filter(isServiceRow).map((row) => row.service))}
-      emptyState={{ title: 'No services found.', description: 'No services were returned by the Swarm manager.' }}
+      onSelectionChange={
+        selectable
+          ? (selected) => setSelectedResources(selected.filter(isServiceRow).map((row) => row.service))
+          : undefined
+      }
+      emptyState={
+        emptyState ?? { title: 'No services found.', description: 'No services were returned by the Swarm manager.' }
+      }
     />
   );
 };
@@ -210,9 +230,7 @@ const ServiceNameCell = ({ row, platformId }: { row: Row<ServiceTableRow>; platf
       )}
       <StateIndicator value={availability.status} tooltip={availability.tooltip} />
 
-      <Link
-        className="table-link truncate"
-        to={getServiceViewRoute(service, platformId)}>
+      <Link className="table-link truncate" to={getServiceViewRoute(service, platformId)}>
         {service.name || service.id.slice(0, 12)}
       </Link>
       {!service.managedServiceId && service.ownership === 'Unmanaged' && (

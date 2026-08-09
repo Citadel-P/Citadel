@@ -313,6 +313,8 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     case DeploymentStatus.Healthy:
     case StackReleaseStatus.Healthy:
       return { colorClass: 'bg-green-500', tooltip: 'Healthy' };
+    case StackReleaseStatus.TimedOut:
+      return { colorClass: 'bg-red-500', tooltip: 'Timed out' };
     case DeploymentStatus.Failed:
     case StackReleaseStatus.Failed:
       return { colorClass: 'bg-red-500', tooltip: 'Failed' };

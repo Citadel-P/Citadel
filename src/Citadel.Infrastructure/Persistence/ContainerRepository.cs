@@ -237,12 +237,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
             INSERT INTO Containers (
                 Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId,
-                deploymentId, StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels
+                deploymentId, StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels, IsSwarmTask
             ) VALUES (
                 @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
                 CASE WHEN @DeploymentId IS NULL OR EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId) THEN @DeploymentId ELSE NULL END,
                 CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
-                @IsSystem, @SystemRole, @HasCitadelOwnershipLabels
+                @IsSystem, @SystemRole, @HasCitadelOwnershipLabels, @IsSwarmTask
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -262,6 +262,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             IsSystem = container.IsSystem,
             SystemRole = container.SystemRole?.ToString(),
             HasCitadelOwnershipLabels = container.HasCitadelOwnershipLabels,
+            IsSwarmTask = container.IsSwarmTask,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -283,7 +284,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 StackId = CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
                 IsSystem = @IsSystem,
                 SystemRole = @SystemRole,
-                HasCitadelOwnershipLabels = @HasCitadelOwnershipLabels
+                HasCitadelOwnershipLabels = @HasCitadelOwnershipLabels,
+                IsSwarmTask = @IsSwarmTask
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -297,6 +299,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             IsSystem = container.IsSystem,
             SystemRole = container.SystemRole?.ToString(),
             HasCitadelOwnershipLabels = container.HasCitadelOwnershipLabels,
+            IsSwarmTask = container.IsSwarmTask,
             Name = container.Name,
             Image = container.Image,
             DockerImageId = container.DockerImageId,
@@ -325,6 +328,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
               AND DeploymentId IS NULL
               AND StackId IS NULL
               AND IsSystem = FALSE
+              AND IsSwarmTask = FALSE
               AND HasCitadelOwnershipLabels = FALSE
               AND ControlState <> 'Processing'
             """;
@@ -392,11 +396,11 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
         INSERT INTO Containers (
             Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId,
-            StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels)
+            StackId, IsSystem, SystemRole, HasCitadelOwnershipLabels, IsSwarmTask)
         VALUES (
             @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
             CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END,
-            @IsSystem, @SystemRole, @HasCitadelOwnershipLabels
+            @IsSystem, @SystemRole, @HasCitadelOwnershipLabels, @IsSwarmTask
         )
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
@@ -410,7 +414,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             StackId = excluded.StackId,
             IsSystem = excluded.IsSystem,
             SystemRole = excluded.SystemRole,
-            HasCitadelOwnershipLabels = excluded.HasCitadelOwnershipLabels;
+            HasCitadelOwnershipLabels = excluded.HasCitadelOwnershipLabels,
+            IsSwarmTask = excluded.IsSwarmTask;
     """;
 
         return db.ExecuteAsync(sql, containers.Select(c => new
@@ -429,6 +434,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             IsSystem = c.IsSystem,
             SystemRole = c.SystemRole?.ToString(),
             HasCitadelOwnershipLabels = c.HasCitadelOwnershipLabels,
+            IsSwarmTask = c.IsSwarmTask,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )

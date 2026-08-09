@@ -145,6 +145,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 p.ServerVersion AS PlatformServerVersion,
                 p.AgentVersion AS PlatformAgentVersion,
                 p.Description AS PlatformDescription,
+                p.ClusterId AS PlatformClusterId,
+                p.PruneHistoricalSwarmTaskContainers AS PlatformPruneHistoricalSwarmTaskContainers,
                 e.Id AS BindingId,
                 e.PlatformId AS BindingPlatformId,
                 e.ResourceType AS BindingResourceType,

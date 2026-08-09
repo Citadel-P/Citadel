@@ -6,6 +6,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
@@ -361,6 +363,140 @@ public class StackLifecycleTests
             It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         stackHub.Verify(x => x.SendStackInfo(stack, "delete"), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteStacks_ShouldDeleteOwnedSwarmServicesBeforeNamespaceResourcesAndDatabaseState()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platform = new Platform(
+            "swarm",
+            "https://swarm.test",
+            0,
+            0,
+            0,
+            1,
+            1024,
+            null,
+            null,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                "node", "10.0.0.1", "Active", true, 1, 1,
+                "daemon", 0, 0, 0, 0));
+        var stack = Stack.Create(
+            "swarm-stack",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                "services:\n  web:\n    image: nginx\n",
+                StackUpdateBehavior.Disabled,
+                ProjectName: "swarm-stack"),
+            platform: platform);
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAllAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack]);
+        stacks.Setup(x => x.GetSwarmNamespaceReservationAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StackSwarmNamespaceReservation(stack.Id, platform.Id, "swarm-stack", DateTime.UtcNow));
+        stacks.Setup(x => x.UpdateProcessingAsync(
+                stack.Id,
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        stacks.Setup(x => x.RemoveRangeAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var platformRepository = new Mock<IPlatformRepository>();
+        platformRepository.Setup(x => x.GetPlatformsWithLatestStatByIdsAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Platforms).Returns(platformRepository.Object);
+        var swarmProjections = new Mock<ISwarmProjectionRepository>();
+        swarmProjections
+            .Setup(x => x.GetServicesAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        unitOfWork.Setup(x => x.Swarm).Returns(swarmProjections.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var labels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "swarm-stack",
+            [CitadelLabels.Managed] = "true",
+            [CitadelLabels.StackId] = stack.Id.ToString("D")
+        };
+        var service = new SwarmServiceResult(
+            "service-id", 1, "swarm-stack_web", "replicated", "nginx", 1, 1,
+            "completed", null, [], ["network-id"], [], [], labels, null, null);
+        var swarmConnector = new Mock<ISwarmConnector>();
+        swarmConnector.SetupSequence(x => x.ListServicesAsync(
+                It.IsAny<ListSwarmServicesCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>([service]))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmServiceResult>>([]));
+        swarmConnector.Setup(x => x.ListNetworksAsync(It.IsAny<ListSwarmNetworksCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmNetworkResult>>([
+                new SwarmNetworkResult("network-id", "swarm-stack_default", "swarm", "overlay", false, false, false, false, false, [],
+                    new Dictionary<string, string> { ["com.docker.stack.namespace"] = "swarm-stack" }, null)
+            ]));
+        swarmConnector.Setup(x => x.ListSecretsAsync(It.IsAny<ListSwarmSecretsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmSecretResult>>([]));
+        swarmConnector.Setup(x => x.ListConfigsAsync(It.IsAny<ListSwarmConfigsCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<SwarmConfigResult>>([]));
+        swarmConnector.Setup(x => x.DeleteInventoryServiceAsync(
+                It.Is<DeleteSwarmInventoryServiceCommand>(command => command.ServiceId == "service-id"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var swarmFactory = new Mock<IConnectorFactory<ISwarmConnector>>();
+        swarmFactory.Setup(x => x.GetConnector(PlatformConnectorType.Local)).Returns(swarmConnector.Object);
+
+        var networkConnector = new Mock<INetworkConnector>();
+        networkConnector.Setup(x => x.DeleteNetworkAsync(
+                It.Is<DeleteDockerNetworkCommand>(command => command.Ids.SequenceEqual(new[] { "network-id" })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var networkFactory = new Mock<IConnectorFactory<INetworkConnector>>();
+        networkFactory.Setup(x => x.GetConnector(PlatformConnectorType.Local)).Returns(networkConnector.Object);
+        var containerFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        using var stackStorage = new TestStackStoragePathProvider();
+        var handler = new DeleteStacksHandler(
+            unitOfWork.Object,
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platform.Id,
+                platform.Address,
+                PlatformConnectorType.Local,
+                ImmutableDictionary<string, Guid>.Empty)),
+            containerFactory.Object,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IPlatformStreamManager>(),
+            stackStorage,
+            CreateUserContext(actorId),
+            CreateApplicationLifetime(),
+            Mock.Of<ILogger<DeleteStacksHandler>>(),
+            swarmFactory.Object,
+            networkFactory.Object);
+
+        var result = await handler.Handle(new DeleteStacks([stack.Id]), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        swarmConnector.Verify(x => x.DeleteInventoryServiceAsync(It.IsAny<DeleteSwarmInventoryServiceCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+        networkConnector.Verify(x => x.DeleteNetworkAsync(It.IsAny<DeleteDockerNetworkCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+        containerFactory.Verify(x => x.GetConnector(It.IsAny<PlatformConnectorType>()), Times.Never);
+        stacks.Verify(x => x.RemoveRangeAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

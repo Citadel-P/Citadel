@@ -2,6 +2,7 @@ using Application.Services.Backups;
 using Application.Features.Search.Models;
 using Application.Features.Identity.Auth.Models;
 using Domain;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Hosting.OpenApi;
@@ -2840,6 +2841,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("createStack");
+
+        stacks.MapPost("/preflight/swarm", Stacks.PreflightSwarm)
+            .WithSummary("Validate a Stack configuration for Docker Swarm")
+            .Produces<SwarmStackCompatibilityReport>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("preflightSwarmStack");
 
         stacks.MapPost("/rename", Stacks.Rename)
             .WithSummary("Rename a stack")

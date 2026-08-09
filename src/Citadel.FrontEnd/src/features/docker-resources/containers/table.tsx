@@ -6,11 +6,12 @@ import {
   ContainerStateStatus,
   ContainerStatView,
   PlatformView,
+  PlatformType,
   ResourceControlState,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
-import { cn, formatId, isUnmanagedContainer } from '@/lib/utils';
+import { cn, formatId } from '@/lib/utils';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -23,10 +24,15 @@ import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { CPUCell, MemoryUsageCell, UnmanagedResourceIcon } from '@/components/custom/common';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { ContainerActionResource, ContainerStackGroupResource, isContainerStackGroup } from './actions';
+import {
+  ContainerActionResource,
+  ContainerStackGroupResource,
+  isContainerAdoptionAvailable,
+  isContainerStackGroup,
+} from './actions';
 import { useAppContext } from '@/lib/context/app-context';
 import { SystemContainerBadge } from './system-container-badge';
-import { normalizeContainerSelection } from './selection';
+import { isVisibleContainer, normalizeContainerSelection } from './selection';
 
 type ContainerTableRow = ContainerActionResource;
 type PlatformResourceLimits = {
@@ -54,7 +60,7 @@ export const ContainersTable = ({
     [currentPlatform, items],
   );
   const rows = useMemo(() => buildContainerRows(items ?? [], platformLimits), [items, platformLimits]);
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const cols = useMemo(() => columns(actions ?? {}, currentPlatform?.type), [actions, currentPlatform?.type]);
   const getSubRows = useCallback(
     (row: ContainerTableRow) => (isContainerStackGroup(row) ? row.containers : undefined),
     [],
@@ -104,6 +110,7 @@ const columns = (
     string,
     React.FC<{ resource: ContainerActionResource; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  platformType?: PlatformType,
 ): ColumnDef<ContainerTableRow>[] => [
   {
     id: 'select',
@@ -127,7 +134,9 @@ const columns = (
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <ContainerNameCell row={row.original} depth={row.depth} tableRow={row} />,
+    cell: ({ row }) => (
+      <ContainerNameCell row={row.original} depth={row.depth} tableRow={row} platformType={platformType} />
+    ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return getDisplayName(rowB.original).localeCompare(getDisplayName(rowA.original));
     },
@@ -196,10 +205,12 @@ const ContainerNameCell = ({
   row,
   depth,
   tableRow,
+  platformType,
 }: {
   row: ContainerTableRow;
   depth: number;
   tableRow: Row<ContainerTableRow>;
+  platformType?: PlatformType;
 }) => {
   if (isContainerStackGroup(row)) {
     const expanded = tableRow.getIsExpanded();
@@ -224,7 +235,9 @@ const ContainerNameCell = ({
         {row.isSystem ? (
           <SystemContainerBadge stack />
         ) : (
-          !row.stackId && <UnmanagedResourceIcon title={'Unmanaged stack'} />
+          !row.stackId && (
+            <UnmanagedResourceIcon title={row.isSwarmTask ? 'Unmanaged Swarm Stack' : 'Unmanaged stack'} />
+          )
         )}
       </div>
     );
@@ -242,14 +255,14 @@ const ContainerNameCell = ({
       </Link>
       {row.isSystem ? (
         <SystemContainerBadge role={row.systemRole} />
-      ) : (
-        isUnmanagedContainer(row) && <UnmanagedResourceIcon title={'Unmanaged Container'} />
-      )}
+      ) : !row.isSwarmTask ? (
+        isContainerAdoptionAvailable(row, platformType) && <UnmanagedResourceIcon title="Unmanaged Container" />
+      ) : null}
     </div>
   );
 };
 
-const buildContainerRows = (
+export const buildContainerRows = (
   containers: ContainerView[],
   platformLimits: PlatformResourceLimits,
 ): ContainerTableRow[] => {
@@ -257,6 +270,8 @@ const buildContainerRows = (
   const orderedRows: Array<{ type: 'stack'; stackName: string } | { type: 'container'; container: ContainerView }> = [];
 
   for (const container of containers) {
+    if (!isVisibleContainer(container)) continue;
+
     const stackName = container.stack?.trim();
 
     if (!stackName) {
@@ -306,6 +321,7 @@ const createStackGroup = (
     ports: {},
     deploymentId: null,
     isSystem: containers.some((container) => container.isSystem),
+    isSwarmTask: containers.length > 0 && containers.every((container) => container.isSwarmTask),
     systemRole: null,
     imageView: null,
     displayStatus: getStackDisplayStatus(containers),
