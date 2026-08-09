@@ -49,6 +49,22 @@ Before installing the Agent, confirm that the Docker host has:
 
 The Citadel Agent version should match the Citadel Core version. Citadel generates the installation command using the expected image tag.
 
+## Docker Swarm
+
+For a Docker Swarm Platform, install the regular Agent on the manager endpoint
+registered with Citadel. That Agent is the current control-plane connection for
+cluster inventory and mutations, and its node-local Docker pages describe that
+manager.
+
+Do not deploy the same regular Agent endpoint as a load-balanced global Swarm
+Service. Citadel sends each request to one Platform address and cannot use a
+load-balanced response to identify or aggregate every Node reliably.
+
+The planned Swarm node-agent setup will keep this manager Agent as the control
+plane and add separate outbound satellite Agents for other Nodes. Until the
+Platform page offers that setup, worker Containers, live statistics, and exec
+sessions are not available through the manager Agent.
+
 ## Builds
 
 Regular Agent platforms can run Citadel build projects.

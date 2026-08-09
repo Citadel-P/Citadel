@@ -2336,7 +2336,8 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("019d0000-0001-7000-8001-000000000018"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Automation Action Run Failed", "[]", null, "Critical", "Enabled", null, "AutomationActionRunFailed" },
                     { new Guid("019d0000-0001-7000-8001-000000000019"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "License Entered Grace Period", "[]", null, "Warning", "Enabled", null, "LicenseEnteredGracePeriod" },
                     { new Guid("019d0000-0001-7000-8001-00000000001a"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "License Expired", "[]", null, "Critical", "Enabled", null, "LicenseExpired" },
-                    { new Guid("019d0000-0001-7000-8001-00000000001b"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Build Run Failed", "[]", null, "Critical", "Enabled", null, "BuildRunFailed" }
+                    { new Guid("019d0000-0001-7000-8001-00000000001b"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Build Run Failed", "[]", null, "Critical", "Enabled", null, "BuildRunFailed" },
+                    { new Guid("019d0000-0001-7000-8001-00000000001c"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Operation Failed - Swarm Service", "[]", null, "Critical", "Enabled", null, "SwarmServiceOperationFailed" }
                 });
 
             migrationBuilder.InsertData(

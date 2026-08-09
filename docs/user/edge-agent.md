@@ -187,6 +187,23 @@ If the agent stops, loses network access, or cannot reach Citadel Core, the plat
 
 Citadel also validates the agent protocol version and advertised capabilities during enrollment and reconnect. If the agent image is too old for the Core version, reconnect is rejected with a clear session rejection message.
 
+## Docker Swarm Node Coverage
+
+An Edge Agent configured for a Docker Swarm Platform currently represents the
+connected manager only. It can manage cluster-scoped Swarm resources through
+that manager and node-local Docker resources stored on the manager.
+
+Do not copy one Platform enrollment token into a global Swarm Service or start
+one enrolled Edge Agent on every Node. Citadel currently stores one active
+Platform Agent identity; additional instances do not create a cluster-wide
+resource view.
+
+Citadel's planned Swarm node-agent setup will use a separate cluster-scoped
+bootstrap flow and one outbound satellite Agent on Nodes not already covered by
+the manager connection. The Platform will remain one Swarm Platform. Until the
+setup appears in the Platform page, Containers, Images, Volumes, container
+statistics, and exec access remain local to the connected manager.
+
 ## Docker Operations
 
 When you use an Edge Agent platform, Citadel routes supported Docker operations over the agent's active connection.

@@ -12,6 +12,11 @@ Task mutations and destructive Node administration remain unavailable. Citadel
 Deployments stay Docker Standalone workloads. Docker Swarm Stacks support
 reviewed import, Apply, safe rollback, and ownership-checked deletion.
 
+Citadel currently reaches node-local Docker resources through the connected
+manager only. Cluster-wide Containers, worker Task statistics and Terminal,
+and per-Node Image or Volume visibility require the planned Swarm node-agent
+data plane described below.
+
 ## Before You Begin
 
 Citadel connects to an existing Swarm. It does not initialize, join, leave, or
@@ -50,6 +55,31 @@ Citadel rejects a Standalone daemon, a Swarm worker, an unsupported API
 version, or a Cluster ID already registered by another Platform. The Platform
 type cannot be changed after creation. A replacement manager endpoint must
 report the same Cluster ID.
+
+## Understand Cluster Node Coverage
+
+Swarm cluster resources and node-local Docker resources come from different
+Docker APIs:
+
+- Nodes, Services, Tasks, Secrets, Configs, and overlay Networks are available
+  through an active manager;
+- Containers, live container statistics, exec sessions, local Images, local
+  Volumes, and local Networks belong to the Node running or storing them.
+
+The current Citadel release connects one validated manager. Its **Containers**,
+**Images**, and **Volumes** pages therefore describe that manager, not every
+Node. A Task scheduled on a worker remains visible in the Tasks table, but its
+container statistics and Terminal are unavailable through the manager.
+
+A future update will offer an explicit **Install node agents** setup step. It
+will deploy a Citadel-owned outbound Agent across the Swarm and show how many
+Nodes are covered. Citadel will then route Task runtime operations to the
+owning Node and aggregate node-local inventory without creating a separate
+Platform for each Node.
+
+Do not reuse the current Platform Agent or Edge Agent enrollment token on every
+Node. The current enrollment model accepts one Agent for a Platform and does
+not yet provide cluster aggregation or Node-targeted routing.
 
 ## Clean Up Historical Task Containers
 
@@ -490,6 +520,8 @@ The current Swarm milestone does not provide:
 - rollback of a release whose required versioned Secret or Config is no longer
   retained;
 - cluster-wide image distribution, volume semantics, backup, or restore;
+- multi-Node Agent installation, cluster-wide Containers, or worker Task
+  statistics and Terminal;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
 

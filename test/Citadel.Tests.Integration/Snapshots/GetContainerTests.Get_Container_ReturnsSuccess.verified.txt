@@ -10,6 +10,7 @@
   updated: 0,
   isSystem: false,
   hasCitadelOwnershipLabels: false,
+  isSwarmTask: false,
   deploymentId: Guid_3,
   imageView: {
     id: Guid_4,
