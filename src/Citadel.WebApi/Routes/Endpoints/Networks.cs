@@ -29,9 +29,9 @@ public static class Networks
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<Ok<DockerNetworkDetailsView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string networkId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerNetworkDetailsView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string networkId, [FromQuery] string? dockerNodeId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new InspectNetwork(platformId, networkId), cancellationToken);
+        var result = await mediator.Send(new InspectNetwork(platformId, networkId, dockerNodeId), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, DockerNetworkDetailsView.Map);
     }
 }

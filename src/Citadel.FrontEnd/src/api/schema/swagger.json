@@ -12506,6 +12506,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "dockerNodeId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -12614,6 +12621,13 @@
           },
           {
             "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dockerNodeId",
             "in": "query",
             "schema": {
               "type": "string"
@@ -17581,6 +17595,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "dockerNodeId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -18103,6 +18124,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "dockerNodeId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -18507,6 +18535,13 @@
             "name": "name",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dockerNodeId",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -50307,7 +50342,8 @@
           "labels",
           "containers",
           "peers",
-          "isSystem"
+          "isSystem",
+          "dockerNodeId"
         ],
         "type": "object",
         "properties": {
@@ -50386,6 +50422,12 @@
           },
           "isSystem": {
             "type": "boolean"
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "capabilities": {
             "oneOf": [
@@ -50497,6 +50539,28 @@
                 "$ref": "#/components/schemas/NetworkCapabilities"
               }
             ]
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isStale": {
+            "type": "boolean",
+            "default": false
+          },
+          "staleReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -50601,6 +50665,28 @@
               {
                 "$ref": "#/components/schemas/VolumeCapabilities"
               }
+            ]
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isStale": {
+            "type": "boolean",
+            "default": false
+          },
+          "staleReason": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -53088,6 +53174,43 @@
                 "$ref": "#/components/schemas/ImageCapabilities"
               }
             ]
+          },
+          "repoDigests": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "contentIdentity": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isStale": {
+            "type": "boolean",
+            "default": false
+          },
+          "staleReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -53190,7 +53313,8 @@
           "layers",
           "labels",
           "containers",
-          "registry"
+          "registry",
+          "dockerNodeId"
         ],
         "type": "object",
         "properties": {
@@ -53276,6 +53400,12 @@
               {
                 "$ref": "#/components/schemas/RegistryView"
               }
+            ]
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
             ]
           },
           "capabilities": {
@@ -60611,6 +60741,9 @@
           "runningTaskCount",
           "desiredTaskCount",
           "networkCount",
+          "localNetworkCount",
+          "volumeCount",
+          "imageCount",
           "capabilities"
         ],
         "type": "object",
@@ -60678,6 +60811,30 @@
             "format": "int32"
           },
           "networkCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "localNetworkCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "volumeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "imageCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

@@ -165,6 +165,20 @@ try {
             $Configuration,
             "--",
             "-class",
+            "Tests.Acceptance.Compatibility.SwarmNodeAgentCompatibilityTests") `
+        -Operation "Running the multi-node Swarm node-agent compatibility suite"
+
+    Invoke-CheckedNative `
+        -FilePath "dotnet" `
+        -Arguments @(
+            "run",
+            "--project",
+            $testProject,
+            "--no-build",
+            "--configuration",
+            $Configuration,
+            "--",
+            "-class",
             "Tests.Acceptance.Compatibility.RustFsBackupCompatibilityTests") `
         -Operation "Running the Core and RustFS compatibility suite"
 }

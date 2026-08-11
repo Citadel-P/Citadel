@@ -41,12 +41,12 @@ describe('TaskComponents', () => {
     );
 
     expect(await screen.findByRole('link', { name: 'frontend.1' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Task 7' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'web.7' })).toBeVisible();
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search resources by name' }), 'task 7');
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search resources by name' }), 'web.7');
 
     await waitFor(() => expect(screen.queryByRole('link', { name: 'frontend.1' })).not.toBeInTheDocument());
-    expect(screen.getByRole('link', { name: 'Task 7' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'web.7' })).toBeVisible();
   });
 
   it('applies SignalR additions, updates, and removals without refetching', async () => {

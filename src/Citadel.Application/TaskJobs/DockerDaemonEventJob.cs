@@ -5,6 +5,7 @@ using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities.Platforms;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -27,6 +28,7 @@ internal sealed class DockerDaemonEventJob(
     IImageStreamManager imageStream,
     IDeploymentStreamManager deploymentHub,
     ISwarmReconciliationCoordinator swarmReconciliationCoordinator,
+    ISwarmNodeDataPlaneCoordinator swarmNodeDataPlaneCoordinator,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     SwarmTaskContainerPruner swarmTaskContainerPruner,
     IDbWorkQueue dbWorkQueue) : BackgroundService
@@ -42,9 +44,15 @@ internal sealed class DockerDaemonEventJob(
             await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
             {
                 if (platform.IsOnLine && platform.IsValidated)
+                {
+                    await swarmNodeDataPlaneCoordinator.NotifyManagerConnectedAsync(platform.Id, cancellationToken);
                     StartMonitoringPlatform(platform, cancellationToken);
+                }
                 else
+                {
+                    await swarmNodeDataPlaneCoordinator.NotifyManagerDisconnectedAsync(platform.Id, cancellationToken);
                     StopMonitoringPlatform(platform.Address);
+                }
             }
         }
         finally
@@ -103,6 +111,16 @@ internal sealed class DockerDaemonEventJob(
                             platform.Id,
                             reply,
                             cancellationToken);
+                        await swarmNodeDataPlaneCoordinator.NotifyManagerDaemonEventAsync(
+                            platform.Id,
+                            reply,
+                            cancellationToken);
+
+                        var isSwarmLocalResource = reply.Scope != DaemonEventScope.Swarm
+                            && swarmNodeDataPlaneCoordinator.HandlesManagerLocalResources(platform.Id)
+                            && reply is DaemonImageEventInfo or DaemonVolumeEventInfo or DaemonNetworkEventInfo;
+                        if (isSwarmLocalResource)
+                            continue;
 
                         if (reply is DaemonContainerEventInfo containerEvent)
                         {

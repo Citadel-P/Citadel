@@ -3,6 +3,7 @@ using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -40,6 +41,17 @@ internal sealed class DeleteImagesHandler(
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
+            if (persistedPlatform?.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+            {
+                return Result.Failure<DeleteImageResult>(new ConflictError(
+                    "Node-local Image deletion requires an explicit Node target and is not available."));
+            }
+        }
+
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error)) 
         {
             return Result.Failure<DeleteImageResult>(error);

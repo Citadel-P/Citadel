@@ -1,9 +1,13 @@
 import { StackReleaseStatus, SwarmOverviewView, SwarmQuorumState, SwarmQuorumView } from '@/api/generated/api.types';
-import { SwarmInventoryUpdate, useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import {
+  SwarmInventoryUpdate,
+  SwarmNodeLocalResourcesUpdate,
+  useDockerDaemonGroup,
+} from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { getServiceAvailability } from '@/features/swarm-resources/shared';
 import { useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 type CachedResponse<T> = { data: T };
 
@@ -86,7 +90,10 @@ export const applySwarmInventoryToOverview = (
     serviceStatusCounts,
     runningTaskCount: inventory.services.items.reduce((total, service) => total + count(service.runningTaskCount), 0),
     desiredTaskCount: inventory.services.items.reduce((total, service) => total + count(service.desiredTaskCount), 0),
-    networkCount: inventory.networks.items.length,
+    networkCount: inventory.networks.items.length + count(previous?.localNetworkCount ?? 0),
+    localNetworkCount: count(previous?.localNetworkCount ?? 0),
+    volumeCount: count(previous?.volumeCount ?? 0),
+    imageCount: count(previous?.imageCount ?? 0),
     capabilities: previous?.capabilities ?? inventory.services.capabilities,
   };
 };
@@ -95,6 +102,7 @@ export const useSwarmOverview = (platformId?: string) => {
   const args = useMemo(() => ({ platformId: platformId ?? '' }), [platformId]);
   const query = useRead('getSwarmOverview', args, { enabled: Boolean(platformId) });
   const queryClient = useQueryClient();
+  const [localSnapshot, setLocalSnapshot] = useState<SwarmNodeLocalResourcesUpdate>();
   const onSwarmInventoryUpdated = useCallback(
     (inventory: SwarmInventoryUpdate) => {
       if (!platformId || inventory.platformId !== platformId) return;
@@ -108,7 +116,47 @@ export const useSwarmOverview = (platformId?: string) => {
     [args, platformId, queryClient],
   );
 
-  useDockerDaemonGroup(platformId, { onSwarmInventoryUpdated });
+  const onSwarmNodeLocalResourcesUpdated = useCallback(
+    (snapshot: SwarmNodeLocalResourcesUpdate) => {
+      if (!platformId || snapshot.platformId !== platformId) return;
+      setLocalSnapshot(snapshot);
+      const queryKey = ['getSwarmOverview', args] as const;
+      queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, (previous) => {
+        if (!previous?.data) return previous;
+        const clusterNetworkCount = Math.max(
+          0,
+          count(previous.data.networkCount) - count(previous.data.localNetworkCount),
+        );
+        return {
+          ...previous,
+          data: {
+            ...previous.data,
+            imageCount: snapshot.images.length,
+            volumeCount: snapshot.volumes.length,
+            localNetworkCount: snapshot.networks.length,
+            networkCount: clusterNetworkCount + snapshot.networks.length,
+          },
+        };
+      });
+      void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
+    },
+    [args, platformId, queryClient],
+  );
 
-  return { ...query, overview: query.data?.data };
+  useDockerDaemonGroup(platformId, { onSwarmInventoryUpdated, onSwarmNodeLocalResourcesUpdated });
+
+  const overview = useMemo(() => {
+    const current = query.data?.data;
+    if (!current || !localSnapshot) return current;
+    const clusterNetworkCount = Math.max(0, count(current.networkCount) - count(current.localNetworkCount));
+    return {
+      ...current,
+      imageCount: localSnapshot.images.length,
+      volumeCount: localSnapshot.volumes.length,
+      localNetworkCount: localSnapshot.networks.length,
+      networkCount: clusterNetworkCount + localSnapshot.networks.length,
+    };
+  }, [localSnapshot, query.data?.data]);
+
+  return { ...query, overview };
 };

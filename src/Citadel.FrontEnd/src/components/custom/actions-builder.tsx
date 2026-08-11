@@ -19,6 +19,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
   icon: LucideIcon;
   mutateKey?: K;
   onClick?: (resources: R[] | R) => void;
+  isVisible?: (resources: R | R[]) => boolean;
   canExecute?: (r: R | R[]) => boolean;
   confirm?: boolean;
   destructive?: boolean;
@@ -41,6 +42,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
 export interface ToggleAction<R, K extends KnownResourceName> {
   key: string;
   type: 'toggle';
+  isVisible?: (resources: R | R[]) => boolean;
   separatorBefore?: boolean;
   predicate?: (r: R) => boolean;
   primary: ToggleConfig<R, K>;
@@ -90,9 +92,21 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
         const components =
           act.type === 'toggle' ? createToggleComponents(act, showToast) : createCommandComponents(act, showToast);
 
-        dropdown[act.key] = components.Dropdown;
-        group[act.key] = components.Group;
-        info[act.key] = components.Info;
+        if (!act.isVisible) {
+          dropdown[act.key] = components.Dropdown;
+          group[act.key] = components.Group;
+          info[act.key] = components.Info;
+          continue;
+        }
+
+        const isVisible = act.isVisible;
+        const Dropdown = components.Dropdown;
+        const Group = components.Group;
+        const Info = components.Info;
+
+        dropdown[act.key] = (props) => (isVisible(props.resource) ? <Dropdown {...props} /> : null);
+        group[act.key] = (props) => (isVisible(props.resources) ? <Group {...props} /> : null);
+        info[act.key] = (props) => (isVisible(props.resource) ? <Info {...props} /> : null);
       }
 
       return { dropdown, group, info };

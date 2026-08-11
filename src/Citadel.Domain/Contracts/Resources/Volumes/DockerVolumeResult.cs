@@ -18,6 +18,10 @@ public record DockerVolumeResult (
     IReadOnlyDictionary<string, string> Options)
 {
     public Guid PlatformId { get; set; }
+    public string? DockerNodeId { get; set; }
+    public string? NodeHostname { get; set; }
+    public bool IsStale { get; set; }
+    public string? StaleReason { get; set; }
 }
 
 public record ContainerVolumeResult(

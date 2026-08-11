@@ -253,10 +253,14 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         Assert.Empty(stats);
     }
 
-    [Fact]
-    public async Task ExecuteAsync_ShouldPersistSwarmTaskStatsAfterItsTaskContainerIsDeleted()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("worker-node")]
+    public async Task ExecuteAsync_ShouldPersistManagedSwarmTaskStatsAfterItsTaskContainerIsDeleted(
+        string? batchDockerNodeId)
     {
         var observedAt = DateTimeOffset.UtcNow;
+        var managedServiceId = Guid.CreateVersion7();
         var taskContainer = new Container(
             name: "redis.1.current",
             dockerImageId: "sha256:redis",
@@ -286,7 +290,8 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             observedAt,
             observedAt,
             false,
-            SwarmServiceOwnership.Unmanaged);
+            SwarmServiceOwnership.CitadelService,
+            SwarmServiceId: managedServiceId);
         var task = new SwarmTaskProjection(
             _platformId,
             "docker-task-current",
@@ -340,14 +345,19 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
                 _platformId,
                 [new ContainerStat(taskContainer.Id, 256, 32, 12.5, 1024, 2048, 1024, created)],
                 _ => { },
-                "worker-node"),
+                batchDockerNodeId),
             TestContext.Current.CancellationToken);
         await _dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
 
         await using var assertionScope = Services.CreateAsyncScope();
         var assertionDb = assertionScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stats = await assertionDb.SwarmServiceStats.GetStatsAggregatedAsync(
-            new SwarmServiceStatIdentity(_platformId, service.DockerServiceId, null, null, service.Name),
+            new SwarmServiceStatIdentity(
+                _platformId,
+                service.DockerServiceId,
+                managedServiceId,
+                null,
+                service.Name),
             24,
             TestContext.Current.CancellationToken);
 
@@ -363,7 +373,12 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         await assertionDb.CommitAsync(TestContext.Current.CancellationToken);
 
         var retainedStats = await assertionDb.SwarmServiceStats.GetStatsAggregatedAsync(
-            new SwarmServiceStatIdentity(_platformId, service.DockerServiceId, null, null, service.Name),
+            new SwarmServiceStatIdentity(
+                _platformId,
+                service.DockerServiceId,
+                managedServiceId,
+                null,
+                service.Name),
             24,
             TestContext.Current.CancellationToken);
         Assert.Single(retainedStats);

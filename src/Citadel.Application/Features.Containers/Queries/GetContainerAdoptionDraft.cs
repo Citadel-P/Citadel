@@ -219,7 +219,7 @@ internal static class ContainerAdoptionDraftFactory
         {
             issues.Add(new AdoptionIssue(
                 "SOURCE_IMAGE_UNAVAILABLE",
-                "The container's original Docker image is no longer available. Select a local replacement image or an external image from the same repository; future Apply operations will use it.",
+                "The container's original Docker image is no longer available. Select the intended local replacement or external image; Citadel verifies the repository when Docker still exposes the original reference. Future Apply operations will use the selected image.",
                 AdoptionIssueSeverity.Warning,
                 "spec.image.imageId"));
         }

@@ -454,6 +454,30 @@ CREATE TABLE swarmnodeagentinstallations (
     CONSTRAINT fk_swarmnodeagentinstallations_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
+CREATE TABLE swarmnodeimageprojections (
+    id uuid NOT NULL,
+    contentidentity text NOT NULL,
+    dockerimageid text NOT NULL,
+    dockernodeid text NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    observedat timestamp with time zone NOT NULL,
+    platformid uuid NOT NULL,
+    resource jsonb NOT NULL,
+    CONSTRAINT pk_swarmnodeimageprojections PRIMARY KEY (id),
+    CONSTRAINT fk_swarmnodeimageprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnodenetworkprojections (
+    platformid uuid NOT NULL,
+    dockernodeid text NOT NULL,
+    dockernetworkid text NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    observedat timestamp with time zone NOT NULL,
+    resource jsonb NOT NULL,
+    CONSTRAINT pk_swarmnodenetworkprojections PRIMARY KEY (platformid, dockernodeid, dockernetworkid),
+    CONSTRAINT fk_swarmnodenetworkprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
 CREATE TABLE swarmnodeprojections (
     platformid uuid NOT NULL,
     dockernodeid text NOT NULL,
@@ -497,6 +521,17 @@ CREATE TABLE swarmnoderuntimeprojectionstates (
     stalesince timestamp with time zone,
     CONSTRAINT pk_swarmnoderuntimeprojectionstates PRIMARY KEY (platformid, dockernodeid),
     CONSTRAINT fk_swarmnoderuntimeprojectionstates_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnodevolumeprojections (
+    platformid uuid NOT NULL,
+    dockernodeid text NOT NULL,
+    volumename text NOT NULL,
+    isstale boolean NOT NULL DEFAULT FALSE,
+    observedat timestamp with time zone NOT NULL,
+    resource jsonb NOT NULL,
+    CONSTRAINT pk_swarmnodevolumeprojections PRIMARY KEY (platformid, dockernodeid, volumename),
+    CONSTRAINT fk_swarmnodevolumeprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
 CREATE TABLE swarmsecretprojections (
@@ -565,6 +600,26 @@ CREATE TABLE swarmservices (
     CONSTRAINT fk_swarmservices_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_swarmservices_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_swarmservices_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE swarmservicestats (
+    id uuid NOT NULL,
+    cpuusage double precision NOT NULL,
+    created bigint NOT NULL,
+    dockerserviceid text NOT NULL,
+    dockertaskid text NOT NULL,
+    memoryactive double precision NOT NULL,
+    memorycache double precision NOT NULL,
+    memorylimit double precision NOT NULL,
+    platformid uuid NOT NULL,
+    rxbytes double precision NOT NULL,
+    servicename text NOT NULL,
+    stackid uuid,
+    swarmserviceid uuid,
+    taskkey text NOT NULL,
+    txbytes double precision NOT NULL,
+    CONSTRAINT pk_swarmservicestats PRIMARY KEY (id),
+    CONSTRAINT fk_swarmservicestats_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
 CREATE TABLE swarmtaskprojections (
@@ -1915,6 +1970,10 @@ CREATE UNIQUE INDEX ix_swarmnodeagentinstallations_dockerserviceid ON swarmnodea
 
 CREATE INDEX ix_swarmnodeagentinstallations_operationactorid ON swarmnodeagentinstallations (operationactorid);
 
+CREATE INDEX ix_swarmnodeimageprojections_contentidentity ON swarmnodeimageprojections (platformid, contentidentity);
+
+CREATE UNIQUE INDEX ix_swarmnodeimageprojections_runtimeidentity ON swarmnodeimageprojections (platformid, dockernodeid, dockerimageid);
+
 CREATE INDEX ix_swarmserviceprojections_stackid ON swarmserviceprojections (stackid);
 
 CREATE INDEX ix_swarmserviceprojections_swarmserviceid ON swarmserviceprojections (swarmserviceid);
@@ -1932,6 +1991,16 @@ CREATE UNIQUE INDEX ix_swarmservices_name_platformid ON swarmservices (name, pla
 CREATE UNIQUE INDEX ix_swarmservices_platformid_dockerserviceid ON swarmservices (platformid, dockerserviceid) WHERE "dockerserviceid" IS NOT NULL;
 
 CREATE INDEX ix_swarmservices_recoverableoperation ON swarmservices (operationstate, preparedat);
+
+CREATE INDEX ix_swarmservicestats_created ON swarmservicestats (created);
+
+CREATE INDEX ix_swarmservicestats_managedservicecreated ON swarmservicestats (swarmserviceid, created) WHERE swarmserviceid IS NOT NULL;
+
+CREATE INDEX ix_swarmservicestats_platformservicecreated ON swarmservicestats (platformid, dockerserviceid, created);
+
+CREATE UNIQUE INDEX ix_swarmservicestats_platformtaskcreated ON swarmservicestats (platformid, dockertaskid, created);
+
+CREATE INDEX ix_swarmservicestats_stackservicecreated ON swarmservicestats (stackid, servicename, created) WHERE stackid IS NOT NULL;
 
 CREATE INDEX ix_tags_createdbyactorid ON tags (createdbyactorid);
 
@@ -1961,7 +2030,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260810172124_migration0001', '10.0.10');
+VALUES ('20260811145720_migration0001', '10.0.10');
 
 COMMIT;
 

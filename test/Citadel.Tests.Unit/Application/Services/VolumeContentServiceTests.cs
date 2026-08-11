@@ -6,6 +6,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -14,6 +15,112 @@ namespace Tests.Unit.Application.Services;
 
 public sealed class VolumeContentServiceTests
 {
+    [Fact]
+    public async Task ListDirectoryAsync_ShouldCreateExecAndDeleteHelperOnOwningSwarmNode()
+    {
+        var platformId = Guid.CreateVersion7();
+        const string dockerNodeId = "worker-1";
+        var platform = Platform.FromPersistence(
+            platformId,
+            "swarm",
+            "local://docker",
+            0, 0, 0, 2, 2048,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                "manager-1", "10.0.0.1", "Active", true, 2, 1,
+                "daemon-1", 0, 0, 0, 0, "cluster-1"),
+            clusterId: "cluster-1");
+        var directConnector = new Mock<IContainerConnector>();
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Local))
+            .Returns(directConnector.Object);
+        var nodeConnector = new Mock<ISwarmNodeRuntimeConnector>();
+        nodeConnector
+            .Setup(connector => connector.CreateContainerAsync(
+                platform,
+                dockerNodeId,
+                It.Is<CreateContainerCommand>(command =>
+                    command.Labels != null
+                    && command.Labels["com.citadel.system"] == "true"
+                    && command.Labels["citadel.volume-browser"] == "true"
+                    && command.Mounts != null
+                    && command.Mounts.Single().Source == "app-data"
+                    && command.EntryPoint != null
+                    && command.EntryPoint.SequenceEqual(new[] { "/app/Citadel.Agent.VolumeHelper" })
+                    && command.Command != null
+                    && command.Command.SequenceEqual(new[] { "volume-helper", "idle" })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success("helper-1"));
+        nodeConnector
+            .Setup(connector => connector.PatchContainersAsync(
+                platform,
+                dockerNodeId,
+                ContainerAction.START,
+                It.Is<IReadOnlyCollection<string>>(ids => ids.Count == 1 && ids.Single() == "helper-1"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        nodeConnector
+            .Setup(connector => connector.InspectContainerAsync(
+                platform, dockerNodeId, "helper-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(RunningContainer("helper-1")));
+        nodeConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                platform,
+                dockerNodeId,
+                It.Is<ContainerBinaryExecRequest>(request =>
+                    request.ContainerId == "helper-1"
+                    && request.Command.Count > 2
+                    && request.Command[0] == "/app/Citadel.Agent.VolumeHelper"
+                    && request.Command[1] == "volume-helper"
+                    && request.Command[2] == "list"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("""{"Path":"/","Entries":[],"IsTruncated":false}"""),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+        nodeConnector
+            .Setup(connector => connector.DeleteContainersAsync(
+                platform,
+                dockerNodeId,
+                It.Is<IReadOnlyCollection<string>>(ids => ids.Count == 1 && ids.Single() == "helper-1"),
+                false,
+                true,
+                false,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns("citadel-agent:1.0");
+        var service = new VolumeContentService(
+            containerConnectorFactory.Object,
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            nodeConnector.Object,
+            helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>(),
+            NullLogger<VolumeContentService>.Instance);
+
+        var result = await service.ListDirectoryAsync(
+            new ListVolumeDirectoryCommand(
+                platform.Address,
+                platformId,
+                platform.ConnectorType,
+                "app-data",
+                new NormalizedVolumePath("/", []),
+                platform,
+                dockerNodeId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out _, out var error), error?.Message);
+        nodeConnector.VerifyAll();
+        helperImageResolver.VerifyAll();
+        directConnector.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task ListDirectoryAsync_ShouldLaunchHelperThroughShellWrapper()
     {
@@ -69,6 +176,7 @@ public sealed class VolumeContentServiceTests
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             helperImageResolver.Object,
             agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
@@ -168,6 +276,7 @@ public sealed class VolumeContentServiceTests
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             helperImageResolver.Object,
             agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
@@ -240,6 +349,7 @@ public sealed class VolumeContentServiceTests
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             helperImageResolver.Object,
             agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
@@ -300,6 +410,7 @@ public sealed class VolumeContentServiceTests
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             helperImageResolver.Object,
             agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
@@ -321,8 +432,21 @@ public sealed class VolumeContentServiceTests
     }
 
     [Fact]
-    public async Task ListDirectoryAsync_ShouldUseCurrentContainerImageAndSourceMountForLocalDevelopment()
+    public async Task ListDirectoryAsync_OnSwarmManager_ShouldUseCurrentContainerImageAndSourceMount()
     {
+        var platformId = Guid.CreateVersion7();
+        const string managerNodeId = "manager-1";
+        var platform = Platform.FromPersistence(
+            platformId,
+            "swarm",
+            "local://docker",
+            0, 0, 0, 1, 2048,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                managerNodeId, "10.0.0.1", "Active", true, 1, 1,
+                "daemon-1", 0, 0, 0, 0, "cluster-1"),
+            clusterId: "cluster-1");
         CreateContainerCommand? createCommand = null;
         ContainerBinaryExecRequest? execRequest = null;
         var currentContainerId = Environment.MachineName;
@@ -374,9 +498,11 @@ public sealed class VolumeContentServiceTests
             .Setup(resolver => resolver.Resolve(PlatformConnectorType.Local))
             .Returns("ghcr.io/citadel-p/citadel:1.0");
 
+        var nodeConnector = new Mock<ISwarmNodeRuntimeConnector>();
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
+            nodeConnector.Object,
             helperImageResolver.Object,
             Mock.Of<IAgentRuntimeImageResolver>(),
             NullLogger<VolumeContentService>.Instance);
@@ -384,10 +510,12 @@ public sealed class VolumeContentServiceTests
         var result = await service.ListDirectoryAsync(
             new ListVolumeDirectoryCommand(
                 "local://docker",
-                Guid.CreateVersion7(),
+                platformId,
                 PlatformConnectorType.Local,
                 "app-data",
-                new NormalizedVolumePath("/", [])),
+                new NormalizedVolumePath("/", []),
+                platform,
+                managerNodeId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess(out _, out var error), error?.Message);
@@ -406,6 +534,7 @@ public sealed class VolumeContentServiceTests
             && mount.ReadOnly == true);
 
         Assert.Contains("/src/src/Citadel.VolumeHelper/bin/Debug/net*/Citadel.VolumeHelper.dll", execRequest.Command[2]);
+        nodeConnector.VerifyNoOtherCalls();
     }
 
     private static ContainerInspectionInfo RunningContainer(string id)

@@ -29,6 +29,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .SwarmSecretProjectionConfiguration()
             .SwarmConfigProjectionConfiguration()
             .SwarmNodeRuntimeProjectionStateConfiguration()
+            .SwarmNodeImageProjectionConfiguration()
+            .SwarmNodeVolumeProjectionConfiguration()
+            .SwarmNodeNetworkProjectionConfiguration()
             .EdgeAgentEnrollmentConfiguration()
             .EdgeAgentBindingConfiguration()
             .SwarmNodeAgentInstallationConfiguration()
@@ -2507,6 +2510,57 @@ internal static class Configuration
         state.Property<string>("AgentVersion").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
         state.Property<string>("DockerVersion").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
         AddSwarmPlatformRelationship(state);
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeImageProjectionConfiguration(this ModelBuilder builder)
+    {
+        var image = builder.Entity("SwarmNodeImageProjection");
+        image.ToTable("SwarmNodeImageProjections");
+        image.Property<Guid>("Id").IsRequired();
+        image.HasKey("Id");
+        image.Property<Guid>("PlatformId").IsRequired();
+        image.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        image.Property<string>("DockerImageId").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        image.Property<string>("ContentIdentity").HasColumnType(Text).HasMaxLength(1000).IsRequired();
+        image.Property<string>("Resource").HasColumnType(JsonB).IsRequired();
+        image.Property<DateTimeOffset>("ObservedAt").HasColumnType(Timestamp).IsRequired();
+        image.Property<bool>("IsStale").IsRequired().HasDefaultValue(false);
+        image.HasIndex("PlatformId", "DockerNodeId", "DockerImageId").IsUnique()
+            .HasDatabaseName("IX_SwarmNodeImageProjections_RuntimeIdentity");
+        image.HasIndex("PlatformId", "ContentIdentity")
+            .HasDatabaseName("IX_SwarmNodeImageProjections_ContentIdentity");
+        AddSwarmPlatformRelationship(image);
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeVolumeProjectionConfiguration(this ModelBuilder builder)
+    {
+        var volume = builder.Entity("SwarmNodeVolumeProjection");
+        volume.ToTable("SwarmNodeVolumeProjections");
+        volume.Property<Guid>("PlatformId").IsRequired();
+        volume.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        volume.Property<string>("VolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        volume.HasKey("PlatformId", "DockerNodeId", "VolumeName");
+        volume.Property<string>("Resource").HasColumnType(JsonB).IsRequired();
+        volume.Property<DateTimeOffset>("ObservedAt").HasColumnType(Timestamp).IsRequired();
+        volume.Property<bool>("IsStale").IsRequired().HasDefaultValue(false);
+        AddSwarmPlatformRelationship(volume);
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeNetworkProjectionConfiguration(this ModelBuilder builder)
+    {
+        var network = builder.Entity("SwarmNodeNetworkProjection");
+        network.ToTable("SwarmNodeNetworkProjections");
+        network.Property<Guid>("PlatformId").IsRequired();
+        network.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        network.Property<string>("DockerNetworkId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        network.HasKey("PlatformId", "DockerNodeId", "DockerNetworkId");
+        network.Property<string>("Resource").HasColumnType(JsonB).IsRequired();
+        network.Property<DateTimeOffset>("ObservedAt").HasColumnType(Timestamp).IsRequired();
+        network.Property<bool>("IsStale").IsRequired().HasDefaultValue(false);
+        AddSwarmPlatformRelationship(network);
         return builder;
     }
 

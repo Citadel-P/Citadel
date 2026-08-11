@@ -58,9 +58,9 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string imageId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string imageId, [FromQuery] string? dockerNodeId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new InspectImage(platformId, imageId), cancellationToken);
+        var result = await mediator.Send(new InspectImage(platformId, imageId, dockerNodeId), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, InspectImageView.Map);
     }
 

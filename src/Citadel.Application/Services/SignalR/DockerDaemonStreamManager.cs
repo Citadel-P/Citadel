@@ -3,6 +3,7 @@ using Application.Services.SignalR.Context;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 
 namespace Application.Services.SignalR;
 
@@ -12,6 +13,9 @@ internal interface IDockerDaemonStreamManager : IStreamGroupManager
     Task SendImageEvent(Image image, string @event);
     Task SendVolumeEvent(DockerVolumeResult? volume, string @event, string actorId, Guid platformId);
     Task SendNetworkEvent(DockerNetworkResult? network, string @event, string actorId, Guid platformId);
+    Task SendSwarmNodeLocalResources(
+        SwarmNodeLocalResourceSnapshot snapshot,
+        CancellationToken cancellationToken = default);
 }
 
 internal class DockerDaemonStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IDockerDaemonStreamManager
@@ -54,5 +58,15 @@ internal class DockerDaemonStreamManager(IApplicationHubDispatcher dispatcher) :
         }
 
         return dispatcher.SendVolumeEvent(volume, @event, actorId, platformId);
+    }
+
+    public Task SendSwarmNodeLocalResources(
+        SwarmNodeLocalResourceSnapshot snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        if (streams.IsEmpty)
+            return Task.CompletedTask;
+
+        return dispatcher.SendSwarmNodeLocalResources(snapshot, cancellationToken);
     }
 }

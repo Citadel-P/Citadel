@@ -40,6 +40,9 @@ const hasStatus = (resource: StackView, ...statuses: StackReleaseStatus[]) => st
 const canControl = (resource: StackView, ...statuses: StackReleaseStatus[]) =>
   resource.platformType !== PlatformType.DockerSwarm && hasStatus(resource, ...statuses) && !isProcessing(resource);
 
+const isStandaloneStack = (resources: StackView | StackView[]) =>
+  everyStack(resources, (resource) => resource.platformType !== PlatformType.DockerSwarm);
+
 const canCheckDrift = (resource: StackView) =>
   resource.platformType !== PlatformType.DockerSwarm &&
   (resource.status === StackReleaseStatus.Healthy || resource.status === StackReleaseStatus.Degraded);
@@ -104,6 +107,7 @@ export const startAction: ActionConfig<StackView, 'startStacks'> = {
   key: 'start',
   type: 'command',
   icon: Play,
+  isVisible: isStandaloneStack,
   mutateKey: 'startStacks',
   useVariables,
   canExecute: (r) => {
@@ -116,6 +120,7 @@ export const syncAction: ActionConfig<StackView, any> = {
   title: 'Reconcile drift',
   type: 'command',
   icon: RefreshCw,
+  isVisible: isStandaloneStack,
   requiredCapabilities: ['canWrite'],
   useHandler: ({ resources }) => {
     const queryClient = useQueryClient();
@@ -213,6 +218,7 @@ export const stopAction: ActionConfig<StackView, 'stopStacks'> = {
   key: 'stop',
   type: 'command',
   icon: Ban,
+  isVisible: isStandaloneStack,
   mutateKey: 'stopStacks',
   useVariables,
   canExecute: (r) => {
@@ -223,6 +229,7 @@ export const stopAction: ActionConfig<StackView, 'stopStacks'> = {
 export const pauseAction: ActionConfig<StackView, 'pauseStacks' | 'resumeStacks'> = {
   key: 'pauseToggle',
   type: 'toggle',
+  isVisible: isStandaloneStack,
   primary: {
     title: 'Pause',
     icon: Pause,

@@ -48,6 +48,7 @@ internal sealed class SwarmNodeDataPlaneJob(
             SingleWriter = false
         });
     private readonly ConcurrentDictionary<NodeKey, NodeMonitor> _monitors = new();
+    private readonly ConcurrentDictionary<Guid, string> _managerNodes = new();
     private readonly SemaphoreSlim _reconciliationSlots = new(
         MaximumConcurrentReconciliations,
         MaximumConcurrentReconciliations);
@@ -55,13 +56,67 @@ internal sealed class SwarmNodeDataPlaneJob(
     private readonly ObjectPool<List<ContainerStat>> _statsPool =
         new DefaultObjectPool<List<ContainerStat>>(new ContainerStatsListPooledObjectPolicy());
 
+    public bool HandlesManagerLocalResources(Guid platformId) => _managerNodes.ContainsKey(platformId);
+
+    public async ValueTask NotifyManagerConnectedAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        var platform = await LoadPlatformAsync(platformId, cancellationToken);
+        if (platform?.PlatformDescriptor is not DockerSwarmPlatformDescriptor descriptor
+            || string.IsNullOrWhiteSpace(descriptor.NodeID))
+        {
+            return;
+        }
+
+        _managerNodes[platformId] = descriptor.NodeID;
+        await _sessionChanges.Writer.WriteAsync(
+            new SessionChange(
+                new NodeKey(platformId, descriptor.NodeID),
+                "manager-connector",
+                Connected: true,
+                OwnsStreams: false),
+            cancellationToken);
+    }
+
+    public ValueTask NotifyManagerDisconnectedAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        if (!_managerNodes.TryRemove(platformId, out var dockerNodeId))
+            return ValueTask.CompletedTask;
+
+        return _sessionChanges.Writer.WriteAsync(
+            new SessionChange(
+                new NodeKey(platformId, dockerNodeId),
+                "manager-connector",
+                Connected: false,
+                OwnsStreams: false),
+            cancellationToken);
+    }
+
+    public ValueTask NotifyManagerDaemonEventAsync(
+        Guid platformId,
+        DaemonEventInfo daemonEvent,
+        CancellationToken cancellationToken)
+    {
+        if (_managerNodes.TryGetValue(platformId, out var dockerNodeId)
+            && _monitors.TryGetValue(new NodeKey(platformId, dockerNodeId), out var monitor)
+            && daemonEvent.Scope != DaemonEventScope.Swarm)
+        {
+            monitor.ReconcileSignals.Writer.TryWrite(true);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask NotifyConnectedAsync(
         Guid platformId,
         string dockerNodeId,
         string sessionId,
         CancellationToken cancellationToken)
         => _sessionChanges.Writer.WriteAsync(
-            new SessionChange(new NodeKey(platformId, dockerNodeId), sessionId, Connected: true),
+            new SessionChange(new NodeKey(platformId, dockerNodeId), sessionId, Connected: true, OwnsStreams: true),
             cancellationToken);
 
     public ValueTask NotifyDisconnectedAsync(
@@ -70,7 +125,7 @@ internal sealed class SwarmNodeDataPlaneJob(
         string sessionId,
         CancellationToken cancellationToken)
         => _sessionChanges.Writer.WriteAsync(
-            new SessionChange(new NodeKey(platformId, dockerNodeId), sessionId, Connected: false),
+            new SessionChange(new NodeKey(platformId, dockerNodeId), sessionId, Connected: false, OwnsStreams: true),
             cancellationToken);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,6 +157,7 @@ internal sealed class SwarmNodeDataPlaneJob(
         var monitor = new NodeMonitor(
             change.Key,
             change.SessionId,
+            change.OwnsStreams,
             CancellationTokenSource.CreateLinkedTokenSource(stoppingToken));
 
         while (true)
@@ -148,10 +204,17 @@ internal sealed class SwarmNodeDataPlaneJob(
             if (platform?.PlatformDescriptor is not DockerSwarmPlatformDescriptor)
                 return;
 
-            await Task.WhenAll(
-                RunReconciliationLoopAsync(platform, monitor),
-                RunEventLoopAsync(platform, monitor),
-                RunStatsLoopAsync(platform, monitor));
+            if (monitor.OwnsStreams)
+            {
+                await Task.WhenAll(
+                    RunReconciliationLoopAsync(platform, monitor),
+                    RunEventLoopAsync(platform, monitor),
+                    RunStatsLoopAsync(platform, monitor));
+            }
+            else
+            {
+                await RunReconciliationLoopAsync(platform, monitor);
+            }
         }
         catch (OperationCanceledException) when (monitor.Token.IsCancellationRequested)
         {
@@ -221,20 +284,71 @@ internal sealed class SwarmNodeDataPlaneJob(
                 var startedAt = DateTimeOffset.UtcNow;
                 var start = new StartSwarmNodeReconciliationWorkItem(monitor.Key, startedAt);
                 await dbQueue.EnqueueAndWaitAsync(start, monitor.Token);
-                var result = await connector.ListContainersAsync(
+                var containersTask = connector.ListContainersAsync(
                     platform,
                     monitor.Key.DockerNodeId,
                     monitor.Token);
-                if (!result.IsSuccess(out var containers, out var error))
+                var imagesTask = connector.ListImagesAsync(
+                    platform,
+                    monitor.Key.DockerNodeId,
+                    monitor.Token);
+                var volumesTask = connector.ListVolumesAsync(
+                    platform,
+                    monitor.Key.DockerNodeId,
+                    monitor.Token);
+                var networksTask = connector.ListNetworksAsync(
+                    platform,
+                    monitor.Key.DockerNodeId,
+                    monitor.Token);
+                await Task.WhenAll(containersTask, imagesTask, volumesTask, networksTask);
+
+                var containersResult = await containersTask;
+                var imagesResult = await imagesTask;
+                var volumesResult = await volumesTask;
+                var networksResult = await networksTask;
+                var containersSucceeded = containersResult.IsSuccess(out var containers, out var containersError);
+                var imagesSucceeded = imagesResult.IsSuccess(out var images, out var imagesError);
+                var volumesSucceeded = volumesResult.IsSuccess(out var volumes, out var volumesError);
+                var networksSucceeded = networksResult.IsSuccess(out var networks, out var networksError);
+                if (!containersSucceeded || !imagesSucceeded || !volumesSucceeded || !networksSucceeded)
                 {
                     await MarkStaleAsync(
                         monitor.Key,
-                        error?.Message ?? "Node inventory could not be refreshed.",
+                        containersError?.Message
+                        ?? imagesError?.Message
+                        ?? volumesError?.Message
+                        ?? networksError?.Message
+                        ?? "Node inventory could not be refreshed.",
                         monitor.Token);
                     return;
                 }
 
-                await PruneHistoricalTaskContainersAsync(platform, monitor, containers.Values);
+                await PruneHistoricalTaskContainersAsync(platform, monitor, containers!.Values);
+
+                var observedAt = DateTimeOffset.UtcNow;
+                var imageProjections = images!
+                    .Select(image => SwarmNodeImageProjection.FromObservation(
+                        platform.Id,
+                        monitor.Key.DockerNodeId,
+                        image,
+                        observedAt))
+                    .ToArray();
+                var volumeProjections = volumes!
+                    .Where(static volume => string.Equals(volume.Scope, "local", StringComparison.OrdinalIgnoreCase))
+                    .Select(volume => SwarmNodeVolumeProjection.FromObservation(
+                        platform.Id,
+                        monitor.Key.DockerNodeId,
+                        volume,
+                        observedAt))
+                    .ToArray();
+                var networkProjections = networks!
+                    .Where(static network => !string.Equals(network.Scope, "swarm", StringComparison.OrdinalIgnoreCase))
+                    .Select(network => SwarmNodeNetworkProjection.FromObservation(
+                        platform.Id,
+                        monitor.Key.DockerNodeId,
+                        network,
+                        observedAt))
+                    .ToArray();
 
                 await dbQueue.EnqueueAndWaitAsync(
                     new ReconcileSwarmNodeContainersWorkItem(
@@ -245,7 +359,11 @@ internal sealed class SwarmNodeDataPlaneJob(
                         monitor,
                         notificationQueue,
                         platformContainerCache,
-                        containerStreamManager),
+                        containerStreamManager,
+                        dockerDaemonStreamManager,
+                        imageProjections,
+                        volumeProjections,
+                        networkProjections),
                     monitor.Token);
             }
             finally
@@ -336,6 +454,12 @@ internal sealed class SwarmNodeDataPlaneJob(
                         await dbQueue.EnqueueAndWaitAsync(apply, monitor.Token);
                         if (!apply.Applied)
                             monitor.ReconcileSignals.Writer.TryWrite(true);
+                    }
+                    else if (daemonEvent is DaemonImageEventInfo
+                             or DaemonVolumeEventInfo
+                             or DaemonNetworkEventInfo)
+                    {
+                        monitor.ReconcileSignals.Writer.TryWrite(true);
                     }
                 }
             }
@@ -442,7 +566,8 @@ internal sealed class SwarmNodeDataPlaneJob(
                     key,
                     reason,
                     notificationQueue,
-                    containerStreamManager),
+                    containerStreamManager,
+                    dockerDaemonStreamManager),
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -480,14 +605,23 @@ internal sealed class SwarmNodeDataPlaneJob(
     }
 
     internal readonly record struct NodeKey(Guid PlatformId, string DockerNodeId);
-    private readonly record struct SessionChange(NodeKey Key, string SessionId, bool Connected);
+    private readonly record struct SessionChange(
+        NodeKey Key,
+        string SessionId,
+        bool Connected,
+        bool OwnsStreams);
 
-    internal sealed class NodeMonitor(NodeKey key, string sessionId, CancellationTokenSource cancellation) : IDisposable
+    internal sealed class NodeMonitor(
+        NodeKey key,
+        string sessionId,
+        bool ownsStreams,
+        CancellationTokenSource cancellation) : IDisposable
     {
         private ImmutableDictionary<string, Guid> _containerIds = ImmutableDictionary<string, Guid>.Empty;
 
         public NodeKey Key { get; } = key;
         public string SessionId { get; } = sessionId;
+        public bool OwnsStreams { get; } = ownsStreams;
         public CancellationToken Token => cancellation.Token;
         public Task Task { get; set; } = Task.CompletedTask;
         public Channel<bool> ReconcileSignals { get; } = Channel.CreateBounded<bool>(
@@ -629,7 +763,11 @@ internal sealed class SwarmNodeDataPlaneJob(
         NodeMonitor monitor,
         INotificationQueue notificationQueue,
         IPlatformContainerCache platformContainerCache,
-        IContainerStreamManager containerStreamManager) : IDbWorkItem
+        IContainerStreamManager containerStreamManager,
+        IDockerDaemonStreamManager dockerDaemonStreamManager,
+        IReadOnlyList<SwarmNodeImageProjection>? images = null,
+        IReadOnlyList<SwarmNodeVolumeProjection>? volumes = null,
+        IReadOnlyList<SwarmNodeNetworkProjection>? networks = null) : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
@@ -700,6 +838,15 @@ internal sealed class SwarmNodeDataPlaneJob(
             if (removed.Length > 0)
                 await uow.Containers.DeleteAsync(removed.Select(static container => container.Id), cancellationToken);
 
+            await uow.Swarm.ReplaceNodeLocalResourcesAsync(
+                key.PlatformId,
+                key.DockerNodeId,
+                images ?? [],
+                volumes ?? [],
+                networks ?? [],
+                DateTimeOffset.FromUnixTimeSeconds(snapshotStartedAt),
+                cancellationToken);
+
             var completedAt = DateTimeOffset.UtcNow;
             await uow.Swarm.UpsertNodeRuntimeStateAsync(runtimeState with
             {
@@ -733,6 +880,12 @@ internal sealed class SwarmNodeDataPlaneJob(
                     new SendContainersInfoNotificationWorkItem(containerStreamManager, all, key.PlatformId),
                     cancellationToken);
             }
+
+            await notificationQueue.EnqueueAsync(
+                new SwarmNodeLocalResourcesNotificationWorkItem(
+                    dockerDaemonStreamManager,
+                    await LoadNodeLocalResourceSnapshotAsync(uow, key.PlatformId, cancellationToken)),
+                cancellationToken);
         }
     }
 
@@ -740,7 +893,8 @@ internal sealed class SwarmNodeDataPlaneJob(
         NodeKey key,
         string reason,
         INotificationQueue notificationQueue,
-        IContainerStreamManager containerStreamManager) : IDbWorkItem
+        IContainerStreamManager containerStreamManager,
+        IDockerDaemonStreamManager dockerDaemonStreamManager) : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
@@ -750,6 +904,10 @@ internal sealed class SwarmNodeDataPlaneJob(
                 key.DockerNodeId,
                 reason,
                 now.ToUnixTimeSeconds(),
+                cancellationToken);
+            await uow.Swarm.MarkNodeLocalResourcesStaleAsync(
+                key.PlatformId,
+                key.DockerNodeId,
                 cancellationToken);
             var state = await uow.Swarm.GetNodeRuntimeStateAsync(key.PlatformId, key.DockerNodeId, cancellationToken)
                         ?? CreateInitialRuntimeState(key, now);
@@ -768,8 +926,24 @@ internal sealed class SwarmNodeDataPlaneJob(
                     new SendContainersInfoNotificationWorkItem(containerStreamManager, all, key.PlatformId),
                     cancellationToken);
             }
+
+
+            await notificationQueue.EnqueueAsync(
+                new SwarmNodeLocalResourcesNotificationWorkItem(
+                    dockerDaemonStreamManager,
+                    await LoadNodeLocalResourceSnapshotAsync(uow, key.PlatformId, cancellationToken)),
+                cancellationToken);
         }
     }
+
+    private static async Task<SwarmNodeLocalResourceSnapshot> LoadNodeLocalResourceSnapshotAsync(
+        IUnitOfWork uow,
+        Guid platformId,
+        CancellationToken cancellationToken) => new(
+        platformId,
+        await uow.Swarm.GetNodeImagesAsync(platformId, cancellationToken),
+        await uow.Swarm.GetNodeVolumesAsync(platformId, cancellationToken),
+        await uow.Swarm.GetNodeNetworksAsync(platformId, cancellationToken));
 
     private sealed class StartSwarmNodeReconciliationWorkItem(NodeKey key, DateTimeOffset startedAt) : IDbWorkItem
     {
@@ -824,4 +998,12 @@ internal sealed class SwarmNodeDataPlaneJob(
         null,
         null,
         null);
+}
+
+internal sealed class SwarmNodeLocalResourcesNotificationWorkItem(
+    IDockerDaemonStreamManager streamManager,
+    SwarmNodeLocalResourceSnapshot snapshot) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken) =>
+        streamManager.SendSwarmNodeLocalResources(snapshot, cancellationToken);
 }

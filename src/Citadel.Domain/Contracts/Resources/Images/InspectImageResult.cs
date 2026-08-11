@@ -24,6 +24,7 @@ public record InspectImageResult(
     )
 {
     public Guid PlatformId { get; set; }
+    public string? DockerNodeId { get; set; }
     public Registry? Registry { get; set; }
 };
 

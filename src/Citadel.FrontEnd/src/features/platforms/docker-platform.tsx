@@ -199,13 +199,13 @@ const DockerPlatformCard = ({
                     {formatCount(swarmDescriptor.containerCount, 'container')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/volumes`} className="hover:text-foreground hover:underline">
-                    {formatCount(platform.volumeCount, 'volume')}
+                    {formatCount(swarmOverview?.volumeCount ?? platform.volumeCount, 'volume')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
-                    {formatCount(platform.networkCount, 'network')}
+                    {formatCount(swarmOverview?.networkCount ?? platform.networkCount, 'network')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
-                    {formatCount(platform.imageCount, 'image')}
+                    {formatCount(swarmOverview?.imageCount ?? platform.imageCount, 'image')}
                   </Link>
                 </>
               ) : (

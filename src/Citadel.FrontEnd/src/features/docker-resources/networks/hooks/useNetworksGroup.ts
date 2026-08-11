@@ -1,18 +1,27 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { NetworksView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup, NetworkEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import {
+  useDockerDaemonGroup,
+  NetworkEvent,
+  SwarmNodeLocalResourcesUpdate,
+} from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listNetworks', { platformId });
   const [networks, setNetworks] = useState<NetworksView | undefined>();
   const lastDataRef = useRef<NetworksView | undefined>(data?.data);
+  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>();
   const capabilities = data?.data.capabilities;
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
       lastDataRef.current = data.data;
-      setNetworks(data.data);
+      const snapshot = nodeSnapshotRef.current;
+      const clusterNetworks = snapshot
+        ? data.data.networks.filter((network) => !network.dockerNodeId)
+        : [];
+      setNetworks(snapshot ? { ...data.data, networks: [...clusterNetworks, ...snapshot.networks] } : data.data);
     }
   }, [data?.data]);
 
@@ -50,7 +59,20 @@ export const useNetworksGroup = (platformId?: string) => {
     });
   }, []);
 
-  useDockerDaemonGroup(platformId, { onNetworkEvent });
+  const onSwarmNodeLocalResourcesUpdated = useCallback(
+    (snapshot: SwarmNodeLocalResourcesUpdate) => {
+      if (snapshot.platformId !== platformId) return;
+      nodeSnapshotRef.current = snapshot;
+      setNetworks((current) => {
+        if (!current) return current;
+        const clusterNetworks = current.networks.filter((network) => !network.dockerNodeId);
+        return { ...current, networks: [...clusterNetworks, ...snapshot.networks] };
+      });
+    },
+    [platformId],
+  );
+
+  useDockerDaemonGroup(platformId, { onNetworkEvent, onSwarmNodeLocalResourcesUpdated });
 
   return { networks, isLoading, capabilities };
 };

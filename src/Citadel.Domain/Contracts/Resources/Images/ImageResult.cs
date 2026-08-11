@@ -11,6 +11,12 @@ public record ImageResult(
         IReadOnlyList<string>? RepoTags,
         IReadOnlyList<string>? RepoDigests,
         IReadOnlyDictionary<string, string>? Labels
-    );
+    )
+{
+    public string? DockerNodeId { get; set; }
+    public string? NodeHostname { get; set; }
+    public bool IsStale { get; set; }
+    public string? StaleReason { get; set; }
+}
 
 

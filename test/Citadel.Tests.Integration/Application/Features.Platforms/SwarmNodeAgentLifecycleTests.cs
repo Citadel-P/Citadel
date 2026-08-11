@@ -136,6 +136,65 @@ public sealed class SwarmNodeAgentLifecycleTests(PostgresTestFixture fixture) : 
     }
 
     [Fact]
+    public async Task Coverage_ShouldKeepActiveDownWorkerInEligibleTotal()
+    {
+        var platform = await CreatePlatformWithManagerNodeAsync();
+        var now = DateTimeOffset.UtcNow;
+        var worker = new SwarmNodeProjection(
+            platform.Id,
+            "worker-node",
+            1,
+            "worker",
+            "Worker",
+            false,
+            string.Empty,
+            "Down",
+            "worker unavailable",
+            "Active",
+            "29.0",
+            "linux",
+            "amd64",
+            "10.0.0.2",
+            new Dictionary<string, string>(),
+            0,
+            0,
+            now,
+            now,
+            now,
+            false);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var manager = Assert.Single(await uow.Swarm.GetNodesAsync(
+                platform.Id,
+                TestContext.Current.CancellationToken));
+            await uow.Swarm.ReplaceAsync(
+                platform.Id,
+                new SwarmProjectionSnapshot([manager, worker], [], [], [], [], []),
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        using var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platform.Id:D}/node-agent-coverage",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("NotInstalled", body.RootElement.GetProperty("state").GetString());
+        Assert.Equal(2, body.RootElement.GetProperty("eligibleNodes").GetInt32());
+        Assert.Equal(1, body.RootElement.GetProperty("coveredNodes").GetInt32());
+        var workerCoverage = Assert.Single(
+            body.RootElement.GetProperty("nodes").EnumerateArray(),
+            node => node.GetProperty("dockerNodeId").GetString() == "worker-node");
+        Assert.True(workerCoverage.GetProperty("eligible").GetBoolean());
+        Assert.False(workerCoverage.GetProperty("schedulable").GetBoolean());
+        Assert.Equal("Missing", workerCoverage.GetProperty("agentConnectionState").GetString());
+    }
+
+    [Fact]
     public async Task Coverage_ShouldReportOwnedServiceDrift_WhenInstalledServiceIsMissing()
     {
         var platform = await CreatePlatformWithManagerNodeAsync();

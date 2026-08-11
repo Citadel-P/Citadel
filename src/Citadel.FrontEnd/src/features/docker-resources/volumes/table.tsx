@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { BackupCoverageStatus, DockerVolumeResultView } from '@/api/generated/api.types';
+import { BackupCoverageStatus, DockerVolumeResultView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/lib/context/app-context';
 import { VolumeBrowserSheet } from './volume-browser-sheet';
+import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
 
 export const VolumesTable = ({
   items,
@@ -32,7 +33,8 @@ export const VolumesTable = ({
   const [_, setSelectedResources] = useSelectedResources<DockerVolumeResultView>('Volume');
   const { currentPlatform } = useAppContext();
   const [browsingVolume, setBrowsingVolume] = useState<DockerVolumeResultView | null>(null);
-  const cols = useMemo(() => columns(actions ?? {}, setBrowsingVolume), [actions]);
+  const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
+  const cols = useMemo(() => columns(actions ?? {}, setBrowsingVolume, showNode), [actions, showNode]);
 
   return (
     <>
@@ -53,6 +55,7 @@ const columns = (
     React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   onBrowse: (volume: DockerVolumeResultView) => void,
+  showNode: boolean,
 ): ColumnDef<DockerVolumeResultView>[] => [
   {
     id: 'select',
@@ -79,6 +82,7 @@ const columns = (
     cell: ({ row }) => <VolumeNameRow volume={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
+  ...(showNode ? [createNodeResourceColumn<DockerVolumeResultView>()] : []),
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
@@ -198,7 +202,8 @@ const VolumeNameRow = ({ volume }: { volume: DockerVolumeResultView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {
-    navigate(`/platforms/${platformId}/volumes/${volume.id}/`);
+    const nodeQuery = volume.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(volume.dockerNodeId)}` : '';
+    navigate(`/platforms/${platformId}/volumes/${volume.id}/${nodeQuery}`);
   }
   return (
     <div className="flex items-center whitespace-nowrap">

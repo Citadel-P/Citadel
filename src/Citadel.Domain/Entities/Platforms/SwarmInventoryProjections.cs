@@ -1,4 +1,7 @@
 using Domain.Contracts.Resources.Swarm;
+using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Volumes;
 
 namespace Domain.Entities.Platforms;
 
@@ -185,7 +188,16 @@ public sealed record SwarmProjectionSummary(
     PlatformWorkloadStatusCounts ServiceStatusCounts,
     int RunningTaskCount,
     int DesiredTaskCount,
-    int NetworkCount);
+    int NetworkCount,
+    int LocalNetworkCount,
+    int VolumeCount,
+    int ImageCount);
+
+public sealed record SwarmNodeLocalResourceSnapshot(
+    Guid PlatformId,
+    IReadOnlyList<SwarmNodeImageProjection> Images,
+    IReadOnlyList<SwarmNodeVolumeProjection> Volumes,
+    IReadOnlyList<SwarmNodeNetworkProjection> Networks);
 
 public sealed record SwarmNodeRuntimeProjectionState(
     Guid PlatformId,
@@ -202,3 +214,70 @@ public sealed record SwarmNodeRuntimeProjectionState(
     DateTimeOffset? LastStatsSampleAt,
     string? AgentVersion,
     string? DockerVersion);
+
+public sealed record SwarmNodeImageProjection(
+    Guid Id,
+    Guid PlatformId,
+    string DockerNodeId,
+    string DockerImageId,
+    string ContentIdentity,
+    ImageResult Resource,
+    DateTimeOffset ObservedAt,
+    bool IsStale,
+    string? NodeHostname = null,
+    string? StaleReason = null)
+{
+    public static SwarmNodeImageProjection FromObservation(
+        Guid platformId,
+        string dockerNodeId,
+        ImageResult resource,
+        DateTimeOffset observedAt)
+    {
+        var digest = resource.RepoDigests?.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
+        return new(
+            Guid.CreateVersion7(),
+            platformId,
+            dockerNodeId,
+            resource.Id,
+            digest ?? resource.Id,
+            resource,
+            observedAt,
+            false);
+    }
+}
+
+public sealed record SwarmNodeVolumeProjection(
+    Guid PlatformId,
+    string DockerNodeId,
+    string VolumeName,
+    DockerVolumeResult Resource,
+    DateTimeOffset ObservedAt,
+    bool IsStale,
+    string? NodeHostname = null,
+    string? StaleReason = null)
+{
+    public static SwarmNodeVolumeProjection FromObservation(
+        Guid platformId,
+        string dockerNodeId,
+        DockerVolumeResult resource,
+        DateTimeOffset observedAt) =>
+        new(platformId, dockerNodeId, resource.Name, resource, observedAt, false);
+}
+
+public sealed record SwarmNodeNetworkProjection(
+    Guid PlatformId,
+    string DockerNodeId,
+    string DockerNetworkId,
+    DockerNetworkResult Resource,
+    DateTimeOffset ObservedAt,
+    bool IsStale,
+    string? NodeHostname = null,
+    string? StaleReason = null)
+{
+    public static SwarmNodeNetworkProjection FromObservation(
+        Guid platformId,
+        string dockerNodeId,
+        DockerNetworkResult resource,
+        DateTimeOffset observedAt) =>
+        new(platformId, dockerNodeId, resource.Id, resource, observedAt, false);
+}

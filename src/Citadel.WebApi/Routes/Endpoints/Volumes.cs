@@ -52,9 +52,10 @@ public static class Volumes
         IPermissionEvaluator permissionEvaluator,
         Guid platformId,
         string name,
+        [FromQuery] string? dockerNodeId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new InspectVolume(platformId, name), cancellationToken);
+        var result = await mediator.Send(new InspectVolume(platformId, name, dockerNodeId), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, DockerVolumeResultView.Map);
     }
 
@@ -63,9 +64,12 @@ public static class Volumes
         Guid platformId,
         string name,
         [FromQuery] string? path,
+        [FromQuery] string? dockerNodeId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new ListVolumeDirectory(platformId, name, path), cancellationToken);
+        var result = await mediator.Send(
+            new ListVolumeDirectory(platformId, name, path, dockerNodeId),
+            cancellationToken);
         return EndpointHandlers.HandleResult(result, VolumeDirectoryView.Map);
     }
 
@@ -77,9 +81,12 @@ public static class Volumes
         Guid platformId,
         string name,
         [FromQuery] string? path,
+        [FromQuery] string? dockerNodeId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new OpenVolumeDownload(platformId, name, path), cancellationToken);
+        var result = await mediator.Send(
+            new OpenVolumeDownload(platformId, name, path, dockerNodeId),
+            cancellationToken);
         if (!result.IsSuccess(out var download))
             return EndpointHandlers.HandleResult(result, static _ => new object());
 

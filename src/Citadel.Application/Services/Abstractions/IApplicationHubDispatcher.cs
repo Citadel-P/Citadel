@@ -60,6 +60,9 @@ public interface IApplicationHubDispatcher
         Guid platformId,
         SwarmProjectionSnapshot snapshot,
         CancellationToken cancellationToken = default);
+    Task SendSwarmNodeLocalResources(
+        SwarmNodeLocalResourceSnapshot snapshot,
+        CancellationToken cancellationToken = default);
     Task SendSwarmNodeAgentCoverageChanged(
         Guid platformId,
         CancellationToken cancellationToken = default);

@@ -781,6 +781,52 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "swarmnodeimageprojections",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    contentidentity = table.Column<string>(type: "text", maxLength: 1000, nullable: false),
+                    dockerimageid = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    isstale = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    observedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resource = table.Column<string>(type: "jsonb", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnodeimageprojections", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_swarmnodeimageprojections_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "swarmnodenetworkprojections",
+                columns: table => new
+                {
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    dockernetworkid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    isstale = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    observedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    resource = table.Column<string>(type: "jsonb", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnodenetworkprojections", x => new { x.platformid, x.dockernodeid, x.dockernetworkid });
+                    table.ForeignKey(
+                        name: "fk_swarmnodenetworkprojections_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "swarmnodeprojections",
                 columns: table => new
                 {
@@ -841,6 +887,28 @@ namespace Infrastructure.Migrations.Migrations
                     table.PrimaryKey("pk_swarmnoderuntimeprojectionstates", x => new { x.platformid, x.dockernodeid });
                     table.ForeignKey(
                         name: "fk_swarmnoderuntimeprojectionstates_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "swarmnodevolumeprojections",
+                columns: table => new
+                {
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    volumename = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    isstale = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    observedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    resource = table.Column<string>(type: "jsonb", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnodevolumeprojections", x => new { x.platformid, x.dockernodeid, x.volumename });
+                    table.ForeignKey(
+                        name: "fk_swarmnodevolumeprojections_platforms_platformid",
                         column: x => x.platformid,
                         principalTable: "platforms",
                         principalColumn: "id",
@@ -945,6 +1013,37 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "platforms",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "swarmservicestats",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    cpuusage = table.Column<double>(type: "double precision", nullable: false),
+                    created = table.Column<long>(type: "bigint", nullable: false),
+                    dockerserviceid = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    dockertaskid = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    memoryactive = table.Column<double>(type: "double precision", nullable: false),
+                    memorycache = table.Column<double>(type: "double precision", nullable: false),
+                    memorylimit = table.Column<double>(type: "double precision", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    rxbytes = table.Column<double>(type: "double precision", nullable: false),
+                    servicename = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    stackid = table.Column<Guid>(type: "uuid", nullable: true),
+                    swarmserviceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    taskkey = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    txbytes = table.Column<double>(type: "double precision", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmservicestats", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_swarmservicestats_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -3637,6 +3736,17 @@ namespace Infrastructure.Migrations.Migrations
                 column: "operationactorid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeimageprojections_contentidentity",
+                table: "swarmnodeimageprojections",
+                columns: new[] { "platformid", "contentidentity" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeimageprojections_runtimeidentity",
+                table: "swarmnodeimageprojections",
+                columns: new[] { "platformid", "dockernodeid", "dockerimageid" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_swarmserviceprojections_stackid",
                 table: "swarmserviceprojections",
                 column: "stackid");
@@ -3686,6 +3796,34 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_swarmservices_recoverableoperation",
                 table: "swarmservices",
                 columns: new[] { "operationstate", "preparedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmservicestats_created",
+                table: "swarmservicestats",
+                column: "created");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmservicestats_managedservicecreated",
+                table: "swarmservicestats",
+                columns: new[] { "swarmserviceid", "created" },
+                filter: "swarmserviceid IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmservicestats_platformservicecreated",
+                table: "swarmservicestats",
+                columns: new[] { "platformid", "dockerserviceid", "created" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmservicestats_platformtaskcreated",
+                table: "swarmservicestats",
+                columns: new[] { "platformid", "dockertaskid", "created" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmservicestats_stackservicecreated",
+                table: "swarmservicestats",
+                columns: new[] { "stackid", "servicename", "created" },
+                filter: "stackid IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_tags_createdbyactorid",
@@ -3864,10 +4002,19 @@ namespace Infrastructure.Migrations.Migrations
                 name: "swarmnodeagentinstallations");
 
             migrationBuilder.DropTable(
+                name: "swarmnodeimageprojections");
+
+            migrationBuilder.DropTable(
+                name: "swarmnodenetworkprojections");
+
+            migrationBuilder.DropTable(
                 name: "swarmnodeprojections");
 
             migrationBuilder.DropTable(
                 name: "swarmnoderuntimeprojectionstates");
+
+            migrationBuilder.DropTable(
+                name: "swarmnodevolumeprojections");
 
             migrationBuilder.DropTable(
                 name: "swarmsecretprojections");
@@ -3877,6 +4024,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "swarmservices");
+
+            migrationBuilder.DropTable(
+                name: "swarmservicestats");
 
             migrationBuilder.DropTable(
                 name: "swarmtaskprojections");

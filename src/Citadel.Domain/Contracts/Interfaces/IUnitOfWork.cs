@@ -1048,6 +1048,18 @@ public interface ISwarmProjectionRepository
     Task<IReadOnlyList<SwarmNodeRuntimeProjectionState>> GetNodeRuntimeStatesAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmNodeRuntimeProjectionState?> GetNodeRuntimeStateAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<int> UpsertNodeRuntimeStateAsync(SwarmNodeRuntimeProjectionState state, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmNodeImageProjection>> GetNodeImagesAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmNodeVolumeProjection>> GetNodeVolumesAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmNodeNetworkProjection>> GetNodeNetworksAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<int> ReplaceNodeLocalResourcesAsync(
+        Guid platformId,
+        string dockerNodeId,
+        IReadOnlyList<SwarmNodeImageProjection> images,
+        IReadOnlyList<SwarmNodeVolumeProjection> volumes,
+        IReadOnlyList<SwarmNodeNetworkProjection> networks,
+        DateTimeOffset snapshotStartedAt,
+        CancellationToken cancellationToken);
+    Task<int> MarkNodeLocalResourcesStaleAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<int> ReplaceAsync(Guid platformId, SwarmProjectionSnapshot snapshot, CancellationToken cancellationToken);
     Task<int> MarkStaleAsync(Guid platformId, CancellationToken cancellationToken);
 }

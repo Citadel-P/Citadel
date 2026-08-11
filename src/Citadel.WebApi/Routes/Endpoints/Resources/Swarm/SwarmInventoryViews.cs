@@ -6,8 +6,24 @@ using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Images;
+using WebApi.Routes.Endpoints.Resources.Networks;
+using WebApi.Routes.Endpoints.Resources.Volumes;
 
 namespace WebApi.Routes.Endpoints.Resources.Swarm;
+
+public sealed record SwarmNodeLocalResourcesView(
+    Guid PlatformId,
+    IReadOnlyList<ImageView> Images,
+    IReadOnlyList<DockerVolumeResultView> Volumes,
+    IReadOnlyList<DockerNetworkResultView> Networks)
+{
+    internal static SwarmNodeLocalResourcesView Map(SwarmNodeLocalResourceSnapshot snapshot) => new(
+        snapshot.PlatformId,
+        snapshot.Images.Select(ImagesView.Map).ToArray(),
+        snapshot.Volumes.Select(static projection => DockerVolumeResultView.Map(projection.Resource)).ToArray(),
+        snapshot.Networks.Select(static projection => DockerNetworkResultView.Map(projection.Resource)).ToArray());
+}
 
 public sealed record SwarmServiceView(
     string Id, long VersionIndex, string Name, string Mode, string Image,
@@ -293,6 +309,9 @@ public sealed record SwarmOverviewView(
     int RunningTaskCount,
     int DesiredTaskCount,
     int NetworkCount,
+    int LocalNetworkCount,
+    int VolumeCount,
+    int ImageCount,
     PlatformCapabilities Capabilities)
 {
     public static SwarmOverviewView Map(Guid platformId, SwarmOverviewResult value)
@@ -335,6 +354,9 @@ public sealed record SwarmOverviewView(
             summary.RunningTaskCount,
             summary.DesiredTaskCount,
             summary.NetworkCount,
+            summary.LocalNetworkCount,
+            summary.VolumeCount,
+            summary.ImageCount,
             PlatformCapabilities.Empty);
     }
 

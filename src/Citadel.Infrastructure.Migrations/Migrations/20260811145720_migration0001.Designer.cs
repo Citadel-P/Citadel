@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260810172124_migration0001")]
+    [Migration("20260811145720_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -5671,6 +5671,100 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("swarmnodeagentinstallations", (string)null);
                 });
 
+            modelBuilder.Entity("SwarmNodeImageProjection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentIdentity")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("text")
+                        .HasColumnName("contentidentity");
+
+                    b.Property<string>("DockerImageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerimageid");
+
+                    b.Property<string>("DockerNodeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
+                    b.Property<bool>("IsStale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isstale");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observedat");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("resource");
+
+                    b.HasKey("Id")
+                        .HasName("pk_swarmnodeimageprojections");
+
+                    b.HasIndex("PlatformId", "ContentIdentity")
+                        .HasDatabaseName("ix_swarmnodeimageprojections_contentidentity");
+
+                    b.HasIndex("PlatformId", "DockerNodeId", "DockerImageId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmnodeimageprojections_runtimeidentity");
+
+                    b.ToTable("swarmnodeimageprojections", (string)null);
+                });
+
+            modelBuilder.Entity("SwarmNodeNetworkProjection", b =>
+                {
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
+                    b.Property<string>("DockerNetworkId")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernetworkid");
+
+                    b.Property<bool>("IsStale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isstale");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observedat");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("resource");
+
+                    b.HasKey("PlatformId", "DockerNodeId", "DockerNetworkId")
+                        .HasName("pk_swarmnodenetworkprojections");
+
+                    b.ToTable("swarmnodenetworkprojections", (string)null);
+                });
+
             modelBuilder.Entity("SwarmNodeProjection", b =>
                 {
                     b.Property<Guid>("PlatformId")
@@ -5856,6 +5950,43 @@ namespace Infrastructure.Migrations.Migrations
                         .HasName("pk_swarmnoderuntimeprojectionstates");
 
                     b.ToTable("swarmnoderuntimeprojectionstates", (string)null);
+                });
+
+            modelBuilder.Entity("SwarmNodeVolumeProjection", b =>
+                {
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
+                    b.Property<string>("VolumeName")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("volumename");
+
+                    b.Property<bool>("IsStale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isstale");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observedat");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("resource");
+
+                    b.HasKey("PlatformId", "DockerNodeId", "VolumeName")
+                        .HasName("pk_swarmnodevolumeprojections");
+
+                    b.ToTable("swarmnodevolumeprojections", (string)null);
                 });
 
             modelBuilder.Entity("SwarmSecretProjection", b =>
@@ -6307,6 +6438,101 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_swarmserviceprojections_swarmserviceid");
 
                     b.ToTable("swarmserviceprojections", (string)null);
+                });
+
+            modelBuilder.Entity("SwarmServiceStat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<double>("CpuUsage")
+                        .HasColumnType("double precision")
+                        .HasColumnName("cpuusage");
+
+                    b.Property<long>("Created")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created");
+
+                    b.Property<string>("DockerServiceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerserviceid");
+
+                    b.Property<string>("DockerTaskId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("dockertaskid");
+
+                    b.Property<double>("MemoryActive")
+                        .HasColumnType("double precision")
+                        .HasColumnName("memoryactive");
+
+                    b.Property<double>("MemoryCache")
+                        .HasColumnType("double precision")
+                        .HasColumnName("memorycache");
+
+                    b.Property<double>("MemoryLimit")
+                        .HasColumnType("double precision")
+                        .HasColumnName("memorylimit");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<double>("RxBytes")
+                        .HasColumnType("double precision")
+                        .HasColumnName("rxbytes");
+
+                    b.Property<string>("ServiceName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("servicename");
+
+                    b.Property<Guid?>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
+                    b.Property<Guid?>("SwarmServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("swarmserviceid");
+
+                    b.Property<string>("TaskKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("taskkey");
+
+                    b.Property<double>("TxBytes")
+                        .HasColumnType("double precision")
+                        .HasColumnName("txbytes");
+
+                    b.HasKey("Id")
+                        .HasName("pk_swarmservicestats");
+
+                    b.HasIndex("Created")
+                        .HasDatabaseName("ix_swarmservicestats_created");
+
+                    b.HasIndex("SwarmServiceId", "Created")
+                        .HasDatabaseName("ix_swarmservicestats_managedservicecreated")
+                        .HasFilter("swarmserviceid IS NOT NULL");
+
+                    b.HasIndex("PlatformId", "DockerServiceId", "Created")
+                        .HasDatabaseName("ix_swarmservicestats_platformservicecreated");
+
+                    b.HasIndex("PlatformId", "DockerTaskId", "Created")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmservicestats_platformtaskcreated");
+
+                    b.HasIndex("StackId", "ServiceName", "Created")
+                        .HasDatabaseName("ix_swarmservicestats_stackservicecreated")
+                        .HasFilter("stackid IS NOT NULL");
+
+                    b.ToTable("swarmservicestats", (string)null);
                 });
 
             modelBuilder.Entity("SwarmTaskProjection", b =>
@@ -7555,6 +7781,26 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_swarmnodeagentinstallations_platforms_platformid");
                 });
 
+            modelBuilder.Entity("SwarmNodeImageProjection", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodeimageprojections_platforms_platformid");
+                });
+
+            modelBuilder.Entity("SwarmNodeNetworkProjection", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodenetworkprojections_platforms_platformid");
+                });
+
             modelBuilder.Entity("SwarmNodeProjection", b =>
                 {
                     b.HasOne("Platform", null)
@@ -7573,6 +7819,16 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_swarmnoderuntimeprojectionstates_platforms_platformid");
+                });
+
+            modelBuilder.Entity("SwarmNodeVolumeProjection", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodevolumeprojections_platforms_platformid");
                 });
 
             modelBuilder.Entity("SwarmSecretProjection", b =>
@@ -7622,6 +7878,16 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("StackId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_swarmserviceprojections_stacks_stackid");
+                });
+
+            modelBuilder.Entity("SwarmServiceStat", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmservicestats_platforms_platformid");
                 });
 
             modelBuilder.Entity("SwarmTaskProjection", b =>

@@ -8,6 +8,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Volumes;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -20,6 +21,7 @@ namespace Application.Services;
 internal sealed class VolumeContentService(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IImageConnector> imageConnectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IVolumeHelperImageResolver helperImageResolver,
     IAgentRuntimeImageResolver agentRuntimeImageResolver,
     ILogger<VolumeContentService> logger)
@@ -29,6 +31,7 @@ internal sealed class VolumeContentService(
 
     private const string HelperLauncherExecutable = "/bin/sh";
     private const string HelperLauncherName = "citadel-volume-helper";
+    private const string NodeHelperExecutable = "/app/Citadel.Agent.VolumeHelper";
     private const string HelperLauncherScript = """
         for executable in \
           ./Citadel.VolumeHelper \
@@ -112,7 +115,7 @@ internal sealed class VolumeContentService(
 
         await using (session)
         {
-            var args = BuildHelperCommand(
+            var args = session.BuildHelperCommand(
                 "volume-helper",
                 "list",
                 "--root",
@@ -173,7 +176,7 @@ internal sealed class VolumeContentService(
 
         try
         {
-            var inspectArgs = BuildHelperCommand(
+            var inspectArgs = session.BuildHelperCommand(
                 "volume-helper",
                 "inspect",
                 "--root",
@@ -203,14 +206,14 @@ internal sealed class VolumeContentService(
                 return Result.Failure<VolumeDownloadStream>(new BadRequestError("Volume path type is not downloadable."));
 
             var streamArgs = entryType == VolumeFileEntryType.Directory
-                ? BuildHelperCommand(
+                ? session.BuildHelperCommand(
                     "volume-helper",
                     "stream-directory",
                     "--root",
                     HelperRoot,
                     "--path",
                     command.Path.ApiPath)
-                : BuildHelperCommand(
+                : session.BuildHelperCommand(
                     "volume-helper",
                     "stream-file",
                     "--root",
@@ -271,6 +274,8 @@ internal sealed class VolumeContentService(
             command.PlatformId,
             command.ConnectorType,
             command.VolumeName,
+            command.Platform,
+            command.DockerNodeId,
             cancellationToken);
 
     private async Task<Result<HelperContainerSession>> CreateAndStartHelperAsync(
@@ -281,6 +286,8 @@ internal sealed class VolumeContentService(
             command.PlatformId,
             command.ConnectorType,
             command.VolumeName,
+            command.Platform,
+            command.DockerNodeId,
             cancellationToken);
 
     private async Task<Result<HelperContainerSession>> CreateAndStartHelperAsync(
@@ -288,32 +295,50 @@ internal sealed class VolumeContentService(
         Guid platformId,
         PlatformConnectorType connectorType,
         string volumeName,
+        Platform? platform,
+        string? dockerNodeId,
         CancellationToken cancellationToken)
     {
         var containerConnector = containerConnectorFactory.GetConnector(connectorType);
         var imageConnector = imageConnectorFactory.GetConnector(connectorType);
-        var helperPlan = await ResolveHelperContainerPlanAsync(
-            containerConnector,
-            platformAddress,
-            platformId,
-            connectorType,
-            volumeName,
-            cancellationToken);
+        var targetsWorkerNode = TargetsWorkerNode(platform, dockerNodeId);
+        IVolumeContainerRuntime runtime = targetsWorkerNode
+            ? new SwarmNodeVolumeContainerRuntime(swarmNodeRuntimeConnector, platform!, dockerNodeId!)
+            : new ConnectorVolumeContainerRuntime(containerConnector);
+        var helperPlan = targetsWorkerNode
+            ? VolumeHelperContainerPlan.Create(
+                helperImageResolver.Resolve(PlatformConnectorType.Agent),
+                volumeName)
+            : await ResolveHelperContainerPlanAsync(
+                containerConnector,
+                platformAddress,
+                platformId,
+                connectorType,
+                volumeName,
+                cancellationToken);
         var helperImage = helperPlan.Image;
         var containerName = $"citadel-volume-helper-{Guid.CreateVersion7():N}";
 
         var create = await TryCreateHelperAsync(
-            containerConnector,
+            runtime,
             platformAddress,
             platformId,
             helperPlan,
             containerName,
+            targetsWorkerNode,
             cancellationToken);
 
         if (!create.IsSuccess(out var containerId, out var createError))
         {
             if (!IsMissingHelperImageError(createError))
                 return Result.Failure<HelperContainerSession>(createError);
+
+            if (targetsWorkerNode)
+            {
+                return Result.Failure<HelperContainerSession>(
+                    new BadGatewayError(
+                        $"Citadel volume helper image '{helperImage}' is not available on Node '{dockerNodeId}'. Repair or upgrade node-agent coverage before browsing this Volume."));
+            }
 
             if (!CanPullHelperImage(helperImage))
             {
@@ -329,11 +354,12 @@ internal sealed class VolumeContentService(
             }
 
             create = await TryCreateHelperAsync(
-                containerConnector,
+                runtime,
                 platformAddress,
                 platformId,
                 helperPlan,
                 containerName,
+                useDirectHelperExecutable: false,
                 cancellationToken);
 
             if (!create.IsSuccess(out containerId, out createError))
@@ -345,7 +371,12 @@ internal sealed class VolumeContentService(
             }
         }
 
-        return await StartHelperAsync(containerConnector, platformAddress, containerId, cancellationToken);
+        return await StartHelperAsync(
+            runtime,
+            platformAddress,
+            containerId,
+            targetsWorkerNode,
+            cancellationToken);
     }
 
     private async Task<VolumeHelperContainerPlan> ResolveHelperContainerPlanAsync(
@@ -401,11 +432,12 @@ internal sealed class VolumeContentService(
     }
 
     private static async Task<Result<string>> TryCreateHelperAsync(
-        IContainerConnector containerConnector,
+        IVolumeContainerRuntime containerConnector,
         string platformAddress,
         Guid platformId,
         VolumeHelperContainerPlan helperPlan,
         string containerName,
+        bool useDirectHelperExecutable,
         CancellationToken cancellationToken)
         => await containerConnector.CreateAsync(
             new CreateContainerCommand(
@@ -425,6 +457,7 @@ internal sealed class VolumeContentService(
                 RestartPolicy: null,
                 Labels: new Dictionary<string, string>
                 {
+                    ["com.citadel.system"] = "true",
                     ["citadel.volume-browser"] = "true",
                     ["citadel.platform-id"] = platformId.ToString(),
                     ["citadel.volume-name"] = helperPlan.VolumeName
@@ -438,14 +471,17 @@ internal sealed class VolumeContentService(
                 SecurityOpt: ["no-new-privileges"],
                 NetworkMode: "none",
                 Networks: null,
-                EntryPoint: [HelperLauncherExecutable],
-                Command: BuildHelperCommandArguments("volume-helper", "idle")),
+                EntryPoint: [useDirectHelperExecutable ? NodeHelperExecutable : HelperLauncherExecutable],
+                Command: useDirectHelperExecutable
+                    ? ["volume-helper", "idle"]
+                    : BuildHelperCommandArguments("volume-helper", "idle")),
             cancellationToken);
 
     private async Task<Result<HelperContainerSession>> StartHelperAsync(
-        IContainerConnector containerConnector,
+        IVolumeContainerRuntime containerConnector,
         string platformAddress,
         string containerId,
+        bool useDirectHelperExecutable,
         CancellationToken cancellationToken)
     {
         var started = await containerConnector.PatchAsync(
@@ -477,7 +513,12 @@ internal sealed class VolumeContentService(
             return Result.Failure<HelperContainerSession>(runningError);
         }
 
-        return new HelperContainerSession(containerConnector, platformAddress, containerId, logger);
+        return new HelperContainerSession(
+            containerConnector,
+            platformAddress,
+            containerId,
+            useDirectHelperExecutable,
+            logger);
     }
 
     private static string[] BuildHelperCommand(params string[] args)
@@ -649,6 +690,11 @@ internal sealed class VolumeContentService(
     private static bool IsSupportedConnector(PlatformConnectorType connectorType)
         => connectorType is PlatformConnectorType.Local or PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent;
 
+    private static bool TargetsWorkerNode(Platform? platform, string? dockerNodeId)
+        => platform?.PlatformDescriptor is DockerSwarmPlatformDescriptor swarm
+           && !string.IsNullOrWhiteSpace(dockerNodeId)
+           && !string.Equals(swarm.NodeID, dockerNodeId, StringComparison.Ordinal);
+
     private static Error MapHelperError(string code, string? message)
         => code switch
         {
@@ -699,7 +745,7 @@ internal sealed class VolumeContentService(
     }
 
     private static async Task DeleteHelperAsync(
-        IContainerConnector connector,
+        IVolumeContainerRuntime connector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -710,7 +756,7 @@ internal sealed class VolumeContentService(
     }
 
     private static async Task<string?> GetHelperStartFailureAsync(
-        IContainerConnector connector,
+        IVolumeContainerRuntime connector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -727,7 +773,7 @@ internal sealed class VolumeContentService(
     }
 
     private static async Task<Result> EnsureHelperIsRunningAsync(
-        IContainerConnector connector,
+        IVolumeContainerRuntime connector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -749,7 +795,7 @@ internal sealed class VolumeContentService(
     }
 
     private static async Task<string?> ReadHelperLogsAsync(
-        IContainerConnector connector,
+        IVolumeContainerRuntime connector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -825,18 +871,106 @@ internal sealed class VolumeContentService(
         }
     }
 
+    private interface IVolumeContainerRuntime
+    {
+        Task<Result<string>> CreateAsync(CreateContainerCommand command, CancellationToken cancellationToken);
+        Task<Result> PatchAsync(PatchContainerCommand command, CancellationToken cancellationToken);
+        Task<Result> DeleteAsync(DeleteContainerCommand command, CancellationToken cancellationToken);
+        Task<Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand command, CancellationToken cancellationToken);
+        Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken);
+        IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(
+            StreamContainerLogsCommand command,
+            CancellationToken cancellationToken);
+    }
+
+    private sealed class ConnectorVolumeContainerRuntime(IContainerConnector connector) : IVolumeContainerRuntime
+    {
+        public Task<Result<string>> CreateAsync(CreateContainerCommand command, CancellationToken cancellationToken) =>
+            connector.CreateAsync(command, cancellationToken);
+
+        public Task<Result> PatchAsync(PatchContainerCommand command, CancellationToken cancellationToken) =>
+            connector.PatchAsync(command, cancellationToken);
+
+        public Task<Result> DeleteAsync(DeleteContainerCommand command, CancellationToken cancellationToken) =>
+            connector.DeleteAsync(command, cancellationToken);
+
+        public Task<Result<ContainerInspectionInfo>> InspectAsync(
+            InspectContainerCommand command,
+            CancellationToken cancellationToken) => connector.InspectAsync(command, cancellationToken);
+
+        public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken) => connector.ExecBinaryAsync(platformAddress, request, cancellationToken);
+
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(
+            StreamContainerLogsCommand command,
+            CancellationToken cancellationToken) => connector.StreamLogsAsync(command, cancellationToken);
+    }
+
+    private sealed class SwarmNodeVolumeContainerRuntime(
+        ISwarmNodeRuntimeConnector connector,
+        Platform platform,
+        string dockerNodeId) : IVolumeContainerRuntime
+    {
+        public Task<Result<string>> CreateAsync(CreateContainerCommand command, CancellationToken cancellationToken) =>
+            connector.CreateContainerAsync(platform, dockerNodeId, command, cancellationToken);
+
+        public Task<Result> PatchAsync(PatchContainerCommand command, CancellationToken cancellationToken) =>
+            connector.PatchContainersAsync(
+                platform,
+                dockerNodeId,
+                command.Action,
+                [.. command.ContainerIds],
+                cancellationToken);
+
+        public Task<Result> DeleteAsync(DeleteContainerCommand command, CancellationToken cancellationToken) =>
+            connector.DeleteContainersAsync(
+                platform,
+                dockerNodeId,
+                [.. command.ContainerIds],
+                command.Volume ?? false,
+                command.Force ?? false,
+                command.Link ?? false,
+                cancellationToken);
+
+        public Task<Result<ContainerInspectionInfo>> InspectAsync(
+            InspectContainerCommand command,
+            CancellationToken cancellationToken) =>
+            connector.InspectContainerAsync(platform, dockerNodeId, command.ContainerId, cancellationToken);
+
+        public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken) =>
+            connector.ExecBinaryAsync(platform, dockerNodeId, request, cancellationToken);
+
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(
+            StreamContainerLogsCommand command,
+            CancellationToken cancellationToken) =>
+            connector.StreamContainerLogsAsync(platform, dockerNodeId, command.ContainerId, cancellationToken);
+    }
+
     private sealed class HelperContainerSession(
-        IContainerConnector containerConnector,
+        IVolumeContainerRuntime containerConnector,
         string platformAddress,
         string containerId,
+        bool useDirectHelperExecutable,
         ILogger logger)
         : IAsyncDisposable
     {
         private bool disposed;
 
-        public IContainerConnector ContainerConnector { get; } = containerConnector;
+        public IVolumeContainerRuntime ContainerConnector { get; } = containerConnector;
         public string PlatformAddress { get; } = platformAddress;
         public string ContainerId { get; } = containerId;
+
+        public string[] BuildHelperCommand(params string[] args) => useDirectHelperExecutable
+            ? [NodeHelperExecutable, .. args]
+            : VolumeContentService.BuildHelperCommand(args);
 
         public async ValueTask DisposeAsync()
         {

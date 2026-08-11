@@ -24,7 +24,10 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
         isPending: false,
         run: () => {
           if (!canExecute || !selected) return;
-          navigate(`/platforms/${currentPlatform?.id}/images/${formatId(selected.dockerImageId)}/`);
+          const nodeQuery = selected.dockerNodeId
+            ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
+            : '';
+          navigate(`/platforms/${currentPlatform?.id}/images/${formatId(selected.dockerImageId)}/${nodeQuery}`);
         },
       };
     },
@@ -34,7 +37,10 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
     type: 'command',
     icon: Trash,
     mutateKey: 'deleteImages',
-    canExecute: () => true,
+    canExecute: (resources) => {
+      const selected = Array.isArray(resources) ? resources : [resources];
+      return selected.every((resource) => !resource.dockerNodeId);
+    },
     separatorBefore: true,
     confirm: true,
     destructive: true,

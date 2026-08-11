@@ -9,6 +9,10 @@ import {
   PlatformResourceSummary,
 } from './platform-stats';
 
+vi.mock('@/features/swarm/hooks/useSwarmOverview', () => ({
+  useSwarmOverview: () => ({ overview: undefined, isLoading: false, error: undefined }),
+}));
+
 describe('platform disk statistics', () => {
   it('describes the connector without presenting a local Core version as an agent', () => {
     expect(

@@ -51,6 +51,12 @@ namespace Domain;
 [JsonSerializable(typeof(IReadOnlyList<SwarmSecretProjection>))]
 [JsonSerializable(typeof(SwarmConfigProjection))]
 [JsonSerializable(typeof(IReadOnlyList<SwarmConfigProjection>))]
+[JsonSerializable(typeof(SwarmNodeImageProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmNodeImageProjection>))]
+[JsonSerializable(typeof(SwarmNodeVolumeProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmNodeVolumeProjection>))]
+[JsonSerializable(typeof(SwarmNodeNetworkProjection))]
+[JsonSerializable(typeof(IReadOnlyList<SwarmNodeNetworkProjection>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(string[]))]
 public partial class PlatformJsonContext : JsonSerializerContext

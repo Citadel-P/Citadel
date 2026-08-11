@@ -126,6 +126,13 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
             .SendAsync("SwarmInventoryUpdated", SwarmInventoryView.Map(platformId, snapshot), cancellationToken);
 
+    public Task SendSwarmNodeLocalResources(
+        SwarmNodeLocalResourceSnapshot snapshot,
+        CancellationToken cancellationToken = default) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(snapshot.PlatformId))
+            .SendAsync("SwarmNodeLocalResourcesUpdated", SwarmNodeLocalResourcesView.Map(snapshot), cancellationToken);
+
     public Task SendSwarmNodeAgentCoverageChanged(
         Guid platformId,
         CancellationToken cancellationToken = default) =>

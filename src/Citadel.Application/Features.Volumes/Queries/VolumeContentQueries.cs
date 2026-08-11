@@ -1,8 +1,11 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
+using Domain.Entities.Platforms;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -12,7 +15,8 @@ namespace Application.Features.Volumes.Queries;
 public sealed record ListVolumeDirectory(
     Guid PlatformId,
     string VolumeName,
-    string? Path) : IQuery<Result<VolumeDirectoryListing>>
+    string? Path,
+    string? DockerNodeId = null) : IQuery<Result<VolumeDirectoryListing>>
 {
     internal sealed class Validator : AbstractValidator<ListVolumeDirectory>
     {
@@ -28,7 +32,8 @@ public sealed record ListVolumeDirectory(
 public sealed record OpenVolumeDownload(
     Guid PlatformId,
     string VolumeName,
-    string? Path) : IQuery<Result<VolumeDownloadStream>>
+    string? Path,
+    string? DockerNodeId = null) : IQuery<Result<VolumeDownloadStream>>
 {
     internal sealed class Validator : AbstractValidator<OpenVolumeDownload>
     {
@@ -41,8 +46,10 @@ public sealed record OpenVolumeDownload(
 }
 
 internal sealed class ListVolumeDirectoryHandler(
+    IUnitOfWork unitOfWork,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IVolumePathNormalizer pathNormalizer,
     IVolumeContentService volumeContentService)
     : IQueryHandler<ListVolumeDirectory, Result<VolumeDirectoryListing>>
@@ -53,31 +60,63 @@ internal sealed class ListVolumeDirectoryHandler(
         if (normalizedPath.IsFailure(out var pathError, out var path))
             return Result.Failure<VolumeDirectoryListing>(pathError);
 
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var platformError))
-            return Result.Failure<VolumeDirectoryListing>(platformError);
+        var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(query.PlatformId, cancellationToken);
+        if (persistedPlatform is null)
+            return Result.Failure<VolumeDirectoryListing>(new NotFoundError("Platform not found."));
 
-        var volumeConnector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-        var volumeExists = await volumeConnector.InspectVolumeAsync(
-            new InspectDockerVolumeCommand(platform.Address, query.VolumeName),
-            cancellationToken);
+        var isSwarm = persistedPlatform.PlatformDescriptor is DockerSwarmPlatformDescriptor;
+        if (isSwarm && string.IsNullOrWhiteSpace(query.DockerNodeId))
+        {
+            return Result.Failure<VolumeDirectoryListing>(
+                new BadRequestError("Select the owning Swarm Node before browsing this Volume."));
+        }
+
+        string platformAddress;
+        PlatformConnectorType connectorType;
+        Result<DockerVolumeResult> volumeExists;
+        if (isSwarm)
+        {
+            platformAddress = persistedPlatform.Address;
+            connectorType = persistedPlatform.ConnectorType;
+            volumeExists = await swarmNodeRuntimeConnector.InspectVolumeAsync(
+                persistedPlatform,
+                query.DockerNodeId!,
+                query.VolumeName,
+                cancellationToken);
+        }
+        else
+        {
+            if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var platformError))
+                return Result.Failure<VolumeDirectoryListing>(platformError);
+
+            platformAddress = platform.Address;
+            connectorType = platform.ConnectorType;
+            volumeExists = await volumeConnectorFactory.GetConnector(connectorType).InspectVolumeAsync(
+                new InspectDockerVolumeCommand(platformAddress, query.VolumeName),
+                cancellationToken);
+        }
 
         if (volumeExists.IsFailure(out var volumeError))
             return Result.Failure<VolumeDirectoryListing>(volumeError);
 
         return await volumeContentService.ListDirectoryAsync(
             new ListVolumeDirectoryCommand(
-                platform.Address,
+                platformAddress,
                 query.PlatformId,
-                platform.ConnectorType,
+                connectorType,
                 query.VolumeName,
-                path),
+                path,
+                persistedPlatform,
+                query.DockerNodeId),
             cancellationToken);
     }
 }
 
 internal sealed class OpenVolumeDownloadHandler(
+    IUnitOfWork unitOfWork,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IVolumePathNormalizer pathNormalizer,
     IVolumeContentService volumeContentService)
     : IQueryHandler<OpenVolumeDownload, Result<VolumeDownloadStream>>
@@ -88,24 +127,54 @@ internal sealed class OpenVolumeDownloadHandler(
         if (normalizedPath.IsFailure(out var pathError, out var path))
             return Result.Failure<VolumeDownloadStream>(pathError);
 
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var platformError))
-            return Result.Failure<VolumeDownloadStream>(platformError);
+        var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(query.PlatformId, cancellationToken);
+        if (persistedPlatform is null)
+            return Result.Failure<VolumeDownloadStream>(new NotFoundError("Platform not found."));
 
-        var volumeConnector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-        var volumeExists = await volumeConnector.InspectVolumeAsync(
-            new InspectDockerVolumeCommand(platform.Address, query.VolumeName),
-            cancellationToken);
+        var isSwarm = persistedPlatform.PlatformDescriptor is DockerSwarmPlatformDescriptor;
+        if (isSwarm && string.IsNullOrWhiteSpace(query.DockerNodeId))
+        {
+            return Result.Failure<VolumeDownloadStream>(
+                new BadRequestError("Select the owning Swarm Node before downloading from this Volume."));
+        }
+
+        string platformAddress;
+        PlatformConnectorType connectorType;
+        Result<DockerVolumeResult> volumeExists;
+        if (isSwarm)
+        {
+            platformAddress = persistedPlatform.Address;
+            connectorType = persistedPlatform.ConnectorType;
+            volumeExists = await swarmNodeRuntimeConnector.InspectVolumeAsync(
+                persistedPlatform,
+                query.DockerNodeId!,
+                query.VolumeName,
+                cancellationToken);
+        }
+        else
+        {
+            if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var platformError))
+                return Result.Failure<VolumeDownloadStream>(platformError);
+
+            platformAddress = platform.Address;
+            connectorType = platform.ConnectorType;
+            volumeExists = await volumeConnectorFactory.GetConnector(connectorType).InspectVolumeAsync(
+                new InspectDockerVolumeCommand(platformAddress, query.VolumeName),
+                cancellationToken);
+        }
 
         if (volumeExists.IsFailure(out var volumeError))
             return Result.Failure<VolumeDownloadStream>(volumeError);
 
         return await volumeContentService.OpenDownloadAsync(
             new DownloadVolumePathCommand(
-                platform.Address,
+                platformAddress,
                 query.PlatformId,
-                platform.ConnectorType,
+                connectorType,
                 query.VolumeName,
-                path),
+                path,
+                persistedPlatform,
+                query.DockerNodeId),
             cancellationToken);
     }
 }

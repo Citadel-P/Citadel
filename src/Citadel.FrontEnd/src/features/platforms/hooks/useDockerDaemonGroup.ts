@@ -50,6 +50,10 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     listenersRef.current?.onSwarmNodeAgentCoverageChanged?.(updatedPlatformId);
   }, []);
 
+  const handleSwarmNodeLocalResourcesUpdated = useCallback((snapshot: SwarmNodeLocalResourcesUpdate) => {
+    listenersRef.current?.onSwarmNodeLocalResourcesUpdated?.(snapshot);
+  }, []);
+
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
       hub.on('ImageEventReceived', handleImageEventReceived);
@@ -58,6 +62,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.on('ContainerEventReceived', handleContainerEventReceived);
       hub.on('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
       hub.on('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
+      hub.on('SwarmNodeLocalResourcesUpdated', handleSwarmNodeLocalResourcesUpdated);
     },
     [
       handleContainerEventReceived,
@@ -65,6 +70,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       handleVolumeEventReceived,
       handleNetworkEventReceived,
       handleSwarmNodeAgentCoverageChanged,
+      handleSwarmNodeLocalResourcesUpdated,
       handleSwarmInventoryUpdated,
     ],
   );
@@ -77,6 +83,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.off('ContainerEventReceived', handleContainerEventReceived);
       hub.off('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
       hub.off('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
+      hub.off('SwarmNodeLocalResourcesUpdated', handleSwarmNodeLocalResourcesUpdated);
     },
     [
       handleContainerEventReceived,
@@ -84,6 +91,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       handleVolumeEventReceived,
       handleNetworkEventReceived,
       handleSwarmNodeAgentCoverageChanged,
+      handleSwarmNodeLocalResourcesUpdated,
       handleSwarmInventoryUpdated,
     ],
   );
@@ -125,6 +133,7 @@ export type DockerDaemonListeners = {
   onNetworkEvent?: (event: NetworkEvent) => void;
   onSwarmInventoryUpdated?: (inventory: SwarmInventoryUpdate) => void;
   onSwarmNodeAgentCoverageChanged?: (platformId: string) => void;
+  onSwarmNodeLocalResourcesUpdated?: (snapshot: SwarmNodeLocalResourcesUpdate) => void;
 };
 
 export type SwarmInventoryUpdate = {
@@ -135,4 +144,11 @@ export type SwarmInventoryUpdate = {
   networks: SwarmNetworksView;
   secrets: SwarmSecretsView;
   configs: SwarmConfigsView;
+};
+
+export type SwarmNodeLocalResourcesUpdate = {
+  platformId: string;
+  images: ImageView[];
+  volumes: DockerVolumeResultView[];
+  networks: DockerNetworkResultView[];
 };

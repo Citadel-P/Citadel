@@ -85,7 +85,7 @@ export const SwarmPlatformSummary = ({
           icon={Network}
           iconClassName="text-cyan-500"
           label="Networks"
-          value={networkCount}
+          value={overview?.networkCount ?? networkCount}
           to={`/platforms/${platformId}/networks`}
         />
         <PlatformResourceMetric

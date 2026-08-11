@@ -1,11 +1,19 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Citadel.Containers.V1;
+using Citadel.Images.V1;
+using Citadel.Networks.V1;
 using Citadel.Platforms.V1;
+using Citadel.SharedModels.V1;
+using Citadel.Volumes.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Swarm;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Google.Protobuf;
@@ -18,9 +26,287 @@ namespace Infrastructure.Connectors.EdgeAgentConnectors;
 
 internal sealed class SwarmNodeRuntimeConnector(
     IConnectorFactory<IContainerConnector> connectorFactory,
+    IConnectorFactory<IImageConnector> imageConnectorFactory,
+    IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
+    IConnectorFactory<INetworkConnector> networkConnectorFactory,
     IEdgeAgentCommandRouter commandRouter) : ISwarmNodeRuntimeConnector
 {
     private const int MaximumLogBytes = 4 * 1024 * 1024;
+
+    public async Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+            return await imageConnectorFactory.GetConnector(platform.ConnectorType)
+                .ListImagesAsync(platform.Address, cancellationToken);
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.ImageList,
+            new ListImagesRequest().ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess && response.Payload is not null
+            ? ListImageResponse.Parser.ParseFrom(response.Payload).Images.Map()
+            : Result.Failure<IReadOnlyList<ImageResult>>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<IReadOnlyList<DockerVolumeResult>>> ListVolumesAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            var result = await volumeConnectorFactory.GetConnector(platform.ConnectorType).ListVolumesAsync(
+                new ListdDockerVolumesCommand(platform.Address, null, null, null),
+                cancellationToken);
+            return result.IsSuccess(out var volumes, out var error)
+                ? Result.Success<IReadOnlyList<DockerVolumeResult>>([.. volumes])
+                : Result.Failure<IReadOnlyList<DockerVolumeResult>>(error!);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.VolumeList,
+            new ListVolumesRequest().ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess && response.Payload is not null
+            ? Result.Success<IReadOnlyList<DockerVolumeResult>>(
+                [.. ListVolumesResponse.Parser.ParseFrom(response.Payload).Map()])
+            : Result.Failure<IReadOnlyList<DockerVolumeResult>>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<IReadOnlyList<DockerNetworkResult>>> ListNetworksAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            var result = await networkConnectorFactory.GetConnector(platform.ConnectorType).ListNetworksAsync(
+                new ListNetworksCommand(platform.Address),
+                cancellationToken);
+            return result.IsSuccess(out var networks, out var error)
+                ? Result.Success<IReadOnlyList<DockerNetworkResult>>([.. networks])
+                : Result.Failure<IReadOnlyList<DockerNetworkResult>>(error!);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.NetworkList,
+            new ListNetworksRequest().ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess && response.Payload is not null
+            ? Result.Success<IReadOnlyList<DockerNetworkResult>>(
+                [.. ListNetworksResponse.Parser.ParseFrom(response.Payload).Map()])
+            : Result.Failure<IReadOnlyList<DockerNetworkResult>>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<InspectImageResult>> InspectImageAsync(
+        Platform platform,
+        string dockerNodeId,
+        string dockerImageId,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            return await imageConnectorFactory.GetConnector(platform.ConnectorType).InspectImageAsync(
+                new InspectImageCommand(platform.Address, dockerImageId),
+                cancellationToken);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.ImageInspect,
+            new InspectImageRequest { Id = dockerImageId }.ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+        return response.IsSuccess && response.Payload is not null
+            ? InspectImageResponse.Parser.ParseFrom(response.Payload).Map()
+            : Result.Failure<InspectImageResult>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<DockerVolumeResult>> InspectVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        string volumeName,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            return await volumeConnectorFactory.GetConnector(platform.ConnectorType).InspectVolumeAsync(
+                new InspectDockerVolumeCommand(platform.Address, volumeName),
+                cancellationToken);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.VolumeInspect,
+            new InspectVolumeRequest { Name = volumeName }.ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+        return response.IsSuccess && response.Payload is not null
+            ? VolumeResponse.Parser.ParseFrom(response.Payload).Map()
+            : Result.Failure<DockerVolumeResult>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<DockerNetworkDetails>> InspectNetworkAsync(
+        Platform platform,
+        string dockerNodeId,
+        string dockerNetworkId,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            return await networkConnectorFactory.GetConnector(platform.ConnectorType).InspectNetworkAsync(
+                new InspectNetworkCommand(platform.Address, dockerNetworkId),
+                cancellationToken);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.NetworkInspect,
+            new InspectNetworkRequest { Id = dockerNetworkId }.ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+        return response.IsSuccess && response.Payload is not null
+            ? InspectNetworkResponse.Parser.ParseFrom(response.Payload).Map()
+            : Result.Failure<DockerNetworkDetails>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result<string>> CreateContainerAsync(
+        Platform platform,
+        string dockerNodeId,
+        CreateContainerCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+            return await connectorFactory.GetConnector(platform.ConnectorType).CreateAsync(command, cancellationToken);
+
+        Dictionary<string, Citadel.SharedModels.V1.EndpointSettings>? networks = [];
+        foreach (var (key, value) in command.Networks ?? [])
+            networks[key] = value.MapAgent();
+
+        var request = new CreateContainerRequest
+        {
+            ImageId = command.ImageId,
+            Name = command.Name ?? string.Empty,
+            WorkingDir = command.WorkingDir,
+            User = command.User,
+            MemoryLimit = command.MemoryLimit,
+            CpuQuota = command.CpuQuota,
+            MemoryReservation = command.MemoryReservation,
+            MemorySwap = command.MemorySwap,
+            PidsLimit = command.PidsLimit,
+            AutoRemove = command.AutoRemove ?? false,
+            Privileged = command.Privileged ?? false,
+            ReadonlyRootfs = command.ReadonlyRootfs,
+            RestartPolicy = command.RestartPolicy.Map(),
+            Labels = { command.Labels ?? [] },
+            EnvVars = { command.EnvVars ?? [] },
+            Ports = { command.Ports ?? [] },
+            Volumes = { command.Volumes ?? [] },
+            Mounts = { command.Mounts?.Select(static mount => mount.MapAgent()) ?? [] },
+            CapAdd = { command.CapAdd ?? [] },
+            CapDrop = { command.CapDrop ?? [] },
+            SecurityOpt = { command.SecurityOpt ?? [] },
+            NetworkMode = command.NetworkMode,
+            Networks = { networks },
+            EntryPoint = { command.EntryPoint ?? [] },
+            Command = { command.Command ?? [] }
+        };
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.ContainerCreate,
+            request.ToByteArray(),
+            TimeSpan.FromMinutes(2),
+            correlationId: null,
+            cancellationToken);
+        return response.IsSuccess && response.Payload is not null
+            ? CreateContainerResponse.Parser.ParseFrom(response.Payload).ContainerId
+            : Result.Failure<string>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+        Platform platform,
+        string dockerNodeId,
+        ContainerBinaryExecRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+        {
+            return connectorFactory.GetConnector(platform.ConnectorType).ExecBinaryAsync(
+                platform.Address,
+                request,
+                cancellationToken);
+        }
+
+        var rpcRequest = new ExecBinaryRequest
+        {
+            ContainerId = request.ContainerId,
+            Cmd = { request.Command },
+            Env = { request.Environment?.ToDictionary(static item => item.Key, static item => item.Value) ?? [] },
+            AttachStdout = request.AttachStdout,
+            AttachStderr = request.AttachStderr,
+            Tty = request.Tty
+        };
+        var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var stream = commandRouter.SendServerStreamAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.ContainerExecBinary,
+            rpcRequest.ToByteArray(),
+            Timeout.InfiniteTimeSpan,
+            correlationId: null,
+            sessionCancellation.Token);
+        var exitCode = new TaskCompletionSource<int?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disposed = 0;
+
+        return Task.FromResult(Result.Success<ContainerBinaryExecResult>(new ContainerBinaryExecResult
+        {
+            Output = ReadBinaryOutputAsync(stream, exitCode, sessionCancellation.Token),
+            GetExitCodeAsync = async ct => await exitCode.Task.WaitAsync(ct).ConfigureAwait(false),
+            CleanupAsync = () =>
+            {
+                if (Interlocked.Exchange(ref disposed, 1) != 0)
+                    return ValueTask.CompletedTask;
+
+                sessionCancellation.Cancel();
+                sessionCancellation.Dispose();
+                exitCode.TrySetCanceled();
+                return ValueTask.CompletedTask;
+            }
+        }));
+    }
+
     public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(
         Platform platform,
         string dockerNodeId,
@@ -390,4 +676,59 @@ internal sealed class SwarmNodeRuntimeConnector(
     private static bool UsesManager(Platform platform, string dockerNodeId)
         => platform.PlatformDescriptor is DockerSwarmPlatformDescriptor descriptor
            && string.Equals(descriptor.NodeID, dockerNodeId, StringComparison.Ordinal);
+
+    private static async IAsyncEnumerable<ContainerBinaryExecChunk> ReadBinaryOutputAsync(
+        IAsyncEnumerable<EdgeAgentStreamItem> stream,
+        TaskCompletionSource<int?> exitCode,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var item in stream.WithCancellation(cancellationToken))
+            {
+                if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
+                {
+                    exitCode.TrySetResult(1);
+                    yield return new ContainerBinaryExecChunk(
+                        ContainerExecStream.Stderr,
+                        Encoding.UTF8.GetBytes(item.ErrorMessage));
+                    yield break;
+                }
+
+                if (item.Completed)
+                {
+                    exitCode.TrySetResult(null);
+                    yield break;
+                }
+
+                if (item.Payload is not { Length: > 0 })
+                    continue;
+
+                var message = ExecServerMessage.Parser.ParseFrom(item.Payload);
+                switch (message.MsgCase)
+                {
+                    case ExecServerMessage.MsgOneofCase.Output when message.Output?.Data.Length > 0:
+                        yield return new ContainerBinaryExecChunk(
+                            message.Output.Stream == StreamType.Stderr
+                                ? ContainerExecStream.Stderr
+                                : ContainerExecStream.Stdout,
+                            message.Output.Data.Memory);
+                        break;
+                    case ExecServerMessage.MsgOneofCase.Error:
+                        exitCode.TrySetResult(1);
+                        yield return new ContainerBinaryExecChunk(
+                            ContainerExecStream.Stderr,
+                            Encoding.UTF8.GetBytes(message.Error?.Message ?? "Binary exec failed."));
+                        yield break;
+                    case ExecServerMessage.MsgOneofCase.Exit:
+                        exitCode.TrySetResult(message.Exit?.ExitCode);
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            exitCode.TrySetResult(null);
+        }
+    }
 }

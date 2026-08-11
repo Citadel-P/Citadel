@@ -23,6 +23,7 @@ public sealed record InspectImageView(
     IDictionary<string, string> Labels,
     IEnumerable<ContainerImageResult> Containers,
     RegistryView? Registry,
+    string? DockerNodeId,
     ImageCapabilities? Capabilities = null
     )
 {
@@ -46,7 +47,8 @@ public sealed record InspectImageView(
             Layers: image.Layers,
             Labels: image.Labels,
             Containers: image.Containers,
-            Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null
+            Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null,
+            DockerNodeId: image.DockerNodeId
         );
     }
 

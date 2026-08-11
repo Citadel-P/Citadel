@@ -11,6 +11,7 @@ import { NetworkInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { SystemBadge } from '@/components/custom/system-badge';
+import { useSearchParams } from 'react-router';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetailsView> = {
   Header: {
@@ -31,7 +32,13 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
     },
   ],
   useData: (platformId: string, resourceId: string) => {
-    const { data, isLoading, error } = useRead(`inspectNetwork`, { platformId, networkId: resourceId });
+    const [searchParams] = useSearchParams();
+    const dockerNodeId = searchParams.get('dockerNodeId') ?? undefined;
+    const { data, isLoading, error } = useRead(`inspectNetwork`, {
+      platformId,
+      networkId: resourceId,
+      query: { dockerNodeId },
+    });
     return { resource: data?.data, isLoading, error };
   },
 };

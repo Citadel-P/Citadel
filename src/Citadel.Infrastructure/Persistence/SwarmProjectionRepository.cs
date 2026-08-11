@@ -48,6 +48,12 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                     SELECT 1 FROM SwarmSecretProjections WHERE PlatformId = @PlatformId AND IsStale
                     UNION ALL
                     SELECT 1 FROM SwarmConfigProjections WHERE PlatformId = @PlatformId AND IsStale
+                    UNION ALL
+                    SELECT 1 FROM SwarmNodeImageProjections WHERE PlatformId = @PlatformId AND IsStale
+                    UNION ALL
+                    SELECT 1 FROM SwarmNodeVolumeProjections WHERE PlatformId = @PlatformId AND IsStale
+                    UNION ALL
+                    SELECT 1 FROM SwarmNodeNetworkProjections WHERE PlatformId = @PlatformId AND IsStale
                 ) AS IsStale,
                 (SELECT COUNT(*)::int FROM SwarmNodeProjections WHERE PlatformId = @PlatformId) AS NodeCount,
                 (SELECT COUNT(*)::int FROM SwarmNodeProjections
@@ -69,7 +75,11 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                 UnknownServiceCount,
                 RunningTaskCount,
                 DesiredTaskCount,
-                (SELECT COUNT(*)::int FROM SwarmNetworkProjections WHERE PlatformId = @PlatformId) AS NetworkCount
+                ((SELECT COUNT(*) FROM SwarmNetworkProjections WHERE PlatformId = @PlatformId)
+                    + (SELECT COUNT(*) FROM SwarmNodeNetworkProjections WHERE PlatformId = @PlatformId))::int AS NetworkCount,
+                (SELECT COUNT(*)::int FROM SwarmNodeNetworkProjections WHERE PlatformId = @PlatformId) AS LocalNetworkCount,
+                (SELECT COUNT(*)::int FROM SwarmNodeVolumeProjections WHERE PlatformId = @PlatformId) AS VolumeCount,
+                (SELECT COUNT(*)::int FROM SwarmNodeImageProjections WHERE PlatformId = @PlatformId) AS ImageCount
             FROM ServiceSummary
             """;
         var value = await db.QuerySingleAsync<SwarmProjectionSummaryDto>(
@@ -95,7 +105,10 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                 Unknown: value.UnknownServiceCount),
             value.RunningTaskCount,
             value.DesiredTaskCount,
-            value.NetworkCount);
+            value.NetworkCount,
+            value.LocalNetworkCount,
+            value.VolumeCount,
+            value.ImageCount);
     }
 
     public async Task<IReadOnlyList<SwarmNodeProjection>> GetNodesAsync(Guid platformId, CancellationToken cancellationToken)
@@ -380,6 +393,209 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                 state.DockerVersion
             },
             transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<SwarmNodeImageProjection>> GetNodeImagesAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT image.Id, image.PlatformId, image.DockerNodeId, image.DockerImageId,
+                   image.ContentIdentity, image.Resource, image.ObservedAt, image.IsStale,
+                   node.Hostname AS NodeHostname, state.StaleReason
+            FROM SwarmNodeImageProjections image
+            LEFT JOIN SwarmNodeProjections node
+              ON node.PlatformId = image.PlatformId AND node.DockerNodeId = image.DockerNodeId
+            LEFT JOIN SwarmNodeRuntimeProjectionStates state
+              ON state.PlatformId = image.PlatformId AND state.DockerNodeId = image.DockerNodeId
+            WHERE image.PlatformId = @PlatformId
+            ORDER BY image.ContentIdentity, node.Hostname, image.DockerNodeId
+            """;
+        return (await db.QueryAsync<SwarmNodeImageProjectionDto>(
+                sql,
+                new { PlatformId = platformId },
+                transaction: tx()))
+            .Select(static value => value.ToDomain())
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<SwarmNodeVolumeProjection>> GetNodeVolumesAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT volume.PlatformId, volume.DockerNodeId, volume.VolumeName, volume.Resource,
+                   volume.ObservedAt, volume.IsStale, node.Hostname AS NodeHostname, state.StaleReason
+            FROM SwarmNodeVolumeProjections volume
+            LEFT JOIN SwarmNodeProjections node
+              ON node.PlatformId = volume.PlatformId AND node.DockerNodeId = volume.DockerNodeId
+            LEFT JOIN SwarmNodeRuntimeProjectionStates state
+              ON state.PlatformId = volume.PlatformId AND state.DockerNodeId = volume.DockerNodeId
+            WHERE volume.PlatformId = @PlatformId
+            ORDER BY volume.VolumeName, node.Hostname, volume.DockerNodeId
+            """;
+        return (await db.QueryAsync<SwarmNodeVolumeProjectionDto>(
+                sql,
+                new { PlatformId = platformId },
+                transaction: tx()))
+            .Select(static value => value.ToDomain())
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<SwarmNodeNetworkProjection>> GetNodeNetworksAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT network.PlatformId, network.DockerNodeId, network.DockerNetworkId, network.Resource,
+                   network.ObservedAt, network.IsStale, node.Hostname AS NodeHostname, state.StaleReason
+            FROM SwarmNodeNetworkProjections network
+            LEFT JOIN SwarmNodeProjections node
+              ON node.PlatformId = network.PlatformId AND node.DockerNodeId = network.DockerNodeId
+            LEFT JOIN SwarmNodeRuntimeProjectionStates state
+              ON state.PlatformId = network.PlatformId AND state.DockerNodeId = network.DockerNodeId
+            WHERE network.PlatformId = @PlatformId
+            ORDER BY (network.Resource->>'Name'), node.Hostname, network.DockerNodeId
+            """;
+        return (await db.QueryAsync<SwarmNodeNetworkProjectionDto>(
+                sql,
+                new { PlatformId = platformId },
+                transaction: tx()))
+            .Select(static value => value.ToDomain())
+            .ToArray();
+    }
+
+    public async Task<int> ReplaceNodeLocalResourcesAsync(
+        Guid platformId,
+        string dockerNodeId,
+        IReadOnlyList<SwarmNodeImageProjection> images,
+        IReadOnlyList<SwarmNodeVolumeProjection> volumes,
+        IReadOnlyList<SwarmNodeNetworkProjection> networks,
+        DateTimeOffset snapshotStartedAt,
+        CancellationToken cancellationToken)
+    {
+        var affected = await ReplaceNodeImagesAsync(platformId, dockerNodeId, images, snapshotStartedAt);
+        affected += await ReplaceNodeVolumesAsync(platformId, dockerNodeId, volumes, snapshotStartedAt);
+        affected += await ReplaceNodeNetworksAsync(platformId, dockerNodeId, networks, snapshotStartedAt);
+        return affected;
+    }
+
+    public Task<int> MarkNodeLocalResourcesStaleAsync(
+        Guid platformId,
+        string dockerNodeId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE SwarmNodeImageProjections SET IsStale = true
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId AND IsStale = false;
+            UPDATE SwarmNodeVolumeProjections SET IsStale = true
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId AND IsStale = false;
+            UPDATE SwarmNodeNetworkProjections SET IsStale = true
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId AND IsStale = false;
+            """;
+        return db.ExecuteAsync(sql, new { PlatformId = platformId, DockerNodeId = dockerNodeId }, transaction: tx());
+    }
+
+    private async Task<int> ReplaceNodeImagesAsync(
+        Guid platformId,
+        string dockerNodeId,
+        IReadOnlyList<SwarmNodeImageProjection> values,
+        DateTimeOffset snapshotStartedAt)
+    {
+        const string sql = """
+            INSERT INTO SwarmNodeImageProjections (
+                Id, PlatformId, DockerNodeId, DockerImageId, ContentIdentity, Resource, ObservedAt, IsStale)
+            SELECT value."Id", @PlatformId, @DockerNodeId, value."DockerImageId",
+                   value."ContentIdentity", value."Resource", value."ObservedAt", false
+            FROM jsonb_to_recordset(@Rows::jsonb) AS value(
+                "Id" uuid, "DockerImageId" text, "ContentIdentity" text,
+                "Resource" jsonb, "ObservedAt" timestamptz)
+            ON CONFLICT (PlatformId, DockerNodeId, DockerImageId) DO UPDATE SET
+                ContentIdentity = excluded.ContentIdentity,
+                Resource = excluded.Resource,
+                ObservedAt = excluded.ObservedAt,
+                IsStale = false
+            WHERE SwarmNodeImageProjections.ObservedAt < @SnapshotStartedAt;
+            DELETE FROM SwarmNodeImageProjections
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId
+              AND ObservedAt < @SnapshotStartedAt
+              AND NOT (DockerImageId = ANY(@Ids));
+            """;
+        var rows = JsonSerializer.Serialize(values, PlatformJsonContext.Default.IReadOnlyListSwarmNodeImageProjection);
+        return await db.ExecuteAsync(sql, new
+        {
+            PlatformId = platformId,
+            DockerNodeId = dockerNodeId,
+            Rows = rows,
+            SnapshotStartedAt = snapshotStartedAt.UtcDateTime,
+            Ids = values.Select(static value => value.DockerImageId).ToArray()
+        }, transaction: tx());
+    }
+
+    private async Task<int> ReplaceNodeVolumesAsync(
+        Guid platformId,
+        string dockerNodeId,
+        IReadOnlyList<SwarmNodeVolumeProjection> values,
+        DateTimeOffset snapshotStartedAt)
+    {
+        const string sql = """
+            INSERT INTO SwarmNodeVolumeProjections (
+                PlatformId, DockerNodeId, VolumeName, Resource, ObservedAt, IsStale)
+            SELECT @PlatformId, @DockerNodeId, value."VolumeName", value."Resource", value."ObservedAt", false
+            FROM jsonb_to_recordset(@Rows::jsonb) AS value(
+                "VolumeName" text, "Resource" jsonb, "ObservedAt" timestamptz)
+            ON CONFLICT (PlatformId, DockerNodeId, VolumeName) DO UPDATE SET
+                Resource = excluded.Resource,
+                ObservedAt = excluded.ObservedAt,
+                IsStale = false
+            WHERE SwarmNodeVolumeProjections.ObservedAt < @SnapshotStartedAt;
+            DELETE FROM SwarmNodeVolumeProjections
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId
+              AND ObservedAt < @SnapshotStartedAt
+              AND NOT (VolumeName = ANY(@Names));
+            """;
+        var rows = JsonSerializer.Serialize(values, PlatformJsonContext.Default.IReadOnlyListSwarmNodeVolumeProjection);
+        return await db.ExecuteAsync(sql, new
+        {
+            PlatformId = platformId,
+            DockerNodeId = dockerNodeId,
+            Rows = rows,
+            SnapshotStartedAt = snapshotStartedAt.UtcDateTime,
+            Names = values.Select(static value => value.VolumeName).ToArray()
+        }, transaction: tx());
+    }
+
+    private async Task<int> ReplaceNodeNetworksAsync(
+        Guid platformId,
+        string dockerNodeId,
+        IReadOnlyList<SwarmNodeNetworkProjection> values,
+        DateTimeOffset snapshotStartedAt)
+    {
+        const string sql = """
+            INSERT INTO SwarmNodeNetworkProjections (
+                PlatformId, DockerNodeId, DockerNetworkId, Resource, ObservedAt, IsStale)
+            SELECT @PlatformId, @DockerNodeId, value."DockerNetworkId", value."Resource", value."ObservedAt", false
+            FROM jsonb_to_recordset(@Rows::jsonb) AS value(
+                "DockerNetworkId" text, "Resource" jsonb, "ObservedAt" timestamptz)
+            ON CONFLICT (PlatformId, DockerNodeId, DockerNetworkId) DO UPDATE SET
+                Resource = excluded.Resource,
+                ObservedAt = excluded.ObservedAt,
+                IsStale = false
+            WHERE SwarmNodeNetworkProjections.ObservedAt < @SnapshotStartedAt;
+            DELETE FROM SwarmNodeNetworkProjections
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId
+              AND ObservedAt < @SnapshotStartedAt
+              AND NOT (DockerNetworkId = ANY(@Ids));
+            """;
+        var rows = JsonSerializer.Serialize(values, PlatformJsonContext.Default.IReadOnlyListSwarmNodeNetworkProjection);
+        return await db.ExecuteAsync(sql, new
+        {
+            PlatformId = platformId,
+            DockerNodeId = dockerNodeId,
+            Rows = rows,
+            SnapshotStartedAt = snapshotStartedAt.UtcDateTime,
+            Ids = values.Select(static value => value.DockerNetworkId).ToArray()
+        }, transaction: tx());
     }
 
     public async Task<int> ReplaceAsync(Guid platformId, SwarmProjectionSnapshot snapshot, CancellationToken cancellationToken)

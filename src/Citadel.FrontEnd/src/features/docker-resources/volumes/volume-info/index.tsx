@@ -9,6 +9,7 @@ import { VolumeInfoTable } from './volume-info-table';
 import { VolumeInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { useSearchParams } from 'react-router';
 
 export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResultView> = {
   Header: {
@@ -28,7 +29,13 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
     },
   ],
   useData: (platformId: string, resourceId: string) => {
-    const { data, isLoading, error } = useRead(`inspectVolume`, { platformId, name: resourceId });
+    const [searchParams] = useSearchParams();
+    const dockerNodeId = searchParams.get('dockerNodeId') ?? undefined;
+    const { data, isLoading, error } = useRead(`inspectVolume`, {
+      platformId,
+      name: resourceId,
+      query: { dockerNodeId },
+    });
     return { resource: data?.data, isLoading, error };
   },
 };

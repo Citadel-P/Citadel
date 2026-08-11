@@ -34,6 +34,16 @@
     InProgress: 0,
     Unknown: 0
   },
+  SwarmServiceStatusCounts: {
+    Total: 0,
+    Healthy: 0,
+    Degraded: 0,
+    Failed: 0,
+    Stopped: 0,
+    Paused: 0,
+    InProgress: 0,
+    Unknown: 0
+  },
   PlatformDescriptor: {
     DaemonId: 123456,
     ContainerCount: 5,

@@ -1,5 +1,8 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
@@ -12,6 +15,77 @@ namespace Tests.Integration.Infrastructure.Persistence;
 
 public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    [Fact]
+    public async Task NodeLocalResources_ShouldPreservePerNodeIdentityAndExposeStaleAggregateCounts()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("swarm-node-local", "cluster-node-local");
+        var observedAt = DateTimeOffset.UtcNow;
+        var nodes = new[]
+        {
+            CreateNodeProjection(platform.Id, "node-a", "worker-a", observedAt),
+            CreateNodeProjection(platform.Id, "node-b", "worker-b", observedAt)
+        };
+        var overlay = new SwarmNetworkProjection(
+            platform.Id, "overlay-id", "frontend", "Swarm", "overlay", true, false, false,
+            true, false, ["10.0.0.0/24"], [], new Dictionary<string, string>(), null, observedAt, false);
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot(nodes, [], [], [overlay], [], []),
+            cancellationToken);
+
+        var digest = "redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        foreach (var nodeId in new[] { "node-a", "node-b" })
+        {
+            await uow.Swarm.ReplaceNodeLocalResourcesAsync(
+                platform.Id,
+                nodeId,
+                [SwarmNodeImageProjection.FromObservation(platform.Id, nodeId, Image(nodeId, digest), observedAt)],
+                [SwarmNodeVolumeProjection.FromObservation(platform.Id, nodeId, Volume("data"), observedAt)],
+                [SwarmNodeNetworkProjection.FromObservation(platform.Id, nodeId, LocalNetwork(nodeId), observedAt)],
+                observedAt.AddMilliseconds(-1),
+                cancellationToken);
+        }
+        await uow.CommitAsync(cancellationToken);
+
+        var images = await uow.Swarm.GetNodeImagesAsync(platform.Id, cancellationToken);
+        Assert.Equal(2, images.Count);
+        Assert.All(images, image => Assert.Equal(digest, image.ContentIdentity));
+        Assert.Equal(new[] { "worker-a", "worker-b" }, images.Select(image => image.NodeHostname).Order().ToArray());
+        var nodeAImageId = images.Single(image => image.DockerNodeId == "node-a").Id;
+
+        var refreshedAt = observedAt.AddMinutes(1);
+        await uow.Swarm.ReplaceNodeLocalResourcesAsync(
+            platform.Id,
+            "node-a",
+            [SwarmNodeImageProjection.FromObservation(platform.Id, "node-a", Image("node-a", digest), refreshedAt)],
+            [],
+            [],
+            refreshedAt.AddMilliseconds(-1),
+            cancellationToken);
+        await uow.Swarm.MarkNodeLocalResourcesStaleAsync(platform.Id, "node-b", cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        images = await uow.Swarm.GetNodeImagesAsync(platform.Id, cancellationToken);
+        Assert.Equal(nodeAImageId, images.Single(image => image.DockerNodeId == "node-a").Id);
+        Assert.False(images.Single(image => image.DockerNodeId == "node-a").IsStale);
+        Assert.True(images.Single(image => image.DockerNodeId == "node-b").IsStale);
+        Assert.Single(await uow.Swarm.GetNodeVolumesAsync(platform.Id, cancellationToken));
+        Assert.Single(await uow.Swarm.GetNodeNetworksAsync(platform.Id, cancellationToken));
+
+        var summary = await uow.Swarm.GetSummaryAsync(platform.Id, cancellationToken);
+        Assert.True(summary.IsStale);
+        Assert.Equal(2, summary.ImageCount);
+        Assert.Equal(1, summary.VolumeCount);
+        Assert.Equal(1, summary.LocalNetworkCount);
+        Assert.Equal(2, summary.NetworkCount);
+    }
+
     [Fact]
     public async Task ProjectionRepository_ShouldBulkUpsertAndRemoveAllInventoryKinds()
     {
@@ -570,4 +644,37 @@ public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : Integra
             observedAt,
             false);
     }
+
+    private static SwarmNodeProjection CreateNodeProjection(
+        Guid platformId,
+        string dockerNodeId,
+        string hostname,
+        DateTimeOffset observedAt) => new(
+        platformId, dockerNodeId, 1, hostname, "Worker", false, "", "Ready", null, "Active",
+        "28.0", "linux", "x86_64", "10.0.0.2", new Dictionary<string, string>(), 0, 0,
+        observedAt, observedAt, observedAt, false);
+
+    private static ImageResult Image(string nodeId, string digest) => new(
+        $"sha256:{nodeId.PadRight(64, 'a')}",
+        100,
+        0,
+        string.Empty,
+        0,
+        observedCreated,
+        100,
+        ["redis:latest"],
+        [digest],
+        new Dictionary<string, string>());
+
+    private const long observedCreated = 1_700_000_000;
+
+    private static DockerVolumeResult Volume(string name) => new(
+        name, name, false, "local", "local", $"/var/lib/docker/volumes/{name}",
+        "2026-08-11T00:00:00Z", null, null, [], new Dictionary<string, string>(),
+        new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    private static DockerNetworkResult LocalNetwork(string nodeId) => new(
+        "bridge", $"network-{nodeId}", "2026-08-11T00:00:00Z", "bridge", "local",
+        true, false, false, false, false, false, false, null, null,
+        new Dictionary<string, string>(), new Dictionary<string, string>());
 }

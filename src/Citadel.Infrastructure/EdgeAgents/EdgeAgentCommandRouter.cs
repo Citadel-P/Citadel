@@ -620,7 +620,15 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.ContainerDelete or
             EdgeAgentCommandKind.ContainerStatsStream or
             EdgeAgentCommandKind.ContainersStatsStream or
-            EdgeAgentCommandKind.ContainerExec;
+            EdgeAgentCommandKind.ContainerExec or
+            EdgeAgentCommandKind.ContainerCreate or
+            EdgeAgentCommandKind.ContainerExecBinary or
+            EdgeAgentCommandKind.ImageList or
+            EdgeAgentCommandKind.ImageInspect or
+            EdgeAgentCommandKind.VolumeList or
+            EdgeAgentCommandKind.VolumeInspect or
+            EdgeAgentCommandKind.NetworkList or
+            EdgeAgentCommandKind.NetworkInspect;
 
     private static ProtoEdgeCommandKind MapKind(EdgeAgentCommandKind kind)
         => kind switch

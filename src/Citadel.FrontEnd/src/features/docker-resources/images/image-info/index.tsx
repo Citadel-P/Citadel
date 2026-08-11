@@ -10,6 +10,7 @@ import { ImageLayerTable } from './image-layer-table';
 import { ImageInfoActions } from './actions';
 import { DockerLabelsSection, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { useSearchParams } from 'react-router';
 
 export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView> = {
   Header: {
@@ -25,6 +26,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
               dockerImageId: resource.id,
               name: resource.name,
               tag: resource.tag,
+              dockerNodeId: resource.dockerNodeId,
               capabilities: resource.capabilities,
             } as Partial<ImageView>
           }
@@ -43,7 +45,13 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   ],
 
   useData: (platformId: string, resourceId: string) => {
-    const { data, isLoading, error } = useRead('inspectImage', { platformId, imageId: resourceId });
+    const [searchParams] = useSearchParams();
+    const dockerNodeId = searchParams.get('dockerNodeId') ?? undefined;
+    const { data, isLoading, error } = useRead('inspectImage', {
+      platformId,
+      imageId: resourceId,
+      query: { dockerNodeId },
+    });
     return { resource: data?.data, isLoading, error };
   },
 };

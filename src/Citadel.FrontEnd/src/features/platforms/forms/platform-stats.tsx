@@ -6,6 +6,7 @@ import {
   PlatformStatus,
   PlatformType,
   PlatformView,
+  SwarmOverviewView,
 } from '@/api/generated/api.types';
 import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
@@ -51,6 +52,7 @@ import {
   WorkloadStatusBreakdown,
 } from '../platform-workload-status';
 import { getBackupMetric, getBackupSourceStates } from '../platform-backups';
+import { useSwarmOverview } from '@/features/swarm/hooks/useSwarmOverview';
 
 type PlatformStatsDatum = {
   created: number;
@@ -116,17 +118,32 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   );
 };
 
-export const PlatformResourceSummary = ({
-  platform,
-  backupSummary,
-  isBackupSummaryLoading = false,
-  isBackupSummaryError = false,
-}: {
+type PlatformResourceSummaryProps = {
   platform: PlatformView;
   backupSummary?: PlatformBackupSummaryView;
   isBackupSummaryLoading?: boolean;
   isBackupSummaryError?: boolean;
-}) => {
+};
+
+export const PlatformResourceSummary = (props: PlatformResourceSummaryProps) =>
+  props.platform.type === PlatformType.DockerSwarm ? (
+    <SwarmPlatformResourceSummary {...props} />
+  ) : (
+    <PlatformResourceSummaryContent {...props} />
+  );
+
+const SwarmPlatformResourceSummary = (props: PlatformResourceSummaryProps) => {
+  const { overview } = useSwarmOverview(props.platform.id);
+  return <PlatformResourceSummaryContent {...props} swarmOverview={overview} />;
+};
+
+const PlatformResourceSummaryContent = ({
+  platform,
+  backupSummary,
+  isBackupSummaryLoading = false,
+  isBackupSummaryError = false,
+  swarmOverview,
+}: PlatformResourceSummaryProps & { swarmOverview?: SwarmOverviewView }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
   const currentDisk = getCurrentDiskUsage(platform);
   const resourceMetrics: ResourceMetric[] = [
@@ -161,7 +178,7 @@ export const PlatformResourceSummary = ({
     {
       icon: ImageIcon,
       label: 'Images',
-      value: platform.imageCount ?? '-',
+      value: swarmOverview?.imageCount ?? platform.imageCount ?? '-',
       to: `/platforms/${platform.id}/images`,
       iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.images,
       detail: formatStorageUsage(descriptor?.imageUsedBytes),
@@ -170,7 +187,7 @@ export const PlatformResourceSummary = ({
     {
       icon: HardDrive,
       label: 'Volumes',
-      value: platform.volumeCount ?? '-',
+      value: swarmOverview?.volumeCount ?? platform.volumeCount ?? '-',
       to: `/platforms/${platform.id}/volumes`,
       iconClassName: PLATFORM_WORKLOAD_ICON_CLASS_NAMES.volumes,
       detail: formatStorageUsage(descriptor?.volumeUsedBytes),

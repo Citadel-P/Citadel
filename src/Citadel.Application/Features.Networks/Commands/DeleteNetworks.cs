@@ -45,6 +45,17 @@ internal class DeleteNetworksHandler(
         var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
         var isSwarmPlatform = persistedPlatform?.PlatformDescriptor is DockerSwarmPlatformDescriptor;
         var ids = command.Ids.Distinct(StringComparer.Ordinal).ToArray();
+        if (isSwarmPlatform)
+        {
+            var localNetworks = await unitOfWork.Swarm.GetNodeNetworksAsync(command.PlatformId, cancellationToken);
+            if (ids.Any(id => localNetworks.Any(network =>
+                    string.Equals(network.DockerNetworkId, id, StringComparison.OrdinalIgnoreCase))))
+            {
+                return Result.Failure(new ConflictError(
+                    "Node-local Network deletion requires an explicit Node target and is not available."));
+            }
+        }
+
         foreach (var id in ids)
         {
             var inspection = await networkConnector.InspectNetworkAsync(

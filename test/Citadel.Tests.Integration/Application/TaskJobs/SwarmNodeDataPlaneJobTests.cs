@@ -56,6 +56,7 @@ public sealed class SwarmNodeDataPlaneJobTests(PostgresTestFixture fixture) : In
         using var monitor = new SwarmNodeDataPlaneJob.NodeMonitor(
             new SwarmNodeDataPlaneJob.NodeKey(platform.Id, dockerNodeId),
             "session",
+            ownsStreams: true,
             cancellation);
         var workItem = new SwarmNodeDataPlaneJob.ReconcileSwarmNodeContainersWorkItem(
             monitor.Key,
@@ -65,7 +66,8 @@ public sealed class SwarmNodeDataPlaneJobTests(PostgresTestFixture fixture) : In
             monitor,
             Mock.Of<INotificationQueue>(),
             new PlatformContainerCache(),
-            Mock.Of<IContainerStreamManager>());
+            Mock.Of<IContainerStreamManager>(),
+            Mock.Of<IDockerDaemonStreamManager>());
 
         await workItem.ExecuteAsync(uow, TestContext.Current.CancellationToken);
 

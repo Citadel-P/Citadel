@@ -118,7 +118,7 @@ public static class ApplicationModule
             .AddSingleton<IUserConnectionRevoker, UserConnectionRevoker>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
-            .AddSingleton<INetworkService, NetworkService>()
+            .AddScoped<INetworkService, NetworkService>()
             .AddScoped<IUserContextAccessor, UserContextAccessor>()
             .AddScoped<IRequestSessionMetadataAccessor, RequestSessionMetadataAccessor>()
             .AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>()

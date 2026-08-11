@@ -3,6 +3,9 @@ using LightResults;
 
 using Domain.Entities.Platforms;
 using Domain.Contracts.Resources.Swarm;
+using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Volumes;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -34,6 +37,51 @@ public interface IExecSession : IAsyncDisposable
 
 public interface ISwarmNodeRuntimeConnector
 {
+    Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken);
+
+    Task<Result<IReadOnlyList<DockerVolumeResult>>> ListVolumesAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken);
+
+    Task<Result<IReadOnlyList<DockerNetworkResult>>> ListNetworksAsync(
+        Platform platform,
+        string dockerNodeId,
+        CancellationToken cancellationToken);
+
+    Task<Result<InspectImageResult>> InspectImageAsync(
+        Platform platform,
+        string dockerNodeId,
+        string dockerImageId,
+        CancellationToken cancellationToken);
+
+    Task<Result<DockerVolumeResult>> InspectVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        string volumeName,
+        CancellationToken cancellationToken);
+
+    Task<Result<DockerNetworkDetails>> InspectNetworkAsync(
+        Platform platform,
+        string dockerNodeId,
+        string dockerNetworkId,
+        CancellationToken cancellationToken);
+
+    Task<Result<string>> CreateContainerAsync(
+        Platform platform,
+        string dockerNodeId,
+        CreateContainerCommand command,
+        CancellationToken cancellationToken);
+
+    Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+        Platform platform,
+        string dockerNodeId,
+        ContainerBinaryExecRequest request,
+        CancellationToken cancellationToken);
+
     Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(
         Platform platform,
         string dockerNodeId,

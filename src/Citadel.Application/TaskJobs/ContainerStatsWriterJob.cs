@@ -259,7 +259,6 @@ internal sealed class ContainerStatsBatchWorkItem(
         var swarmServiceStats = await BuildSwarmServiceStatsAsync(
             uow,
             filteredList,
-            nodeScopedContainers,
             token);
         await uow.ContainerStats.BulkInsertAsync(filteredList, token);
         if (swarmServiceStats.Count > 0)
@@ -290,11 +289,9 @@ internal sealed class ContainerStatsBatchWorkItem(
     private static async Task<IReadOnlyList<SwarmServiceStat>> BuildSwarmServiceStatsAsync(
         IUnitOfWork uow,
         IReadOnlyList<ContainerStat> stats,
-        IReadOnlyDictionary<Guid, SwarmNodeStatsSource> nodeScopedContainers,
         CancellationToken cancellationToken)
     {
         var candidateContainerIds = stats
-            .Where(stat => nodeScopedContainers.ContainsKey(stat.ContainerId))
             .Select(static stat => stat.ContainerId)
             .Distinct()
             .ToArray();

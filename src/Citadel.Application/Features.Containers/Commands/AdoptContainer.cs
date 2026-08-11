@@ -491,6 +491,11 @@ internal static class ContainerAdoptionImageValidation
             .Where(static value => value is not null)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // A pruned image can leave only its sha256 ID on the container. In that
+        // case Docker no longer exposes a repository that Citadel can compare.
+        if (sourceRepositories.Count == 0)
+            return true;
+
         return selectedReferences
             .Select(GetRepository)
             .Any(repository => repository is not null && sourceRepositories.Contains(repository));

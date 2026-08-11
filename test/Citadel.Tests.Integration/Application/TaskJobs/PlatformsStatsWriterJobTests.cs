@@ -78,17 +78,13 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
         // Act
-        var checkpoint = _dbWorkQueue.CreateCheckpoint();
         await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true, IsValidated: true),
             cancellationToken: TestContext.Current.CancellationToken);
-        await _dbWorkQueue.WaitForIdleAfterAsync(
-            checkpoint,
-            TestContext.Current.CancellationToken);
 
         // Assert
-        await using var scope = Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(_platformId, TestContext.Current.CancellationToken);
+        var stats = await WaitForPlatformStatsAsync(
+            expectedCount: 2,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(2, stats.Count());
     }
@@ -378,6 +374,27 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
             yield return stat2;
         }
         
+    }
+
+    private async Task<IReadOnlyList<PlatformStat>> WaitForPlatformStatsAsync(
+        int expectedCount,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<PlatformStat> stats = [];
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            stats = (await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(
+                _platformId,
+                cancellationToken)).ToArray();
+            if (stats.Count >= expectedCount)
+                return stats;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
+
+        return stats;
     }
 
 }

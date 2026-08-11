@@ -34,7 +34,10 @@ public sealed class SwarmQuorumResultTests
             ServiceStatusCounts: PlatformWorkloadStatusCounts.Empty,
             RunningTaskCount: 0,
             DesiredTaskCount: 0,
-            NetworkCount: 0);
+            NetworkCount: 0,
+            LocalNetworkCount: 0,
+            VolumeCount: 0,
+            ImageCount: 0);
 
         var result = SwarmQuorumResult.Calculate(connectionStatus, summary);
 

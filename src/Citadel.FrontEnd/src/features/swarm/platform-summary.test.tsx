@@ -44,6 +44,14 @@ describe('SwarmPlatformSummary', () => {
     await waitFor(() => expect(requestCount).toBe(1));
     await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
 
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', {
+        platformId,
+        images: [],
+        volumes: [],
+        networks: [{ dockerNodeId: 'worker-1' }, { dockerNodeId: 'worker-2' }],
+      }),
+    );
     act(() => fake.emit('SwarmInventoryUpdated', emptyInventory()));
 
     const summary = await screen.findByRole('region', { name: 'Swarm cluster summary' });
@@ -58,7 +66,7 @@ describe('SwarmPlatformSummary', () => {
     expect(within(cards[2]).getByLabelText('Failed: 1')).toBeVisible();
     expect(cards[3]).toHaveTextContent('Running tasks');
     expect(cards[4]).toHaveTextContent('Networks');
-    expect(cards[4]).toHaveTextContent('4');
+    expect(cards[4]).toHaveTextContent('2');
     expect(cards[4]).toHaveAttribute('href', `/platforms/${platformId}/networks`);
     expect(cards[5]).toHaveTextContent('Backups');
     expect(cards[5]).toHaveAttribute('href', '/backup-policies');
@@ -197,6 +205,9 @@ function overview() {
     runningTaskCount: 0,
     desiredTaskCount: 0,
     networkCount: 0,
+    localNetworkCount: 0,
+    volumeCount: 0,
+    imageCount: 0,
   };
 }
 

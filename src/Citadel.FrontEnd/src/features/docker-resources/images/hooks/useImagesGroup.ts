@@ -1,18 +1,26 @@
 import { useState, useCallback, useMemo } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ImagesView, ImageView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup, ImageEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import {
+  useDockerDaemonGroup,
+  ImageEvent,
+  SwarmNodeLocalResourcesUpdate,
+} from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useImagesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listImages', { platformId });
   const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesView>();
+  const [nodeSnapshot, setNodeSnapshot] = useState<SwarmNodeLocalResourcesUpdate>();
   const capabilities = data?.data.capabilities;
 
   const imagesInfo = useMemo<ImagesView | undefined>(() => {
-    return realtimeImagesInfo ?? data?.data;
-  }, [realtimeImagesInfo, data]);
+    const source = realtimeImagesInfo ?? data?.data;
+    return source && nodeSnapshot?.platformId === platformId
+      ? { ...source, images: nodeSnapshot.images }
+      : source;
+  }, [data, nodeSnapshot, platformId, realtimeImagesInfo]);
 
   const onImageEvent = useCallback(
     (event: ImageEvent) => {
@@ -58,7 +66,19 @@ export const useImagesGroup = (platformId?: string) => {
     [data],
   );
 
-  useDockerDaemonGroup(platformId, { onImageEvent });
+  const onSwarmNodeLocalResourcesUpdated = useCallback(
+    (snapshot: SwarmNodeLocalResourcesUpdate) => {
+      if (snapshot.platformId !== platformId) return;
+      setNodeSnapshot(snapshot);
+      setRealtimeImagesInfo((currentInfo) => {
+        const source = currentInfo ?? data?.data;
+        return source ? { ...source, images: snapshot.images } : source;
+      });
+    },
+    [data, platformId],
+  );
+
+  useDockerDaemonGroup(platformId, { onImageEvent, onSwarmNodeLocalResourcesUpdated });
 
   const handleImageInfoUpdated = useCallback(
     (image: ImageView) => {

@@ -4,8 +4,10 @@ using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Domain.Entities.Platforms;
 
 namespace Application.Features.Volumes.Commands;
 
@@ -23,10 +25,20 @@ public sealed record DeleteVolumes(Guid PlatformId, string[] Names, bool? Force 
     }
 }
 
-internal class DeleteVolumesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolumes, Result>
+internal class DeleteVolumesHandler(
+    IPlatformContainerCache platformContainerCache,
+    IConnectorFactory<IVolumeConnector> connectorFactory,
+    IUnitOfWork unitOfWork) : ICommandHandler<DeleteVolumes, Result>
 {
     public async ValueTask<Result> Handle(DeleteVolumes command, CancellationToken cancellationToken)
     {
+        var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, cancellationToken);
+        if (persistedPlatform?.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+        {
+            return Result.Failure(new ConflictError(
+                "Node-local Volume deletion requires an explicit Node target and is not available."));
+        }
+
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
         {
             return Result.Failure(error);

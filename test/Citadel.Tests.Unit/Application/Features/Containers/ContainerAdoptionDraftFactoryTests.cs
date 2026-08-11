@@ -163,6 +163,34 @@ public sealed class ContainerAdoptionDraftFactoryTests
     }
 
     [Fact]
+    public async Task ImageValidation_ShouldAcceptExternalSourceWhenPrunedImageHasNoRepositoryReference()
+    {
+        var context = CreateContext(
+            entrypoint: ["/docker-entrypoint.sh"],
+            includeImage: false,
+            containerImageReference: "sha256:image");
+        var registry = CreateDefaultRegistry();
+        var unitOfWork = CreateRegistryUnitOfWork(registry);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        var spec = new DeploymentSpec(
+            new ExternalImage(registry.Id, "nginx:latest"),
+            UpdateBehavior.Disabled);
+
+        var result = await ContainerAdoptionImageValidation.ResolveAsync(
+            context,
+            spec,
+            unitOfWork,
+            connectorFactory.Object,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
+        Assert.Same(context, resolved);
+        connectorFactory.Verify(
+            value => value.GetConnector(It.IsAny<PlatformConnectorType>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task ImageValidation_ShouldRejectExternalSourceFromAnotherRepository()
     {
         var context = CreateContext(entrypoint: ["/docker-entrypoint.sh"], includeImage: false);
@@ -515,7 +543,8 @@ public sealed class ContainerAdoptionDraftFactoryTests
         string? stopSignal = null,
         string? user = null,
         string? imageUser = null,
-        bool includeImage = true)
+        bool includeImage = true,
+        string containerImageReference = "nginx:latest")
     {
         var platform = new Platform(
             "Local",
@@ -552,7 +581,8 @@ public sealed class ContainerAdoptionDraftFactoryTests
             entrypoint ?? [],
             mounts ?? [],
             stopSignal,
-            user);
+            user,
+            containerImageReference);
         var imageInspection = entrypoint is { Count: > 0 } || !string.IsNullOrWhiteSpace(user)
             ? new InspectImageResult(
                 Id: image.DockerImageId,
@@ -623,7 +653,8 @@ public sealed class ContainerAdoptionDraftFactoryTests
         IReadOnlyList<string> entrypoint,
         IReadOnlyList<MountPointInfo> mounts,
         string? stopSignal,
-        string? user)
+        string? user,
+        string containerImageReference)
         => new(
             Id: "container-id",
             Created: "2026-07-29T00:00:00Z",
@@ -661,7 +692,7 @@ public sealed class ContainerAdoptionDraftFactoryTests
                 StdinOnce: null,
                 Env: environment,
                 Cmd: [],
-                Image: "nginx:latest",
+                Image: containerImageReference,
                 Volumes: null,
                 WorkingDir: null,
                 Entrypoint: entrypoint,

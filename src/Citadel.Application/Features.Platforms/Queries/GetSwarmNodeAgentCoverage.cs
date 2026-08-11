@@ -64,9 +64,10 @@ internal sealed class GetSwarmNodeAgentCoverageHandler(
             var isManagerSource = string.Equals(node.DockerNodeId, descriptor.NodeID, StringComparison.Ordinal);
             var supported = string.Equals(node.OperatingSystem, "linux", StringComparison.OrdinalIgnoreCase)
                             && supportedArchitectures.Contains(NormalizeArchitecture(node.Architecture));
+            var active = string.Equals(node.Availability, "active", StringComparison.OrdinalIgnoreCase);
             var schedulable = string.Equals(node.Status, "ready", StringComparison.OrdinalIgnoreCase)
-                              && string.Equals(node.Availability, "active", StringComparison.OrdinalIgnoreCase);
-            var eligible = isManagerSource || (supported && schedulable);
+                              && active;
+            var eligible = isManagerSource || (supported && active);
             bindings.TryGetValue(node.DockerNodeId, out var binding);
             tasksByNode.TryGetValue(node.DockerNodeId, out var task);
             runtimeStates.TryGetValue(node.DockerNodeId, out var runtimeState);
@@ -101,7 +102,7 @@ internal sealed class GetSwarmNodeAgentCoverageHandler(
                 ? "ManagerConnector"
                 : !supported
                     ? "Unsupported"
-                    : !schedulable
+                    : !active
                         ? "Unschedulable"
                         : !compatible
                             ? "Incompatible"

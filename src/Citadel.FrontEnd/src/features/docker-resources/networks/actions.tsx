@@ -24,7 +24,10 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
           isPending: false,
           run: () => {
             if (!canExecute || !selected) return;
-            navigate(`/platforms/${currentPlatform?.id}/networks/${selected.id}/`);
+            const nodeQuery = selected.dockerNodeId
+              ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
+              : '';
+            navigate(`/platforms/${currentPlatform?.id}/networks/${selected.id}/${nodeQuery}`);
           },
         };
       },
@@ -35,7 +38,7 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
       icon: Trash,
       mutateKey: 'deleteNetworks',
       canExecute: (r) => {
-        const can = (x: DockerNetworkResultView) => !x.isSystem && x.inUse === false;
+        const can = (x: DockerNetworkResultView) => !x.isSystem && x.inUse === false && !x.dockerNodeId;
         return Array.isArray(r) ? r.every(can) : can(r);
       },
       separatorBefore: true,

@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { ImageView, ResourceControlState } from '@/api/generated/api.types';
+import { ImageView, PlatformType, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,6 +17,8 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { useAppContext } from '@/lib/context/app-context';
+import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
 
 export const ImagesTable = ({
   items,
@@ -31,8 +33,10 @@ export const ImagesTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
+  const { currentPlatform } = useAppContext();
   const formatDateTime = useProfileDateTimeFormatter();
-  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
+  const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime, showNode), [actions, formatDateTime, showNode]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
@@ -43,6 +47,7 @@ const columns = (
     React.FC<{ resource: ImageView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
+  showNode: boolean,
 ): ColumnDef<ImageView>[] => [
   {
     id: 'select',
@@ -69,6 +74,7 @@ const columns = (
     cell: ({ row }) => <ImageNameRow image={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
+  ...(showNode ? [createNodeResourceColumn<ImageView>()] : []),
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
@@ -125,7 +131,8 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onNameClick() {
-    navigate(`/platforms/${platformId}/images/${formatId(image.dockerImageId)}/`);
+    const nodeQuery = image.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(image.dockerNodeId)}` : '';
+    navigate(`/platforms/${platformId}/images/${formatId(image.dockerImageId)}/${nodeQuery}`);
   }
   return (
     <div className="flex items-center whitespace-nowrap">

@@ -23,7 +23,8 @@
     isInUse: true,
     platformId: Guid_2,
     createdAt: Date_MinValue,
-    controlState: Idle
+    controlState: Idle,
+    isStale: false
   },
   deploymentView: {
     id: Guid_3,

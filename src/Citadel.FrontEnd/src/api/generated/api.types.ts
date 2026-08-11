@@ -5213,6 +5213,7 @@ export interface DockerNetworkDetailsView {
   containers: Record<string, NetworkConnectedContainer>;
   peers: NetworkPeerInfo[];
   isSystem: boolean;
+  dockerNodeId: null | string;
   capabilities?: null | NetworkCapabilities;
 }
 
@@ -5235,6 +5236,11 @@ export interface DockerNetworkResultView {
   labels: Record<string, string>;
   isSystem: boolean;
   capabilities?: null | NetworkCapabilities;
+  dockerNodeId?: null | string;
+  nodeHostname?: null | string;
+  /** @default false */
+  isStale?: boolean;
+  staleReason?: null | string;
 }
 
 export interface DockerVolumeResultView {
@@ -5253,6 +5259,11 @@ export interface DockerVolumeResultView {
   options: Record<string, string>;
   backupCoverage?: null | BackupCoverageView;
   capabilities?: null | VolumeCapabilities;
+  dockerNodeId?: null | string;
+  nodeHostname?: null | string;
+  /** @default false */
+  isStale?: boolean;
+  staleReason?: null | string;
 }
 
 export interface DriverConfiguration {
@@ -5894,6 +5905,13 @@ export interface ImageView {
   registryId?: null | string;
   registry?: null | RegistryView;
   capabilities?: null | ImageCapabilities;
+  repoDigests?: null | string[];
+  contentIdentity?: null | string;
+  dockerNodeId?: null | string;
+  nodeHostname?: null | string;
+  /** @default false */
+  isStale?: boolean;
+  staleReason?: null | string;
 }
 
 export interface ImagesView {
@@ -5940,6 +5958,7 @@ export interface InspectImageView {
   labels: Record<string, string>;
   containers: ContainerImageResult[];
   registry: null | RegistryView;
+  dockerNodeId: null | string;
   capabilities?: null | ImageCapabilities;
 }
 
@@ -8005,6 +8024,21 @@ export interface SwarmOverviewView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   networkCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  localNetworkCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  volumeCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  imageCount: number | string;
   capabilities: PlatformCapabilities;
 }
 
@@ -13096,6 +13130,7 @@ export class Api<
       name: string,
       query?: {
         path?: string;
+        dockerNodeId?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -13129,6 +13164,7 @@ export class Api<
       name: string,
       query?: {
         path?: string;
+        dockerNodeId?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -14541,6 +14577,9 @@ export class Api<
     inspectImage: (
       platformId: string,
       imageId: string,
+      query?: {
+        dockerNodeId?: string;
+      },
       params: RequestParams = {},
     ) =>
       this.request<
@@ -14549,6 +14588,7 @@ export class Api<
       >({
         path: `/api/v1/images/${platformId}/${imageId}`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -14701,6 +14741,9 @@ export class Api<
     inspectNetwork: (
       platformId: string,
       networkId: string,
+      query?: {
+        dockerNodeId?: string;
+      },
       params: RequestParams = {},
     ) =>
       this.request<
@@ -14709,6 +14752,7 @@ export class Api<
       >({
         path: `/api/v1/networks/${platformId}/${networkId}`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -14823,6 +14867,9 @@ export class Api<
     inspectVolume: (
       platformId: string,
       name: string,
+      query?: {
+        dockerNodeId?: string;
+      },
       params: RequestParams = {},
     ) =>
       this.request<
@@ -14831,6 +14878,7 @@ export class Api<
       >({
         path: `/api/v1/volumes/${platformId}/${name}`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

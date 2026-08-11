@@ -4,6 +4,7 @@ using Domain.Contracts.Resources.Volumes;
 using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
+using Domain.Entities.Platforms;
 
 namespace Application.Features.Volumes.Queries;
 
@@ -11,10 +12,21 @@ namespace Application.Features.Volumes.Queries;
 public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null)
     : IQuery<Result<IEnumerable<DockerVolumeResult>>>;
 
-internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<ListVolumes, Result<IEnumerable<DockerVolumeResult>>>
+internal class ListVolumesHandler(
+    IPlatformContainerCache platformContainerCache,
+    IConnectorFactory<IVolumeConnector> connectorFactory,
+    IUnitOfWork unitOfWork) : IQueryHandler<ListVolumes, Result<IEnumerable<DockerVolumeResult>>>
 {
     public async ValueTask<Result<IEnumerable<DockerVolumeResult>>> Handle(ListVolumes query, CancellationToken cancellationToken)
     {
+        var persistedPlatform = await unitOfWork.Platforms.GetByIdAsync(query.PlatformId, cancellationToken);
+        if (persistedPlatform?.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+        {
+            var projections = await unitOfWork.Swarm.GetNodeVolumesAsync(query.PlatformId, cancellationToken);
+            var projected = projections.Select(static value => value.Resource);
+            return Result.Success<IEnumerable<DockerVolumeResult>>(ApplyFilters(projected, query));
+        }
+
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
             return Result.Failure<IEnumerable<DockerVolumeResult>>(error);
@@ -39,4 +51,13 @@ internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache
 
         return Result.Success<IEnumerable<DockerVolumeResult>>(list);
     }
+
+    private static IEnumerable<DockerVolumeResult> ApplyFilters(
+        IEnumerable<DockerVolumeResult> values,
+        ListVolumes query) => values.Where(value =>
+        (!query.Dangling.HasValue || query.Dangling.Value == !value.InUse)
+        && (string.IsNullOrWhiteSpace(query.Driver)
+            || string.Equals(value.Driver, query.Driver, StringComparison.OrdinalIgnoreCase))
+        && (string.IsNullOrWhiteSpace(query.Name)
+            || value.Name.Contains(query.Name, StringComparison.OrdinalIgnoreCase)));
 }

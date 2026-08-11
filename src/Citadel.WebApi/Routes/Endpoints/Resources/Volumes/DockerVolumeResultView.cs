@@ -21,7 +21,11 @@ public sealed record DockerVolumeResultView(
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyDictionary<string, string> Options,
     BackupCoverageView? BackupCoverage = null,
-    VolumeCapabilities? Capabilities = null)
+    VolumeCapabilities? Capabilities = null,
+    string? DockerNodeId = null,
+    string? NodeHostname = null,
+    bool IsStale = false,
+    string? StaleReason = null)
 {
     internal static async Task<DockerVolumeResultView> Map(DockerVolumeResult volume, IPermissionEvaluator permissionEvaluator)
     {
@@ -46,5 +50,9 @@ public sealed record DockerVolumeResultView(
             Containers: volume.Containers,
             Status: volume.Status,
             Labels: volume.Labels,
-            Options: volume.Options);
+            Options: volume.Options,
+            DockerNodeId: volume.DockerNodeId,
+            NodeHostname: volume.NodeHostname,
+            IsStale: volume.IsStale,
+            StaleReason: volume.StaleReason);
 }

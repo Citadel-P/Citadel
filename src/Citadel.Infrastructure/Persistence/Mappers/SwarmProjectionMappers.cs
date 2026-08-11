@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Domain;
 using Domain.Entities.Platforms;
+using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Volumes;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;
@@ -52,6 +55,77 @@ internal static class SwarmProjectionMappers
         ToOffset(value.LastSuccessfulReconciliationAt), value.IsStale, ToOffset(value.StaleSince),
         value.StaleReason, ToOffset(value.LastEventStreamConnectedAt), ToOffset(value.LastEventGapAt),
         ToOffset(value.LastStatsSampleAt), value.AgentVersion, value.DockerVersion);
+
+    internal static SwarmNodeImageProjection ToDomain(this SwarmNodeImageProjectionDto value)
+    {
+        var resource = JsonSerializer.Deserialize(value.Resource, PlatformJsonContext.Default.ImageResult)
+                       ?? throw new InvalidDataException("A persisted Swarm Node Image projection has no payload.");
+        ApplyNodeMetadata(resource, value.DockerNodeId, value.NodeHostname, value.IsStale, value.StaleReason);
+        return new SwarmNodeImageProjection(
+            value.Id, value.PlatformId, value.DockerNodeId, value.DockerImageId, value.ContentIdentity,
+            resource, ToOffset(value.ObservedAt), value.IsStale, value.NodeHostname, value.StaleReason);
+    }
+
+    internal static SwarmNodeVolumeProjection ToDomain(this SwarmNodeVolumeProjectionDto value)
+    {
+        var resource = JsonSerializer.Deserialize(value.Resource, PlatformJsonContext.Default.DockerVolumeResult)
+                       ?? throw new InvalidDataException("A persisted Swarm Node Volume projection has no payload.");
+        resource.PlatformId = value.PlatformId;
+        ApplyNodeMetadata(resource, value.DockerNodeId, value.NodeHostname, value.IsStale, value.StaleReason);
+        return new SwarmNodeVolumeProjection(
+            value.PlatformId, value.DockerNodeId, value.VolumeName, resource,
+            ToOffset(value.ObservedAt), value.IsStale, value.NodeHostname, value.StaleReason);
+    }
+
+    internal static SwarmNodeNetworkProjection ToDomain(this SwarmNodeNetworkProjectionDto value)
+    {
+        var resource = JsonSerializer.Deserialize(value.Resource, PlatformJsonContext.Default.DockerNetworkResult)
+                       ?? throw new InvalidDataException("A persisted Swarm Node Network projection has no payload.");
+        resource.PlatformId = value.PlatformId;
+        ApplyNodeMetadata(resource, value.DockerNodeId, value.NodeHostname, value.IsStale, value.StaleReason);
+        return new SwarmNodeNetworkProjection(
+            value.PlatformId, value.DockerNodeId, value.DockerNetworkId, resource,
+            ToOffset(value.ObservedAt), value.IsStale, value.NodeHostname, value.StaleReason);
+    }
+
+    private static void ApplyNodeMetadata(
+        ImageResult resource,
+        string dockerNodeId,
+        string? nodeHostname,
+        bool isStale,
+        string? staleReason)
+    {
+        resource.DockerNodeId = dockerNodeId;
+        resource.NodeHostname = nodeHostname;
+        resource.IsStale = isStale;
+        resource.StaleReason = staleReason;
+    }
+
+    private static void ApplyNodeMetadata(
+        DockerVolumeResult resource,
+        string dockerNodeId,
+        string? nodeHostname,
+        bool isStale,
+        string? staleReason)
+    {
+        resource.DockerNodeId = dockerNodeId;
+        resource.NodeHostname = nodeHostname;
+        resource.IsStale = isStale;
+        resource.StaleReason = staleReason;
+    }
+
+    private static void ApplyNodeMetadata(
+        DockerNetworkResult resource,
+        string dockerNodeId,
+        string? nodeHostname,
+        bool isStale,
+        string? staleReason)
+    {
+        resource.DockerNodeId = dockerNodeId;
+        resource.NodeHostname = nodeHostname;
+        resource.IsStale = isStale;
+        resource.StaleReason = staleReason;
+    }
 
     private static DateTimeOffset ToOffset(DateTime value) =>
         new(DateTime.SpecifyKind(value, DateTimeKind.Utc));

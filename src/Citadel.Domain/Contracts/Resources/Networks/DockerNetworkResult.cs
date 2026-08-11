@@ -19,6 +19,10 @@ public record DockerNetworkResult(
     IReadOnlyDictionary<string, string> Labels)
 {
     public Guid PlatformId { get; set; }
+    public string? DockerNodeId { get; set; }
+    public string? NodeHostname { get; set; }
+    public bool IsStale { get; set; }
+    public string? StaleReason { get; set; }
     public bool IsSystem => DockerNetworkSystemClassifier.IsSystem(Name, Ingress);
 }
 

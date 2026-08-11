@@ -34,6 +34,16 @@
     inProgress: 0,
     unknown: 0
   },
+  swarmServiceStatusCounts: {
+    total: 0,
+    healthy: 0,
+    degraded: 0,
+    failed: 0,
+    stopped: 0,
+    paused: 0,
+    inProgress: 0,
+    unknown: 0
+  },
   platformDescriptor: {
     $type: Docker,
     daemonId: 123456,

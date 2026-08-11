@@ -15,7 +15,10 @@ internal sealed record SwarmProjectionSummaryDto(
     int UnknownServiceCount,
     int RunningTaskCount,
     int DesiredTaskCount,
-    int NetworkCount);
+    int NetworkCount,
+    int LocalNetworkCount,
+    int VolumeCount,
+    int ImageCount);
 
 internal sealed record SwarmServiceProjectionDto(
     Guid PlatformId, string DockerServiceId, long VersionIndex, string Name, string Mode,
@@ -63,3 +66,35 @@ internal sealed record SwarmNodeRuntimeProjectionStateDto(
     DateTime? LastStatsSampleAt,
     string? AgentVersion,
     string? DockerVersion);
+
+internal sealed record SwarmNodeImageProjectionDto(
+    Guid Id,
+    Guid PlatformId,
+    string DockerNodeId,
+    string DockerImageId,
+    string ContentIdentity,
+    string Resource,
+    DateTime ObservedAt,
+    bool IsStale,
+    string? NodeHostname,
+    string? StaleReason);
+
+internal sealed record SwarmNodeVolumeProjectionDto(
+    Guid PlatformId,
+    string DockerNodeId,
+    string VolumeName,
+    string Resource,
+    DateTime ObservedAt,
+    bool IsStale,
+    string? NodeHostname,
+    string? StaleReason);
+
+internal sealed record SwarmNodeNetworkProjectionDto(
+    Guid PlatformId,
+    string DockerNodeId,
+    string DockerNetworkId,
+    string Resource,
+    DateTime ObservedAt,
+    bool IsStale,
+    string? NodeHostname,
+    string? StaleReason);

@@ -13,10 +13,10 @@ Deployments stay Docker Standalone workloads. Docker Swarm Stacks support
 reviewed import, Apply, safe rollback, and ownership-checked deletion.
 
 Citadel reaches the connected manager's node-local Docker resources by
-default. The optional node data plane extends current Container inventory,
-Task statistics, logs, inspect, lifecycle actions, and Terminal to covered
-workers. Images, Volumes, and local Networks remain manager-local in this
-release.
+default. The optional node data plane extends current Container, Image,
+Volume, and local Network inventory to covered workers and routes Task runtime
+plus Volume browsing to the owning Node. Destructive Image, Volume, and local
+Network actions and node-routed Volume backup/restore remain unavailable.
 
 ## Before You Begin
 
@@ -67,9 +67,10 @@ Docker APIs:
 - Containers, live container statistics, exec sessions, local Images, local
   Volumes, and local Networks belong to the Node running or storing them.
 
-Without node agents, the **Containers**, **Images**, and **Volumes** pages
-describe the connected manager rather than every Node. A Task scheduled on a
-worker remains visible, but its node-local runtime operations are unavailable.
+Without node agents, the **Containers**, **Images**, **Volumes**, and local
+**Networks** views describe the connected manager rather than every Node. A
+Task scheduled on a worker remains visible, but its node-local runtime
+operations are unavailable.
 
 Use **Cluster node coverage** on the Platform page to install the node data
 plane. **Install node agents** creates a Citadel System global Docker Service
@@ -78,14 +79,22 @@ satellite runs the existing Agent in a restricted outbound `swarm-node`
 profile and opens no inbound management port. The Platform remains one Swarm
 Platform; its manager connection can be Local, regular Agent, or Edge Agent.
 
-With coverage installed, Citadel aggregates current Containers from covered
-Nodes and routes Task inspect, logs, statistics, lifecycle operations, and
-Terminal to the exact owning Node. Service statistics sum the available
-current Task samples and explicitly report partial coverage when a Node or
-Task sample is missing. Service chart history is retained across routine Task
-replacement, rollout, restart, and cleanup of stopped Task containers. An
-offline satellite keeps its last-known Container projection marked stale; it
-does not make the manager or whole Platform offline.
+With coverage installed, Citadel aggregates current Containers, Images,
+Volumes, and local Networks from covered Nodes. Each local resource keeps its
+Node identity: same-named Volumes on different Nodes remain separate. Image,
+Volume, and local Network inspect plus Volume browse/download route to the
+selected owning Node. Task inspect, logs, statistics, lifecycle operations,
+and Terminal also route to the exact owning Node. Service statistics sum the
+available current Task samples and explicitly report partial coverage when a
+Node or Task sample is missing. Service chart history is retained across
+routine Task replacement, rollout, restart, and cleanup of stopped Task
+containers. An offline satellite keeps its last-known node-local projections
+marked stale; it does not make the manager or whole Platform offline.
+
+An active supported worker remains part of expected coverage while it is down,
+so coverage becomes **Partial** instead of shrinking the total. A deliberately
+paused or drained Node is shown as unschedulable and is not counted as a missing
+Agent target until it becomes active again.
 
 The System Service is infrastructure owned by Citadel, not a user Stack or
 managed Service. It mounts each Node's Docker socket read-write, which gives it
@@ -140,13 +149,15 @@ Selecting a Swarm Platform opens its Swarm navigation:
   read-only editor and keeps labels editable. Citadel can create Configs, edit
   their labels, and delete unused Configs.
 
-Images and Volumes remain manager-local in this release even when the Container
-and Task runtime data plane is installed. They are not cluster inventory. An
-Image on the manager may be absent from a worker, and same-named local Volumes on two
-Nodes may contain different data. Container adoption remains available only on
-Docker Standalone Platforms. On a Swarm manager, Citadel can import either an
-existing Docker Stack namespace or a regular Docker Compose project. A Docker
-Stack is imported as one complete namespace from **Services** or its parent row
+Images, Volumes, and local Networks are Node-local rather than cluster
+inventory. Their tables show the owning Node and can contain multiple entries
+with the same local name. Citadel does not infer that an Image present on one
+Node exists on another. Browsing a Volume targets its exact Node; destructive
+Image, Volume, and local Network actions remain disabled. Container adoption
+remains available only on Docker Standalone Platforms. On a Swarm manager,
+Citadel can import an existing Docker Stack namespace or a regular Docker
+Compose project. A Docker Stack is imported as one complete namespace from
+**Services** or its parent row
 in **Containers**. A regular Compose project is imported from its parent row in
 **Containers** and converted on its first explicit Apply. Swarm Task containers
 never expose individual adoption actions.
@@ -187,6 +198,13 @@ and Docker Swarm requires duplicating the Stack and reviewing the new draft.
 Select **Apply** after reviewing a valid draft. The progress sheet reports
 preflight, Docker CLI output, and rollout observation. Citadel supports this
 flow through Local, regular Agent, and Edge Agent connections.
+
+Swarm owns the lifecycle of a Stack's Tasks, so Swarm Stacks do not show the
+container-oriented **Start**, **Stop**, **Pause**, **Resume**, or **Reconcile
+drift** actions used by Docker Standalone Stacks. Manually changing an
+individual Task container is temporary because Swarm recreates it to restore
+the Service's desired state. Change the Compose configuration, including
+`deploy.replicas`, then use **Apply** or **Redeploy** instead.
 
 Docker accepting the Stack definition does not by itself mark the release
 healthy. Citadel observes the Stack Services and their Tasks and reports a
@@ -561,8 +579,8 @@ The current Swarm milestone does not provide:
 - Citadel Deployments on Swarm Platforms;
 - rollback of a release whose required versioned Secret or Config is no longer
   retained;
-- cluster-wide Image distribution, per-Node Image and Volume inventory, local
-  Network aggregation, multi-Node Volume backup, or restore;
+- cluster-wide Image distribution, destructive node-local Image/Volume/local
+  Network mutations, or node-routed Volume backup/restore;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
 

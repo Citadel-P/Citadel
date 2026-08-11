@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { VolumesView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup, VolumeEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import {
+  useDockerDaemonGroup,
+  VolumeEvent,
+  SwarmNodeLocalResourcesUpdate,
+} from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useVolumesGroup = (platformId?: string) => {
@@ -9,11 +13,16 @@ export const useVolumesGroup = (platformId?: string) => {
   const capabilities = data?.data.capabilities;
 
   const lastDataRef = useRef<VolumesView | undefined>(data?.data);
+  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>();
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
       lastDataRef.current = data.data;
-      setVolumes(data.data);
+      setVolumes(
+        nodeSnapshotRef.current
+          ? { ...data.data, volumes: nodeSnapshotRef.current.volumes }
+          : data.data,
+      );
     }
   }, [data?.data]);
 
@@ -51,7 +60,16 @@ export const useVolumesGroup = (platformId?: string) => {
     });
   }, []);
 
-  useDockerDaemonGroup(platformId, { onVolumeEvent });
+  const onSwarmNodeLocalResourcesUpdated = useCallback(
+    (snapshot: SwarmNodeLocalResourcesUpdate) => {
+      if (snapshot.platformId !== platformId) return;
+      nodeSnapshotRef.current = snapshot;
+      setVolumes((current) => (current ? { ...current, volumes: snapshot.volumes } : current));
+    },
+    [platformId],
+  );
+
+  useDockerDaemonGroup(platformId, { onVolumeEvent, onSwarmNodeLocalResourcesUpdated });
 
   return { volumes, isLoading, capabilities };
 };

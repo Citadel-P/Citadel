@@ -31,6 +31,14 @@ protocol reporting, routed Docker operations, streamed stack deployment,
 container inspection, persisted-identity reconnect, revocation, and
 cross-platform command isolation.
 
+The Swarm node-agent compatibility suite creates a disposable three-node
+Docker-in-Docker Swarm and a private disposable Registry. It installs the
+candidate Agent through Citadel's production global-Service workflow with
+Local, regular Agent, and Edge Agent manager connections. Each case verifies
+per-worker Container inventory, statistics, and inspect routing, then proves
+that one worker disconnect produces partial coverage with retained stale data
+and that the same Node recovers after restart.
+
 The Forgejo compatibility suite starts a pinned, registration-disabled Forgejo
 instance and a real candidate Core process. It creates a private repository,
 deploys a Git-backed stack, delivers signed push webhooks, deploys a second
@@ -90,8 +98,9 @@ are already built:
 .\test\Citadel.Tests.Acceptance\run-image-compatibility.ps1 -SkipBuild
 ```
 
-The runner requires all three suites to execute, fails on missing images, and
-restores the process environment variables after completion.
+The runner requires all four candidate-image suites to execute, fails on
+missing images, and restores the process environment variables after
+completion.
 
 Run only the upgrade suite:
 
@@ -124,6 +133,7 @@ $env:CITADEL_ACCEPTANCE_AGENT_VERSION = "1.0.0" # Optional exact assertion
 
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.SwarmNodeAgentCompatibilityTests
 ```
 
 The image references may also be registry references or immutable digests.
@@ -131,6 +141,11 @@ The same Agent image is exercised in inbound regular Agent and outbound Edge
 Agent modes. The suites create disposable Core data, Agent identity,
 PostgreSQL, and Docker data volumes; they do not deploy test stacks to the host
 Docker daemon.
+
+The Swarm suite temporarily tags the local candidate Agent image and pushes it
+to its disposable Registry so the nested worker daemons exercise a real image
+pull. The generated tag, Registry, Swarm Nodes, and Docker volumes are removed
+when the test finishes.
 
 Run only the Forgejo Git and webhook compatibility suite:
 

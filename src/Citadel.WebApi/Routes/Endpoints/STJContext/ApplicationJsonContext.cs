@@ -693,6 +693,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(SwarmExternalImage))]
 [JsonSerializable(typeof(SwarmBuildImage))]
 [JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.SwarmServices.SwarmServiceOperationView))]
+[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.Swarm.SwarmNodeLocalResourcesView))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

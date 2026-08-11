@@ -108,4 +108,43 @@ describe('createActionsBuilder', () => {
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('The selected container cannot be started yet.');
   });
+
+  it('omits actions that are not available for the current resources', () => {
+    const { info, group } = createActionsBuilder<{ name: string; supportsAction: boolean }>()
+      .addAction({
+        key: 'restart',
+        title: 'Restart',
+        type: 'command',
+        icon: RefreshCw,
+        isVisible: (resources) => {
+          const items = Array.isArray(resources) ? resources : [resources];
+          return items.every((resource) => resource.supportsAction);
+        },
+        useHandler: () => ({
+          canExecute: true,
+          run: vi.fn(),
+        }),
+      })
+      .build();
+    const InfoAction = info.restart;
+    const GroupAction = group.restart;
+
+    const { rerender } = render(
+      <>
+        <InfoAction resource={{ name: 'unsupported', supportsAction: false }} />
+        <GroupAction resources={[{ name: 'unsupported', supportsAction: false }]} />
+      </>,
+    );
+
+    expect(screen.queryByRole('button', { name: /restart/i })).not.toBeInTheDocument();
+
+    rerender(
+      <>
+        <InfoAction resource={{ name: 'supported', supportsAction: true }} />
+        <GroupAction resources={[{ name: 'supported', supportsAction: true }]} />
+      </>,
+    );
+
+    expect(screen.getAllByRole('button', { name: /restart/i })).toHaveLength(2);
+  });
 });

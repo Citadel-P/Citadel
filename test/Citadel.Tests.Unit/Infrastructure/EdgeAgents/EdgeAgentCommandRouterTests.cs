@@ -101,11 +101,9 @@ public sealed class EdgeAgentCommandRouterTests
         var deniedKinds = new[]
         {
             EdgeAgentCommandKind.SwarmNodeUpdate,
-            EdgeAgentCommandKind.ContainerCreate,
-            EdgeAgentCommandKind.ContainerExecBinary,
-            EdgeAgentCommandKind.ImageList,
-            EdgeAgentCommandKind.VolumeList,
-            EdgeAgentCommandKind.NetworkList
+            EdgeAgentCommandKind.ImageDelete,
+            EdgeAgentCommandKind.VolumeDelete,
+            EdgeAgentCommandKind.NetworkDelete
         };
         foreach (var kind in deniedKinds)
         {
@@ -122,6 +120,43 @@ public sealed class EdgeAgentCommandRouterTests
             Assert.Contains("not allowed", result.ErrorMessage);
         }
         Assert.False(session.Outbound.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task SendUnaryAsync_WithNodeId_ShouldRouteNodeLocalReadAndHelperCommands()
+    {
+        var registry = new EdgeAgentSessionRegistry();
+        var platformId = Guid.CreateVersion7();
+        var session = CreateNodeSession(platformId, "node-1");
+        registry.Register(session);
+        var router = new EdgeAgentCommandRouter(registry, NullLogger<EdgeAgentCommandRouter>.Instance);
+        var allowedKinds = new[]
+        {
+            EdgeAgentCommandKind.ContainerCreate,
+            EdgeAgentCommandKind.ContainerExecBinary,
+            EdgeAgentCommandKind.ImageList,
+            EdgeAgentCommandKind.ImageInspect,
+            EdgeAgentCommandKind.VolumeList,
+            EdgeAgentCommandKind.VolumeInspect,
+            EdgeAgentCommandKind.NetworkList,
+            EdgeAgentCommandKind.NetworkInspect
+        };
+
+        foreach (var kind in allowedKinds)
+        {
+            var resultTask = router.SendUnaryAsync(
+                platformId,
+                "node-1",
+                kind,
+                [],
+                TimeSpan.FromSeconds(5),
+                correlationId: null,
+                TestContext.Current.CancellationToken);
+            var envelope = await ReadOutboundAsync(session, TestContext.Current.CancellationToken);
+            Assert.Equal("node-1", envelope.Command.NodeId);
+            session.HandleCompleted(envelope.CommandId);
+            Assert.True((await resultTask).IsSuccess);
+        }
     }
 
     [Fact]

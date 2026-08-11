@@ -66,6 +66,7 @@ export function VolumeBrowserSheet({ open, onOpenChange, volume, platformId }: V
               key={`${effectivePlatformId}:${volume.id}:${treeVersion}`}
               platformId={effectivePlatformId}
               volumeName={volume.id}
+              dockerNodeId={volume.dockerNodeId}
               enabled={open}
             />
           ) : (
@@ -143,7 +144,17 @@ export const VolumeBrowseInfoAction: ButtonActionComponent<DockerVolumeResultVie
   );
 };
 
-function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; volumeName: string; enabled: boolean }) {
+function VolumeTree({
+  platformId,
+  volumeName,
+  dockerNodeId,
+  enabled,
+}: {
+  platformId: string;
+  volumeName: string;
+  dockerNodeId?: string | null;
+  enabled: boolean;
+}) {
   const { apiClient } = useApiClientContext();
   const formatDateTime = useProfileDateTimeFormatter();
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
@@ -158,7 +169,7 @@ function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; v
         const response = await apiClient.request<Response, ProblemDetails>({
           path: `/api/v1/platforms/${encodeURIComponent(platformId)}/volumes/${encodeURIComponent(volumeName)}/files/download`,
           method: 'GET',
-          query: { path: normalized },
+          query: { path: normalized, dockerNodeId: dockerNodeId ?? undefined },
           secure: true,
           headers: { Accept: 'application/octet-stream, application/x-tar' },
         });
@@ -183,12 +194,17 @@ function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; v
         setDownloadingPath(null);
       }
     },
-    [apiClient, platformId, volumeName],
+    [apiClient, dockerNodeId, platformId, volumeName],
   );
 
   const loadDirectory = useCallback(
     async (path: string, signal: AbortSignal) => {
-      const response = await apiClient.api.listVolumeDirectory(platformId, volumeName, { path }, { signal });
+      const response = await apiClient.api.listVolumeDirectory(
+        platformId,
+        volumeName,
+        { path, dockerNodeId: dockerNodeId ?? undefined },
+        { signal },
+      );
       return {
         entries: response.data.entries.map(
           (entry): BrowserEntry => ({
@@ -203,7 +219,7 @@ function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; v
         isTruncated: response.data.isTruncated,
       };
     },
-    [apiClient, formatDateTime, platformId, volumeName],
+    [apiClient, dockerNodeId, formatDateTime, platformId, volumeName],
   );
 
   const renderEntryActions = useCallback(

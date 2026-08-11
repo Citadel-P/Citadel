@@ -19,7 +19,11 @@ public sealed record DockerNetworkResultView(
     IReadOnlyDictionary<string, string> Options,
     IReadOnlyDictionary<string, string> Labels,
     bool IsSystem,
-    NetworkCapabilities? Capabilities = null)
+    NetworkCapabilities? Capabilities = null,
+    string? DockerNodeId = null,
+    string? NodeHostname = null,
+    bool IsStale = false,
+    string? StaleReason = null)
 {
     internal static DockerNetworkResultView Map(DockerNetworkResult dockerNetworkResult)
     {
@@ -40,6 +44,10 @@ public sealed record DockerNetworkResultView(
             dockerNetworkResult.Ipam,
             dockerNetworkResult.Options,
             dockerNetworkResult.Labels,
-            dockerNetworkResult.IsSystem);
+            dockerNetworkResult.IsSystem,
+            DockerNodeId: dockerNetworkResult.DockerNodeId,
+            NodeHostname: dockerNetworkResult.NodeHostname,
+            IsStale: dockerNetworkResult.IsStale,
+            StaleReason: dockerNetworkResult.StaleReason);
     }
 }

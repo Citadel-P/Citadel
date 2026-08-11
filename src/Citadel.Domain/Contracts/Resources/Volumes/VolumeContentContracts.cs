@@ -1,4 +1,5 @@
 using Domain;
+using Domain.Entities.Platforms;
 
 namespace Domain.Contracts.Resources.Volumes;
 
@@ -11,14 +12,18 @@ public sealed record ListVolumeDirectoryCommand(
     Guid PlatformId,
     PlatformConnectorType ConnectorType,
     string VolumeName,
-    NormalizedVolumePath Path);
+    NormalizedVolumePath Path,
+    Platform? Platform = null,
+    string? DockerNodeId = null);
 
 public sealed record DownloadVolumePathCommand(
     string PlatformAddress,
     Guid PlatformId,
     PlatformConnectorType ConnectorType,
     string VolumeName,
-    NormalizedVolumePath Path);
+    NormalizedVolumePath Path,
+    Platform? Platform = null,
+    string? DockerNodeId = null);
 
 public sealed record VolumeDirectoryListing(
     Guid PlatformId,

@@ -84,8 +84,15 @@ public sealed class ContainerStatsMemoryTests
                 It.IsAny<IEnumerable<ContainerStat>>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("database unavailable"));
+        var swarmServiceStatsRepository = new Mock<ISwarmServiceStatRepository>();
+        swarmServiceStatsRepository
+            .Setup(repository => repository.GetAttributionsAsync(
+                It.IsAny<Guid[]>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(value => value.ContainerStats).Returns(statsRepository.Object);
+        uow.SetupGet(value => value.SwarmServiceStats).Returns(swarmServiceStatsRepository.Object);
         var workItem = new ContainerStatsBatchWorkItem(
             new Dictionary<Guid, List<ContainerStat>>
             {

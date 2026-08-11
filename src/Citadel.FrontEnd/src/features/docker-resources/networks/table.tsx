@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerNetworkResultView } from '@/api/generated/api.types';
+import { DockerNetworkResultView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,6 +12,8 @@ import { useSelectedResources } from '@/lib/atoms';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ActionData } from '@/pages/types';
 import { SystemBadge } from '@/components/custom/system-badge';
+import { useAppContext } from '@/lib/context/app-context';
+import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
 
 export const NetworksTable = ({
   items,
@@ -26,7 +28,9 @@ export const NetworksTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<DockerNetworkResultView>('Network');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const { currentPlatform } = useAppContext();
+  const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
+  const cols = useMemo(() => columns(actions ?? {}, showNode), [actions, showNode]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
@@ -36,6 +40,7 @@ const columns = (
     string,
     React.FC<{ resource: DockerNetworkResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  showNode: boolean,
 ): ColumnDef<DockerNetworkResultView>[] => [
   {
     id: 'select',
@@ -62,6 +67,7 @@ const columns = (
     cell: ({ row }) => <NetworkNameRow network={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
+  ...(showNode ? [createNodeResourceColumn<DockerNetworkResultView>()] : []),
   {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
@@ -144,7 +150,8 @@ export const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {
-    navigate(`/platforms/${platformId}/networks/${formatId(network.id)}/`);
+    const nodeQuery = network.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(network.dockerNodeId)}` : '';
+    navigate(`/platforms/${platformId}/networks/${formatId(network.id)}/${nodeQuery}`);
   }
 
   return (

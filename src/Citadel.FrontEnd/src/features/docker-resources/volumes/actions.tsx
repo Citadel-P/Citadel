@@ -24,7 +24,10 @@ const volumeActions = createActionsBuilder<DockerVolumeResultView>()
         isPending: false,
         run: () => {
           if (!canExecute || !selected) return;
-          navigate(`/platforms/${currentPlatform?.id}/volumes/${selected.id}/`);
+          const nodeQuery = selected.dockerNodeId
+            ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
+            : '';
+          navigate(`/platforms/${currentPlatform?.id}/volumes/${selected.id}/${nodeQuery}`);
         },
       };
     },
@@ -35,7 +38,7 @@ const volumeActions = createActionsBuilder<DockerVolumeResultView>()
     icon: Trash,
     mutateKey: 'deleteVolumes',
     canExecute: (r) => {
-      const can = (x: DockerVolumeResultView) => x.inUse === false;
+      const can = (x: DockerVolumeResultView) => x.inUse === false && !x.dockerNodeId;
       return Array.isArray(r) ? r.every(can) : can(r);
     },
     separatorBefore: true,
