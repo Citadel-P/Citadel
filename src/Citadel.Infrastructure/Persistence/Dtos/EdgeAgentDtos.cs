@@ -30,7 +30,18 @@ internal sealed record EdgeAgentBindingDto(
     int ProtocolVersion,
     DateTime? RevokedAtUtc,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string? Profile,
+    string? ClusterId,
+    string? DockerNodeId,
+    string? DockerDaemonId,
+    string? DockerHostname,
+    string? SwarmRole,
+    string? LastObservedServiceId,
+    string? LastObservedTaskId,
+    DateTime? FirstEnrolledAtUtc,
+    DateTime? LastAuthenticatedAtUtc,
+    string? RevocationReason);
 
 internal sealed record EdgeAgentPlatformStateDto(
     Guid PlatformId,
@@ -66,4 +77,50 @@ internal sealed record EdgeAgentPlatformStateDto(
     int? BindingProtocolVersion,
     DateTime? BindingRevokedAtUtc,
     DateTime? BindingCreatedAtUtc,
-    DateTime? BindingUpdatedAtUtc);
+    DateTime? BindingUpdatedAtUtc,
+    string? BindingProfile,
+    string? BindingClusterId,
+    string? BindingDockerNodeId,
+    string? BindingDockerDaemonId,
+    string? BindingDockerHostname,
+    string? BindingSwarmRole,
+    string? BindingLastObservedServiceId,
+    string? BindingLastObservedTaskId,
+    DateTime? BindingFirstEnrolledAtUtc,
+    DateTime? BindingLastAuthenticatedAtUtc,
+    string? BindingRevocationReason);
+
+internal sealed record SwarmNodeAgentInstallationDto(
+    Guid PlatformId,
+    string ClusterId,
+    string ManagerDockerNodeId,
+    string ManagerDockerDaemonId,
+    string? DockerServiceId,
+    string DockerServiceName,
+    string AgentImageReference,
+    string AgentImageDigest,
+    string? DockerCaConfigId,
+    string? DockerCaConfigName,
+    string DesiredState,
+    Guid? OperationId,
+    string? OperationKind,
+    string? OperationState,
+    DateTime? OperationStartedAtUtc,
+    Guid? OperationActorId,
+    string? OperationError,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+internal sealed record SwarmNodeAgentBootstrapDto(
+    Guid Id,
+    Guid PlatformId,
+    string ClusterId,
+    int Version,
+    string TokenHash,
+    string? DockerSecretId,
+    string DockerSecretName,
+    DateTime ExpiresAtUtc,
+    DateTime? RevokedAtUtc,
+    Guid CreatedByActorId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);

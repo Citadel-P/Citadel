@@ -5,6 +5,7 @@ using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Routes.Endpoints;
@@ -47,6 +48,15 @@ public static class SwarmInventory
         EndpointHandlers.HandleResult(await mediator.Send(new InspectSwarmService(platformId, resourceId), ct), SwarmServiceInspectView.Map);
     public static async Task<Results<Ok<SwarmLogsView>, ProblemHttpResult>> GetServiceLogs(IMediator mediator, Guid platformId, string resourceId, int tail = 100, CancellationToken ct = default) =>
         EndpointHandlers.HandleResult(await mediator.Send(new GetSwarmServiceLogs(platformId, resourceId, tail), ct), SwarmLogsView.Map);
+    public static async Task<Results<Ok<SwarmServiceStatsView>, ProblemHttpResult>> GetServiceStats(
+        IMediator mediator,
+        Guid platformId,
+        string resourceId,
+        int hours = 24,
+        CancellationToken ct = default) =>
+        EndpointHandlers.HandleResult(
+            await mediator.Send(new GetSwarmServiceStats(platformId, resourceId, hours), ct),
+            SwarmServiceStatsView.Map);
     public static async Task<Results<NoContent, ProblemHttpResult>> RestartService(
         IMediator mediator,
         Guid platformId,
@@ -82,8 +92,8 @@ public static class SwarmInventory
             await mediator.Send(new GetSwarmTask(platformId, resourceId), ct),
             permissionEvaluator,
             SwarmTaskView.Map);
-    public static async Task<Results<Ok<SwarmTaskInspectView>, ProblemHttpResult>> InspectTask(IMediator mediator, Guid platformId, string resourceId, CancellationToken ct) =>
-        EndpointHandlers.HandleResult(await mediator.Send(new InspectSwarmTask(platformId, resourceId), ct), SwarmTaskInspectView.Map);
+    public static async Task<Results<Ok<ContainerInspectView>, ProblemHttpResult>> InspectTask(IMediator mediator, Guid platformId, string resourceId, CancellationToken ct) =>
+        EndpointHandlers.HandleResult(await mediator.Send(new InspectSwarmTask(platformId, resourceId), ct), ContainerInspectView.Map);
     public static async Task<Results<Ok<SwarmTaskStatsView>, ProblemHttpResult>> GetTaskStats(
         IMediator mediator,
         Guid platformId,

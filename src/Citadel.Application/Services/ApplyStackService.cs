@@ -65,7 +65,8 @@ internal class ApplyStackService(
     IConnectorFactory<ISwarmConnector>? swarmConnectorFactory = null,
     ISwarmReconciliationCoordinator? swarmReconciliationCoordinator = null,
     IConnectorFactory<IVolumeConnector>? volumeConnectorFactory = null,
-    IOptions<SwarmStackOptions>? swarmStackOptions = null) : IApplyStackService
+    IOptions<SwarmStackOptions>? swarmStackOptions = null,
+    ISwarmManagerIdentityValidator? managerIdentityValidator = null) : IApplyStackService
 {
     private const int MaxTransportSourceFiles = 512;
     private const long MaxTransportSourceBytes = 12L * 1024 * 1024;
@@ -92,6 +93,17 @@ internal class ApplyStackService(
         }
 
         var isSwarmStack = stack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type == PlatformType.DockerSwarm;
+        if (isSwarmStack && managerIdentityValidator is not null)
+        {
+            var managerIdentity = await managerIdentityValidator.ValidateAsync(
+                stack.CurrentStackRelease!.Platform!,
+                ct);
+            if (managerIdentity.IsFailure(out var managerIdentityError))
+            {
+                yield return StackStreamItem.FromStdErr(managerIdentityError!.Message, 1);
+                yield break;
+            }
+        }
         var convertComposeProjectToSwarm = isSwarmStack
             && operation == StackApplyOperation.Apply
             && (await LoadStackContainersAsync(stack.Id, ct)).Any(static container => !container.IsSwarmTask);
@@ -357,13 +369,28 @@ internal class ApplyStackService(
             yield break;
         }
 
-        var referencedConfigurationKeys = await GetReferencedConfigurationKeysAsync(
+        var configurationReferences = await GetConfigurationReferencesAsync(
             composeFileContent,
             sourceComposeFilePaths,
             ct);
+        var missingConfigurationKeys = GetMissingRequiredConfigurationKeys(
+            configurationReferences.Required,
+            resolvedConfiguration,
+            sourceEnvironmentVariables);
+        if (missingConfigurationKeys.Count > 0)
+        {
+            var message = missingConfigurationKeys.Count == 1
+                ? $"Required Compose variable '{missingConfigurationKeys[0]}' has no value. Define a Stack Variable or Secret, or provide it through a configured repository env file."
+                : $"Required Compose variables {string.Join(", ", missingConfigurationKeys.Select(static name => $"'{name}'"))} have no values. Define Stack Variables or Secrets, or provide them through configured repository env files.";
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, source: releaseSource, expectedRowVersion: operationRowVersion, ct: ct);
+            await ProcessConfigurationFailureAlertAsync(stack.Id, stack.Name, message, ct);
+            yield return StackStreamItem.FromStdErr(message, 1);
+            yield break;
+        }
+
         var selectedConfiguration = SelectStackApplyConfiguration(
             resolvedConfiguration,
-            referencedConfigurationKeys);
+            configurationReferences.All);
         var secretFiles = retainedMountedSecrets.Length > 0
             ? []
             : BuildMountedSecretFiles(selectedConfiguration);
@@ -390,7 +417,7 @@ internal class ApplyStackService(
         yield return StackStreamItem.SystemMessage(
             ResourceBindingApplyMessageBuilder.BuildComposeInterpolationMessage(
                 selectedConfiguration,
-                referencedConfigurationKeys,
+                configurationReferences.All,
                 sourceEnvFilePaths?.Count ?? 0),
             0);
 
@@ -1279,16 +1306,17 @@ internal class ApplyStackService(
         return alertService.ProcessAsync(AlertType.StackConfigurationResolutionFailed, context, ct);
     }
 
-    private static async Task<IReadOnlySet<string>> GetReferencedConfigurationKeysAsync(
+    private static async Task<StackConfigurationReferences> GetConfigurationReferencesAsync(
         string? composeFileContent,
         IReadOnlyList<string>? sourceComposeFilePaths,
         CancellationToken cancellationToken)
     {
-        var references = new HashSet<string>(StringComparer.Ordinal);
+        var all = new HashSet<string>(StringComparer.Ordinal);
+        var required = new HashSet<string>(StringComparer.Ordinal);
 
         if (!string.IsNullOrWhiteSpace(composeFileContent))
         {
-            AddReferencedConfigurationKeys(composeFileContent, references);
+            AddConfigurationReferences(composeFileContent, all, required);
         }
 
         if (sourceComposeFilePaths is { Count: > 0 })
@@ -1299,33 +1327,79 @@ internal class ApplyStackService(
                     continue;
 
                 var content = await File.ReadAllTextAsync(composeFilePath, cancellationToken);
-                AddReferencedConfigurationKeys(content, references);
+                AddConfigurationReferences(content, all, required);
             }
         }
 
-        return references;
+        return new StackConfigurationReferences(all, required);
     }
 
-    private static void AddReferencedConfigurationKeys(string content, HashSet<string> references)
+    private static void AddConfigurationReferences(
+        string content,
+        HashSet<string> all,
+        HashSet<string> required)
     {
         foreach (Match match in BracedVariableReferenceRegex.Matches(content))
         {
-            references.Add(match.Groups["name"].Value);
+            all.Add(match.Groups["name"].Value);
+        }
+
+        foreach (Match match in RequiredBracedVariableReferenceRegex.Matches(content))
+        {
+            required.Add(match.Groups["name"].Value);
         }
 
         foreach (Match match in SimpleVariableReferenceRegex.Matches(content))
         {
-            references.Add(match.Groups["name"].Value);
+            var name = match.Groups["name"].Value;
+            all.Add(name);
+            required.Add(name);
         }
+    }
+
+    private static IReadOnlyList<string> GetMissingRequiredConfigurationKeys(
+        IReadOnlySet<string> required,
+        ResolvedResourceBindings configuration,
+        IReadOnlyList<string>? sourceEnvironmentVariables)
+    {
+        if (required.Count == 0)
+            return [];
+
+        var available = configuration.Entries
+            .Select(static entry => entry.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        if (sourceEnvironmentVariables is { Count: > 0 })
+        {
+            foreach (var entry in sourceEnvironmentVariables)
+            {
+                var separator = entry.IndexOf('=');
+                var name = (separator < 0 ? entry : entry[..separator]).Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                    available.Add(name);
+            }
+        }
+
+        return required
+            .Where(name => !available.Contains(name))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static readonly Regex BracedVariableReferenceRegex = new(
         @"(?<!\$)\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?=[:?+\-}]|\})",
         RegexOptions.Compiled);
 
+    private static readonly Regex RequiredBracedVariableReferenceRegex = new(
+        @"(?<!\$)\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?=\}|:?\?)",
+        RegexOptions.Compiled);
+
     private static readonly Regex SimpleVariableReferenceRegex = new(
         @"(?<!\$)\$(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Compiled);
+
+    private sealed record StackConfigurationReferences(
+        IReadOnlySet<string> All,
+        IReadOnlySet<string> Required);
 
     private static async Task<(bool HasItem, StackApplyResult? Result, string? ErrorMessage)> TryReadNextAsync(IAsyncEnumerator<StackApplyResult> enumerator)
     {
@@ -2144,7 +2218,7 @@ internal class ApplyStackService(
         IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
         long? expectedRowVersion = null,
         CancellationToken ct = default)
-        => dbWorkQueue.EnqueueAsync(
+        => dbWorkQueue.EnqueueAndWaitAsync(
             new UpdateStackStatusWorkItem(
                 stackId,
                 actorId,

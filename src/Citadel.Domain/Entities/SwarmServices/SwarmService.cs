@@ -312,11 +312,13 @@ public sealed class SwarmService : IAuditedEntity, IReconcilableResource
             ? SwarmServiceHealth.Unknown
             : terminalUpdate
                 ? SwarmServiceHealth.Failed
-                : projection.DesiredTaskCount == 0 || projection.RunningTaskCount >= projection.DesiredTaskCount
-                    ? SwarmServiceHealth.Healthy
-                    : projection.RunningTaskCount > 0
-                        ? SwarmServiceHealth.Degraded
-                        : SwarmServiceHealth.Progressing;
+                : projection.DesiredTaskCount == 0
+                    ? SwarmServiceHealth.Stopped
+                    : projection.RunningTaskCount >= projection.DesiredTaskCount
+                        ? SwarmServiceHealth.Healthy
+                        : projection.RunningTaskCount > 0
+                            ? SwarmServiceHealth.Degraded
+                            : SwarmServiceHealth.Progressing;
 
         SynchronizationState = projection.Ownership == SwarmServiceOwnership.OwnershipConflict
             ? SwarmServiceSynchronizationState.OwnershipConflict

@@ -80,11 +80,11 @@ public sealed class ContainerCommandCompletionTests(PostgresTestFixture fixture)
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var workItem = new CompleteContainerCommandWorkItem(
                 claims,
-                new Dictionary<string, ContainerStateStatus>(StringComparer.OrdinalIgnoreCase)
+                new Dictionary<Guid, ContainerStateStatus>
                 {
-                    [directContainer.DockerContainerId] = ContainerStateStatus.Running,
-                    [deploymentContainer.DockerContainerId] = ContainerStateStatus.Running,
-                    [stackContainer.DockerContainerId] = ContainerStateStatus.Running
+                    [directContainer.Id] = ContainerStateStatus.Running,
+                    [deploymentContainer.Id] = ContainerStateStatus.Running,
+                    [stackContainer.Id] = ContainerStateStatus.Running
                 },
                 actorId,
                 notificationQueue.Object,
@@ -180,9 +180,9 @@ public sealed class ContainerCommandCompletionTests(PostgresTestFixture fixture)
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var workItem = new CompleteContainerCommandWorkItem(
                 new ProcessedResources([originalClaim], [], []),
-                new Dictionary<string, ContainerStateStatus>
+                new Dictionary<Guid, ContainerStateStatus>
                 {
-                    [container.DockerContainerId] = ContainerStateStatus.Running
+                    [originalClaim.Id] = ContainerStateStatus.Running
                 },
                 actorId,
                 notificationQueue.Object,

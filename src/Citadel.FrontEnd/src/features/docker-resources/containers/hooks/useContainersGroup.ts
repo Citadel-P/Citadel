@@ -27,7 +27,7 @@ export const useContainersGroup = (platformId?: string) => {
       }
 
       const updatedContainers = [...(currentInfo.containers ?? [])];
-      const existingIndex = updatedContainers.findIndex((c) => c.containerId === containerEvent?.container.containerId);
+      const existingIndex = updatedContainers.findIndex((c) => c.id === containerEvent?.container.id);
 
       switch (containerEvent?.eventType) {
         case 'create':

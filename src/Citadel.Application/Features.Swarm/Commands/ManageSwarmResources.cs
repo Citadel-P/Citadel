@@ -1,4 +1,5 @@
 using System.Text;
+using Application.Services;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -215,12 +216,13 @@ public sealed record DeleteSwarmConfigs(Guid PlatformId, IReadOnlyList<string> C
 internal sealed class CreateSwarmSecretHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<CreateSwarmSecret, Result>
 {
     public async ValueTask<Result> Handle(CreateSwarmSecret command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -236,12 +238,13 @@ internal sealed class CreateSwarmSecretHandler(
 internal sealed class UpdateSwarmNodeHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<UpdateSwarmNode, Result>
 {
     public async ValueTask<Result> Handle(UpdateSwarmNode command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -270,12 +273,13 @@ internal sealed class UpdateSwarmNodeHandler(
 internal sealed class UpdateSwarmNodesAvailabilityHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<UpdateSwarmNodesAvailability, Result>
 {
     public async ValueTask<Result> Handle(UpdateSwarmNodesAvailability command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -334,12 +338,13 @@ internal sealed class UpdateSwarmNodesAvailabilityHandler(
 internal sealed class RestartSwarmServiceHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<RestartSwarmService, Result>
 {
     public async ValueTask<Result> Handle(RestartSwarmService command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -360,12 +365,13 @@ internal sealed class RestartSwarmServiceHandler(
 internal sealed class DeleteSwarmServicesHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<DeleteSwarmServices, Result>
 {
     public async ValueTask<Result> Handle(DeleteSwarmServices command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -443,12 +449,13 @@ internal static class NativeSwarmServiceValidation
 internal sealed class UpdateSwarmSecretLabelsHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<UpdateSwarmSecretLabels, Result>
 {
     public async ValueTask<Result> Handle(UpdateSwarmSecretLabels command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -470,12 +477,13 @@ internal sealed class UpdateSwarmSecretLabelsHandler(
 internal sealed class DeleteSwarmSecretsHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<DeleteSwarmSecrets, Result>
 {
     public async ValueTask<Result> Handle(DeleteSwarmSecrets command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -530,12 +538,13 @@ internal sealed class DeleteSwarmSecretsHandler(
 internal sealed class CreateSwarmConfigHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<CreateSwarmConfig, Result>
 {
     public async ValueTask<Result> Handle(CreateSwarmConfig command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -551,12 +560,13 @@ internal sealed class CreateSwarmConfigHandler(
 internal sealed class UpdateSwarmConfigLabelsHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<UpdateSwarmConfigLabels, Result>
 {
     public async ValueTask<Result> Handle(UpdateSwarmConfigLabels command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -578,12 +588,13 @@ internal sealed class UpdateSwarmConfigLabelsHandler(
 internal sealed class DeleteSwarmConfigsHandler(
     IUnitOfWork unitOfWork,
     IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     ISwarmReconciliationCoordinator reconciliationCoordinator)
     : ICommandHandler<DeleteSwarmConfigs, Result>
 {
     public async ValueTask<Result> Handle(DeleteSwarmConfigs command, CancellationToken cancellationToken)
     {
-        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, command.PlatformId, cancellationToken);
+        var context = await SwarmMutationContext.LoadAsync(unitOfWork, connectorFactory, managerIdentityValidator, command.PlatformId, cancellationToken);
         if (!context.IsSuccess(out var value, out var error))
             return Result.Failure(error!);
 
@@ -640,6 +651,7 @@ internal sealed record SwarmMutationContext(Platform Platform, ISwarmConnector C
     internal static async Task<Result<SwarmMutationContext>> LoadAsync(
         IUnitOfWork unitOfWork,
         IConnectorFactory<ISwarmConnector> connectorFactory,
+        ISwarmManagerIdentityValidator managerIdentityValidator,
         Guid platformId,
         CancellationToken cancellationToken)
     {
@@ -651,6 +663,10 @@ internal sealed record SwarmMutationContext(Platform Platform, ISwarmConnector C
         if (platform.Status != PlatformStatus.Online)
             return Result.Failure<SwarmMutationContext>(new ConflictError("Platform is offline."));
 
+        var managerIdentity = await managerIdentityValidator.ValidateAsync(platform, cancellationToken);
+        if (managerIdentity.IsFailure(out var managerIdentityError))
+            return Result.Failure<SwarmMutationContext>(managerIdentityError!);
+
         return Result.Success(new SwarmMutationContext(
             platform,
             connectorFactory.GetConnector(platform.ConnectorType)));
@@ -659,6 +675,26 @@ internal sealed record SwarmMutationContext(Platform Platform, ISwarmConnector C
 
 internal static class SwarmMutationExecution
 {
+    internal static async Task<Result> ExecuteAndRefreshAsync<T>(
+        Func<Task<Result<T>>> mutation,
+        ISwarmReconciliationCoordinator reconciliationCoordinator,
+        Guid platformId)
+    {
+        try
+        {
+            var result = await mutation();
+            await reconciliationCoordinator.RefreshAsync(platformId, CancellationToken.None);
+            return result.IsSuccess(out _, out var error)
+                ? Result.Success()
+                : Result.Failure(error!);
+        }
+        catch (OperationCanceledException)
+        {
+            await reconciliationCoordinator.RefreshAsync(platformId, CancellationToken.None);
+            throw;
+        }
+    }
+
     internal static async Task<Result> ExecuteAndRefreshAsync(
         Func<Task<Result>> mutation,
         ISwarmReconciliationCoordinator reconciliationCoordinator,

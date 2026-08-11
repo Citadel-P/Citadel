@@ -12,6 +12,20 @@ public sealed class EdgeAgentOptions
 
     public string? AgentImageTag { get; set; }
 
+    public string[] SupportedNodeArchitectures { get; set; } = ["amd64", "arm64"];
+
+    public int NodeAgentBootstrapMinutes { get; set; } = 10;
+
+    public int NodeAgentSetupMinutes { get; set; } = 5;
+
+    public int NodeAgentRemovalGraceMinutes { get; set; } = 10;
+
+    public long NodeAgentLimitNanoCpus { get; set; } = 500_000_000;
+
+    public long NodeAgentLimitMemoryBytes { get; set; } = 512L * 1024 * 1024;
+
+    public long NodeAgentPidsLimit { get; set; } = 256;
+
     public string GetAgentImage()
     {
         var repository = string.IsNullOrWhiteSpace(AgentImageRepository)

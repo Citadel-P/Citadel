@@ -30,7 +30,14 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         stack_counts.StackStoppedCount,
         stack_counts.StackPausedCount,
         stack_counts.StackInProgressCount,
-        stack_counts.StackUnknownCount
+        stack_counts.StackUnknownCount,
+        swarm_service_counts.SwarmServiceCount,
+        swarm_service_counts.SwarmServiceHealthyCount,
+        swarm_service_counts.SwarmServiceDegradedCount,
+        swarm_service_counts.SwarmServiceFailedCount,
+        swarm_service_counts.SwarmServiceStoppedCount,
+        swarm_service_counts.SwarmServiceInProgressCount,
+        swarm_service_counts.SwarmServiceUnknownCount
         """;
 
     private const string WorkloadStatusJoins = """
@@ -60,6 +67,18 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
             WHERE sr.PlatformId = p.Id
         ) stack_counts ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*) AS SwarmServiceCount,
+                COUNT(*) FILTER (WHERE ss.Health = @SwarmServiceHealthyStatus) AS SwarmServiceHealthyCount,
+                COUNT(*) FILTER (WHERE ss.Health = @SwarmServiceDegradedStatus) AS SwarmServiceDegradedCount,
+                COUNT(*) FILTER (WHERE ss.Health = @SwarmServiceFailedStatus) AS SwarmServiceFailedCount,
+                COUNT(*) FILTER (WHERE ss.Health = @SwarmServiceStoppedStatus) AS SwarmServiceStoppedCount,
+                COUNT(*) FILTER (WHERE ss.Health = ANY(@SwarmServiceInProgressStatuses)) AS SwarmServiceInProgressCount,
+                COUNT(*) FILTER (WHERE ss.Health = @SwarmServiceUnknownStatus) AS SwarmServiceUnknownCount
+            FROM SwarmServices ss
+            WHERE ss.PlatformId = p.Id
+        ) swarm_service_counts ON TRUE
         """;
 
     public async Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken)
@@ -574,6 +593,21 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Created),
             EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Pending),
             EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Applying)
+        };
+        public string SwarmServiceHealthyStatus { get; } =
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Healthy);
+        public string SwarmServiceDegradedStatus { get; } =
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Degraded);
+        public string SwarmServiceFailedStatus { get; } =
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Failed);
+        public string SwarmServiceStoppedStatus { get; } =
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Stopped);
+        public string SwarmServiceUnknownStatus { get; } =
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Unknown);
+        public string[] SwarmServiceInProgressStatuses { get; } =
+        {
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Created),
+            EnumFormatter<SwarmServiceHealth>.GetValue(SwarmServiceHealth.Progressing)
         };
     }
 

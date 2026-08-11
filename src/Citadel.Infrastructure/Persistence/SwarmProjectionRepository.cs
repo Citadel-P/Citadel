@@ -33,7 +33,7 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                     COALESCE(SUM(RunningTaskCount), 0)::int AS RunningTaskCount,
                     COALESCE(SUM(DesiredTaskCount), 0)::int AS DesiredTaskCount
                 FROM SwarmServiceProjections
-                WHERE PlatformId = @PlatformId
+                WHERE PlatformId = @PlatformId AND Ownership <> 'System'
             )
             SELECT
                 EXISTS (
@@ -52,6 +52,15 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                 (SELECT COUNT(*)::int FROM SwarmNodeProjections WHERE PlatformId = @PlatformId) AS NodeCount,
                 (SELECT COUNT(*)::int FROM SwarmNodeProjections
                     WHERE PlatformId = @PlatformId AND lower(Role) = 'manager') AS ManagerCount,
+                (SELECT COUNT(*)::int FROM SwarmNodeProjections
+                    WHERE PlatformId = @PlatformId AND lower(Role) = 'manager'
+                        AND NOT IsStale AND lower(Reachability) = 'reachable') AS ReachableManagerCount,
+                EXISTS (SELECT 1 FROM SwarmNodeProjections
+                    WHERE PlatformId = @PlatformId AND lower(Role) = 'manager'
+                        AND NOT IsStale AND IsLeader) AS HasLeader,
+                EXISTS (SELECT 1 FROM SwarmNodeProjections
+                    WHERE PlatformId = @PlatformId AND lower(Role) = 'manager'
+                        AND IsStale) AS IsManagerInventoryStale,
                 ServiceCount,
                 HealthyServiceCount,
                 DegradedServiceCount,
@@ -71,6 +80,9 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
             value.IsStale,
             value.NodeCount,
             value.ManagerCount,
+            value.ReachableManagerCount,
+            value.HasLeader,
+            value.IsManagerInventoryStale,
             value.ServiceCount,
             new PlatformWorkloadStatusCounts(
                 value.ServiceCount,
@@ -121,7 +133,9 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
                    ConfigIds, Labels, Ownership, DockerStackNamespace,
                    OwnershipDiagnostic, SwarmServiceId, StackId, LiveRuntimeHash, ForceUpdate,
                    DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale
-            FROM SwarmServiceProjections WHERE PlatformId = @PlatformId ORDER BY Name, DockerServiceId
+            FROM SwarmServiceProjections
+            WHERE PlatformId = @PlatformId AND Ownership <> 'System'
+            ORDER BY Name, DockerServiceId
             """;
         return (await db.QueryAsync<SwarmServiceProjectionDto>(sql, new { PlatformId = platformId }, transaction: tx()))
             .Select(static value => value.ToDomain()).ToArray();
@@ -178,10 +192,15 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
         const string sql = """
             SELECT PlatformId, DockerTaskId, VersionIndex, Name, DockerServiceId, ServiceName, Slot,
                    DockerNodeId, NodeHostname, DesiredState, State, StatusMessage, Error, Image, Ports,
-                   StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale
+                   StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale, DockerContainerId
             FROM SwarmTaskProjections
             WHERE PlatformId = @PlatformId
               AND (@DockerServiceId IS NULL OR DockerServiceId = @DockerServiceId)
+              AND (@DockerServiceId IS NOT NULL OR NOT EXISTS (
+                    SELECT 1 FROM SwarmServiceProjections service
+                    WHERE service.PlatformId = @PlatformId
+                      AND service.DockerServiceId = SwarmTaskProjections.DockerServiceId
+                      AND service.Ownership = 'System'))
             ORDER BY StatusTimestamp DESC NULLS LAST, DockerTaskId LIMIT @Limit
             """;
         return (await db.QueryAsync<SwarmTaskProjectionDto>(sql, new
@@ -198,7 +217,7 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
         const string sql = """
             SELECT PlatformId, DockerTaskId, VersionIndex, Name, DockerServiceId, ServiceName, Slot,
                    DockerNodeId, NodeHostname, DesiredState, State, StatusMessage, Error, Image, Ports,
-                   StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale
+                   StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale, DockerContainerId
             FROM SwarmTaskProjections WHERE PlatformId = @PlatformId AND DockerTaskId = @DockerTaskId
             """;
         var row = await db.QuerySingleOrDefaultAsync<SwarmTaskProjectionDto>(sql, new { PlatformId = platformId, DockerTaskId = dockerTaskId }, transaction: tx());
@@ -269,6 +288,98 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
             """;
         var row = await db.QuerySingleOrDefaultAsync<SwarmConfigProjectionDto>(sql, new { PlatformId = platformId, DockerConfigId = dockerConfigId }, transaction: tx());
         return row?.ToDomain();
+    }
+
+    public async Task<IReadOnlyList<SwarmNodeRuntimeProjectionState>> GetNodeRuntimeStatesAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT PlatformId, DockerNodeId, ReconciliationGeneration, ReconciliationStartedAt,
+                   ReconciliationCompletedAt, LastSuccessfulReconciliationAt, IsStale, StaleSince,
+                   StaleReason, LastEventStreamConnectedAt, LastEventGapAt, LastStatsSampleAt,
+                   AgentVersion, DockerVersion
+            FROM SwarmNodeRuntimeProjectionStates
+            WHERE PlatformId = @PlatformId
+            ORDER BY DockerNodeId
+            """;
+        return (await db.QueryAsync<SwarmNodeRuntimeProjectionStateDto>(
+                sql,
+                new { PlatformId = platformId },
+                transaction: tx()))
+            .Select(static value => value.ToDomain())
+            .ToArray();
+    }
+
+    public async Task<SwarmNodeRuntimeProjectionState?> GetNodeRuntimeStateAsync(
+        Guid platformId,
+        string dockerNodeId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT PlatformId, DockerNodeId, ReconciliationGeneration, ReconciliationStartedAt,
+                   ReconciliationCompletedAt, LastSuccessfulReconciliationAt, IsStale, StaleSince,
+                   StaleReason, LastEventStreamConnectedAt, LastEventGapAt, LastStatsSampleAt,
+                   AgentVersion, DockerVersion
+            FROM SwarmNodeRuntimeProjectionStates
+            WHERE PlatformId = @PlatformId AND DockerNodeId = @DockerNodeId
+            """;
+        var row = await db.QuerySingleOrDefaultAsync<SwarmNodeRuntimeProjectionStateDto>(
+            sql,
+            new { PlatformId = platformId, DockerNodeId = dockerNodeId },
+            transaction: tx());
+        return row?.ToDomain();
+    }
+
+    public Task<int> UpsertNodeRuntimeStateAsync(
+        SwarmNodeRuntimeProjectionState state,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO SwarmNodeRuntimeProjectionStates (
+                PlatformId, DockerNodeId, ReconciliationGeneration, ReconciliationStartedAt,
+                ReconciliationCompletedAt, LastSuccessfulReconciliationAt, IsStale, StaleSince,
+                StaleReason, LastEventStreamConnectedAt, LastEventGapAt, LastStatsSampleAt,
+                AgentVersion, DockerVersion)
+            VALUES (
+                @PlatformId, @DockerNodeId, @ReconciliationGeneration, @ReconciliationStartedAt,
+                @ReconciliationCompletedAt, @LastSuccessfulReconciliationAt, @IsStale, @StaleSince,
+                @StaleReason, @LastEventStreamConnectedAt, @LastEventGapAt, @LastStatsSampleAt,
+                @AgentVersion, @DockerVersion)
+            ON CONFLICT (PlatformId, DockerNodeId) DO UPDATE SET
+                ReconciliationGeneration = excluded.ReconciliationGeneration,
+                ReconciliationStartedAt = excluded.ReconciliationStartedAt,
+                ReconciliationCompletedAt = excluded.ReconciliationCompletedAt,
+                LastSuccessfulReconciliationAt = excluded.LastSuccessfulReconciliationAt,
+                IsStale = excluded.IsStale,
+                StaleSince = excluded.StaleSince,
+                StaleReason = excluded.StaleReason,
+                LastEventStreamConnectedAt = excluded.LastEventStreamConnectedAt,
+                LastEventGapAt = excluded.LastEventGapAt,
+                LastStatsSampleAt = excluded.LastStatsSampleAt,
+                AgentVersion = excluded.AgentVersion,
+                DockerVersion = excluded.DockerVersion
+            """;
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                state.PlatformId,
+                state.DockerNodeId,
+                state.ReconciliationGeneration,
+                ReconciliationStartedAt = state.ReconciliationStartedAt?.UtcDateTime,
+                ReconciliationCompletedAt = state.ReconciliationCompletedAt?.UtcDateTime,
+                LastSuccessfulReconciliationAt = state.LastSuccessfulReconciliationAt?.UtcDateTime,
+                state.IsStale,
+                StaleSince = state.StaleSince?.UtcDateTime,
+                state.StaleReason,
+                LastEventStreamConnectedAt = state.LastEventStreamConnectedAt?.UtcDateTime,
+                LastEventGapAt = state.LastEventGapAt?.UtcDateTime,
+                LastStatsSampleAt = state.LastStatsSampleAt?.UtcDateTime,
+                state.AgentVersion,
+                state.DockerVersion
+            },
+            transaction: tx());
     }
 
     public async Task<int> ReplaceAsync(Guid platformId, SwarmProjectionSnapshot snapshot, CancellationToken cancellationToken)
@@ -384,25 +495,27 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
         const string sql = """
             INSERT INTO SwarmTaskProjections (PlatformId, DockerTaskId, VersionIndex, Name, DockerServiceId,
                 ServiceName, Slot, DockerNodeId, NodeHostname, DesiredState, State, StatusMessage, Error,
-                Image, Ports, StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale)
+                Image, Ports, StatusTimestamp, DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale,
+                DockerContainerId)
             SELECT @PlatformId, value."DockerTaskId", value."VersionIndex", value."Name",
                 value."DockerServiceId", value."ServiceName", value."Slot", value."DockerNodeId",
                 value."NodeHostname", value."DesiredState", value."State", value."StatusMessage", value."Error",
                 value."Image", value."Ports", value."StatusTimestamp", value."DockerCreatedAt",
-                value."DockerUpdatedAt", value."ObservedAt", false
+                value."DockerUpdatedAt", value."ObservedAt", false, value."DockerContainerId"
             FROM jsonb_to_recordset(@Rows::jsonb) AS value(
                 "DockerTaskId" text, "VersionIndex" bigint, "Name" text, "DockerServiceId" text,
                 "ServiceName" text, "Slot" integer, "DockerNodeId" text, "NodeHostname" text,
                 "DesiredState" text, "State" text, "StatusMessage" text, "Error" text, "Image" text,
                 "Ports" jsonb, "StatusTimestamp" timestamptz, "DockerCreatedAt" timestamptz,
-                "DockerUpdatedAt" timestamptz, "ObservedAt" timestamptz)
+                "DockerUpdatedAt" timestamptz, "ObservedAt" timestamptz, "DockerContainerId" text)
             ON CONFLICT (PlatformId, DockerTaskId) DO UPDATE SET VersionIndex=excluded.VersionIndex,
                 Name=excluded.Name, DockerServiceId=excluded.DockerServiceId, ServiceName=excluded.ServiceName,
                 Slot=excluded.Slot, DockerNodeId=excluded.DockerNodeId, NodeHostname=excluded.NodeHostname,
                 DesiredState=excluded.DesiredState, State=excluded.State, StatusMessage=excluded.StatusMessage,
                 Error=excluded.Error, Image=excluded.Image, Ports=excluded.Ports,
                 StatusTimestamp=excluded.StatusTimestamp, DockerCreatedAt=excluded.DockerCreatedAt,
-                DockerUpdatedAt=excluded.DockerUpdatedAt, ObservedAt=excluded.ObservedAt, IsStale=false;
+                DockerUpdatedAt=excluded.DockerUpdatedAt, ObservedAt=excluded.ObservedAt, IsStale=false,
+                DockerContainerId=excluded.DockerContainerId;
             DELETE FROM SwarmTaskProjections
             WHERE PlatformId = @PlatformId AND NOT (DockerTaskId = ANY(@Ids));
             """;

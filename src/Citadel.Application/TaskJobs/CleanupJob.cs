@@ -87,6 +87,7 @@ internal class CleanupJob(
         var totalCount = 0;
         int containerCount;
         int platformCount;
+        int swarmServiceCount;
 
         do
         {
@@ -98,10 +99,13 @@ internal class CleanupJob(
             platformCount = await uow.PlatformStats.RemoveOlderThanAsync(
                 thresholdEpochSeconds,
                 cancellationToken);
+            swarmServiceCount = await uow.SwarmServiceStats.RemoveOlderThanAsync(
+                thresholdEpochSeconds,
+                cancellationToken);
             await uow.CommitAsync(cancellationToken);
-            totalCount += containerCount + platformCount;
+            totalCount += containerCount + platformCount + swarmServiceCount;
         }
-        while (containerCount == batchSize || platformCount == batchSize);
+        while (containerCount == batchSize || platformCount == batchSize || swarmServiceCount == batchSize);
 
         return totalCount;
     }

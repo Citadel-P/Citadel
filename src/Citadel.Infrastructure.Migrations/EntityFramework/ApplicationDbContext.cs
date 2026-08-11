@@ -20,6 +20,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         modelBuilder
             .ContainerConfiguration()
             .ContainerStatConfiguration()
+            .SwarmServiceStatConfiguration()
             .PlatformConfiguration()
             .SwarmNodeProjectionConfiguration()
             .SwarmServiceProjectionConfiguration()
@@ -27,8 +28,11 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .SwarmNetworkProjectionConfiguration()
             .SwarmSecretProjectionConfiguration()
             .SwarmConfigProjectionConfiguration()
+            .SwarmNodeRuntimeProjectionStateConfiguration()
             .EdgeAgentEnrollmentConfiguration()
             .EdgeAgentBindingConfiguration()
+            .SwarmNodeAgentInstallationConfiguration()
+            .SwarmNodeAgentBootstrapConfiguration()
             .PlatformStatConfiguration()
             .RegistryConfiguration()
             .GitAccountConfiguration()
@@ -466,6 +470,10 @@ internal static class Configuration
         container.Property<string>("SystemRole").HasColumnType(Text).IsRequired(false);
         container.Property<bool>("HasCitadelOwnershipLabels").IsRequired().HasDefaultValue(false);
         container.Property<bool>("IsSwarmTask").IsRequired().HasDefaultValue(false);
+        container.Property<string>("DockerNodeId").HasColumnType(Text).IsRequired(false).HasMaxLength(64);
+        container.Property<long?>("ProjectionObservedAt").HasColumnType(BigInt).IsRequired(false);
+        container.Property<long?>("ProjectionStaleSince").HasColumnType(BigInt).IsRequired(false);
+        container.Property<string>("ProjectionStaleReason").HasColumnType(Text).IsRequired(false).HasMaxLength(256);
         container.Property<string>("Ports").HasColumnType(Json).IsRequired();
 
         container.AddReconcilableMember();
@@ -497,7 +505,15 @@ internal static class Configuration
             .HasForeignKey("StackId")
             .OnDelete(DeleteBehavior.SetNull);
 
-        container.HasIndex("DockerContainerId", "PlatformId").IsUnique().HasDatabaseName($"IX__{tableName}_DockerContainerId_PlatformId");
+        container.HasIndex("DockerContainerId", "PlatformId")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NULL")
+            .HasDatabaseName($"IX__{tableName}_DockerContainerId_PlatformId");
+        container.HasIndex("DockerContainerId", "PlatformId", "DockerNodeId")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NOT NULL")
+            .HasDatabaseName($"IX__{tableName}_DockerContainerId_PlatformId_DockerNodeId");
+        container.HasIndex("PlatformId", "DockerNodeId").HasDatabaseName($"IX_{tableName}_PlatformId_DockerNodeId");
         container.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
         container.HasIndex("DockerImageId").HasDatabaseName($"IX_{tableName}_DockerImageId");
@@ -692,14 +708,103 @@ internal static class Configuration
         binding.Property<string>("LastSeenHostname").HasColumnType(Text).HasMaxLength(256).IsRequired(false);
         binding.Property<string>("CapabilitiesJson").HasColumnType(Json).IsRequired(false);
         binding.Property<int>("ProtocolVersion").HasColumnType(Integer).IsRequired().HasDefaultValue(1);
+        binding.Property<string>("Profile").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("Ordinary");
+        binding.Property<string>("ClusterId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<string>("DockerDaemonId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<string>("DockerHostname").HasColumnType(Text).HasMaxLength(256).IsRequired(false);
+        binding.Property<string>("SwarmRole").HasColumnType(Text).HasMaxLength(32).IsRequired(false);
+        binding.Property<string>("LastObservedServiceId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<string>("LastObservedTaskId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<DateTime?>("FirstEnrolledAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<DateTime?>("LastAuthenticatedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<string>("RevocationReason").HasColumnType(Text).HasMaxLength(512).IsRequired(false);
         binding.Property<DateTime?>("RevokedAtUtc").HasColumnType(Timestamp).IsRequired(false);
         binding.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         binding.Property<DateTime>("UpdatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-        binding.HasIndex("ResourceType", "ResourceId").IsUnique().HasDatabaseName($"IX_{tableName}_Resource");
-        binding.HasIndex("AgentId").HasDatabaseName($"IX_{tableName}_AgentId");
-        binding.HasIndex("AgentFingerprint").HasDatabaseName($"IX_{tableName}_AgentFingerprint");
+        binding.HasIndex("ResourceType", "ResourceId")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NULL AND revokedatutc IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveResource");
+        binding.HasIndex("ResourceType", "ResourceId", "DockerNodeId")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NOT NULL AND revokedatutc IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveNode");
+        binding.HasIndex("DockerDaemonId")
+            .IsUnique()
+            .HasFilter("dockerdaemonid IS NOT NULL AND revokedatutc IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveDaemon");
+        binding.HasIndex("AgentId")
+            .IsUnique()
+            .HasFilter("revokedatutc IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveAgentId");
+        binding.HasIndex("AgentFingerprint")
+            .IsUnique()
+            .HasFilter("revokedatutc IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveAgentFingerprint");
 
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeAgentInstallationConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "SwarmNodeAgentInstallations";
+        var installation = builder.Entity("SwarmNodeAgentInstallation");
+
+        installation.ToTable(tableName);
+        installation.Property<Guid>("PlatformId").IsRequired();
+        installation.HasKey("PlatformId");
+        installation.Property<string>("ClusterId").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        installation.Property<string>("ManagerDockerNodeId").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        installation.Property<string>("ManagerDockerDaemonId").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        installation.Property<string>("DockerServiceId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        installation.Property<string>("DockerServiceName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        installation.Property<string>("AgentImageReference").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        installation.Property<string>("AgentImageDigest").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        installation.Property<string>("DockerCaConfigId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        installation.Property<string>("DockerCaConfigName").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        installation.Property<string>("DesiredState").HasColumnType(Text).HasMaxLength(32).IsRequired();
+        installation.Property<Guid?>("OperationId").IsRequired(false);
+        installation.Property<string>("OperationKind").HasColumnType(Text).HasMaxLength(32).IsRequired(false);
+        installation.Property<string>("OperationState").HasColumnType(Text).HasMaxLength(32).IsRequired(false);
+        installation.Property<DateTime?>("OperationStartedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        installation.Property<Guid?>("OperationActorId").IsRequired(false);
+        installation.Property<string>("OperationError").HasColumnType(Text).HasMaxLength(2000).IsRequired(false);
+        installation.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        installation.Property<DateTime>("UpdatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        installation.HasOne("Platform").WithOne().HasForeignKey("SwarmNodeAgentInstallation", "PlatformId").OnDelete(DeleteBehavior.Cascade);
+        installation.HasOne("Actor").WithMany().HasForeignKey("OperationActorId").OnDelete(DeleteBehavior.Restrict);
+        installation.HasIndex("DockerServiceId").IsUnique().HasFilter("dockerserviceid IS NOT NULL").HasDatabaseName($"IX_{tableName}_DockerServiceId");
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeAgentBootstrapConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "SwarmNodeAgentBootstraps";
+        var bootstrap = builder.Entity("SwarmNodeAgentBootstrap");
+
+        bootstrap.ToTable(tableName);
+        bootstrap.Property<Guid>("Id").IsRequired();
+        bootstrap.HasKey("Id");
+        bootstrap.Property<Guid>("PlatformId").IsRequired();
+        bootstrap.Property<string>("ClusterId").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        bootstrap.Property<int>("Version").HasColumnType(Integer).IsRequired();
+        bootstrap.Property<string>("TokenHash").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        bootstrap.Property<string>("DockerSecretId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        bootstrap.Property<string>("DockerSecretName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        bootstrap.Property<DateTime>("ExpiresAtUtc").HasColumnType(Timestamp).IsRequired();
+        bootstrap.Property<DateTime?>("RevokedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        bootstrap.Property<Guid>("CreatedByActorId").IsRequired();
+        bootstrap.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        bootstrap.Property<DateTime>("UpdatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        bootstrap.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Cascade);
+        bootstrap.HasOne("Actor").WithMany().HasForeignKey("CreatedByActorId").OnDelete(DeleteBehavior.Restrict);
+        bootstrap.HasIndex("PlatformId", "Version").IsUnique().HasDatabaseName($"IX_{tableName}_PlatformVersion");
+        bootstrap.HasIndex("TokenHash").IsUnique().HasDatabaseName($"IX_{tableName}_TokenHash");
+        bootstrap.HasIndex("DockerSecretId").IsUnique().HasFilter("dockersecretid IS NOT NULL").HasDatabaseName($"IX_{tableName}_DockerSecretId");
         return builder;
     }
 
@@ -2104,6 +2209,47 @@ internal static class Configuration
         return builder;
     }
 
+    public static ModelBuilder SwarmServiceStatConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "SwarmServiceStats";
+        var stat = builder.Entity("SwarmServiceStat");
+
+        stat.ToTable(tableName);
+
+        stat.Property<Guid>("Id").IsRequired();
+        stat.HasKey("Id");
+
+        stat.Property<Guid>("PlatformId").IsRequired();
+        stat.Property<string>("DockerServiceId").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        stat.Property<Guid?>("SwarmServiceId").IsRequired(false);
+        stat.Property<Guid?>("StackId").IsRequired(false);
+        stat.Property<string>("ServiceName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        stat.Property<string>("TaskKey").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        stat.Property<string>("DockerTaskId").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        stat.Property<long>("Created").HasColumnType(BigInt).IsRequired();
+        stat.Property<double>("MemoryActive").HasColumnType(Double);
+        stat.Property<double>("MemoryCache").HasColumnType(Double);
+        stat.Property<double>("CpuUsage").HasColumnType(Double);
+        stat.Property<double>("MemoryLimit").HasColumnType(Double);
+        stat.Property<double>("RxBytes").HasColumnType(Double);
+        stat.Property<double>("TxBytes").HasColumnType(Double);
+
+        stat.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Cascade);
+        stat.HasIndex("PlatformId", "DockerTaskId", "Created").IsUnique()
+            .HasDatabaseName($"IX_{tableName}_PlatformTaskCreated");
+        stat.HasIndex("PlatformId", "DockerServiceId", "Created")
+            .HasDatabaseName($"IX_{tableName}_PlatformServiceCreated");
+        stat.HasIndex("SwarmServiceId", "Created")
+            .HasFilter("swarmserviceid IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_ManagedServiceCreated");
+        stat.HasIndex("StackId", "ServiceName", "Created")
+            .HasFilter("stackid IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_StackServiceCreated");
+        stat.HasIndex("Created").HasDatabaseName($"IX_{tableName}_Created");
+
+        return builder;
+    }
+
     public static ModelBuilder SwarmServiceConfiguration(this ModelBuilder builder)
     {
         const string tableName = "SwarmServices";
@@ -2268,6 +2414,7 @@ internal static class Configuration
         task.Property<string>("ServiceName").HasColumnType(Text).HasMaxLength(255).IsRequired();
         task.Property<int?>("Slot").HasColumnType(Integer).IsRequired(false);
         task.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        task.Property<string>("DockerContainerId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
         task.Property<string>("NodeHostname").HasColumnType(Text).HasMaxLength(255).IsRequired();
         task.Property<string>("DesiredState").HasColumnType(Text).HasMaxLength(32).IsRequired();
         task.Property<string>("State").HasColumnType(Text).HasMaxLength(32).IsRequired();
@@ -2337,6 +2484,29 @@ internal static class Configuration
         config.Property<string>("Labels").HasColumnType(JsonB).IsRequired();
         AddSwarmObservationFields(config);
         AddSwarmPlatformRelationship(config);
+        return builder;
+    }
+
+    public static ModelBuilder SwarmNodeRuntimeProjectionStateConfiguration(this ModelBuilder builder)
+    {
+        var state = builder.Entity("SwarmNodeRuntimeProjectionState");
+        state.ToTable("SwarmNodeRuntimeProjectionStates");
+        state.Property<Guid>("PlatformId").IsRequired();
+        state.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        state.HasKey("PlatformId", "DockerNodeId");
+        state.Property<long>("ReconciliationGeneration").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        state.Property<DateTimeOffset?>("ReconciliationStartedAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<DateTimeOffset?>("ReconciliationCompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<DateTimeOffset?>("LastSuccessfulReconciliationAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<bool>("IsStale").IsRequired().HasDefaultValue(true);
+        state.Property<DateTimeOffset?>("StaleSince").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<string>("StaleReason").HasColumnType(Text).HasMaxLength(512).IsRequired(false);
+        state.Property<DateTimeOffset?>("LastEventStreamConnectedAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<DateTimeOffset?>("LastEventGapAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<DateTimeOffset?>("LastStatsSampleAt").HasColumnType(Timestamp).IsRequired(false);
+        state.Property<string>("AgentVersion").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        state.Property<string>("DockerVersion").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        AddSwarmPlatformRelationship(state);
         return builder;
     }
 

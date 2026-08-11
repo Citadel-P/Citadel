@@ -64,6 +64,40 @@ public sealed record UpdateSwarmConfigLabelsCommand(
     IReadOnlyDictionary<string, string> Labels);
 public sealed record DeleteSwarmConfigCommand(string PlatformAddress, string ConfigId);
 
+public sealed record SwarmResourceCreationResult(string ResourceId);
+
+public sealed record SystemSwarmServiceSpec(
+    string Image,
+    IReadOnlyList<string> Environment,
+    string ManagerNodeId,
+    string StateVolumeName,
+    string BootstrapSecretId,
+    string BootstrapSecretName,
+    string? CaConfigId,
+    string? CaConfigName,
+    long LimitNanoCpus,
+    long LimitMemoryBytes,
+    long PidsLimit,
+    long StopGracePeriodNanoseconds,
+    IReadOnlyList<string> SupportedArchitectures);
+
+public sealed record CreateSystemSwarmServiceCommand(
+    string PlatformAddress,
+    Guid OperationId,
+    string DockerName,
+    SystemSwarmServiceSpec Spec,
+    IReadOnlyDictionary<string, string> Labels,
+    IReadOnlyDictionary<string, string> ContainerLabels);
+
+public sealed record UpdateSystemSwarmServiceCommand(
+    string PlatformAddress,
+    Guid OperationId,
+    string ServiceId,
+    long VersionIndex,
+    SystemSwarmServiceSpec Spec,
+    IReadOnlyDictionary<string, string> Labels,
+    IReadOnlyDictionary<string, string> ContainerLabels);
+
 public sealed record CreateManagedSwarmServiceCommand(
     string PlatformAddress,
     Guid OperationId,

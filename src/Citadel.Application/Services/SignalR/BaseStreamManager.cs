@@ -107,7 +107,15 @@ internal abstract class BaseStreamManager<TContext> where TContext : StreamConte
         if ((uint)idx >= (uint)(groupId.Length - 1))
             return string.Empty;
 
-        return NormalizeDockerId(groupId[(idx + 1)..]);
+        return NormalizeContainerReference(groupId[(idx + 1)..]);
+    }
+
+    protected static string NormalizeContainerReference(ReadOnlySpan<char> containerReference)
+    {
+        if (Guid.TryParse(containerReference, out var resourceId))
+            return resourceId.ToString("D");
+
+        return NormalizeDockerId(containerReference);
     }
 
     protected static string NormalizeDockerId(ReadOnlySpan<char> dockerId)

@@ -107,24 +107,37 @@ public sealed record SwarmTasksView(
     }
 }
 
-public sealed record SwarmTaskInspectView(
-    string Id, long VersionIndex, string Name, string ServiceId, int? Slot, string NodeId,
-    string DesiredState, string State, string? StatusMessage, string? Error, string Image,
-    IReadOnlyList<string> Ports, DateTimeOffset? StatusTimestamp, DateTimeOffset? CreatedAt,
-    DateTimeOffset? UpdatedAt, string? ContainerId)
-{
-    public static SwarmTaskInspectView Map(Domain.Contracts.Resources.Swarm.SwarmTaskResult value) => new(
-        value.Id, value.VersionIndex, value.Name, value.ServiceId, value.Slot, value.NodeId,
-        value.DesiredState, value.State, value.StatusMessage, value.Error, value.Image,
-        value.Ports, value.StatusTimestamp, value.CreatedAt, value.UpdatedAt, value.ContainerId);
-}
-
 public sealed record SwarmTaskStatsView(
+    Guid ContainerProjectionId,
     string DockerContainerId,
     IReadOnlyList<ContainerStatView> Stats)
 {
     public static SwarmTaskStatsView Map(Domain.Contracts.Resources.Swarm.SwarmTaskStatsResult value) =>
-        new(value.DockerContainerId, ContainerStatView.Map(value.Stats));
+        new(value.ContainerProjectionId, value.DockerContainerId, ContainerStatView.Map(value.Stats));
+}
+
+public sealed record SwarmServiceStatsView(
+    string DockerServiceId,
+    int ObservedTasks,
+    int ExpectedTasks,
+    bool Complete,
+    IReadOnlyList<Guid> ObservedContainerProjectionIds,
+    IReadOnlyList<string> MissingDockerNodeIds,
+    DateTimeOffset? OldestSampleAt,
+    DateTimeOffset? NewestSampleAt,
+    IReadOnlyList<ContainerStatView> Stats)
+{
+    public static SwarmServiceStatsView Map(Domain.Contracts.Resources.Swarm.SwarmServiceStatsResult value) =>
+        new(
+            value.DockerServiceId,
+            value.ObservedTasks,
+            value.ExpectedTasks,
+            value.Complete,
+            value.ObservedContainerProjectionIds,
+            value.MissingDockerNodeIds,
+            value.OldestSampleAt,
+            value.NewestSampleAt,
+            ContainerStatView.Map(value.Stats));
 }
 
 public sealed record SwarmTaskTerminalView(string DockerContainerId);
@@ -274,6 +287,7 @@ public sealed record SwarmOverviewView(
     bool IsStale,
     int NodeCount,
     int ManagerCount,
+    SwarmQuorumView Quorum,
     int ServiceCount,
     PlatformWorkloadStatusCountsView ServiceStatusCounts,
     int RunningTaskCount,
@@ -289,13 +303,21 @@ public sealed record SwarmOverviewView(
             ? "Offline"
             : stale
                 ? "Stale"
-                : !value.ControlAvailable || !string.IsNullOrWhiteSpace(value.Error)
+                : value.Quorum.State != SwarmQuorumState.Healthy ||
+                  !value.ControlAvailable ||
+                  !string.IsNullOrWhiteSpace(value.Error)
                     ? "Degraded"
                     : "Healthy";
         var message = health switch
         {
             "Offline" => "The Swarm manager is offline. Last-known inventory remains available.",
             "Stale" => "The latest inventory refresh failed. Last-known inventory may be out of date.",
+            "Degraded" when value.Quorum.State == SwarmQuorumState.Lost =>
+                $"Swarm manager quorum is unavailable: {value.Quorum.ReachableManagers} of {summary.ManagerCount} managers are reachable and {value.Quorum.RequiredManagers} are required.",
+            "Degraded" when value.Quorum.State == SwarmQuorumState.Degraded =>
+                $"Swarm manager quorum is available, but only {value.Quorum.ReachableManagers} of {summary.ManagerCount} managers are reachable.",
+            "Degraded" when value.Quorum.State == SwarmQuorumState.Unknown =>
+                "Swarm manager quorum cannot be confirmed from the current Node inventory.",
             "Degraded" => value.Error ?? "The connected Docker node does not currently expose Swarm manager control.",
             _ => null
         };
@@ -307,6 +329,7 @@ public sealed record SwarmOverviewView(
             stale,
             summary.NodeCount,
             summary.ManagerCount,
+            SwarmQuorumView.Map(value.Quorum),
             summary.ServiceCount,
             PlatformWorkloadStatusCountsView.Map(summary.ServiceStatusCounts),
             summary.RunningTaskCount,
@@ -326,4 +349,17 @@ public sealed record SwarmOverviewView(
             Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
         };
     }
+}
+
+public sealed record SwarmQuorumView(
+    SwarmQuorumState State,
+    int ReachableManagers,
+    int RequiredManagers,
+    bool HasLeader)
+{
+    public static SwarmQuorumView Map(SwarmQuorumResult value) => new(
+        value.State,
+        value.ReachableManagers,
+        value.RequiredManagers,
+        value.HasLeader);
 }

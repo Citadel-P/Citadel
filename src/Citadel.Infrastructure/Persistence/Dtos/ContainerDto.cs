@@ -21,7 +21,12 @@ internal record ContainerDto(
     bool IsSystem = false,
     string? SystemRole = null,
     bool HasCitadelOwnershipLabels = false,
-    bool IsSwarmTask = false)
+    bool IsSwarmTask = false,
+    string? DockerNodeId = null,
+    long? ProjectionObservedAt = null,
+    long? ProjectionStaleSince = null,
+    string? ProjectionStaleReason = null,
+    string? NodeHostname = null)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 

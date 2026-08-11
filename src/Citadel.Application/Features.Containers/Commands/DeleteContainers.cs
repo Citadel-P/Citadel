@@ -42,8 +42,22 @@ internal sealed class DeleteContainersHandler(
             return Result.Failure(new ConflictError(protectionError));
         }
 
+        var requestedContainers = (await unitOfWork.Containers.GetByIdsAsync(request.ContainerIds, ct)).ToArray();
+        if (requestedContainers.Length == 0)
+        {
+            return Result.Failure(new NotFoundError("No containers found for the provided ID(s)."));
+        }
+
+        var runtimeRequest = request with
+        {
+            ContainerIds = requestedContainers
+                .Select(container => container.DockerContainerId)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+        };
+
         var actorId = userContext.Current.ActorId;
-        return await containerService.DeleteContainers(request, actorId, ct);
+        return await containerService.DeleteContainers(runtimeRequest, actorId, ct);
     }
 
 }

@@ -60,10 +60,17 @@ Do not deploy the same regular Agent endpoint as a load-balanced global Swarm
 Service. Citadel sends each request to one Platform address and cannot use a
 load-balanced response to identify or aggregate every Node reliably.
 
-The planned Swarm node-agent setup will keep this manager Agent as the control
-plane and add separate outbound satellite Agents for other Nodes. Until the
-Platform page offers that setup, worker Containers, live statistics, and exec
-sessions are not available through the manager Agent.
+Citadel keeps this regular manager Agent as the control plane. From the Swarm
+Platform page, an administrator can explicitly install a Citadel System global
+Docker Service on eligible Nodes not already covered by it. Those satellite
+tasks use the same Agent runtime in a restricted outbound `swarm-node` profile;
+regular Agent mode is not the satellite transport. They expose no inbound
+management port and do not replace the manager Agent.
+
+Once installed, Citadel aggregates current Containers and routes worker Task
+inspect, logs, statistics, lifecycle operations, and Terminal through the
+owning Node's authenticated satellite session. Images and Volumes remain
+manager-local until their node-scoped inventory support is delivered.
 
 ## Builds
 

@@ -10,6 +10,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -51,14 +52,31 @@ public sealed class ResourceStateCommandCancellationTests
             .Returns(Task.CompletedTask);
         var connector = CreateSuccessfulConnector();
         var platform = CreatePlatform(platformId, container);
+        var platformEntity = Platform.FromPersistence(
+            platformId,
+            "platform",
+            platform.Address,
+            0,
+            0,
+            0,
+            1,
+            1,
+            PlatformStatus.Online,
+            platform.ConnectorType,
+            new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
         var containers = new Mock<IContainerRepository>();
         containers
             .Setup(repository => repository.GetByIdsAsync(
                 It.IsAny<string[]>(),
                 requestCancellation.Token))
-            .ReturnsAsync([]);
+            .ReturnsAsync([container]);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(repository => repository.GetByIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platformEntity);
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(work => work.Containers).Returns(containers.Object);
+        unitOfWork.SetupGet(work => work.Platforms).Returns(platforms.Object);
         var authorization = new Mock<IContainerAuthorizationService>();
         authorization
             .Setup(service => service.HasAccessAsync(
@@ -72,8 +90,8 @@ public sealed class ResourceStateCommandCancellationTests
             CreateUserContext(actorId),
             unitOfWork.Object,
             processing.Object,
-            CreatePlatformCache(platform),
             CreateConnectorFactory(connector.Object),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             authorization.Object,
             CreateApplicationLifetime(),
             Mock.Of<ILogger<PatchContainerHandler>>());

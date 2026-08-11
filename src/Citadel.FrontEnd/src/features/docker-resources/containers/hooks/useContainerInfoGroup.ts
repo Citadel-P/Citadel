@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
-import { normalizeDockerId } from '@/lib/utils';
+import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import {
   type ContainerDataView,
   type ContainerView,
@@ -26,6 +26,9 @@ export const toContainerDetailsView = (container: ContainerView): ContainerDetai
   controlState: container.controlState,
   isSystem: container.isSystem,
   systemRole: container.systemRole,
+  hasCitadelOwnershipLabels: container.hasCitadelOwnershipLabels,
+  isSwarmTask: container.isSwarmTask,
+  dockerNodeId: container.dockerNodeId,
   created: container.created,
   stack: container.stack,
   containerStat: container.lastStats,
@@ -47,6 +50,7 @@ export const mergeContainerRuntimeUpdate = (
   image: container.image,
   imageId: container.imageId,
   state: container.state,
+  dockerNodeId: container.dockerNodeId ?? current?.dockerNodeId,
   created: container.created,
   stack: container.stack,
   containerStat: container.containerStat,
@@ -54,12 +58,13 @@ export const mergeContainerRuntimeUpdate = (
 });
 
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
-  const nid = normalizeDockerId(containerId);
+  const containerReference = normalizeContainerReference(containerId);
 
-  const { data, isLoading } = useRead('getContainer', { id: nid });
+  const { data, isLoading } = useRead('getContainer', { id: containerReference });
   const { currentPlatform } = useAppContext();
 
   const containerData = useMemo(() => (data?.data ? toContainerDetailsView(data.data) : undefined), [data]);
+  const dockerContainerId = normalizeDockerId(containerData?.id);
 
   const [liveContainerInfo, setLiveContainerInfo] = useState<Partial<ContainerDataView>>();
 
@@ -90,11 +95,14 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
 
   const onContainerEvent = useCallback(
     (event: ContainerEvent) => {
-      if (!nid) return;
+      if (!dockerContainerId) return;
 
       const { container, eventType } = event;
 
-      if (!container.containerId.startsWith(nid)) {
+      if (!container.containerId.toLowerCase().startsWith(dockerContainerId)) {
+        return;
+      }
+      if (containerData?.dockerNodeId !== container.dockerNodeId) {
         return;
       }
 
@@ -114,10 +122,15 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         ports: container.ports as any,
         controlState: container.controlState,
         imageId: container.dockerImageId,
+        isSystem: container.isSystem,
+        systemRole: container.systemRole,
+        hasCitadelOwnershipLabels: container.hasCitadelOwnershipLabels,
+        isSwarmTask: container.isSwarmTask,
+        dockerNodeId: container.dockerNodeId,
         // don't map capabilities here
       }));
     },
-    [nid],
+    [containerData?.dockerNodeId, dockerContainerId],
   );
 
   useDockerDaemonGroup(platformId, { onContainerEvent });
@@ -141,10 +154,10 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   );
 
   useSignalRGroup({
-    groupName: `container-info:${nid}`,
+    groupName: containerInfo?.resourceId ? `container-info:${containerInfo.resourceId}` : undefined,
     setupEventListeners,
     removeEventListeners,
-    skip: !nid,
+    skip: !containerInfo?.resourceId,
   });
 
   return {

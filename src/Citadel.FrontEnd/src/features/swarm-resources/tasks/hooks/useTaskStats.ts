@@ -4,12 +4,12 @@ import { StatsQueryState } from '@/features/docker-resources/containers/containe
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 import { appendBoundedLiveStat, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
-import { normalizeDockerId } from '@/lib/utils';
 import { HubConnection } from '@microsoft/signalr';
 import { useCallback, useMemo, useState } from 'react';
 
 export type SwarmTaskStatsQueryState = StatsQueryState & {
   dockerContainerId?: string;
+  containerProjectionId?: string;
   error?: unknown;
 };
 
@@ -26,6 +26,7 @@ export const useTaskStatsWindow = (platformId: string, taskId: string): SwarmTas
   return {
     baseStats: query.data?.data?.stats ?? EMPTY_STATS,
     dockerContainerId: query.data?.data?.dockerContainerId,
+    containerProjectionId: query.data?.data?.containerProjectionId,
     error: query.error,
     isLoading: query.isLoading,
     windowHours,
@@ -33,44 +34,44 @@ export const useTaskStatsWindow = (platformId: string, taskId: string): SwarmTas
   };
 };
 
-export const useTaskStatsStream = (dockerContainerId?: string) => {
-  const [stream, setStream] = useState<{ dockerContainerId?: string; stats: ContainerStatView[] }>({ stats: [] });
-  const normalizedContainerId = normalizeDockerId(dockerContainerId);
+export const useTaskStatsStream = (platformId: string, containerProjectionId?: string) => {
+  const [stream, setStream] = useState<{ containerProjectionId?: string; stats: ContainerStatView[] }>({ stats: [] });
 
   const handleStats = useCallback(
-    (container: { containerStat?: ContainerStatView | null }) => {
-      const current = container.containerStat;
-      if (!dockerContainerId || !current) return;
+    (stats: ContainerStatView[]) => {
+      if (!containerProjectionId) return;
+      const current = stats.find((stat) => stat.containerId === containerProjectionId);
+      if (!current) return;
 
       const timestamped = {
         ...current,
         created: Number(current.created) > 0 ? current.created : Math.floor(Date.now() / 1000),
       };
       setStream((previous) => ({
-        dockerContainerId,
+        containerProjectionId,
         stats: appendBoundedLiveStat(
-          previous.dockerContainerId === dockerContainerId ? previous.stats : EMPTY_STATS,
+          previous.containerProjectionId === containerProjectionId ? previous.stats : EMPTY_STATS,
           timestamped,
         ),
       }));
     },
-    [dockerContainerId],
+    [containerProjectionId],
   );
   const setupEventListeners = useCallback(
-    (connection: HubConnection) => connection.on('ReceiveContainerInfo', handleStats),
+    (connection: HubConnection) => connection.on('ContainersStatsUpdated', handleStats),
     [handleStats],
   );
   const removeEventListeners = useCallback(
-    (connection: HubConnection) => connection.off('ReceiveContainerInfo', handleStats),
+    (connection: HubConnection) => connection.off('ContainersStatsUpdated', handleStats),
     [handleStats],
   );
 
   useSignalRGroup({
-    groupName: normalizedContainerId ? `container-info:${normalizedContainerId}` : undefined,
+    groupName: platformId && containerProjectionId ? `containers:${platformId}` : undefined,
     setupEventListeners,
     removeEventListeners,
-    skip: !normalizedContainerId,
+    skip: !platformId || !containerProjectionId,
   });
 
-  return stream.dockerContainerId === dockerContainerId ? stream.stats : EMPTY_STATS;
+  return stream.containerProjectionId === containerProjectionId ? stream.stats : EMPTY_STATS;
 };

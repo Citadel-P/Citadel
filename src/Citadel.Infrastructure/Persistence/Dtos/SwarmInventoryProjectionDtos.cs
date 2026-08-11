@@ -4,6 +4,9 @@ internal sealed record SwarmProjectionSummaryDto(
     bool IsStale,
     int NodeCount,
     int ManagerCount,
+    int ReachableManagerCount,
+    bool HasLeader,
+    bool IsManagerInventoryStale,
     int ServiceCount,
     int HealthyServiceCount,
     int DegradedServiceCount,
@@ -28,7 +31,7 @@ internal sealed record SwarmTaskProjectionDto(
     string ServiceName, int? Slot, string DockerNodeId, string NodeHostname, string DesiredState,
     string State, string? StatusMessage, string? Error, string Image, string Ports,
     DateTime? StatusTimestamp, DateTime? DockerCreatedAt, DateTime? DockerUpdatedAt,
-    DateTime ObservedAt, bool IsStale);
+    DateTime ObservedAt, bool IsStale, string? DockerContainerId);
 
 internal sealed record SwarmNetworkProjectionDto(
     Guid PlatformId, string DockerNetworkId, string Name, string Scope, string Driver,
@@ -44,3 +47,19 @@ internal sealed record SwarmConfigProjectionDto(
     Guid PlatformId, string DockerConfigId, long VersionIndex, string Name, string? TemplatingDriver,
     string ServiceNames, string Labels, DateTime? DockerCreatedAt, DateTime? DockerUpdatedAt,
     DateTime ObservedAt, bool IsStale);
+
+internal sealed record SwarmNodeRuntimeProjectionStateDto(
+    Guid PlatformId,
+    string DockerNodeId,
+    long ReconciliationGeneration,
+    DateTime? ReconciliationStartedAt,
+    DateTime? ReconciliationCompletedAt,
+    DateTime? LastSuccessfulReconciliationAt,
+    bool IsStale,
+    DateTime? StaleSince,
+    string? StaleReason,
+    DateTime? LastEventStreamConnectedAt,
+    DateTime? LastEventGapAt,
+    DateTime? LastStatsSampleAt,
+    string? AgentVersion,
+    string? DockerVersion);

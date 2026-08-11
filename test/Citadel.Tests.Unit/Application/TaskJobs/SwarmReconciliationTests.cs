@@ -22,6 +22,88 @@ namespace Tests.Unit.Application.TaskJobs;
 public sealed class SwarmReconciliationTests
 {
     [Fact]
+    public async Task NodeAgentInfrastructure_ShouldRevokeBootstrap_WhenOwnedServiceIsMissing()
+    {
+        var platform = CreateNodeAgentPlatform();
+        var now = DateTime.UtcNow;
+        var installation = CreateNodeAgentInstallation(platform, now);
+        var manager = CreateNode(platform.Id, "manager-node", "Manager", "manager", now);
+        var worker = CreateNode(platform.Id, "worker-node", "Worker", "worker", now);
+        var edgeAgents = new Mock<IEdgeAgentRepository>();
+        edgeAgents.Setup(repository => repository.GetNodeAgentInstallationAsync(
+                platform.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(installation);
+        edgeAgents.Setup(repository => repository.GetNodeBindingsAsync(
+                platform.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        edgeAgents.Setup(repository => repository.RevokeNodeAgentBootstrapsAsync(
+                platform.Id,
+                now,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = CreateNodeAgentUnitOfWork(platform, edgeAgents.Object);
+        var workItem = new ReconcileSwarmNodeAgentInfrastructureWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([manager, worker], [], [], [], [], []),
+            now,
+            TimeSpan.FromMinutes(10),
+            ["amd64"]);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Contains("missing", workItem.ServiceDriftReason, StringComparison.OrdinalIgnoreCase);
+        edgeAgents.Verify(repository => repository.RevokeNodeAgentBootstrapsAsync(
+            platform.Id,
+            now,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task NodeAgentInfrastructure_ShouldRevokeOnlyAbsentBindingBeyondGrace()
+    {
+        var platform = CreateNodeAgentPlatform();
+        var now = DateTime.UtcNow;
+        var manager = CreateNode(platform.Id, "manager-node", "Manager", "manager", now);
+        var oldBinding = CreateNodeBinding(platform, "removed-node", now.AddMinutes(-11));
+        var recentBinding = CreateNodeBinding(platform, "recently-removed-node", now.AddMinutes(-9));
+        var edgeAgents = new Mock<IEdgeAgentRepository>();
+        edgeAgents.Setup(repository => repository.GetNodeAgentInstallationAsync(
+                platform.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateNodeAgentInstallation(platform, now));
+        edgeAgents.Setup(repository => repository.GetNodeBindingsAsync(
+                platform.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([oldBinding, recentBinding]);
+        edgeAgents.Setup(repository => repository.RevokeNodeBindingAsync(
+                platform.Id,
+                oldBinding.DockerNodeId!,
+                now,
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = CreateNodeAgentUnitOfWork(platform, edgeAgents.Object);
+        var workItem = new ReconcileSwarmNodeAgentInfrastructureWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([manager], [], [], [], [], []),
+            now,
+            TimeSpan.FromMinutes(10),
+            ["amd64"]);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Equal([oldBinding.DockerNodeId], workItem.RevokedNodeIds);
+        edgeAgents.Verify(repository => repository.RevokeNodeBindingAsync(
+            platform.Id,
+            recentBinding.DockerNodeId!,
+            It.IsAny<DateTime>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task TimedOutStack_ShouldRecoverOnlyAfterAllOwnedServicesConverge()
     {
         var platform = CreatePlatform();
@@ -102,6 +184,65 @@ public sealed class SwarmReconciliationTests
             stack.Id,
             stack.CurrentStackReleaseId,
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HealthyStack_ShouldBecomeDegradedWhenAnOwnedServiceHasNoRunningTask()
+    {
+        var platform = CreatePlatform();
+        var stack = Stack.Create(
+            "demo",
+            Constants.SystemId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                "services:\n  api:\n    image: nginx\n",
+                StackUpdateBehavior.Disabled,
+                ProjectName: "demo"),
+            driftPolicy: StackDriftPolicy.Disabled,
+            platform: platform);
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+        var labels = new Dictionary<string, string>
+        {
+            ["com.docker.stack.namespace"] = "demo",
+            ["com.citadel.managed"] = "true",
+            ["com.citadel.stack-id"] = stack.Id.ToString("D"),
+            ["com.citadel.release-id"] = stack.CurrentStackReleaseId.ToString("D"),
+            ["com.citadel.stack-service-count"] = "1"
+        };
+        var projection = new SwarmServiceProjection(
+            platform.Id, "service-id", 1, "demo_api", "Replicated", "nginx",
+            0, 1, "None", null, [], [], [], [], labels, null, null,
+            DateTimeOffset.UtcNow, false, SwarmServiceOwnership.CitadelStack, "demo");
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(repository => repository.GetInfoAsync(
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                platform.Id))
+            .ReturnsAsync([stack]);
+        stacks.Setup(repository => repository.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm.Setup(repository => repository.ReplaceAsync(
+                platform.Id,
+                It.IsAny<SwarmProjectionSnapshot>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Stacks).Returns(stacks.Object);
+        unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
+        unitOfWork.SetupGet(value => value.SwarmServices).Returns(CreateEmptyManagedServiceRepository());
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var workItem = new PersistSwarmSnapshotWorkItem(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [projection], [], [], [], []));
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease?.Status);
+        Assert.Same(stack, Assert.Single(workItem.RecoveredStacks));
+        stacks.Verify(repository => repository.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -1098,6 +1239,7 @@ public sealed class SwarmReconciliationTests
         unitOfWork.SetupGet(value => value.Platforms).Returns(platforms.Object);
         unitOfWork.SetupGet(value => value.Swarm).Returns(repository);
         unitOfWork.SetupGet(value => value.SwarmServices).Returns(CreateEmptyManagedServiceRepository());
+        unitOfWork.SetupGet(value => value.EdgeAgents).Returns(Mock.Of<IEdgeAgentRepository>());
         unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         unitOfWork.Setup(value => value.DisposeAsync()).Returns(ValueTask.CompletedTask);
 
@@ -1119,8 +1261,10 @@ public sealed class SwarmReconciliationTests
             provider.GetRequiredService<IDbWorkQueue>(),
             provider.GetRequiredService<INotificationQueue>(),
             Mock.Of<IApplicationHubDispatcher>(),
+            Mock.Of<IEdgeAgentSessionTerminator>(),
             Mock.Of<IGitStackMaterializer>(),
             Mock.Of<IAlertService>(),
+            Microsoft.Extensions.Options.Options.Create(new global::Application.Configs.EdgeAgentOptions()),
             TimeProvider.System,
             Mock.Of<ILogger<SwarmReconciliationJob>>());
     }
@@ -1139,6 +1283,122 @@ public sealed class SwarmReconciliationTests
         PlatformConnectorType.Local,
         new DockerSwarmPlatformDescriptor(
             "node-1", "10.0.0.1", "Active", true, 1, 1, "daemon-1", 0, 0, 0, 0));
+
+    private static Platform CreateNodeAgentPlatform() => new(
+        "swarm-node-agent",
+        "unix:///var/run/docker.sock",
+        0,
+        0,
+        0,
+        1,
+        1024,
+        "29.0",
+        null,
+        PlatformStatus.Online,
+        PlatformConnectorType.Local,
+        new DockerSwarmPlatformDescriptor(
+            NodeID: "manager-node",
+            NodeAddr: "10.0.0.1",
+            LocalNodeState: "Active",
+            ControlAvailable: true,
+            Nodes: 2,
+            Managers: 1,
+            DaemonId: "manager-daemon",
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0,
+            ClusterId: "cluster-test"),
+        clusterId: "cluster-test");
+
+    private static SwarmNodeProjection CreateNode(
+        Guid platformId,
+        string dockerNodeId,
+        string role,
+        string hostname,
+        DateTime observedAt) => new(
+        platformId,
+        dockerNodeId,
+        1,
+        hostname,
+        role,
+        role.Equals("Manager", StringComparison.OrdinalIgnoreCase),
+        role.Equals("Manager", StringComparison.OrdinalIgnoreCase) ? "Reachable" : string.Empty,
+        "Ready",
+        null,
+        "Active",
+        "29.0",
+        "linux",
+        "amd64",
+        "10.0.0.2",
+        new Dictionary<string, string>(),
+        0,
+        0,
+        observedAt,
+        observedAt,
+        observedAt,
+        false);
+
+    private static SwarmNodeAgentInstallation CreateNodeAgentInstallation(Platform platform, DateTime now) => new(
+        platform.Id,
+        platform.ClusterId!,
+        "manager-node",
+        "manager-daemon",
+        "node-agent-service",
+        $"citadel-node-agent-{platform.Id:N}",
+        "ghcr.io/citadel-p/citadel.agent:latest",
+        "sha256:test",
+        null,
+        null,
+        SwarmNodeAgentDesiredState.Installed,
+        Guid.CreateVersion7(),
+        SwarmNodeAgentOperationKind.Install,
+        SwarmNodeAgentOperationState.Completed,
+        now,
+        Constants.SystemId,
+        null,
+        now,
+        now);
+
+    private static EdgeAgentBinding CreateNodeBinding(Platform platform, string dockerNodeId, DateTime observedAt) => new(
+        Guid.CreateVersion7(),
+        platform.Id,
+        EdgeAgentResourceType.Platform,
+        platform.Id,
+        Guid.CreateVersion7(),
+        "public-key",
+        $"SHA256:{Guid.NewGuid():N}",
+        EdgeAgentConnectionStatus.Offline,
+        observedAt,
+        observedAt,
+        observedAt,
+        "test",
+        dockerNodeId,
+        "{}",
+        Constants.EdgeAgentProtocolVersion,
+        null,
+        observedAt,
+        observedAt,
+        EdgeAgentProfile.SwarmNode,
+        platform.ClusterId,
+        dockerNodeId,
+        $"daemon-{dockerNodeId}");
+
+    private static Mock<IUnitOfWork> CreateNodeAgentUnitOfWork(
+        Platform platform,
+        IEdgeAgentRepository edgeAgents)
+    {
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(repository => repository.GetByIdAsync(
+                platform.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platform);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Platforms).Returns(platforms.Object);
+        unitOfWork.SetupGet(value => value.EdgeAgents).Returns(edgeAgents);
+        unitOfWork.Setup(value => value.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        return unitOfWork;
+    }
 
     private static SwarmNodeProjection CreateNode(Guid platformId, bool isStale) =>
         new(

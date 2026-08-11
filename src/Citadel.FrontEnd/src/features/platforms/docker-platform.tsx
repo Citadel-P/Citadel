@@ -5,7 +5,7 @@ import {
   PlatformStatus,
   PlatformType,
   PlatformView,
-  PlatformWorkloadStatusCountsView,
+  SwarmOverviewView,
   TagSummaryView,
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
@@ -31,6 +31,7 @@ import {
   WorkloadStatusBreakdown,
 } from './platform-workload-status';
 import { useSwarmOverview } from '@/features/swarm/hooks/useSwarmOverview';
+import { SwarmQuorumStatus } from '@/features/swarm/swarm-quorum-status';
 
 export const DockerPlatform = ({
   platform,
@@ -67,28 +68,31 @@ const LiveSwarmPlatform = ({
           ...descriptor,
           nodes: overview.nodeCount,
           managers: overview.managerCount,
-          serviceCount: overview.serviceCount,
           runningTaskCount: overview.runningTaskCount,
         },
       }
     : platform;
 
   return (
-    <DockerPlatformCard platform={livePlatform} actions={actions} serviceStatusCounts={overview?.serviceStatusCounts} />
+    <DockerPlatformCard
+      platform={livePlatform}
+      actions={actions}
+      swarmOverview={overview}
+    />
   );
 };
 
 const DockerPlatformCard = ({
   platform,
   actions,
-  serviceStatusCounts,
+  swarmOverview,
 }: {
   platform: PlatformView;
   actions: Record<
     string,
     React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
-  serviceStatusCounts?: PlatformWorkloadStatusCountsView;
+  swarmOverview?: SwarmOverviewView;
 }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
   const isSwarm = platform.type === PlatformType.DockerSwarm;
@@ -164,6 +168,9 @@ const DockerPlatformCard = ({
                 className="min-w-0 truncate text-[15px] font-medium text-foreground hover:underline">
                 {platform.name}
               </Link>
+              {swarmOverview?.quorum && (
+                <SwarmQuorumStatus quorum={swarmOverview.quorum} managerCount={swarmOverview.managerCount} />
+              )}
             </div>
 
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -182,8 +189,8 @@ const DockerPlatformCard = ({
                   <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.nodes, 'node')}
                   </Link>
-                  <Link to={`/platforms/${platform.id}/services`} className="hover:text-foreground hover:underline">
-                    {formatCount(swarmDescriptor.serviceCount, 'service')}
+                  <Link to={`/swarm-services?platformId=${platform.id}`} className="hover:text-foreground hover:underline">
+                    {formatCount(platform.swarmServiceStatusCounts.total, 'service')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/tasks`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.runningTaskCount, 'running task')}
@@ -248,10 +255,10 @@ const DockerPlatformCard = ({
               <WorkloadMetric
                 icon={Workflow}
                 label="Services"
-                total={swarmDescriptor.serviceCount}
-                to={`/platforms/${platform.id}/services`}
+                total={platform.swarmServiceStatusCounts.total}
+                to={`/swarm-services?platformId=${platform.id}`}
                 iconClassName="text-sky-500"
-                states={getServiceStates(serviceStatusCounts)}
+                states={getServiceStates(platform.swarmServiceStatusCounts)}
               />
             ) : (
               <WorkloadMetric

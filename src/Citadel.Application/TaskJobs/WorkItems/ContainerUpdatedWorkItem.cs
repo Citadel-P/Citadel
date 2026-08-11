@@ -8,11 +8,13 @@ using Domain.Entities;
 using Domain.Entities.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;
 
 internal sealed class ContainerUpdatedWorkItem(
+    Guid platformId,
     DaemonContainerEventInfo eventInfo,
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
@@ -31,7 +33,21 @@ internal sealed class ContainerUpdatedWorkItem(
             Container? container = null;
             Stack? stack = null;
 
-            var existing = await uow.Containers.GetContainerInfoAsync(eventInfo.ContainerId, cancellationToken);
+            var platform = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+            var managerNodeId = (platform?.PlatformDescriptor as DockerSwarmPlatformDescriptor)?.NodeID;
+            var existing = await uow.Containers.GetByRuntimeIdentityAsync(
+                platformId,
+                managerNodeId,
+                eventInfo.ContainerId,
+                cancellationToken);
+            if (existing is null && managerNodeId is not null)
+            {
+                existing = await uow.Containers.GetByRuntimeIdentityAsync(
+                    platformId,
+                    dockerNodeId: null,
+                    dockerContainerId: eventInfo.ContainerId,
+                    cancellationToken: cancellationToken);
+            }
 
             if (existing is null) return;
 
@@ -106,6 +122,8 @@ internal sealed class ContainerUpdatedWorkItem(
             isSystem: eventInfo.Container?.IsSystem,
             systemRole: eventInfo.Container?.SystemRole,
             hasCitadelOwnershipLabels: eventInfo.Container?.HasCitadelOwnershipLabels);
+        if (container.DockerNodeId is not null)
+            container.ObserveOnNode(container.DockerNodeId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         await uow.Containers.UpdateAsync(container, cancellationToken);
 
         container.ReleaseProcessing();

@@ -254,6 +254,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(PlatformConnected))]
 [JsonSerializable(typeof(PlatformDisconnected))]
 [JsonSerializable(typeof(PlatformRenamed))]
+[JsonSerializable(typeof(PlatformNodeAgentLifecycle))]
 [JsonSerializable(typeof(RegistryRenamed))]
 [JsonSerializable(typeof(RegistryDeleted))]
 [JsonSerializable(typeof(RegistryUpdated))]

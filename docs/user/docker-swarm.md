@@ -12,10 +12,11 @@ Task mutations and destructive Node administration remain unavailable. Citadel
 Deployments stay Docker Standalone workloads. Docker Swarm Stacks support
 reviewed import, Apply, safe rollback, and ownership-checked deletion.
 
-Citadel currently reaches node-local Docker resources through the connected
-manager only. Cluster-wide Containers, worker Task statistics and Terminal,
-and per-Node Image or Volume visibility require the planned Swarm node-agent
-data plane described below.
+Citadel reaches the connected manager's node-local Docker resources by
+default. The optional node data plane extends current Container inventory,
+Task statistics, logs, inspect, lifecycle actions, and Terminal to covered
+workers. Images, Volumes, and local Networks remain manager-local in this
+release.
 
 ## Before You Begin
 
@@ -66,41 +67,60 @@ Docker APIs:
 - Containers, live container statistics, exec sessions, local Images, local
   Volumes, and local Networks belong to the Node running or storing them.
 
-The current Citadel release connects one validated manager. Its **Containers**,
-**Images**, and **Volumes** pages therefore describe that manager, not every
-Node. A Task scheduled on a worker remains visible in the Tasks table, but its
-container statistics and Terminal are unavailable through the manager.
+Without node agents, the **Containers**, **Images**, and **Volumes** pages
+describe the connected manager rather than every Node. A Task scheduled on a
+worker remains visible, but its node-local runtime operations are unavailable.
 
-A future update will offer an explicit **Install node agents** setup step. It
-will deploy a Citadel-owned outbound Agent across the Swarm and show how many
-Nodes are covered. Citadel will then route Task runtime operations to the
-owning Node and aggregate node-local inventory without creating a separate
-Platform for each Node.
+Use **Cluster node coverage** on the Platform page to install the node data
+plane. **Install node agents** creates a Citadel System global Docker Service
+on eligible Linux Nodes not already covered by the manager connection. Each
+satellite runs the existing Agent in a restricted outbound `swarm-node`
+profile and opens no inbound management port. The Platform remains one Swarm
+Platform; its manager connection can be Local, regular Agent, or Edge Agent.
 
-Do not reuse the current Platform Agent or Edge Agent enrollment token on every
-Node. The current enrollment model accepts one Agent for a Platform and does
-not yet provide cluster aggregation or Node-targeted routing.
+With coverage installed, Citadel aggregates current Containers from covered
+Nodes and routes Task inspect, logs, statistics, lifecycle operations, and
+Terminal to the exact owning Node. Service statistics sum the available
+current Task samples and explicitly report partial coverage when a Node or
+Task sample is missing. Service chart history is retained across routine Task
+replacement, rollout, restart, and cleanup of stopped Task containers. An
+offline satellite keeps its last-known Container projection marked stale; it
+does not make the manager or whole Platform offline.
+
+The System Service is infrastructure owned by Citadel, not a user Stack or
+managed Service. It mounts each Node's Docker socket read-write, which gives it
+daemon-level access. Installation, repair, upgrade, and removal are therefore
+explicit privileged actions and never happen when you only Test or Save a
+Platform. A single-Node Swarm is already covered by its manager and does not
+need a satellite Service.
+
+Do not reuse the regular Platform Agent or Edge Agent enrollment token on every
+Node. Citadel creates a separate, expiring, cluster-scoped bootstrap credential
+for satellite enrollment. Use **Repair coverage** when a new eligible Node
+joins after that enrollment window expires. Upgrade and removal are also
+explicit Platform actions. Requests and final outcomes appear in the Platform's
+activity history; bootstrap credentials are never included there.
 
 ## Clean Up Historical Task Containers
 
 The Swarm Platform **Config** tab includes **Prune historical task containers**.
 It is enabled by default. During container synchronization, Citadel deletes a
-bounded batch of exited or dead Swarm Task containers retained on
-the connected manager. Running Tasks and stopped Docker Standalone or Compose
-containers are never removed by this setting.
+bounded batch of exited or dead Swarm Task containers on the connected manager
+and every covered worker. Running Tasks and stopped Docker Standalone or
+Compose containers are never removed by this setting.
 
 Disable the setting if you need Docker Desktop or the Docker CLI to retain the
 manager's stopped Task containers for manual inspection. Citadel still hides
-that terminal history from current Stack membership, counts, and health. A
-manager connection cannot delete container history stored locally on worker
-Nodes.
+that terminal history from current Stack membership, counts, and health.
+Worker history is pruned only while that worker has a usable node data source.
 
 ## Use The Swarm Pages
 
 Selecting a Swarm Platform opens its Swarm navigation:
 
-- **Overview** shows connection/freshness health and Node, manager, Service,
-  and running/desired Task counts.
+- **Overview** shows connection/freshness health, manager quorum, and Node,
+  manager, Service, and running/desired Task counts. The Platforms list also
+  shows quorum separately from the manager connection indicator.
 - **Nodes** shows manager/worker role, readiness, availability, reachability,
   Engine details, labels, and Task counts.
 - **Services** shows mode, image, replica counts, update state, ports, labels,
@@ -108,7 +128,8 @@ Selecting a Swarm Platform opens its Swarm navigation:
   create new managed Services from Citadel's main **Services** page.
 - **Tasks** shows current and recent scheduler attempts, including Service,
   Node, desired/current state, image, and Docker error details. A running Task
-  can open a terminal when its container is on the connected manager.
+  can use inspect, logs, statistics, lifecycle actions, and Terminal when its
+  owning Node is covered.
 - **Networks** shows Swarm-scoped Network metadata and attached Services.
 - **Secrets** uses one Inspect tab for details, referencing Services, and
   labels. Docker never returns stored Secret values, so the Edit dialog exposes
@@ -119,9 +140,9 @@ Selecting a Swarm Platform opens its Swarm navigation:
   read-only editor and keeps labels editable. Citadel can create Configs, edit
   their labels, and delete unused Configs.
 
-Containers, Images, and Volumes visible through the same manager remain
-manager-local Docker resources. They are not cluster inventory. An Image on
-the manager may be absent from a worker, and same-named local Volumes on two
+Images and Volumes remain manager-local in this release even when the Container
+and Task runtime data plane is installed. They are not cluster inventory. An
+Image on the manager may be absent from a worker, and same-named local Volumes on two
 Nodes may contain different data. Container adoption remains available only on
 Docker Standalone Platforms. On a Swarm manager, Citadel can import either an
 existing Docker Stack namespace or a regular Docker Compose project. A Docker
@@ -180,9 +201,8 @@ Stack-owned Services remain visible from the Swarm Platform's **Services** and
 only the Services owned by that Stack, with their current Tasks as expandable
 rows. The table follows the live Swarm inventory stream. Select a Service to
 use the bounded log viewer, inspect its Docker definition, or open a terminal
-for a running Task on the connected manager. Citadel does not show aggregate
-Stack statistics because a manager cannot provide truthful worker-wide
-container statistics.
+for a running Task on a covered Node. Citadel does not show aggregate Stack
+statistics.
 
 Rollback reapplies a selected healthy release through the same preflight and
 convergence checks. Each successful release records the immutable Docker Secret
@@ -215,8 +235,25 @@ source or move large application data out of the repository before retrying.
 Citadel stores the last successful Swarm observation so inventory remains
 available when the manager disconnects.
 
+Connection and quorum are different signals. Connection reports whether
+Citadel can reach the configured manager. Quorum reports whether the Swarm
+control plane has an elected leader and enough reachable managers for a Raft
+majority. Workers do not count toward quorum.
+
+- **Quorum healthy** means a leader exists and all known managers are
+  reachable.
+- **Quorum degraded** means a majority is still reachable, but at least one
+  manager is unavailable.
+- **Quorum lost** means no leader exists or fewer than
+  `floor(manager count / 2) + 1` managers are reachable.
+- **Quorum unknown** means Citadel cannot safely evaluate current manager
+  membership because the Platform is offline or manager inventory is stale.
+
+A healthy single-manager Swarm has quorum but no manager failure tolerance.
+Citadel reports that limitation in the quorum tooltip.
+
 - **Healthy** means the manager is online, exposes Swarm control, and the
-  persisted inventory is current.
+  persisted inventory and quorum are healthy.
 - **Stale** means the most recent refresh failed. The displayed inventory is
   last-known state and may no longer match Docker.
 - **Degraded** means the endpoint is online but does not currently expose
@@ -363,10 +400,14 @@ is reported as progressing, degraded, or failed according to its current Task
 and rollout state.
 
 The Config tab stores desired state. Runtime shows the current Service summary,
-bounded Tasks, logs, Task terminal access, and inspect data. Bindings and
-Activities use the same Citadel controls as other managed resources. Service
-statistics are not shown because a manager cannot truthfully provide aggregate
-worker-node statistics.
+bounded Tasks, logs, Task terminal access, inspect data, and aggregate current
+Task statistics. Bindings and Activities use the same Citadel controls as
+other managed resources. Runtime identifies partial statistics when one or
+more owning Nodes or current Task samples are unavailable. That warning
+describes current coverage; it does not remove previously collected chart
+history. Statistics are retained for seven days. Open an individual Task to
+inspect that Task's current runtime data; the Service chart is the aggregate
+across its logical replicas.
 
 External tagged images support **Disabled**, **Notify only**, and **Auto
 deploy** update behavior. Disabled Services are not scanned in the background,
@@ -416,8 +457,8 @@ containers than Citadel when automatic pruning is disabled or when the
 containers are local to a worker Node.
 Citadel excludes exited, dead, and removing Swarm Task containers from Stack
 membership and health calculations. The default Platform setting also deletes
-bounded batches of that history from the connected manager during container
-synchronization.
+bounded batches of that history from the connected manager and covered workers
+during container synchronization.
 Stopped Docker Standalone and Compose containers remain visible because they
 are current workloads rather than immutable Swarm Task history.
 
@@ -450,14 +491,13 @@ driver's external destination.
 ## Open A Task Terminal
 
 Open a running Task and select **Terminal**. Terminal access requires Platform
-Read plus the Terminal permission. Docker exec is node-local, so Citadel can
-open the terminal only when the Task is running on the manager connected to the
-Platform. Tasks on another manager or worker remain visible, but their terminal
-cannot be opened through this connection.
+Read plus the Terminal permission. Docker exec is node-local, so Citadel opens
+the terminal through the exact owning Node data source. A Task on an uncovered,
+offline, stale, or unsupported Node remains visible but cannot open a terminal.
 
 The same Task selector is available in a managed Service's **Runtime** tab.
-Tasks on the connected manager can be selected; running Tasks on worker nodes
-are shown but disabled.
+Running Tasks on covered Nodes can be selected; Tasks without a usable owning
+Node data source are shown but disabled.
 
 ## Permissions
 
@@ -465,8 +505,10 @@ are shown but disabled.
 - Platform Read plus Inspect: inspect live Node, Service, and Task data and
   load Config content into the read-only editor.
 - Platform Read plus Logs: retrieve Service and Task logs.
-- Platform Read plus Terminal: open a terminal for a running Task on the
-  connected manager.
+- Platform Read plus Terminal: open a terminal for a running Task on a covered
+  Node.
+- Platform Execute plus Manage Node Agents: install, repair, upgrade, or
+  remove the privileged node data plane.
 - Platform Write: register or edit the Platform connection and create, edit
   labels on, or delete unused Secrets and Configs.
 - Swarm Service Write plus Platform visibility: create or edit managed Service
@@ -519,9 +561,8 @@ The current Swarm milestone does not provide:
 - Citadel Deployments on Swarm Platforms;
 - rollback of a release whose required versioned Secret or Config is no longer
   retained;
-- cluster-wide image distribution, volume semantics, backup, or restore;
-- multi-Node Agent installation, cluster-wide Containers, or worker Task
-  statistics and Terminal;
+- cluster-wide Image distribution, per-Node Image and Volume inventory, local
+  Network aggregation, multi-Node Volume backup, or restore;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
 

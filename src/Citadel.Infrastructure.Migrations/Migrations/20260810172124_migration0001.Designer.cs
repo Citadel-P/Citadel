@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260809173801_migration0001")]
+    [Migration("20260810172124_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -2628,6 +2628,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("dockerimageid");
 
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
                     b.Property<bool>("HasCitadelOwnershipLabels")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2663,6 +2668,19 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("json")
                         .HasColumnName("ports");
+
+                    b.Property<long?>("ProjectionObservedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("projectionobservedat");
+
+                    b.Property<string>("ProjectionStaleReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("projectionstalereason");
+
+                    b.Property<long?>("ProjectionStaleSince")
+                        .HasColumnType("bigint")
+                        .HasColumnName("projectionstalesince");
 
                     b.Property<long>("RowVersion")
                         .ValueGeneratedOnAdd()
@@ -2714,7 +2732,16 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("DockerContainerId", "PlatformId")
                         .IsUnique()
-                        .HasDatabaseName("ix__containers_dockercontainerid_platformid");
+                        .HasDatabaseName("ix__containers_dockercontainerid_platformid")
+                        .HasFilter("dockernodeid IS NULL");
+
+                    b.HasIndex("PlatformId", "DockerNodeId")
+                        .HasDatabaseName("ix_containers_platformid_dockernodeid");
+
+                    b.HasIndex("DockerContainerId", "PlatformId", "DockerNodeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix__containers_dockercontainerid_platformid_dockernodeid")
+                        .HasFilter("dockernodeid IS NOT NULL");
 
                     b.ToTable("containers", (string)null);
                 });
@@ -2905,6 +2932,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("json")
                         .HasColumnName("capabilitiesjson");
 
+                    b.Property<string>("ClusterId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("clusterid");
+
                     b.Property<string>("ConnectionStatus")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -2917,6 +2949,29 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("createdatutc")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("DockerDaemonId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerdaemonid");
+
+                    b.Property<string>("DockerHostname")
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerhostname");
+
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
+                    b.Property<DateTime?>("FirstEnrolledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("firstenrolledatutc");
+
+                    b.Property<DateTime?>("LastAuthenticatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastauthenticatedatutc");
+
                     b.Property<DateTime?>("LastConnectedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("lastconnectedatutc");
@@ -2928,6 +2983,16 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<DateTime?>("LastHeartbeatAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("lastheartbeatatutc");
+
+                    b.Property<string>("LastObservedServiceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("lastobservedserviceid");
+
+                    b.Property<string>("LastObservedTaskId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("lastobservedtaskid");
 
                     b.Property<string>("LastSeenHostname")
                         .HasMaxLength(256)
@@ -2942,6 +3007,14 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("PlatformId")
                         .HasColumnType("uuid")
                         .HasColumnName("platformid");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Ordinary")
+                        .HasColumnName("profile");
 
                     b.Property<int>("ProtocolVersion")
                         .ValueGeneratedOnAdd()
@@ -2961,9 +3034,19 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDefaultValue("Platform")
                         .HasColumnName("resourcetype");
 
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("revocationreason");
+
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revokedatutc");
+
+                    b.Property<string>("SwarmRole")
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("swarmrole");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .ValueGeneratedOnAdd()
@@ -2975,14 +3058,29 @@ namespace Infrastructure.Migrations.Migrations
                         .HasName("pk_edgeagentbindings");
 
                     b.HasIndex("AgentFingerprint")
-                        .HasDatabaseName("ix_edgeagentbindings_agentfingerprint");
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentbindings_activeagentfingerprint")
+                        .HasFilter("revokedatutc IS NULL");
 
                     b.HasIndex("AgentId")
-                        .HasDatabaseName("ix_edgeagentbindings_agentid");
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentbindings_activeagentid")
+                        .HasFilter("revokedatutc IS NULL");
+
+                    b.HasIndex("DockerDaemonId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentbindings_activedaemon")
+                        .HasFilter("dockerdaemonid IS NOT NULL AND revokedatutc IS NULL");
 
                     b.HasIndex("ResourceType", "ResourceId")
                         .IsUnique()
-                        .HasDatabaseName("ix_edgeagentbindings_resource");
+                        .HasDatabaseName("ix_edgeagentbindings_activeresource")
+                        .HasFilter("dockernodeid IS NULL AND revokedatutc IS NULL");
+
+                    b.HasIndex("ResourceType", "ResourceId", "DockerNodeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentbindings_activenode")
+                        .HasFilter("dockernodeid IS NOT NULL AND revokedatutc IS NULL");
 
                     b.ToTable("edgeagentbindings", (string)null);
                 });
@@ -3899,11 +3997,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("a4b222e3-7452-b5f4-377b-c05652533f67"),
+                            Id = new Guid("de0d45da-a297-0302-9357-99247a89afe2"),
                             PermissionLevel = 4,
                             ResourceType = 0,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 27
+                            SpecificPermissions = 1051
                         },
                         new
                         {
@@ -5373,6 +5471,206 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("swarmnetworkprojections", (string)null);
                 });
 
+            modelBuilder.Entity("SwarmNodeAgentBootstrap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClusterId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("clusterid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("DockerSecretId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockersecretid");
+
+                    b.Property<string>("DockerSecretName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockersecretname");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresatutc");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revokedatutc");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("tokenhash");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_swarmnodeagentbootstraps");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_swarmnodeagentbootstraps_createdbyactorid");
+
+                    b.HasIndex("DockerSecretId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmnodeagentbootstraps_dockersecretid")
+                        .HasFilter("dockersecretid IS NOT NULL");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmnodeagentbootstraps_tokenhash");
+
+                    b.HasIndex("PlatformId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmnodeagentbootstraps_platformversion");
+
+                    b.ToTable("swarmnodeagentbootstraps", (string)null);
+                });
+
+            modelBuilder.Entity("SwarmNodeAgentInstallation", b =>
+                {
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("AgentImageDigest")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("agentimagedigest");
+
+                    b.Property<string>("AgentImageReference")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("agentimagereference");
+
+                    b.Property<string>("ClusterId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("clusterid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DesiredState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("desiredstate");
+
+                    b.Property<string>("DockerCaConfigId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockercaconfigid");
+
+                    b.Property<string>("DockerCaConfigName")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockercaconfigname");
+
+                    b.Property<string>("DockerServiceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerserviceid");
+
+                    b.Property<string>("DockerServiceName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerservicename");
+
+                    b.Property<string>("ManagerDockerDaemonId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("managerdockerdaemonid");
+
+                    b.Property<string>("ManagerDockerNodeId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("managerdockernodeid");
+
+                    b.Property<Guid?>("OperationActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operationactorid");
+
+                    b.Property<string>("OperationError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("text")
+                        .HasColumnName("operationerror");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operationid");
+
+                    b.Property<string>("OperationKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("operationkind");
+
+                    b.Property<DateTime?>("OperationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("operationstartedatutc");
+
+                    b.Property<string>("OperationState")
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("operationstate");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("PlatformId")
+                        .HasName("pk_swarmnodeagentinstallations");
+
+                    b.HasIndex("DockerServiceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_swarmnodeagentinstallations_dockerserviceid")
+                        .HasFilter("dockerserviceid IS NOT NULL");
+
+                    b.HasIndex("OperationActorId")
+                        .HasDatabaseName("ix_swarmnodeagentinstallations_operationactorid");
+
+                    b.ToTable("swarmnodeagentinstallations", (string)null);
+                });
+
             modelBuilder.Entity("SwarmNodeProjection", b =>
                 {
                     b.Property<Guid>("PlatformId")
@@ -5486,6 +5784,78 @@ namespace Infrastructure.Migrations.Migrations
                         .HasName("pk_swarmnodeprojections");
 
                     b.ToTable("swarmnodeprojections", (string)null);
+                });
+
+            modelBuilder.Entity("SwarmNodeRuntimeProjectionState", b =>
+                {
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
+                    b.Property<string>("AgentVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("agentversion");
+
+                    b.Property<string>("DockerVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerversion");
+
+                    b.Property<bool>("IsStale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("isstale");
+
+                    b.Property<DateTimeOffset?>("LastEventGapAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lasteventgapat");
+
+                    b.Property<DateTimeOffset?>("LastEventStreamConnectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lasteventstreamconnectedat");
+
+                    b.Property<DateTimeOffset?>("LastStatsSampleAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("laststatssampleat");
+
+                    b.Property<DateTimeOffset?>("LastSuccessfulReconciliationAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastsuccessfulreconciliationat");
+
+                    b.Property<DateTimeOffset?>("ReconciliationCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reconciliationcompletedat");
+
+                    b.Property<long>("ReconciliationGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("reconciliationgeneration");
+
+                    b.Property<DateTimeOffset?>("ReconciliationStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reconciliationstartedat");
+
+                    b.Property<string>("StaleReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("stalereason");
+
+                    b.Property<DateTimeOffset?>("StaleSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stalesince");
+
+                    b.HasKey("PlatformId", "DockerNodeId")
+                        .HasName("pk_swarmnoderuntimeprojectionstates");
+
+                    b.ToTable("swarmnoderuntimeprojectionstates", (string)null);
                 });
 
             modelBuilder.Entity("SwarmSecretProjection", b =>
@@ -5955,6 +6325,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("text")
                         .HasColumnName("desiredstate");
+
+                    b.Property<string>("DockerContainerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockercontainerid");
 
                     b.Property<DateTimeOffset?>("DockerCreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -7147,6 +7522,39 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_swarmnetworkprojections_platforms_platformid");
                 });
 
+            modelBuilder.Entity("SwarmNodeAgentBootstrap", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodeagentbootstraps_actors_createdbyactorid");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodeagentbootstraps_platforms_platformid");
+                });
+
+            modelBuilder.Entity("SwarmNodeAgentInstallation", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("OperationActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_swarmnodeagentinstallations_actors_operationactorid");
+
+                    b.HasOne("Platform", null)
+                        .WithOne()
+                        .HasForeignKey("SwarmNodeAgentInstallation", "PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnodeagentinstallations_platforms_platformid");
+                });
+
             modelBuilder.Entity("SwarmNodeProjection", b =>
                 {
                     b.HasOne("Platform", null)
@@ -7155,6 +7563,16 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_swarmnodeprojections_platforms_platformid");
+                });
+
+            modelBuilder.Entity("SwarmNodeRuntimeProjectionState", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_swarmnoderuntimeprojectionstates_platforms_platformid");
                 });
 
             modelBuilder.Entity("SwarmSecretProjection", b =>

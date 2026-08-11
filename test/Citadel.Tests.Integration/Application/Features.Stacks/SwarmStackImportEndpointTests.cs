@@ -10,6 +10,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
@@ -34,6 +35,8 @@ public sealed class SwarmStackImportEndpointTests(PostgresTestFixture fixture) :
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerConnectorFactory = new();
     private readonly Mock<IStackConnector> stackConnector = new();
     private readonly Mock<IConnectorFactory<IStackConnector>> stackConnectorFactory = new();
+    private readonly Mock<IPlatformConnector> platformConnector = new();
+    private readonly Mock<IConnectorFactory<IPlatformConnector>> platformConnectorFactory = new();
     private readonly Mock<ISwarmReconciliationCoordinator> reconciliationCoordinator = new();
     private Guid platformId;
     private Guid importedStackId;
@@ -52,16 +55,33 @@ public sealed class SwarmStackImportEndpointTests(PostgresTestFixture fixture) :
         services.RemoveAll<IConnectorFactory<ISwarmConnector>>();
         services.RemoveAll<IConnectorFactory<IContainerConnector>>();
         services.RemoveAll<IConnectorFactory<IStackConnector>>();
+        services.RemoveAll<IConnectorFactory<IPlatformConnector>>();
         services.RemoveAll<ISwarmReconciliationCoordinator>();
         services.AddHostedService<DbWriteWorker>();
         services.AddSingleton<IDbWorkQueue, DbWorkQueue>();
         services.AddSingleton(connectorFactory.Object);
         services.AddSingleton(containerConnectorFactory.Object);
         services.AddSingleton(stackConnectorFactory.Object);
+        services.AddSingleton(platformConnectorFactory.Object);
         services.AddSingleton(reconciliationCoordinator.Object);
         connectorFactory.Setup(value => value.GetConnector(PlatformConnectorType.Agent)).Returns(connector.Object);
         containerConnectorFactory.Setup(value => value.GetConnector(PlatformConnectorType.Agent)).Returns(containerConnector.Object);
         stackConnectorFactory.Setup(value => value.GetConnector(PlatformConnectorType.Agent)).Returns(stackConnector.Object);
+        platformConnectorFactory.Setup(value => value.GetConnector(PlatformConnectorType.Agent)).Returns(platformConnector.Object);
+        platformConnector
+            .Setup(value => value.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new PlatformResult(
+                "import-manager",
+                "https://swarm-import.example.test",
+                0,
+                0,
+                0,
+                4,
+                1024,
+                "28.0.0",
+                "1.0.0",
+                CreateManagerDescriptor(),
+                ClusterId: "cluster-import")));
         stackConnector
             .Setup(value => value.StackApplyAsync(It.IsAny<StackApplyCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StackApplyCommand command, CancellationToken cancellationToken) =>
@@ -89,9 +109,7 @@ public sealed class SwarmStackImportEndpointTests(PostgresTestFixture fixture) :
             "1.0.0",
             PlatformStatus.Online,
             PlatformConnectorType.Agent,
-            new DockerSwarmPlatformDescriptor(
-                "node-1", "10.0.0.1", "Active", true, 1, 1,
-                "daemon-1", 0, 0, 0, 0, "cluster-import"),
+            CreateManagerDescriptor(),
             clusterId: "cluster-import");
         platformId = platform.Id;
         await uow.Platforms.AddAsync(platform, cancellationToken);
@@ -390,6 +408,20 @@ public sealed class SwarmStackImportEndpointTests(PostgresTestFixture fixture) :
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
             RuntimeHash: "runtime-hash");
+
+    private static DockerSwarmPlatformDescriptor CreateManagerDescriptor() => new(
+        NodeID: "node-1",
+        NodeAddr: "10.0.0.1",
+        LocalNodeState: "Active",
+        ControlAvailable: true,
+        Nodes: 1,
+        Managers: 1,
+        DaemonId: "daemon-1",
+        ContainerCount: 0,
+        ContainersRunning: 0,
+        ContainersPaused: 0,
+        ContainersStopped: 0,
+        ClusterId: "cluster-import");
 
     private SwarmServiceResult CreateOwnedService()
         => CreateService() with

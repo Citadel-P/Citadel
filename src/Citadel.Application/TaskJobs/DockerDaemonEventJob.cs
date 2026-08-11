@@ -115,7 +115,7 @@ internal sealed class DockerDaemonEventJob(
                                     await OnContainerDestroyed(containerEvent, platform.Id, cancellationToken);
                                     break;
                                 default:
-                                    await OnContainerUpdated(containerEvent, cancellationToken);
+                                    await OnContainerUpdated(containerEvent, platform.Id, cancellationToken);
                                     if (containerEvent.Container is
                                         {
                                             IsSwarmTask: true,
@@ -220,9 +220,9 @@ internal sealed class DockerDaemonEventJob(
         return dbWorkQueue.EnqueueAsync(dbItem, cancellationToken);
     }
 
-    private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
+    private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
-        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, activityHub, deploymentHub, dockerDaemonHub, containerEventBroadcaster, stackHub, logger);
+        var item = new ContainerUpdatedWorkItem(platformId, eventInfo, notificationQueue, activityHub, deploymentHub, dockerDaemonHub, containerEventBroadcaster, stackHub, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }

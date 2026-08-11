@@ -66,6 +66,12 @@ internal sealed class ContainerAuthorizationService(
 
     private async Task<Guid?> ResolvePlatformIdAsync(string containerId, CancellationToken cancellationToken)
     {
+        if (Guid.TryParse(containerId, out var id))
+        {
+            var container = await unitOfWork.Containers.GetByIdAsync(id, cancellationToken);
+            return container?.PlatformId;
+        }
+
         if (platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
         {
             return platform.Id;

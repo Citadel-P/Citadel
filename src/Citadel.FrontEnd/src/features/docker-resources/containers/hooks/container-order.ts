@@ -8,18 +8,18 @@ export const reconcileContainerOrder = (
     return incomingContainers;
   }
 
-  const previousIds = new Set(previousContainers.map((container) => container.containerId));
-  const incomingById = new Map(incomingContainers.map((container) => [container.containerId, container]));
+  const previousIds = new Set(previousContainers.map((container) => container.id));
+  const incomingById = new Map(incomingContainers.map((container) => [container.id, container]));
   const reconciled: ContainerView[] = [];
 
   for (const container of incomingContainers) {
-    if (!previousIds.has(container.containerId)) {
+    if (!previousIds.has(container.id)) {
       reconciled.push(container);
     }
   }
 
   for (const container of previousContainers) {
-    const updatedContainer = incomingById.get(container.containerId);
+    const updatedContainer = incomingById.get(container.id);
     if (updatedContainer) {
       reconciled.push(updatedContainer);
     }

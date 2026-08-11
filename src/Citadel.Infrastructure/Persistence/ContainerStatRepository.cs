@@ -9,13 +9,83 @@ using NpgsqlTypes;
 
 namespace Infrastructure.Persistence;
 
-internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerStatRepository 
+internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerStatRepository
 {
+    public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(
+        Guid containerId,
+        int hours,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+              S.ContainerId,
+              MIN(S.Created) AS Created,
+              AVG(S.CpuUsage) AS CpuUsage,
+              AVG(S.MemoryActive) AS MemoryActive,
+              AVG(S.MemoryCache) AS MemoryCache,
+              AVG(S.MemoryLimit) AS MemoryLimit,
+              AVG(S.RxBytes) AS RxBytes,
+              AVG(S.TxBytes) AS TxBytes
+            FROM ContainerStats S
+            WHERE S.ContainerId = @ContainerId
+              AND S.Created > @Since
+            GROUP BY S.ContainerId, (S.Created / @BucketSeconds)
+            ORDER BY MIN(S.Created)
+            """;
+
+        var normalizedHours = Math.Clamp(hours, 1, 72);
+        var result = await db.QueryAsync<ContainerStatDto>(sql, new
+        {
+            ContainerId = containerId,
+            Since = DateTimeOffset.UtcNow.AddHours(-normalizedHours).ToUnixTimeSeconds(),
+            BucketSeconds = normalizedHours > 24 ? 300 : 60
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
+    public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(
+        Guid[] containerIds,
+        int hours,
+        CancellationToken cancellationToken)
+    {
+        if (containerIds.Length == 0)
+            return [];
+
+        const string sql = """
+            SELECT
+              S.ContainerId,
+              MIN(S.Created) AS Created,
+              AVG(S.CpuUsage) AS CpuUsage,
+              AVG(S.MemoryActive) AS MemoryActive,
+              AVG(S.MemoryCache) AS MemoryCache,
+              AVG(S.MemoryLimit) AS MemoryLimit,
+              AVG(S.RxBytes) AS RxBytes,
+              AVG(S.TxBytes) AS TxBytes
+            FROM ContainerStats S
+            WHERE S.ContainerId = ANY(@ContainerIds)
+              AND S.Created > @Since
+            GROUP BY S.ContainerId, (S.Created / @BucketSeconds)
+            ORDER BY MIN(S.Created)
+            """;
+
+        var normalizedHours = Math.Clamp(hours, 1, 72);
+        var result = await db.QueryAsync<ContainerStatDto>(sql, new
+        {
+            ContainerIds = containerIds,
+            Since = DateTimeOffset.UtcNow.AddHours(-normalizedHours).ToUnixTimeSeconds(),
+            BucketSeconds = normalizedHours > 24 ? 300 : 60
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
     public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string dockerContainerId, CancellationToken cancellationToken)
         => await GetStatsAggregatedAsync(dockerContainerId, 24, cancellationToken);
 
     public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(string dockerContainerId, int hours, CancellationToken cancellationToken)
     {
+        if (Guid.TryParse(dockerContainerId, out var containerId))
+            return await GetStatsAggregatedAsync(containerId, hours, cancellationToken);
+
         // We don't retrieve the full stats, but rather aggregate them to reduce the amount of data transferred and processed.
         const string sql = """
             SELECT 
@@ -34,7 +104,7 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
             GROUP BY C.Id, (S.Created / @BucketSeconds)
             ORDER BY MIN(S.Created)
             """;
-      
+
         var normalizedHours = Math.Clamp(hours, 1, 72);
         var bucketSeconds = normalizedHours > 24 ? 300 : 60;
         var since = DateTimeOffset.UtcNow.AddHours(-normalizedHours).ToUnixTimeSeconds();

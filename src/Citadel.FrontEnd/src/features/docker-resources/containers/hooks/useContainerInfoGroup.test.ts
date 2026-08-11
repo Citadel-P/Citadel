@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ContainerDataView,
   ContainerStateStatus,
@@ -6,7 +7,19 @@ import {
   ContainerView,
   ResourceControlState,
 } from '@/api/generated/api.types';
-import { mergeContainerRuntimeUpdate, toContainerDetailsView } from './useContainerInfoGroup';
+import { mergeContainerRuntimeUpdate, toContainerDetailsView, useContainerInfoGroup } from './useContainerInfoGroup';
+
+const { useReadMock } = vi.hoisted(() => ({ useReadMock: vi.fn() }));
+
+vi.mock('@/lib/hooks', () => ({ useRead: useReadMock }));
+vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
+vi.mock('@/features/platforms/hooks/useDockerDaemonGroup', () => ({ useDockerDaemonGroup: vi.fn() }));
+vi.mock('@/hooks/useSignalRGroup', () => ({ useSignalRGroup: vi.fn() }));
+
+beforeEach(() => {
+  useReadMock.mockReset();
+  useReadMock.mockReturnValue({ data: undefined, isLoading: false });
+});
 
 describe('mergeContainerRuntimeUpdate', () => {
   const runtimeUpdate: ContainerDataView = {
@@ -18,6 +31,9 @@ describe('mergeContainerRuntimeUpdate', () => {
     controlState: ResourceControlState.Idle,
     isSystem: false,
     systemRole: null,
+    hasCitadelOwnershipLabels: false,
+    isSwarmTask: true,
+    dockerNodeId: 'worker-node',
     deploymentId: null,
     stackId: null,
     containerStat: {
@@ -72,6 +88,13 @@ describe('toContainerDetailsView', () => {
       stack: null,
       isSystem: false,
       systemRole: null,
+      hasCitadelOwnershipLabels: false,
+      isSwarmTask: true,
+      dockerNodeId: 'worker-node',
+      nodeHostname: 'worker',
+      projectionObservedAt: 1,
+      projectionStaleSince: null,
+      projectionStaleReason: null,
       lastStats: null,
       ports: {},
       deploymentId: null,
@@ -81,5 +104,16 @@ describe('toContainerDetailsView', () => {
     expect(details.resourceId).toBe('019f0000-0000-7000-8000-000000000001');
     expect(details.platformId).toBe('019f0000-0000-7000-8000-000000000002');
     expect(details.id).toBe('ea5f935b4706');
+    expect(details.dockerNodeId).toBe('worker-node');
+  });
+});
+
+describe('useContainerInfoGroup', () => {
+  it('preserves a persisted container id when loading container details', () => {
+    const persistedId = '019fed15-5340-7000-8000-000000000001';
+
+    renderHook(() => useContainerInfoGroup(persistedId, '019f0000-0000-7000-8000-000000000002'));
+
+    expect(useReadMock).toHaveBeenCalledWith('getContainer', { id: persistedId });
   });
 });

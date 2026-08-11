@@ -227,7 +227,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 return;
             }
 
-            if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+            if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor currentSwarm)
             {
                 if (platformInfo.Descriptor is not DockerSwarmPlatformDescriptor reportedSwarm
                     || !reportedSwarm.ControlAvailable
@@ -246,6 +246,26 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 {
                     logger.LogError(
                         "Platform {PlatformId} synchronization was rejected because its Swarm cluster identity changed",
+                        platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(currentSwarm.NodeID)
+                    && !string.Equals(currentSwarm.NodeID, reportedSwarm.NodeID, StringComparison.Ordinal))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because its pinned Swarm manager Node identity changed",
+                        platformId);
+                    await RejectAsync(platform, uow, cancellationToken);
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(currentSwarm.DaemonId)
+                    && !string.Equals(currentSwarm.DaemonId, reportedSwarm.DaemonId, StringComparison.Ordinal))
+                {
+                    logger.LogError(
+                        "Platform {PlatformId} synchronization was rejected because its pinned Swarm manager Docker daemon identity changed",
                         platformId);
                     await RejectAsync(platform, uow, cancellationToken);
                     return;

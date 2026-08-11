@@ -32,7 +32,10 @@ internal sealed record StackDto(
     string? ActivityEvent_ActivityEventInfo = null,
     DateTime? ActivityEvent_CreatedAt = null,
     string? TagsJson = null,
-    string? Platform_Descriptor = null
+    string? Platform_Descriptor = null,
+    string? Platform_ClusterId = null,
+    string? Platform_Address = null,
+    string? Platform_ConnectorType = null
     )
 {
     public StackDto()

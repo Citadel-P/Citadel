@@ -5,7 +5,9 @@ import { MonacoEditor } from '@/lib/monaco';
 import { serializeData } from '@/lib/utils';
 import { SwarmServiceInfoView } from '../hooks/useServicesGroup';
 
-export const ServiceInspect = ({ service }: { service: SwarmServiceInfoView }) => {
+type InspectableService = Pick<SwarmServiceInfoView, 'id' | 'platformId'>;
+
+export const ServiceInspect = ({ service }: { service: InspectableService }) => {
   const query = useRead('inspectSwarmService', { platformId: service.platformId, resourceId: service.id });
   const problem = (query.error as { error?: ProblemDetails } | undefined)?.error;
   if (problem) {

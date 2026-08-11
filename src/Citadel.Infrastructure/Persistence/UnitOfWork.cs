@@ -45,6 +45,7 @@ internal class UnitOfWork : IUnitOfWork
         Swarm = new Lazy<ISwarmProjectionRepository>(() => new SwarmProjectionRepository(connection, GetTransaction));
         SwarmServices = new Lazy<ISwarmServiceRepository>(() => new SwarmServiceRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
+        SwarmServiceStats = new Lazy<ISwarmServiceStatRepository>(() => new SwarmServiceStatRepository(connection, GetTransaction));
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
         GitAccounts = new Lazy<IGitAccountRepository>(() => new GitAccountRepository(connection, GetTransaction));
         GitRepositories = new Lazy<IGitReposRepository>(() => new GitReposRepository(connection, GetTransaction));
@@ -131,6 +132,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<ISwarmServiceRepository> SwarmServices { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
     private Lazy<IContainerStatRepository> ContainerStats { get; }
+    private Lazy<ISwarmServiceStatRepository> SwarmServiceStats { get; }
 
     IUserRepository IUnitOfWork.Users => Users.Value;
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
@@ -159,6 +161,7 @@ internal class UnitOfWork : IUnitOfWork
     IGitAccountRepository IUnitOfWork.GitAccounts => GitAccounts.Value;
     IGitReposRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
+    ISwarmServiceStatRepository IUnitOfWork.SwarmServiceStats => SwarmServiceStats.Value;
     IActivityEventRepository IUnitOfWork.ActivityEventRepository => ActivityEvents.Value;
     IResourceBindingRepository IUnitOfWork.ResourceBindings => ResourceBindings.Value;
     ISecretDefinitionRepository IUnitOfWork.SecretDefinitions => SecretDefinitions.Value;

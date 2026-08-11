@@ -46,6 +46,10 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     listenersRef.current?.onSwarmInventoryUpdated?.(inventory);
   }, []);
 
+  const handleSwarmNodeAgentCoverageChanged = useCallback((updatedPlatformId: string) => {
+    listenersRef.current?.onSwarmNodeAgentCoverageChanged?.(updatedPlatformId);
+  }, []);
+
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
       hub.on('ImageEventReceived', handleImageEventReceived);
@@ -53,12 +57,14 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.on('NetworkEventReceived', handleNetworkEventReceived);
       hub.on('ContainerEventReceived', handleContainerEventReceived);
       hub.on('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
+      hub.on('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
     },
     [
       handleContainerEventReceived,
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
+      handleSwarmNodeAgentCoverageChanged,
       handleSwarmInventoryUpdated,
     ],
   );
@@ -70,12 +76,14 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.off('NetworkEventReceived', handleNetworkEventReceived);
       hub.off('ContainerEventReceived', handleContainerEventReceived);
       hub.off('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
+      hub.off('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
     },
     [
       handleContainerEventReceived,
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
+      handleSwarmNodeAgentCoverageChanged,
       handleSwarmInventoryUpdated,
     ],
   );
@@ -116,6 +124,7 @@ export type DockerDaemonListeners = {
   onVolumeEvent?: (event: VolumeEvent) => void;
   onNetworkEvent?: (event: NetworkEvent) => void;
   onSwarmInventoryUpdated?: (inventory: SwarmInventoryUpdate) => void;
+  onSwarmNodeAgentCoverageChanged?: (platformId: string) => void;
 };
 
 export type SwarmInventoryUpdate = {

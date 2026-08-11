@@ -116,13 +116,14 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         ExecuteListAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).ListSecretsAsync(new ListSwarmSecretsRequest { MaxItems = SwarmInventoryLimits.NormalizeConnectorLimit(command.Limit) }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secrets", cancellationToken);
     public Task<Result<SwarmSecretResult>> InspectSecretAsync(InspectSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectSecretAsync(new InspectSwarmSecretRequest { SecretId = command.SecretId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "secret", cancellationToken);
-    public Task<Result> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateSecretAsync(new CreateSwarmSecretRequest
+    public Task<Result<SwarmResourceCreationResult>> CreateSecretAsync(CreateSwarmSecretCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateSecretAsync(new CreateSwarmSecretRequest
         {
             Name = command.Name,
             Data = Google.Protobuf.ByteString.CopyFrom(command.Data),
             Labels = { command.Labels.ToDictionary() }
-        }, cancellationToken: cancellationToken).ResponseAsync, "secret", cancellationToken);
+        }, cancellationToken: cancellationToken).ResponseAsync,
+            static response => new SwarmResourceCreationResult(response.ResourceId), "secret", cancellationToken);
     public Task<Result> UpdateSecretLabelsAsync(UpdateSwarmSecretLabelsCommand command, CancellationToken cancellationToken = default) =>
         ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateSecretLabelsAsync(new UpdateSwarmResourceLabelsRequest
         {
@@ -140,13 +141,14 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).InspectConfigAsync(new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Map(), "config", cancellationToken);
     public Task<Result<byte[]>> GetConfigDataAsync(InspectSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).GetConfigDataAsync(new InspectSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync, static value => value.Data.ToByteArray(), "config data", cancellationToken);
-    public Task<Result> CreateConfigAsync(CreateSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
-        ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateConfigAsync(new CreateSwarmConfigRequest
+    public Task<Result<SwarmResourceCreationResult>> CreateConfigAsync(CreateSwarmConfigCommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).CreateConfigAsync(new CreateSwarmConfigRequest
         {
             Name = command.Name,
             Data = Google.Protobuf.ByteString.CopyFrom(command.Data),
             Labels = { command.Labels.ToDictionary() }
-        }, cancellationToken: cancellationToken).ResponseAsync, "config", cancellationToken);
+        }, cancellationToken: cancellationToken).ResponseAsync,
+            static response => new SwarmResourceCreationResult(response.ResourceId), "config", cancellationToken);
     public Task<Result> UpdateConfigLabelsAsync(UpdateSwarmConfigLabelsCommand command, CancellationToken cancellationToken = default) =>
         ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).UpdateConfigLabelsAsync(new UpdateSwarmResourceLabelsRequest
         {
@@ -158,6 +160,28 @@ internal sealed class AgentSwarmConnector(IGrpcClientFactory clientFactory) : IS
         ExecuteMutationAsync(() => clientFactory.GetSwarmClient(command.PlatformAddress).DeleteConfigAsync(
             new DeleteSwarmConfigRequest { ConfigId = command.ConfigId }, cancellationToken: cancellationToken).ResponseAsync,
             "config", cancellationToken);
+
+    public Task<Result<ManagedSwarmServiceMutationResult>> CreateSystemServiceAsync(
+        CreateSystemSwarmServiceCommand command,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => clientFactory.GetSwarmClient(command.PlatformAddress)
+                .CreateSystemServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken)
+                .ResponseAsync,
+            SwarmServiceTransportMappers.Map,
+            "system service mutation",
+            cancellationToken);
+
+    public Task<Result<ManagedSwarmServiceMutationResult>> UpdateSystemServiceAsync(
+        UpdateSystemSwarmServiceCommand command,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => clientFactory.GetSwarmClient(command.PlatformAddress)
+                .UpdateSystemServiceAsync(SwarmServiceTransportMappers.Map(command), cancellationToken: cancellationToken)
+                .ResponseAsync,
+            SwarmServiceTransportMappers.Map,
+            "system service mutation",
+            cancellationToken);
 
     private static async Task<Result<IReadOnlyList<T>>> ExecuteListAsync<TResponse, T>(Func<Task<TResponse>> call, Func<TResponse, IReadOnlyList<T>> map, string resource, CancellationToken cancellationToken)
     {

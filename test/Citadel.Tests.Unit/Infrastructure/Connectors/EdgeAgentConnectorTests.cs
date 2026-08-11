@@ -492,6 +492,16 @@ public class EdgeAgentConnectorTests
             CancellationToken cancellationToken)
             => SendUnaryAsync(resourceId, kind, payload, timeout, correlationId, cancellationToken);
 
+        public Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+            Guid platformId,
+            string dockerNodeId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            CancellationToken cancellationToken)
+            => SendUnaryAsync(platformId, kind, payload, timeout, correlationId, cancellationToken);
+
         public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
             Guid platformId,
             EdgeAgentCommandKind kind,
@@ -528,6 +538,27 @@ public class EdgeAgentConnectorTests
             }
         }
 
+        public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+            Guid platformId,
+            string dockerNodeId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await foreach (var item in SendServerStreamAsync(
+                               platformId,
+                               kind,
+                               payload,
+                               timeout,
+                               correlationId,
+                               cancellationToken))
+            {
+                yield return item;
+            }
+        }
+
         public Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
             Guid platformId,
             EdgeAgentCommandKind kind,
@@ -553,6 +584,16 @@ public class EdgeAgentConnectorTests
             CancellationToken cancellationToken)
             => StartInteractiveAsync(resourceId, kind, payload, timeout, correlationId, cancellationToken);
 
+        public Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+            Guid platformId,
+            string dockerNodeId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            CancellationToken cancellationToken)
+            => StartInteractiveAsync(platformId, kind, payload, timeout, correlationId, cancellationToken);
+
         public Task<Result> SendStreamInputAsync(
             Guid platformId,
             string commandId,
@@ -564,12 +605,28 @@ public class EdgeAgentConnectorTests
             return Task.FromResult(Result.Success());
         }
 
+        public Task<Result> SendStreamInputAsync(
+            Guid platformId,
+            string dockerNodeId,
+            string commandId,
+            byte[] payload,
+            CancellationToken cancellationToken)
+            => SendStreamInputAsync(platformId, commandId, payload, cancellationToken);
+
         public Task<Result> CancelAsync(Guid platformId, string commandId, string reason, CancellationToken cancellationToken)
         {
             PlatformId = platformId;
             Cancelled = true;
             return Task.FromResult(Result.Success());
         }
+
+        public Task<Result> CancelAsync(
+            Guid platformId,
+            string dockerNodeId,
+            string commandId,
+            string reason,
+            CancellationToken cancellationToken)
+            => CancelAsync(platformId, commandId, reason, cancellationToken);
 
         private async IAsyncEnumerable<EdgeAgentStreamItem> ReadStreamItemsAsync()
         {

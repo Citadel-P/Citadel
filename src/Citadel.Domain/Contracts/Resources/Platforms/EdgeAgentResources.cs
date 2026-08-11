@@ -37,20 +37,36 @@ public sealed record EdgeAgentEnrollmentRequest(
     string AgentVersion,
     string CapabilitiesJson,
     int ProtocolVersion,
-    string DaemonId);
+    string DaemonId,
+    EdgeAgentProfile Profile = EdgeAgentProfile.Ordinary,
+    string? ClusterId = null,
+    string? DockerNodeId = null,
+    string? DockerHostname = null,
+    string? SwarmRole = null,
+    string? ServiceId = null,
+    string? TaskId = null);
 
 public sealed record EdgeAgentEnrollmentCompleteResult(
     Guid PlatformId,
     Guid AgentId,
     EdgeAgentResourceType ResourceType = EdgeAgentResourceType.Platform,
-    Guid? ResourceId = null);
+    Guid? ResourceId = null,
+    EdgeAgentProfile Profile = EdgeAgentProfile.Ordinary,
+    string? DockerNodeId = null);
 
 public sealed record EdgeAgentHeartbeatSnapshot(
     bool DockerReachable,
     string? DockerVersion,
     string? Hostname,
     string? AgentVersion,
-    string? CapabilitiesJson);
+    string? CapabilitiesJson,
+    string? DockerDaemonId = null,
+    string? ClusterId = null,
+    string? DockerNodeId = null,
+    string? DockerHostname = null,
+    string? ServiceId = null,
+    string? TaskId = null,
+    string? SwarmRole = null);
 
 public sealed record EdgeAgentCommandRouterResult(
     byte[]? Payload,

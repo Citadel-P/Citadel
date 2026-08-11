@@ -82,6 +82,7 @@ public interface IUnitOfWork : IAsyncDisposable
     ISwarmProjectionRepository Swarm { get; }
     ISwarmServiceRepository SwarmServices { get; }
     IContainerStatRepository ContainerStats { get; }
+    ISwarmServiceStatRepository SwarmServiceStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
     IGlobalSearchRepository GlobalSearch { get; }
     IStackWebhookDeployQueueRepository StackWebhookDeployQueue { get; }
@@ -897,7 +898,9 @@ public interface IContainerRepository
 {
     Task<Container?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<Container?> GetByRuntimeIdentityAsync(Guid platformId, string? dockerNodeId, string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<Container?> GetContainerInfoByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByIdsAsync(string[] dockerContainerIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetStaleByDockerIdsAsync(string[] dockerContainerIds, Guid[] resolvedContainerIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
@@ -905,6 +908,7 @@ public interface IContainerRepository
     Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByDeploymentIdsAsync(IEnumerable<Guid> deploymentIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetByPlatformAndNodeIdAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>?> GetContainersInfoAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Container container, CancellationToken cancellationToken);
@@ -926,6 +930,7 @@ public interface IContainerRepository
         Guid? orphanedOwnerStackId,
         CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
+    Task<int> MarkNodeProjectionStaleAsync(Guid platformId, string dockerNodeId, string reason, long staleSince, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
@@ -933,6 +938,8 @@ public interface IContainerRepository
 
 public interface IContainerStatRepository
 {
+    Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(Guid containerId, int hours, CancellationToken cancellationToken);
+    Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(Guid[] containerIds, int hours, CancellationToken cancellationToken);
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(string containerId, int hours, CancellationToken cancellationToken);
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken);
@@ -967,6 +974,19 @@ public interface IRefreshTokenRepository
     Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken);
     Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken);
+}
+
+public interface ISwarmServiceStatRepository
+{
+    Task<IReadOnlyList<SwarmServiceStatAttribution>> GetAttributionsAsync(
+        Guid[] containerIds,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmServiceStatSample>> GetStatsAggregatedAsync(
+        SwarmServiceStatIdentity identity,
+        int hours,
+        CancellationToken cancellationToken);
+    Task<int> BulkInsertAsync(IEnumerable<SwarmServiceStat> stats, CancellationToken cancellationToken);
+    Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 
 public interface IUserMfaRepository
@@ -1025,6 +1045,9 @@ public interface ISwarmProjectionRepository
     Task<SwarmSecretProjection?> GetSecretAsync(Guid platformId, string dockerSecretId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmConfigProjection>> GetConfigsAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmConfigProjection?> GetConfigAsync(Guid platformId, string dockerConfigId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SwarmNodeRuntimeProjectionState>> GetNodeRuntimeStatesAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<SwarmNodeRuntimeProjectionState?> GetNodeRuntimeStateAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
+    Task<int> UpsertNodeRuntimeStateAsync(SwarmNodeRuntimeProjectionState state, CancellationToken cancellationToken);
     Task<int> ReplaceAsync(Guid platformId, SwarmProjectionSnapshot snapshot, CancellationToken cancellationToken);
     Task<int> MarkStaleAsync(Guid platformId, CancellationToken cancellationToken);
 }
@@ -1115,15 +1138,34 @@ public interface IEdgeAgentRepository
     Task<EdgeAgentPlatformState?> GetPlatformStateByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<EdgeAgentBinding?> GetBindingByAgentAsync(Guid platformId, Guid agentId, CancellationToken cancellationToken);
     Task<EdgeAgentBinding?> GetBindingByAgentAsync(EdgeAgentResourceType resourceType, Guid resourceId, Guid agentId, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetNodeBindingAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetActiveBindingByDockerDaemonIdAsync(string dockerDaemonId, CancellationToken cancellationToken);
+    Task<IEnumerable<EdgeAgentBinding>> GetNodeBindingsAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> AddBindingAsync(EdgeAgentBinding binding, CancellationToken cancellationToken);
     Task<int> UpdateBindingConnectedAsync(Guid platformId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken);
     Task<int> UpdateBindingConnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateNodeBindingConnectedAsync(Guid platformId, string dockerNodeId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, string? serviceId, string? taskId, CancellationToken cancellationToken);
     Task<int> UpdateBindingHeartbeatAsync(Guid platformId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken);
     Task<int> UpdateBindingHeartbeatAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateNodeBindingHeartbeatAsync(Guid platformId, string dockerNodeId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, string? serviceId, string? taskId, CancellationToken cancellationToken);
     Task<int> UpdateBindingDisconnectedAsync(Guid platformId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
     Task<int> UpdateBindingDisconnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
+    Task<int> UpdateNodeBindingDisconnectedAsync(Guid platformId, string dockerNodeId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
     Task<int> RevokeBindingAsync(Guid platformId, DateTime revokedAtUtc, CancellationToken cancellationToken);
     Task<int> RevokeBindingAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime revokedAtUtc, CancellationToken cancellationToken);
+    Task<int> RevokeNodeBindingAsync(Guid platformId, string dockerNodeId, DateTime revokedAtUtc, string reason, CancellationToken cancellationToken);
+    Task<int> RebindNodeAsync(Guid bindingId, string previousDockerNodeId, string dockerNodeId, string dockerHostname, string swarmRole, string serviceId, string taskId, DateTime updatedAtUtc, CancellationToken cancellationToken);
+
+    Task<SwarmNodeAgentInstallation?> GetNodeAgentInstallationAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<int> TryStartNodeAgentOperationAsync(SwarmNodeAgentInstallation installation, CancellationToken cancellationToken);
+    Task<int> UpsertNodeAgentInstallationAsync(SwarmNodeAgentInstallation installation, CancellationToken cancellationToken);
+    Task<int> AddNodeAgentBootstrapAsync(SwarmNodeAgentBootstrap bootstrap, CancellationToken cancellationToken);
+    Task<SwarmNodeAgentBootstrap?> GetActiveNodeAgentBootstrapByTokenHashAsync(string tokenHash, DateTime utcNow, CancellationToken cancellationToken);
+    Task<SwarmNodeAgentBootstrap?> GetLatestNodeAgentBootstrapAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<SwarmNodeAgentBootstrap>> GetNodeAgentBootstrapsAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<int> UpdateNodeAgentBootstrapSecretAsync(Guid bootstrapId, string dockerSecretId, DateTime updatedAtUtc, CancellationToken cancellationToken);
+    Task<int> RevokeNodeAgentBootstrapsAsync(Guid platformId, DateTime revokedAtUtc, CancellationToken cancellationToken);
+    Task<int> RevokeOtherNodeAgentBootstrapsAsync(Guid platformId, Guid activeBootstrapId, DateTime revokedAtUtc, CancellationToken cancellationToken);
 }
 
 public interface IEdgeAgentCommandRouter
@@ -1145,6 +1187,15 @@ public interface IEdgeAgentCommandRouter
         string? correlationId,
         CancellationToken cancellationToken);
 
+    Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        Guid platformId,
+        string dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
     IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
         EdgeAgentResourceType resourceType,
         Guid resourceId,
@@ -1162,6 +1213,15 @@ public interface IEdgeAgentCommandRouter
         string? correlationId,
         CancellationToken cancellationToken);
 
+    IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        Guid platformId,
+        string dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
     Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
         EdgeAgentResourceType resourceType,
         Guid resourceId,
@@ -1173,6 +1233,15 @@ public interface IEdgeAgentCommandRouter
 
     Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
         Guid platformId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        Guid platformId,
+        string dockerNodeId,
         EdgeAgentCommandKind kind,
         byte[] payload,
         TimeSpan timeout,
@@ -1185,8 +1254,22 @@ public interface IEdgeAgentCommandRouter
         byte[] payload,
         CancellationToken cancellationToken);
 
+    Task<Result> SendStreamInputAsync(
+        Guid platformId,
+        string dockerNodeId,
+        string commandId,
+        byte[] payload,
+        CancellationToken cancellationToken);
+
     Task<Result> CancelAsync(
         Guid platformId,
+        string commandId,
+        string reason,
+        CancellationToken cancellationToken);
+
+    Task<Result> CancelAsync(
+        Guid platformId,
+        string dockerNodeId,
         string commandId,
         string reason,
         CancellationToken cancellationToken);

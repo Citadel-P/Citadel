@@ -1,6 +1,6 @@
 import type { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { SwarmTaskExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { useRead } from '@/lib/hooks';
 import Loader from '@/components/ui/loader';
 import type { SwarmTaskInfoView } from '../hooks/useTasksGroup';
@@ -33,5 +33,12 @@ export const TaskTerminal = ({ task, toolbarStart }: { task: SwarmTaskInfoView; 
     );
   }
 
-  return <ContainerExec containerId={containerId} toolbarStart={toolbarStart} />;
+  return (
+    <SwarmTaskExec
+      platformId={task.platformId}
+      taskId={task.id}
+      containerId={containerId}
+      toolbarStart={toolbarStart}
+    />
+  );
 };

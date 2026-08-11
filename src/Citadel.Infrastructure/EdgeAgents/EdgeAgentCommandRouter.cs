@@ -28,13 +28,39 @@ internal sealed class EdgeAgentCommandRouter(
         TimeSpan timeout,
         string? correlationId,
         CancellationToken cancellationToken)
+        => await SendUnaryAsync(resourceType, resourceId, null, kind, payload, timeout, correlationId, cancellationToken);
+
+    public async Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        Guid platformId,
+        string dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAllowedForSwarmNode(kind))
+            return EdgeAgentCommandRouterResult.Failure("Command is not allowed for a swarm-node Agent session.");
+
+        return await SendUnaryAsync(EdgeAgentResourceType.Platform, platformId, dockerNodeId, kind, payload, timeout, correlationId, cancellationToken);
+    }
+
+    private async Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        string? dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
     {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             return EdgeAgentCommandRouterResult.Failure("Edge Agent command payload exceeded the maximum payload size.");
         }
 
-        if (!registry.TryGet(resourceType, resourceId, out var session))
+        if (!TryGetSession(resourceType, resourceId, dockerNodeId, out var session))
         {
             return EdgeAgentCommandRouterResult.Failure("Edge Agent is offline.");
         }
@@ -143,13 +169,66 @@ internal sealed class EdgeAgentCommandRouter(
         string? correlationId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await foreach (var item in SendServerStreamAsync(
+            resourceType,
+            resourceId,
+            null,
+            kind,
+            payload,
+            timeout,
+            correlationId,
+            cancellationToken))
+        {
+            yield return item;
+        }
+    }
+
+    public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        Guid platformId,
+        string dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (!IsAllowedForSwarmNode(kind))
+        {
+            yield return EdgeAgentStreamItem.Failure("Command is not allowed for a swarm-node Agent session.");
+            yield break;
+        }
+
+        await foreach (var item in SendServerStreamAsync(
+            EdgeAgentResourceType.Platform,
+            platformId,
+            dockerNodeId,
+            kind,
+            payload,
+            timeout,
+            correlationId,
+            cancellationToken))
+        {
+            yield return item;
+        }
+    }
+
+    private async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        string? dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             yield return EdgeAgentStreamItem.Failure("Edge Agent command payload exceeded the maximum payload size.");
             yield break;
         }
 
-        if (!registry.TryGet(resourceType, resourceId, out var session))
+        if (!TryGetSession(resourceType, resourceId, dockerNodeId, out var session))
         {
             yield return EdgeAgentStreamItem.Failure("Edge Agent is offline.");
             yield break;
@@ -273,13 +352,39 @@ internal sealed class EdgeAgentCommandRouter(
         TimeSpan timeout,
         string? correlationId,
         CancellationToken cancellationToken)
+        => await StartInteractiveAsync(resourceType, resourceId, null, kind, payload, timeout, correlationId, cancellationToken);
+
+    public async Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        Guid platformId,
+        string dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAllowedForSwarmNode(kind))
+            return Result.Failure<EdgeAgentInteractiveCommand>("Command is not allowed for a swarm-node Agent session.");
+
+        return await StartInteractiveAsync(EdgeAgentResourceType.Platform, platformId, dockerNodeId, kind, payload, timeout, correlationId, cancellationToken);
+    }
+
+    private async Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        string? dockerNodeId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
     {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             return Result.Failure<EdgeAgentInteractiveCommand>("Edge Agent command payload exceeded the maximum payload size.");
         }
 
-        if (!registry.TryGet(resourceType, resourceId, out var session))
+        if (!TryGetSession(resourceType, resourceId, dockerNodeId, out var session))
         {
             return Result.Failure<EdgeAgentInteractiveCommand>("Edge Agent is offline.");
         }
@@ -328,8 +433,24 @@ internal sealed class EdgeAgentCommandRouter(
         string commandId,
         byte[] payload,
         CancellationToken cancellationToken)
+        => await SendStreamInputCoreAsync(platformId, null, commandId, payload, cancellationToken);
+
+    public async Task<Result> SendStreamInputAsync(
+        Guid platformId,
+        string dockerNodeId,
+        string commandId,
+        byte[] payload,
+        CancellationToken cancellationToken)
+        => await SendStreamInputCoreAsync(platformId, dockerNodeId, commandId, payload, cancellationToken);
+
+    private async Task<Result> SendStreamInputCoreAsync(
+        Guid platformId,
+        string? dockerNodeId,
+        string commandId,
+        byte[] payload,
+        CancellationToken cancellationToken)
     {
-        if (!registry.TryGet(platformId, out var session))
+        if (!TryGetSession(EdgeAgentResourceType.Platform, platformId, dockerNodeId, out var session))
         {
             return Result.Failure("Edge Agent is offline.");
         }
@@ -350,8 +471,24 @@ internal sealed class EdgeAgentCommandRouter(
         string commandId,
         string reason,
         CancellationToken cancellationToken)
+        => await CancelCoreAsync(platformId, null, commandId, reason, cancellationToken);
+
+    public async Task<Result> CancelAsync(
+        Guid platformId,
+        string dockerNodeId,
+        string commandId,
+        string reason,
+        CancellationToken cancellationToken)
+        => await CancelCoreAsync(platformId, dockerNodeId, commandId, reason, cancellationToken);
+
+    private async Task<Result> CancelCoreAsync(
+        Guid platformId,
+        string? dockerNodeId,
+        string commandId,
+        string reason,
+        CancellationToken cancellationToken)
     {
-        if (!registry.TryGet(platformId, out var session))
+        if (!TryGetSession(EdgeAgentResourceType.Platform, platformId, dockerNodeId, out var session))
         {
             return Result.Success();
         }
@@ -451,6 +588,40 @@ internal sealed class EdgeAgentCommandRouter(
         }
     }
 
+    private bool TryGetSession(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        string? dockerNodeId,
+        out EdgeAgentSession session)
+    {
+        if (dockerNodeId is null)
+            return registry.TryGet(resourceType, resourceId, out session);
+        if (resourceType == EdgeAgentResourceType.Platform)
+            return registry.TryGet(resourceId, dockerNodeId, out session);
+
+        session = null!;
+        return false;
+    }
+
+    private static bool IsAllowedForSwarmNode(EdgeAgentCommandKind kind)
+        => kind is
+            EdgeAgentCommandKind.PlatformCheckHealth or
+            EdgeAgentCommandKind.PlatformGetInfo or
+            EdgeAgentCommandKind.PlatformStatsStream or
+            EdgeAgentCommandKind.PlatformDaemonEventsStream or
+            EdgeAgentCommandKind.ContainerList or
+            EdgeAgentCommandKind.ContainerLogsStream or
+            EdgeAgentCommandKind.ContainerInspect or
+            EdgeAgentCommandKind.ContainerStart or
+            EdgeAgentCommandKind.ContainerStop or
+            EdgeAgentCommandKind.ContainerPause or
+            EdgeAgentCommandKind.ContainerUnpause or
+            EdgeAgentCommandKind.ContainerRestart or
+            EdgeAgentCommandKind.ContainerDelete or
+            EdgeAgentCommandKind.ContainerStatsStream or
+            EdgeAgentCommandKind.ContainersStatsStream or
+            EdgeAgentCommandKind.ContainerExec;
+
     private static ProtoEdgeCommandKind MapKind(EdgeAgentCommandKind kind)
         => kind switch
         {
@@ -515,6 +686,13 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.SwarmConfigUpdate => ProtoEdgeCommandKind.SwarmConfigUpdate,
             EdgeAgentCommandKind.SwarmConfigDelete => ProtoEdgeCommandKind.SwarmConfigDelete,
             EdgeAgentCommandKind.SwarmConfigData => ProtoEdgeCommandKind.SwarmConfigData,
+            EdgeAgentCommandKind.SwarmServiceCreate => ProtoEdgeCommandKind.SwarmServiceCreate,
+            EdgeAgentCommandKind.SwarmServiceUpdate => ProtoEdgeCommandKind.SwarmServiceUpdate,
+            EdgeAgentCommandKind.SwarmServiceDelete => ProtoEdgeCommandKind.SwarmServiceDelete,
+            EdgeAgentCommandKind.SwarmServiceRestart => ProtoEdgeCommandKind.SwarmServiceRestart,
+            EdgeAgentCommandKind.SwarmNodeUpdate => ProtoEdgeCommandKind.SwarmNodeUpdate,
+            EdgeAgentCommandKind.SwarmSystemServiceCreate => ProtoEdgeCommandKind.SwarmSystemServiceCreate,
+            EdgeAgentCommandKind.SwarmSystemServiceUpdate => ProtoEdgeCommandKind.SwarmSystemServiceUpdate,
             _ => ProtoEdgeCommandKind.Unspecified
         };
 }

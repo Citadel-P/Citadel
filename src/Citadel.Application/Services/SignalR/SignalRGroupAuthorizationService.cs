@@ -103,7 +103,9 @@ internal sealed class SignalRGroupAuthorizationService(
         SpecificPermission specificPermission,
         CancellationToken cancellationToken)
     {
-        var container = await unitOfWork.Containers.GetByIdAsync(containerId, cancellationToken);
+        var container = Guid.TryParse(containerId, out var resourceId)
+            ? await unitOfWork.Containers.GetByIdAsync(resourceId, cancellationToken)
+            : await unitOfWork.Containers.GetByIdAsync(containerId, cancellationToken);
         if (container is null)
             return false;
 
@@ -309,6 +311,16 @@ internal sealed class SignalRGroupAuthorizationService(
             IsValidOpaqueSegment(parts[2]))
         {
             target = Container(parts[1], SpecificPermission.Terminal);
+            return true;
+        }
+
+        if (parts.Length == 4
+            && parts[0] == "swarm-task-exec"
+            && Guid.TryParse(parts[1], out resourceId)
+            && IsValidOpaqueSegment(parts[2])
+            && IsValidOpaqueSegment(parts[3]))
+        {
+            target = Permission(ResourceType.Platform, resourceId, SpecificPermission.Terminal);
             return true;
         }
 

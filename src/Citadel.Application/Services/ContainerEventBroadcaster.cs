@@ -14,4 +14,8 @@ internal sealed class ContainerEventBroadcaster : MulticastChannel<ContainerEven
     
 }
 
-internal record ContainerEvent(Guid PlatformId, string ContainerId, string Action);
+internal record ContainerEvent(
+    Guid PlatformId,
+    string? DockerNodeId,
+    string ContainerId,
+    string Action);

@@ -302,9 +302,11 @@ internal sealed class PlatformContainerCache : IPlatformContainerCache
 
         if (nid.Length >= ShortIdLength)
         {
-            // In case of multiple matches (extremely rare), FirstOrDefault returns the first found.
-            return snap.ContainerToPlatform.Keys
-                .FirstOrDefault(k => k.StartsWith(nid, StringComparison.OrdinalIgnoreCase));
+            var matches = snap.ContainerToPlatform.Keys
+                .Where(key => key.StartsWith(nid, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return matches.Length == 1 ? matches[0] : null;
         }
 
         return null;

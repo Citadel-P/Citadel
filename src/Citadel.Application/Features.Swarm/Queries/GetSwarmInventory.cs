@@ -2,6 +2,7 @@ using System.Text;
 using Domain;
 using Application.TaskJobs;
 using Application.Features.Swarm.Commands;
+using Application.Services;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities.Platforms;
@@ -163,7 +164,8 @@ internal sealed class GetSwarmConfigHandler(IUnitOfWork unitOfWork, ISwarmReconc
 
 internal sealed class GetSwarmConfigDataHandler(
     IUnitOfWork unitOfWork,
-    IConnectorFactory<ISwarmConnector> connectorFactory)
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmManagerIdentityValidator managerIdentityValidator)
     : IQueryHandler<GetSwarmConfigData, Result<string>>
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -173,6 +175,7 @@ internal sealed class GetSwarmConfigDataHandler(
         var context = await SwarmMutationContext.LoadAsync(
             unitOfWork,
             connectorFactory,
+            managerIdentityValidator,
             query.PlatformId,
             cancellationToken);
         if (!context.IsSuccess(out var value, out var error))

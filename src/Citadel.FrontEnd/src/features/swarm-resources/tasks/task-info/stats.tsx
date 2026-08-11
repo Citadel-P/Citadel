@@ -8,8 +8,9 @@ export const TaskStats = ({ task }: { task: SwarmTaskInfoView }) => {
   const memory = useTaskStatsWindow(task.platformId, task.id);
   const cpu = useTaskStatsWindow(task.platformId, task.id);
   const network = useTaskStatsWindow(task.platformId, task.id);
-  const dockerContainerId = memory.dockerContainerId ?? cpu.dockerContainerId ?? network.dockerContainerId;
-  const liveStats = useTaskStatsStream(dockerContainerId);
+  const containerProjectionId =
+    memory.containerProjectionId ?? cpu.containerProjectionId ?? network.containerProjectionId;
+  const liveStats = useTaskStatsStream(task.platformId, containerProjectionId);
   const problem = ((memory.error ?? cpu.error ?? network.error) as { error?: ProblemDetails } | undefined)?.error;
 
   if (problem) {

@@ -17,6 +17,7 @@ vi.mock('./platform-stats', () => ({
   PlatformResourceSummary: () => <div>Platform resource summary</div>,
   PlatformStatsTab: () => null,
 }));
+vi.mock('./swarm-node-agent-coverage', () => ({ SwarmNodeAgentCoverage: () => null }));
 vi.mock('@/features/swarm/platform-summary', () => ({
   SwarmPlatformSummary: ({ platformId }: { platformId: string }) => <div>Swarm summary {platformId}</div>,
 }));

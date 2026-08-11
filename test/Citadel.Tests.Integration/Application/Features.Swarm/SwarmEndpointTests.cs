@@ -3,9 +3,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Channels;
 using System.Text.Json;
+using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
@@ -22,6 +24,7 @@ namespace Tests.Integration.Application.Features.Swarm;
 public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<ISwarmConnector> connector = new(MockBehavior.Strict);
+    private readonly Mock<ISwarmNodeRuntimeConnector> nodeRuntimeConnector = new(MockBehavior.Strict);
     private readonly Mock<INetworkConnector> networkConnector = new(MockBehavior.Strict);
     private Guid platformId;
     private Guid taskContainerId;
@@ -140,7 +143,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                 var created = new SwarmSecretResult(
                     $"secret-{command.Name}", 1, command.Name, null, command.Labels, null, null);
                 liveSecrets.Add(created);
-                return Result.Success();
+                return Result.Success(new SwarmResourceCreationResult(created.Id));
             });
         connector
             .Setup(value => value.UpdateSecretLabelsAsync(It.IsAny<UpdateSwarmSecretLabelsCommand>(), It.IsAny<CancellationToken>()))
@@ -169,7 +172,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                 var created = new SwarmConfigResult(
                     $"config-{command.Name}", 1, command.Name, null, command.Labels, null, null);
                 liveConfigs.Add(created);
-                return Result.Success();
+                return Result.Success(new SwarmResourceCreationResult(created.Id));
             });
         connector
             .Setup(value => value.UpdateConfigLabelsAsync(It.IsAny<UpdateSwarmConfigLabelsCommand>(), It.IsAny<CancellationToken>()))
@@ -255,7 +258,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                     "primary-web.1",
                     "primary-service",
                     1,
-                    command.TaskId == "primary-task-2" ? "worker-node" : "node-swarm-endpoints",
+                    command.TaskId == "primary-task-2" ? "worker-node" : "primary-node",
                     "Running",
                     "Running",
                     null,
@@ -266,10 +269,61 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                     null,
                     null,
                     ContainerId: $"container-{command.TaskId}")));
+        nodeRuntimeConnector
+            .Setup(value => value.InspectContainerAsync(
+                It.IsAny<Platform>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Platform _, string _, string containerId, CancellationToken _) =>
+                Result.Success(new ContainerInspectionInfo(
+                    Id: containerId,
+                    Created: "2026-08-09T12:00:00Z",
+                    Path: null,
+                    Args: [],
+                    State: new ContainerRuntimeState(
+                        ContainerStateStatus.Running,
+                        Running: true,
+                        Paused: false,
+                        Restarting: false,
+                        OOMKilled: false,
+                        Dead: false,
+                        Pid: 42,
+                        ExitCode: null,
+                        Error: null,
+                        StartedAt: "2026-08-09T12:00:00Z",
+                        FinishedAt: null,
+                        Health: null),
+                    Image: "nginx:primary",
+                    ResolvConfPath: null,
+                    HostnamePath: null,
+                    HostsPath: null,
+                    LogPath: null,
+                    Name: "primary-web.1",
+                    RestartCount: 0,
+                    Driver: "overlay2",
+                    Platform: "linux",
+                    MountLabel: null,
+                    ProcessLabel: null,
+                    AppArmorProfile: null,
+                    ExecIDs: [],
+                    HostConfig: null,
+                    GraphDriver: null,
+                    SizeRw: null,
+                    SizeRootFs: null,
+                    Mounts: [],
+                    Config: null,
+                    NetworkSettings: null)));
         services.ReplaceService<IConnectorFactory<ISwarmConnector>>(
             new FakeConnectorFactory(connector.Object));
+        services.ReplaceService<ISwarmNodeRuntimeConnector>(nodeRuntimeConnector.Object);
         services.ReplaceService<IConnectorFactory<INetworkConnector>>(
             new FakeNetworkConnectorFactory(networkConnector.Object));
+        var managerIdentityValidator = new Mock<ISwarmManagerIdentityValidator>();
+        managerIdentityValidator
+            .Setup(value => value.ValidateAsync(It.IsAny<Platform>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        services.ReplaceService<ISwarmManagerIdentityValidator>(managerIdentityValidator.Object);
         var platformCache = new Mock<IPlatformContainerCache>();
         var cacheEntry = new PlatformCacheEntry(
             Guid.Empty,
@@ -288,8 +342,8 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var platform = CreateSwarmPlatform("swarm-endpoints", "cluster-endpoints");
-        var otherPlatform = CreateSwarmPlatform("other-swarm", "other-cluster");
+        var platform = CreateSwarmPlatform("swarm-endpoints", "cluster-endpoints", "primary-node");
+        var otherPlatform = CreateSwarmPlatform("other-swarm", "other-cluster", "foreign-node");
         var standalonePlatform = CreateStandalonePlatform();
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
@@ -300,13 +354,16 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             "sha256:image",
             platform.Id,
             "container-primary-task-1",
-            ContainerStateStatus.Running);
+            ContainerStateStatus.Running,
+            isSwarmTask: true,
+            dockerNodeId: "primary-node",
+            projectionObservedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         await uow.Containers.AddAsync(taskContainer, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         await uow.ContainerStats.BulkInsertAsync(
             [new ContainerStat(taskContainer.Id, 256, 32, 12.5, 1024, 2048, 1024,
-                DateTimeOffset.UtcNow.ToUnixTimeSeconds())],
+                DateTimeOffset.UtcNow.AddSeconds(-45).ToUnixTimeSeconds())],
             TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
@@ -926,6 +983,11 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.False(root.TryGetProperty("observedAt", out _));
         Assert.Equal(1, root.GetProperty("nodeCount").GetInt32());
         Assert.Equal(1, root.GetProperty("managerCount").GetInt32());
+        var quorum = root.GetProperty("quorum");
+        Assert.Equal("Healthy", quorum.GetProperty("state").GetString());
+        Assert.Equal(1, quorum.GetProperty("reachableManagers").GetInt32());
+        Assert.Equal(1, quorum.GetProperty("requiredManagers").GetInt32());
+        Assert.True(quorum.GetProperty("hasLeader").GetBoolean());
         Assert.Equal(1, root.GetProperty("serviceCount").GetInt32());
         var serviceStatusCounts = root.GetProperty("serviceStatusCounts");
         Assert.Equal(1, serviceStatusCounts.GetProperty("total").GetInt32());
@@ -939,6 +1001,51 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         Assert.Equal(1, root.GetProperty("networkCount").GetInt32());
         Assert.False(root.TryGetProperty("inventory", out _));
         Assert.True(root.GetProperty("capabilities").GetProperty("canRead").GetBoolean());
+    }
+
+    [Fact]
+    public async Task OverviewEndpoint_ShouldReportLostQuorumFromPersistedManagerReachability()
+    {
+        var snapshot = CreateSnapshot(platformId, "primary", taskCount: 3);
+        var leader = snapshot.Nodes.Single();
+        var manager2 = leader with
+        {
+            DockerNodeId = "manager-node-2",
+            Hostname = "manager-2",
+            IsLeader = false,
+            Reachability = "Unreachable",
+            Address = "10.0.0.2"
+        };
+        var manager3 = manager2 with
+        {
+            DockerNodeId = "manager-node-3",
+            Hostname = "manager-3",
+            Address = "10.0.0.3"
+        };
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await unitOfWork.Swarm.ReplaceAsync(
+                platformId,
+                snapshot with { Nodes = [leader, manager2, manager3] },
+                TestContext.Current.CancellationToken);
+            await unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        var root = document.RootElement;
+        var quorum = root.GetProperty("quorum");
+        Assert.Equal("Degraded", root.GetProperty("health").GetString());
+        Assert.Equal("Lost", quorum.GetProperty("state").GetString());
+        Assert.Equal(1, quorum.GetProperty("reachableManagers").GetInt32());
+        Assert.Equal(2, quorum.GetProperty("requiredManagers").GetInt32());
+        Assert.True(quorum.GetProperty("hasLeader").GetBoolean());
     }
 
     [Fact]
@@ -1085,8 +1192,13 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
             TestContext.Current.CancellationToken);
         allowed.EnsureSuccessStatusCode();
         using var document = await ReadJsonAsync(allowed);
-        Assert.Equal("primary-task-1", document.RootElement.GetProperty("id").GetString());
-        Assert.Equal("container-primary-task-1", document.RootElement.GetProperty("containerId").GetString());
+        Assert.Equal("container-primary-task-1", document.RootElement.GetProperty("id").GetString());
+        Assert.Equal("primary-web.1", document.RootElement.GetProperty("name").GetString());
+        nodeRuntimeConnector.Verify(value => value.InspectContainerAsync(
+            It.Is<Platform>(platform => platform.Id == platformId),
+            "primary-node",
+            "container-primary-task-1",
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -1259,7 +1371,78 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
     }
 
     [Fact]
-    public async Task TaskStatsEndpoint_ShouldExplainTheNodeLocalDockerLimitation()
+    public async Task ServiceStatsEndpoint_ShouldReturnAvailableAggregateAndPartialCoverage()
+    {
+        var snapshot = CreateSnapshot(platformId, "primary", taskCount: 3);
+        var secondTask = snapshot.Tasks[1] with { DockerContainerId = "container-primary-task-2" };
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await unitOfWork.Containers.AddAsync(
+                new Container(
+                    "primary-web.2",
+                    "sha256:image",
+                    platformId,
+                    secondTask.DockerContainerId,
+                    ContainerStateStatus.Running,
+                    isSwarmTask: true,
+                    dockerNodeId: secondTask.DockerNodeId,
+                    projectionObservedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+                TestContext.Current.CancellationToken);
+            await unitOfWork.Swarm.ReplaceAsync(
+                platformId,
+                snapshot with { Tasks = [snapshot.Tasks[0], secondTask, snapshot.Tasks[2]] },
+                TestContext.Current.CancellationToken);
+            await unitOfWork.SwarmServiceStats.BulkInsertAsync(
+                [
+                    new SwarmServiceStat(
+                        platformId,
+                        "primary-service",
+                        null,
+                        null,
+                        "primary-web",
+                        "slot:1",
+                        "retired-primary-task-1",
+                        256,
+                        32,
+                        12.5,
+                        1024,
+                        2048,
+                        1024,
+                        DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds())
+                ],
+                TestContext.Current.CancellationToken);
+            await unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var reader = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read)]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(reader.UserId, reader.ActorId));
+
+        var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId}/swarm/services/primary-service/stats",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await ReadJsonAsync(response);
+        Assert.Equal(1, document.RootElement.GetProperty("observedTasks").GetInt32());
+        Assert.Equal(3, document.RootElement.GetProperty("expectedTasks").GetInt32());
+        Assert.False(document.RootElement.GetProperty("complete").GetBoolean());
+        Assert.Equal(
+            "primary-node",
+            document.RootElement.GetProperty("missingDockerNodeIds").EnumerateArray().Single().GetString());
+        Assert.Equal(
+            2,
+            document.RootElement.GetProperty("observedContainerProjectionIds").GetArrayLength());
+        var stats = document.RootElement.GetProperty("stats").EnumerateArray().Single();
+        Assert.Equal(12.5, stats.GetProperty("cpuUsage").GetDouble());
+        Assert.Equal(256, stats.GetProperty("memoryActive").GetDouble());
+    }
+
+    [Fact]
+    public async Task TaskStatsEndpoint_ShouldRejectAChangedRuntimeTarget()
     {
         var response = await Client.GetAsync(
             $"/api/v1/platforms/{platformId}/swarm/tasks/primary-task-2/stats",
@@ -1267,7 +1450,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = await ReadJsonAsync(response);
-        Assert.Contains("not running on the connected manager", document.RootElement.GetProperty("detail").GetString());
+        Assert.Contains("TaskNoLongerRunning", document.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -1372,7 +1555,8 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
                 service.DockerServiceId, service.Name, index, node.DockerNodeId, node.Hostname,
                 "Running", "Running", null, null, service.Image, ["80/tcp"],
                 observedAt.AddMinutes(index), observedAt.AddDays(-1), observedAt,
-                observedAt, false))
+                observedAt, false,
+                prefix == "primary" && index == 1 ? "container-primary-task-1" : null))
             .ToArray();
         var network = new SwarmNetworkProjection(
             selectedPlatformId, $"{prefix}network", $"{prefix}-overlay", "Swarm", "overlay",
@@ -1396,7 +1580,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         return new SwarmProjectionSnapshot([node], [service], tasks, [network], [secret, unusedSecret], [config, unusedConfig]);
     }
 
-    private static Platform CreateSwarmPlatform(string name, string clusterId) => new(
+    private static Platform CreateSwarmPlatform(string name, string clusterId, string dockerNodeId) => new(
         name,
         $"https://{name}.test",
         networkCount: 1,
@@ -1409,7 +1593,7 @@ public sealed class SwarmEndpointTests(PostgresTestFixture fixture) : Integratio
         status: PlatformStatus.Online,
         connectorType: PlatformConnectorType.Agent,
         platformDescriptor: new DockerSwarmPlatformDescriptor(
-            NodeID: $"node-{name}",
+            NodeID: dockerNodeId,
             NodeAddr: "10.0.0.10",
             LocalNodeState: "Active",
             ControlAvailable: true,

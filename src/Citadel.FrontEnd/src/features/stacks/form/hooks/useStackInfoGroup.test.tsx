@@ -24,6 +24,8 @@ function StackContainersProbe() {
     <>
       <span data-testid="state">{container?.state}</span>
       <span data-testid="cpu">{container?.containerStat?.cpuUsage ?? '-'}</span>
+      <span data-testid="swarm-task">{String(container?.isSwarmTask ?? false)}</span>
+      <span data-testid="docker-node">{container?.dockerNodeId ?? '-'}</span>
     </>
   );
 }
@@ -80,11 +82,15 @@ describe('useStackInfoGroup', () => {
           ports: {},
           deploymentId: null,
           stackId,
+          isSwarmTask: true,
+          dockerNodeId: 'worker-1',
         } as ContainerView,
         'die',
       );
     });
     expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
+    expect(screen.getByTestId('swarm-task')).toHaveTextContent('true');
+    expect(screen.getByTestId('docker-node')).toHaveTextContent('worker-1');
 
     act(() => {
       fake.emit('ReceiveStackContainersInfo', [
@@ -98,6 +104,7 @@ describe('useStackInfoGroup', () => {
 
     expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
     expect(screen.getByTestId('cpu')).toHaveTextContent('42');
+    expect(screen.getByTestId('swarm-task')).toHaveTextContent('true');
   });
 });
 

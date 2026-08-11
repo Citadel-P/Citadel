@@ -22,7 +22,10 @@ internal static class StackMappers
                 dto.CurrentRelease_PlatformId ?? Guid.Empty,
                 dto.Platform_Name,
                 dto.Platform_Status,
-                dto.Platform_Descriptor);
+                dto.Platform_Descriptor,
+                clusterId: dto.Platform_ClusterId,
+                address: dto.Platform_Address,
+                connectorType: dto.Platform_ConnectorType);
 
         var currentRelease = !dto.HasCurrentReleaseIdentity
             ? null

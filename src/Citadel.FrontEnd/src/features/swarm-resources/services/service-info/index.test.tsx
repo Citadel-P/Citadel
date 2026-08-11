@@ -31,6 +31,19 @@ describe('ServiceInfoComponents', () => {
           items: [task(), task({ id: 'other-task', name: 'other.1', serviceId: 'service-2', serviceName: 'other' })],
         }),
       ),
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services/service-1/stats`, () =>
+        HttpResponse.json({
+          dockerServiceId: 'service-1',
+          observedTasks: 0,
+          expectedTasks: 1,
+          complete: false,
+          observedContainerProjectionIds: [],
+          missingDockerNodeIds: ['node-1'],
+          oldestSampleAt: null,
+          newestSampleAt: null,
+          stats: [],
+        }),
+      ),
       http.get(`http://localhost/api/v1/platforms/${platformId}`, () =>
         HttpResponse.json({
           status: 'Online',
@@ -82,7 +95,7 @@ describe('ServiceInfoComponents', () => {
     expect(screen.getByRole('columnheader', { name: 'Desired' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeDisabled();
     expect(screen.getByRole('tab', { name: 'Inspect' })).toBeDisabled();
-    expect(screen.queryByRole('tab', { name: 'Stats' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Stats' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Adopt Service' })).toBeVisible();
     const actionGroup = screen.getByRole('group');

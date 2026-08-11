@@ -1847,6 +1847,50 @@ public static class PublicEndpoints
 
     private static void MapPlatformEndpoints(RouteGroupBuilder platforms)
     {
+        platforms.MapGet("{id:guid}/node-agent-coverage", Platforms.GetNodeAgentCoverage)
+            .WithSummary("Get Docker Swarm node-agent coverage")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmNodeAgentCoverage");
+
+        platforms.MapPost("{id:guid}/node-agents/install", Platforms.InstallNodeAgents)
+            .WithSummary("Install Docker Swarm node agents")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("installSwarmNodeAgents");
+
+        platforms.MapPost("{id:guid}/node-agents/repair", Platforms.RepairNodeAgents)
+            .WithSummary("Repair Docker Swarm node-agent coverage")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("repairSwarmNodeAgents");
+
+        platforms.MapPost("{id:guid}/node-agents/upgrade", Platforms.UpgradeNodeAgents)
+            .WithSummary("Upgrade Docker Swarm node agents")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("upgradeSwarmNodeAgents");
+
+        platforms.MapDelete("{id:guid}/node-agents", Platforms.RemoveNodeAgents)
+            .WithSummary("Remove Docker Swarm node agents")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeSwarmNodeAgents");
+
         platforms.MapGet("{platformId:guid}/swarm", SwarmInventory.GetOverview)
             .WithSummary("Get Docker Swarm cluster health and persisted inventory")
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -1926,6 +1970,12 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getSwarmServiceLogs");
+        platforms.MapGet("{platformId:guid}/swarm/services/{resourceId}/stats", SwarmInventory.GetServiceStats)
+            .WithSummary("Get aggregate statistics for the current tasks of a Docker Swarm service")
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getSwarmServiceStats");
         platforms.MapPost("{platformId:guid}/swarm/services/{resourceId}/restart", SwarmInventory.RestartService)
             .WithSummary("Restart every task of a Docker Swarm service")
             .ProducesValidationProblem().ProducesProblem(StatusCodes.Status400BadRequest)

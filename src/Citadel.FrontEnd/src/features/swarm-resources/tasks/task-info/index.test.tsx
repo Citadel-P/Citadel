@@ -30,7 +30,7 @@ vi.mock('@/features/docker-resources/containers/container-info/container-stats',
 }));
 
 vi.mock('@/features/docker-resources/containers/container-info/container-exec', () => ({
-  ContainerExec: ({ containerId }: { containerId: string }) => <div>Terminal connected to {containerId}</div>,
+  SwarmTaskExec: ({ containerId }: { containerId: string }) => <div>Terminal connected to {containerId}</div>,
 }));
 
 const platformId = '00000000-0000-0000-0000-000000000200';
@@ -63,6 +63,7 @@ describe('TaskInfoComponents', () => {
         statsRequests++;
         return HttpResponse.json({
           dockerContainerId,
+          containerProjectionId: containerId,
           stats: [
             {
               containerId,
@@ -116,11 +117,11 @@ describe('TaskInfoComponents', () => {
       `/platforms/${platformId}/nodes/node-1`,
     );
     await waitFor(() => expect(statsRequests).toBe(1));
-    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'container-info:abcdef123456'));
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', `containers:${platformId}`));
 
     act(() => {
-      fake.emit('ReceiveContainerInfo', {
-        containerStat: {
+      fake.emit('ContainersStatsUpdated', [
+        {
           containerId,
           memoryActive: 512,
           memoryCache: 64,
@@ -129,7 +130,7 @@ describe('TaskInfoComponents', () => {
           rxBytes: 4096,
           txBytes: 2048,
         },
-      });
+      ]);
     });
 
     expect(await screen.findByText('18.75%')).toBeVisible();

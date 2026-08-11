@@ -151,6 +151,7 @@ public sealed class ContainerProcessingConsistencyTests
             Mock.Of<IDeploymentStreamManager>(),
             Mock.Of<IContainerEventBroadcaster>(),
             Mock.Of<IConnectorFactory<IContainerConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             Mock.Of<IDbWorkQueue>(),
             Mock.Of<IHostApplicationLifetime>(),
             NullLogger<ContainerProcessingService>.Instance);
@@ -214,9 +215,9 @@ public sealed class ContainerProcessingConsistencyTests
         var notificationQueue = new Mock<INotificationQueue>();
         var workItem = new CompleteContainerCommandWorkItem(
             new ProcessedResources([claimed], [], []),
-            new Dictionary<string, ContainerStateStatus>
+            new Dictionary<Guid, ContainerStateStatus>
             {
-                [dockerContainerId] = ContainerStateStatus.Running
+                [claimed.Id] = ContainerStateStatus.Running
             },
             actorId,
             notificationQueue.Object,
@@ -289,6 +290,7 @@ public sealed class ContainerProcessingConsistencyTests
             Mock.Of<IDeploymentStreamManager>(),
             Mock.Of<IContainerEventBroadcaster>(),
             Mock.Of<IConnectorFactory<IContainerConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             Mock.Of<IDbWorkQueue>(),
             Mock.Of<IHostApplicationLifetime>(),
             NullLogger<ContainerProcessingService>.Instance);
@@ -317,6 +319,7 @@ public sealed class ContainerProcessingConsistencyTests
             Mock.Of<IDeploymentStreamManager>(),
             Mock.Of<IContainerEventBroadcaster>(),
             Mock.Of<IConnectorFactory<IContainerConnector>>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             Mock.Of<IDbWorkQueue>(),
             Mock.Of<IHostApplicationLifetime>(),
             NullLogger<ContainerProcessingService>.Instance);

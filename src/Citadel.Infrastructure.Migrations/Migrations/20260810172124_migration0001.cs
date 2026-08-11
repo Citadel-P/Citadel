@@ -69,18 +69,29 @@ namespace Infrastructure.Migrations.Migrations
                     agentid = table.Column<Guid>(type: "uuid", nullable: false),
                     agentpublickey = table.Column<string>(type: "text", nullable: false),
                     capabilitiesjson = table.Column<string>(type: "json", nullable: true),
+                    clusterid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     connectionstatus = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    dockerdaemonid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    dockerhostname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    firstenrolledatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastauthenticatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     lastconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     lastdisconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     lastheartbeatatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastobservedserviceid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    lastobservedtaskid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     lastseenhostname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
                     lastseenversion = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    profile = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Ordinary"),
                     protocolversion = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
                     resourceid = table.Column<Guid>(type: "uuid", nullable: false),
                     resourcetype = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Platform"),
+                    revocationreason = table.Column<string>(type: "text", maxLength: 512, nullable: true),
                     revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    swarmrole = table.Column<string>(type: "text", maxLength: 32, nullable: true),
                     updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
@@ -695,6 +706,81 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "swarmnodeagentbootstraps",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    clusterid = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    dockersecretid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    dockersecretname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    expiresatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    tokenhash = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    version = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnodeagentbootstraps", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_swarmnodeagentbootstraps_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_swarmnodeagentbootstraps_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "swarmnodeagentinstallations",
+                columns: table => new
+                {
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    agentimagedigest = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    agentimagereference = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    clusterid = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    desiredstate = table.Column<string>(type: "text", maxLength: 32, nullable: false),
+                    dockercaconfigid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    dockercaconfigname = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    dockerserviceid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    dockerservicename = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    managerdockerdaemonid = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    managerdockernodeid = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    operationactorid = table.Column<Guid>(type: "uuid", nullable: true),
+                    operationerror = table.Column<string>(type: "text", maxLength: 2000, nullable: true),
+                    operationid = table.Column<Guid>(type: "uuid", nullable: true),
+                    operationkind = table.Column<string>(type: "text", maxLength: 32, nullable: true),
+                    operationstartedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    operationstate = table.Column<string>(type: "text", maxLength: 32, nullable: true),
+                    updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnodeagentinstallations", x => x.platformid);
+                    table.ForeignKey(
+                        name: "fk_swarmnodeagentinstallations_actors_operationactorid",
+                        column: x => x.operationactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_swarmnodeagentinstallations_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "swarmnodeprojections",
                 columns: table => new
                 {
@@ -725,6 +811,36 @@ namespace Infrastructure.Migrations.Migrations
                     table.PrimaryKey("pk_swarmnodeprojections", x => new { x.platformid, x.dockernodeid });
                     table.ForeignKey(
                         name: "fk_swarmnodeprojections_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "swarmnoderuntimeprojectionstates",
+                columns: table => new
+                {
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    agentversion = table.Column<string>(type: "text", maxLength: 64, nullable: true),
+                    dockerversion = table.Column<string>(type: "text", maxLength: 64, nullable: true),
+                    isstale = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    lasteventgapat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    lasteventstreamconnectedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    laststatssampleat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    lastsuccessfulreconciliationat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    reconciliationcompletedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    reconciliationgeneration = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    reconciliationstartedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    stalereason = table.Column<string>(type: "text", maxLength: 512, nullable: true),
+                    stalesince = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_swarmnoderuntimeprojectionstates", x => new { x.platformid, x.dockernodeid });
+                    table.ForeignKey(
+                        name: "fk_swarmnoderuntimeprojectionstates_platforms_platformid",
                         column: x => x.platformid,
                         principalTable: "platforms",
                         principalColumn: "id",
@@ -838,6 +954,7 @@ namespace Infrastructure.Migrations.Migrations
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     dockertaskid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     desiredstate = table.Column<string>(type: "text", maxLength: 32, nullable: false),
+                    dockercontainerid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     dockercreatedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     dockerserviceid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
@@ -1771,6 +1888,7 @@ namespace Infrastructure.Migrations.Migrations
                     deploymentid = table.Column<Guid>(type: "uuid", nullable: true),
                     dockercontainerid = table.Column<string>(type: "text", maxLength: 64, nullable: false),
                     dockerimageid = table.Column<string>(type: "text", nullable: false),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 64, nullable: true),
                     hascitadelownershiplabels = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     imageid = table.Column<Guid>(type: "uuid", nullable: true),
                     isswarmtask = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -1778,6 +1896,9 @@ namespace Infrastructure.Migrations.Migrations
                     name = table.Column<string>(type: "text", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     ports = table.Column<string>(type: "json", nullable: false),
+                    projectionobservedat = table.Column<long>(type: "bigint", nullable: true),
+                    projectionstalereason = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    projectionstalesince = table.Column<long>(type: "bigint", nullable: true),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
                     stack = table.Column<string>(type: "text", nullable: true),
                     stackid = table.Column<Guid>(type: "uuid", nullable: true),
@@ -2387,7 +2508,6 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("9b075e03-6326-7b95-ae78-2b296990ce26"), 2, 4, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("9e0c1481-c640-3182-c9a0-4687ef91bd6a"), 4, 13, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("a3cd7182-baa1-324f-79f0-3a04d7647032"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
-                    { new Guid("a4b222e3-7452-b5f4-377b-c05652533f67"), 4, 0, new Guid("30000000-0000-0000-0000-000000000001"), 27 },
                     { new Guid("b2298835-c351-7367-ad8d-e5884be235f3"), 2, 12, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("ba1393e4-1090-990e-aee3-a3e36ede0fee"), 4, 16, new Guid("30000000-0000-0000-0000-000000000001"), 128 },
@@ -2395,6 +2515,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("d1af8dbf-ef7d-d81d-33f9-e3be5ee72243"), 4, 18, new Guid("30000000-0000-0000-0000-000000000001"), 4 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("de0d45da-a297-0302-9357-99247a89afe2"), 4, 0, new Guid("30000000-0000-0000-0000-000000000001"), 1051 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("e89ccf24-0132-149c-c8bc-33265af98ed8"), 1, 12, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("e9b46175-cc60-8d02-1dbd-ddf7f907eb16"), 4, 15, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
@@ -2953,7 +3074,15 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix__containers_dockercontainerid_platformid",
                 table: "containers",
                 columns: new[] { "dockercontainerid", "platformid" },
-                unique: true);
+                unique: true,
+                filter: "dockernodeid IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix__containers_dockercontainerid_platformid_dockernodeid",
+                table: "containers",
+                columns: new[] { "dockercontainerid", "platformid", "dockernodeid" },
+                unique: true,
+                filter: "dockernodeid IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_containers_controltriggeredby",
@@ -2979,6 +3108,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_containers_platformid",
                 table: "containers",
                 column: "platformid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_containers_platformid_dockernodeid",
+                table: "containers",
+                columns: new[] { "platformid", "dockernodeid" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_containers_stackid",
@@ -3025,20 +3159,39 @@ namespace Infrastructure.Migrations.Migrations
                 column: "platformid");
 
             migrationBuilder.CreateIndex(
-                name: "ix_edgeagentbindings_agentfingerprint",
+                name: "ix_edgeagentbindings_activeagentfingerprint",
                 table: "edgeagentbindings",
-                column: "agentfingerprint");
+                column: "agentfingerprint",
+                unique: true,
+                filter: "revokedatutc IS NULL");
 
             migrationBuilder.CreateIndex(
-                name: "ix_edgeagentbindings_agentid",
+                name: "ix_edgeagentbindings_activeagentid",
                 table: "edgeagentbindings",
-                column: "agentid");
+                column: "agentid",
+                unique: true,
+                filter: "revokedatutc IS NULL");
 
             migrationBuilder.CreateIndex(
-                name: "ix_edgeagentbindings_resource",
+                name: "ix_edgeagentbindings_activedaemon",
+                table: "edgeagentbindings",
+                column: "dockerdaemonid",
+                unique: true,
+                filter: "dockerdaemonid IS NOT NULL AND revokedatutc IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentbindings_activenode",
+                table: "edgeagentbindings",
+                columns: new[] { "resourcetype", "resourceid", "dockernodeid" },
+                unique: true,
+                filter: "dockernodeid IS NOT NULL AND revokedatutc IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentbindings_activeresource",
                 table: "edgeagentbindings",
                 columns: new[] { "resourcetype", "resourceid" },
-                unique: true);
+                unique: true,
+                filter: "dockernodeid IS NULL AND revokedatutc IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_edgeagentenrollments_createdbyactorid",
@@ -3448,6 +3601,42 @@ namespace Infrastructure.Migrations.Migrations
                 column: "stackid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentbootstraps_createdbyactorid",
+                table: "swarmnodeagentbootstraps",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentbootstraps_dockersecretid",
+                table: "swarmnodeagentbootstraps",
+                column: "dockersecretid",
+                unique: true,
+                filter: "dockersecretid IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentbootstraps_platformversion",
+                table: "swarmnodeagentbootstraps",
+                columns: new[] { "platformid", "version" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentbootstraps_tokenhash",
+                table: "swarmnodeagentbootstraps",
+                column: "tokenhash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentinstallations_dockerserviceid",
+                table: "swarmnodeagentinstallations",
+                column: "dockerserviceid",
+                unique: true,
+                filter: "dockerserviceid IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_swarmnodeagentinstallations_operationactorid",
+                table: "swarmnodeagentinstallations",
+                column: "operationactorid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_swarmserviceprojections_stackid",
                 table: "swarmserviceprojections",
                 column: "stackid");
@@ -3669,7 +3858,16 @@ namespace Infrastructure.Migrations.Migrations
                 name: "swarmnetworkprojections");
 
             migrationBuilder.DropTable(
+                name: "swarmnodeagentbootstraps");
+
+            migrationBuilder.DropTable(
+                name: "swarmnodeagentinstallations");
+
+            migrationBuilder.DropTable(
                 name: "swarmnodeprojections");
+
+            migrationBuilder.DropTable(
+                name: "swarmnoderuntimeprojectionstates");
 
             migrationBuilder.DropTable(
                 name: "swarmsecretprojections");

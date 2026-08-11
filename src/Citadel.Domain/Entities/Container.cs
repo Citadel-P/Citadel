@@ -19,7 +19,9 @@ public class Container(
     bool isSystem = false,
     ContainerSystemRole? systemRole = null,
     bool hasCitadelOwnershipLabels = false,
-    bool isSwarmTask = false) : IReconcilableResource
+    bool isSwarmTask = false,
+    string? dockerNodeId = null,
+    long? projectionObservedAt = null) : IReconcilableResource
 {
     private readonly List<ContainerStat> stats = [];
     private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
@@ -41,6 +43,11 @@ public class Container(
     public ContainerSystemRole? SystemRole { get; private set; } = isSystem ? systemRole : null;
     public bool HasCitadelOwnershipLabels { get; private set; } = hasCitadelOwnershipLabels;
     public bool IsSwarmTask { get; private set; } = isSwarmTask;
+    public string? DockerNodeId { get; private set; } = dockerNodeId;
+    public long? ProjectionObservedAt { get; private set; } = projectionObservedAt;
+    public long? ProjectionStaleSince { get; private set; }
+    public string? ProjectionStaleReason { get; private set; }
+    public string? NodeHostname { get; private set; }
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
@@ -106,6 +113,20 @@ public class Container(
         return this;
     }
 
+    public void ObserveOnNode(string? dockerNodeId, long observedAt)
+    {
+        DockerNodeId = dockerNodeId;
+        ProjectionObservedAt = observedAt;
+        ProjectionStaleSince = null;
+        ProjectionStaleReason = null;
+    }
+
+    public void MarkProjectionStale(string reason, long staleSince)
+    {
+        ProjectionStaleSince ??= staleSince;
+        ProjectionStaleReason = reason;
+    }
+
     public void MarkProcessing(Guid controlTriggeredBy)
     {
         ControlTriggeredBy = controlTriggeredBy;
@@ -145,7 +166,12 @@ public class Container(
         bool isSystem = false,
         ContainerSystemRole? systemRole = null,
         bool hasCitadelOwnershipLabels = false,
-        bool isSwarmTask = false
+        bool isSwarmTask = false,
+        string? dockerNodeId = null,
+        long? projectionObservedAt = null,
+        long? projectionStaleSince = null,
+        string? projectionStaleReason = null,
+        string? nodeHostname = null
         )
     {
         var container = new Container(
@@ -163,7 +189,9 @@ public class Container(
             isSystem: isSystem,
             systemRole: systemRole,
             hasCitadelOwnershipLabels: hasCitadelOwnershipLabels,
-            isSwarmTask: isSwarmTask)
+            isSwarmTask: isSwarmTask,
+            dockerNodeId: dockerNodeId,
+            projectionObservedAt: projectionObservedAt)
         {
             Id = id,
             Image = image,
@@ -173,7 +201,10 @@ public class Container(
             RowVersion = rowVersion,
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,
-            ControlTriggeredBy = controlTriggeredBy
+            ControlTriggeredBy = controlTriggeredBy,
+            ProjectionStaleSince = projectionStaleSince,
+            ProjectionStaleReason = projectionStaleReason,
+            NodeHostname = nodeHostname
         };
 
         if (stats is not null)

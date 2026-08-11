@@ -56,8 +56,11 @@ export const SwarmLogs = ({
   const appContext = useContext(AppContext);
   const currentPlatform = appContext?.currentPlatform;
   const canViewLogs = capabilities?.canViewLogs === true;
-  const isOnline =
-    !appContext || (currentPlatform?.id === platformId && currentPlatform.status === PlatformStatus.Online);
+  const platform =
+    currentPlatform?.id === platformId
+      ? currentPlatform
+      : appContext?.platforms?.find((candidate) => candidate.id === platformId);
+  const isOnline = platform?.status === undefined || platform.status === PlatformStatus.Online;
   const serviceLogs = useRead(
     'getSwarmServiceLogs',
     { platformId, resourceId, query: { tail: 100 } },

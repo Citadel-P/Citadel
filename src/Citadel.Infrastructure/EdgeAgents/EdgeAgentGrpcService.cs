@@ -14,6 +14,7 @@ namespace Infrastructure.EdgeAgents;
 internal sealed class EdgeAgentGrpcService(
     IEdgeAgentManagementService edgeAgentManagementService,
     EdgeAgentSessionRegistry sessionRegistry,
+    ISwarmNodeDataPlaneCoordinator swarmNodeDataPlaneCoordinator,
     ILogger<EdgeAgentGrpcService> logger)
     : EdgeAgentService.EdgeAgentServiceBase
 {
@@ -24,6 +25,19 @@ internal sealed class EdgeAgentGrpcService(
         "images.build",
         "images.push",
         "images.checkBuildHost"
+    ];
+    private static readonly string[] RequiredSwarmNodeCommands =
+    [
+        "platform.checkHealth",
+        "platform.getInfo",
+        "platform.events",
+        "containers.list",
+        "containers.logs",
+        "containers.inspect",
+        "containers.patch",
+        "containers.delete",
+        "containers.stats",
+        "containers.exec"
     ];
     private static readonly SignatureAlgorithm SignatureAlgorithm = SignatureAlgorithm.Ed25519;
 
@@ -52,22 +66,53 @@ internal sealed class EdgeAgentGrpcService(
                 return;
             }
 
-            session = sessionRegistry.Register(new EdgeAgentSession(
+            var authenticatedSession = new EdgeAgentSession(
                 authentication.ResourceType,
                 authentication.ResourceId,
                 authentication.PlatformId,
                 authentication.AgentId,
                 authentication.AgentFingerprint,
-                Guid.CreateVersion7().ToString("D")));
+                Guid.CreateVersion7().ToString("D"),
+                authentication.Profile,
+                authentication.DockerNodeId);
 
-            await edgeAgentManagementService.MarkConnectedAsync(
-                authentication.ResourceType,
-                authentication.ResourceId,
-                authentication.Hostname,
-                authentication.AgentVersion,
-                authentication.CapabilitiesJson,
-                DateTime.UtcNow,
-                context.CancellationToken);
+            if (!sessionRegistry.TryRegister(authenticatedSession, out var sessionConflict))
+            {
+                await RejectAsync(responseStream, sessionConflict ?? "Node identity conflict.");
+                return;
+            }
+
+            session = authenticatedSession;
+
+            if (authentication.Profile == Domain.EdgeAgentProfile.SwarmNode)
+            {
+                await edgeAgentManagementService.MarkSwarmNodeConnectedAsync(
+                    authentication.PlatformId,
+                    authentication.DockerNodeId!,
+                    authentication.Hostname,
+                    authentication.AgentVersion,
+                    authentication.CapabilitiesJson,
+                    authentication.ServiceId,
+                    authentication.TaskId,
+                    DateTime.UtcNow,
+                    context.CancellationToken);
+                await swarmNodeDataPlaneCoordinator.NotifyConnectedAsync(
+                    authentication.PlatformId,
+                    authentication.DockerNodeId!,
+                    session.SessionId,
+                    context.CancellationToken);
+            }
+            else
+            {
+                await edgeAgentManagementService.MarkConnectedAsync(
+                    authentication.ResourceType,
+                    authentication.ResourceId,
+                    authentication.Hostname,
+                    authentication.AgentVersion,
+                    authentication.CapabilitiesJson,
+                    DateTime.UtcNow,
+                    context.CancellationToken);
+            }
 
             logger.LogInformation(
                 "Edge Agent session accepted for {ResourceType} {ResourceId} agent {AgentId}",
@@ -85,7 +130,8 @@ internal sealed class EdgeAgentGrpcService(
                     AgentId = session.AgentId.ToString("D"),
                     SessionId = session.SessionId,
                     ResourceType = MapResourceType(session.ResourceType),
-                    ResourceId = session.ResourceId.ToString("D")
+                    ResourceId = session.ResourceId.ToString("D"),
+                    NodeId = session.DockerNodeId ?? string.Empty
                 }
             });
 
@@ -114,11 +160,27 @@ internal sealed class EdgeAgentGrpcService(
                 session.Complete();
                 if (shouldMarkDisconnected)
                 {
-                    await edgeAgentManagementService.MarkDisconnectedAsync(
-                        session.ResourceType,
-                        session.ResourceId,
-                        DateTime.UtcNow,
-                        CancellationToken.None);
+                    if (session.Profile == Domain.EdgeAgentProfile.SwarmNode)
+                    {
+                        await edgeAgentManagementService.MarkSwarmNodeDisconnectedAsync(
+                            session.PlatformId,
+                            session.DockerNodeId!,
+                            DateTime.UtcNow,
+                            CancellationToken.None);
+                        await swarmNodeDataPlaneCoordinator.NotifyDisconnectedAsync(
+                            session.PlatformId,
+                            session.DockerNodeId!,
+                            session.SessionId,
+                            CancellationToken.None);
+                    }
+                    else
+                    {
+                        await edgeAgentManagementService.MarkDisconnectedAsync(
+                            session.ResourceType,
+                            session.ResourceId,
+                            DateTime.UtcNow,
+                            CancellationToken.None);
+                    }
                     logger.LogInformation("Edge Agent session disconnected for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
                 }
             }
@@ -179,7 +241,14 @@ internal sealed class EdgeAgentGrpcService(
                 request.AgentVersion,
                 capabilitiesJson,
                 protocolVersion,
-                request.DaemonId),
+                request.DaemonId,
+                MapProfile(request.Profile),
+                NullIfEmpty(request.ClusterId),
+                NullIfEmpty(request.NodeId),
+                NullIfEmpty(request.DockerHostname),
+                NullIfEmpty(request.SwarmRole),
+                NullIfEmpty(request.ServiceId),
+                NullIfEmpty(request.TaskId)),
             DateTime.UtcNow,
             cancellationToken);
 
@@ -197,7 +266,11 @@ internal sealed class EdgeAgentGrpcService(
             fingerprint,
             request.Hostname,
             request.AgentVersion,
-            capabilitiesJson);
+            capabilitiesJson,
+            enrollment.Profile,
+            enrollment.DockerNodeId,
+            request.ServiceId,
+            request.TaskId);
     }
 
     private async Task<EdgeAgentAuthentication?> AuthenticateReconnectAsync(
@@ -235,13 +308,44 @@ internal sealed class EdgeAgentGrpcService(
             return null;
         }
 
-        var bindingResult = await edgeAgentManagementService.GetReconnectBindingAsync(
-            resourceType,
-            resourceId,
-            agentId,
-            hello.AgentFingerprint,
-            hello.DaemonId,
-            cancellationToken);
+        var profile = MapProfile(hello.Profile);
+        if (profile == Domain.EdgeAgentProfile.SwarmNode
+            && !EdgeAgentCapabilities.HasRequiredCommands(
+                capabilitiesJson,
+                RequiredSwarmNodeCommands,
+                out var missingSwarmNodeCommand))
+        {
+            await RejectAsync(responseStream, $"Swarm Node Agent must advertise capability '{missingSwarmNodeCommand}'.");
+            return null;
+        }
+
+        var reconnectIdentity = new EdgeAgentHeartbeatSnapshot(
+            DockerReachable: true,
+            DockerVersion: null,
+            Hostname: NullIfEmpty(hello.Hostname),
+            AgentVersion: NullIfEmpty(hello.AgentVersion),
+            CapabilitiesJson: capabilitiesJson,
+            DockerDaemonId: NullIfEmpty(hello.DaemonId),
+            ClusterId: NullIfEmpty(hello.ClusterId),
+            DockerNodeId: NullIfEmpty(hello.NodeId),
+            DockerHostname: NullIfEmpty(hello.DockerHostname),
+            ServiceId: NullIfEmpty(hello.ServiceId),
+            TaskId: NullIfEmpty(hello.TaskId),
+            SwarmRole: NullIfEmpty(hello.SwarmRole));
+        var bindingResult = profile == Domain.EdgeAgentProfile.SwarmNode
+            ? await edgeAgentManagementService.GetSwarmNodeReconnectBindingAsync(
+                platformId,
+                agentId,
+                hello.AgentFingerprint,
+                reconnectIdentity,
+                cancellationToken)
+            : await edgeAgentManagementService.GetReconnectBindingAsync(
+                resourceType,
+                resourceId,
+                agentId,
+                hello.AgentFingerprint,
+                hello.DaemonId,
+                cancellationToken);
 
         if (!bindingResult.IsSuccess(out var binding, out var error))
         {
@@ -297,7 +401,11 @@ internal sealed class EdgeAgentGrpcService(
             hello.AgentFingerprint,
             hello.Hostname,
             hello.AgentVersion,
-            capabilitiesJson);
+            capabilitiesJson,
+            profile,
+            binding.DockerNodeId,
+            reconnectIdentity.ServiceId,
+            reconnectIdentity.TaskId);
     }
 
     private async Task ReadLoopAsync(
@@ -316,17 +424,37 @@ internal sealed class EdgeAgentGrpcService(
                     logger.LogWarning("Ignoring invalid Edge Agent heartbeat capabilities for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
                 }
 
-                await edgeAgentManagementService.MarkHeartbeatAsync(
-                    session.ResourceType,
-                    session.ResourceId,
-                    new EdgeAgentHeartbeatSnapshot(
+                var snapshot = new EdgeAgentHeartbeatSnapshot(
                         heartbeat.DockerReachable,
                         NullIfEmpty(heartbeat.DockerVersion),
                         NullIfEmpty(heartbeat.Hostname),
                         NullIfEmpty(heartbeat.AgentVersion),
-                        capabilitiesJson),
-                    DateTime.UtcNow,
-                    cancellationToken);
+                        capabilitiesJson,
+                        NullIfEmpty(heartbeat.DaemonId),
+                        NullIfEmpty(heartbeat.ClusterId),
+                        NullIfEmpty(heartbeat.NodeId),
+                        NullIfEmpty(heartbeat.DockerHostname),
+                        NullIfEmpty(heartbeat.ServiceId),
+                        NullIfEmpty(heartbeat.TaskId),
+                        NullIfEmpty(heartbeat.SwarmRole));
+                if (session.Profile == Domain.EdgeAgentProfile.SwarmNode)
+                {
+                    await edgeAgentManagementService.MarkSwarmNodeHeartbeatAsync(
+                        session.PlatformId,
+                        session.DockerNodeId!,
+                        snapshot,
+                        DateTime.UtcNow,
+                        cancellationToken);
+                }
+                else
+                {
+                    await edgeAgentManagementService.MarkHeartbeatAsync(
+                        session.ResourceType,
+                        session.ResourceId,
+                        snapshot,
+                        DateTime.UtcNow,
+                        cancellationToken);
+                }
                 continue;
             }
 
@@ -423,7 +551,16 @@ internal sealed class EdgeAgentGrpcService(
         string AgentFingerprint,
         string Hostname,
         string AgentVersion,
-        string CapabilitiesJson);
+        string CapabilitiesJson,
+        Domain.EdgeAgentProfile Profile,
+        string? DockerNodeId,
+        string? ServiceId,
+        string? TaskId);
+
+    private static Domain.EdgeAgentProfile MapProfile(Citadel.Edge.V1.EdgeAgentProfile profile)
+        => profile == Citadel.Edge.V1.EdgeAgentProfile.SwarmNode
+            ? Domain.EdgeAgentProfile.SwarmNode
+            : Domain.EdgeAgentProfile.Ordinary;
 
     private static Domain.EdgeAgentResourceType MapResourceType(Citadel.Edge.V1.EdgeAgentResourceType resourceType)
         => resourceType == Citadel.Edge.V1.EdgeAgentResourceType.BuildAgentPool

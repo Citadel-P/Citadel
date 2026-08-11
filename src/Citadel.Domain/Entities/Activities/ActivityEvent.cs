@@ -102,6 +102,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.PlatformConnected
             or ActivityEventType.PlatformDisconnected
             or ActivityEventType.PlatformRenamed
+            or ActivityEventType.PlatformNodeAgentLifecycle
                 => ActivityResourceType.Platform,
 
             ActivityEventType.RegistryCreated
@@ -302,6 +303,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.PlatformConnected, PlatformConnected) => true,
             (ActivityEventType.PlatformDisconnected, PlatformDisconnected) => true,
             (ActivityEventType.PlatformRenamed, PlatformRenamed) => true,
+            (ActivityEventType.PlatformNodeAgentLifecycle, PlatformNodeAgentLifecycle) => true,
 
             (ActivityEventType.RegistryRenamed, RegistryRenamed) => true,
             (ActivityEventType.RegistryDeleted, RegistryDeleted) => true,

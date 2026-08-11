@@ -74,12 +74,10 @@ import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useNavigate } from 'react-router';
-import { useServicesGroup } from '@/features/swarm-resources/services/hooks/useServicesGroup';
+import { SwarmServiceListView, useServicesGroup } from '@/features/swarm-resources/services/hooks/useServicesGroup';
 import { ServicesTable } from '@/features/swarm-resources/services/table';
-import { SwarmLogs } from '@/features/swarm-resources/shared';
+import { ServiceInspect } from '@/features/swarm-resources/services/service-info/inspect';
 import { ServiceTerminal } from '@/features/swarm-services/form/service-terminal';
-import { MonacoEditor } from '@/lib/monaco';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -302,17 +300,24 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
   const platformId = stack.platformId ?? '';
   const { items, isLoading } = useServicesGroup(platformId);
-  const [selectedServiceId, setSelectedServiceId] = useState<string>();
+  const stackInfo = useStackInfoGroup(stack.id, platformId);
   const services = useMemo(
     () => items.filter((service) => service.labels[STACK_ID_LABEL]?.toLowerCase() === stack.id.toLowerCase()),
     [items, stack.id],
   );
-  const selectedService = services.find((service) => service.id === selectedServiceId) ?? services[0];
-  const inspectQuery = useRead(
-    'inspectSwarmService',
-    { platformId, resourceId: selectedService?.id ?? '' },
-    { enabled: Boolean(platformId && selectedService?.id && selectedService.capabilities?.canInspect) },
+  const tasks = useMemo(() => services.flatMap((service) => service.tasks), [services]);
+  const containers = useMemo(
+    () => stackInfo.containersInfo.filter((container) => container.isSwarmTask),
+    [stackInfo.containersInfo],
   );
+  const containerNames = useMemo(
+    () =>
+      containers.map((container) => container.name?.replace(/^\//, '')).filter((name): name is string => Boolean(name)),
+    [containers],
+  );
+  const canViewLogs = services.some((service) => service.capabilities?.canViewLogs === true);
+  const canInspect = services.some((service) => service.capabilities?.canInspect === true);
+  const defaultTab = canViewLogs ? 'logs' : canInspect ? 'inspect' : tasks.length > 0 ? 'terminal' : 'stats';
 
   if (!platformId) {
     return (
@@ -335,60 +340,69 @@ const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
         platformId={platformId}
         selectable={false}
         showActions={false}
+        taskContainers={containers}
         emptyState={{
           title: 'No Stack services found.',
           description: 'No Services owned by this Stack are present in the latest Swarm inventory.',
         }}
       />
-      {selectedService && (
-        <Tabs defaultValue="logs" className="w-full">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <TabsList className="w-fit">
-              <TabsTrigger value="logs" disabled={selectedService.capabilities?.canViewLogs !== true}>
-                Logs
-              </TabsTrigger>
-              <TabsTrigger value="inspect" disabled={selectedService.capabilities?.canInspect !== true}>
-                Inspect
-              </TabsTrigger>
-              <TabsTrigger value="terminal">Terminal</TabsTrigger>
-            </TabsList>
-            <Select value={selectedService.id} onValueChange={setSelectedServiceId}>
-              <SelectTrigger className="w-full sm:w-72" aria-label="Service">
-                <SelectValue placeholder="Select a Service" />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.id} value={service.id}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <TabsContent value="logs" className="mt-2">
-            <SwarmLogs
-              platformId={platformId}
-              resourceId={selectedService.id}
-              resource="service"
-              capabilities={selectedService.capabilities}
-            />
+      {services.length > 0 && (
+        <Tabs defaultValue={defaultTab} className="w-full">
+          <TabsList className="w-fit max-w-full overflow-x-auto">
+            <TabsTrigger value="logs" disabled={!canViewLogs}>
+              Logs
+            </TabsTrigger>
+            <TabsTrigger value="inspect" disabled={!canInspect}>
+              Inspect
+            </TabsTrigger>
+            <TabsTrigger value="terminal" disabled={tasks.length === 0}>
+              Terminal
+            </TabsTrigger>
+            <TabsTrigger value="stats">Stats</TabsTrigger>
+          </TabsList>
+          <TabsContent value="logs" className="mt-2 w-full">
+            <StackLogs key={stack.id} stackId={stack.id} containers={containerNames} />
           </TabsContent>
-          <TabsContent value="inspect" className="mt-2">
-            <MonacoEditor
-              value={JSON.stringify(inspectQuery.data?.data ?? {}, null, 2)}
-              language="json"
-              readOnly
-              minHeight={320}
-            />
+          <TabsContent value="inspect" className="mt-2 w-full">
+            <SwarmStackInspect platformId={platformId} services={services} />
           </TabsContent>
-          <TabsContent value="terminal" className="mt-2">
-            <ServiceTerminal platformId={platformId} tasks={selectedService.tasks} tasksLoading={isLoading} />
+          <TabsContent value="terminal" className="mt-2 w-full">
+            <ServiceTerminal platformId={platformId} tasks={tasks} tasksLoading={isLoading} />
+          </TabsContent>
+          <TabsContent value="stats" className="mt-2 w-full">
+            <StackStats key={stack.id} stackId={stack.id} containers={containers} />
           </TabsContent>
         </Tabs>
       )}
     </div>
   );
 };
+
+const SwarmStackInspect = ({ platformId, services }: { platformId: string; services: SwarmServiceListView[] }) => {
+  const availableServices = services.filter((service) => service.capabilities?.canInspect === true);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>();
+  const selectedService = getSelectedSwarmStackService(availableServices, selectedServiceId);
+
+  if (!selectedService) return null;
+
+  return (
+    <div className="relative">
+      <div className="absolute top-4 right-6 z-10">
+        <StackRuntimeTargetFilter
+          label="Inspect Service"
+          tooltip="Service"
+          value={selectedService.id}
+          options={availableServices.map((service) => ({ value: service.id, label: service.name }))}
+          onValueChange={setSelectedServiceId}
+        />
+      </div>
+      <ServiceInspect service={{ id: selectedService.id, platformId }} />
+    </div>
+  );
+};
+
+const getSelectedSwarmStackService = (services: SwarmServiceListView[], selectedServiceId?: string) =>
+  services.find((service) => service.id === selectedServiceId) ?? services[0];
 
 const STACK_ID_LABEL = 'com.citadel.stack-id';
 
@@ -401,12 +415,7 @@ const ImportedComposeStackRuntime = ({ stack }: { stack: StackView }) => {
 
   if (stackInfo.isLoading) {
     return (
-      <StackContainersRuntime
-        stack={stack}
-        containersInfo={composeContainers}
-        isLoading
-        error={stackInfo.error}
-      />
+      <StackContainersRuntime stack={stack} containersInfo={composeContainers} isLoading error={stackInfo.error} />
     );
   }
 
@@ -460,7 +469,6 @@ const StackContainersRuntime = ({
   isLoading: boolean;
   error: ReturnType<typeof useStackInfoGroup>['error'];
 }) => {
-
   if (error)
     return (
       <div className="mb-2">
@@ -487,9 +495,7 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
   const { open: openSheet } = useTaskSheet('Stack');
   const [previewRelease, setPreviewRelease] = useState<StackReleaseView | null>(null);
   const releases = data?.data.releases ?? [];
-  const canRollback =
-    hasCapability(stack, 'canApply') &&
-    stack.controlState !== ResourceControlState.Processing;
+  const canRollback = hasCapability(stack, 'canApply') && stack.controlState !== ResourceControlState.Processing;
 
   const columns = useMemo<ColumnDef<StackReleaseView>[]>(
     () => [
@@ -896,11 +902,15 @@ const StackContainerInspect = ({
 
   return (
     <div className="relative">
-      <StackInspectContainerFilter
-        containers={containers}
-        selectedContainer={selectedContainer}
-        onSelectContainer={onSelectContainer}
-      />
+      <div className="absolute top-4 right-6 z-10">
+        <StackRuntimeTargetFilter
+          label="Inspect container"
+          tooltip="Container"
+          value={selectedContainer.id}
+          options={containers.map((container) => ({ value: container.id, label: getStackContainerLabel(container) }))}
+          onValueChange={onSelectContainer}
+        />
+      </div>
       <StackInspect key={`${stackId}-${selectedContainer.id}`} stackId={stackId} containerId={selectedContainer.id} />
     </div>
   );
@@ -970,58 +980,64 @@ const StackTerminalContainerSelect = ({
   );
 };
 
-const StackInspectContainerFilter = ({
-  containers,
-  selectedContainer,
-  onSelectContainer,
+const StackRuntimeTargetFilter = ({
+  label,
+  tooltip,
+  value,
+  options,
+  onValueChange,
 }: {
-  containers: ContainerDataView[];
-  selectedContainer: ContainerDataView;
-  onSelectContainer: (containerId: string) => void;
+  label: string;
+  tooltip: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onValueChange: (value: string) => void;
 }) => {
   return (
-    <div className="absolute top-4 right-6 z-10">
-      <Popover>
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button size="icon-sm" variant="outline" className="h-7 w-7 rounded-full bg-background shadow-sm">
-                  <Funnel className="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="left">Container</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <PopoverContent align="end" side="left" className="w-64 p-2 bg-background">
-          <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Inspect container</div>
-          <div className="max-h-64 overflow-auto">
-            {containers.map((container) => {
-              const selected = selectedContainer.id === container.id;
-              return (
-                <button
-                  type="button"
-                  key={container.id}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  onClick={() => onSelectContainer(container.id)}>
-                  <span
-                    className={cn(
-                      'flex size-4 shrink-0 items-center justify-center border',
-                      selected && 'bg-primary text-primary-foreground',
-                    )}>
-                    {selected && <Check className="size-3" />}
-                  </span>
-                  <span className="truncate" title={getStackContainerLabel(container)}>
-                    {getStackContainerLabel(container)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+    <Popover>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                size="icon-sm"
+                variant="outline"
+                className="h-7 w-7 rounded-full bg-background shadow-sm"
+                aria-label={`${tooltip} filter`}>
+                <Funnel className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left">{tooltip}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <PopoverContent align="end" side="left" className="w-64 bg-background p-2">
+        <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="max-h-64 overflow-auto">
+          {options.map((option) => {
+            const selected = value === option.value;
+            return (
+              <button
+                type="button"
+                key={option.value}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                onClick={() => onValueChange(option.value)}>
+                <span
+                  className={cn(
+                    'flex size-4 shrink-0 items-center justify-center border',
+                    selected && 'bg-primary text-primary-foreground',
+                  )}>
+                  {selected && <Check className="size-3" />}
+                </span>
+                <span className="truncate" title={option.label}>
+                  {option.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 

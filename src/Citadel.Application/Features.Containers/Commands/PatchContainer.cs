@@ -30,8 +30,8 @@ internal sealed class PatchContainerHandler(
     IUserContextAccessor userContext,
     IUnitOfWork unitOfWork,
     IContainerProcessingService containerService,
-    IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IContainerAuthorizationService containerAuthorizationService,
     IHostApplicationLifetime applicationLifetime,
     ILogger<PatchContainerHandler> logger)
@@ -55,13 +55,14 @@ internal sealed class PatchContainerHandler(
         }
 
         var actorId = userContext.Current.ActorId;
-        if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platforms))
+        var requestedContainers = (await unitOfWork.Containers.GetByIdsAsync(request.ContainerIds, ct)).ToArray();
+        if (requestedContainers.Length == 0)
         {
             return Result.Failure(new NotFoundError(
                 "Platform resolution failed for container IDs. Platform may be disconnected."));
         }
 
-        var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
+        var containerIds = requestedContainers.Select(container => container.Id).ToArray();
         var resources = await containerService.MarkProcessingAsync(containerIds, actorId, ct);
 
         if (resources.HasConflict)
@@ -84,9 +85,13 @@ internal sealed class PatchContainerHandler(
         {
             await containerService.NotifyProcessingAsync(resources, completionToken);
 
-            foreach (var platform in platforms)
+            foreach (var platformGroup in resources.Containers.GroupBy(container => container.PlatformId))
             {
-                var result = await PatchPlatformAsync(platform, request.Action, completionToken);
+                var result = await PatchPlatformAsync(
+                    platformGroup.Key,
+                    platformGroup.ToArray(),
+                    request.Action,
+                    completionToken);
                 if (result.IsFailure())
                 {
                     await TryRollbackProcessingAsync(resources, actorId);
@@ -94,7 +99,7 @@ internal sealed class PatchContainerHandler(
                 }
             }
 
-            await containerService.CompleteProcessingAsync(resources, platforms, actorId);
+            await containerService.CompleteProcessingAsync(resources, [], actorId);
             return Result.Success();
         }
         catch
@@ -120,14 +125,39 @@ internal sealed class PatchContainerHandler(
         }
     }
 
-    private Task<Result> PatchPlatformAsync(PlatformCacheEntry platform, ContainerAction action, CancellationToken ct)
+    private async Task<Result> PatchPlatformAsync(
+        Guid platformId,
+        IReadOnlyCollection<Domain.Entities.Container> containers,
+        ContainerAction action,
+        CancellationToken ct)
     {
-        var command = new PatchContainerCommand(
-            Action: action,
-            PlatformAddress: platform.Address,
-            ContainerIds: platform.Containers.Keys);
+        var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, ct);
+        if (platform is null)
+            return Result.Failure(new NotFoundError("Platform does not exist."));
 
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        return connector.PatchAsync(command, ct);
+        foreach (var group in containers.GroupBy(container => container.DockerNodeId, StringComparer.Ordinal))
+        {
+            Result result;
+            var ids = group.Select(container => container.DockerContainerId).ToArray();
+            if (group.Key is not null)
+            {
+                result = await swarmNodeRuntimeConnector.PatchContainersAsync(
+                    platform,
+                    group.Key,
+                    action,
+                    ids,
+                    ct);
+            }
+            else
+            {
+                var command = new PatchContainerCommand(action, platform.Address, ids);
+                result = await connectorFactory.GetConnector(platform.ConnectorType).PatchAsync(command, ct);
+            }
+
+            if (result.IsFailure())
+                return result;
+        }
+
+        return Result.Success();
     }
 }

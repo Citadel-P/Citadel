@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useLayoutContext } from '@/lib/context/layout-context';
-import { normalizeDockerId } from '@/lib/utils';
+import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import { nanoid } from 'nanoid';
 import '@xterm/xterm/css/xterm.css';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,6 +40,7 @@ interface UseContainerExecOptions {
   disabled?: boolean;
   deploymentId?: string;
   stackId?: string;
+  swarmTask?: { platformId: string; taskId: string };
   methodNames?: {
     sendExecInput?: string;
     resizeExec?: string;
@@ -151,7 +152,9 @@ const ExecTerminal: React.FC<ExecTerminalProps> = ({
 };
 
 export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
-  const { containerId, disabled = false, deploymentId, stackId, methodNames = {} } = options;
+  const { containerId, disabled = false, deploymentId, stackId, swarmTask, methodNames = {} } = options;
+  const swarmPlatformId = swarmTask?.platformId;
+  const swarmTaskId = swarmTask?.taskId;
 
   const {
     sendExecInput = 'SendExecInput',
@@ -164,11 +167,16 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
   const [isActive, setIsActive] = useState(false);
 
   const sessionId = useMemo(() => nanoid(), []);
-  const groupId = containerId ? `container-exec:${containerId}:${sessionId}` : undefined;
+  const groupId = swarmPlatformId && swarmTaskId
+    ? `swarm-task-exec:${swarmPlatformId}:${swarmTaskId}:${sessionId}`
+    : containerId
+      ? `container-exec:${containerId}:${sessionId}`
+      : undefined;
   const targetIds = useMemo(() => {
+    if (swarmPlatformId && swarmTaskId) return [swarmPlatformId, swarmTaskId];
     if (stackId && containerId) return [stackId, containerId];
     return [deploymentId ?? containerId];
-  }, [containerId, deploymentId, stackId]);
+  }, [containerId, deploymentId, stackId, swarmPlatformId, swarmTaskId]);
 
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -336,8 +344,30 @@ export const ContainerExec: React.FC<{
   disabled?: boolean;
   toolbarStart?: ReactNode;
 }> = ({ containerId, disabled, toolbarStart }) => {
-  const nid = normalizeDockerId(containerId);
+  const nid = normalizeContainerReference(containerId);
   const terminal = useContainerExecTerminal({ containerId: nid, disabled });
+
+  return <ExecTerminal {...terminal} disabled={disabled} toolbarStart={toolbarStart} />;
+};
+
+export const SwarmTaskExec: React.FC<{
+  platformId: string;
+  taskId: string;
+  containerId?: string;
+  disabled?: boolean;
+  toolbarStart?: ReactNode;
+}> = ({ platformId, taskId, containerId, disabled, toolbarStart }) => {
+  const nid = normalizeDockerId(containerId);
+  const terminal = useContainerExecTerminal({
+    containerId: nid,
+    disabled,
+    swarmTask: { platformId, taskId },
+    methodNames: {
+      sendExecInput: 'SendSwarmTaskExecInput',
+      resizeExec: 'ResizeSwarmTaskExec',
+      startExecProcess: 'StartSwarmTaskExecProcess',
+    },
+  });
 
   return <ExecTerminal {...terminal} disabled={disabled} toolbarStart={toolbarStart} />;
 };

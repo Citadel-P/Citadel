@@ -835,6 +835,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         {
             var uow = updateScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var workItem = new ContainerUpdatedWorkItem(
+                platformId,
                 new DaemonContainerEventInfo("update", containerId, eventContainer),
                 notificationQueue.Object,
                 Mock.Of<IActivityStreamManager>(),

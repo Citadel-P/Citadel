@@ -1,4 +1,10 @@
-import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
+import {
+  PlatformConnectorType,
+  PlatformStatus,
+  PlatformType,
+  PlatformView,
+  SwarmQuorumState,
+} from '@/api/generated/api.types';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { DockerPlatform } from './docker-platform';
@@ -40,6 +46,16 @@ const createPlatform = (diskUsage: number | null): PlatformView =>
       failed: 0,
       stopped: 1,
       paused: 1,
+      inProgress: 0,
+      unknown: 0,
+    },
+    swarmServiceStatusCounts: {
+      total: 0,
+      healthy: 0,
+      degraded: 0,
+      failed: 0,
+      stopped: 0,
+      paused: 0,
       inProgress: 0,
       unknown: 0,
     },
@@ -132,10 +148,26 @@ describe('DockerPlatform disk usage', () => {
       containersStopped: 0,
       containersPaused: 0,
     } as PlatformView['platformDescriptor'];
+    platform.swarmServiceStatusCounts = {
+      total: 4,
+      healthy: 1,
+      degraded: 1,
+      failed: 1,
+      stopped: 0,
+      paused: 0,
+      inProgress: 1,
+      unknown: 0,
+    };
     useSwarmOverviewMock.mockReturnValue({
       overview: {
         nodeCount: 3,
         managerCount: 1,
+        quorum: {
+          state: SwarmQuorumState.Healthy,
+          reachableManagers: 1,
+          requiredManagers: 1,
+          hasLeader: true,
+        },
         serviceCount: 6,
         runningTaskCount: 10,
         serviceStatusCounts: {
@@ -159,17 +191,18 @@ describe('DockerPlatform disk usage', () => {
 
     expect(screen.getByLabelText('Docker Swarm')).toBeVisible();
     expect(screen.getByText('3 nodes')).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Swarm quorum healthy, 1/1 managers reachable' })).toBeVisible();
     expect(screen.queryByText('1 manager')).not.toBeInTheDocument();
-    expect(screen.getByText('6 services')).toBeVisible();
+    expect(screen.getByText('4 services')).toBeVisible();
     expect(screen.getByText('10 running tasks')).toBeVisible();
     expect(screen.getByText('2 containers')).toBeVisible();
     expect(screen.getByText('4 volumes')).toBeVisible();
     expect(screen.getByText('5 networks')).toBeVisible();
     expect(screen.getByText('7 images')).toBeVisible();
     expect(screen.getByRole('link', { name: '3 nodes' })).toHaveAttribute('href', `/platforms/${platform.id}/nodes`);
-    expect(screen.getByRole('link', { name: '6 services' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '4 services' })).toHaveAttribute(
       'href',
-      `/platforms/${platform.id}/services`,
+      `/swarm-services?platformId=${platform.id}`,
     );
     expect(screen.getByRole('link', { name: '10 running tasks' })).toHaveAttribute(
       'href',
@@ -191,12 +224,12 @@ describe('DockerPlatform disk usage', () => {
     const servicesMetric = screen.getByRole('link', { name: 'Services' }).parentElement!;
     expect(screen.getByRole('link', { name: 'Services' })).toHaveAttribute(
       'href',
-      `/platforms/${platform.id}/services`,
+      `/swarm-services?platformId=${platform.id}`,
     );
-    expect(within(servicesMetric).getByLabelText('Healthy: 3')).toBeVisible();
+    expect(within(servicesMetric).getByLabelText('Healthy: 1')).toBeVisible();
     expect(within(servicesMetric).getByLabelText('Degraded: 1')).toBeVisible();
     expect(within(servicesMetric).getByLabelText('Failed: 1')).toBeVisible();
-    expect(within(servicesMetric).getByLabelText('Stopped: 1')).toBeVisible();
+    expect(within(servicesMetric).getByLabelText('In progress: 1')).toBeVisible();
     expect(screen.getByRole('region', { name: 'Swarm workloads' })).toBeVisible();
     expect(screen.getByRole('region', { name: 'Connected manager utilization' })).toBeVisible();
   });

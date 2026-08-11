@@ -28,7 +28,24 @@ vi.mock('@/features/swarm-resources/tasks/task-info/terminal', () => ({
   ),
 }));
 
+vi.mock('@/features/docker-resources/containers/container-info/container-stats', () => ({
+  ContainerStatsCharts: ({ resource }: { resource?: { containerStat?: { cpuUsage?: number } } }) => (
+    <div>
+      <span>CPU Usage</span>
+      <span>{resource?.containerStat?.cpuUsage?.toFixed(2)}%</span>
+    </div>
+  ),
+}));
+
 describe('SwarmServiceFormComponents', () => {
+  beforeEach(() => {
+    server.use(
+      http.get('http://localhost/api/v1/platforms/:platformId/containers', () =>
+        HttpResponse.json({ containers: [], capabilities: {} }),
+      ),
+    );
+  });
+
   it('shows the persisted Docker rollout failure above the Service tabs', () => {
     const SubHeader = SwarmServiceFormComponents.EditForm!.SubHeader!;
     const resource = managedService({
@@ -63,6 +80,26 @@ describe('SwarmServiceFormComponents', () => {
     const { container } = renderCitadel(<SubHeader resource={managedService()} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('explains that an adopted stopped Service must be applied to use the configured replicas', () => {
+    const SubHeader = SwarmServiceFormComponents.EditForm!.SubHeader!;
+    const resource = managedService({
+      health: SwarmServiceHealth.Stopped,
+      runningTaskCount: 0,
+      desiredTaskCount: 0,
+      hasPendingDesiredChanges: true,
+      spec: {
+        schedulingMode: SwarmServiceSchedulingMode.Replicated,
+        replicas: 1,
+        image: { $type: 'External', registryId: 'registry-1', imageTag: 'redis:latest' },
+      },
+    });
+
+    renderCitadel(<SubHeader resource={resource} />);
+
+    expect(screen.getByText('Changes not applied')).toBeVisible();
+    expect(screen.getByText(/Docker is currently scaled to 0.*configured for 1.*Select Apply/)).toBeVisible();
   });
 
   it('renders edit actions as buttons rather than orphaned dropdown items', () => {
@@ -122,7 +159,7 @@ describe('SwarmServiceFormComponents', () => {
     expect(await screen.findByText('Duplicate Service form')).toBeVisible();
   });
 
-  it('opens a terminal for a local Task and disables remote-worker Tasks', async () => {
+  it('opens a terminal for Tasks on the connected manager and worker nodes', async () => {
     const Runtime = SwarmServiceFormComponents.EditForm!.Tabs.find((tab) => tab.label === 'Runtime')!.Content;
     const resource = managedService();
     server.use(
@@ -150,11 +187,11 @@ describe('SwarmServiceFormComponents', () => {
     await user.click(await screen.findByRole('tab', { name: 'Terminal' }));
     expect(await screen.findByText('Terminal connected to redis.1')).toBeVisible();
 
-    screen.getByRole('combobox', { name: 'Task' }).focus();
-    await user.keyboard('{ArrowDown}');
-    expect(await screen.findByRole('option', { name: /redis\.2.*worker.*remote node/i })).toHaveAttribute(
-      'data-disabled',
-    );
+    await user.click(screen.getByRole('combobox', { name: 'Task' }));
+    const remoteTask = await screen.findByRole('option', { name: /redis\.2.*worker/i });
+    expect(remoteTask).not.toHaveAttribute('data-disabled');
+    await user.click(remoteTask);
+    expect(await screen.findByText('Terminal connected to redis.2')).toBeVisible();
   });
 
   it('shows the standard log viewer controls for Service logs', async () => {
@@ -162,12 +199,13 @@ describe('SwarmServiceFormComponents', () => {
     const resource = managedService();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${resource.platformId}/swarm/tasks`, () =>
-        HttpResponse.json({ items: [task()], capabilities: {} }),
+        HttpResponse.json({ items: [task({ name: '' })], capabilities: {} }),
       ),
       http.get(`http://localhost/api/v1/swarmServices/${resource.id}/logs`, () =>
         HttpResponse.json({
           lines: [
             '2026-08-06T10:00:00Z com.docker.swarm.node.id=manager-node,com.docker.swarm.service.id=docker-service-1,com.docker.swarm.task.id=task-1 service output',
+            '2026-08-06T10:00:01Z managed-web.1.task-1@manager | source output',
           ],
           truncated: false,
         }),
@@ -177,6 +215,9 @@ describe('SwarmServiceFormComponents', () => {
     const { user } = renderRuntime(<Runtime resource={resource} />);
 
     expect(await screen.findByText('service output')).toBeVisible();
+    expect(screen.getByText('source output')).toBeVisible();
+    expect(screen.getAllByText('[managed-web.1]')).toHaveLength(2);
+    expect(screen.queryByText('[]')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Timestamps' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Container filter' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Wrap Lines' })).toBeVisible();
@@ -206,7 +247,7 @@ describe('SwarmServiceFormComponents', () => {
     const { fake, user } = renderRuntime(<Runtime resource={resource} />);
 
     expect(await screen.findByText('redis.1')).toBeVisible();
-    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
+    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(2));
 
     act(() => {
       fake.emit(
@@ -231,6 +272,108 @@ describe('SwarmServiceFormComponents', () => {
     expect(await screen.findByText('1/1')).toBeVisible();
     expect(await screen.findByText('Terminal connected to redis.2')).toBeVisible();
     expect(screen.queryByText('Terminal connected to redis.1')).not.toBeInTheDocument();
+  });
+
+  it('streams node-agent statistics into the Task table and Service charts', async () => {
+    const Runtime = SwarmServiceFormComponents.EditForm!.Tabs.find((tab) => tab.label === 'Runtime')!.Content;
+    const resource = managedService();
+    const projectionId = '019f0000-0000-7000-8000-000000000301';
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${resource.platformId}/swarm/tasks`, () =>
+        HttpResponse.json({ items: [task()], capabilities: {} }),
+      ),
+      http.get(`http://localhost/api/v1/platforms/${resource.platformId}/containers`, () =>
+        HttpResponse.json({
+          containers: [
+            {
+              id: projectionId,
+              platformId: resource.platformId,
+              containerId: 'abcdef012345',
+              name: '/managed-web.1.task-1',
+              dockerImageId: 'sha256:redis',
+              created: 1,
+              state: 'Running',
+              controlState: 'Idle',
+              updated: 1,
+              stack: null,
+              isSystem: false,
+              systemRole: null,
+              hasCitadelOwnershipLabels: true,
+              isSwarmTask: true,
+              dockerNodeId: 'manager-node',
+              nodeHostname: 'manager',
+              projectionObservedAt: 1,
+              projectionStaleSince: null,
+              projectionStaleReason: null,
+              lastStats: {
+                containerId: projectionId,
+                cpuUsage: 10,
+                memoryActive: 128,
+                memoryLimit: 512,
+                created: 1,
+              },
+              ports: {},
+              deploymentId: null,
+              stackId: null,
+            },
+          ],
+          capabilities: {},
+        }),
+      ),
+      http.get(
+        `http://localhost/api/v1/platforms/${resource.platformId}/swarm/services/${resource.dockerServiceId}/stats`,
+        () =>
+          HttpResponse.json({
+            dockerServiceId: resource.dockerServiceId,
+            observedTasks: 0,
+            expectedTasks: 1,
+            complete: false,
+            observedContainerProjectionIds: [projectionId],
+            missingDockerNodeIds: ['manager-node'],
+            oldestSampleAt: '2026-08-06T10:00:00Z',
+            newestSampleAt: '2026-08-06T10:00:00Z',
+            stats: [
+              {
+                containerId: projectionId,
+                cpuUsage: 10,
+                memoryActive: 128,
+                memoryLimit: 512,
+                created: 1,
+              },
+            ],
+          }),
+      ),
+      http.get(`http://localhost/api/v1/swarmServices/${resource.id}/logs`, () => HttpResponse.json({ lines: [] })),
+    );
+
+    const { fake, user } = renderRuntime(<Runtime resource={resource} />);
+
+    const taskLink = await screen.findByRole('link', { name: 'redis.1' });
+    const taskRow = taskLink.closest('tr');
+    expect(taskRow).not.toBeNull();
+    expect(within(taskRow!).getByText(/10.*00/)).toBeVisible();
+    expect(within(taskRow!).getByText(/128.*512/)).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Stats' }));
+    expect(await screen.findByText('CPU Usage')).toBeVisible();
+    expect(screen.getByText('Partial Service statistics')).toBeVisible();
+    await waitFor(() => expect(fake.listenerCount('ContainersStatsUpdated')).toBe(2));
+
+    act(() => {
+      fake.emit('ContainersStatsUpdated', [
+        {
+          containerId: projectionId,
+          cpuUsage: 25,
+          memoryActive: 256,
+          memoryLimit: 512,
+          created: 2,
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(within(taskRow!).getByText(/25.*00/)).toBeVisible());
+    expect(screen.getAllByText(/25.*00/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('Partial Service statistics')).not.toBeInTheDocument();
   });
 });
 

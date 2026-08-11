@@ -230,6 +230,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<PlatformConnected>]
 [GenerateShapeFor<PlatformDisconnected>]
 [GenerateShapeFor<PlatformRenamed>]
+[GenerateShapeFor<PlatformNodeAgentLifecycle>]
 [GenerateShapeFor<RegistryRenamed>]
 [GenerateShapeFor<RegistryCreated>]
 [GenerateShapeFor<RegistryUpdated>]
@@ -378,6 +379,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.PlatformConnected)] = typeof(PlatformConnected),
         [nameof(ActivityEventType.PlatformDisconnected)] = typeof(PlatformDisconnected),
         [nameof(ActivityEventType.PlatformRenamed)] = typeof(PlatformRenamed),
+        [nameof(ActivityEventType.PlatformNodeAgentLifecycle)] = typeof(PlatformNodeAgentLifecycle),
         [nameof(ActivityEventType.RegistryRenamed)] = typeof(RegistryRenamed),
         [nameof(ActivityEventType.RegistryCreated)] = typeof(RegistryCreated),
         [nameof(ActivityEventType.RegistryUpdated)] = typeof(RegistryUpdated),

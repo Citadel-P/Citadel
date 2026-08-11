@@ -37,6 +37,7 @@ internal sealed class SwarmServiceMutationService(
     IImageDigestScanner imageDigestScanner,
     IResourceBindingResolver resourceBindingResolver,
     ISwarmReconciliationCoordinator reconciliationCoordinator,
+    ISwarmManagerIdentityValidator managerIdentityValidator,
     IHostApplicationLifetime applicationLifetime,
     ISwarmServiceStreamManager streamManager,
     IUserContextAccessor userContext,
@@ -384,6 +385,9 @@ internal sealed class SwarmServiceMutationService(
             return Result.Failure<Platform>(new BadRequestError("Managed Services require a Docker Swarm platform."));
         if (platform.Status != PlatformStatus.Online || !descriptor.ControlAvailable)
             return Result.Failure<Platform>(new ConflictError("The Docker Swarm manager is not available."));
+        var managerIdentity = await managerIdentityValidator.ValidateAsync(platform, cancellationToken);
+        if (managerIdentity.IsFailure(out var managerIdentityError))
+            return Result.Failure<Platform>(managerIdentityError!);
         return Result.Success(platform);
     }
 

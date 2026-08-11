@@ -27,7 +27,8 @@ internal static class SwarmProjectionMappers
         value.PlatformId, value.DockerTaskId, value.VersionIndex, value.Name, value.DockerServiceId,
         value.ServiceName, value.Slot, value.DockerNodeId, value.NodeHostname, value.DesiredState, value.State,
         value.StatusMessage, value.Error, value.Image, DeserializeList(value.Ports), ToOffset(value.StatusTimestamp),
-        ToOffset(value.DockerCreatedAt), ToOffset(value.DockerUpdatedAt), ToOffset(value.ObservedAt), value.IsStale);
+        ToOffset(value.DockerCreatedAt), ToOffset(value.DockerUpdatedAt), ToOffset(value.ObservedAt), value.IsStale,
+        value.DockerContainerId);
 
     internal static SwarmNetworkProjection ToDomain(this SwarmNetworkProjectionDto value) => new(
         value.PlatformId, value.DockerNetworkId, value.Name, value.Scope, value.Driver, value.IsAttachable,
@@ -44,6 +45,13 @@ internal static class SwarmProjectionMappers
         value.PlatformId, value.DockerConfigId, value.VersionIndex, value.Name, value.TemplatingDriver,
         DeserializeList(value.ServiceNames), DeserializeLabels(value.Labels), ToOffset(value.DockerCreatedAt),
         ToOffset(value.DockerUpdatedAt), ToOffset(value.ObservedAt), value.IsStale);
+
+    internal static SwarmNodeRuntimeProjectionState ToDomain(this SwarmNodeRuntimeProjectionStateDto value) => new(
+        value.PlatformId, value.DockerNodeId, value.ReconciliationGeneration,
+        ToOffset(value.ReconciliationStartedAt), ToOffset(value.ReconciliationCompletedAt),
+        ToOffset(value.LastSuccessfulReconciliationAt), value.IsStale, ToOffset(value.StaleSince),
+        value.StaleReason, ToOffset(value.LastEventStreamConnectedAt), ToOffset(value.LastEventGapAt),
+        ToOffset(value.LastStatsSampleAt), value.AgentVersion, value.DockerVersion);
 
     private static DateTimeOffset ToOffset(DateTime value) =>
         new(DateTime.SpecifyKind(value, DateTimeKind.Utc));

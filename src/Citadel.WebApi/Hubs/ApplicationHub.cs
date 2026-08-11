@@ -1,6 +1,7 @@
 using Application.Features.Containers.Commands;
 using Application.Features.Deployments.Commands;
 using Application.Features.Stacks.Commands;
+using Application.Features.Swarm.Commands;
 using Application.Services.SignalR;
 using Hosting.Common;
 using Hosting.Common.Extensions;
@@ -144,6 +145,21 @@ internal sealed class ApplicationHub(
     public async Task SendDeploymentExecInput(Guid deploymentId, string sessionId, byte[] data)
     {
         await mediator.Send(new SendDeploymentExecInput(deploymentId, sessionId, data), Context.ConnectionAborted);
+    }
+
+    public async Task StartSwarmTaskExecProcess(Guid platformId, string taskId, string sessionId, string shell)
+    {
+        await mediator.Send(new StartSwarmTaskShellSession(platformId, taskId, sessionId, shell), Context.ConnectionAborted);
+    }
+
+    public async Task ResizeSwarmTaskExec(Guid platformId, string taskId, string sessionId, int cols, int rows)
+    {
+        await mediator.Send(new ResizeSwarmTaskExecSession(platformId, taskId, sessionId, cols, rows), Context.ConnectionAborted);
+    }
+
+    public async Task SendSwarmTaskExecInput(Guid platformId, string taskId, string sessionId, byte[] data)
+    {
+        await mediator.Send(new SendSwarmTaskExecInput(platformId, taskId, sessionId, data), Context.ConnectionAborted);
     }
 
     public async Task StartStackExecProcess(Guid stackId, string containerId, string sessionId, string shell)

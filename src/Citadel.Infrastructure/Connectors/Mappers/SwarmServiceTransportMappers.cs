@@ -41,6 +41,58 @@ internal static class SwarmServiceTransportMappers
     internal static ManagedSwarmServiceMutationResult Map(SwarmServiceMutationResponse response) =>
         new(string.IsNullOrEmpty(response.ServiceId) ? null : response.ServiceId, response.Warnings.ToArray());
 
+    internal static CreateSystemSwarmServiceRequest Map(CreateSystemSwarmServiceCommand command)
+    {
+        var request = new CreateSystemSwarmServiceRequest
+        {
+            OperationId = command.OperationId.ToString("D"),
+            DockerName = command.DockerName,
+            Spec = Map(command.Spec)
+        };
+        foreach (var (key, value) in command.Labels)
+            request.Labels[key] = value;
+        foreach (var (key, value) in command.ContainerLabels)
+            request.ContainerLabels[key] = value;
+        return request;
+    }
+
+    internal static UpdateSystemSwarmServiceRequest Map(UpdateSystemSwarmServiceCommand command)
+    {
+        var request = new UpdateSystemSwarmServiceRequest
+        {
+            OperationId = command.OperationId.ToString("D"),
+            ServiceId = command.ServiceId,
+            VersionIndex = checked((ulong)command.VersionIndex),
+            Spec = Map(command.Spec)
+        };
+        foreach (var (key, value) in command.Labels)
+            request.Labels[key] = value;
+        foreach (var (key, value) in command.ContainerLabels)
+            request.ContainerLabels[key] = value;
+        return request;
+    }
+
+    private static SystemSwarmServiceSpecMessage Map(SystemSwarmServiceSpec spec)
+    {
+        var message = new SystemSwarmServiceSpecMessage
+        {
+            Image = spec.Image,
+            ManagerNodeId = spec.ManagerNodeId,
+            StateVolumeName = spec.StateVolumeName,
+            BootstrapSecretId = spec.BootstrapSecretId,
+            BootstrapSecretName = spec.BootstrapSecretName,
+            CaConfigId = spec.CaConfigId ?? string.Empty,
+            CaConfigName = spec.CaConfigName ?? string.Empty,
+            LimitNanoCpus = spec.LimitNanoCpus,
+            LimitMemoryBytes = spec.LimitMemoryBytes,
+            PidsLimit = spec.PidsLimit,
+            StopGracePeriodNanoseconds = spec.StopGracePeriodNanoseconds
+        };
+        message.Environment.Add(spec.Environment);
+        message.SupportedArchitectures.Add(spec.SupportedArchitectures);
+        return message;
+    }
+
     private static SwarmServiceMutationSpecMessage Map(
         SwarmServiceSpec spec,
         string image,

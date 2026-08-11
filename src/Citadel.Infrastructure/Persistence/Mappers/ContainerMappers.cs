@@ -37,7 +37,12 @@ internal static class ContainerMappers
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
             hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
-            isSwarmTask: container.IsSwarmTask);
+            isSwarmTask: container.IsSwarmTask,
+            dockerNodeId: container.DockerNodeId,
+            projectionObservedAt: container.ProjectionObservedAt,
+            projectionStaleSince: container.ProjectionStaleSince,
+            projectionStaleReason: container.ProjectionStaleReason,
+            nodeHostname: container.NodeHostname);
     }
 
     internal static Container? ToDomain(this ContainerWithImageDto? container)
@@ -92,7 +97,12 @@ internal static class ContainerMappers
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
             hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
-            isSwarmTask: container.IsSwarmTask);
+            isSwarmTask: container.IsSwarmTask,
+            dockerNodeId: container.DockerNodeId,
+            projectionObservedAt: container.ProjectionObservedAt,
+            projectionStaleSince: container.ProjectionStaleSince,
+            projectionStaleReason: container.ProjectionStaleReason,
+            nodeHostname: container.NodeHostname);
     }
 
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerWithLastStatDto> containers)
@@ -177,7 +187,12 @@ internal static class ContainerMappers
             isSystem: container.IsSystem,
             systemRole: ParseSystemRole(container.IsSystem, container.SystemRole),
             hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
-            isSwarmTask: container.IsSwarmTask);
+            isSwarmTask: container.IsSwarmTask,
+            dockerNodeId: container.DockerNodeId,
+            projectionObservedAt: container.ProjectionObservedAt,
+            projectionStaleSince: container.ProjectionStaleSince,
+            projectionStaleReason: container.ProjectionStaleReason,
+            nodeHostname: container.NodeHostname);
     }
 
     internal static IEnumerable<ContainerStat> ToDomain(this IEnumerable<ContainerStatDto> stats)

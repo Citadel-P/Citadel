@@ -67,20 +67,34 @@ internal sealed class GetSwarmServiceLogsHandler(
 
 internal sealed class GetSwarmTaskLogsHandler(
     IUnitOfWork unitOfWork,
-    IConnectorFactory<ISwarmConnector> connectorFactory)
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector)
     : IQueryHandler<GetSwarmTaskLogs, Result<SwarmLogsResult>>
 {
     public async ValueTask<Result<SwarmLogsResult>> Handle(GetSwarmTaskLogs query, CancellationToken cancellationToken)
     {
-        var context = await SwarmLogQuery.LoadPlatformAsync(unitOfWork, query.PlatformId, cancellationToken);
-        if (!context.IsSuccess(out var platform, out var error))
+        var context = await SwarmTaskRuntimeQuery.LoadRunningTargetAsync(
+            unitOfWork,
+            connectorFactory,
+            query.PlatformId,
+            query.TaskId,
+            cancellationToken);
+        if (!context.IsSuccess(out var target, out var error))
             return Result.Failure<SwarmLogsResult>(error!);
 
-        if (await unitOfWork.Swarm.GetTaskAsync(query.PlatformId, query.TaskId, cancellationToken) is null)
-            return Result.Failure<SwarmLogsResult>(new NotFoundError("Swarm task does not exist."));
+        if (target.Platform.PlatformDescriptor is DockerSwarmPlatformDescriptor descriptor
+            && string.Equals(descriptor.NodeID, target.DockerNodeId, StringComparison.Ordinal))
+        {
+            return await connectorFactory.GetConnector(target.Platform.ConnectorType).GetTaskLogsAsync(
+                new GetSwarmTaskLogsCommand(target.Platform.Address, query.TaskId, query.Tail),
+                cancellationToken);
+        }
 
-        return await connectorFactory.GetConnector(platform.ConnectorType).GetTaskLogsAsync(
-            new GetSwarmTaskLogsCommand(platform.Address, query.TaskId, query.Tail),
+        return await swarmNodeRuntimeConnector.GetContainerLogsAsync(
+            target.Platform,
+            target.DockerNodeId,
+            target.DockerContainerId,
+            query.Tail,
             cancellationToken);
     }
 }

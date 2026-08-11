@@ -37,10 +37,19 @@ internal static class SwarmServiceOwnershipClassifier
     private const string DeploymentIdLabel = CitadelPrefix + "deployment-id";
     private const string StackIdLabel = CitadelPrefix + "stack-id";
     private const string ServiceIdLabel = CitadelPrefix + "service-id";
+    private const string SystemLabel = CitadelPrefix + "system";
+    private const string SystemRoleLabel = CitadelPrefix + "system-role";
     private const string DockerStackNamespaceLabel = "com.docker.stack.namespace";
 
     public static SwarmServiceOwnership Classify(IReadOnlyDictionary<string, string> labels)
     {
+        if (labels.TryGetValue(SystemLabel, out var system)
+            && string.Equals(system, "true", StringComparison.OrdinalIgnoreCase)
+            && labels.ContainsKey(SystemRoleLabel))
+        {
+            return SwarmServiceOwnership.System;
+        }
+
         if (!IsCitadelManaged(labels))
             return GetDockerStackNamespace(labels) is null
                 ? SwarmServiceOwnership.Unmanaged
@@ -115,14 +124,14 @@ public sealed record SwarmTaskProjection(
     string ServiceName, int? Slot, string DockerNodeId, string NodeHostname, string DesiredState,
     string State, string? StatusMessage, string? Error, string Image, IReadOnlyList<string> Ports,
     DateTimeOffset? StatusTimestamp, DateTimeOffset? DockerCreatedAt, DateTimeOffset? DockerUpdatedAt,
-    DateTimeOffset ObservedAt, bool IsStale)
+    DateTimeOffset ObservedAt, bool IsStale, string? DockerContainerId = null)
 {
     public static SwarmTaskProjection FromObservation(
         Guid platformId, SwarmTaskResult value, string serviceName, string nodeHostname, DateTimeOffset observedAt) =>
         new(platformId, value.Id, value.VersionIndex, value.Name, value.ServiceId, serviceName,
             value.Slot, value.NodeId, nodeHostname, value.DesiredState, value.State, value.StatusMessage,
             value.Error, value.Image, value.Ports, value.StatusTimestamp, value.CreatedAt, value.UpdatedAt,
-            observedAt, false);
+            observedAt, false, value.ContainerId);
 }
 
 public sealed record SwarmNetworkProjection(
@@ -169,8 +178,27 @@ public sealed record SwarmProjectionSummary(
     bool IsStale,
     int NodeCount,
     int ManagerCount,
+    int ReachableManagerCount,
+    bool HasLeader,
+    bool IsManagerInventoryStale,
     int ServiceCount,
     PlatformWorkloadStatusCounts ServiceStatusCounts,
     int RunningTaskCount,
     int DesiredTaskCount,
     int NetworkCount);
+
+public sealed record SwarmNodeRuntimeProjectionState(
+    Guid PlatformId,
+    string DockerNodeId,
+    long ReconciliationGeneration,
+    DateTimeOffset? ReconciliationStartedAt,
+    DateTimeOffset? ReconciliationCompletedAt,
+    DateTimeOffset? LastSuccessfulReconciliationAt,
+    bool IsStale,
+    DateTimeOffset? StaleSince,
+    string? StaleReason,
+    DateTimeOffset? LastEventStreamConnectedAt,
+    DateTimeOffset? LastEventGapAt,
+    DateTimeOffset? LastStatsSampleAt,
+    string? AgentVersion,
+    string? DockerVersion);

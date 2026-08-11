@@ -39,6 +39,25 @@ internal static class PlatformActivity
             ActivityStatus.Warning,
             new PlatformDisconnected(platform.ToSnapshot(), previousStatus));
 
+    public static ActivityEvent NodeAgentLifecycle(
+        Platform platform,
+        Guid actorId,
+        SwarmNodeAgentOperationKind kind,
+        Guid operationId,
+        SwarmNodeAgentOperationState state,
+        string? message = null)
+        => Create(
+            platform,
+            actorId,
+            ActivityEventType.PlatformNodeAgentLifecycle,
+            state switch
+            {
+                SwarmNodeAgentOperationState.Completed => ActivityStatus.Success,
+                SwarmNodeAgentOperationState.Failed => ActivityStatus.Failure,
+                _ => ActivityStatus.Information
+            },
+            new PlatformNodeAgentLifecycle(kind, operationId, state, message));
+
     private static ActivityEvent Create(
         Platform platform,
         Guid actorId,

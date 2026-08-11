@@ -105,7 +105,7 @@ public sealed class ContainerCommandEndpointTests(PostgresTestFixture fixture) :
 
         using var response = await Client.PatchAsJsonAsync(
             $"/api/v1/containers/{route}",
-            new[] { DockerContainerId[..12] },
+            new[] { PersistedContainerId.ToString("D") },
             cancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 

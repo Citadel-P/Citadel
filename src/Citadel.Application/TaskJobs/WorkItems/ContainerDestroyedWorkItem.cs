@@ -8,6 +8,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Microsoft.Extensions.Logging;
 
@@ -33,7 +34,21 @@ internal sealed class ContainerDestroyedWorkItem(
             Deployment? deployment = null;
             Stack? stack = null;
             Image? image = null;
-            var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
+            var platform = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+            var managerNodeId = (platform?.PlatformDescriptor as DockerSwarmPlatformDescriptor)?.NodeID;
+            var existing = await uow.Containers.GetByRuntimeIdentityAsync(
+                platformId,
+                managerNodeId,
+                eventInfo.ContainerId,
+                cancellationToken);
+            if (existing is null && managerNodeId is not null)
+            {
+                existing = await uow.Containers.GetByRuntimeIdentityAsync(
+                    platformId,
+                    dockerNodeId: null,
+                    dockerContainerId: eventInfo.ContainerId,
+                    cancellationToken: cancellationToken);
+            }
             if (existing is null) return;
 
             if (!string.IsNullOrEmpty(existing.DockerImageId))

@@ -130,6 +130,9 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
           containerStat: event.container.lastStats ?? undefined,
           ports: event.container.ports,
           controlState: event.container.controlState,
+          stackId: event.container.stackId,
+          isSwarmTask: event.container.isSwarmTask,
+          dockerNodeId: event.container.dockerNodeId,
         },
       ]);
     },

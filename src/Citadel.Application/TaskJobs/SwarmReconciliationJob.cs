@@ -1,3 +1,4 @@
+using Application.Configs;
 using Application.Services.Abstractions;
 using Application.Services;
 using Application.Services.Alerts;
@@ -15,6 +16,7 @@ using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 
@@ -36,8 +38,10 @@ internal sealed class SwarmReconciliationJob(
     IDbWorkQueue dbQueue,
     INotificationQueue notificationQueue,
     IApplicationHubDispatcher hubDispatcher,
+    IEdgeAgentSessionTerminator sessionTerminator,
     IGitStackMaterializer gitStackMaterializer,
     IAlertService alertService,
+    IOptions<EdgeAgentOptions> edgeAgentOptions,
     TimeProvider timeProvider,
     ILogger<SwarmReconciliationJob> logger) : BackgroundService, ISwarmReconciliationCoordinator
 {
@@ -435,6 +439,26 @@ internal sealed class SwarmReconciliationJob(
             timeProvider.GetUtcNow(),
             gitStackMaterializer);
         await dbQueue.EnqueueAndWaitAsync(workItem, cancellationToken);
+        if (snapshot is not null)
+        {
+            var infrastructureWorkItem = new ReconcileSwarmNodeAgentInfrastructureWorkItem(
+                platformId,
+                workItem.Current,
+                timeProvider.GetUtcNow().UtcDateTime,
+                TimeSpan.FromMinutes(Math.Clamp(
+                    edgeAgentOptions.Value.NodeAgentRemovalGraceMinutes,
+                    1,
+                    1_440)),
+                edgeAgentOptions.Value.SupportedNodeArchitectures);
+            await dbQueue.EnqueueAndWaitAsync(infrastructureWorkItem, cancellationToken);
+            foreach (var dockerNodeId in infrastructureWorkItem.RevokedNodeIds)
+            {
+                sessionTerminator.Disconnect(
+                    platformId,
+                    dockerNodeId,
+                    "The Swarm node left the cluster beyond the configured removal grace period.");
+            }
+        }
         await TryNotifyAsync(
             platformId,
             workItem.Current,
@@ -533,6 +557,108 @@ internal sealed class SwarmReconciliationJob(
     }
 }
 
+internal sealed class ReconcileSwarmNodeAgentInfrastructureWorkItem(
+    Guid platformId,
+    SwarmProjectionSnapshot snapshot,
+    DateTime utcNow,
+    TimeSpan nodeRemovalGrace,
+    IReadOnlyCollection<string> supportedArchitectures) : IDbWorkItem
+{
+    private readonly HashSet<string> _supportedArchitectures = supportedArchitectures
+        .Where(static value => !string.IsNullOrWhiteSpace(value))
+        .Select(NormalizeArchitecture)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyList<string> RevokedNodeIds { get; private set; } = [];
+    public string? ServiceDriftReason { get; private set; }
+
+    public async Task ExecuteAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
+    {
+        var installation = await unitOfWork.EdgeAgents.GetNodeAgentInstallationAsync(platformId, cancellationToken);
+        if (installation is not { DesiredState: SwarmNodeAgentDesiredState.Installed })
+            return;
+
+        var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
+        if (platform?.PlatformDescriptor is not DockerSwarmPlatformDescriptor descriptor)
+            return;
+
+        var requiresSatellites = snapshot.Nodes.Any(node =>
+            !node.IsStale
+            && !string.Equals(node.DockerNodeId, descriptor.NodeID, StringComparison.Ordinal)
+            && string.Equals(node.Status, "ready", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(node.Availability, "active", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(node.OperatingSystem, "linux", StringComparison.OrdinalIgnoreCase)
+            && _supportedArchitectures.Contains(NormalizeArchitecture(node.Architecture)));
+        if (requiresSatellites
+            && installation.OperationState != SwarmNodeAgentOperationState.Running)
+        {
+            ServiceDriftReason = SwarmNodeAgentInfrastructure.GetServiceDriftReason(
+                platform,
+                installation,
+                snapshot.Services);
+            if (ServiceDriftReason is not null)
+            {
+                await unitOfWork.EdgeAgents.RevokeNodeAgentBootstrapsAsync(
+                    platformId,
+                    utcNow,
+                    cancellationToken);
+            }
+        }
+
+        var currentNodeIds = snapshot.Nodes
+            .Where(static node => !node.IsStale)
+            .Select(static node => node.DockerNodeId)
+            .ToHashSet(StringComparer.Ordinal);
+        var revocationThreshold = utcNow.Subtract(nodeRemovalGrace);
+        var bindings = await unitOfWork.EdgeAgents.GetNodeBindingsAsync(platformId, cancellationToken);
+        var revoked = new List<string>();
+        foreach (var binding in bindings)
+        {
+            if (binding.IsRevoked
+                || binding.Profile != EdgeAgentProfile.SwarmNode
+                || string.IsNullOrWhiteSpace(binding.DockerNodeId)
+                || currentNodeIds.Contains(binding.DockerNodeId)
+                || GetLastObservedAtUtc(binding) > revocationThreshold)
+            {
+                continue;
+            }
+
+            if (await unitOfWork.EdgeAgents.RevokeNodeBindingAsync(
+                    platformId,
+                    binding.DockerNodeId,
+                    utcNow,
+                    "The Swarm node left the cluster beyond the configured removal grace period.",
+                    cancellationToken) == 1)
+            {
+                revoked.Add(binding.DockerNodeId);
+            }
+        }
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        RevokedNodeIds = revoked;
+    }
+
+    private static DateTime GetLastObservedAtUtc(EdgeAgentBinding binding)
+    {
+        var result = binding.UpdatedAtUtc;
+        if (binding.LastConnectedAtUtc is { } connected && connected > result)
+            result = connected;
+        if (binding.LastDisconnectedAtUtc is { } disconnected && disconnected > result)
+            result = disconnected;
+        if (binding.LastHeartbeatAtUtc is { } heartbeat && heartbeat > result)
+            result = heartbeat;
+        return result;
+    }
+
+    private static string NormalizeArchitecture(string architecture) => architecture.Trim().ToLowerInvariant() switch
+    {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        "armv7l" => "arm",
+        var value => value
+    };
+}
+
 internal sealed class PersistSwarmSnapshotWorkItem(
     Guid platformId,
     SwarmProjectionSnapshot? snapshot,
@@ -567,14 +693,14 @@ internal sealed class PersistSwarmSnapshotWorkItem(
                 ? []
                 : (await stackRepository.GetInfoAsync(cancellationToken, platformId: platformId) ?? []).ToArray();
             Current = await NormalizeManagedServicesAsync(unitOfWork, snapshot, stacks, cancellationToken);
-            RecoveredStacks = await ReconcileRecoverableStacksAsync(unitOfWork, Current, stacks, cancellationToken);
+            RecoveredStacks = await ReconcileStackStatusesAsync(unitOfWork, Current, stacks, cancellationToken);
             await unitOfWork.Swarm.ReplaceAsync(platformId, Current, cancellationToken);
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
-    private async Task<IReadOnlyList<Stack>> ReconcileRecoverableStacksAsync(
+    private async Task<IReadOnlyList<Stack>> ReconcileStackStatusesAsync(
         IUnitOfWork unitOfWork,
         SwarmProjectionSnapshot source,
         IReadOnlyList<Stack> stacks,
@@ -590,7 +716,15 @@ internal sealed class PersistSwarmSnapshotWorkItem(
         var recovered = new List<Stack>();
 
         foreach (var stack in stacks.Where(static stack =>
-                     stack.CurrentStackRelease?.Status is StackReleaseStatus.TimedOut or StackReleaseStatus.Unknown))
+                     stack.ControlState == ResourceControlState.Idle
+                     && stack.CurrentStackRelease?.Status is
+                         StackReleaseStatus.Unknown
+                         or StackReleaseStatus.Healthy
+                         or StackReleaseStatus.Pending
+                         or StackReleaseStatus.Paused
+                         or StackReleaseStatus.Degraded
+                         or StackReleaseStatus.Stopped
+                         or StackReleaseStatus.TimedOut))
         {
             var release = stack.CurrentStackRelease!;
             var stackId = stack.Id.ToString("D");
@@ -601,43 +735,29 @@ internal sealed class PersistSwarmSnapshotWorkItem(
                     && HasLabel(service.Labels, releaseIdLabel, releaseId))
                 .ToArray();
             if (services.Length == 0
-                || !TryGetExpectedServiceCount(services, serviceCountLabel, out var expectedServiceCount)
-                || services.Length != expectedServiceCount)
+                || !TryGetExpectedServiceCount(services, serviceCountLabel, out var expectedServiceCount))
             {
                 continue;
             }
 
-            string? failure = null;
-            foreach (var service in services)
-            {
-                if (IsPausedRollout(service.UpdateState))
-                {
-                    failure = FindTaskFailure(source.Tasks, service.DockerServiceId)
-                        ?? service.UpdateMessage
-                        ?? $"Docker paused Service '{service.Name}' in rollout state '{service.UpdateState}'.";
-                    break;
-                }
+            var isRecoverable = release.Status is StackReleaseStatus.TimedOut or StackReleaseStatus.Unknown;
+            if (services.Length != expectedServiceCount && isRecoverable)
+                continue;
 
-                if (IsCompletedRollout(service.UpdateState)
-                    && service.RunningTaskCount < service.DesiredTaskCount
-                    && FindTaskFailure(source.Tasks, service.DockerServiceId) is { } taskFailure)
-                {
-                    failure = taskFailure;
-                    break;
-                }
+            var status = services.Length == expectedServiceCount
+                ? GetObservedStackStatus(services, source.Tasks)
+                : StackReleaseStatus.Degraded;
+            if (isRecoverable
+                && status is not (StackReleaseStatus.Healthy or StackReleaseStatus.Failed))
+            {
+                continue;
             }
 
-            var status = failure is not null
-                ? StackReleaseStatus.Failed
-                : services.All(service =>
-                    IsCompletedRollout(service.UpdateState)
-                    && service.RunningTaskCount >= service.DesiredTaskCount)
-                    ? StackReleaseStatus.Healthy
-                    : StackReleaseStatus.Unknown;
-            if (status == StackReleaseStatus.Unknown)
+            if (status == release.Status)
                 continue;
 
             if (status == StackReleaseStatus.Healthy
+                && isRecoverable
                 && !await HasCompleteSwarmReleaseResourcesAsync(
                     stackRepository,
                     release.Id,
@@ -652,6 +772,7 @@ internal sealed class PersistSwarmSnapshotWorkItem(
             }
 
             if (status == StackReleaseStatus.Healthy
+                && isRecoverable
                 && release.Spec is GitStack
                 && gitStackMaterializer is not null)
             {
@@ -694,6 +815,39 @@ internal sealed class PersistSwarmSnapshotWorkItem(
         }
 
         return recovered;
+    }
+
+    private static StackReleaseStatus GetObservedStackStatus(
+        IReadOnlyList<SwarmServiceProjection> services,
+        IReadOnlyList<SwarmTaskProjection> tasks)
+    {
+        foreach (var service in services)
+        {
+            if (IsPausedRollout(service.UpdateState))
+                return StackReleaseStatus.Failed;
+
+            if (IsCompletedRollout(service.UpdateState)
+                && service.RunningTaskCount < service.DesiredTaskCount
+                && FindTaskFailure(tasks, service.DockerServiceId) is not null)
+            {
+                return StackReleaseStatus.Failed;
+            }
+        }
+
+        if (services.All(static service => service.DesiredTaskCount == 0))
+            return StackReleaseStatus.Stopped;
+
+        if (services.All(service =>
+                IsCompletedRollout(service.UpdateState)
+                && service.RunningTaskCount >= service.DesiredTaskCount))
+        {
+            return StackReleaseStatus.Healthy;
+        }
+
+        if (services.Any(static service => service.RunningTaskCount < service.DesiredTaskCount))
+            return StackReleaseStatus.Degraded;
+
+        return StackReleaseStatus.Pending;
     }
 
     private static async Task<bool> HasCompleteSwarmReleaseResourcesAsync(
@@ -1347,15 +1501,16 @@ internal sealed class SwarmInventoryUpdatedNotificationWorkItem(
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var stackChanges = recoveredStacks ?? [];
-        var notifications = new Task[managedChanges.Count + stackChanges.Count + 1];
+        var notifications = new Task[managedChanges.Count + stackChanges.Count + 2];
         notifications[0] = hubDispatcher.SendSwarmInventory(platformId, snapshot, cancellationToken);
+        notifications[1] = hubDispatcher.SendSwarmNodeAgentCoverageChanged(platformId, cancellationToken);
         for (var index = 0; index < managedChanges.Count; index++)
         {
             var change = managedChanges[index];
-            notifications[index + 1] = hubDispatcher.SendSwarmServiceInfo(change.Service, change.Action);
+            notifications[index + 2] = hubDispatcher.SendSwarmServiceInfo(change.Service, change.Action);
         }
         for (var index = 0; index < stackChanges.Count; index++)
-            notifications[managedChanges.Count + index + 1] = hubDispatcher.SendStackInfo(stackChanges[index]);
+            notifications[managedChanges.Count + index + 2] = hubDispatcher.SendStackInfo(stackChanges[index]);
         return Task.WhenAll(notifications);
     }
 }

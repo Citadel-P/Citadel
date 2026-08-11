@@ -32,6 +32,13 @@ internal record PlatformDto(
     long StackPausedCount = 0,
     long StackInProgressCount = 0,
     long StackUnknownCount = 0,
+    long SwarmServiceCount = 0,
+    long SwarmServiceHealthyCount = 0,
+    long SwarmServiceDegradedCount = 0,
+    long SwarmServiceFailedCount = 0,
+    long SwarmServiceStoppedCount = 0,
+    long SwarmServiceInProgressCount = 0,
+    long SwarmServiceUnknownCount = 0,
     string? TagsJson = null)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];

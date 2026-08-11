@@ -1,4 +1,4 @@
-import { PlatformBackupSummaryView, ProblemDetails } from '@/api/generated/api.types';
+import { PlatformBackupSummaryView, PlatformWorkloadStatusCountsView, ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import Loader from '@/components/ui/loader';
 import { PlatformResourceMetric } from '@/features/platforms/forms/platform-stats';
@@ -9,18 +9,22 @@ import {
   PLATFORM_BACKUP_ICON_CLASS_NAME,
 } from '@/features/platforms/platform-backups';
 import { ArchiveRestore, Boxes, CircleDot, ListTodo, Network, Server } from 'lucide-react';
+import { SwarmQuorumStatus } from './swarm-quorum-status';
+import { getServiceStates } from '@/features/platforms/platform-workload-status';
 
 export { applySwarmInventoryToOverview };
 
 export const SwarmPlatformSummary = ({
   platformId,
   networkCount,
+  serviceStatusCounts,
   backupSummary,
   isBackupSummaryLoading = false,
   isBackupSummaryError = false,
 }: {
   platformId: string;
   networkCount: number | string;
+  serviceStatusCounts: PlatformWorkloadStatusCountsView;
   backupSummary?: PlatformBackupSummaryView;
   isBackupSummaryLoading?: boolean;
   isBackupSummaryError?: boolean;
@@ -49,6 +53,11 @@ export const SwarmPlatformSummary = ({
           label="Managers"
           value={overview?.managerCount ?? '-'}
           to={`/platforms/${platformId}/nodes`}
+          detail={
+            overview?.quorum ? (
+              <SwarmQuorumStatus quorum={overview.quorum} managerCount={overview.managerCount} showCounts={false} />
+            ) : undefined
+          }
         />
         <PlatformResourceMetric
           icon={Server}
@@ -61,8 +70,9 @@ export const SwarmPlatformSummary = ({
           icon={Boxes}
           iconClassName="text-violet-500"
           label="Services"
-          value={overview?.serviceCount ?? '-'}
-          to={`/platforms/${platformId}/services`}
+          value={serviceStatusCounts.total}
+          to={`/swarm-services?platformId=${platformId}`}
+          states={getServiceStates(serviceStatusCounts)}
         />
         <PlatformResourceMetric
           icon={ListTodo}

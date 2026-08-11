@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services;
+using Application.Services.Abstractions;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -80,6 +81,7 @@ public sealed class EdgeAgentManagementServiceTests
             Mock.Of<INotificationQueue>(),
             Mock.Of<IPlatformStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
             Options.Create(new EdgeAgentOptions
             {
                 AgentImageRepository = "registry.example.com/citadel-agent",
@@ -152,6 +154,7 @@ public sealed class EdgeAgentManagementServiceTests
             Mock.Of<INotificationQueue>(),
             Mock.Of<IPlatformStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
             Options.Create(new EdgeAgentOptions()));
 
         await service.MarkHeartbeatAsync(platformId, heartbeat, utcNow, TestContext.Current.CancellationToken);
@@ -223,6 +226,7 @@ public sealed class EdgeAgentManagementServiceTests
             Mock.Of<INotificationQueue>(),
             Mock.Of<IPlatformStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
             Options.Create(new EdgeAgentOptions()));
 
         var result = await service.CompleteEnrollmentAsync(
@@ -321,6 +325,7 @@ public sealed class EdgeAgentManagementServiceTests
             notificationQueue.Object,
             Mock.Of<IPlatformStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
             Options.Create(new EdgeAgentOptions()));
 
         await service.MarkConnectedAsync(
@@ -442,6 +447,7 @@ public sealed class EdgeAgentManagementServiceTests
             notificationQueue.Object,
             Mock.Of<IPlatformStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
             Options.Create(new EdgeAgentOptions()));
 
         await service.MarkConnectedAsync(
@@ -462,5 +468,77 @@ public sealed class EdgeAgentManagementServiceTests
         actors.VerifyAll();
         notificationQueue.Verify(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkSwarmNodeHeartbeatAsync_ShouldRejectIdentityDifferentFromAuthenticatedBinding()
+    {
+        var platformId = Guid.CreateVersion7();
+        const string nodeId = "node-1";
+        var binding = new EdgeAgentBinding(
+            Guid.CreateVersion7(),
+            platformId,
+            EdgeAgentResourceType.Platform,
+            platformId,
+            Guid.CreateVersion7(),
+            "public-key",
+            "SHA256:test",
+            EdgeAgentConnectionStatus.Connected,
+            DateTime.UtcNow,
+            null,
+            DateTime.UtcNow,
+            "1.0",
+            "worker-1",
+            "{}",
+            2,
+            null,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            Profile: EdgeAgentProfile.SwarmNode,
+            ClusterId: "cluster-1",
+            DockerNodeId: nodeId,
+            DockerDaemonId: "daemon-1");
+
+        var edgeAgents = new Mock<IEdgeAgentRepository>(MockBehavior.Strict);
+        edgeAgents
+            .Setup(repository => repository.GetNodeBindingAsync(
+                platformId,
+                nodeId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(binding);
+
+        var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
+        unitOfWork.SetupGet(value => value.EdgeAgents).Returns(edgeAgents.Object);
+        unitOfWork.Setup(value => value.DisposeAsync()).Returns(ValueTask.CompletedTask);
+
+        await using var provider = new ServiceCollection()
+            .AddScoped(_ => unitOfWork.Object)
+            .BuildServiceProvider();
+        var service = new EdgeAgentManagementService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IApplicationHubDispatcher>(),
+            Options.Create(new EdgeAgentOptions()));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.MarkSwarmNodeHeartbeatAsync(
+                platformId,
+                nodeId,
+                new EdgeAgentHeartbeatSnapshot(
+                    true,
+                    "28.0",
+                    "worker-1",
+                    "1.0",
+                    "{}",
+                    DockerDaemonId: "other-daemon",
+                    ClusterId: "cluster-1",
+                    DockerNodeId: nodeId),
+                DateTime.UtcNow,
+                TestContext.Current.CancellationToken));
+
+        Assert.StartsWith("NodeIdentityConflict:", exception.Message, StringComparison.Ordinal);
+        edgeAgents.VerifyAll();
     }
 }

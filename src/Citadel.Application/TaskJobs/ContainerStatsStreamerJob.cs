@@ -205,12 +205,17 @@ internal class ContainerStatsStreamerJob(
     }
 }
 
-public sealed class ContainersStatBatch(Guid platformId, List<ContainerStat> stats, Action<List<ContainerStat>> returnList)
+public sealed class ContainersStatBatch(
+    Guid platformId,
+    List<ContainerStat> stats,
+    Action<List<ContainerStat>> returnList,
+    string? dockerNodeId = null)
 {
     private Action<List<ContainerStat>>? _returnList = returnList;
 
     public Guid PlatformId { get; } = platformId;
     public List<ContainerStat> Stats { get; } = stats;
+    public string? DockerNodeId { get; } = dockerNodeId;
     public void Release() => Interlocked.Exchange(ref _returnList, null)?.Invoke(Stats);
 }
 

@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 using Microsoft.Extensions.Logging;
 using System.Threading.Channels;
 
@@ -24,14 +25,34 @@ internal sealed class ContainerCreatedWorkItem(
     {
         if (eventInfo.Container is null) return;
 
+        var dockerImageId = string.IsNullOrWhiteSpace(eventInfo.Container.ImageId)
+            ? eventInfo.Container.Image
+            : eventInfo.Container.ImageId;
+        if (string.IsNullOrWhiteSpace(dockerImageId))
+        {
+            logger.LogWarning(
+                "Ignoring container created event without an image identity for platform {PlatformId}",
+                platformId);
+            return;
+        }
+
+        var dockerContainer = eventInfo.Container with { ImageId = dockerImageId };
+
         try
         {
+            var platform = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+            var managerNodeId = (platform?.PlatformDescriptor as DockerSwarmPlatformDescriptor)?.NodeID;
             var image = await uow.Images.GetByDockerImageIdAsync(
-                eventInfo.Container.ImageId,
+                dockerImageId,
                 platformId,
                 cancellationToken);
 
-            var container = eventInfo.Container.Map(platformId, image?.Id);
+            var observedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var container = dockerContainer.Map(
+                platformId,
+                image?.Id,
+                managerNodeId,
+                managerNodeId is null ? null : observedAt);
 
             await uow.Containers.AddAsync(container, cancellationToken);
 
@@ -74,7 +95,7 @@ internal sealed class ContainerCreatedWorkItem(
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
 
-            if (!container.IsSystem && !container.HasCitadelOwnershipLabels && !eventInfo.Container.IsSwarmTask)
+            if (!container.IsSystem && !container.HasCitadelOwnershipLabels && !dockerContainer.IsSwarmTask)
             {
                 await unmanagedContainerAlertWriter.WriteAsync(
                         new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
@@ -101,7 +122,13 @@ internal class ContainerNotificationWorkItem(
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await dockerDaemonHub.SendContainerEvent(container, eventInfo.Action);
-        await containerEventBroadcaster.PublishAsync(new ContainerEvent(container.PlatformId, container.DockerContainerId, eventInfo.Action), cancellationToken);
+        await containerEventBroadcaster.PublishAsync(
+            new ContainerEvent(
+                container.PlatformId,
+                container.DockerNodeId,
+                container.DockerContainerId,
+                eventInfo.Action),
+            cancellationToken);
     }
 }
 

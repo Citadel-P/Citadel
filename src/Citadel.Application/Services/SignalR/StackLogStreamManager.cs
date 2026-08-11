@@ -5,6 +5,7 @@ using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,9 +21,9 @@ internal sealed class StackLogStreamManager(
     IServiceScopeFactory scopeFactory,
     IApplicationHubDispatcher dispatcher,
     ILogger<StackLogStreamManager> logger,
-    IPlatformContainerCache platformContainerCache,
     IContainerEventBroadcaster containerEventBroadcaster,
-    IConnectorFactory<IContainerConnector> connectorFactory)
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector)
     : BaseStreamManager<LogStreamContext>, IStackLogStreamManager
 {
     public void StartStackLogs(Guid stackId)
@@ -97,13 +98,23 @@ internal sealed class StackLogStreamManager(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var containers = await unitOfWork.Stacks.GetContainersAsync(stackId, cancellationToken);
+        var containers = (await unitOfWork.Stacks.GetContainersAsync(stackId, cancellationToken)).ToArray();
+        var platforms = new Dictionary<Guid, Platform>();
+        foreach (var platformId in containers.Select(static container => container.PlatformId).Distinct())
+        {
+            if (await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken) is { } platform)
+                platforms.Add(platformId, platform);
+        }
 
         return containers
-            .Where(container => !string.IsNullOrWhiteSpace(container.DockerContainerId))
+            .Where(container =>
+                !string.IsNullOrWhiteSpace(container.DockerContainerId)
+                && platforms.ContainsKey(container.PlatformId))
             .Select(container => new StackLogContainer(
                 NormalizeDockerId(container.DockerContainerId),
-                System.Text.Encoding.UTF8.GetBytes($"[{container.Name.TrimStart('/')}] ")))
+                System.Text.Encoding.UTF8.GetBytes($"[{container.Name.TrimStart('/')}] "),
+                platforms[container.PlatformId],
+                container.DockerNodeId))
             .ToList();
     }
 
@@ -113,18 +124,19 @@ internal sealed class StackLogStreamManager(
         StackLogContainer container,
         CancellationToken token)
     {
-        if (!platformContainerCache.TryGetPlatformWithContainer(container.Id, out var platform))
-        {
-            logger.LogWarning("No platform found for stack container {ContainerId}", container.Id);
-            return;
-        }
-
         try
         {
-            var request = new StreamContainerLogsCommand(platform.Address, container.Id);
-            var connector = connectorFactory.GetConnector(platform.ConnectorType);
+            var stream = container.DockerNodeId is not null
+                ? swarmNodeRuntimeConnector.StreamContainerLogsAsync(
+                    container.Platform,
+                    container.DockerNodeId,
+                    container.Id,
+                    token)
+                : connectorFactory.GetConnector(container.Platform.ConnectorType).StreamLogsAsync(
+                    new StreamContainerLogsCommand(container.Platform.Address, container.Id),
+                    token);
 
-            await foreach (var data in connector.StreamLogsAsync(request, token))
+            await foreach (var data in stream.WithCancellation(token))
             {
                 var transformed = PrefixContainerName(data.Span, container.Prefix);
                 if (transformed is null)
@@ -355,5 +367,9 @@ internal sealed class StackLogStreamManager(
         return value;
     }
 
-    private sealed record StackLogContainer(string Id, byte[] Prefix);
+    private sealed record StackLogContainer(
+        string Id,
+        byte[] Prefix,
+        Platform Platform,
+        string? DockerNodeId);
 }

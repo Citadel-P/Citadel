@@ -2,6 +2,7 @@
 using Application.Services;
 using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
+using Application.Mappers;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
@@ -94,20 +95,7 @@ internal sealed class StackInfoStreamManager(
             .Select(container => new TrackedStackContainer(
                 container.Id,
                 container.PlatformId,
-                new DockerContainer(
-                    Name: container.Name,
-                    Image: container.Image?.Name ?? string.Empty,
-                    Id: container.DockerContainerId,
-                    ImageId: container.DockerImageId,
-                    State: container.State,
-                    Created: container.Created,
-                    Stack: container.DockerStack,
-                    ContainerStat: null,
-                    ControlState: container.ControlState,
-                    Ports: container.Ports,
-                    IsSystem: container.IsSystem,
-                    SystemRole: container.SystemRole,
-                    HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels)))
+                container.ToDockerContainer()))
             .ToList();
     }
 

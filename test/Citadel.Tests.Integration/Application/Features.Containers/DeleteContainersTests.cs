@@ -86,6 +86,43 @@ public class DeleteContainersTests(PostgresTestFixture fixture) : IntegrationTes
     }
 
     [Fact]
+    public async Task Delete_StaleContainerByCitadelId_ReturnsSuccessAndDeletesRow()
+    {
+        var platform = Fakes.GetDummyPlatform();
+        const string dockerContainerId = "62ccd07956a662ccd07956a662ccd07956a662ccd07956a662ccd07956a6";
+        var container = new Container(
+            name: "stale-container-by-citadel-id",
+            dockerImageId: "sha256:stale",
+            platformId: platform.Id,
+            dockerContainerId: dockerContainerId,
+            state: ContainerStateStatus.Offline);
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var uow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+            await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/containers")
+        {
+            Content = new StringContent(
+                $$"""{"containerIds":["{{container.Id}}"],"force":true}""",
+                Encoding.UTF8,
+                "application/json")
+        };
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Assert.Null(await assertUow.Containers.GetByIdAsync(container.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Delete_MixedSelectionContainingSystemContainer_ReturnsConflictAndDeletesNothing()
     {
         var platform = Fakes.GetDummyPlatform();

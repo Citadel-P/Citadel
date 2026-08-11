@@ -7,6 +7,13 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+export const getSwarmTaskIdFromContainerName = (name?: string | null) => {
+  const normalized = name?.replace(/^\//, '');
+  if (!normalized) return undefined;
+
+  return normalized.slice(normalized.lastIndexOf('.') + 1);
+};
+
 export function toFixedNumber(
   input: number | undefined | null,
   style?: 'percent',
@@ -77,8 +84,22 @@ export const filterBySplit = <T>(items: T[] | undefined, search: string, extract
 };
 export const normalizeDockerId = (id?: string) => (id ? id.slice(0, 12).toLowerCase() : undefined);
 
-export const getTaskName = (task: { id: string; name?: string | null; slot?: number | null }) =>
-  task.name?.trim() || `Task ${task.slot ?? task.id.slice(0, 12)}`;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const normalizeContainerReference = (id?: string) =>
+  id ? (UUID_PATTERN.test(id) ? id.toLowerCase() : normalizeDockerId(id)) : undefined;
+
+export const getTaskName = (task: {
+  id: string;
+  name?: string | null;
+  serviceName?: string | null;
+  slot?: number | null;
+}) => {
+  const name = task.name?.trim();
+  if (name) return name;
+
+  const serviceName = task.serviceName?.trim();
+  return serviceName && task.slot != null ? `${serviceName}.${task.slot}` : `Task ${task.slot ?? task.id.slice(0, 12)}`;
+};
 
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

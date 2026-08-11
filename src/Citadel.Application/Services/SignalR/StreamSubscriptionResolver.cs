@@ -15,6 +15,7 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["container-info"] = typeof(ContainerInfoStreamManager),
         ["container-log"] = typeof(ContainerLogStreamManager),
         ["container-exec"] = typeof(ExecSessionManager),
+        ["swarm-task-exec"] = typeof(ExecSessionManager),
         ["stack-info"] = typeof(StackInfoStreamManager),
         ["stack-log"] = typeof(StackLogStreamManager),
         ["stack"] = typeof(StackStreamManager),

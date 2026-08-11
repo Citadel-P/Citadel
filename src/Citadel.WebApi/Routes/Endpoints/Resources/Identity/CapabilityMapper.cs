@@ -16,13 +16,14 @@ public sealed record PlatformCapabilities(
     bool CanViewLogs,
     bool CanInspect,
     bool CanOpenTerminal,
-    bool CanPull
+    bool CanPull,
+    bool CanManageNodeAgents
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
     CanExecute)
 {
-    public static PlatformCapabilities Empty => new(false, false, false, false, false, false, false);
+    public static PlatformCapabilities Empty => new(false, false, false, false, false, false, false, false);
 }
 
 public sealed record SwarmCapabilities(
@@ -140,7 +141,11 @@ public static class CapabilityMapper
 
             CanPull:
                common.CanRead &&
-                (permission.SpecificPermissions & SpecificPermission.Pull) != 0
+                (permission.SpecificPermissions & SpecificPermission.Pull) != 0,
+
+            CanManageNodeAgents:
+                common.CanExecute &&
+                (permission.SpecificPermissions & SpecificPermission.ManageNodeAgents) != 0
         );
     }
 

@@ -29,6 +29,31 @@ internal static class SwarmServiceMutationMappers
     internal static ManagedSwarmServiceMutationResult Map(SwarmServiceMutationResult result) =>
         new(result.ServiceId, result.Warnings);
 
+    internal static Hosting.DockerClient.Models.Swarm.CreateSystemSwarmServiceCommand Map(
+        Domain.Contracts.Resources.Swarm.CreateSystemSwarmServiceCommand command) =>
+        new(command.OperationId, command.DockerName, Map(command.Spec), command.Labels, command.ContainerLabels);
+
+    internal static Hosting.DockerClient.Models.Swarm.UpdateSystemSwarmServiceCommand Map(
+        Domain.Contracts.Resources.Swarm.UpdateSystemSwarmServiceCommand command) =>
+        new(command.OperationId, command.ServiceId, command.VersionIndex, Map(command.Spec), command.Labels, command.ContainerLabels);
+
+    private static Hosting.DockerClient.Models.Swarm.SystemSwarmServiceSpec Map(
+        Domain.Contracts.Resources.Swarm.SystemSwarmServiceSpec spec) =>
+        new(
+            spec.Image,
+            spec.Environment,
+            spec.ManagerNodeId,
+            spec.StateVolumeName,
+            spec.BootstrapSecretId,
+            spec.BootstrapSecretName,
+            spec.CaConfigId,
+            spec.CaConfigName,
+            spec.LimitNanoCpus,
+            spec.LimitMemoryBytes,
+            spec.PidsLimit,
+            spec.StopGracePeriodNanoseconds,
+            spec.SupportedArchitectures);
+
     private static SwarmServiceMutationSpec Map(SwarmServiceSpec spec, string image, int forceUpdate = 0) =>
         new(
             image,

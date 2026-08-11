@@ -27,13 +27,28 @@ vi.mock('./hooks/useStackInfoGroup', () => ({
   useStackInfoGroup: useStackInfoGroupMock,
 }));
 vi.mock('@/features/swarm-resources/services/table', () => ({
-  ServicesTable: ({ items }: { items: Array<{ id: string; name: string }> }) => (
-    <ul>
-      {items.map((item) => (
-        <li key={item.id}>{item.name}</li>
-      ))}
-    </ul>
+  ServicesTable: ({
+    items,
+    taskContainers,
+  }: {
+    items: Array<{ id: string; name: string }>;
+    taskContainers?: unknown[];
+  }) => (
+    <>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>{item.name}</li>
+        ))}
+      </ul>
+      {taskContainers && <div>Runtime stats for {taskContainers.length} containers</div>}
+    </>
   ),
+}));
+vi.mock('@/features/swarm-resources/services/service-info/inspect', () => ({
+  ServiceInspect: ({ service }: { service: { id: string } }) => <div>Inspecting {service.id}</div>,
+}));
+vi.mock('@/features/swarm-services/form/service-terminal', () => ({
+  ServiceTerminal: ({ tasks }: { tasks: unknown[] }) => <div>Terminal tasks: {tasks.length}</div>,
 }));
 
 vi.mock('@/lib/monaco', () => ({
@@ -42,7 +57,10 @@ vi.mock('@/lib/monaco', () => ({
   MonacoToArrayEditor: () => null,
 }));
 vi.mock('@/features/docker-resources/containers/container-info/container-logs', () => ({
-  StackLogs: () => null,
+  StackLogs: ({ containers }: { containers: string[] }) => <div>Logs for {containers.join(', ')}</div>,
+}));
+vi.mock('@/features/docker-resources/containers/container-info/stack-stats', () => ({
+  StackStats: ({ containers }: { containers: unknown[] }) => <div>Stats for {containers.length} containers</div>,
 }));
 vi.mock('monaco-editor', () => ({ MarkerSeverity: { Warning: 4 } }));
 
@@ -123,6 +141,72 @@ describe('Stack tabs', () => {
 
     expect(screen.getAllByText('redis-test_web')).not.toHaveLength(0);
     expect(screen.queryByText('another-stack_api')).not.toBeInTheDocument();
+  });
+
+  it('uses the standard Stack runtime controls for Swarm Services', async () => {
+    const resource = {
+      ...stack(PlatformType.DockerSwarm),
+      platformId: '019f0000-0000-7000-8000-000000000010',
+      status: StackReleaseStatus.Healthy,
+    } as StackView;
+    useServicesGroupMock.mockReturnValue({
+      isLoading: false,
+      items: [
+        {
+          id: 'web',
+          name: 'redis-test_web',
+          labels: { 'com.citadel.stack-id': resource.id },
+          capabilities: { canViewLogs: true, canInspect: true },
+          runningTaskCount: 1,
+          tasks: [{ id: 'web-task' }],
+        },
+        {
+          id: 'worker',
+          name: 'redis-test_worker',
+          labels: { 'com.citadel.stack-id': resource.id },
+          capabilities: { canViewLogs: true, canInspect: true },
+          runningTaskCount: 1,
+          tasks: [{ id: 'worker-task' }],
+        },
+      ],
+    });
+    useStackInfoGroupMock.mockReturnValue({
+      isLoading: false,
+      error: undefined,
+      containersInfo: [
+        {
+          id: 'container-web',
+          name: '/redis-test_web.1.task-id',
+          isSwarmTask: true,
+        },
+        {
+          id: 'container-worker',
+          name: '/redis-test_worker.1.task-id',
+          isSwarmTask: true,
+        },
+      ],
+    });
+    const Content = servicesTab.Content;
+
+    const { user } = renderCitadel(<Content resource={resource} />);
+
+    expect(screen.getByRole('tab', { name: 'Stats' })).toBeVisible();
+    expect(screen.getByText('Runtime stats for 2 containers')).toBeVisible();
+    expect(screen.getByText('Logs for redis-test_web.1.task-id, redis-test_worker.1.task-id')).toBeVisible();
+    expect(screen.queryByRole('combobox', { name: 'Service' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Terminal' }));
+    expect(screen.getByText('Terminal tasks: 2')).toBeVisible();
+    expect(screen.queryByRole('combobox', { name: 'Service' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Inspect' }));
+    expect(screen.getByText('Inspecting web')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Service filter' }));
+    await user.click(screen.getByRole('button', { name: 'redis-test_worker' }));
+    expect(screen.getByText('Inspecting worker')).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Stats' }));
+    expect(screen.getByText('Stats for 2 containers')).toBeVisible();
   });
 
   it('shows linked Compose containers until the first Swarm Apply creates Services', () => {

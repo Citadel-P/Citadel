@@ -1,5 +1,7 @@
+using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Swarm;
 using Domain.Entities;
 using Domain.Entities.Platforms;
@@ -13,7 +15,7 @@ using Mediator;
 namespace Application.Features.Swarm.Queries;
 
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read, SpecificPermission.Inspect)]
-public sealed record InspectSwarmTask(Guid PlatformId, string TaskId) : IQuery<Result<SwarmTaskResult>>
+public sealed record InspectSwarmTask(Guid PlatformId, string TaskId) : IQuery<Result<ContainerInspectionInfo>>
 {
     internal sealed class Validator : AbstractValidator<InspectSwarmTask>
     {
@@ -57,33 +59,31 @@ public sealed record GetSwarmTaskTerminalTarget(Guid PlatformId, string TaskId) 
 
 internal sealed class InspectSwarmTaskHandler(
     IUnitOfWork unitOfWork,
-    IConnectorFactory<ISwarmConnector> connectorFactory)
-    : IQueryHandler<InspectSwarmTask, Result<SwarmTaskResult>>
+    IConnectorFactory<ISwarmConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector)
+    : IQueryHandler<InspectSwarmTask, Result<ContainerInspectionInfo>>
 {
-    public async ValueTask<Result<SwarmTaskResult>> Handle(
+    public async ValueTask<Result<ContainerInspectionInfo>> Handle(
         InspectSwarmTask query,
         CancellationToken cancellationToken)
     {
-        var context = await SwarmTaskRuntimeQuery.LoadAsync(
+        var context = await SwarmTaskRuntimeQuery.LoadRunningTargetAsync(
             unitOfWork,
+            connectorFactory,
             query.PlatformId,
             query.TaskId,
             cancellationToken);
-        if (!context.IsSuccess(out var platform, out var error))
-            return Result.Failure<SwarmTaskResult>(error!);
+        if (!context.IsSuccess(out var target, out var error))
+            return Result.Failure<ContainerInspectionInfo>(error!);
 
-        var inspected = await connectorFactory.GetConnector(platform.ConnectorType).InspectTaskAsync(
-            new InspectSwarmTaskCommand(platform.Address, query.TaskId),
+        var inspected = await swarmNodeRuntimeConnector.InspectContainerAsync(
+            target.Platform,
+            target.DockerNodeId,
+            target.DockerContainerId,
             cancellationToken);
-        if (!inspected.IsSuccess(out var task, out error))
-            return Result.Failure<SwarmTaskResult>(error!);
-        if (!string.Equals(task.Id, query.TaskId, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result.Failure<SwarmTaskResult>(
-                new InternalServerError("Docker returned a different task than the one requested."));
-        }
-
-        return Result.Success(task);
+        return inspected.IsSuccess(out var inspection, out error)
+            ? Result.Success(ContainerInspectionRedactor.RedactEnvironment(inspection))
+            : Result.Failure<ContainerInspectionInfo>(error!);
     }
 }
 
@@ -106,10 +106,10 @@ internal sealed class GetSwarmTaskStatsHandler(
             return Result.Failure<SwarmTaskStatsResult>(error!);
 
         var stats = await unitOfWork.ContainerStats.GetStatsAggregatedAsync(
-            container.DockerContainerId,
+            container.Id,
             query.Hours,
             cancellationToken);
-        return Result.Success(new SwarmTaskStatsResult(container.DockerContainerId, stats.ToArray()));
+        return Result.Success(new SwarmTaskStatsResult(container.Id, container.DockerContainerId, stats.ToArray()));
     }
 }
 
@@ -122,21 +122,21 @@ internal sealed class GetSwarmTaskTerminalTargetHandler(
         GetSwarmTaskTerminalTarget query,
         CancellationToken cancellationToken)
     {
-        var context = await SwarmTaskRuntimeQuery.LoadRunningContainerAsync(
+        var context = await SwarmTaskRuntimeQuery.LoadRunningTargetAsync(
             unitOfWork,
             swarmConnectorFactory,
             query.PlatformId,
             query.TaskId,
             cancellationToken);
-        return context.IsSuccess(out var container, out var error)
-            ? Result.Success(container.DockerContainerId)
+        return context.IsSuccess(out var target, out var error)
+            ? Result.Success(target.DockerContainerId)
             : Result.Failure<string>(error!);
     }
 }
 
 internal static class SwarmTaskRuntimeQuery
 {
-    public static async Task<Result<Platform>> LoadAsync(
+    private static async Task<Result<SwarmTaskRuntimeContext>> LoadAsync(
         IUnitOfWork unitOfWork,
         Guid platformId,
         string taskId,
@@ -144,15 +144,17 @@ internal static class SwarmTaskRuntimeQuery
     {
         var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
         if (platform is null)
-            return Result.Failure<Platform>(new NotFoundError("Platform does not exist."));
+            return Result.Failure<SwarmTaskRuntimeContext>(new NotFoundError("Platform does not exist."));
         if (platform.PlatformDescriptor is not DockerSwarmPlatformDescriptor)
-            return Result.Failure<Platform>(new BadRequestError("Task runtime data is only available for Docker Swarm platforms."));
+            return Result.Failure<SwarmTaskRuntimeContext>(new BadRequestError("Task runtime data is only available for Docker Swarm platforms."));
         if (platform.Status != PlatformStatus.Online)
-            return Result.Failure<Platform>(new ConflictError("Platform is offline."));
-        if (await unitOfWork.Swarm.GetTaskAsync(platformId, taskId, cancellationToken) is null)
-            return Result.Failure<Platform>(new NotFoundError("Swarm task does not exist."));
+            return Result.Failure<SwarmTaskRuntimeContext>(new ConflictError("Platform is offline."));
 
-        return Result.Success(platform);
+        var task = await unitOfWork.Swarm.GetTaskAsync(platformId, taskId, cancellationToken);
+        if (task is null)
+            return Result.Failure<SwarmTaskRuntimeContext>(new NotFoundError("Swarm task does not exist."));
+
+        return Result.Success(new SwarmTaskRuntimeContext(platform, task));
     }
 
     public static async Task<Result<Container>> LoadRunningContainerAsync(
@@ -162,37 +164,21 @@ internal static class SwarmTaskRuntimeQuery
         string taskId,
         CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(unitOfWork, platformId, taskId, cancellationToken);
-        if (!loaded.IsSuccess(out var platform, out var error))
-            return Result.Failure<Container>(error!);
-
-        var inspected = await connectorFactory.GetConnector(platform.ConnectorType).InspectTaskAsync(
-            new InspectSwarmTaskCommand(platform.Address, taskId),
+        var loaded = await LoadRunningTargetAsync(
+            unitOfWork,
+            connectorFactory,
+            platformId,
+            taskId,
             cancellationToken);
-        if (!inspected.IsSuccess(out var task, out error))
+        if (!loaded.IsSuccess(out var target, out var error))
             return Result.Failure<Container>(error!);
-        if (!string.Equals(task.Id, taskId, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result.Failure<Container>(
-                new InternalServerError("Docker returned a different task than the one requested."));
-        }
 
-        if (!string.Equals(task.State, "Running", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(task.ContainerId))
-        {
-            return Result.Failure<Container>(
-                new ConflictError("Runtime access is only available while the task container is running."));
-        }
-
-        var descriptor = (DockerSwarmPlatformDescriptor)platform.PlatformDescriptor;
-        if (!string.Equals(task.NodeId, descriptor.NodeID, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result.Failure<Container>(
-                new ConflictError("Docker exposes task runtime access only on the node running the task. This task is not running on the connected manager."));
-        }
-
-        var container = await unitOfWork.Containers.GetByIdAsync(task.ContainerId, cancellationToken);
-        if (container is null || container.PlatformId != platformId)
+        var container = await unitOfWork.Containers.GetByRuntimeIdentityAsync(
+            platformId,
+            target.DockerNodeId,
+            target.DockerContainerId,
+            cancellationToken);
+        if (container is null)
         {
             return Result.Failure<Container>(
                 new ConflictError("The running task container has not been synchronized yet."));
@@ -200,4 +186,52 @@ internal static class SwarmTaskRuntimeQuery
 
         return Result.Success(container);
     }
+
+    public static async Task<Result<SwarmTaskRuntimeTarget>> LoadRunningTargetAsync(
+        IUnitOfWork unitOfWork,
+        IConnectorFactory<ISwarmConnector> connectorFactory,
+        Guid platformId,
+        string taskId,
+        CancellationToken cancellationToken)
+    {
+        var loaded = await LoadAsync(unitOfWork, platformId, taskId, cancellationToken);
+        if (!loaded.IsSuccess(out var context, out var error))
+            return Result.Failure<SwarmTaskRuntimeTarget>(error!);
+
+        var inspected = await connectorFactory.GetConnector(context.Platform.ConnectorType).InspectTaskAsync(
+            new InspectSwarmTaskCommand(context.Platform.Address, taskId),
+            cancellationToken);
+        if (!inspected.IsSuccess(out var task, out error))
+            return Result.Failure<SwarmTaskRuntimeTarget>(error!);
+        if (!string.Equals(task.Id, taskId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<SwarmTaskRuntimeTarget>(
+                new InternalServerError("Docker returned a different task than the one requested."));
+        }
+
+        if (!string.Equals(task.State, "Running", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(task.ContainerId))
+        {
+            return Result.Failure<SwarmTaskRuntimeTarget>(
+                new ConflictError("TaskNoLongerRunning: runtime access is only available while this exact task container is running."));
+        }
+
+        if (!string.Equals(context.Task.DockerNodeId, task.NodeId, StringComparison.Ordinal)
+            || !string.Equals(context.Task.State, "Running", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<SwarmTaskRuntimeTarget>(
+                new ConflictError("TaskNoLongerRunning: the persisted task observation no longer matches Docker's current runtime target."));
+        }
+
+        return Result.Success(new SwarmTaskRuntimeTarget(context.Platform, task.NodeId, task.ContainerId));
+    }
 }
+
+internal sealed record SwarmTaskRuntimeContext(
+    Platform Platform,
+    SwarmTaskProjection Task);
+
+internal sealed record SwarmTaskRuntimeTarget(
+    Platform Platform,
+    string DockerNodeId,
+    string DockerContainerId);

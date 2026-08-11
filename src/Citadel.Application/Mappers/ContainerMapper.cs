@@ -6,6 +6,23 @@ namespace Application.Mappers;
 
 internal static class ContainerMapper
 {
+    internal static DockerContainer ToDockerContainer(this Container container) => new(
+        Name: container.Name,
+        Image: container.Image?.Name ?? string.Empty,
+        Id: container.DockerContainerId,
+        ImageId: container.DockerImageId ?? string.Empty,
+        State: container.State,
+        Created: container.Created,
+        Stack: container.DockerStack,
+        ControlState: container.ControlState,
+        Ports: container.Ports,
+        DeploymentId: container.DeploymentId,
+        StackId: container.StackId,
+        IsSystem: container.IsSystem,
+        SystemRole: container.SystemRole,
+        HasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
+        IsSwarmTask: container.IsSwarmTask);
+
     internal static bool IsHistoricalSwarmTask(this DockerContainer container)
         => container.IsSwarmTask
            && container.State is ContainerStateStatus.Exited
@@ -21,7 +38,12 @@ internal static class ContainerMapper
         }
     }
 
-    internal static Container Map(this DockerContainer container, Guid platformId, Guid? imageId)
+    internal static Container Map(
+        this DockerContainer container,
+        Guid platformId,
+        Guid? imageId,
+        string? dockerNodeId = null,
+        long? observedAt = null)
         => new
         (
             name: container.Name,
@@ -37,7 +59,9 @@ internal static class ContainerMapper
             isSystem: container.IsSystem,
             systemRole: container.SystemRole,
             hasCitadelOwnershipLabels: container.HasCitadelOwnershipLabels,
-            isSwarmTask: container.IsSwarmTask
+            isSwarmTask: container.IsSwarmTask,
+            dockerNodeId: dockerNodeId,
+            projectionObservedAt: observedAt
         );
 
     internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

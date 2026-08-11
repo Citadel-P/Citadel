@@ -9,7 +9,7 @@ import {
   StackReleaseStatus,
 } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { formatId, isUnmanagedContainer } from '@/lib/utils';
+import { isUnmanagedContainer } from '@/lib/utils';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { CommandAction, ToggleAction } from '@/components/custom/actions-builder';
@@ -21,6 +21,7 @@ interface BaseContainerResource {
   controlState: ResourceControlState;
   isSystem: boolean;
   isSwarmTask?: boolean;
+  projectionStaleSince?: number | string | null;
 }
 
 export type ContainerStackGroupResource = {
@@ -41,6 +42,7 @@ export type ContainerStackGroupResource = {
   imageView?: null;
   displayStatus: StackReleaseStatus;
   capabilities?: ContainerView['capabilities'];
+  projectionStaleSince?: number | string | null;
   containers: ContainerView[];
   isStackGroup: true;
 };
@@ -58,10 +60,12 @@ type ContainerVariablesFactory<T extends BaseContainerResource> = (
 ) => any;
 
 const isProcessing = (r: BaseContainerResource) => r.controlState === ResourceControlState.Processing;
+const isStale = (r: BaseContainerResource) => Boolean(r.projectionStaleSince);
 
 const canStart = (x: BaseContainerResource) =>
   !x.isSystem &&
   !x.isSwarmTask &&
+  !isStale(x) &&
   x.state !== ContainerStateStatus.Running &&
   x.state !== ContainerStateStatus.Offline &&
   x.state !== ContainerStateStatus.Paused &&
@@ -70,18 +74,20 @@ const canStart = (x: BaseContainerResource) =>
 const canStop = (x: BaseContainerResource) =>
   !x.isSystem &&
   !x.isSwarmTask &&
+  !isStale(x) &&
   (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
   !isProcessing(x);
 
 const canPause = (x: BaseContainerResource) =>
-  !x.isSystem && !x.isSwarmTask && x.state === ContainerStateStatus.Running && !isProcessing(x);
+  !x.isSystem && !x.isSwarmTask && !isStale(x) && x.state === ContainerStateStatus.Running && !isProcessing(x);
 
 const canUnpause = (x: BaseContainerResource) =>
-  !x.isSystem && !x.isSwarmTask && x.state === ContainerStateStatus.Paused && !isProcessing(x);
+  !x.isSystem && !x.isSwarmTask && !isStale(x) && x.state === ContainerStateStatus.Paused && !isProcessing(x);
 
 const canRestart = (x: BaseContainerResource) =>
   !x.isSystem &&
   !x.isSwarmTask &&
+  !isStale(x) &&
   (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) &&
   !isProcessing(x);
 
@@ -217,7 +223,7 @@ const useVariables = (resources: ContainerActionResource | ContainerActionResour
     new Set(
       getContainers(resources)
         .filter(eligibleFor(action))
-        .map((r) => r.containerId),
+        .map((r) => r.id),
     ),
   );
 
@@ -320,7 +326,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
               navigate(`/stacks/edit/${selected.stackId}`);
               return;
             }
-            navigate(`/platforms/${currentPlatform?.id}/containers/${formatId(selected.containerId)}`);
+            navigate(`/platforms/${currentPlatform?.id}/containers/${selected.id}`);
           },
         };
       },
@@ -348,7 +354,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
           new Set(
             getContainers(resources)
               .filter(can)
-              .map((r) => r.containerId),
+              .map((r) => r.id),
           ),
         );
         return { force: true, containerIds };

@@ -4,7 +4,6 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import Loader from '@/components/ui/loader';
 import { TerminalTargetSelect } from '@/features/docker-resources/containers/container-info/container-exec';
 import { TaskTerminal } from '@/features/swarm-resources/tasks/task-info/terminal';
-import { useRead } from '@/lib/hooks';
 import { getTaskName } from '@/lib/utils';
 
 type ServiceTerminalProps = {
@@ -15,18 +14,12 @@ type ServiceTerminalProps = {
 
 export const ServiceTerminal = ({ platformId, tasks, tasksLoading }: ServiceTerminalProps) => {
   const [selectedTaskId, setSelectedTaskId] = useState<string>();
-  const platformQuery = useRead('getPlatfom', { id: platformId });
-  const platform = platformQuery.data?.data;
-  const descriptor = platform?.platformDescriptor;
-  const connectedNodeId = descriptor && 'nodeID' in descriptor ? descriptor.nodeID : undefined;
   const runningTasks = useMemo(() => tasks.filter((task) => task.state.toLowerCase() === 'running'), [tasks]);
-  const canOpenTerminal = (task: SwarmTaskView) =>
-    (task.capabilities ?? platform?.capabilities)?.canOpenTerminal === true;
-  const localTasks = runningTasks.filter((task) => task.nodeId === connectedNodeId && canOpenTerminal(task));
-  const selectedTask = localTasks.find((task) => task.id === selectedTaskId) ?? localTasks[0];
-  const hasRemoteTasks = runningTasks.some((task) => task.nodeId !== connectedNodeId);
+  const canOpenTerminal = (task: SwarmTaskView) => task.capabilities?.canOpenTerminal === true;
+  const availableTasks = runningTasks.filter(canOpenTerminal);
+  const selectedTask = availableTasks.find((task) => task.id === selectedTaskId) ?? availableTasks[0];
 
-  if (tasksLoading || platformQuery.isLoading) return <Loader />;
+  if (tasksLoading) return <Loader />;
 
   if (runningTasks.length === 0) {
     return (
@@ -36,26 +29,17 @@ export const ServiceTerminal = ({ platformId, tasks, tasksLoading }: ServiceTerm
     );
   }
 
-  if (!connectedNodeId) {
-    return (
-      <AlertMessage title="Connected manager unavailable" type="error">
-        Citadel could not identify the Swarm manager used by this Platform.
-      </AlertMessage>
-    );
-  }
-
   const hasTerminalPermission = runningTasks.some(canOpenTerminal);
   const taskSelect = (
     <TerminalTargetSelect
       value={selectedTask?.id}
       options={runningTasks.map((task) => {
-        const isLocal = task.nodeId === connectedNodeId;
         const permitted = canOpenTerminal(task);
-        const suffix = !permitted ? 'permission required' : !isLocal ? 'remote node' : 'connected manager';
+        const suffix = permitted ? task.nodeHostname || task.nodeId.slice(0, 12) : 'permission required';
         return {
           value: task.id,
-          label: `${getTaskName(task)} — ${task.nodeHostname || task.nodeId.slice(0, 12)} (${suffix})`,
-          disabled: !isLocal || !permitted,
+          label: `${getTaskName(task)} — ${suffix}`,
+          disabled: !permitted,
         };
       })}
       placeholder="Select a running Task"
@@ -71,17 +55,6 @@ export const ServiceTerminal = ({ platformId, tasks, tasksLoading }: ServiceTerm
         <AlertMessage title="Terminal permission required" type="warning">
           Terminal access requires Platform Read and Terminal permission.
         </AlertMessage>
-      )}
-      {hasTerminalPermission && !selectedTask && (
-        <AlertMessage title="No local Task available" type="info">
-          Docker can open a terminal only on the node running the Task. None of this Service&apos;s running Tasks are on
-          the connected manager.
-        </AlertMessage>
-      )}
-      {selectedTask && hasRemoteTasks && (
-        <p className="text-xs text-muted-foreground">
-          Terminal access is unavailable for worker-node Tasks because Docker exec is node-local.
-        </p>
       )}
       {selectedTask && (
         <TaskTerminal key={selectedTask.id} task={{ ...selectedTask, platformId }} toolbarStart={taskSelect} />

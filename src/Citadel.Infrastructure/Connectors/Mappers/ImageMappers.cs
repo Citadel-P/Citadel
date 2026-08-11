@@ -448,7 +448,12 @@ internal static class ImageMappers
                 descriptor.Platform.OsVersion),
             ArtifactType: descriptor.ArtifactType
             );
-        return new DistributionResult(descriptorMap);
+        return new DistributionResult(
+            descriptorMap,
+            item.Platforms.Select(static platform => new OCIPlatformResult(
+                platform.Architecture,
+                platform.Os,
+                platform.OsVersion)).ToArray());
     }
 
     internal static ImageResult Map(this Hosting.DockerClient.Models.Images.ImageResult image)
@@ -483,6 +488,13 @@ internal static class ImageMappers
             ArtifactType: distribution?.Descriptor?.ArtifactType
             );
 
-        return new(descriptor);
+        return new(
+            descriptor,
+            distribution?.Platforms?
+                .Select(static value => new OCIPlatformResult(
+                    value.Architecture,
+                    value.Os,
+                    value.OsVersion))
+                .ToArray() ?? []);
     }
 }

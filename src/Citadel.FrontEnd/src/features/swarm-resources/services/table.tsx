@@ -1,4 +1,4 @@
-import { SwarmTaskView } from '@/api/generated/api.types';
+import { ContainerDataView, ContainerStateStatus, ContainerStatView, SwarmTaskView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateBadge } from '@/components/custom/state-badge';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { getTaskName } from '@/lib/utils';
+import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
 import { useSelectedResources } from '@/lib/atoms';
 import { DropdownActionComponent } from '@/pages/types';
 import { ColumnDef, Row } from '@tanstack/react-table';
@@ -15,7 +15,7 @@ import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router';
 import { getServiceAvailability, isServiceUpdatePaused, swarmOwnershipLabel } from '../shared';
 import { SwarmServiceListView } from './hooks/useServicesGroup';
-import { UnmanagedResourceIcon } from '@/components/custom/common';
+import { CPUCell, MemoryUsageCell, UnmanagedResourceIcon } from '@/components/custom/common';
 import { getServiceViewRoute } from './actions';
 
 type ServiceRow = {
@@ -43,6 +43,7 @@ export const ServicesTable = ({
   selectable = true,
   showActions = true,
   emptyState,
+  taskContainers,
 }: {
   items: SwarmServiceListView[];
   isLoading: boolean;
@@ -51,6 +52,7 @@ export const ServicesTable = ({
   selectable?: boolean;
   showActions?: boolean;
   emptyState?: { title: string; description: string };
+  taskContainers?: ContainerDataView[];
 }) => {
   const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
   const platformId = platformIdProp ?? routePlatformId;
@@ -66,6 +68,8 @@ export const ServicesTable = ({
     [items],
   );
   const getSubRows = useCallback((row: ServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
+  const taskContainersById = useMemo(() => mapTaskContainers(items, taskContainers), [items, taskContainers]);
+  const serviceStatsById = useMemo(() => mapServiceStats(items, taskContainersById), [items, taskContainersById]);
   const columns = useMemo<ColumnDef<ServiceTableRow>[]>(() => {
     const allColumns: ColumnDef<ServiceTableRow>[] = [
       {
@@ -146,6 +150,32 @@ export const ServicesTable = ({
         },
       },
       {
+        id: 'cpu',
+        header: 'CPU',
+        cell: ({ row }) => {
+          if (isServiceRow(row.original)) {
+            const stats = serviceStatsById.get(row.original.service.id);
+            return stats ? <CPUCell state={ContainerStateStatus.Running} stats={stats} /> : '-';
+          }
+
+          const container = taskContainersById.get(row.original.task.id);
+          return container ? <CPUCell state={container.state} stats={container.containerStat} /> : '-';
+        },
+      },
+      {
+        id: 'memory',
+        header: 'Memory',
+        cell: ({ row }) => {
+          if (isServiceRow(row.original)) {
+            const stats = serviceStatsById.get(row.original.service.id);
+            return stats ? <MemoryUsageCell state={ContainerStateStatus.Running} stats={stats} /> : '-';
+          }
+
+          const container = taskContainersById.get(row.original.task.id);
+          return container ? <MemoryUsageCell state={container.state} stats={container.containerStat} /> : '-';
+        },
+      },
+      {
         id: 'ownership',
         accessorFn: (row) => (isServiceRow(row) ? swarmOwnershipLabel(row.service.ownership) : ''),
         header: ({ column }) => <SortableCell cellName="Ownership" column={column} />,
@@ -169,9 +199,10 @@ export const ServicesTable = ({
     return allColumns.filter((column) => {
       if (column.id === 'select') return selectable;
       if (column.id === 'actions') return showActions;
+      if (column.id === 'cpu' || column.id === 'memory') return taskContainers !== undefined;
       return true;
     });
-  }, [actions, platformId, selectable, showActions]);
+  }, [actions, platformId, selectable, serviceStatsById, showActions, taskContainers, taskContainersById]);
 
   return (
     <DataTable
@@ -190,6 +221,62 @@ export const ServicesTable = ({
         emptyState ?? { title: 'No services found.', description: 'No services were returned by the Swarm manager.' }
       }
     />
+  );
+};
+
+const mapTaskContainers = (services: SwarmServiceListView[], containers?: ContainerDataView[]) => {
+  const result = new Map<string, ContainerDataView>();
+  if (!containers?.length) return result;
+
+  const taskIds = new Set(services.flatMap((service) => service.tasks.map((task) => task.id)));
+  for (const container of containers) {
+    const taskId = getSwarmTaskIdFromContainerName(container.name);
+    if (taskId && taskIds.has(taskId)) result.set(taskId, container);
+  }
+
+  return result;
+};
+
+const mapServiceStats = (services: SwarmServiceListView[], containers: Map<string, ContainerDataView>) => {
+  const result = new Map<string, ContainerStatView>();
+  for (const service of services) {
+    const stats = aggregateTaskStats(service, containers);
+    if (stats) result.set(service.id, stats);
+  }
+
+  return result;
+};
+
+const aggregateTaskStats = (
+  service: SwarmServiceListView,
+  containers: Map<string, ContainerDataView>,
+): ContainerStatView | undefined => {
+  const stats = service.tasks
+    .map((task) => containers.get(task.id))
+    .filter((container) => container?.state === ContainerStateStatus.Running)
+    .map((container) => container.containerStat)
+    .filter((stat): stat is ContainerStatView => stat !== null && stat !== undefined);
+  if (stats.length === 0) return undefined;
+
+  return stats.reduce<ContainerStatView>(
+    (total, stat) => ({
+      memoryActive: Number(total.memoryActive) + Number(stat.memoryActive ?? 0),
+      memoryCache: Number(total.memoryCache) + Number(stat.memoryCache ?? 0),
+      cpuUsage: Number(total.cpuUsage) + Number(stat.cpuUsage ?? 0),
+      memoryLimit: Number(total.memoryLimit) + Number(stat.memoryLimit ?? 0),
+      rxBytes: Number(total.rxBytes) + Number(stat.rxBytes ?? 0),
+      txBytes: Number(total.txBytes) + Number(stat.txBytes ?? 0),
+      created: Math.max(Number(total.created), Number(stat.created ?? 0)),
+    }),
+    {
+      memoryActive: 0,
+      memoryCache: 0,
+      cpuUsage: 0,
+      memoryLimit: 0,
+      rxBytes: 0,
+      txBytes: 0,
+      created: 0,
+    },
   );
 };
 

@@ -22,6 +22,7 @@ public class Platform(
     long stackCount = 0,
     PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
     PlatformWorkloadStatusCounts? stackStatusCounts = null,
+    PlatformWorkloadStatusCounts? swarmServiceStatusCounts = null,
     string? clusterId = null,
     bool pruneHistoricalSwarmTaskContainers = true)
 {
@@ -45,6 +46,8 @@ public class Platform(
         deploymentStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
     public PlatformWorkloadStatusCounts StackStatusCounts { get; private set; } =
         stackStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
+    public PlatformWorkloadStatusCounts SwarmServiceStatusCounts { get; private set; } =
+        swarmServiceStatusCounts ?? PlatformWorkloadStatusCounts.Empty;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public string? ClusterId { get; private set; } = clusterId;
     public bool PruneHistoricalSwarmTaskContainers { get; private set; } = pruneHistoricalSwarmTaskContainers;
@@ -71,6 +74,7 @@ public class Platform(
         long stackCount = 0,
         PlatformWorkloadStatusCounts? deploymentStatusCounts = null,
         PlatformWorkloadStatusCounts? stackStatusCounts = null,
+        PlatformWorkloadStatusCounts? swarmServiceStatusCounts = null,
         string? clusterId = null,
         bool pruneHistoricalSwarmTaskContainers = true
         )
@@ -93,6 +97,7 @@ public class Platform(
             stackCount: stackCount,
             deploymentStatusCounts: deploymentStatusCounts,
             stackStatusCounts: stackStatusCounts,
+            swarmServiceStatusCounts: swarmServiceStatusCounts,
             clusterId: clusterId,
             pruneHistoricalSwarmTaskContainers: pruneHistoricalSwarmTaskContainers)
         {

@@ -42,7 +42,20 @@ internal static class EdgeAgentMappers
             dto.ProtocolVersion,
             dto.RevokedAtUtc,
             dto.CreatedAtUtc,
-            dto.UpdatedAtUtc);
+            dto.UpdatedAtUtc,
+            string.IsNullOrWhiteSpace(dto.Profile)
+                ? EdgeAgentProfile.Ordinary
+                : Enum.Parse<EdgeAgentProfile>(dto.Profile),
+            dto.ClusterId,
+            dto.DockerNodeId,
+            dto.DockerDaemonId,
+            dto.DockerHostname,
+            dto.SwarmRole,
+            dto.LastObservedServiceId,
+            dto.LastObservedTaskId,
+            dto.FirstEnrolledAtUtc,
+            dto.LastAuthenticatedAtUtc,
+            dto.RevocationReason);
 
     public static EdgeAgentPlatformState ToDomain(this EdgeAgentPlatformStateDto dto)
         => new(
@@ -83,5 +96,53 @@ internal static class EdgeAgentMappers
                     dto.BindingProtocolVersion!.Value,
                     dto.BindingRevokedAtUtc,
                     dto.BindingCreatedAtUtc!.Value,
-                    dto.BindingUpdatedAtUtc!.Value).ToDomain());
+                    dto.BindingUpdatedAtUtc!.Value,
+                    dto.BindingProfile,
+                    dto.BindingClusterId,
+                    dto.BindingDockerNodeId,
+                    dto.BindingDockerDaemonId,
+                    dto.BindingDockerHostname,
+                    dto.BindingSwarmRole,
+                    dto.BindingLastObservedServiceId,
+                    dto.BindingLastObservedTaskId,
+                    dto.BindingFirstEnrolledAtUtc,
+                    dto.BindingLastAuthenticatedAtUtc,
+                    dto.BindingRevocationReason).ToDomain());
+
+    public static SwarmNodeAgentInstallation ToDomain(this SwarmNodeAgentInstallationDto dto)
+        => new(
+            dto.PlatformId,
+            dto.ClusterId,
+            dto.ManagerDockerNodeId,
+            dto.ManagerDockerDaemonId,
+            dto.DockerServiceId,
+            dto.DockerServiceName,
+            dto.AgentImageReference,
+            dto.AgentImageDigest,
+            dto.DockerCaConfigId,
+            dto.DockerCaConfigName,
+            Enum.Parse<SwarmNodeAgentDesiredState>(dto.DesiredState),
+            dto.OperationId,
+            string.IsNullOrWhiteSpace(dto.OperationKind) ? null : Enum.Parse<SwarmNodeAgentOperationKind>(dto.OperationKind),
+            string.IsNullOrWhiteSpace(dto.OperationState) ? null : Enum.Parse<SwarmNodeAgentOperationState>(dto.OperationState),
+            dto.OperationStartedAtUtc,
+            dto.OperationActorId,
+            dto.OperationError,
+            dto.CreatedAtUtc,
+            dto.UpdatedAtUtc);
+
+    public static SwarmNodeAgentBootstrap ToDomain(this SwarmNodeAgentBootstrapDto dto)
+        => new(
+            dto.Id,
+            dto.PlatformId,
+            dto.ClusterId,
+            dto.Version,
+            dto.TokenHash,
+            dto.DockerSecretId,
+            dto.DockerSecretName,
+            dto.ExpiresAtUtc,
+            dto.RevokedAtUtc,
+            dto.CreatedByActorId,
+            dto.CreatedAtUtc,
+            dto.UpdatedAtUtc);
 }

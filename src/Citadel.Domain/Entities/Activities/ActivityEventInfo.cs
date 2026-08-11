@@ -54,6 +54,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(PlatformConnected), nameof(ActivityEventType.PlatformConnected))]
 [JsonDerivedType(typeof(PlatformDisconnected), nameof(ActivityEventType.PlatformDisconnected))]
 [JsonDerivedType(typeof(PlatformRenamed), nameof(ActivityEventType.PlatformRenamed))]
+[JsonDerivedType(typeof(PlatformNodeAgentLifecycle), nameof(ActivityEventType.PlatformNodeAgentLifecycle))]
 [JsonDerivedType(typeof(RegistryRenamed), nameof(ActivityEventType.RegistryRenamed))]
 [JsonDerivedType(typeof(RegistryCreated), nameof(ActivityEventType.RegistryCreated))]
 [JsonDerivedType(typeof(RegistryUpdated), nameof(ActivityEventType.RegistryUpdated))]
@@ -264,6 +265,11 @@ public sealed record PlatformDeleted(PlatformSnapshot Platform) : ActivityEventI
 public sealed record PlatformConnected(PlatformSnapshot Platform, PlatformStatus PreviousStatus) : ActivityEventInfo;
 public sealed record PlatformDisconnected(PlatformSnapshot Platform, PlatformStatus PreviousStatus) : ActivityEventInfo;
 public sealed record PlatformRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record PlatformNodeAgentLifecycle(
+    SwarmNodeAgentOperationKind Kind,
+    Guid OperationId,
+    SwarmNodeAgentOperationState State,
+    string? Message) : ActivityEventInfo;
 
 public sealed record RegistryRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record RegistryDeleted(RegistrySnapshot Registry) : ActivityEventInfo;

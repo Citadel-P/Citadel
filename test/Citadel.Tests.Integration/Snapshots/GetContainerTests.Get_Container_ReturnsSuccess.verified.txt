@@ -44,6 +44,7 @@
     canInspect: true,
     canOpenTerminal: true,
     canPull: true,
+    canManageNodeAgents: true,
     canRead: true,
     canWrite: true,
     canExecute: true

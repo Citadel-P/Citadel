@@ -93,8 +93,8 @@ import { getContainerSeriesColor } from './container-series-colors';
 import { useFormFieldAccessibility } from './form-field-accessibility';
 
 export const PageContainer = ({ className, children, ...props }: ComponentProps<'div'>) => (
-  <div className="mx-auto w-full max-w-(--layout-content-width) px-4 py-4 sm:px-6">
-    <div className={cn('w-full rounded-md border-border bg-background p-4 shadow-sm', className)} {...props}>
+  <div className="mx-auto flex min-h-[calc(100dvh-var(--layout-header-height))] w-full max-w-(--layout-content-width) flex-col px-4 py-4 sm:px-6">
+    <div className={cn('w-full flex-1 rounded-md border-border bg-background p-4 shadow-sm', className)} {...props}>
       {children}
     </div>
   </div>

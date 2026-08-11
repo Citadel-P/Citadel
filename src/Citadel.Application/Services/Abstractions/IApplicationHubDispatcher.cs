@@ -28,7 +28,7 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Container Info
-    Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken);
+    Task SendContainerInfo(string containerReference, DockerContainer container, CancellationToken cancellationToken);
     #endregion
 
     #region Container Logs
@@ -59,6 +59,9 @@ public interface IApplicationHubDispatcher
     Task SendSwarmInventory(
         Guid platformId,
         SwarmProjectionSnapshot snapshot,
+        CancellationToken cancellationToken = default);
+    Task SendSwarmNodeAgentCoverageChanged(
+        Guid platformId,
         CancellationToken cancellationToken = default);
     #endregion
 
@@ -105,6 +108,7 @@ public interface IApplicationHubDispatcher
 
     #region Exec Sessions
     Task SendExecOutput(string containerId, string sessionId, byte[] data);
+    Task SendSwarmTaskExecOutput(Guid platformId, string taskId, string sessionId, byte[] data);
     #endregion
 
     #region GitRepo

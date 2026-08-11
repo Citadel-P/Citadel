@@ -44,9 +44,15 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         services.RemoveAll<IConnectorFactory<ISwarmConnector>>();
         services.RemoveAll<IImageDigestScanner>();
         services.RemoveAll<ISwarmReconciliationCoordinator>();
+        services.RemoveAll<ISwarmManagerIdentityValidator>();
         services.AddSingleton(connectorFactory.Object);
         services.AddSingleton(imageDigestScanner.Object);
         services.AddSingleton(reconciliationCoordinator.Object);
+        var managerIdentityValidator = new Mock<ISwarmManagerIdentityValidator>();
+        managerIdentityValidator
+            .Setup(value => value.ValidateAsync(It.IsAny<Platform>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        services.AddSingleton(managerIdentityValidator.Object);
 
         connectorFactory.Setup(factory => factory.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(connector.Object);
@@ -92,8 +98,8 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
                         "external-web",
                         "Replicated",
                         "nginx:1.27",
-                        2,
-                        2,
+                        0,
+                        0,
                         "Completed",
                         null,
                         ["8080:80/tcp (ingress)"],
@@ -345,8 +351,8 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
                 "external-web",
                 "Replicated",
                 "nginx:1.27",
-                2,
-                2,
+                0,
+                0,
                 "Completed",
                 null,
                 ["8080:80/tcp (ingress)"],
@@ -361,7 +367,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
                 {
                     Image = new SwarmExternalImage(Guid.Empty, "nginx:1.27"),
                     SchedulingMode = SwarmServiceSchedulingMode.Replicated,
-                    Replicas = 2,
+                    Replicas = 0,
                     Command = ["nginx"],
                     Environment = ["APP_ENV=production", "PASSWORD=original-secret"],
                     NetworkIds = ["overlay-network"],
@@ -404,6 +410,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         }
 
         spec["environment"]![1] = "PASSWORD=replaced-during-review";
+        spec["replicas"] = 1;
 
         var adoptRequest = new
         {
@@ -423,6 +430,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
             cancellationToken: cancellationToken);
         var adoptedId = adoptedJson.RootElement.GetProperty("id").GetGuid();
         Assert.Equal("external-service", adoptedJson.RootElement.GetProperty("dockerServiceId").GetString());
+        Assert.Equal("Stopped", adoptedJson.RootElement.GetProperty("health").GetString());
         Assert.Equal("DesiredChangesPending", adoptedJson.RootElement.GetProperty("synchronizationState").GetString());
         Assert.Equal("Disabled", adoptedJson.RootElement.GetProperty("spec").GetProperty("updateBehavior").GetString());
 
@@ -432,6 +440,7 @@ public sealed class ManagedSwarmServiceEndpointTests(PostgresTestFixture fixture
         Assert.NotNull(persisted);
         Assert.Equal(adoptedId, persisted.Id);
         Assert.Equal("external-runtime-hash", persisted.LastAppliedRuntimeHash);
+        Assert.Equal(SwarmServiceHealth.Stopped, persisted.Health);
         Assert.True(persisted.HasPendingChanges);
         var activities = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
             .ActivityEventRepository.GetPagedAsync(

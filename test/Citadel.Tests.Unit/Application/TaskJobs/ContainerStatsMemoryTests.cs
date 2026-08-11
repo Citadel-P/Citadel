@@ -91,6 +91,7 @@ public sealed class ContainerStatsMemoryTests
             {
                 [platformId] = [stat]
             },
+            new Dictionary<Guid, SwarmNodeStatsSource>(),
             cache.Object,
             NullLogger.Instance);
 

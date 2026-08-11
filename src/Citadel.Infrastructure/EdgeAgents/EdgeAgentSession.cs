@@ -14,7 +14,9 @@ internal sealed class EdgeAgentSession(
     Guid platformId,
     Guid agentId,
     string agentFingerprint,
-    string sessionId)
+    string sessionId,
+    Domain.EdgeAgentProfile profile = Domain.EdgeAgentProfile.Ordinary,
+    string? dockerNodeId = null)
 {
     private readonly ConcurrentDictionary<string, EdgePendingCommand> pendingCommands = new();
     private readonly SemaphoreSlim commandSlots = new(
@@ -31,7 +33,9 @@ internal sealed class EdgeAgentSession(
     public Guid PlatformId { get; } = platformId;
     public Domain.EdgeAgentResourceType ResourceType { get; } = resourceType;
     public Guid ResourceId { get; } = resourceId;
-    public EdgeAgentTarget Target { get; } = new(resourceType, resourceId);
+    public Domain.EdgeAgentProfile Profile { get; } = profile;
+    public string? DockerNodeId { get; } = string.IsNullOrWhiteSpace(dockerNodeId) ? null : dockerNodeId.Trim();
+    public EdgeAgentTarget Target { get; } = new(resourceType, resourceId, string.IsNullOrWhiteSpace(dockerNodeId) ? null : dockerNodeId.Trim());
     public Guid AgentId { get; } = agentId;
     public string AgentFingerprint { get; } = agentFingerprint;
     public string SessionId { get; } = sessionId;
@@ -82,6 +86,7 @@ internal sealed class EdgeAgentSession(
                 PlatformId = PlatformId.ToString("D"),
                 ResourceType = MapResourceType(ResourceType),
                 ResourceId = ResourceId.ToString("D"),
+                NodeId = DockerNodeId ?? string.Empty,
                 Kind = kind,
                 Payload = ByteString.CopyFrom(payload),
                 PayloadSchemaVersion = 1,

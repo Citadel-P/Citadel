@@ -14,14 +14,14 @@ export const normalizeContainerSelection = (selectedRows: ContainerActionResourc
   const groupedContainerIds = new Set(
     selectedRows
       .filter(isContainerStackGroup)
-      .flatMap((group) => group.containers.map((container) => container.containerId)),
+      .flatMap((group) => group.containers.map((container) => container.id)),
   );
   const seen = new Set<string>();
 
   return selectedRows.filter((resource) => {
-    if (!isContainerStackGroup(resource) && groupedContainerIds.has(resource.containerId)) return false;
+    if (!isContainerStackGroup(resource) && groupedContainerIds.has(resource.id)) return false;
 
-    const key = isContainerStackGroup(resource) ? resource.id : resource.containerId;
+    const key = resource.id;
     if (seen.has(key)) return false;
 
     seen.add(key);

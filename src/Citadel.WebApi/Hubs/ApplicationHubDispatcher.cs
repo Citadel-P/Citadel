@@ -38,9 +38,12 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients.All.SendAsync("LicenseStateChanged", cancellationToken);
 
     #region Container Info
-    public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken) =>
+    public Task SendContainerInfo(
+        string containerReference,
+        DockerContainer container,
+        CancellationToken cancellationToken) =>
         hubContext.Clients
-            .Group(WellKnownSignalRGroups.ContainerInfoGroup(container.Id.Length > 12 ? container.Id[..12] : container.Id))
+            .Group(WellKnownSignalRGroups.ContainerInfoGroup(containerReference))
             .SendAsync("ReceiveContainerInfo", container, cancellationToken);
     #endregion
 
@@ -122,6 +125,13 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
             .SendAsync("SwarmInventoryUpdated", SwarmInventoryView.Map(platformId, snapshot), cancellationToken);
+
+    public Task SendSwarmNodeAgentCoverageChanged(
+        Guid platformId,
+        CancellationToken cancellationToken = default) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
+            .SendAsync("SwarmNodeAgentCoverageChanged", platformId, cancellationToken);
     #endregion
 
     #region Backups
@@ -351,6 +361,11 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             .Groups(groups)
             .SendAsync("AlertEventReceived", AlertEventView.Map(alertEvent));
     }
+
+    public Task SendSwarmTaskExecOutput(Guid platformId, string taskId, string sessionId, byte[] data) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.SwarmTaskExecGroup(platformId, taskId, sessionId))
+            .SendAsync("SendContainerExec", data);
 
     public Task SendUpdatedAlertEvents(IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>> alertEventsByUser)
     {

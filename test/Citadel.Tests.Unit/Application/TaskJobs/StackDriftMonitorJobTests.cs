@@ -25,7 +25,7 @@ public sealed class StackDriftMonitorJobTests
         await using var services = fixture.Services;
 
         await fixture.Job.HandleContainerEventAsync(
-            new ContainerEvent(fixture.PlatformId, fixture.ContainerId, "die"),
+            new ContainerEvent(fixture.PlatformId, null, fixture.ContainerId, "die"),
             TestContext.Current.CancellationToken);
 
         fixture.DriftChecker.Verify(
@@ -51,7 +51,7 @@ public sealed class StackDriftMonitorJobTests
         await using var services = fixture.Services;
 
         await fixture.Job.HandleContainerEventAsync(
-            new ContainerEvent(fixture.PlatformId, fixture.ContainerId, "die"),
+            new ContainerEvent(fixture.PlatformId, null, fixture.ContainerId, "die"),
             TestContext.Current.CancellationToken);
 
         fixture.DriftChecker.Verify(

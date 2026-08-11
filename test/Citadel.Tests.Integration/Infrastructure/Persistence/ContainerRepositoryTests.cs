@@ -244,6 +244,104 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
         }
     }
 
+    [Fact]
+    public async Task NodeScopedContainers_ShouldPersistCompositeIdentityAndRejectAmbiguousDockerId()
+    {
+        var platform = CreatePlatform();
+        var dockerContainerId = $"shared-{Guid.CreateVersion7():N}";
+        var first = new Container(
+            "worker-one",
+            "image-1",
+            platform.Id,
+            dockerContainerId,
+            ContainerStateStatus.Running,
+            dockerNodeId: "node-1",
+            projectionObservedAt: 100);
+        var second = new Container(
+            "worker-two",
+            "image-2",
+            platform.Id,
+            dockerContainerId,
+            ContainerStateStatus.Exited,
+            dockerNodeId: "node-2",
+            projectionObservedAt: 200);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(first, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(second, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var firstPersisted = await uow.Containers.GetByRuntimeIdentityAsync(
+            platform.Id,
+            "node-1",
+            dockerContainerId,
+            TestContext.Current.CancellationToken);
+        var secondPersisted = await uow.Containers.GetByRuntimeIdentityAsync(
+            platform.Id,
+            "node-2",
+            dockerContainerId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(first.Id, firstPersisted?.Id);
+        Assert.Equal(second.Id, secondPersisted?.Id);
+        Assert.Null(await uow.Containers.GetByIdAsync(dockerContainerId, TestContext.Current.CancellationToken));
+        Assert.Empty(await uow.Containers.GetByIdsAsync([dockerContainerId], TestContext.Current.CancellationToken));
+        Assert.Equal(first.Id, (await uow.Containers.GetByIdAsync(first.Id.ToString("D"), TestContext.Current.CancellationToken))?.Id);
+        Assert.Equal(second.Id, Assert.Single(await uow.Containers.GetByIdsAsync(
+            [second.Id.ToString("D")],
+            TestContext.Current.CancellationToken)).Id);
+        Assert.Equal(first.Id, Assert.Single(await uow.Containers.GetByPlatformAndNodeIdAsync(
+            platform.Id,
+            "node-1",
+            TestContext.Current.CancellationToken)).Id);
+    }
+
+    [Fact]
+    public async Task MarkNodeProjectionStaleAsync_ShouldOnlyMarkTheRequestedNode()
+    {
+        var platform = CreatePlatform();
+        var first = new Container(
+            "worker-one",
+            "image-1",
+            platform.Id,
+            $"container-{Guid.CreateVersion7():N}",
+            ContainerStateStatus.Running,
+            dockerNodeId: "node-1",
+            projectionObservedAt: 100);
+        var second = new Container(
+            "worker-two",
+            "image-2",
+            platform.Id,
+            $"container-{Guid.CreateVersion7():N}",
+            ContainerStateStatus.Running,
+            dockerNodeId: "node-2",
+            projectionObservedAt: 200);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(first, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(second, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var changed = await uow.Containers.MarkNodeProjectionStaleAsync(
+            platform.Id,
+            "node-1",
+            "Agent offline",
+            300,
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var firstPersisted = await uow.Containers.GetByIdAsync(first.Id, TestContext.Current.CancellationToken);
+        var secondPersisted = await uow.Containers.GetByIdAsync(second.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(1, changed);
+        Assert.Equal(300, firstPersisted?.ProjectionStaleSince);
+        Assert.Equal("Agent offline", firstPersisted?.ProjectionStaleReason);
+        Assert.Null(secondPersisted?.ProjectionStaleSince);
+    }
+
     private static Platform CreatePlatform()
         => new(
             name: $"platform-{Guid.CreateVersion7():N}",

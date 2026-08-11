@@ -6,6 +6,7 @@ using Hosting.Common;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Threading.Channels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services.SignalR;
 
@@ -17,9 +18,10 @@ internal interface IContainerLogStreamManager : IStreamGroupManager
 internal sealed class ContainerLogStreamManager(
     IApplicationHubDispatcher dispatcher,
     ILogger<ContainerLogStreamManager> logger,
-    IPlatformContainerCache platformContainerCache,
+    IServiceScopeFactory scopeFactory,
     IContainerEventBroadcaster containerEventBroadcaster,
-    IConnectorFactory<IContainerConnector> connectorFactory)
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector)
     : BaseStreamManager<LogStreamContext>, IContainerLogStreamManager
 {
     public void StartContainerLogs(string containerId)
@@ -27,14 +29,14 @@ internal sealed class ContainerLogStreamManager(
         if (string.IsNullOrWhiteSpace(containerId))
             return;
 
-        var normalized = NormalizeDockerId(containerId);
-        var groupId = Constants.WellKnownSignalRGroups.ContainerLogGroup(normalized);
+        var containerReference = NormalizeContainerReference(containerId);
+        var groupId = Constants.WellKnownSignalRGroups.ContainerLogGroup(containerReference);
         TryUseStream(groupId, context =>
         {
-            if (!context.TryStartStream(resources => StreamLogsAsync(resources, normalized)))
+            if (!context.TryStartStream(resources => StreamLogsAsync(resources, containerReference)))
                 return;
 
-            context.EnsureWatcher(token => WatchContainerEvents(context, normalized, token));
+            context.EnsureWatcher(token => WatchContainerEvents(context, containerReference, token));
         });
     }
 
@@ -62,41 +64,48 @@ internal sealed class ContainerLogStreamManager(
         }
     }
 
-    private async Task StreamLogsAsync(LogStreamResources resources, string containerId)
+    private async Task StreamLogsAsync(LogStreamResources resources, string containerReference)
     {
         var token = resources.CancellationToken;
 
-        if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
+        var target = await ResolveTargetAsync(containerReference, token);
+        if (target is null)
             return;
 
         var channel = resources.Channel;
 
         try
         {
-            var request = new StreamContainerLogsCommand(platform.Address, containerId);
-            var connector = connectorFactory.GetConnector(platform.ConnectorType);
+            var stream = target.DockerNodeId is not null
+                ? swarmNodeRuntimeConnector.StreamContainerLogsAsync(
+                    target.Platform,
+                    target.DockerNodeId,
+                    target.DockerContainerId,
+                    token)
+                : connectorFactory.GetConnector(target.Platform.ConnectorType).StreamLogsAsync(
+                    new StreamContainerLogsCommand(target.Platform.Address, target.DockerContainerId),
+                    token);
 
             await LogStreamPipeline.RunAsync(
                 channel,
-                pipelineToken => ProduceLogsAsync(resources, connector, request, channel.Writer, pipelineToken),
-                pipelineToken => BroadcastBatchesAsync(channel.Reader, containerId, pipelineToken),
+                pipelineToken => ProduceLogsAsync(resources, stream, channel.Writer, pipelineToken),
+                pipelineToken => BroadcastBatchesAsync(channel.Reader, containerReference, pipelineToken),
                 token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error while polling logs for {ContainerId}", containerId);
+            logger.LogError(ex, "Error while polling logs for {ContainerReference}", containerReference);
         }
     }
 
     private static async Task ProduceLogsAsync(
         LogStreamResources resources,
-        IContainerConnector connector,
-        StreamContainerLogsCommand request,
+        IAsyncEnumerable<ReadOnlyMemory<byte>> stream,
         ChannelWriter<PooledBuffer> writer,
         CancellationToken token)
     {
-        await foreach (var data in connector.StreamLogsAsync(request, token))
+        await foreach (var data in stream.WithCancellation(token))
         {
             resources.AddToBuffer(data.Span);
             resources.AddToBuffer("\n"u8);
@@ -173,9 +182,13 @@ internal sealed class ContainerLogStreamManager(
 
     private async Task WatchContainerEvents(
         LogStreamContext context,
-        string containerId,
+        string containerReference,
         CancellationToken token)
     {
+        var target = await ResolveTargetAsync(containerReference, token);
+        if (target is null)
+            return;
+
         // IMPORTANT: per-context reader to avoid event loss
         var reader = containerEventBroadcaster.AddSubscriber();
 
@@ -183,25 +196,50 @@ internal sealed class ContainerLogStreamManager(
         {
             await foreach (var ev in reader.ReadAllAsync(token))
             {
-                if (NormalizeDockerId(ev.ContainerId) != containerId)
+                if (ev.PlatformId != target.Platform.Id
+                    || !string.Equals(ev.DockerNodeId, target.DockerNodeId, StringComparison.Ordinal)
+                    || !string.Equals(ev.ContainerId, target.DockerContainerId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 if (ev.Action == "start")
                 {
                     // Stop current producer/consumer and create fresh ones
                     context.Reset();
-                    context.TryStartStream(resources => StreamLogsAsync(resources, containerId));
+                    context.TryStartStream(resources => StreamLogsAsync(resources, containerReference));
                 }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Watcher failed for {ContainerId}", containerId);
+            logger.LogError(ex, "Watcher failed for {ContainerReference}", containerReference);
         }
         finally
         {
             containerEventBroadcaster.RemoveSubscriber(reader);
         }
     }
+
+    private async Task<ContainerLogTarget?> ResolveTargetAsync(
+        string containerReference,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var container = Guid.TryParse(containerReference, out var resourceId)
+            ? await uow.Containers.GetByIdAsync(resourceId, cancellationToken)
+            : await uow.Containers.GetByIdAsync(containerReference, cancellationToken);
+        if (container is null)
+            return null;
+
+        var platform = await uow.Platforms.GetByIdAsync(container.PlatformId, cancellationToken);
+        return platform is null
+            ? null
+            : new ContainerLogTarget(platform, container.DockerNodeId, container.DockerContainerId);
+    }
+
+    private sealed record ContainerLogTarget(
+        Domain.Entities.Platforms.Platform Platform,
+        string? DockerNodeId,
+        string DockerContainerId);
 }

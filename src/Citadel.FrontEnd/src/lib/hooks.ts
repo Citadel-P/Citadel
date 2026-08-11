@@ -403,6 +403,7 @@ const usePulledStream = (
   onChunkReceived: (chunk: string) => boolean | void,
   endpoint: string,
   onMutate?: () => void,
+  method: 'POST' | 'DELETE' = 'POST',
 ) => {
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
@@ -414,7 +415,7 @@ const usePulledStream = (
     const requestUrl = `${normalizedBaseUrl}${normalizedEndpoint}`;
 
     const response = await fetch(requestUrl, {
-      method: 'POST',
+      method,
       credentials: 'include',
       signal,
       headers: {
@@ -496,6 +497,7 @@ interface StreamProgressState {
 
 interface UseStreamProgressOptions<TRequest, TItem> {
   endpoint: string;
+  method?: 'POST' | 'DELETE';
   request: TRequest;
   successMessage: string;
   errorMessageDefault: string;
@@ -682,6 +684,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   getError,
   getMessageSeverity,
   getIsComplete,
+  method,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<StreamLogEntry[]>([]);
   const [activeItems, setActiveItems] = useState<Map<string, string>>(new Map());
@@ -921,7 +924,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     isSuccess,
     error: streamError,
     mutate,
-  } = usePulledStream(handleChunkReceived, endpoint, resetTimer);
+  } = usePulledStream(handleChunkReceived, endpoint, resetTimer, method);
 
   const logs = useMemo(() => {
     const activeLogs = Array.from(activeItems.values()).map((message) => ({ message }));

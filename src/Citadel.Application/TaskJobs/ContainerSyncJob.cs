@@ -6,6 +6,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Immutable;
@@ -238,13 +239,20 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 return;
 
             var images = await uow.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
-            var containers = await uow.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
+            var platform = await uow.Platforms.GetByIdAsync(platformEvent.Id, cancellationToken);
+            var containers = (await uow.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken)).ToArray();
+            var managerNodeId = (platform?.PlatformDescriptor as DockerSwarmPlatformDescriptor)?.NodeID;
+            var sourceContainers = managerNodeId is null
+                ? containers
+                : containers.Where(container =>
+                    container.DockerNodeId is null
+                    || string.Equals(container.DockerNodeId, managerNodeId, StringComparison.Ordinal)).ToArray();
             var imageIds = images.ToDictionary(
                 image => image.DockerImageId,
                 image => image.Id,
                 StringComparer.OrdinalIgnoreCase);
 
-            var existingContainersInDb = containers.ToDictionary(
+            var existingContainersInDb = sourceContainers.ToDictionary(
                 c => c.DockerContainerId,
                 c => c,
                 StringComparer.OrdinalIgnoreCase);
@@ -283,13 +291,19 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                         systemRole: freshContainer.SystemRole,
                         hasCitadelOwnershipLabels: freshContainer.HasCitadelOwnershipLabels,
                         isSwarmTask: freshContainer.IsSwarmTask);
+                    if (managerNodeId is not null)
+                        existingDbContainer.ObserveOnNode(managerNodeId, snapshotStartedAt);
 
                     currentActiveContainers.Add(existingDbContainer);
                     containersToUpsert.Add(existingDbContainer);
                 }
                 else
                 {
-                    var container = freshContainer.Map(platformEvent.Id, imageId);
+                    var container = freshContainer.Map(
+                        platformEvent.Id,
+                        imageId,
+                        managerNodeId,
+                        managerNodeId is null ? null : snapshotStartedAt);
                     currentActiveContainers.Add(container);
                     containersToUpsert.Add(container);
                 }
@@ -324,12 +338,16 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
 
             await uow.CommitAsync(cancellationToken);
 
+            var allCurrentContainers = (await uow.Containers.GetContainersInfoAsync(
+                platformEvent.Id,
+                cancellationToken))?.ToArray() ?? [];
+
             // Refresh cache
             var cacheEntry = new PlatformCacheEntry(
                 Id: platformEvent.Id,
                 Address: platformEvent.Address,
                 ConnectorType: platformEvent.Type,
-                Containers: currentActiveContainers.ToImmutableDictionary(
+                Containers: allCurrentContainers.ToImmutableDictionary(
                     c => c.DockerContainerId,
                     c => c.Id,
                     StringComparer.OrdinalIgnoreCase));
@@ -339,7 +357,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
             // Notify clients
             var notificationWorkItem = new SendContainersInfoNotificationWorkItem(
                 containerStreamManager,
-                currentActiveContainers,
+                allCurrentContainers,
                 platformEvent.Id);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
@@ -355,7 +373,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
 
             logger.LogInformation(
                 "Synchronized {Count} containers for platform {PlatformId}.",
-                currentActiveContainers.Count, platformEvent.Id);
+                allCurrentContainers.Length, platformEvent.Id);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -385,7 +403,14 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
     {
         try
         {
-            var offlineContainers = (await uow.Containers.GetByPlatformIdAsync(platformId, cancellationToken)).ToArray();
+            var platform = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+            var allContainers = (await uow.Containers.GetByPlatformIdAsync(platformId, cancellationToken)).ToArray();
+            var managerNodeId = (platform?.PlatformDescriptor as DockerSwarmPlatformDescriptor)?.NodeID;
+            var offlineContainers = managerNodeId is null
+                ? allContainers
+                : allContainers.Where(container =>
+                    container.DockerNodeId is null
+                    || string.Equals(container.DockerNodeId, managerNodeId, StringComparison.Ordinal)).ToArray();
 
             await uow.Containers.UpdateContainersStateAsync(
                 offlineContainers.Select(c => c.Id),
@@ -397,15 +422,41 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
                 container.PartialUpdate(state: ContainerStateStatus.Offline);
             }
 
+            if (managerNodeId is not null)
+            {
+                await uow.Containers.MarkNodeProjectionStaleAsync(
+                    platformId,
+                    managerNodeId,
+                    "Manager data source is offline.",
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    cancellationToken);
+            }
+
             await uow.CommitAsync(cancellationToken);
 
-            // Evict platform from cache
-            platformContainerCache.EvictPlatform(platformId);
+            var currentContainers = (await uow.Containers.GetContainersInfoAsync(platformId, cancellationToken))?.ToArray() ?? [];
+            if (managerNodeId is not null && platform is not null)
+            {
+                platformContainerCache.ReplacePlatformContainers(
+                    platformId,
+                    new PlatformCacheEntry(
+                        platformId,
+                        platform.Address,
+                        platform.ConnectorType,
+                        currentContainers.ToImmutableDictionary(
+                            container => container.DockerContainerId,
+                            container => container.Id,
+                            StringComparer.OrdinalIgnoreCase)));
+            }
+            else
+            {
+                platformContainerCache.EvictPlatform(platformId);
+            }
 
             // Notify clients that containers went offline
             var notificationWorkItem = new SendContainersInfoNotificationWorkItem(
                 containerStreamManager,
-                offlineContainers,
+                currentContainers,
                 platformId);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 

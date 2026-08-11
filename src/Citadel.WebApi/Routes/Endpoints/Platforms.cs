@@ -12,6 +12,10 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using Application.Permissions;
 using WebApi.Transport;
+using Domain;
+using Domain.Contracts.Resources.Platforms;
+using Hosting.Common;
+using System.Runtime.CompilerServices;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -138,5 +142,53 @@ public static class Platforms
 
         return EndpointHandlers.HandleResultForNoContent(result);
     }
+
+    public static async Task<Results<Ok<SwarmNodeAgentCoverageView>, ProblemHttpResult>> GetNodeAgentCoverage(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [Description("The platform id")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetSwarmNodeAgentCoverage(id), cancellationToken);
+        if (!result.IsSuccess(out var coverage, out var error))
+            return EndpointHandlers.HandleResult(result, static value => SwarmNodeAgentCoverageView.Map(value, false));
+
+        var permission = await permissionEvaluator.EvaluateAsync(id, ResourceType.Platform);
+        var canManage = permission.Has(PermissionLevel.Execute, SpecificPermission.ManageNodeAgents);
+        return TypedResults.Ok(SwarmNodeAgentCoverageView.Map(coverage, canManage));
+    }
+
+    public static IAsyncEnumerable<SwarmNodeAgentProgressItem> InstallNodeAgents(
+        IMediator mediator,
+        ICitadelPublicEndpoints publicEndpoints,
+        [Description("The platform id")] Guid id,
+        CancellationToken cancellationToken)
+        => mediator.CreateStream(
+            new InstallSwarmNodeAgents(id, publicEndpoints.EdgeAgentGrpcUrl.AbsoluteUri.TrimEnd('/')),
+            cancellationToken);
+
+    public static IAsyncEnumerable<SwarmNodeAgentProgressItem> RepairNodeAgents(
+        IMediator mediator,
+        ICitadelPublicEndpoints publicEndpoints,
+        [Description("The platform id")] Guid id,
+        CancellationToken cancellationToken)
+        => mediator.CreateStream(
+            new RepairSwarmNodeAgents(id, publicEndpoints.EdgeAgentGrpcUrl.AbsoluteUri.TrimEnd('/')),
+            cancellationToken);
+
+    public static IAsyncEnumerable<SwarmNodeAgentProgressItem> UpgradeNodeAgents(
+        IMediator mediator,
+        ICitadelPublicEndpoints publicEndpoints,
+        [Description("The platform id")] Guid id,
+        CancellationToken cancellationToken)
+        => mediator.CreateStream(
+            new UpgradeSwarmNodeAgents(id, publicEndpoints.EdgeAgentGrpcUrl.AbsoluteUri.TrimEnd('/')),
+            cancellationToken);
+
+    public static IAsyncEnumerable<SwarmNodeAgentProgressItem> RemoveNodeAgents(
+        IMediator mediator,
+        [Description("The platform id")] Guid id,
+        CancellationToken cancellationToken)
+        => mediator.CreateStream(new RemoveSwarmNodeAgents(id), cancellationToken);
 
 }

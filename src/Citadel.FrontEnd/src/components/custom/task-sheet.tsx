@@ -59,6 +59,7 @@ import {
   StackStreamItem,
   ScaleSwarmServiceInput,
   SwarmServiceProgressItem,
+  SwarmNodeAgentProgressItem,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
@@ -83,6 +84,11 @@ type SwarmServiceMutationParams = {
   name: string;
   action: 'apply' | 'scale' | 'force-update';
   replicas?: number;
+};
+type SwarmNodeAgentParams = {
+  platformId: string;
+  name: string;
+  action: 'install' | 'repair' | 'upgrade' | 'remove';
 };
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
@@ -116,6 +122,7 @@ export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
   | { kind: 'deploy'; payload: DeployParams }
   | { kind: 'swarmService'; payload: SwarmServiceMutationParams }
+  | { kind: 'swarmNodeAgents'; payload: SwarmNodeAgentParams }
   | { kind: 'activity'; payload: Pick<ActivityView, 'id'> }
   | { kind: 'alertEvent'; payload: Pick<AlertEventView, 'id'> }
   | { kind: 'build'; payload: Record<string, unknown> }
@@ -667,6 +674,16 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     </span>
   ),
 
+  PlatformNodeAgentLifecycle: (info) => (
+    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+      <span>
+        <b>{info.kind}</b> operation {info.state.toLowerCase()}.
+      </span>
+      {info.message ? <span>{info.message}</span> : null}
+      <span className="font-mono text-xs">{info.operationId}</span>
+    </div>
+  ),
+
   RegistryCreated: (info, activity) => (
     <SpecViewer spec={info.registry} resourceId={activity.resourceId} title="Initial configuration" />
   ),
@@ -1178,6 +1195,12 @@ function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActio
   return <TaskStreamLayout title={title} refName={payload.name} type="AutomationAction" state={state as any} />;
 }
 
+function SwarmNodeAgentsTaskRenderer({ payload }: { payload: SwarmNodeAgentParams; type: ResourceType }) {
+  const state = useSwarmNodeAgentProgress(payload);
+  const title = `${payload.action[0].toUpperCase()}${payload.action.slice(1)} node data plane`;
+  return <TaskStreamLayout title={title} refName={payload.name} type="Platform" state={state} />;
+}
+
 function ActivityTaskRenderer({ payload }: { payload: Pick<ActivityView, 'id'>; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
 }
@@ -1190,6 +1213,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   pull: PullImageTaskRenderer,
   deploy: ApplyDeployTaskRenderer,
   swarmService: SwarmServiceTaskRenderer,
+  swarmNodeAgents: SwarmNodeAgentsTaskRenderer,
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
   backupRun: BackupRunTaskRenderer,
@@ -1317,6 +1341,25 @@ function useSwarmServiceProgress(params: SwarmServiceMutationParams) {
     request,
     successMessage: 'Swarm Service operation completed successfully',
     errorMessageDefault: 'Swarm Service operation failed',
+    getError: (item) => item.errorMessage,
+    getMessageSeverity: (item) => (item.isWarning ? 'warning' : item.isCompleted ? 'success' : undefined),
+    getIsComplete: (item) => item.isCompleted === true,
+  });
+}
+
+function useSwarmNodeAgentProgress(params: SwarmNodeAgentParams) {
+  const request = useMemo<Record<string, never>>(() => ({}), []);
+  const endpoint =
+    params.action === 'remove'
+      ? `api/v1/platforms/${params.platformId}/node-agents`
+      : `api/v1/platforms/${params.platformId}/node-agents/${params.action}`;
+  return useStreamProgress<Record<string, never>, SwarmNodeAgentProgressItem>({
+    endpoint,
+    method: params.action === 'remove' ? 'DELETE' : 'POST',
+    request,
+    pendingMessage: 'Starting node data-plane operation...',
+    successMessage: 'Node data-plane operation completed',
+    errorMessageDefault: 'Node data-plane operation failed',
     getError: (item) => item.errorMessage,
     getMessageSeverity: (item) => (item.isWarning ? 'warning' : item.isCompleted ? 'success' : undefined),
     getIsComplete: (item) => item.isCompleted === true,

@@ -15,6 +15,57 @@ namespace Tests.Unit.Application.TaskJobs;
 public sealed class ContainerEventWorkItemConsistencyTests
 {
     [Fact]
+    public async Task CreatedEvent_ShouldUseTheImageReference_WhenTheDaemonOmitsTheImageId()
+    {
+        var platformId = Guid.CreateVersion7();
+        Container? added = null;
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(repository => repository.AddAsync(It.IsAny<Container>(), It.IsAny<CancellationToken>()))
+            .Callback<Container, CancellationToken>((container, _) => added = container)
+            .ReturnsAsync(1);
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(repository => repository.GetByDockerImageIdAsync(
+                "nginx:latest",
+                platformId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Image?)null);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(work => work.Containers).Returns(containers.Object);
+        unitOfWork.SetupGet(work => work.Images).Returns(images.Object);
+        unitOfWork.SetupGet(work => work.Platforms).Returns(Mock.Of<IPlatformRepository>());
+        unitOfWork.Setup(work => work.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var notifications = new Mock<INotificationQueue>();
+        notifications
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        var workItem = new ContainerCreatedWorkItem(
+            new DaemonContainerEventInfo(
+                "create",
+                "container-1",
+                new DockerContainer(
+                    "web",
+                    "nginx:latest",
+                    "container-1",
+                    null!,
+                    ContainerStateStatus.Running,
+                    IsSwarmTask: true)),
+            platformId,
+            notifications.Object,
+            Channel.CreateUnbounded<UnmanagedContainerAlertRequest>().Writer,
+            Mock.Of<IDockerDaemonStreamManager>(),
+            Mock.Of<IPlatformContainerCache>(),
+            Mock.Of<IContainerEventBroadcaster>(),
+            Mock.Of<ILogger>());
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(added);
+        Assert.Equal("nginx:latest", added.DockerImageId);
+    }
+
+    [Fact]
     public async Task CreatedEvent_ShouldNotPublishCacheEntry_WhenCommitFails()
     {
         var platformId = Guid.CreateVersion7();

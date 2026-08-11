@@ -1,6 +1,7 @@
 using Domain.Contracts.Interfaces;
 using Domain;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Domain.Entities.Tags;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,7 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
 {
     private Guid platformId;
     private Guid otherPlatformId;
+    private Guid swarmPlatformId;
     private Tag platformTag = null!;
     private Tag otherPlatformTag = null!;
 
@@ -20,6 +22,7 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
     {
         var platform = CreatePlatform("platform-counts-a", "https://platform-counts-a");
         var otherPlatform = CreatePlatform("platform-counts-b", "https://platform-counts-b");
+        var swarmPlatform = CreateSwarmPlatform("platform-counts-swarm", "https://platform-counts-swarm");
         platformTag = Tag.Create("platform-filter-match", "#1144AA", Constants.SystemId);
         otherPlatformTag = Tag.Create("platform-filter-other", "#AA4411", Constants.SystemId);
 
@@ -27,10 +30,22 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
         await uow.Tags.AddAsync(otherPlatformTag, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken, [platformTag.Id], Constants.SystemId);
         await uow.Platforms.AddAsync(otherPlatform, TestContext.Current.CancellationToken, [otherPlatformTag.Id], Constants.SystemId);
+        await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
+        await uow.SwarmServices.AddAsync(
+            new SwarmService(
+                "managed-service",
+                swarmPlatform.Id,
+                Constants.SystemId,
+                new SwarmServiceSpec
+                {
+                    Image = new SwarmExternalImage(Constants.DefaultRegistryId, "redis:latest")
+                }),
+            TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
         otherPlatformId = otherPlatform.Id;
+        swarmPlatformId = swarmPlatform.Id;
     }
 
     [Fact]
@@ -57,6 +72,10 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
         Assert.Equal(1, target.GetProperty("deploymentStatusCounts").GetProperty("inProgress").GetInt64());
         Assert.Equal(1, target.GetProperty("stackStatusCounts").GetProperty("total").GetInt64());
         Assert.Equal(1, target.GetProperty("stackStatusCounts").GetProperty("inProgress").GetInt64());
+        var swarmTarget = document.RootElement.GetProperty("platforms").EnumerateArray()
+            .Single(platform => platform.GetProperty("id").GetGuid() == swarmPlatformId);
+        Assert.Equal(1, swarmTarget.GetProperty("swarmServiceStatusCounts").GetProperty("total").GetInt64());
+        Assert.Equal(1, swarmTarget.GetProperty("swarmServiceStatusCounts").GetProperty("inProgress").GetInt64());
     }
 
     [Fact]
@@ -70,16 +89,20 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platforms = (await uow.Platforms.GetPlatformsWithLatestStatByIdsAsync(
-            [platformId],
+            [platformId, swarmPlatformId],
             TestContext.Current.CancellationToken)).ToArray();
 
-        var platform = Assert.Single(platforms);
+        Assert.Equal(2, platforms.Length);
+        var platform = platforms.Single(value => value.Id == platformId);
         Assert.Equal(platformId, platform.Id);
         Assert.Equal(1, platform.DeploymentCount);
         Assert.Equal(1, platform.StackCount);
         Assert.Equal(1, platform.DeploymentStatusCounts.InProgress);
         Assert.Equal(1, platform.StackStatusCounts.InProgress);
         Assert.Contains(platform.Tags, tag => tag.Id == platformTag.Id);
+        var swarmPlatform = platforms.Single(value => value.Id == swarmPlatformId);
+        Assert.Equal(1, swarmPlatform.SwarmServiceStatusCounts.Total);
+        Assert.Equal(1, swarmPlatform.SwarmServiceStatusCounts.InProgress);
     }
 
     [Fact]
@@ -170,4 +193,31 @@ public class PlatformViewTests(PostgresTestFixture fixture) : IntegrationTestBas
             ContainersRunning: 0,
             ContainersPaused: 0,
             ContainersStopped: 0));
+
+    private static Platform CreateSwarmPlatform(string name, string address) => new(
+        name: name,
+        address: address,
+        networkCount: 1,
+        volumeCount: 1,
+        imageCount: 1,
+        cpuCount: 2,
+        memTotal: 512,
+        serverVersion: "1.0.0",
+        agentVersion: "1.0.0",
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            NodeID: $"{name}-node",
+            NodeAddr: "10.0.0.1",
+            LocalNodeState: "Active",
+            ControlAvailable: true,
+            Nodes: 1,
+            Managers: 1,
+            DaemonId: name,
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0,
+            ClusterId: $"{name}-cluster"),
+        clusterId: $"{name}-cluster");
 }

@@ -49,6 +49,7 @@ internal sealed class ContainerProcessingService(
     IDeploymentStreamManager deploymentStreamManager,
     IContainerEventBroadcaster containerEventBroadcaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IDbWorkQueue dbWorkQueue,
     IHostApplicationLifetime applicationLifetime,
     ILogger<ContainerProcessingService> logger) : IContainerProcessingService
@@ -179,22 +180,47 @@ internal sealed class ContainerProcessingService(
 
         try
         {
-            var runtimeStates = new Dictionary<string, ContainerStateStatus>(StringComparer.OrdinalIgnoreCase);
+            var runtimeStates = new Dictionary<Guid, ContainerStateStatus>();
 
-            foreach (var platform in platforms)
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platformEntities = new Dictionary<Guid, Domain.Entities.Platforms.Platform>();
+            IReadOnlyCollection<Container> inspectionTargets = resources.Containers.Count > 0
+                ? resources.Containers
+                : (await uow.Containers.GetByIdAsync(
+                    platforms.SelectMany(platform => platform.Containers.Values),
+                    completionToken)).ToArray();
+
+            foreach (var container in inspectionTargets)
             {
-                var connector = connectorFactory.GetConnector(platform.ConnectorType);
-                foreach (var containerId in platform.Containers.Keys)
+                if (!platformEntities.TryGetValue(container.PlatformId, out var platform))
                 {
-                    var result = await connector.InspectAsync(
-                        new InspectContainerCommand(platform.Address, containerId),
-                        completionToken);
-
-                    if (!result.IsSuccess(out var inspection) || inspection.State is null)
+                    platform = await uow.Platforms.GetByIdAsync(container.PlatformId, completionToken);
+                    if (platform is null)
                         return;
-
-                    runtimeStates[containerId] = inspection.State.Status;
+                    platformEntities[container.PlatformId] = platform;
                 }
+
+                Result<ContainerInspectionInfo> result;
+                if (container.DockerNodeId is not null)
+                {
+                    result = await swarmNodeRuntimeConnector.InspectContainerAsync(
+                        platform,
+                        container.DockerNodeId,
+                        container.DockerContainerId,
+                        completionToken);
+                }
+                else
+                {
+                    result = await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(
+                        new InspectContainerCommand(platform.Address, container.DockerContainerId),
+                        completionToken);
+                }
+
+                if (!result.IsSuccess(out var inspection) || inspection.State is null)
+                    return;
+
+                runtimeStates[container.Id] = inspection.State.Status;
             }
 
             if (runtimeStates.Count == 0)
@@ -339,13 +365,19 @@ internal sealed class ContainerProcessingService(
             .ToArray();
 
         var staleContainers = await GetStalePersistedContainersAsync(request.ContainerIds, cachedContainerIds, ct);
+        var nodeScopedContainers = staleContainers.Where(container => container.DockerNodeId is not null).ToArray();
+        var removableStaleContainers = staleContainers.Where(container => container.DockerNodeId is null).ToArray();
 
         if (!hasCachedContainers && staleContainers.Count == 0)
         {
             return Result.Failure(new NotFoundError("No containers found for the provided ID(s)."));
         }
 
-        var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
+        var containerIds = platforms
+            .SelectMany(p => p.Containers.Values)
+            .Concat(nodeScopedContainers.Select(container => container.Id))
+            .Distinct()
+            .ToArray();
         var processingResult = containerIds.Length > 0
             ? await MarkProcessingAsync(containerIds, controlTriggeredBy, ct, claimParentResources)
             : new ProcessedResources([], [], []);
@@ -356,7 +388,7 @@ internal sealed class ContainerProcessingService(
                 "One or more containers, deployments, or stacks are already processing another operation."));
         }
 
-        if (processingResult.Containers.Count == 0 && staleContainers.Count == 0)
+        if (processingResult.Containers.Count == 0 && removableStaleContainers.Length == 0)
         {
             return Result.Failure(new NotFoundError("No containers found for the provided ID(s)."));
         }
@@ -369,9 +401,13 @@ internal sealed class ContainerProcessingService(
         {
             await NotifyProcessingAsync(processingResult, completionToken);
 
-            foreach (var platform in platforms)
+            foreach (var platformGroup in processingResult.Containers.GroupBy(container => container.PlatformId))
             {
-                var result = await DeleteFromPlatformAsync(platform, request, completionToken);
+                var result = await DeleteFromPlatformAsync(
+                    platformGroup.Key,
+                    platformGroup.ToArray(),
+                    request,
+                    completionToken);
                 if (result.IsFailure())
                 {
                     await TryRollbackProcessingAsync(processingResult, controlTriggeredBy);
@@ -379,9 +415,9 @@ internal sealed class ContainerProcessingService(
                 }
             }
 
-            if (staleContainers.Count > 0)
+            if (removableStaleContainers.Length > 0)
             {
-                await DeleteStalePersistedContainersAsync(staleContainers, completionToken);
+                await DeleteStalePersistedContainersAsync(removableStaleContainers, completionToken);
             }
 
             return Result.Success();
@@ -549,23 +585,55 @@ internal sealed class ContainerProcessingService(
         return image;
     }
 
-    private async Task<Result> DeleteFromPlatformAsync(PlatformCacheEntry platform, DeleteContainers request, CancellationToken ct)
+    private async Task<Result> DeleteFromPlatformAsync(
+        Guid platformId,
+        IReadOnlyCollection<Container> containers,
+        DeleteContainers request,
+        CancellationToken ct)
     {
-        var command = new DeleteContainerCommand(
-            ContainerIds: platform.Containers.Keys,
-            PlatformAddress: platform.Address,
-            Volume: request.V,
-            Force: request.Force,
-            Link: request.Link);
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByIdAsync(platformId, ct);
+        if (platform is null)
+            return Result.Failure(new NotFoundError("Platform does not exist."));
 
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await connector.DeleteAsync(command, ct);
+        foreach (var group in containers.GroupBy(container => container.DockerNodeId, StringComparer.Ordinal))
+        {
+            var ids = group.Select(container => container.DockerContainerId).ToArray();
+            Result result;
+            if (group.Key is not null)
+            {
+                result = await swarmNodeRuntimeConnector.DeleteContainersAsync(
+                    platform,
+                    group.Key,
+                    ids,
+                    request.V ?? false,
+                    request.Force ?? false,
+                    request.Link ?? false,
+                    ct);
+            }
+            else
+            {
+                var command = new DeleteContainerCommand(
+                    ids,
+                    platform.Address,
+                    request.V,
+                    request.Force,
+                    request.Link);
+                result = await connectorFactory.GetConnector(platform.ConnectorType).DeleteAsync(command, ct);
+            }
+
+            if (result.IsFailure())
+                return result;
+        }
+
+        return Result.Success();
     }
 }
 
 internal sealed class CompleteContainerCommandWorkItem(
     ProcessedResources resources,
-    IReadOnlyDictionary<string, ContainerStateStatus> runtimeStates,
+    IReadOnlyDictionary<Guid, ContainerStateStatus> runtimeStates,
     Guid controlTriggeredBy,
     INotificationQueue notificationQueue,
     IDockerDaemonStreamManager dockerDaemonHub,
@@ -611,9 +679,9 @@ internal sealed class CompleteContainerCommandWorkItem(
             }
         }
 
-        foreach (var (dockerContainerId, state) in runtimeStates)
+        foreach (var (containerId, state) in runtimeStates)
         {
-            var container = await uow.Containers.GetContainerInfoAsync(dockerContainerId, ct);
+            var container = await uow.Containers.GetByIdAsync(containerId, ct);
             if (container is null)
                 continue;
 

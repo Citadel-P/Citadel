@@ -61,7 +61,7 @@ public interface ISwarmConnector
     Task<Result<SwarmSecretResult>> InspectSecretAsync(
         InspectSwarmSecretCommand command,
         CancellationToken cancellationToken = default);
-    Task<Result> CreateSecretAsync(
+    Task<Result<SwarmResourceCreationResult>> CreateSecretAsync(
         CreateSwarmSecretCommand command,
         CancellationToken cancellationToken = default);
     Task<Result> UpdateSecretLabelsAsync(
@@ -79,7 +79,7 @@ public interface ISwarmConnector
     Task<Result<byte[]>> GetConfigDataAsync(
         InspectSwarmConfigCommand command,
         CancellationToken cancellationToken = default);
-    Task<Result> CreateConfigAsync(
+    Task<Result<SwarmResourceCreationResult>> CreateConfigAsync(
         CreateSwarmConfigCommand command,
         CancellationToken cancellationToken = default);
     Task<Result> UpdateConfigLabelsAsync(
@@ -87,5 +87,11 @@ public interface ISwarmConnector
         CancellationToken cancellationToken = default);
     Task<Result> DeleteConfigAsync(
         DeleteSwarmConfigCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result<ManagedSwarmServiceMutationResult>> CreateSystemServiceAsync(
+        CreateSystemSwarmServiceCommand command,
+        CancellationToken cancellationToken = default);
+    Task<Result<ManagedSwarmServiceMutationResult>> UpdateSystemServiceAsync(
+        UpdateSystemSwarmServiceCommand command,
         CancellationToken cancellationToken = default);
 }

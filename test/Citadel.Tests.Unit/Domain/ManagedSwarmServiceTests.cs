@@ -39,6 +39,31 @@ public sealed class ManagedSwarmServiceTests
     }
 
     [Fact]
+    public void AdoptedServiceScaledToZero_ShouldRemainStoppedUntilDesiredChangesAreApplied()
+    {
+        var spec = CreateSpec(new SwarmExternalImage(Guid.CreateVersion7(), "redis:latest")) with { Replicas = 1 };
+        var service = SwarmService.AdoptExisting(
+            "redis",
+            "Adopted from Docker Swarm Service redis.",
+            Guid.CreateVersion7(),
+            Constants.SystemId,
+            "redis",
+            "docker-service",
+            1,
+            "observed-runtime",
+            spec);
+
+        service.ApplyObservation(CreateProjection(service, "observed-runtime") with
+        {
+            RunningTaskCount = 0,
+            DesiredTaskCount = 0
+        });
+
+        Assert.Equal(SwarmServiceHealth.Stopped, service.Health);
+        Assert.Equal(SwarmServiceSynchronizationState.DesiredChangesPending, service.SynchronizationState);
+    }
+
+    [Fact]
     public void DesiredHash_ShouldTrackSourceTagButIgnoreResolvedDigest()
     {
         var registryId = Guid.CreateVersion7();

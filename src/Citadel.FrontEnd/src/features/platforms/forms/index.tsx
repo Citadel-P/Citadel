@@ -11,6 +11,7 @@ import { PlatformForm } from './form';
 import { usePlatformGroup } from './hooks/usePlatformGroup';
 import { PlatformResourceSummary, PlatformStatsTab } from './platform-stats';
 import { SwarmPlatformSummary } from '@/features/swarm/platform-summary';
+import { SwarmNodeAgentCoverage } from './swarm-node-agent-coverage';
 
 type PlatformFormResource = PlatformView & RequiredFormFields;
 
@@ -26,13 +27,17 @@ const PlatformSubHeader = ({ resource }: { resource: PlatformFormResource }) => 
   return (
     <>
       {resource.type === PlatformType.DockerSwarm && (
-        <SwarmPlatformSummary
-          platformId={resource.id}
-          networkCount={resource.networkCount}
-          backupSummary={summaries.get(resource.id)}
-          isBackupSummaryLoading={isLoading}
-          isBackupSummaryError={isError}
-        />
+        <div className='mt-2 flex flex-col gap-2'>
+          <SwarmPlatformSummary
+            platformId={resource.id}
+            networkCount={resource.networkCount}
+            serviceStatusCounts={resource.swarmServiceStatusCounts}
+            backupSummary={summaries.get(resource.id)}
+            isBackupSummaryLoading={isLoading}
+            isBackupSummaryError={isError}
+          />
+          <SwarmNodeAgentCoverage platformId={resource.id} platformName={resource.name} />
+        </div>
       )}
       <PlatformResourceSummary
         platform={resource}

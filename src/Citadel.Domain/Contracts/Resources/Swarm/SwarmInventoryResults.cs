@@ -19,7 +19,19 @@ public sealed record SwarmTaskResult(
     DateTimeOffset? CreatedAt, DateTimeOffset? UpdatedAt, string? ContainerId = null);
 
 public sealed record SwarmTaskStatsResult(
+    Guid ContainerProjectionId,
     string DockerContainerId,
+    IReadOnlyList<ContainerStat> Stats);
+
+public sealed record SwarmServiceStatsResult(
+    string DockerServiceId,
+    int ObservedTasks,
+    int ExpectedTasks,
+    bool Complete,
+    IReadOnlyList<Guid> ObservedContainerProjectionIds,
+    IReadOnlyList<string> MissingDockerNodeIds,
+    DateTimeOffset? OldestSampleAt,
+    DateTimeOffset? NewestSampleAt,
     IReadOnlyList<ContainerStat> Stats);
 
 public sealed record SwarmNetworkResult(

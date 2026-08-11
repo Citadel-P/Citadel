@@ -242,7 +242,7 @@ internal sealed class EdgeContainerConnector(IEdgeAgentCommandRouter commandRout
             throw new InvalidOperationException(error?.Message ?? "Failed to start Edge Agent exec session.");
         }
 
-        return new EdgeExecSession(platformId, command.CommandId, command.Output, commandRouter);
+        return new EdgeExecSession(platformId, null, command.CommandId, command.Output, commandRouter);
     }
 
     public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(string platformAddress, ContainerBinaryExecRequest request, CancellationToken cancellationToken)
@@ -421,6 +421,7 @@ internal sealed class EdgeContainerConnector(IEdgeAgentCommandRouter commandRout
 
 internal sealed class EdgeExecSession(
     Guid platformId,
+    string? dockerNodeId,
     string commandId,
     IAsyncEnumerable<EdgeAgentStreamItem> output,
     IEdgeAgentCommandRouter commandRouter)
@@ -471,7 +472,9 @@ internal sealed class EdgeExecSession(
             Stdin = new ExecStdin { Data = ByteString.CopyFrom(input.Span) }
         };
 
-        var result = await commandRouter.SendStreamInputAsync(platformId, commandId, message.ToByteArray(), ct);
+        var result = dockerNodeId is null
+            ? await commandRouter.SendStreamInputAsync(platformId, commandId, message.ToByteArray(), ct)
+            : await commandRouter.SendStreamInputAsync(platformId, dockerNodeId, commandId, message.ToByteArray(), ct);
         if (result.IsFailure(out var error))
         {
             throw new InvalidOperationException(error.Message);
@@ -485,7 +488,9 @@ internal sealed class EdgeExecSession(
             Resize = new ExecResize { Cols = cols, Rows = rows }
         };
 
-        var result = await commandRouter.SendStreamInputAsync(platformId, commandId, message.ToByteArray(), ct);
+        var result = dockerNodeId is null
+            ? await commandRouter.SendStreamInputAsync(platformId, commandId, message.ToByteArray(), ct)
+            : await commandRouter.SendStreamInputAsync(platformId, dockerNodeId, commandId, message.ToByteArray(), ct);
         if (result.IsFailure(out var error))
         {
             throw new InvalidOperationException(error.Message);
@@ -493,5 +498,10 @@ internal sealed class EdgeExecSession(
     }
 
     public async ValueTask DisposeAsync()
-        => await commandRouter.CancelAsync(platformId, commandId, "Exec session disposed.", CancellationToken.None);
+    {
+        if (dockerNodeId is null)
+            await commandRouter.CancelAsync(platformId, commandId, "Exec session disposed.", CancellationToken.None);
+        else
+            await commandRouter.CancelAsync(platformId, dockerNodeId, commandId, "Exec session disposed.", CancellationToken.None);
+    }
 }

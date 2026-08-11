@@ -8,20 +8,30 @@ namespace Infrastructure.Persistence.Mappers;
 
 internal static class PlatformMappers
 {
-    internal static Platform ToDomainSummary(Guid id, string name, string? status, string descriptor)
+    internal static Platform ToDomainSummary(
+        Guid id,
+        string name,
+        string? status,
+        string descriptor,
+        string? clusterId = null,
+        string? address = null,
+        string? connectorType = null)
         => Platform.FromPersistence(
             id: id,
             name: name,
-            address: string.Empty,
+            address: address ?? string.Empty,
             networkCount: 0,
             volumeCount: 0,
             imageCount: 0,
             cpuCount: 0,
             memTotal: 0,
             status: status != null ? Enum.Parse<PlatformStatus>(status) : PlatformStatus.Offline,
-            connectorType: PlatformConnectorType.Unknown,
+            connectorType: connectorType != null
+                ? Enum.Parse<PlatformConnectorType>(connectorType)
+                : PlatformConnectorType.Unknown,
             platformDescriptor: JsonSerializer.Deserialize(descriptor, PlatformJsonContext.Default.PlatformDescriptor)
-                ?? throw new InvalidDataException($"Platform descriptor is missing for platform {id}."));
+                ?? throw new InvalidDataException($"Platform descriptor is missing for platform {id}."),
+            clusterId: clusterId);
 
     internal static Platform ToDomain(this PlatformDto platform)
     {
@@ -46,6 +56,7 @@ internal static class PlatformMappers
             stackCount: platform.StackCount,
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
             stackStatusCounts: MapStackStatusCounts(platform),
+            swarmServiceStatusCounts: MapSwarmServiceStatusCounts(platform),
             clusterId: platform.ClusterId,
             pruneHistoricalSwarmTaskContainers: platform.PruneHistoricalSwarmTaskContainers);
 
@@ -78,6 +89,7 @@ internal static class PlatformMappers
             stackCount: platform.StackCount,
             deploymentStatusCounts: MapDeploymentStatusCounts(platform),
             stackStatusCounts: MapStackStatusCounts(platform),
+            swarmServiceStatusCounts: MapSwarmServiceStatusCounts(platform),
             clusterId: platform.ClusterId,
             pruneHistoricalSwarmTaskContainers: platform.PruneHistoricalSwarmTaskContainers,
             stats: [new PlatformStat(
@@ -115,6 +127,16 @@ internal static class PlatformMappers
         Paused: platform.StackPausedCount,
         InProgress: platform.StackInProgressCount,
         Unknown: platform.StackUnknownCount);
+
+    private static PlatformWorkloadStatusCounts MapSwarmServiceStatusCounts(PlatformDto platform) => new(
+        Total: platform.SwarmServiceCount,
+        Healthy: platform.SwarmServiceHealthyCount,
+        Degraded: platform.SwarmServiceDegradedCount,
+        Failed: platform.SwarmServiceFailedCount,
+        Stopped: platform.SwarmServiceStoppedCount,
+        Paused: 0,
+        InProgress: platform.SwarmServiceInProgressCount,
+        Unknown: platform.SwarmServiceUnknownCount);
 
     internal static IEnumerable<PlatformStat> ToDomain(this IEnumerable<PlatformStatDto> stats)
         => stats.Select(ToDomain);

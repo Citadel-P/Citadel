@@ -38,9 +38,12 @@ import { SwarmServiceInfoActions } from '../actions';
 import { useSwarmServiceGroup } from '../hooks/useSwarmServiceGroup';
 import { ServiceTerminal } from './service-terminal';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { useContainersGroup } from '@/features/docker-resources/containers/hooks/useContainersGroup';
+import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
+import { ServiceStats } from '@/features/swarm-resources/services/service-info/stats';
 
 export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServiceView> = {
-  AddForm: { Header : {title : 'Swarm Service'}, Content: () => <SwarmServiceForm mode="add" /> },
+  AddForm: { Header: { title: 'Swarm Service' }, Content: () => <SwarmServiceForm mode="add" /> },
   EditForm: {
     Header: {
       Indicator: ({ resource }) => (
@@ -62,7 +65,12 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
       ),
       ActionButtons: ({ resource }) => <ServiceActions resource={resource} />,
     },
-    SubHeader: ({ resource }) => <SwarmServiceFailureAlert resource={resource} />,
+    SubHeader: ({ resource }) => (
+      <>
+        <SwarmServiceFailureAlert resource={resource} />
+        <SwarmServicePendingChangesAlert resource={resource} />
+      </>
+    ),
     Tabs: [
       {
         label: 'Config',
@@ -116,6 +124,23 @@ const SwarmServiceFailureAlert = ({ resource }: { resource: ManagedSwarmServiceV
   return (
     <AlertMessage type="error" title="Service operation failed">
       {message}
+    </AlertMessage>
+  );
+};
+
+const SwarmServicePendingChangesAlert = ({ resource }: { resource: ManagedSwarmServiceView }) => {
+  if (!resource.hasPendingDesiredChanges || resource.controlState === ResourceControlState.Processing) return null;
+
+  const desiredReplicas = resource.spec.replicas ?? 0;
+  const isStoppedBelowDesired = resource.desiredTaskCount === 0 && desiredReplicas > 0;
+
+  return (
+    <AlertMessage type="warning" title="Changes not applied">
+      {!resource.dockerServiceId
+        ? 'This Service has not been deployed. Select Apply to create it in Docker Swarm.'
+        : isStoppedBelowDesired
+          ? `Docker is currently scaled to 0, while Citadel is configured for ${desiredReplicas}. Select Apply to deploy the reviewed configuration.`
+          : 'The saved configuration differs from the running Docker Service. Select Apply to deploy these changes.'}
     </AlertMessage>
   );
 };
@@ -201,10 +226,12 @@ const ScaleServiceButton = ({ resource }: { resource: ManagedSwarmServiceView })
 const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => {
   const canLogs = hasCapability(resource, 'canViewLogs');
   const canInspect = hasCapability(resource, 'canInspect');
+  const canViewStats = hasCapability(resource, 'canRead') && Boolean(resource.dockerServiceId);
   const defaultTab = canLogs ? 'logs' : 'inspect';
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [logsClearedAt, setLogsClearedAt] = useState<number>();
   const taskGroup = useServiceTasksGroup(resource.platformId, resource.dockerServiceId);
+  const containerGroup = useContainersGroup(resource.platformId);
   const logsQuery = useRead(
     'getManagedSwarmServiceLogs',
     { id: resource.id, query: { tail: 200 } },
@@ -220,6 +247,16 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
     },
   );
   const tasks = taskGroup.items;
+  const taskIds = useMemo(() => new Set(tasks.map((task) => task.id)), [tasks]);
+  const taskContainers = useMemo(
+    () =>
+      containerGroup.containersInfo?.containers.filter((container) => {
+        if (!container.isSwarmTask) return false;
+        const taskId = getSwarmTaskIdFromContainerName(container.name);
+        return taskId !== undefined && taskIds.has(taskId);
+      }) ?? [],
+    [containerGroup.containersInfo?.containers, taskIds],
+  );
   const runningTaskCount = taskGroup.isLoading
     ? (resource.runningTaskCount ?? 0)
     : tasks.reduce((count, task) => count + (task.state.toLowerCase() === 'running' ? 1 : 0), 0);
@@ -239,7 +276,13 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
         <Summary icon={RefreshCw} label="Update" value={updateState} />
         <Summary icon={Container} label="Docker name" value={resource.dockerName} />
       </div>
-      <TasksTable items={tasks} isLoading={taskGroup.isLoading} showService={false} platformId={resource.platformId} />
+      <TasksTable
+        items={tasks}
+        isLoading={taskGroup.isLoading}
+        showService={false}
+        platformId={resource.platformId}
+        taskContainers={taskContainers}
+      />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-fit">
           <TabsTrigger value="logs" disabled={!canLogs}>
@@ -249,6 +292,9 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
             Inspect
           </TabsTrigger>
           <TabsTrigger value="terminal">Terminal</TabsTrigger>
+          <TabsTrigger value="stats" disabled={!canViewStats}>
+            Stats
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="logs" className="mt-2">
           <LogViewer
@@ -259,6 +305,7 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
             showTimestamps={false}
             wrapLines={false}
             onClear={() => setLogsClearedAt(logsQuery.dataUpdatedAt)}
+            containerFilters={tasks.map(getTaskName)}
             enableContainerFilter
             className="pb-[20vh]"
           />
@@ -274,6 +321,20 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
             minHeight={320}
           />
         </TabsContent>
+        <TabsContent value="stats" className="mt-2">
+          {resource.dockerServiceId && (
+            <ServiceStats
+              service={{
+                id: resource.dockerServiceId,
+                platformId: resource.platformId,
+                runningTaskCount,
+              }}
+              containerProjectionIds={
+                taskContainers.length > 0 ? taskContainers.map((container) => container.id) : undefined
+              }
+            />
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -281,11 +342,14 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
 
 const DOCKER_LOG_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}T\S+)\s+(.*)$/s;
 const DOCKER_SERVICE_SOURCE = /^(\S+)@\S+\s+\|\s?(.*)$/s;
-const DOCKER_SWARM_TASK_DETAIL = /(?:^|,)com\.docker\.swarm\.task\.id=([^,]+)/;
+const DOCKER_SWARM_TASK_DETAIL = /(?:^|,)com\.docker\.swarm\.task\.id=([^,\s]+)/;
 
-const parseServiceLogs = (lines: string[], tasks: { id: string; name: string }[]): LogEntry[] => {
-  const taskNames = tasks.map((task) => task.name).filter(Boolean);
-  const taskNamesById = new Map(tasks.map((task) => [task.id, task.name]));
+const parseServiceLogs = (
+  lines: string[],
+  tasks: { id: string; name?: string | null; serviceName?: string | null; slot?: number | null }[],
+): LogEntry[] => {
+  const taskNamesById = new Map(tasks.map((task) => [task.id, getTaskName(task)]));
+  const taskNames = [...taskNamesById.values()];
   const entries: LogEntry[] = [];
 
   for (const chunk of lines) {

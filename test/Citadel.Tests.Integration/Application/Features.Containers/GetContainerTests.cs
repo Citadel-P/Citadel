@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Deployments;
 using Hosting.Common;
+using System.Text.Json;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Containers;
@@ -10,6 +11,8 @@ namespace Tests.Integration.Application.Features.Containers;
 public class GetContainerTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     readonly string containerId = "42ccd07956a6";
+    Guid persistedContainerId;
+
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
@@ -22,6 +25,7 @@ public class GetContainerTests(PostgresTestFixture fixture) : IntegrationTestBas
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
 
         var container = new Container(deployment.Name, "container-01-id", platform.Id, containerId, ContainerStateStatus.Created, deploymentId: deployment.Id, imageId: image.Id, created: 1768686293);
+        persistedContainerId = container.Id;
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -39,5 +43,22 @@ public class GetContainerTests(PostgresTestFixture fixture) : IntegrationTestBas
         // Assert
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Get_Container_ByPersistedId_ReturnsSuccess()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/containers/{persistedContainerId}",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        await using var responseBody = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
+        using var document = await JsonDocument.ParseAsync(
+            responseBody,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(persistedContainerId, document.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(containerId, document.RootElement.GetProperty("containerId").GetString());
     }
 }

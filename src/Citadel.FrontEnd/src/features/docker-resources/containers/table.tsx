@@ -111,7 +111,8 @@ const columns = (
     React.FC<{ resource: ContainerActionResource; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   platformType?: PlatformType,
-): ColumnDef<ContainerTableRow>[] => [
+): ColumnDef<ContainerTableRow>[] => {
+  const result: ColumnDef<ContainerTableRow>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -166,10 +167,35 @@ const columns = (
         />
       ),
   },
+  ...(platformType === PlatformType.DockerSwarm
+    ? [
+        {
+          accessorKey: 'nodeHostname',
+          header: ({ column }: any) => <SortableCell cellName="Node" column={column} />,
+          cell: ({ row }: any) => {
+            if (isContainerStackGroup(row.original))
+              return <span className="text-xs text-muted-foreground">Multiple nodes</span>;
+            const nodeId = row.original.dockerNodeId;
+            return nodeId ? (
+              <Link to={`../nodes/${nodeId}`} className="table-link truncate" title={row.original.nodeHostname ?? nodeId}>
+                {row.original.nodeHostname ?? formatId(nodeId)}
+              </Link>
+            ) : (
+              <span className="text-xs text-muted-foreground">Manager</span>
+            );
+          },
+        } as ColumnDef<ContainerTableRow>,
+      ]
+    : []),
   {
     accessorKey: 'CPU',
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
-    cell: ({ row }) => <CPUCell state={row.original.state} stats={row.original.lastStats} />,
+    cell: ({ row }) => (
+      <CPUCell
+        state={row.original.state}
+        stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
+      />
+    ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return toNumber(rowA.original.lastStats?.cpuUsage) < toNumber(rowB.original.lastStats?.cpuUsage) ? 1 : -1;
     },
@@ -177,7 +203,12 @@ const columns = (
   {
     accessorKey: 'memory',
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
-    cell: ({ row }) => <MemoryUsageCell state={row.original.state} stats={row.original.lastStats} />,
+    cell: ({ row }) => (
+      <MemoryUsageCell
+        state={row.original.state}
+        stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
+      />
+    ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       const cA = rowA.original.lastStats as ContainerStatView;
       const cB = rowB.original.lastStats as ContainerStatView;
@@ -199,7 +230,10 @@ const columns = (
     id: 'actions',
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
-];
+  ];
+
+  return result;
+};
 
 const ContainerNameCell = ({
   row,
@@ -246,11 +280,16 @@ const ContainerNameCell = ({
   return (
     <div className={cn('flex min-w-0 items-center gap-2', depth > 0 && 'pl-7')}>
       <StateIndicator
-        value={row.state ?? ContainerStateStatus.Exited}
+        value={row.projectionStaleSince ? ContainerStateStatus.Unknown : (row.state ?? ContainerStateStatus.Exited)}
         isProcessing={row.controlState === ResourceControlState.Processing}
         kind="container"
+        tooltip={
+          row.projectionStaleSince
+            ? (row.projectionStaleReason ?? 'Last-known state; the owning Node Agent is unavailable.')
+            : undefined
+        }
       />
-      <Link to={`./${formatId(row.containerId)}`} className="table-link truncate" title={row.name}>
+      <Link to={`./${row.id}`} className="table-link truncate" title={row.name}>
         {row.name ? truncate(row.name?.slice(1), 24) : ''}
       </Link>
       {row.isSystem ? (
@@ -326,6 +365,9 @@ const createStackGroup = (
     imageView: null,
     displayStatus: getStackDisplayStatus(containers),
     capabilities: firstContainer.capabilities,
+    projectionStaleSince: containers.some((container) => container.projectionStaleSince)
+      ? (containers.find((container) => container.projectionStaleSince)?.projectionStaleSince ?? null)
+      : null,
     containers,
     isStackGroup: true,
   };
@@ -333,6 +375,7 @@ const createStackGroup = (
 
 const getStackDisplayStatus = (containers: ContainerView[]) => {
   if (containers.length === 0) return StackReleaseStatus.Unknown;
+  if (containers.some((container) => container.projectionStaleSince)) return StackReleaseStatus.Degraded;
   if (containers.every((container) => container.state === ContainerStateStatus.Running))
     return StackReleaseStatus.Healthy;
   if (containers.every((container) => container.state === ContainerStateStatus.Paused))
@@ -386,6 +429,7 @@ const getStackState = (containers: ContainerView[]) => {
 };
 
 const aggregateStats = (containers: ContainerView[], platformLimits: PlatformResourceLimits): ContainerStatView => {
+  containers = containers.filter((container) => !container.projectionStaleSince);
   const memoryLimit = getAggregateMemoryLimit(containers, platformLimits.memoryTotal);
   const cpuLimit = platformLimits.cpuCount > 0 ? platformLimits.cpuCount * 100 : 0;
 

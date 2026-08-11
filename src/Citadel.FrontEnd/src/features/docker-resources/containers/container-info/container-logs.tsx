@@ -2,7 +2,7 @@ import { useCallback, useState, useRef, useEffect, memo } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
-import { normalizeDockerId } from '@/lib/utils';
+import { normalizeContainerReference } from '@/lib/utils';
 
 const MAX_LOGS = 5000;
 const MAX_CACHED_LOG_GROUPS = 8;
@@ -18,6 +18,7 @@ type LogsProps = {
   logEventName?: string;
   logBatchEventName?: string;
   containerFilters?: string[];
+  enableContainerFilter?: boolean;
 };
 
 const Logs = memo(
@@ -30,8 +31,9 @@ const Logs = memo(
     logEventName = 'SendContainerLogs',
     logBatchEventName = 'SendContainerLogsBatch',
     containerFilters,
+    enableContainerFilter,
   }: LogsProps) => {
-    const nid = normalizeDockerId(containerId);
+    const nid = normalizeContainerReference(containerId);
     const effectiveGroupName = groupName ?? (nid ? `container-log:${nid}` : undefined);
     const hubMethodArg = deploymentId ?? stackId ?? nid;
     const { containerLogs: logs, clearLogs } = useContainerLogGroup({
@@ -53,6 +55,7 @@ const Logs = memo(
           wrapLines={false}
           onClear={clearLogs}
           containerFilters={containerFilters}
+          enableContainerFilter={enableContainerFilter}
           className="pb-[20vh]"
         />
       </div>
@@ -81,6 +84,7 @@ export const StackLogs = memo(({ stackId, containers }: { stackId: string; conta
     logEventName="SendStackLogs"
     logBatchEventName="SendStackLogsBatch"
     containerFilters={containers}
+    enableContainerFilter
   />
 ));
 StackLogs.displayName = 'StackLogs';

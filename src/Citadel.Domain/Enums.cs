@@ -15,6 +15,14 @@ public enum PlatformStatus
     Online
 }
 
+public enum SwarmQuorumState
+{
+    Unknown,
+    Healthy,
+    Degraded,
+    Lost
+}
+
 public enum RegistryType
 {
     Custom,
@@ -312,6 +320,33 @@ public enum EdgeAgentResourceType
     BuildAgentPool = 1
 }
 
+public enum EdgeAgentProfile
+{
+    Ordinary = 0,
+    SwarmNode = 1
+}
+
+public enum SwarmNodeAgentDesiredState
+{
+    Installed = 0,
+    Removed = 1
+}
+
+public enum SwarmNodeAgentOperationKind
+{
+    Install = 0,
+    Repair = 1,
+    Upgrade = 2,
+    Remove = 3
+}
+
+public enum SwarmNodeAgentOperationState
+{
+    Running = 0,
+    Completed = 1,
+    Failed = 2
+}
+
 public enum EdgeAgentCommandKind
 {
     Unspecified = 0,
@@ -380,7 +415,9 @@ public enum EdgeAgentCommandKind
     SwarmServiceUpdate = 112,
     SwarmServiceDelete = 113,
     SwarmServiceRestart = 114,
-    SwarmNodeUpdate = 115
+    SwarmNodeUpdate = 115,
+    SwarmSystemServiceCreate = 116,
+    SwarmSystemServiceUpdate = 117
 }
 
 public enum SwarmServiceOwnership
@@ -390,6 +427,7 @@ public enum SwarmServiceOwnership
     CitadelDeployment,
     CitadelStack,
     CitadelService,
+    System,
     OwnershipConflict
 }
 
@@ -400,7 +438,8 @@ public enum SwarmServiceHealth
     Progressing,
     Degraded,
     Failed,
-    Created
+    Created,
+    Stopped
 }
 
 public enum SwarmServiceSynchronizationState
@@ -833,6 +872,7 @@ public enum ActivityEventType
     PlatformConnected,
     PlatformDisconnected,
     PlatformRenamed,
+    PlatformNodeAgentLifecycle,
     #endregion
 
     #region Registry Events

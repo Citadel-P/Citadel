@@ -156,6 +156,100 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
             Times.Once);
     }
 
+    [Theory]
+    [InlineData("manager-node-b", "manager-daemon")]
+    [InlineData("manager-node-a", "replacement-daemon")]
+    public async Task SwarmPlatformSync_ShouldRejectChangedPinnedManagerIdentity(
+        string reportedNodeId,
+        string reportedDaemonId)
+    {
+        const string address = "https://swarm-manager.example.test";
+        var swarmPlatform = new Platform(
+            name: $"swarm-{Guid.CreateVersion7():N}",
+            address: address,
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "29.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerSwarmPlatformDescriptor(
+                NodeID: "manager-node-a",
+                NodeAddr: "10.0.0.1",
+                LocalNodeState: "Active",
+                ControlAvailable: true,
+                Nodes: 2,
+                Managers: 1,
+                DaemonId: "manager-daemon",
+                ContainerCount: 2,
+                ContainersRunning: 2,
+                ContainersPaused: 0,
+                ContainersStopped: 0,
+                ClusterId: "cluster-a"),
+            clusterId: "cluster-a");
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var setupUow = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await setupUow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
+            await setupUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        connectorMock
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.Is<GetPlatformCommand>(command => command.PlatformAddress == address),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new PlatformResult(
+                swarmPlatform.Name,
+                address,
+                99,
+                99,
+                99,
+                4,
+                500,
+                "29.0",
+                "1.0.0",
+                new DockerSwarmPlatformDescriptor(
+                    NodeID: reportedNodeId,
+                    NodeAddr: "10.0.0.2",
+                    LocalNodeState: "Active",
+                    ControlAvailable: true,
+                    Nodes: 2,
+                    Managers: 1,
+                    DaemonId: reportedDaemonId,
+                    ContainerCount: 99,
+                    ContainersRunning: 99,
+                    ContainersPaused: 0,
+                    ContainersStopped: 0,
+                    ClusterId: "cluster-a"))));
+
+        var checkpoint = dbWorkQueue.CreateCheckpoint();
+        await broadcaster.PublishAsync(
+            new PlatformHealth(
+                swarmPlatform.Id,
+                address,
+                PlatformConnectorType.Agent,
+                IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+        await dbWorkQueue.WaitForIdleAfterAsync(checkpoint, TestContext.Current.CancellationToken);
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var assertUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = Assert.IsType<Platform>(await assertUow.Platforms.GetByIdAsync(
+            swarmPlatform.Id,
+            TestContext.Current.CancellationToken));
+        var descriptor = Assert.IsType<DockerSwarmPlatformDescriptor>(persisted.PlatformDescriptor);
+
+        Assert.Equal("manager-node-a", descriptor.NodeID);
+        Assert.Equal(1, persisted.NetworkCount);
+        Assert.Equal(PlatformStatus.Offline, persisted.Status);
+    }
+
     [Fact]
     public async Task DockerPlatform_Goes_Offline_Should_Update_Platform_Info()
     {

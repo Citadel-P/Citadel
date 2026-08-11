@@ -7,6 +7,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Swarm;
@@ -30,6 +31,8 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
     private readonly Mock<IConnectorFactory<IStackConnector>> stackConnectorFactory = new();
     private readonly Mock<IConnectorFactory<ISwarmConnector>> swarmConnectorFactory = new();
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerConnectorFactory = new();
+    private readonly Mock<IPlatformConnector> platformConnector = new();
+    private readonly Mock<IConnectorFactory<IPlatformConnector>> platformConnectorFactory = new();
     private Guid stackId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -39,6 +42,7 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
         services.RemoveAll<IConnectorFactory<IStackConnector>>();
         services.RemoveAll<IConnectorFactory<ISwarmConnector>>();
         services.RemoveAll<IConnectorFactory<IContainerConnector>>();
+        services.RemoveAll<IConnectorFactory<IPlatformConnector>>();
         services.RemoveAll<IResourceBindingResolver>();
 
         services
@@ -47,6 +51,7 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
             .AddSingleton(stackConnectorFactory.Object)
             .AddSingleton(swarmConnectorFactory.Object)
             .AddSingleton(containerConnectorFactory.Object)
+            .AddSingleton(platformConnectorFactory.Object)
             .AddSingleton<IResourceBindingResolver>(new EmptyResourceBindingResolver());
 
         stackConnectorFactory
@@ -55,6 +60,25 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
         swarmConnectorFactory
             .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
             .Returns(swarmConnector.Object);
+        platformConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(connector => connector.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new PlatformResult(
+                "swarm-manager",
+                "https://swarm.example.test",
+                0,
+                0,
+                0,
+                4,
+                1024,
+                "28.0.0",
+                "1.0.0",
+                CreateManagerDescriptor(),
+                ClusterId: "cluster-1")));
         stackConnector
             .Setup(connector => connector.StackApplyAsync(
                 It.IsAny<StackApplyCommand>(),
@@ -76,9 +100,7 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
             agentVersion: "1.0.0",
             status: PlatformStatus.Online,
             connectorType: PlatformConnectorType.Agent,
-            platformDescriptor: new DockerSwarmPlatformDescriptor(
-                "node-1", "10.0.0.1", "Active", true, 1, 1,
-                "daemon-1", 0, 0, 0, 0, "cluster-1"),
+            platformDescriptor: CreateManagerDescriptor(),
             clusterId: "cluster-1");
         var stack = Stack.Create(
             "endpoint-stack",
@@ -172,6 +194,76 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
         Assert.Equal(StackReleaseStatus.Healthy, persisted?.CurrentStackRelease?.Status);
     }
 
+    [Fact]
+    public async Task ApplyEndpoint_ShouldRejectUndefinedRequiredComposeVariableBeforeDockerMutation()
+    {
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var uow = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+            Assert.NotNull(stack?.CurrentStackRelease);
+            stack.CurrentStackRelease.UpdateSpec(new ManualStack(
+                "services:\n  api:\n    image: nginx:latest\n    environment:\n      TOKEN: ${MISSING_TOKEN}\n",
+                StackUpdateBehavior.Disabled,
+                DestroyBeforeDeploy: false,
+                ProjectName: "endpoint-stack"));
+            await uow.Stacks.UpdateAsync(stack, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        using var response = await Client.PostAsync(
+            "/api/v1/stacks/apply",
+            new StringContent($$"""{"id":"{{stackId}}","recreate":false}""", Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Required Compose variable 'MISSING_TOKEN'", responseBody, StringComparison.Ordinal);
+        stackConnector.Verify(
+            connector => connector.StackApplyAsync(
+                It.IsAny<StackApplyCommand>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        await using var verificationScope = Services.CreateAsyncScope();
+        var verificationUow = verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = await verificationUow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+        Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
+        Assert.Equal(StackReleaseStatus.Failed, persisted?.CurrentStackRelease?.Status);
+    }
+
+    [Fact]
+    public async Task ApplyEndpoint_ShouldAllowComposeDefaultWithoutBinding()
+    {
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var uow = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+            Assert.NotNull(stack?.CurrentStackRelease);
+            stack.CurrentStackRelease.UpdateSpec(new ManualStack(
+                "services:\n  api:\n    image: nginx:latest\n    environment:\n      TOKEN: ${OPTIONAL_TOKEN:-fallback}\n",
+                StackUpdateBehavior.Disabled,
+                DestroyBeforeDeploy: false,
+                ProjectName: "endpoint-stack"));
+            await uow.Stacks.UpdateAsync(stack, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        using var response = await Client.PostAsync(
+            "/api/v1/stacks/apply",
+            new StringContent($$"""{"id":"{{stackId}}","recreate":false}""", Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Swarm Stack converged successfully", responseBody, StringComparison.Ordinal);
+        stackConnector.Verify(
+            connector => connector.StackApplyAsync(
+                It.Is<StackApplyCommand>(command => command.OrchestrationMode == StackOrchestrationMode.DockerSwarm),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     private static async IAsyncEnumerable<StackApplyResult> SuccessfulApplyStream(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -179,6 +271,20 @@ public sealed class SwarmStackApplyEndpointTests(PostgresTestFixture fixture) : 
         yield return StackApplyResult.Finished(0);
         await Task.CompletedTask;
     }
+
+    private static DockerSwarmPlatformDescriptor CreateManagerDescriptor() => new(
+        NodeID: "node-1",
+        NodeAddr: "10.0.0.1",
+        LocalNodeState: "Active",
+        ControlAvailable: true,
+        Nodes: 1,
+        Managers: 1,
+        DaemonId: "daemon-1",
+        ContainerCount: 0,
+        ContainersRunning: 0,
+        ContainersPaused: 0,
+        ContainersStopped: 0,
+        ClusterId: "cluster-1");
 
     private sealed class EmptyResourceBindingResolver : IResourceBindingResolver
     {

@@ -189,20 +189,25 @@ Citadel also validates the agent protocol version and advertised capabilities du
 
 ## Docker Swarm Node Coverage
 
-An Edge Agent configured for a Docker Swarm Platform currently represents the
-connected manager only. It can manage cluster-scoped Swarm resources through
-that manager and node-local Docker resources stored on the manager.
+An ordinary Edge Agent configured for a Docker Swarm Platform represents the
+connected manager. It manages cluster-scoped Swarm resources and supplies the
+manager's node-local Docker data.
 
-Do not copy one Platform enrollment token into a global Swarm Service or start
-one enrolled Edge Agent on every Node. Citadel currently stores one active
-Platform Agent identity; additional instances do not create a cluster-wide
-resource view.
+Do not copy that Platform enrollment token into a global Swarm Service or
+start one enrolled ordinary Edge Agent on every Node. Use **Install node
+agents** on the Platform's **Cluster node coverage** card. Citadel then creates
+a separate cluster-scoped bootstrap flow and a Citadel System global Docker
+Service for eligible Nodes not already covered by the manager connection. Its
+tasks run the existing Agent in a restricted outbound `swarm-node` profile and
+expose no inbound management port. The ordinary Edge Agent remains the
+manager/control-plane connector; satellite tasks are separate Node data
+sources under the same Swarm Platform.
 
-Citadel's planned Swarm node-agent setup will use a separate cluster-scoped
-bootstrap flow and one outbound satellite Agent on Nodes not already covered by
-the manager connection. The Platform will remain one Swarm Platform. Until the
-setup appears in the Platform page, Containers, Images, Volumes, container
-statistics, and exec access remain local to the connected manager.
+Installing the System Service is an explicit privileged action because its
+tasks mount each Node's Docker socket read-write. With coverage installed,
+Citadel aggregates current Containers and routes worker Task inspect, logs,
+statistics, lifecycle operations, and Terminal to the owning Node. Images and
+Volumes remain manager-local in this release.
 
 ## Docker Operations
 

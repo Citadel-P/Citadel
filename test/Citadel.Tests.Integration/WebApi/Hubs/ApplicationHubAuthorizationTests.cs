@@ -26,6 +26,7 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
     private static readonly Guid AdminRoleId = Guid.Parse("30000000-0000-0000-0000-000000000001");
     private readonly List<HubConnection> connections = [];
     private Guid platformId;
+    private Guid containerResourceId;
     private string containerId = string.Empty;
     private Guid swarmServiceId;
 
@@ -61,6 +62,7 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
         await unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
+        containerResourceId = container.Id;
         containerId = container.DockerContainerId[..12];
         swarmServiceId = swarmService.Id;
     }
@@ -130,6 +132,9 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
         var noPlatformAccess = await CreateAuthorizationSubjectAsync();
 
         await AssertAuthorizationAllowedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerInfoGroup(containerId));
+        await AssertAuthorizationAllowedAsync(
+            readOnly,
+            Constants.WellKnownSignalRGroups.ContainerInfoGroup(containerResourceId.ToString("D")));
         await AssertAuthorizationDeniedAsync(noPlatformAccess, Constants.WellKnownSignalRGroups.ContainerInfoGroup(containerId));
         await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.StackLogGroup(stackId));
         await AssertAuthorizationDeniedAsync(readOnly, Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId));

@@ -8,6 +8,7 @@
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
   --layout-content-width: 96rem;
+  --layout-header-height: 4rem;
   --layout-footer-height: 3.5625rem;
   /* Animations */
   --animate-wiggle: wiggle 1s ease-in-out infinite;

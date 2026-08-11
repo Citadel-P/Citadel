@@ -32,7 +32,7 @@ const LayoutPage = () => {
         <Header />
         <AlertTaskSheet />
         <ActivityTaskSheet />
-        <div id="main-scroll-container" className="grow overflow-auto">
+        <div id="main-scroll-container" className="min-h-0 grow overflow-auto">
           <LicenseReminder />
           <Outlet />
         </div>

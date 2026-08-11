@@ -61,6 +61,70 @@ public sealed class EdgeAgentCommandRouterTests
     }
 
     [Fact]
+    public async Task SendUnaryAsync_WithNodeId_ShouldRouteOnlyToOwningNode()
+    {
+        var registry = new EdgeAgentSessionRegistry();
+        var platformId = Guid.CreateVersion7();
+        var first = CreateNodeSession(platformId, "node-1");
+        var second = CreateNodeSession(platformId, "node-2");
+        registry.Register(first);
+        registry.Register(second);
+        var router = new EdgeAgentCommandRouter(registry, NullLogger<EdgeAgentCommandRouter>.Instance);
+
+        var resultTask = router.SendUnaryAsync(
+            platformId,
+            "node-2",
+            EdgeAgentCommandKind.ContainerInspect,
+            [],
+            TimeSpan.FromSeconds(5),
+            correlationId: null,
+            TestContext.Current.CancellationToken);
+
+        var envelope = await ReadOutboundAsync(second, TestContext.Current.CancellationToken);
+        Assert.False(first.Outbound.TryRead(out _));
+        Assert.Equal("node-2", envelope.Command.NodeId);
+        second.HandleCompleted(envelope.CommandId);
+
+        var result = await resultTask;
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task SendUnaryAsync_WithNodeId_ShouldRejectManagerOnlyAndUndeliveredCommandsBeforeRouting()
+    {
+        var registry = new EdgeAgentSessionRegistry();
+        var platformId = Guid.CreateVersion7();
+        var session = CreateNodeSession(platformId, "node-1");
+        registry.Register(session);
+        var router = new EdgeAgentCommandRouter(registry, NullLogger<EdgeAgentCommandRouter>.Instance);
+
+        var deniedKinds = new[]
+        {
+            EdgeAgentCommandKind.SwarmNodeUpdate,
+            EdgeAgentCommandKind.ContainerCreate,
+            EdgeAgentCommandKind.ContainerExecBinary,
+            EdgeAgentCommandKind.ImageList,
+            EdgeAgentCommandKind.VolumeList,
+            EdgeAgentCommandKind.NetworkList
+        };
+        foreach (var kind in deniedKinds)
+        {
+            var result = await router.SendUnaryAsync(
+                platformId,
+                "node-1",
+                kind,
+                [],
+                TimeSpan.FromSeconds(1),
+                correlationId: null,
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains("not allowed", result.ErrorMessage);
+        }
+        Assert.False(session.Outbound.TryRead(out _));
+    }
+
+    [Fact]
     public async Task CancelCommandAsync_ShouldReleasePendingCommand_WhenOutboundQueueIsFull()
     {
         var platformId = Guid.CreateVersion7();
@@ -196,4 +260,15 @@ public sealed class EdgeAgentCommandRouterTests
             Guid.CreateVersion7(),
             "SHA256:test",
             Guid.CreateVersion7().ToString("D"));
+
+    private static EdgeAgentSession CreateNodeSession(Guid platformId, string dockerNodeId)
+        => new(
+            global::Domain.EdgeAgentResourceType.Platform,
+            platformId,
+            platformId,
+            Guid.CreateVersion7(),
+            "SHA256:test",
+            Guid.CreateVersion7().ToString("D"),
+            global::Domain.EdgeAgentProfile.SwarmNode,
+            dockerNodeId);
 }

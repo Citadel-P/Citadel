@@ -37,18 +37,29 @@ CREATE TABLE edgeagentbindings (
     agentid uuid NOT NULL,
     agentpublickey text NOT NULL,
     capabilitiesjson json,
+    clusterid text,
     connectionstatus text NOT NULL,
     createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    dockerdaemonid text,
+    dockerhostname text,
+    dockernodeid text,
+    firstenrolledatutc timestamp with time zone,
+    lastauthenticatedatutc timestamp with time zone,
     lastconnectedatutc timestamp with time zone,
     lastdisconnectedatutc timestamp with time zone,
     lastheartbeatatutc timestamp with time zone,
+    lastobservedserviceid text,
+    lastobservedtaskid text,
     lastseenhostname text,
     lastseenversion text,
     platformid uuid NOT NULL,
+    profile text NOT NULL DEFAULT 'Ordinary',
     protocolversion integer NOT NULL DEFAULT 1,
     resourceid uuid NOT NULL,
     resourcetype text NOT NULL DEFAULT 'Platform',
+    revocationreason text,
     revokedatutc timestamp with time zone,
+    swarmrole text,
     updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     CONSTRAINT pk_edgeagentbindings PRIMARY KEY (id)
 );
@@ -400,6 +411,49 @@ CREATE TABLE swarmnetworkprojections (
     CONSTRAINT fk_swarmnetworkprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
+CREATE TABLE swarmnodeagentbootstraps (
+    id uuid NOT NULL,
+    clusterid text NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    dockersecretid text,
+    dockersecretname text NOT NULL,
+    expiresatutc timestamp with time zone NOT NULL,
+    platformid uuid NOT NULL,
+    revokedatutc timestamp with time zone,
+    tokenhash text NOT NULL,
+    updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    version integer NOT NULL,
+    CONSTRAINT pk_swarmnodeagentbootstraps PRIMARY KEY (id),
+    CONSTRAINT fk_swarmnodeagentbootstraps_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_swarmnodeagentbootstraps_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnodeagentinstallations (
+    platformid uuid NOT NULL,
+    agentimagedigest text NOT NULL,
+    agentimagereference text NOT NULL,
+    clusterid text NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    desiredstate text NOT NULL,
+    dockercaconfigid text,
+    dockercaconfigname text,
+    dockerserviceid text,
+    dockerservicename text NOT NULL,
+    managerdockerdaemonid text NOT NULL,
+    managerdockernodeid text NOT NULL,
+    operationactorid uuid,
+    operationerror text,
+    operationid uuid,
+    operationkind text,
+    operationstartedatutc timestamp with time zone,
+    operationstate text,
+    updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_swarmnodeagentinstallations PRIMARY KEY (platformid),
+    CONSTRAINT fk_swarmnodeagentinstallations_actors_operationactorid FOREIGN KEY (operationactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_swarmnodeagentinstallations_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
 CREATE TABLE swarmnodeprojections (
     platformid uuid NOT NULL,
     dockernodeid text NOT NULL,
@@ -424,6 +478,25 @@ CREATE TABLE swarmnodeprojections (
     versionindex bigint NOT NULL,
     CONSTRAINT pk_swarmnodeprojections PRIMARY KEY (platformid, dockernodeid),
     CONSTRAINT fk_swarmnodeprojections_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE swarmnoderuntimeprojectionstates (
+    platformid uuid NOT NULL,
+    dockernodeid text NOT NULL,
+    agentversion text,
+    dockerversion text,
+    isstale boolean NOT NULL DEFAULT TRUE,
+    lasteventgapat timestamp with time zone,
+    lasteventstreamconnectedat timestamp with time zone,
+    laststatssampleat timestamp with time zone,
+    lastsuccessfulreconciliationat timestamp with time zone,
+    reconciliationcompletedat timestamp with time zone,
+    reconciliationgeneration bigint NOT NULL DEFAULT 0,
+    reconciliationstartedat timestamp with time zone,
+    stalereason text,
+    stalesince timestamp with time zone,
+    CONSTRAINT pk_swarmnoderuntimeprojectionstates PRIMARY KEY (platformid, dockernodeid),
+    CONSTRAINT fk_swarmnoderuntimeprojectionstates_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
 CREATE TABLE swarmsecretprojections (
@@ -498,6 +571,7 @@ CREATE TABLE swarmtaskprojections (
     platformid uuid NOT NULL,
     dockertaskid text NOT NULL,
     desiredstate text NOT NULL,
+    dockercontainerid text,
     dockercreatedat timestamp with time zone,
     dockernodeid text NOT NULL,
     dockerserviceid text NOT NULL,
@@ -986,6 +1060,7 @@ CREATE TABLE containers (
     deploymentid uuid,
     dockercontainerid text NOT NULL,
     dockerimageid text NOT NULL,
+    dockernodeid text,
     hascitadelownershiplabels boolean NOT NULL DEFAULT FALSE,
     imageid uuid,
     isswarmtask boolean NOT NULL DEFAULT FALSE,
@@ -993,6 +1068,9 @@ CREATE TABLE containers (
     name text NOT NULL,
     platformid uuid NOT NULL,
     ports json NOT NULL,
+    projectionobservedat bigint,
+    projectionstalereason text,
+    projectionstalesince bigint,
     rowversion bigint NOT NULL DEFAULT 0,
     stack text,
     stackid uuid,
@@ -1396,8 +1474,6 @@ VALUES ('9e0c1481-c640-3182-c9a0-4687ef91bd6a', 4, 13, '30000000-0000-0000-0000-
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('a3cd7182-baa1-324f-79f0-3a04d7647032', 4, 11, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('a4b222e3-7452-b5f4-377b-c05652533f67', 4, 0, '30000000-0000-0000-0000-000000000001', 27);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b2298835-c351-7367-ad8d-e5884be235f3', 2, 12, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b3abb382-80da-8170-b011-05af044e7908', 2, 3, '30000000-0000-0000-0000-000000000002', 0);
@@ -1411,6 +1487,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('d5fa8563-b0a2-4f11-7e16-7c1877e43dda', 4, 6, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('dbb104e4-d7e2-5173-b0b2-6d1519c2f682', 4, 8, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('de0d45da-a297-0302-9357-99247a89afe2', 4, 0, '30000000-0000-0000-0000-000000000001', 1051);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('e04cd0d3-47bf-2d28-e099-c7a9b61e3875', 1, 3, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1635,7 +1713,9 @@ CREATE INDEX ix_buildruns_triggeredbyactorid ON buildruns (triggeredbyactorid);
 
 CREATE UNIQUE INDEX ix_citadelinstanceidentity_instanceid ON citadelinstanceidentity (instanceid);
 
-CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid ON containers (dockercontainerid, platformid);
+CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid ON containers (dockercontainerid, platformid) WHERE dockernodeid IS NULL;
+
+CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid_dockernodeid ON containers (dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL;
 
 CREATE INDEX ix_containers_controltriggeredby ON containers (controltriggeredby);
 
@@ -1646,6 +1726,8 @@ CREATE INDEX ix_containers_dockerimageid ON containers (dockerimageid);
 CREATE INDEX ix_containers_imageid ON containers (imageid);
 
 CREATE INDEX ix_containers_platformid ON containers (platformid);
+
+CREATE INDEX ix_containers_platformid_dockernodeid ON containers (platformid, dockernodeid);
 
 CREATE INDEX ix_containers_stackid ON containers (stackid);
 
@@ -1663,11 +1745,15 @@ CREATE UNIQUE INDEX ix_deployments_name_platformid ON deployments (name, platfor
 
 CREATE INDEX ix_deployments_platformid ON deployments (platformid);
 
-CREATE INDEX ix_edgeagentbindings_agentfingerprint ON edgeagentbindings (agentfingerprint);
+CREATE UNIQUE INDEX ix_edgeagentbindings_activeagentfingerprint ON edgeagentbindings (agentfingerprint) WHERE revokedatutc IS NULL;
 
-CREATE INDEX ix_edgeagentbindings_agentid ON edgeagentbindings (agentid);
+CREATE UNIQUE INDEX ix_edgeagentbindings_activeagentid ON edgeagentbindings (agentid) WHERE revokedatutc IS NULL;
 
-CREATE UNIQUE INDEX ix_edgeagentbindings_resource ON edgeagentbindings (resourcetype, resourceid);
+CREATE UNIQUE INDEX ix_edgeagentbindings_activedaemon ON edgeagentbindings (dockerdaemonid) WHERE dockerdaemonid IS NOT NULL AND revokedatutc IS NULL;
+
+CREATE UNIQUE INDEX ix_edgeagentbindings_activenode ON edgeagentbindings (resourcetype, resourceid, dockernodeid) WHERE dockernodeid IS NOT NULL AND revokedatutc IS NULL;
+
+CREATE UNIQUE INDEX ix_edgeagentbindings_activeresource ON edgeagentbindings (resourcetype, resourceid) WHERE dockernodeid IS NULL AND revokedatutc IS NULL;
 
 CREATE INDEX ix_edgeagentenrollments_createdbyactorid ON edgeagentenrollments (createdbyactorid);
 
@@ -1817,6 +1903,18 @@ CREATE INDEX ix_stackwebhookdeployqueue_ready ON stackwebhookdeployqueue (status
 
 CREATE INDEX ix_stackwebhookdeployqueue_stackid ON stackwebhookdeployqueue (stackid);
 
+CREATE INDEX ix_swarmnodeagentbootstraps_createdbyactorid ON swarmnodeagentbootstraps (createdbyactorid);
+
+CREATE UNIQUE INDEX ix_swarmnodeagentbootstraps_dockersecretid ON swarmnodeagentbootstraps (dockersecretid) WHERE dockersecretid IS NOT NULL;
+
+CREATE UNIQUE INDEX ix_swarmnodeagentbootstraps_platformversion ON swarmnodeagentbootstraps (platformid, version);
+
+CREATE UNIQUE INDEX ix_swarmnodeagentbootstraps_tokenhash ON swarmnodeagentbootstraps (tokenhash);
+
+CREATE UNIQUE INDEX ix_swarmnodeagentinstallations_dockerserviceid ON swarmnodeagentinstallations (dockerserviceid) WHERE dockerserviceid IS NOT NULL;
+
+CREATE INDEX ix_swarmnodeagentinstallations_operationactorid ON swarmnodeagentinstallations (operationactorid);
+
 CREATE INDEX ix_swarmserviceprojections_stackid ON swarmserviceprojections (stackid);
 
 CREATE INDEX ix_swarmserviceprojections_swarmserviceid ON swarmserviceprojections (swarmserviceid);
@@ -1863,7 +1961,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260809173801_migration0001', '10.0.10');
+VALUES ('20260810172124_migration0001', '10.0.10');
 
 COMMIT;
 

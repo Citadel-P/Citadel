@@ -120,6 +120,7 @@ export enum SwarmServiceOwnership {
   CitadelDeployment = "CitadelDeployment",
   CitadelStack = "CitadelStack",
   CitadelService = "CitadelService",
+  System = "System",
   OwnershipConflict = "OwnershipConflict",
 }
 
@@ -154,6 +155,27 @@ export enum SwarmServiceHealth {
   Degraded = "Degraded",
   Failed = "Failed",
   Created = "Created",
+  Stopped = "Stopped",
+}
+
+export enum SwarmQuorumState {
+  Unknown = "Unknown",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
+  Lost = "Lost",
+}
+
+export enum SwarmNodeAgentOperationState {
+  Running = "Running",
+  Completed = "Completed",
+  Failed = "Failed",
+}
+
+export enum SwarmNodeAgentOperationKind {
+  Install = "Install",
+  Repair = "Repair",
+  Upgrade = "Upgrade",
+  Remove = "Remove",
 }
 
 export enum StopSignal {
@@ -239,6 +261,7 @@ export enum SpecificPermission {
   Restore = "Restore",
   Browse = "Browse",
   Download = "Download",
+  ManageNodeAgents = "ManageNodeAgents",
 }
 
 export enum SecretProviderType {
@@ -828,6 +851,7 @@ export enum ActivityEventType {
   PlatformConnected = "PlatformConnected",
   PlatformDisconnected = "PlatformDisconnected",
   PlatformRenamed = "PlatformRenamed",
+  PlatformNodeAgentLifecycle = "PlatformNodeAgentLifecycle",
   RegistryCreated = "RegistryCreated",
   RegistryRenamed = "RegistryRenamed",
   RegistryUpdated = "RegistryUpdated",
@@ -1408,6 +1432,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "PlatformRenamed",
         ActivityEventInfoPlatformRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformNodeAgentLifecycle",
+        ActivityEventInfoPlatformNodeAgentLifecycle
       >
     | BaseActivityEventInfoTypeMapping<
         "RegistryRenamed",
@@ -2210,6 +2238,15 @@ export interface ActivityEventInfoPlatformDisconnected {
   $type?: "PlatformDisconnected";
   platform: PlatformSnapshot;
   previousStatus: PlatformStatus;
+}
+
+export interface ActivityEventInfoPlatformNodeAgentLifecycle {
+  $type?: "PlatformNodeAgentLifecycle";
+  kind: SwarmNodeAgentOperationKind;
+  /** @format uuid */
+  operationId: string;
+  state: SwarmNodeAgentOperationState;
+  message: null | string;
 }
 
 export interface ActivityEventInfoPlatformRenamed {
@@ -4417,6 +4454,7 @@ export interface ContainerDataView {
   systemRole: null | ContainerSystemRole;
   hasCitadelOwnershipLabels: boolean;
   isSwarmTask: boolean;
+  dockerNodeId: null | string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4599,6 +4637,19 @@ export interface ContainerView {
   systemRole: null | ContainerSystemRole;
   hasCitadelOwnershipLabels: boolean;
   isSwarmTask: boolean;
+  dockerNodeId: null | string;
+  nodeHostname: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  projectionObservedAt: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  projectionStaleSince: null | number | string;
+  projectionStaleReason: null | string;
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
   /** @format uuid */
@@ -6492,6 +6543,7 @@ export interface PlatformCapabilities {
   canInspect: boolean;
   canOpenTerminal: boolean;
   canPull: boolean;
+  canManageNodeAgents: boolean;
   canRead: boolean;
   canWrite: boolean;
   canExecute: boolean;
@@ -6761,6 +6813,7 @@ export interface PlatformView {
   stackCount: number | string;
   deploymentStatusCounts: PlatformWorkloadStatusCountsView;
   stackStatusCounts: PlatformWorkloadStatusCountsView;
+  swarmServiceStatusCounts: PlatformWorkloadStatusCountsView;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
   clusterId: null | string;
@@ -7706,6 +7759,126 @@ export interface SwarmNetworksView {
   capabilities: PlatformCapabilities;
 }
 
+export interface SwarmNodeAgentCoverageView {
+  state: string;
+  isInstalled: boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  coveredNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  eligibleNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  connectedNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  offlineNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  enrollingNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  missingNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  incompatibleNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  unsupportedNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  unschedulableNodes: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  staleNodes: number | string;
+  /** @format date-time */
+  lastMembershipReconciliationAtUtc: null | string;
+  agentImageReference: null | string;
+  agentImageDigest: null | string;
+  /** @format date-time */
+  enrollmentExpiresAtUtc: null | string;
+  operation: null | SwarmNodeAgentOperationResult;
+  reasons: string[];
+  nodes: SwarmNodeAgentNodeCoverageResult[];
+  canManageNodeAgents: boolean;
+}
+
+export interface SwarmNodeAgentNodeCoverageResult {
+  dockerNodeId: string;
+  hostname: string;
+  role: string;
+  availability: string;
+  nodeStatus: string;
+  architecture: string;
+  dataSource: string;
+  eligible: boolean;
+  supported: boolean;
+  schedulable: boolean;
+  serviceTaskState: null | string;
+  agentConnectionState: string;
+  dockerReachable: boolean;
+  compatible: boolean;
+  projectionStale: boolean;
+  /** @format date-time */
+  lastHeartbeatAtUtc: any;
+  /** @format date-time */
+  lastSuccessfulReconciliationAt: null | string;
+  /** @format date-time */
+  staleSince: null | string;
+  staleReason: null | string;
+  reasons: string[];
+}
+
+export interface SwarmNodeAgentOperationResult {
+  /** @format uuid */
+  operationId: string;
+  kind: string;
+  state: string;
+  /** @format date-time */
+  startedAtUtc: any;
+  error: null | string;
+}
+
+export interface SwarmNodeAgentProgressItem {
+  /** @format uuid */
+  platformId: string;
+  /** @format uuid */
+  operationId: string;
+  stage: string;
+  message: string;
+  /** @default false */
+  isCompleted?: boolean;
+  /** @default false */
+  isWarning?: boolean;
+  errorMessage?: null | string;
+}
+
 export interface SwarmNodeAvailabilityTargetInput {
   nodeId: string;
   /**
@@ -7810,6 +7983,7 @@ export interface SwarmOverviewView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   managerCount: number | string;
+  quorum: SwarmQuorumView;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -7837,6 +8011,21 @@ export interface SwarmOverviewView {
 export interface SwarmPeer {
   nodeID: null | string;
   addr: null | string;
+}
+
+export interface SwarmQuorumView {
+  state: SwarmQuorumState;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  reachableManagers: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredManagers: number | string;
+  hasLeader: boolean;
 }
 
 export interface SwarmSecretView {
@@ -8129,6 +8318,28 @@ export interface SwarmServiceSpec {
   webhook?: null | SwarmServiceWebhookConfig;
 }
 
+export interface SwarmServiceStatsView {
+  dockerServiceId: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  observedTasks: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  expectedTasks: number | string;
+  complete: boolean;
+  observedContainerProjectionIds: string[];
+  missingDockerNodeIds: string[];
+  /** @format date-time */
+  oldestSampleAt: null | string;
+  /** @format date-time */
+  newestSampleAt: null | string;
+  stats: ContainerStatView[];
+}
+
 export interface SwarmServiceUpdatePolicy {
   /**
    * @format int32
@@ -8222,37 +8433,9 @@ export interface SwarmStackPreflightInput {
   driftPolicy?: null | StackDriftPolicy;
 }
 
-export interface SwarmTaskInspectView {
-  id: string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  versionIndex: number | string;
-  name: string;
-  serviceId: string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  slot: null | number | string;
-  nodeId: string;
-  desiredState: string;
-  state: string;
-  statusMessage: null | string;
-  error: null | string;
-  image: string;
-  ports: string[];
-  /** @format date-time */
-  statusTimestamp: null | string;
-  /** @format date-time */
-  createdAt: null | string;
-  /** @format date-time */
-  updatedAt: null | string;
-  containerId: null | string;
-}
-
 export interface SwarmTaskStatsView {
+  /** @format uuid */
+  containerProjectionId: string;
   dockerContainerId: string;
   stats: ContainerStatView[];
 }
@@ -11328,6 +11511,135 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name GetSwarmNodeAgentCoverage
+     * @summary Get Docker Swarm node-agent coverage
+     * @request GET:/api/v1/platforms/{id}/node-agent-coverage
+     * @secure
+     * @response `200` `SwarmNodeAgentCoverageView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmNodeAgentCoverage: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmNodeAgentCoverageView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/node-agent-coverage`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name InstallSwarmNodeAgents
+     * @summary Install Docker Swarm node agents
+     * @request POST:/api/v1/platforms/{id}/node-agents/install
+     * @secure
+     * @response `200` `(SwarmNodeAgentProgressItem)[]` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    installSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmNodeAgentProgressItem[], ProblemDetails>({
+        path: `/api/v1/platforms/${id}/node-agents/install`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RepairSwarmNodeAgents
+     * @summary Repair Docker Swarm node-agent coverage
+     * @request POST:/api/v1/platforms/{id}/node-agents/repair
+     * @secure
+     * @response `200` `(SwarmNodeAgentProgressItem)[]` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    repairSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmNodeAgentProgressItem[], ProblemDetails>({
+        path: `/api/v1/platforms/${id}/node-agents/repair`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name UpgradeSwarmNodeAgents
+     * @summary Upgrade Docker Swarm node agents
+     * @request POST:/api/v1/platforms/{id}/node-agents/upgrade
+     * @secure
+     * @response `200` `(SwarmNodeAgentProgressItem)[]` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    upgradeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmNodeAgentProgressItem[], ProblemDetails>({
+        path: `/api/v1/platforms/${id}/node-agents/upgrade`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RemoveSwarmNodeAgents
+     * @summary Remove Docker Swarm node agents
+     * @request DELETE:/api/v1/platforms/{id}/node-agents
+     * @secure
+     * @response `200` `(SwarmNodeAgentProgressItem)[]` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
+      this.request<SwarmNodeAgentProgressItem[], ProblemDetails>({
+        path: `/api/v1/platforms/${id}/node-agents`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name GetSwarmOverview
      * @summary Get Docker Swarm cluster health and persisted inventory
      * @request GET:/api/v1/platforms/{platformId}/swarm
@@ -11717,6 +12029,45 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name GetSwarmServiceStats
+     * @summary Get aggregate statistics for the current tasks of a Docker Swarm service
+     * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats
+     * @secure
+     * @response `200` `SwarmServiceStatsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmServiceStats: (
+      platformId: string,
+      resourceId: string,
+      query?: {
+        /**
+         * @format int32
+         * @default 24
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        hours?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmServiceStatsView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/stats`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name RestartSwarmService
      * @summary Restart every task of a Docker Swarm service
      * @request POST:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart
@@ -11817,7 +12168,7 @@ export class Api<
      * @summary Inspect a live Docker Swarm task
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect
      * @secure
-     * @response `200` `SwarmTaskInspectView` OK
+     * @response `200` `ContainerInspectView` OK
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11831,7 +12182,7 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTaskInspectView, ProblemDetails>({
+      this.request<ContainerInspectView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/inspect`,
         method: "GET",
         secure: true,

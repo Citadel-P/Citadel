@@ -71,7 +71,9 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
     {
       label: 'Logs',
       disabled: (resource: ContainerDataView) => !hasCapability(resource, 'canViewLogs'),
-      Content: ({ resource }) => <ContainerLogs containerId={resource?.id} />,
+      Content: ({ resource }) => (
+        <ContainerLogs containerId={(resource as ContainerDetailsView | undefined)?.resourceId ?? resource?.id} />
+      ),
     },
     {
       label: 'Inspect',
@@ -84,7 +86,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
         resource.state !== ContainerStateStatus.Running || !hasCapability(resource, 'canOpenTerminal'),
       Content: ({ resource }) => (
         <ContainerExec
-          containerId={resource?.id}
+          containerId={(resource as ContainerDetailsView | undefined)?.resourceId ?? resource?.id}
           disabled={resource.state !== ContainerStateStatus.Running || !hasCapability(resource, 'canOpenTerminal')}
         />
       ),

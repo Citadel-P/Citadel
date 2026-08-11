@@ -5,14 +5,16 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services.SignalR;
 
 internal sealed class ContainerInfoStreamManager(
     IOptions<JobConfiguration> options,
     IApplicationHubDispatcher dispatcher,
-    IPlatformContainerCache platformContainerCache,
+    IServiceScopeFactory scopeFactory,
     IConnectorFactory<IContainerConnector> connectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     ILogger<ContainerInfoStreamManager> logger) : BaseStreamManager<ChannelStreamContext<DockerContainer>>, IStreamGroupManager
 {
     protected override void OnSubscriberAdded(string groupId, string connectionId)
@@ -38,7 +40,7 @@ internal sealed class ContainerInfoStreamManager(
         {
             await Task.WhenAll(
                 PollDockerStats(containerId, context),
-                BroadcastStats(context));
+                BroadcastStats(containerId, context));
         }
         catch (Exception ex)
         {
@@ -51,18 +53,42 @@ internal sealed class ContainerInfoStreamManager(
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
 
-        if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platformInfo))
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var container = Guid.TryParse(containerId, out var resourceId)
+            ? await uow.Containers.GetByIdAsync(resourceId, token)
+            : await uow.Containers.GetByIdAsync(containerId, token);
+        if (container is null)
         {
-            logger.LogError("No platform found for container ID {ContainerId}", containerId);
+            logger.LogError("No Container projection found for container ID {ContainerId}", containerId);
+            writer.TryComplete();
+            return;
+        }
+        var platform = await uow.Platforms.GetByIdAsync(container.PlatformId, token);
+        if (platform is null)
+        {
             writer.TryComplete();
             return;
         }
 
         try
         {
-            await foreach (var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.MonitoringInterval * 1000), token))
+            var stream = container.DockerNodeId is not null
+                ? swarmNodeRuntimeConnector.StreamContainerStatsAsync(
+                    platform,
+                    container.DockerNodeId,
+                    container.DockerContainerId,
+                    options.Value.MonitoringInterval * 1000,
+                    token)
+                : connectorFactory.GetConnector(platform.ConnectorType).StreamContainerStatsAsync(
+                    new StreamContainerStatsCommand(
+                        container.DockerContainerId,
+                        platform.Address,
+                        options.Value.MonitoringInterval * 1000),
+                    token);
+            await foreach (var current in stream)
             {
-                await writer.WriteAsync(container, token);
+                await writer.WriteAsync(current, token);
             }
         }
         catch (OperationCanceledException) { }
@@ -76,7 +102,9 @@ internal sealed class ContainerInfoStreamManager(
         }
     }
 
-    private async Task BroadcastStats(ChannelStreamContext<DockerContainer> ctx)
+    private async Task BroadcastStats(
+        string containerReference,
+        ChannelStreamContext<DockerContainer> ctx)
     {
         var reader = ctx.Channel.Reader;
         var token = ctx.Cancellation.Token;
@@ -89,7 +117,7 @@ internal sealed class ContainerInfoStreamManager(
                 {
                     try
                     {
-                        await dispatcher.SendContainerInfo(container, token);
+                        await dispatcher.SendContainerInfo(containerReference, container, token);
                     }
                     catch (Exception ex)
                     {

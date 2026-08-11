@@ -16,6 +16,7 @@ import { SwarmServiceInfoView, useServiceInfoGroup } from '../hooks/useServicesG
 import { ServiceInspect } from './inspect';
 import { ServiceInfoActions } from '../actions';
 import { UnmanagedResourceIcon } from '@/components/custom/common';
+import { ServiceStats } from './stats';
 
 const { view: _view, adopt, importStack, ...groupedServiceInfoActions } = ServiceInfoActions;
 
@@ -76,6 +77,10 @@ export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfo
           capabilities={resource.capabilities}
         />
       ),
+    },
+    {
+      label: 'Stats',
+      Content: ({ resource }) => <ServiceStats service={resource} />,
     },
     {
       label: 'Inspect',

@@ -44,6 +44,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         p.Name AS Platform_Name,
         p.Status AS Platform_Status,
         p.PlatformDescriptor AS Platform_Descriptor,
+        p.ClusterId AS Platform_ClusterId,
+        p.Address AS Platform_Address,
+        p.ConnectorType AS Platform_ConnectorType,
         {{ResourceTagSql.TagAggregate("s")}}
     FROM Stacks s
     LEFT JOIN StackReleases sr
@@ -107,6 +110,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
                 p.PlatformDescriptor AS Platform_Descriptor,
+                p.ClusterId AS Platform_ClusterId,
+                p.Address AS Platform_Address,
+                p.ConnectorType AS Platform_ConnectorType,
                 ei.Info AS ActivityEvent_ActivityEventInfo,
                 ei.EventType AS ActivityEvent_EventType,
                 ei.Status AS ActivityEvent_Status,
@@ -256,7 +262,10 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
-                p.PlatformDescriptor AS Platform_Descriptor
+                p.PlatformDescriptor AS Platform_Descriptor,
+                p.ClusterId AS Platform_ClusterId,
+                p.Address AS Platform_Address,
+                p.ConnectorType AS Platform_ConnectorType
             FROM Stacks s
             INNER JOIN StackReleases sr
                 ON s.CurrentStackReleaseId = sr.Id
@@ -1070,7 +1079,10 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
-                p.PlatformDescriptor AS Platform_Descriptor
+                p.PlatformDescriptor AS Platform_Descriptor,
+                p.ClusterId AS Platform_ClusterId,
+                p.Address AS Platform_Address,
+                p.ConnectorType AS Platform_ConnectorType
             FROM Stacks s
             INNER JOIN StackReleases sr
                 ON s.CurrentStackReleaseId = sr.Id
