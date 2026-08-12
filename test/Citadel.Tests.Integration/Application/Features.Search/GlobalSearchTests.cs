@@ -5,6 +5,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Hosting.Common;
 
 namespace Tests.Integration.Application.Features.Search;
@@ -16,6 +17,8 @@ public sealed class GlobalSearchTests(PostgresTestFixture fixture) : Integration
     private Guid _containsPlatformId;
     private Guid _literalWildcardPlatformId;
     private Guid _deploymentId;
+    private Guid _swarmPlatformId;
+    private Guid _swarmServiceId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -28,6 +31,10 @@ public sealed class GlobalSearchTests(PostgresTestFixture fixture) : Integration
         await uow.Platforms.AddAsync(prefixPlatform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(containsPlatform, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(literalWildcardPlatform, TestContext.Current.CancellationToken);
+
+        var swarmPlatform = CreateSwarmPlatform("swarm-search-host");
+        await uow.Platforms.AddAsync(swarmPlatform, TestContext.Current.CancellationToken);
+        _swarmPlatformId = swarmPlatform.Id;
 
         _exactPlatformId = exactPlatform.Id;
         _prefixPlatformId = prefixPlatform.Id;
@@ -43,6 +50,17 @@ public sealed class GlobalSearchTests(PostgresTestFixture fixture) : Integration
                 UpdateBehavior.Notify));
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
         _deploymentId = deployment.Id;
+
+        var swarmService = new SwarmService(
+            "production-cache",
+            swarmPlatform.Id,
+            Constants.SystemId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "redis:latest")
+            });
+        await uow.SwarmServices.AddAsync(swarmService, TestContext.Current.CancellationToken);
+        _swarmServiceId = swarmService.Id;
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
@@ -151,6 +169,37 @@ public sealed class GlobalSearchTests(PostgresTestFixture fixture) : Integration
         Assert.Equal("prod", parent.GetProperty("name").GetString());
     }
 
+    [Fact]
+    public async Task Search_Should_Return_Authorized_Managed_Swarm_Service()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.SwarmService, _swarmServiceId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Platform, _swarmPlatformId, PermissionLevel.Read)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync(
+            "/api/v1/search?q=production-cache&types=SwarmService",
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsSuccessStatusCode, body);
+
+        using var document = JsonDocument.Parse(body);
+        var group = Assert.Single(document.RootElement.GetProperty("groups").EnumerateArray());
+        Assert.Equal("SwarmServices", group.GetProperty("category").GetString());
+
+        var item = Assert.Single(group.GetProperty("items").EnumerateArray());
+        Assert.Equal(_swarmServiceId, item.GetProperty("id").GetGuid());
+        Assert.Equal("SwarmService", item.GetProperty("resourceType").GetString());
+        Assert.Equal("Created", item.GetProperty("status").GetProperty("label").GetString());
+        Assert.Equal("swarm-search-host", item.GetProperty("parent").GetProperty("name").GetString());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -210,4 +259,31 @@ public sealed class GlobalSearchTests(PostgresTestFixture fixture) : Integration
                 ContainersRunning: 0,
                 ContainersPaused: 0,
                 ContainersStopped: 0));
+
+    private static Platform CreateSwarmPlatform(string name) => new(
+        name: name,
+        address: $"https://{name}.local",
+        networkCount: 1,
+        volumeCount: 1,
+        imageCount: 1,
+        cpuCount: 2,
+        memTotal: 512,
+        serverVersion: "1.0.0",
+        agentVersion: "1.0.0",
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerSwarmPlatformDescriptor(
+            NodeID: $"{name}-node",
+            NodeAddr: "10.0.0.1",
+            LocalNodeState: "Active",
+            ControlAvailable: true,
+            Nodes: 1,
+            Managers: 1,
+            DaemonId: $"{name}-daemon",
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0,
+            ClusterId: $"{name}-cluster"),
+        clusterId: $"{name}-cluster");
 }

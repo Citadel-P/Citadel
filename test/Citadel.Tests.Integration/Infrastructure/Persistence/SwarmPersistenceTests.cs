@@ -16,6 +16,53 @@ namespace Tests.Integration.Infrastructure.Persistence;
 public sealed class SwarmPersistenceTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
+    public async Task SystemService_ShouldRemainHiddenFromInventoryButBeLoadableForLifecycleChecks()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = CreateSwarmPlatform("swarm-system-service", "cluster-system-service");
+        var observedAt = DateTimeOffset.UtcNow;
+        var service = new SwarmServiceProjection(
+            platform.Id,
+            "system-service-1",
+            1,
+            $"citadel-node-agent-{platform.Id:N}",
+            "Global",
+            "citadel-agent@sha256:test",
+            1,
+            1,
+            "Completed",
+            null,
+            [],
+            [],
+            [],
+            [],
+            new Dictionary<string, string>(),
+            observedAt,
+            observedAt,
+            observedAt,
+            false,
+            SwarmServiceOwnership.System);
+
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        await uow.Swarm.ReplaceAsync(
+            platform.Id,
+            new SwarmProjectionSnapshot([], [service], [], [], [], []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        Assert.Empty(await uow.Swarm.GetServicesAsync(platform.Id, cancellationToken));
+        Assert.Equal(
+            service.DockerServiceId,
+            (await uow.Swarm.GetServiceAsync(platform.Id, service.DockerServiceId, cancellationToken))?.DockerServiceId);
+        Assert.Equal(
+            service.DockerServiceId,
+            (await uow.Swarm.GetServiceByNameAsync(platform.Id, service.Name, cancellationToken))?.DockerServiceId);
+    }
+
+    [Fact]
     public async Task NodeLocalResources_ShouldPreservePerNodeIdentityAndExposeStaleAggregateCounts()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

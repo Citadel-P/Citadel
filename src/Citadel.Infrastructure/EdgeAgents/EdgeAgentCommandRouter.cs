@@ -627,6 +627,8 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.ImageInspect or
             EdgeAgentCommandKind.VolumeList or
             EdgeAgentCommandKind.VolumeInspect or
+            EdgeAgentCommandKind.VolumeCreate or
+            EdgeAgentCommandKind.VolumeDelete or
             EdgeAgentCommandKind.NetworkList or
             EdgeAgentCommandKind.NetworkInspect;
 

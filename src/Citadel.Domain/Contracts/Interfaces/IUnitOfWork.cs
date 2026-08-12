@@ -1032,6 +1032,7 @@ public interface ISwarmProjectionRepository
     Task<SwarmNodeProjection?> GetNodeAsync(Guid platformId, string dockerNodeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmServiceProjection>> GetServicesAsync(Guid platformId, CancellationToken cancellationToken);
     Task<SwarmServiceProjection?> GetServiceAsync(Guid platformId, string dockerServiceId, CancellationToken cancellationToken);
+    Task<SwarmServiceProjection?> GetServiceByNameAsync(Guid platformId, string name, CancellationToken cancellationToken);
     Task<int> TryAssignStackNamespaceAsync(Guid platformId, string stackNamespace, IReadOnlyCollection<string> dockerServiceIds, Guid stackId, CancellationToken cancellationToken);
     Task<IReadOnlyList<SwarmTaskProjection>> GetTasksAsync(
         Guid platformId,

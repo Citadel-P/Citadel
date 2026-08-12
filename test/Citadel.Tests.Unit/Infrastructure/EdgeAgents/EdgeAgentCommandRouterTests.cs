@@ -102,7 +102,6 @@ public sealed class EdgeAgentCommandRouterTests
         {
             EdgeAgentCommandKind.SwarmNodeUpdate,
             EdgeAgentCommandKind.ImageDelete,
-            EdgeAgentCommandKind.VolumeDelete,
             EdgeAgentCommandKind.NetworkDelete
         };
         foreach (var kind in deniedKinds)
@@ -138,6 +137,8 @@ public sealed class EdgeAgentCommandRouterTests
             EdgeAgentCommandKind.ImageInspect,
             EdgeAgentCommandKind.VolumeList,
             EdgeAgentCommandKind.VolumeInspect,
+            EdgeAgentCommandKind.VolumeCreate,
+            EdgeAgentCommandKind.VolumeDelete,
             EdgeAgentCommandKind.NetworkList,
             EdgeAgentCommandKind.NetworkInspect
         };

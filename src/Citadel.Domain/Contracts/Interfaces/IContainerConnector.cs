@@ -64,6 +64,18 @@ public interface ISwarmNodeRuntimeConnector
         string volumeName,
         CancellationToken cancellationToken);
 
+    Task<Result<DockerVolumeResult>> CreateVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        CreateDockerVolumeCommand command,
+        CancellationToken cancellationToken);
+
+    Task<Result> DeleteVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        DeleteDockerVolumeCommand command,
+        CancellationToken cancellationToken);
+
     Task<Result<DockerNetworkDetails>> InspectNetworkAsync(
         Platform platform,
         string dockerNodeId,

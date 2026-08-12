@@ -161,6 +161,8 @@ public static class ApplicationModule
             .AddSingleton<ICitadelSystemBackupBuilder, CitadelSystemBackupBuilder>()
             .AddSingleton<IStackBackupVolumeResolver, StackBackupVolumeResolver>()
             .AddSingleton<IDeploymentBackupVolumeResolver, DeploymentBackupVolumeResolver>()
+            .AddSingleton<ISwarmWorkloadBackupVolumeResolver, SwarmWorkloadBackupVolumeResolver>()
+            .AddSingleton<ISwarmServiceBackupVolumeResolver, SwarmServiceBackupVolumeResolver>()
             .AddSingleton<IAutomationActionScheduler, AutomationActionScheduler>()
             .AddSingleton<IBackupPolicyScheduler, BackupPolicyScheduler>()
             .AddSingleton<IBackupRunCoordinator, BackupRunCoordinator>()

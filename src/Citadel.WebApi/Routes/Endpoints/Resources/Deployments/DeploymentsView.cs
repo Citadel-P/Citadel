@@ -149,8 +149,10 @@ public sealed record DeploymentBackupVolumeView(
     StackVolumeKind Kind,
     bool IsExternal,
     bool IsShared,
-    bool HasBackupCoverage)
+    bool HasBackupCoverage,
+    string? DockerNodeId,
+    string? NodeHostname)
 {
     internal static DeploymentBackupVolumeView Map(StackBackupVolumePreviewItem item)
-        => new(item.Name, item.Kind, item.IsExternal, item.IsShared, item.HasBackupCoverage);
+        => new(item.Name, item.Kind, item.IsExternal, item.IsShared, item.HasBackupCoverage, item.DockerNodeId, item.NodeHostname);
 }

@@ -6,8 +6,11 @@ using System.Text.Json;
 using Application.Services.Backups;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
 using Domain.Entities.Platforms;
+using Domain.Entities.SwarmServices;
 using Domain.Entities.Tags;
 using Hosting.Common;
 using LightResults;
@@ -20,7 +23,9 @@ namespace Tests.Integration.Application.Features.Backups;
 public sealed class BackupEndpointTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IBackupRepositoryDestinationService> destinationService = new();
+    private readonly Mock<ISwarmNodeRuntimeConnector> swarmNodeRuntimeConnector = new(MockBehavior.Strict);
     private Guid platformId;
+    private Guid swarmServiceId;
     private Guid tagId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -61,6 +66,22 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
         services.ReplaceService<IBackupRepositoryDestinationService>(destinationService.Object);
         services.ReplaceService<IBackupRunExecutionService>(new FakeBackupRunExecutionService());
         services.ReplaceService<IBackupRestoreRunExecutionService>(new FakeBackupRestoreRunExecutionService());
+        services.ReplaceService<ISwarmNodeRuntimeConnector>(swarmNodeRuntimeConnector.Object);
+
+        swarmNodeRuntimeConnector
+            .Setup(connector => connector.InspectContainerAsync(
+                It.IsAny<Platform>(),
+                "worker-1",
+                "container-backup-task",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(CreateContainerInspection()));
+        swarmNodeRuntimeConnector
+            .Setup(connector => connector.InspectVolumeAsync(
+                It.IsAny<Platform>(),
+                "worker-1",
+                "service-data",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(CreateDockerVolume("service-data")));
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -80,11 +101,86 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
             PlatformConnectorType.Local,
             new DockerPlatformDescriptor("backup-endpoint-daemon", 0, 0, 0, 0));
         var tag = Tag.Create("backup-endpoint-tag", "#2A66AA", Constants.SystemId);
+        var swarmPlatform = CreateSwarmPlatform();
+        var swarmService = SwarmService.AdoptExisting(
+            "backup-service",
+            null,
+            swarmPlatform.Id,
+            Constants.SystemId,
+            "backup-service",
+            "docker-backup-service",
+            1,
+            "runtime-hash",
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Guid.CreateVersion7(), "postgres:17"),
+                Replicas = 1,
+                Mounts = [new SwarmServiceMount(SwarmServiceMountKind.Volume, "service-data", "/var/lib/postgresql/data")]
+            });
 
         await uow.Platforms.AddAsync(platform, cancellationToken);
+        await uow.Platforms.AddAsync(swarmPlatform, cancellationToken);
+        await uow.SwarmServices.AddAsync(swarmService, cancellationToken);
         await uow.Tags.AddAsync(tag, cancellationToken);
         await uow.CommitAsync(cancellationToken);
+
+        var observedAt = DateTimeOffset.UtcNow;
+        await uow.Swarm.ReplaceAsync(
+            swarmPlatform.Id,
+            new SwarmProjectionSnapshot(
+                [CreateSwarmNode(swarmPlatform.Id, observedAt)],
+                [new SwarmServiceProjection(
+                    swarmPlatform.Id,
+                    "docker-backup-service",
+                    1,
+                    "backup-service",
+                    "Replicated",
+                    "postgres:17",
+                    1,
+                    1,
+                    "Completed",
+                    null,
+                    [],
+                    [],
+                    [],
+                    [],
+                    new Dictionary<string, string>(),
+                    observedAt,
+                    observedAt,
+                    observedAt,
+                    false,
+                    SwarmServiceOwnership.CitadelService,
+                    SwarmServiceId: swarmService.Id)],
+                [new SwarmTaskProjection(
+                    swarmPlatform.Id,
+                    "task-backup-service",
+                    1,
+                    "backup-service.1",
+                    "docker-backup-service",
+                    "backup-service",
+                    1,
+                    "worker-1",
+                    "worker-one",
+                    "running",
+                    "running",
+                    null,
+                    null,
+                    "postgres:17",
+                    [],
+                    observedAt,
+                    observedAt,
+                    observedAt,
+                    observedAt,
+                    false,
+                    "container-backup-task")],
+                [],
+                [],
+                []),
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
         platformId = platform.Id;
+        swarmServiceId = swarmService.Id;
         tagId = tag.Id;
     }
 
@@ -189,6 +285,20 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
             cancellationToken);
         summariesResponse.EnsureSuccessStatusCode();
 
+        using var servicePreviewResponse = await Client.GetAsync(
+            $"/api/v1/swarmServices/{swarmServiceId:D}/backup-source-preview",
+            cancellationToken);
+        servicePreviewResponse.EnsureSuccessStatusCode();
+        using (var servicePreview = await JsonDocument.ParseAsync(
+            await servicePreviewResponse.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken))
+        {
+            var volume = Assert.Single(servicePreview.RootElement.GetProperty("volumes").EnumerateArray());
+            Assert.Equal("service-data", volume.GetProperty("name").GetString());
+            Assert.Equal("worker-1", volume.GetProperty("dockerNodeId").GetString());
+            Assert.Equal("worker-one", volume.GetProperty("nodeHostname").GetString());
+        }
+
         using var replaceTagsResponse = await Client.PutAsJsonAsync(
             $"/api/v1/backupPolicies/{policyId:D}/tags",
             new { tagIds = new[] { tagId } },
@@ -238,6 +348,13 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
         restoreResponse.EnsureSuccessStatusCode();
         var restoreRunId = await ReadIdAsync(restoreResponse, cancellationToken);
         await AssertRestoreRunReadEndpointsAsync(policyId, successfulRunId, restoreRunId, cancellationToken);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var persistedRestore = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+                .BackupRestoreRuns.GetAsync(restoreRunId, cancellationToken);
+            Assert.NotNull(persistedRestore);
+            Assert.Null(persistedRestore.SourceBackupRunItemId);
+        }
         using var cancelRestoreResponse = await Client.PostAsync(
             $"/api/v1/backupRestoreRuns/{restoreRunId:D}/cancel",
             content: null,
@@ -389,6 +506,10 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
             ?? throw new InvalidOperationException("Queued backup run was not persisted.");
         var now = DateTimeOffset.UtcNow;
         run.MarkRunning(now);
+        var item = new BackupRunItem(run.Id, platformId, "source-data");
+        item.MarkRunning(now);
+        item.CompleteSucceeded("snapshot-endpoint", null, 1, 128, 64, now.AddSeconds(1));
+        await uow.BackupRunItems.AddRangeAsync([item], cancellationToken);
         run.CompleteSucceeded("snapshot-endpoint", null, 1, 128, 64, [], now.AddSeconds(1));
         await uow.BackupRuns.FinishRunAndMarkPolicyIdleAsync(
             run,
@@ -467,6 +588,96 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
             yield return new BackupRunStreamItem(runId, BackupRunStatus.Running, "Execution delegated by endpoint.");
         }
     }
+
+    private static Platform CreateSwarmPlatform() => new(
+        "backup-endpoint-swarm",
+        "edge://backup-endpoint-swarm",
+        0,
+        1,
+        0,
+        2,
+        2_048,
+        "test",
+        "test",
+        PlatformStatus.Online,
+        PlatformConnectorType.EdgeAgent,
+        new DockerSwarmPlatformDescriptor(
+            "manager-1",
+            "10.0.0.1",
+            "Active",
+            true,
+            2,
+            1,
+            "backup-endpoint-swarm-daemon",
+            1,
+            1,
+            0,
+            0));
+
+    private static SwarmNodeProjection CreateSwarmNode(Guid platformId, DateTimeOffset observedAt) => new(
+        platformId,
+        "worker-1",
+        1,
+        "worker-one",
+        "Worker",
+        false,
+        "Reachable",
+        "Ready",
+        null,
+        "Active",
+        "test",
+        "linux",
+        "amd64",
+        "10.0.0.2",
+        new Dictionary<string, string>(),
+        1,
+        1,
+        observedAt,
+        observedAt,
+        observedAt,
+        false);
+
+    private static ContainerInspectionInfo CreateContainerInspection() => new(
+        "container-backup-task",
+        string.Empty,
+        null,
+        [],
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+        null,
+        null,
+        null,
+        null,
+        [],
+        null,
+        null,
+        null,
+        null,
+        [new MountPointInfo("volume", "service-data", "service-data", "/var/lib/postgresql/data", "local", "rw", true, string.Empty)],
+        null,
+        null);
+
+    private static DockerVolumeResult CreateDockerVolume(string name) => new(
+        name,
+        name,
+        true,
+        "local",
+        "local",
+        $"/var/lib/docker/volumes/{name}/_data",
+        string.Empty,
+        null,
+        null,
+        [],
+        new Dictionary<string, string>(),
+        new Dictionary<string, string>(),
+        new Dictionary<string, string>());
 
     private sealed class FakeBackupRestoreRunExecutionService : IBackupRestoreRunExecutionService
     {

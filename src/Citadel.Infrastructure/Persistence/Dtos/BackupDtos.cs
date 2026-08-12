@@ -110,6 +110,7 @@ internal sealed record ScheduledBackupPolicyDto(Guid Id, string? Cron, string? T
 internal sealed record VolumeBackupCoverageDto(
     Guid PlatformId,
     string VolumeName,
+    string? DockerNodeId,
     string Status,
     int PolicyCount,
     Guid? LastRunId,
@@ -119,7 +120,7 @@ internal sealed record VolumeBackupCoverageDto(
     DateTime? NextRunAt)
 {
     public VolumeBackupCoverageDto()
-        : this(Guid.Empty, string.Empty, string.Empty, 0, null, null, null, null, null)
+        : this(Guid.Empty, string.Empty, null, string.Empty, 0, null, null, null, null, null)
     {
     }
 }
@@ -131,12 +132,13 @@ internal sealed record PlatformBackupSummaryDto(
     int DockerVolumePolicyCount,
     int StackPolicyCount,
     int DeploymentPolicyCount,
+    int SwarmServicePolicyCount,
     int AttentionPolicyCount,
     string? LastRunStatus,
     DateTime? LastRunAt)
 {
     public PlatformBackupSummaryDto()
-        : this(Guid.Empty, 0, 0, 0, 0, 0, 0, null, null)
+        : this(Guid.Empty, 0, 0, 0, 0, 0, 0, 0, null, null)
     {
     }
 }
@@ -234,6 +236,8 @@ internal sealed record BackupRunItemDto(
     Guid BackupRunId,
     Guid PlatformId,
     string VolumeName,
+    string? DockerNodeId,
+    string? NodeHostname,
     string Status,
     string? ResticSnapshotId,
     string? ParentSnapshotId,
@@ -254,6 +258,8 @@ internal sealed record BackupRunItemDto(
             Guid.Empty,
             Guid.Empty,
             string.Empty,
+            null,
+            null,
             string.Empty,
             null,
             null,
@@ -481,10 +487,13 @@ internal sealed record BackupRunLogDto(
 internal sealed record BackupRestoreRunDto(
     Guid Id,
     Guid BackupRunId,
+    Guid? SourceBackupRunItemId,
     Guid BackupRepositoryId,
     string Status,
     Guid TargetPlatformId,
     string TargetVolumeName,
+    string? TargetDockerNodeId,
+    string? TargetNodeHostname,
     bool OverwriteExisting,
     bool TargetVolumeCreatedByCitadel,
     string AffectedContainers,
@@ -501,10 +510,13 @@ internal sealed record BackupRestoreRunDto(
         : this(
             Guid.Empty,
             Guid.Empty,
+            null,
             Guid.Empty,
             string.Empty,
             Guid.Empty,
             string.Empty,
+            null,
+            null,
             false,
             false,
             "[]",
@@ -523,10 +535,13 @@ internal sealed record BackupRestoreRunDto(
 internal sealed record BackupRestoreRunWithPolicyDto(
     Guid Id,
     Guid BackupRunId,
+    Guid? SourceBackupRunItemId,
     Guid BackupRepositoryId,
     string Status,
     Guid TargetPlatformId,
     string TargetVolumeName,
+    string? TargetDockerNodeId,
+    string? TargetNodeHostname,
     bool OverwriteExisting,
     bool TargetVolumeCreatedByCitadel,
     string AffectedContainers,
@@ -544,10 +559,13 @@ internal sealed record BackupRestoreRunWithPolicyDto(
         : this(
             Guid.Empty,
             Guid.Empty,
+            null,
             Guid.Empty,
             string.Empty,
             Guid.Empty,
             string.Empty,
+            null,
+            null,
             false,
             false,
             "[]",
@@ -567,10 +585,13 @@ internal sealed record BackupRestoreRunWithPolicyDto(
 internal sealed record BackupRestoreRunExecutionPlanDto(
     Guid RestoreRunId,
     Guid RestoreBackupRunId,
+    Guid? RestoreSourceBackupRunItemId,
     Guid RestoreBackupRepositoryId,
     string RestoreStatus,
     Guid RestoreTargetPlatformId,
     string RestoreTargetVolumeName,
+    string? RestoreTargetDockerNodeId,
+    string? RestoreTargetNodeHostname,
     bool RestoreOverwriteExisting,
     bool RestoreTargetVolumeCreatedByCitadel,
     string RestoreAffectedContainers,
@@ -628,10 +649,13 @@ internal sealed record BackupRestoreRunExecutionPlanDto(
         : this(
             Guid.Empty,
             Guid.Empty,
+            null,
             Guid.Empty,
             string.Empty,
             Guid.Empty,
             string.Empty,
+            null,
+            null,
             false,
             false,
             "[]",

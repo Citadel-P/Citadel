@@ -64,6 +64,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Swarm;
+using WebApi.Routes.Endpoints.Resources.SwarmServices;
 using WebApi.Routes.Endpoints.Resources.Search;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using Application.Features.Webhooks.Commands;
@@ -266,6 +267,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(CitadelSystemBackupSource))]
 [JsonSerializable(typeof(StackBackupSource))]
 [JsonSerializable(typeof(DeploymentBackupSource))]
+[JsonSerializable(typeof(SwarmServiceBackupSource))]
 [JsonSerializable(typeof(BackupRepositorySpec))]
 [JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
 [JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]
@@ -313,6 +315,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(StackBackupVolumeView))]
 [JsonSerializable(typeof(DeploymentBackupSourcePreviewView))]
 [JsonSerializable(typeof(DeploymentBackupVolumeView))]
+[JsonSerializable(typeof(SwarmServiceBackupSourcePreviewView))]
+[JsonSerializable(typeof(SwarmServiceBackupVolumeView))]
 [JsonSerializable(typeof(BuildArgSpec))]
 [JsonSerializable(typeof(IReadOnlyList<BuildArgSpec>))]
 [JsonSerializable(typeof(BuildSecretSpec))]

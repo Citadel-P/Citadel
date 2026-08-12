@@ -2,6 +2,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
+using Domain.Entities.Platforms;
+using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -26,13 +28,16 @@ internal sealed record PlatformResticCommand(
     string? SourceVolumeName,
     string? TargetVolumeName,
     string? RepositoryHostPath,
-    string? NetworkMode);
+    string? NetworkMode,
+    string? DockerNodeId = null);
 
 internal sealed partial class PlatformResticRunner(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IImageConnector> imageConnectorFactory,
     IVolumeHelperImageResolver helperImageResolver,
-    IAgentRuntimeImageResolver agentRuntimeImageResolver)
+    IAgentRuntimeImageResolver agentRuntimeImageResolver,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
+    IServiceScopeFactory scopeFactory)
     : IPlatformResticRunner
 {
     private const string HelperExecutable = "/bin/sh";
@@ -51,7 +56,52 @@ internal sealed partial class PlatformResticRunner(
 
         var containerConnector = containerConnectorFactory.GetConnector(command.ConnectorType);
         var imageConnector = imageConnectorFactory.GetConnector(command.ConnectorType);
-        var helperImage = await ResolveHelperImageAsync(containerConnector, command, ct);
+        Platform? platform = null;
+        string? swarmNodeHelperImage = null;
+        if (!string.IsNullOrWhiteSpace(command.DockerNodeId))
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            platform = await unitOfWork.Platforms.GetByIdAsync(command.PlatformId, ct);
+            if (platform?.PlatformDescriptor is not DockerSwarmPlatformDescriptor)
+            {
+                yield return new ResticProcessEvent(ResticProcessStream.StdErr, "The selected backup Node does not belong to a Docker Swarm Platform.");
+                yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
+                yield break;
+            }
+
+            var installation = await unitOfWork.EdgeAgents.GetNodeAgentInstallationAsync(command.PlatformId, ct);
+            if (!string.IsNullOrWhiteSpace(installation?.DockerServiceId))
+            {
+                var service = await unitOfWork.Swarm.GetServiceAsync(
+                    command.PlatformId,
+                    installation.DockerServiceId,
+                    ct);
+                if (service is not null
+                    && SwarmNodeAgentInfrastructure.HasOwnership(service, platform)
+                    && !string.IsNullOrWhiteSpace(service.Image))
+                {
+                    swarmNodeHelperImage = service.Image;
+                }
+            }
+        }
+
+        var targetsWorker = platform?.PlatformDescriptor is DockerSwarmPlatformDescriptor descriptor
+            && !string.Equals(descriptor.NodeID, command.DockerNodeId, StringComparison.Ordinal);
+        IBackupContainerRuntime runtime = targetsWorker
+            ? new SwarmNodeBackupContainerRuntime(swarmNodeRuntimeConnector, platform!, command.DockerNodeId!)
+            : new ConnectorBackupContainerRuntime(containerConnector);
+        var helperImage = targetsWorker
+            ? swarmNodeHelperImage ?? helperImageResolver.Resolve(PlatformConnectorType.Agent)
+            : await ResolveHelperImageAsync(containerConnector, command, ct);
+
+        if (targetsWorker && !string.IsNullOrWhiteSpace(command.RepositoryHostPath))
+        {
+            yield return new ResticProcessEvent(ResticProcessStream.StdErr, "Filesystem backup repositories are not supported for Swarm Node backups.");
+            yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
+            yield break;
+        }
+
         var preparedRepositoryPath = await EnsureRepositoryHostPathAsync(containerConnector, imageConnector, command, helperImage, ct);
         if (preparedRepositoryPath.IsFailure(out var prepareError))
         {
@@ -62,7 +112,7 @@ internal sealed partial class PlatformResticRunner(
             yield break;
         }
 
-        var helper = await CreateAndStartHelperAsync(containerConnector, imageConnector, command, helperImage, ct);
+        var helper = await CreateAndStartHelperAsync(runtime, imageConnector, command, helperImage, !targetsWorker, ct);
         if (!helper.IsSuccess(out var containerId, out var helperError))
         {
             yield return new ResticProcessEvent(
@@ -74,7 +124,7 @@ internal sealed partial class PlatformResticRunner(
 
         try
         {
-            var exec = await containerConnector.ExecBinaryAsync(
+            var exec = await runtime.ExecBinaryAsync(
                 command.PlatformAddress,
                 new ContainerBinaryExecRequest(
                     containerId,
@@ -115,7 +165,7 @@ internal sealed partial class PlatformResticRunner(
         }
         finally
         {
-            await containerConnector.DeleteAsync(
+            await runtime.DeleteAsync(
                 new DeleteContainerCommand([containerId], command.PlatformAddress, Volume: false, Force: true, Link: false),
                 CancellationToken.None);
         }
@@ -157,21 +207,22 @@ internal sealed partial class PlatformResticRunner(
     }
 
     private async Task<LightResults.Result<string>> CreateAndStartHelperAsync(
-        IContainerConnector containerConnector,
+        IBackupContainerRuntime runtime,
         IImageConnector imageConnector,
         PlatformResticCommand command,
         string helperImage,
+        bool canPullImage,
         CancellationToken cancellationToken)
     {
         var containerName = $"citadel-backup-helper-{Guid.CreateVersion7():N}";
-        var create = await TryCreateHelperAsync(containerConnector, command, helperImage, containerName, cancellationToken);
+        var create = await TryCreateHelperAsync(runtime, command, helperImage, containerName, cancellationToken);
 
         if (!create.IsSuccess(out var containerId, out var createError))
         {
             if (!IsMissingHelperImageError(createError))
                 return LightResults.Result.Failure<string>(createError);
 
-            if (!CanPullHelperImage(helperImage))
+            if (!canPullImage || !CanPullHelperImage(helperImage))
             {
                 return LightResults.Result.Failure<string>(
                     new Hosting.Common.ErrorTypes.BadGatewayError($"Backup helper image '{helperImage}' is not available on the target platform. Build or load the configured helper image on that Docker daemon before running platform backups."));
@@ -181,26 +232,26 @@ internal sealed partial class PlatformResticRunner(
             if (pull.IsFailure(out var pullError))
                 return LightResults.Result.Failure<string>(pullError);
 
-            create = await TryCreateHelperAsync(containerConnector, command, helperImage, containerName, cancellationToken);
+            create = await TryCreateHelperAsync(runtime, command, helperImage, containerName, cancellationToken);
             if (!create.IsSuccess(out containerId, out createError))
                 return LightResults.Result.Failure<string>(createError);
         }
 
-        var started = await containerConnector.PatchAsync(
+        var started = await runtime.PatchAsync(
             new PatchContainerCommand(ContainerAction.START, command.PlatformAddress, [containerId]),
             cancellationToken);
 
         if (started.IsFailure())
         {
-            await DeleteHelperAsync(containerConnector, command.PlatformAddress, containerId, CancellationToken.None);
+            await DeleteHelperAsync(runtime, command.PlatformAddress, containerId, CancellationToken.None);
             return LightResults.Result.Failure<string>(
                 new Hosting.Common.ErrorTypes.BadGatewayError("Backup helper container failed to start."));
         }
 
-        var running = await EnsureHelperIsRunningAsync(containerConnector, command.PlatformAddress, containerId, cancellationToken);
+        var running = await EnsureHelperIsRunningAsync(runtime, command.PlatformAddress, containerId, cancellationToken);
         if (running.IsFailure(out var runningError))
         {
-            await DeleteHelperAsync(containerConnector, command.PlatformAddress, containerId, CancellationToken.None);
+            await DeleteHelperAsync(runtime, command.PlatformAddress, containerId, CancellationToken.None);
             return LightResults.Result.Failure<string>(runningError);
         }
 
@@ -225,6 +276,7 @@ internal sealed partial class PlatformResticRunner(
             return LightResults.Result.Success();
 
         var containerName = $"citadel-backup-path-helper-{Guid.CreateVersion7():N}";
+        var runtime = new ConnectorBackupContainerRuntime(containerConnector);
         var create = await TryCreateRepositoryPathHelperAsync(
             containerConnector,
             command,
@@ -267,7 +319,7 @@ internal sealed partial class PlatformResticRunner(
             if (started.IsFailure(out var startError))
                 return LightResults.Result.Failure(startError);
 
-            var running = await EnsureHelperIsRunningAsync(containerConnector, command.PlatformAddress, containerId, cancellationToken);
+            var running = await EnsureHelperIsRunningAsync(runtime, command.PlatformAddress, containerId, cancellationToken);
             if (running.IsFailure(out var runningError))
                 return LightResults.Result.Failure(runningError);
 
@@ -275,12 +327,12 @@ internal sealed partial class PlatformResticRunner(
         }
         finally
         {
-            await DeleteHelperAsync(containerConnector, command.PlatformAddress, containerId, CancellationToken.None);
+            await DeleteHelperAsync(runtime, command.PlatformAddress, containerId, CancellationToken.None);
         }
     }
 
     private static async Task<LightResults.Result<string>> TryCreateHelperAsync(
-        IContainerConnector containerConnector,
+        IBackupContainerRuntime runtime,
         PlatformResticCommand command,
         string helperImage,
         string containerName,
@@ -328,7 +380,7 @@ internal sealed partial class PlatformResticRunner(
                 VolumeOptions: null));
         }
 
-        return await containerConnector.CreateAsync(
+        return await runtime.CreateAsync(
             new CreateContainerCommand(
                 PlatformAddress: command.PlatformAddress,
                 ImageId: helperImage,
@@ -340,7 +392,7 @@ internal sealed partial class PlatformResticRunner(
                 MemoryReservation: null,
                 MemorySwap: HelperMemoryBytes,
                 PidsLimit: 128,
-                AutoRemove: false,
+                AutoRemove: true,
                 Privileged: false,
                 ReadonlyRootfs: false,
                 RestartPolicy: null,
@@ -362,7 +414,7 @@ internal sealed partial class PlatformResticRunner(
                 Command:
                 [
                     "-c",
-                    "trap 'exit 0' TERM INT; while :; do sleep 3600; done"
+                    $"trap 'exit 0' TERM INT; sleep {GetHelperLifetimeSeconds(command.Timeout)}"
                 ]),
             cancellationToken);
     }
@@ -387,7 +439,7 @@ internal sealed partial class PlatformResticRunner(
                 MemoryReservation: null,
                 MemorySwap: HelperMemoryBytes,
                 PidsLimit: 128,
-                AutoRemove: false,
+                AutoRemove: true,
                 Privileged: false,
                 ReadonlyRootfs: false,
                 RestartPolicy: null,
@@ -420,7 +472,7 @@ internal sealed partial class PlatformResticRunner(
                 Command:
                 [
                     "-c",
-                    "trap 'exit 0' TERM INT; while :; do sleep 3600; done"
+                    $"trap 'exit 0' TERM INT; sleep {GetHelperLifetimeSeconds(command.Timeout)}"
                 ]),
             cancellationToken);
 
@@ -483,7 +535,7 @@ internal sealed partial class PlatformResticRunner(
     }
 
     private static async Task<LightResults.Result> EnsureHelperIsRunningAsync(
-        IContainerConnector containerConnector,
+        IBackupContainerRuntime containerConnector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -528,7 +580,7 @@ internal sealed partial class PlatformResticRunner(
     }
 
     private static async Task DeleteHelperAsync(
-        IContainerConnector connector,
+        IBackupContainerRuntime connector,
         string platformAddress,
         string containerId,
         CancellationToken cancellationToken)
@@ -538,6 +590,82 @@ internal sealed partial class PlatformResticRunner(
             cancellationToken);
     }
 
+    private interface IBackupContainerRuntime
+    {
+        Task<LightResults.Result<string>> CreateAsync(
+            CreateContainerCommand command,
+            CancellationToken cancellationToken);
+
+        Task<LightResults.Result> PatchAsync(
+            PatchContainerCommand command,
+            CancellationToken cancellationToken);
+
+        Task<LightResults.Result> DeleteAsync(
+            DeleteContainerCommand command,
+            CancellationToken cancellationToken);
+
+        Task<LightResults.Result<ContainerInspectionInfo>> InspectAsync(
+            InspectContainerCommand command,
+            CancellationToken cancellationToken);
+
+        Task<LightResults.Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken);
+    }
+
+    private sealed class ConnectorBackupContainerRuntime(IContainerConnector connector) : IBackupContainerRuntime
+    {
+        public Task<LightResults.Result<string>> CreateAsync(CreateContainerCommand command, CancellationToken cancellationToken)
+            => connector.CreateAsync(command, cancellationToken);
+
+        public Task<LightResults.Result> PatchAsync(PatchContainerCommand command, CancellationToken cancellationToken)
+            => connector.PatchAsync(command, cancellationToken);
+
+        public Task<LightResults.Result> DeleteAsync(DeleteContainerCommand command, CancellationToken cancellationToken)
+            => connector.DeleteAsync(command, cancellationToken);
+
+        public Task<LightResults.Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand command, CancellationToken cancellationToken)
+            => connector.InspectAsync(command, cancellationToken);
+
+        public Task<LightResults.Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken)
+            => connector.ExecBinaryAsync(platformAddress, request, cancellationToken);
+    }
+
+    private sealed class SwarmNodeBackupContainerRuntime(
+        ISwarmNodeRuntimeConnector connector,
+        Platform platform,
+        string dockerNodeId) : IBackupContainerRuntime
+    {
+        public Task<LightResults.Result<string>> CreateAsync(CreateContainerCommand command, CancellationToken cancellationToken)
+            => connector.CreateContainerAsync(platform, dockerNodeId, command, cancellationToken);
+
+        public Task<LightResults.Result> PatchAsync(PatchContainerCommand command, CancellationToken cancellationToken)
+            => connector.PatchContainersAsync(platform, dockerNodeId, command.Action, [.. command.ContainerIds], cancellationToken);
+
+        public Task<LightResults.Result> DeleteAsync(DeleteContainerCommand command, CancellationToken cancellationToken)
+            => connector.DeleteContainersAsync(
+                platform,
+                dockerNodeId,
+                [.. command.ContainerIds],
+                command.Volume ?? false,
+                command.Force ?? false,
+                command.Link ?? false,
+                cancellationToken);
+
+        public Task<LightResults.Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand command, CancellationToken cancellationToken)
+            => connector.InspectContainerAsync(platform, dockerNodeId, command.ContainerId, cancellationToken);
+
+        public Task<LightResults.Result<ContainerBinaryExecResult>> ExecBinaryAsync(
+            string platformAddress,
+            ContainerBinaryExecRequest request,
+            CancellationToken cancellationToken)
+            => connector.ExecBinaryAsync(platform, dockerNodeId, request, cancellationToken);
+    }
+
     private static bool IsMissingHelperImageError(LightResults.IError error)
     {
         var message = error.Message;
@@ -545,6 +673,9 @@ internal sealed partial class PlatformResticRunner(
                || message.Contains("image not found", StringComparison.OrdinalIgnoreCase)
                || message.Contains("not found: manifest", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static long GetHelperLifetimeSeconds(TimeSpan timeout)
+        => Math.Max(300L, (long)Math.Ceiling(timeout.TotalSeconds) + 300L);
 
     private static bool IsMissingHostPathError(string message)
         => message.Contains("bind source path does not exist", StringComparison.OrdinalIgnoreCase)

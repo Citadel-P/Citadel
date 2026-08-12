@@ -21345,6 +21345,78 @@
         }
       }
     },
+    "/api/v1/swarmServices/{id}/backup-source-preview": {
+      "get": {
+        "tags": [
+          "SwarmServices"
+        ],
+        "summary": "Preview Docker Swarm Service backup Volumes",
+        "operationId": "getSwarmServiceBackupSourcePreview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwarmServiceBackupSourcePreviewView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/swarmServices/{id}/duplicate-draft": {
       "get": {
         "tags": [
@@ -44390,8 +44462,11 @@
           "id",
           "backupRunId",
           "backupRepositoryId",
+          "sourceBackupRunItemId",
           "status",
           "targetPlatformId",
+          "targetDockerNodeId",
+          "targetNodeHostname",
           "targetVolumeName",
           "overwriteExisting",
           "targetVolumeCreatedByCitadel",
@@ -44419,12 +44494,31 @@
             "type": "string",
             "format": "uuid"
           },
+          "sourceBackupRunItemId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
           "status": {
             "$ref": "#/components/schemas/BackupRestoreStatus"
           },
           "targetPlatformId": {
             "type": "string",
             "format": "uuid"
+          },
+          "targetDockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "targetNodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "targetVolumeName": {
             "type": "string"
@@ -44535,6 +44629,8 @@
           "backupRunId",
           "platformId",
           "volumeName",
+          "dockerNodeId",
+          "nodeHostname",
           "status",
           "resticSnapshotId",
           "parentSnapshotId",
@@ -44563,6 +44659,18 @@
           },
           "volumeName": {
             "type": "string"
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
             "$ref": "#/components/schemas/BackupRunItemStatus"
@@ -44929,6 +45037,9 @@
           },
           {
             "$ref": "#/components/schemas/BackupSourceSpecDeploymentBackupSource"
+          },
+          {
+            "$ref": "#/components/schemas/BackupSourceSpecSwarmServiceBackupSource"
           }
         ],
         "discriminator": {
@@ -44937,7 +45048,8 @@
             "DockerVolume": "#/components/schemas/BackupSourceSpecDockerVolumeBackupSource",
             "CitadelSystem": "#/components/schemas/BackupSourceSpecCitadelSystemBackupSource",
             "Stack": "#/components/schemas/BackupSourceSpecStackBackupSource",
-            "Deployment": "#/components/schemas/BackupSourceSpecDeploymentBackupSource"
+            "Deployment": "#/components/schemas/BackupSourceSpecDeploymentBackupSource",
+            "SwarmService": "#/components/schemas/BackupSourceSpecSwarmServiceBackupSource"
           }
         }
       },
@@ -45008,6 +45120,12 @@
           "consistency": {
             "$ref": "#/components/schemas/VolumeBackupConsistency"
           },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/BackupSourceType"
           },
@@ -45045,12 +45163,39 @@
           }
         }
       },
+      "BackupSourceSpecSwarmServiceBackupSource": {
+        "required": [
+          "swarmServiceId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SwarmService"
+            ],
+            "type": "string"
+          },
+          "swarmServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/BackupSourceType"
+          },
+          "stableKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "BackupSourceType": {
         "enum": [
           "DockerVolume",
           "CitadelSystem",
           "Stack",
-          "Deployment"
+          "Deployment",
+          "SwarmService"
         ]
       },
       "BackupWebhookConfig": {
@@ -49545,7 +49690,9 @@
           "kind",
           "isExternal",
           "isShared",
-          "hasBackupCoverage"
+          "hasBackupCoverage",
+          "dockerNodeId",
+          "nodeHostname"
         ],
         "type": "object",
         "properties": {
@@ -49563,6 +49710,18 @@
           },
           "hasBackupCoverage": {
             "type": "boolean"
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -55540,6 +55699,7 @@
           "dockerVolumePolicyCount",
           "stackPolicyCount",
           "deploymentPolicyCount",
+          "swarmServicePolicyCount",
           "attentionPolicyCount",
           "lastRunStatus",
           "lastRunAt"
@@ -55583,6 +55743,14 @@
             "format": "int32"
           },
           "deploymentPolicyCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "swarmServicePolicyCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -57852,6 +58020,19 @@
           },
           "overwriteExisting": {
             "type": "boolean"
+          },
+          "targetDockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceBackupRunItemId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -58248,7 +58429,9 @@
           "kind",
           "isExternal",
           "isShared",
-          "hasBackupCoverage"
+          "hasBackupCoverage",
+          "dockerNodeId",
+          "nodeHostname"
         ],
         "type": "object",
         "properties": {
@@ -58266,6 +58449,18 @@
           },
           "hasBackupCoverage": {
             "type": "boolean"
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -61116,6 +61311,90 @@
           },
           "platformName": {
             "type": "string"
+          }
+        }
+      },
+      "SwarmServiceBackupSourcePreviewView": {
+        "required": [
+          "swarmServiceId",
+          "swarmServiceName",
+          "platformId",
+          "platformName",
+          "platformStatus",
+          "volumes",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "swarmServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "swarmServiceName": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceBackupVolumeView"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SwarmServiceBackupVolumeView": {
+        "required": [
+          "name",
+          "kind",
+          "isExternal",
+          "isShared",
+          "hasBackupCoverage",
+          "dockerNodeId",
+          "nodeHostname"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StackVolumeKind"
+          },
+          "isExternal": {
+            "type": "boolean"
+          },
+          "isShared": {
+            "type": "boolean"
+          },
+          "hasBackupCoverage": {
+            "type": "boolean"
+          },
+          "dockerNodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

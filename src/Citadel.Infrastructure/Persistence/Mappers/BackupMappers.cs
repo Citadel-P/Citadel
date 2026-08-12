@@ -92,7 +92,7 @@ internal static class BackupMappers
 
     internal static VolumeBackupCoverage ToDomain(this VolumeBackupCoverageDto dto)
         => new(
-            new VolumeBackupCoverageKey(dto.PlatformId, dto.VolumeName),
+            new VolumeBackupCoverageKey(dto.PlatformId, dto.VolumeName, dto.DockerNodeId),
             new BackupCoverageView(
                 Enum.Parse<BackupCoverageStatus>(dto.Status),
                 dto.PolicyCount,
@@ -110,6 +110,7 @@ internal static class BackupMappers
             dto.DockerVolumePolicyCount,
             dto.StackPolicyCount,
             dto.DeploymentPolicyCount,
+            dto.SwarmServicePolicyCount,
             dto.AttentionPolicyCount,
             dto.LastRunStatus is null ? null : Enum.Parse<BackupRunStatus>(dto.LastRunStatus),
             ToOffset(dto.LastRunAt));
@@ -200,7 +201,9 @@ internal static class BackupMappers
             dto.ErrorCode,
             dto.ErrorMessage,
             ToOffset(dto.CreatedAt),
-            ToOffset(dto.UpdatedAt));
+            ToOffset(dto.UpdatedAt),
+            dto.DockerNodeId,
+            dto.NodeHostname);
 
     internal static IEnumerable<BackupRunItem> ToDomain(this IEnumerable<BackupRunItemDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
@@ -331,7 +334,10 @@ internal static class BackupMappers
             dto.ExitCode,
             dto.ErrorCode,
             dto.ErrorMessage,
-            dto.TriggeredByActorId);
+            dto.TriggeredByActorId,
+            dto.TargetDockerNodeId,
+            dto.TargetNodeHostname,
+            dto.SourceBackupRunItemId);
 
     internal static IEnumerable<BackupRestoreRun> ToDomain(this IEnumerable<BackupRestoreRunDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
@@ -341,10 +347,13 @@ internal static class BackupMappers
             new BackupRestoreRunDto(
                 dto.Id,
                 dto.BackupRunId,
+                dto.SourceBackupRunItemId,
                 dto.BackupRepositoryId,
                 dto.Status,
                 dto.TargetPlatformId,
                 dto.TargetVolumeName,
+                dto.TargetDockerNodeId,
+                dto.TargetNodeHostname,
                 dto.OverwriteExisting,
                 dto.TargetVolumeCreatedByCitadel,
                 dto.AffectedContainers,
@@ -363,10 +372,13 @@ internal static class BackupMappers
             new BackupRestoreRunDto(
                 dto.RestoreRunId,
                 dto.RestoreBackupRunId,
+                dto.RestoreSourceBackupRunItemId,
                 dto.RestoreBackupRepositoryId,
                 dto.RestoreStatus,
                 dto.RestoreTargetPlatformId,
                 dto.RestoreTargetVolumeName,
+                dto.RestoreTargetDockerNodeId,
+                dto.RestoreTargetNodeHostname,
                 dto.RestoreOverwriteExisting,
                 dto.RestoreTargetVolumeCreatedByCitadel,
                 dto.RestoreAffectedContainers,
@@ -440,6 +452,7 @@ internal static class BackupMappers
             CitadelSystemBackupSource system => SerializeWithType("CitadelSystem", system, BackupJsonContext.Default.CitadelSystemBackupSource),
             StackBackupSource stack => SerializeWithType("Stack", stack, BackupJsonContext.Default.StackBackupSource),
             DeploymentBackupSource deployment => SerializeWithType("Deployment", deployment, BackupJsonContext.Default.DeploymentBackupSource),
+            SwarmServiceBackupSource service => SerializeWithType("SwarmService", service, BackupJsonContext.Default.SwarmServiceBackupSource),
             _ => throw new NotSupportedException($"Backup source type '{source.GetType().Name}' is not supported.")
         };
 
@@ -481,6 +494,8 @@ internal static class BackupMappers
                        ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             "Deployment" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.DeploymentBackupSource)
                             ?? throw new InvalidOperationException("Backup source JSON is invalid."),
+            "SwarmService" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.SwarmServiceBackupSource)
+                              ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             _ => throw new NotSupportedException($"Backup source type '{type}' is not supported.")
         };
     }

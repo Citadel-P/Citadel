@@ -1103,7 +1103,10 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
 
         var requested = volumes
             .Where(static volume => volume.PlatformId != Guid.Empty && !string.IsNullOrWhiteSpace(volume.VolumeName))
-            .Select(static volume => new VolumeBackupCoverageKey(volume.PlatformId, BackupRepository.NormalizeName(volume.VolumeName)))
+            .Select(static volume => new VolumeBackupCoverageKey(
+                volume.PlatformId,
+                BackupRepository.NormalizeName(volume.VolumeName),
+                BackupRepository.NormalizeOptional(volume.DockerNodeId)))
             .Distinct()
             .ToArray();
 
@@ -1120,13 +1123,15 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
         string sql = $$"""
             WITH requested AS (
                 SELECT *
-                FROM unnest(@PlatformIds::uuid[], @VolumeNames::text[]) AS r(PlatformId, VolumeName)
+                FROM unnest(@PlatformIds::uuid[], @VolumeNames::text[], @DockerNodeIds::text[])
+                    AS r(PlatformId, VolumeName, DockerNodeId)
             )
             {{authorizationCtes}},
             policies AS (
                 SELECT
                     r.PlatformId,
                     r.VolumeName,
+                    r.DockerNodeId,
                     p.Id,
                     p.Enabled,
                     p.BackupRepositoryId
@@ -1137,57 +1142,64 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                     p.Source @> jsonb_build_object('$type', @DockerVolumeType, 'PlatformId', r.PlatformId::text, 'VolumeName', r.VolumeName)
                     OR p.Source @> jsonb_build_object('$type', @DockerVolumeType, 'platformId', r.PlatformId::text, 'volumeName', r.VolumeName)
                  )
+                 AND COALESCE(p.Source ->> 'DockerNodeId', p.Source ->> 'dockerNodeId') IS NOT DISTINCT FROM r.DockerNodeId
                  {{authorizationPredicate}}
             ),
             aggregate AS (
                 SELECT
                     r.PlatformId,
                     r.VolumeName,
+                    r.DockerNodeId,
                     COUNT(p.Id)::int AS PolicyCount,
                     COUNT(p.Id) FILTER (WHERE p.Enabled)::int AS EnabledPolicyCount
                 FROM requested r
                 LEFT JOIN policies p
-                  ON p.PlatformId = r.PlatformId
+                 ON p.PlatformId = r.PlatformId
                  AND p.VolumeName = r.VolumeName
-                GROUP BY r.PlatformId, r.VolumeName
+                 AND p.DockerNodeId IS NOT DISTINCT FROM r.DockerNodeId
+                GROUP BY r.PlatformId, r.VolumeName, r.DockerNodeId
             ),
             repository_readiness AS (
                 SELECT
                     p.PlatformId,
                     p.VolumeName,
+                    p.DockerNodeId,
                     BOOL_OR(v.Status = @ReadyValidationStatus) AS HasReadyValidation
                 FROM policies p
                 LEFT JOIN BackupRepositoryValidations v
                   ON v.BackupRepositoryId = p.BackupRepositoryId
                  AND v.Location = @CoreLocation
                  AND v.PlatformId IS NULL
-                GROUP BY p.PlatformId, p.VolumeName
+                GROUP BY p.PlatformId, p.VolumeName, p.DockerNodeId
             ),
             latest_runs AS (
-                SELECT DISTINCT ON (p.PlatformId, p.VolumeName)
+                SELECT DISTINCT ON (p.PlatformId, p.DockerNodeId, p.VolumeName)
                     p.PlatformId,
                     p.VolumeName,
+                    p.DockerNodeId,
                     r.Id AS LastRunId,
                     r.Status AS LastRunStatus,
                     COALESCE(r.CompletedAt, r.QueuedAt) AS LastRunAt
                 FROM policies p
                 JOIN BackupRuns r ON r.BackupPolicyId = p.Id
-                ORDER BY p.PlatformId, p.VolumeName, r.QueuedAt DESC, r.Id DESC
+                ORDER BY p.PlatformId, p.DockerNodeId, p.VolumeName, r.QueuedAt DESC, r.Id DESC
             ),
             latest_success AS (
-                SELECT DISTINCT ON (p.PlatformId, p.VolumeName)
+                SELECT DISTINCT ON (p.PlatformId, p.DockerNodeId, p.VolumeName)
                     p.PlatformId,
                     p.VolumeName,
+                    p.DockerNodeId,
                     COALESCE(r.CompletedAt, r.QueuedAt) AS LastSuccessfulRunAt
                 FROM policies p
                 JOIN BackupRuns r ON r.BackupPolicyId = p.Id
                 WHERE r.Status = ANY(@SuccessfulStatuses)
                   AND r.SnapshotAvailability = @AvailableSnapshot
-                ORDER BY p.PlatformId, p.VolumeName, COALESCE(r.CompletedAt, r.QueuedAt) DESC, r.Id DESC
+                ORDER BY p.PlatformId, p.DockerNodeId, p.VolumeName, COALESCE(r.CompletedAt, r.QueuedAt) DESC, r.Id DESC
             )
             SELECT
                 a.PlatformId AS PlatformId,
                 a.VolumeName AS VolumeName,
+                a.DockerNodeId AS DockerNodeId,
                 CASE
                     WHEN a.PolicyCount = 0 THEN @UnprotectedStatus
                     WHEN lr.LastRunStatus = @FailedRunStatus THEN @FailedStatus
@@ -1205,15 +1217,18 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 NULL::timestamp AS NextRunAt
             FROM aggregate a
             LEFT JOIN repository_readiness rr
-              ON rr.PlatformId = a.PlatformId
+             ON rr.PlatformId = a.PlatformId
              AND rr.VolumeName = a.VolumeName
+             AND rr.DockerNodeId IS NOT DISTINCT FROM a.DockerNodeId
             LEFT JOIN latest_runs lr
-              ON lr.PlatformId = a.PlatformId
+             ON lr.PlatformId = a.PlatformId
              AND lr.VolumeName = a.VolumeName
+             AND lr.DockerNodeId IS NOT DISTINCT FROM a.DockerNodeId
             LEFT JOIN latest_success ls
-              ON ls.PlatformId = a.PlatformId
+             ON ls.PlatformId = a.PlatformId
              AND ls.VolumeName = a.VolumeName
-            ORDER BY a.VolumeName ASC
+             AND ls.DockerNodeId IS NOT DISTINCT FROM a.DockerNodeId
+            ORDER BY a.VolumeName ASC, a.DockerNodeId ASC NULLS FIRST
             """;
 
         var rows = await db.QueryAsync<VolumeBackupCoverageDto>(
@@ -1222,6 +1237,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             {
                 PlatformIds = requested.Select(static volume => volume.PlatformId).ToArray(),
                 VolumeNames = requested.Select(static volume => volume.VolumeName).ToArray(),
+                DockerNodeIds = requested.Select(static volume => volume.DockerNodeId).ToArray(),
                 UserId = userId ?? Guid.Empty,
                 ResourceType = (int)resourceType,
                 GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
@@ -1290,6 +1306,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                         WHEN @DockerVolumeType THEN NULLIF(COALESCE(p.Source->>'PlatformId', p.Source->>'platformId'), '')::uuid
                         WHEN @StackType THEN sr.PlatformId
                         WHEN @DeploymentType THEN d.PlatformId
+                        WHEN @SwarmServiceType THEN ss.PlatformId
                         ELSE NULL
                     END AS PlatformId
                 FROM BackupPolicies p
@@ -1300,6 +1317,9 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 LEFT JOIN Deployments d
                   ON p.Source->>'$type' = @DeploymentType
                  AND d.Id = NULLIF(COALESCE(p.Source->>'DeploymentId', p.Source->>'deploymentId'), '')::uuid
+                LEFT JOIN SwarmServices ss
+                  ON p.Source->>'$type' = @SwarmServiceType
+                 AND ss.Id = NULLIF(COALESCE(p.Source->>'SwarmServiceId', p.Source->>'swarmServiceId'), '')::uuid
                 WHERE p.ArchivedAt IS NULL
                   {{authorizationPredicate}}
             ),
@@ -1333,6 +1353,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 COUNT(p.Id) FILTER (WHERE p.SourceType = @DockerVolumeType)::int AS DockerVolumePolicyCount,
                 COUNT(p.Id) FILTER (WHERE p.SourceType = @StackType)::int AS StackPolicyCount,
                 COUNT(p.Id) FILTER (WHERE p.SourceType = @DeploymentType)::int AS DeploymentPolicyCount,
+                COUNT(p.Id) FILTER (WHERE p.SourceType = @SwarmServiceType)::int AS SwarmServicePolicyCount,
                 COUNT(p.Id) FILTER (WHERE latest.Status = ANY(@AttentionStatuses))::int AS AttentionPolicyCount,
                 latest_platform.Status AS LastRunStatus,
                 latest_platform.RunAt AS LastRunAt
@@ -1356,6 +1377,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 DockerVolumeType = "DockerVolume",
                 StackType = "Stack",
                 DeploymentType = "Deployment",
+                SwarmServiceType = "SwarmService",
                 AttentionStatuses = new[]
                 {
                     EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Failed),
@@ -2374,11 +2396,11 @@ internal sealed class BackupRunItemRepository(IDbConnection db, Func<IDbTransact
         var batch = items.ToArray();
         const string sql = """
             INSERT INTO BackupRunItems (
-                Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                Id, BackupRunId, PlatformId, VolumeName, DockerNodeId, NodeHostname, Status, ResticSnapshotId, ParentSnapshotId,
                 FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
                 ErrorCode, ErrorMessage, CreatedAt, UpdatedAt)
             SELECT
-                Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                Id, BackupRunId, PlatformId, VolumeName, DockerNodeId, NodeHostname, Status, ResticSnapshotId, ParentSnapshotId,
                 FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
                 ErrorCode, ErrorMessage, CreatedAt, UpdatedAt
             FROM unnest(
@@ -2386,6 +2408,8 @@ internal sealed class BackupRunItemRepository(IDbConnection db, Func<IDbTransact
                 @BackupRunIds::uuid[],
                 @PlatformIds::uuid[],
                 @VolumeNames::text[],
+                @DockerNodeIds::text[],
+                @NodeHostnames::text[],
                 @Statuses::text[],
                 @ResticSnapshotIds::text[],
                 @ParentSnapshotIds::text[],
@@ -2400,7 +2424,7 @@ internal sealed class BackupRunItemRepository(IDbConnection db, Func<IDbTransact
                 @CreatedAts::timestamp[],
                 @UpdatedAts::timestamp[])
                 AS items(
-                    Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                    Id, BackupRunId, PlatformId, VolumeName, DockerNodeId, NodeHostname, Status, ResticSnapshotId, ParentSnapshotId,
                     FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
                     ErrorCode, ErrorMessage, CreatedAt, UpdatedAt)
             ON CONFLICT (Id) DO NOTHING
@@ -2414,6 +2438,8 @@ internal sealed class BackupRunItemRepository(IDbConnection db, Func<IDbTransact
                 BackupRunIds = batch.Select(static item => item.BackupRunId).ToArray(),
                 PlatformIds = batch.Select(static item => item.PlatformId).ToArray(),
                 VolumeNames = batch.Select(static item => item.VolumeName).ToArray(),
+                DockerNodeIds = batch.Select(static item => item.DockerNodeId).ToArray(),
+                NodeHostnames = batch.Select(static item => item.NodeHostname).ToArray(),
                 Statuses = batch.Select(static item => EnumFormatter<BackupRunItemStatus>.GetValue(item.Status)).ToArray(),
                 ResticSnapshotIds = batch.Select(static item => item.ResticSnapshotId).ToArray(),
                 ParentSnapshotIds = batch.Select(static item => item.ParentSnapshotId).ToArray(),
@@ -2597,10 +2623,13 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
     private const string RestoreExecutionPlanSelect = """
             rr.Id AS RestoreRunId,
             rr.BackupRunId AS RestoreBackupRunId,
+            rr.SourceBackupRunItemId AS RestoreSourceBackupRunItemId,
             rr.BackupRepositoryId AS RestoreBackupRepositoryId,
             rr.Status AS RestoreStatus,
             rr.TargetPlatformId AS RestoreTargetPlatformId,
             rr.TargetVolumeName AS RestoreTargetVolumeName,
+            rr.TargetDockerNodeId AS RestoreTargetDockerNodeId,
+            rr.TargetNodeHostname AS RestoreTargetNodeHostname,
             rr.OverwriteExisting AS RestoreOverwriteExisting,
             rr.TargetVolumeCreatedByCitadel AS RestoreTargetVolumeCreatedByCitadel,
             rr.AffectedContainers AS RestoreAffectedContainers,
@@ -2659,11 +2688,13 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
     {
         const string sql = """
             INSERT INTO BackupRestoreRuns (
-                Id, BackupRunId, BackupRepositoryId, Status, TargetPlatformId, TargetVolumeName,
+                Id, BackupRunId, SourceBackupRunItemId, BackupRepositoryId, Status, TargetPlatformId, TargetVolumeName,
+                TargetDockerNodeId, TargetNodeHostname,
                 OverwriteExisting, TargetVolumeCreatedByCitadel, AffectedContainers, Warnings,
                 QueuedAt, StartedAt, CompletedAt, ExitCode, ErrorCode, ErrorMessage, TriggeredByActorId)
             VALUES (
-                @Id, @BackupRunId, @BackupRepositoryId, @Status, @TargetPlatformId, @TargetVolumeName,
+                @Id, @BackupRunId, @SourceBackupRunItemId, @BackupRepositoryId, @Status, @TargetPlatformId, @TargetVolumeName,
+                @TargetDockerNodeId, @TargetNodeHostname,
                 @OverwriteExisting, @TargetVolumeCreatedByCitadel, @AffectedContainers::jsonb, @Warnings::jsonb,
                 @QueuedAt, @StartedAt, @CompletedAt, @ExitCode, @ErrorCode, @ErrorMessage, @TriggeredByActorId)
             """;
@@ -2674,10 +2705,13 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
             {
                 run.Id,
                 run.BackupRunId,
+                run.SourceBackupRunItemId,
                 run.BackupRepositoryId,
                 Status = EnumFormatter<BackupRestoreStatus>.GetValue(run.Status),
                 run.TargetPlatformId,
                 run.TargetVolumeName,
+                run.TargetDockerNodeId,
+                run.TargetNodeHostname,
                 run.OverwriteExisting,
                 run.TargetVolumeCreatedByCitadel,
                 AffectedContainers = BackupMappers.SerializeAffectedContainers(run.AffectedContainers),

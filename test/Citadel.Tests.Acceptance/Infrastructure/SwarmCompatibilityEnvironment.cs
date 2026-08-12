@@ -5,6 +5,8 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using DotNet.Testcontainers.Volumes;
+using Minio;
+using Minio.DataModel.Args;
 
 namespace Tests.Acceptance.Infrastructure;
 
@@ -20,13 +22,18 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
     private const ushort CoreHttpPort = 8000;
     private const ushort CoreGrpcPort = 8001;
     private const ushort RegistryPort = 5000;
+    private const ushort RustFsPort = 9000;
     private const string CoreNetworkAlias = "citadel-core";
     private const string ManagerNetworkAlias = "swarm-manager";
     private const string WorkerOneNetworkAlias = "swarm-worker-one";
     private const string WorkerTwoNetworkAlias = "swarm-worker-two";
     private const string RegistryNetworkAlias = "swarm-registry";
+    private const string RustFsNetworkAlias = "swarm-rustfs";
+    internal const string PostgresNetworkAlias = "swarm-postgres";
     private const string DockerImage = "docker:27.5.1-dind";
     private const string RegistryImage = "registry:2.8.3";
+    private const string RustFsImage =
+        "rustfs/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a";
     private const string NodeAgentTag = "candidate";
     private const string ManagerAgentContainerName = "citadel-acceptance-manager-agent";
     private const string ManagerAgentStateVolume = "citadel-acceptance-manager-agent-state";
@@ -34,9 +41,14 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
     private const string SwarmGatewaySubnet = "172.31.0.0/24";
     private const string SwarmGateway = "172.31.0.1";
 
+    public const string RustFsAccessKey = "citadel-swarm-acceptance";
+    public const string RustFsSecretKey = "citadel-swarm-acceptance-secret-2026";
+
+    private readonly string sourceCoreImage;
     private readonly string sourceAgentImage;
+    private readonly string postgresContainerId;
     private readonly string nodeAgentRepository;
-    private string? hostNodeAgentImage;
+    private readonly string backupHelperImage;
     private readonly INetwork network;
     private readonly IVolume managerSocketVolume;
     private readonly IVolume managerDataVolume;
@@ -50,16 +62,24 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
     private readonly IContainer workerOne;
     private readonly IContainer workerTwo;
     private readonly IContainer core;
-    private bool hostImageTagged;
+    private readonly IContainer? rustFs;
+    private IMinioClient? objectStorage;
+    private bool postgresConnected;
 
     private SwarmCompatibilityEnvironment(
         string coreImage,
         string agentImage,
-        string postgresConnectionString)
+        string postgresConnectionString,
+        string postgresContainerId,
+        bool enableBackupInfrastructure)
     {
+        sourceCoreImage = coreImage;
         sourceAgentImage = agentImage;
+        this.postgresContainerId = postgresContainerId;
         var repositoryName = $"citadel-agent-{Guid.NewGuid():N}";
+        var helperRepositoryName = $"citadel-backup-helper-{Guid.NewGuid():N}";
         nodeAgentRepository = $"{RegistryNetworkAlias}:{RegistryPort}/{repositoryName}";
+        backupHelperImage = $"{RegistryNetworkAlias}:{RegistryPort}/{helperRepositoryName}:candidate";
 
         network = new NetworkBuilder().Build();
         managerSocketVolume = new VolumeBuilder().Build();
@@ -80,6 +100,19 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
                         .ForPort(RegistryPort)
                         .ForPath("/v2/")))
             .Build();
+
+        rustFs = enableBackupInfrastructure
+            ? new ContainerBuilder(RustFsImage)
+                .WithPortBinding(RustFsPort, assignRandomHostPort: true)
+                .WithEnvironment("RUSTFS_ACCESS_KEY", RustFsAccessKey)
+                .WithEnvironment("RUSTFS_SECRET_KEY", RustFsSecretKey)
+                .WithNetwork(network)
+                .WithNetworkAliases(RustFsNetworkAlias)
+                .WithWaitStrategy(
+                    Wait.ForUnixContainer()
+                        .UntilInternalTcpPortIsAvailable(RustFsPort))
+                .Build()
+            : null;
 
         manager = BuildDockerDaemon(
             ManagerNetworkAlias,
@@ -109,6 +142,10 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
             .WithEnvironment("EdgeAgent__AgentImageTag", NodeAgentTag)
             .WithEnvironment("EdgeAgent__NodeAgentSetupMinutes", "3")
             .WithEnvironment("EdgeAgent__NodeAgentBootstrapMinutes", "5")
+            .WithEnvironment("VolumeBrowser__HelperImage", backupHelperImage)
+            .WithEnvironment(
+                "DOCKER_HOST",
+                $"tcp://{ManagerNetworkAlias}:2375")
             .WithEnvironment("ConnectionStrings__Postgres", postgresConnectionString)
             .WithEnvironment("Jwt__Issuer", "http://citadel-core")
             .WithEnvironment("Jwt__Audience", "http://citadel-core")
@@ -118,7 +155,6 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
             .WithEnvironment(
                 "Secrets__EncryptionKey",
                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
-            .WithVolumeMount(managerSocketVolume, "/var/run")
             .WithVolumeMount(coreDataVolume, "/app/data")
             .WithNetwork(network)
             .WithNetworkAliases(CoreNetworkAlias)
@@ -139,10 +175,40 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
 
     public string ManagerNodeId { get; private set; } = string.Empty;
 
+    public string? PlatformS3Endpoint { get; private set; }
+
     public static async Task<SwarmCompatibilityEnvironment> StartAsync(
         string coreImage,
         string agentImage,
         string postgresConnectionString,
+        string postgresContainerId,
+        CancellationToken cancellationToken) => await StartAsync(
+            coreImage,
+            agentImage,
+            postgresConnectionString,
+            postgresContainerId,
+            enableBackupInfrastructure: false,
+            cancellationToken);
+
+    public static async Task<SwarmCompatibilityEnvironment> StartWithBackupAsync(
+        string coreImage,
+        string agentImage,
+        string postgresConnectionString,
+        string postgresContainerId,
+        CancellationToken cancellationToken) => await StartAsync(
+            coreImage,
+            agentImage,
+            postgresConnectionString,
+            postgresContainerId,
+            enableBackupInfrastructure: true,
+            cancellationToken);
+
+    private static async Task<SwarmCompatibilityEnvironment> StartAsync(
+        string coreImage,
+        string agentImage,
+        string postgresConnectionString,
+        string postgresContainerId,
+        bool enableBackupInfrastructure,
         CancellationToken cancellationToken)
     {
         Assert.False(
@@ -155,24 +221,41 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         var environment = new SwarmCompatibilityEnvironment(
             coreImage,
             agentImage,
-            postgresConnectionString);
+            postgresConnectionString,
+            postgresContainerId,
+            enableBackupInfrastructure);
         try
         {
             await environment.StartCoreInfrastructureAsync(cancellationToken);
             return environment;
         }
-        catch
+        catch (Exception exception)
         {
+            var diagnostics = await environment.GetDiagnosticsAsync(
+                CancellationToken.None);
             await environment.DisposeAsync();
-            throw;
+            throw new InvalidOperationException(
+                $"Starting the disposable Swarm environment failed.{Environment.NewLine}{diagnostics}",
+                exception);
         }
     }
 
-    public Task AuthenticateAsAdminAsync(CancellationToken cancellationToken) =>
-        InitialAdministratorSession.AuthenticateAsync(
-            Client,
-            "Swarm compatibility Core image",
-            cancellationToken);
+    public async Task AuthenticateAsAdminAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await InitialAdministratorSession.AuthenticateAsync(
+                Client,
+                "Swarm compatibility Core image",
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"Authenticating with the disposable Core failed.{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}",
+                exception);
+        }
+    }
 
     public async Task<Guid> CreatePlatformAsync(
         SwarmManagerConnectorMode connectorMode,
@@ -197,9 +280,11 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
             },
             cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        Assert.True(
-            response.IsSuccessStatusCode,
-            $"Creating the Swarm platform failed with HTTP {(int)response.StatusCode}: {body}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+        if (!response.IsSuccessStatusCode)
+        {
+            Assert.Fail(
+                $"Creating the Swarm platform failed with HTTP {(int)response.StatusCode}: {body}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+        }
 
         using var json = JsonDocument.Parse(body);
         var platformId = json.RootElement.GetProperty("id").GetGuid();
@@ -219,25 +304,83 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         Guid platformId,
         CancellationToken cancellationToken)
     {
-        using var response = await Client.PostAsync(
-            $"/api/v1/platforms/{platformId:D}/node-agents/install",
-            content: null,
-            cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        Assert.True(
-            response.IsSuccessStatusCode,
-            $"Installing Swarm node Agents failed with HTTP {(int)response.StatusCode}: {body}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+        HttpResponseMessage response;
+        string body;
+        try
+        {
+            response = await Client.PostAsync(
+                $"/api/v1/platforms/{platformId:D}/node-agents/install",
+                content: null,
+                cancellationToken);
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"The node-agent installation response ended unexpectedly.{Environment.NewLine}{await GetNodeAgentDiagnosticsAsync(platformId, CancellationToken.None)}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}",
+                exception);
+        }
 
-        using var json = JsonDocument.Parse(body);
-        var progress = json.RootElement.EnumerateArray().ToArray();
-        Assert.NotEmpty(progress);
-        var completion = progress[^1];
-        Assert.True(completion.GetProperty("isCompleted").GetBoolean());
-        Assert.Equal("completed", completion.GetProperty("stage").GetString());
-        var hasError = completion.TryGetProperty("errorMessage", out var errorMessage)
-            && errorMessage.ValueKind != JsonValueKind.Null
-            && !string.IsNullOrWhiteSpace(errorMessage.GetString());
-        Assert.False(hasError, hasError ? errorMessage.GetString() : null);
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                Assert.Fail(
+                    $"Installing Swarm node Agents failed with HTTP {(int)response.StatusCode}: {body}{Environment.NewLine}{await GetNodeAgentDiagnosticsAsync(platformId, CancellationToken.None)}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+            }
+
+            using var json = JsonDocument.Parse(body);
+            var progress = json.RootElement.EnumerateArray().ToArray();
+            Assert.NotEmpty(progress);
+            var completion = progress[^1];
+            var hasError = completion.TryGetProperty("errorMessage", out var errorMessage)
+                && errorMessage.ValueKind != JsonValueKind.Null
+                && !string.IsNullOrWhiteSpace(errorMessage.GetString());
+            if (!completion.GetProperty("isCompleted").GetBoolean()
+                || !string.Equals(completion.GetProperty("stage").GetString(), "completed", StringComparison.Ordinal)
+                || hasError)
+            {
+                Assert.Fail(
+                    $"Swarm node Agent installation failed: {(hasError ? errorMessage.GetString() : body)}{Environment.NewLine}{await GetNodeAgentDiagnosticsAsync(platformId, CancellationToken.None)}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+            }
+        }
+    }
+
+    private async Task<string> GetNodeAgentDiagnosticsAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        var sections = new List<string>(3);
+        try
+        {
+            using var response = await Client.GetAsync(
+                $"/api/v1/platforms/{platformId:D}/node-agent-coverage",
+                cancellationToken);
+            sections.Add(
+                $"Node Agent coverage ({(int)response.StatusCode}):{Environment.NewLine}{await response.Content.ReadAsStringAsync(cancellationToken)}");
+        }
+        catch (Exception exception)
+        {
+            sections.Add($"Node Agent coverage diagnostics unavailable: {exception.Message}");
+        }
+
+        var serviceName = $"citadel-node-agent-{platformId:N}";
+        await AddNestedDockerCommandDiagnosticsAsync(
+            sections,
+            "Node Agent Service tasks",
+            ["docker", "service", "ps", "--no-trunc", serviceName],
+            cancellationToken);
+        await AddNestedDockerCommandDiagnosticsAsync(
+            sections,
+            "Node Agent Service logs",
+            ["docker", "service", "logs", "--raw", "--tail", "200", serviceName],
+            cancellationToken);
+        await AddNestedDockerCommandDiagnosticsAsync(
+            sections,
+            "Node Agent Service specification",
+            ["docker", "service", "inspect", "--format", "{{json .Spec}}", serviceName],
+            cancellationToken);
+        return string.Join(Environment.NewLine, sections);
     }
 
     public async Task<JsonElement> WaitForCoverageAsync(
@@ -273,8 +416,43 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         }
 
         Assert.Fail(
-            $"Timed out waiting for {expectation}. Last coverage: {lastBody}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
+            $"Timed out waiting for {expectation}. Last coverage: {lastBody}{Environment.NewLine}{await GetNodeAgentDiagnosticsAsync(platformId, CancellationToken.None)}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
         return default;
+    }
+
+    public async Task WaitForSwarmNodesAsync(
+        Guid platformId,
+        int expectedCount,
+        CancellationToken cancellationToken)
+    {
+        string? lastBody = null;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+
+        try
+        {
+            while (!timeout.IsCancellationRequested)
+            {
+                using var response = await Client.GetAsync(
+                    $"/api/v1/platforms/{platformId:D}/swarm/nodes",
+                    timeout.Token);
+                lastBody = await response.Content.ReadAsStringAsync(timeout.Token);
+                if (response.IsSuccessStatusCode)
+                {
+                    using var json = JsonDocument.Parse(lastBody);
+                    if (json.RootElement.GetProperty("items").GetArrayLength() == expectedCount)
+                        return;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), timeout.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+
+        Assert.Fail(
+            $"Timed out waiting for {expectedCount} Swarm Nodes. Last response: {lastBody}{Environment.NewLine}{await GetDiagnosticsAsync(CancellationToken.None)}");
     }
 
     public async Task<(string ContainerId, string NodeId)> StartWorkerContainerAsync(
@@ -300,6 +478,99 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         AssertCommandSucceeded(result, $"Starting {name}");
         return (result.Stdout.Trim(), nodeId);
     }
+
+    public async Task CreateBackupBucketAsync(
+        string bucket,
+        CancellationToken cancellationToken)
+    {
+        Assert.NotNull(objectStorage);
+        var exists = await objectStorage.BucketExistsAsync(
+            new BucketExistsArgs().WithBucket(bucket),
+            cancellationToken);
+        if (!exists)
+        {
+            await objectStorage.MakeBucketAsync(
+                new MakeBucketArgs().WithBucket(bucket),
+                cancellationToken);
+        }
+    }
+
+    public async Task SeedWorkerVolumeAsync(
+        int workerNumber,
+        string volumeName,
+        byte[] content,
+        CancellationToken cancellationToken)
+    {
+        var worker = GetWorker(workerNumber);
+        AssertCommandSucceeded(
+            await worker.ExecAsync(["docker", "pull", "busybox:1.36.1"], cancellationToken),
+            $"Pulling the worker {workerNumber} volume fixture image");
+        AssertCommandSucceeded(
+            await worker.ExecAsync(["docker", "volume", "create", volumeName], cancellationToken),
+            $"Creating worker {workerNumber} Volume {volumeName}");
+
+        var payload = Convert.ToBase64String(content);
+        AssertCommandSucceeded(
+            await worker.ExecAsync(
+                [
+                    "docker", "run", "--rm",
+                    "--volume", $"{volumeName}:/data",
+                    "busybox:1.36.1",
+                    "sh", "-c", $"printf '%s' '{payload}' | base64 -d > /data/payload.bin"
+                ],
+                cancellationToken),
+            $"Seeding worker {workerNumber} Volume {volumeName}");
+    }
+
+    public async Task<byte[]> ReadWorkerVolumePayloadAsync(
+        int workerNumber,
+        string volumeName,
+        CancellationToken cancellationToken)
+    {
+        var result = await GetWorker(workerNumber).ExecAsync(
+            [
+                "docker", "run", "--rm",
+                "--volume", $"{volumeName}:/data:ro",
+                "busybox:1.36.1",
+                "base64", "/data/payload.bin"
+            ],
+            cancellationToken);
+        AssertCommandSucceeded(
+            result,
+            $"Reading worker {workerNumber} Volume {volumeName}");
+        return Convert.FromBase64String(result.Stdout);
+    }
+
+    public async Task AssertNoBackupHelpersAsync(
+        int workerNumber,
+        CancellationToken cancellationToken)
+    {
+        var result = await GetWorker(workerNumber).ExecAsync(
+            [
+                "docker", "ps", "--all", "--quiet",
+                "--filter", "label=citadel.backup-helper=true"
+            ],
+            cancellationToken);
+        AssertCommandSucceeded(
+            result,
+            $"Listing worker {workerNumber} backup helpers");
+        Assert.True(
+            string.IsNullOrWhiteSpace(result.Stdout),
+            $"Worker {workerNumber} retained backup helper containers: {result.Stdout}");
+    }
+
+    public Task<JsonElement> WaitForNodeVolumeAsync(
+        Guid platformId,
+        string dockerNodeId,
+        string volumeName,
+        CancellationToken cancellationToken) => WaitForNodeLocalResourceAsync(
+            $"/api/v1/volumes/{platformId:D}",
+            "volumes",
+            item => item.GetProperty("dockerNodeId").GetString() == dockerNodeId
+                    && item.GetProperty("name").GetString() == volumeName
+                    && !item.GetProperty("isStale").GetBoolean(),
+            $"Node {dockerNodeId} Volume {volumeName}",
+            cancellationToken);
 
     public async Task AssertNodeLocalResourcesRouteAsync(
         Guid platformId,
@@ -557,12 +828,14 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
 
     public async Task<string> GetDiagnosticsAsync(CancellationToken cancellationToken)
     {
-        var sections = new List<string>(5);
+        var sections = new List<string>(6);
         await AddLogsAsync(sections, "Core", core, cancellationToken);
         await AddLogsAsync(sections, "Manager", manager, cancellationToken);
         await AddLogsAsync(sections, "Worker one", workerOne, cancellationToken);
         await AddLogsAsync(sections, "Worker two", workerTwo, cancellationToken);
         await AddLogsAsync(sections, "Registry", registry, cancellationToken);
+        if (rustFs is not null)
+            await AddLogsAsync(sections, "RustFS", rustFs, cancellationToken);
         await AddNestedManagerAgentLogsAsync(sections, cancellationToken);
         return string.Join(Environment.NewLine, sections);
     }
@@ -570,11 +843,14 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Client?.Dispose();
+        objectStorage?.Dispose();
 
         await core.DisposeAsync();
         await workerTwo.DisposeAsync();
         await workerOne.DisposeAsync();
         await manager.DisposeAsync();
+        if (rustFs is not null)
+            await rustFs.DisposeAsync();
         await registry.DisposeAsync();
         await coreDataVolume.DisposeAsync();
         await workerTwoDataVolume.DisposeAsync();
@@ -583,20 +859,28 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         await workerOneSocketVolume.DisposeAsync();
         await managerDataVolume.DisposeAsync();
         await managerSocketVolume.DisposeAsync();
-        await network.DisposeAsync();
-
-        if (hostImageTagged && hostNodeAgentImage is not null)
+        if (postgresConnected)
         {
-            await RunDockerAsync(
-                ["image", "rm", hostNodeAgentImage],
+            await RunProcessAsync(
+                "docker",
+                ["network", "disconnect", "--force", network.Name, postgresContainerId],
                 throwOnError: false,
                 CancellationToken.None);
+            postgresConnected = false;
         }
+        await network.DisposeAsync();
+
     }
 
     private async Task StartCoreInfrastructureAsync(CancellationToken cancellationToken)
     {
         await network.CreateAsync(cancellationToken);
+        await RunProcessAsync(
+            "docker",
+            ["network", "connect", "--alias", PostgresNetworkAlias, network.Name, postgresContainerId],
+            throwOnError: true,
+            cancellationToken);
+        postgresConnected = true;
         await managerSocketVolume.CreateAsync(cancellationToken);
         await managerDataVolume.CreateAsync(cancellationToken);
         await workerOneSocketVolume.CreateAsync(cancellationToken);
@@ -605,13 +889,11 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         await workerTwoDataVolume.CreateAsync(cancellationToken);
         await coreDataVolume.CreateAsync(cancellationToken);
         await registry.StartAsync(cancellationToken);
-
-        var mappedRegistryPort = registry.GetMappedPublicPort(RegistryPort);
-        var hostImage = $"127.0.0.1:{mappedRegistryPort}/{nodeAgentRepository[(nodeAgentRepository.IndexOf('/') + 1)..]}:{NodeAgentTag}";
-        hostNodeAgentImage = hostImage;
-        await RunDockerAsync(["tag", sourceAgentImage, hostImage], true, cancellationToken);
-        hostImageTagged = true;
-        await RunDockerAsync(["push", hostImage], true, cancellationToken);
+        if (rustFs is not null)
+        {
+            await rustFs.StartAsync(cancellationToken);
+            await InitializeObjectStorageAsync(cancellationToken);
+        }
 
         await manager.StartAsync(cancellationToken);
         await workerOne.StartAsync(cancellationToken);
@@ -624,6 +906,14 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         await ConfigureCoreForwardingAsync(manager, cancellationToken);
         await ConfigureCoreForwardingAsync(workerOne, cancellationToken);
         await ConfigureCoreForwardingAsync(workerTwo, cancellationToken);
+        await ImportCandidateImageAsync(
+            sourceAgentImage,
+            $"{nodeAgentRepository}:{NodeAgentTag}",
+            cancellationToken);
+        await ImportCandidateImageAsync(
+            sourceCoreImage,
+            backupHelperImage,
+            cancellationToken);
 
         Client = new HttpClient
         {
@@ -631,6 +921,42 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
                 $"http://127.0.0.1:{core.GetMappedPublicPort(CoreHttpPort)}"),
             Timeout = TimeSpan.FromMinutes(5)
         };
+    }
+
+    private IContainer GetWorker(int workerNumber) => workerNumber switch
+    {
+        1 => workerOne,
+        2 => workerTwo,
+        _ => throw new ArgumentOutOfRangeException(nameof(workerNumber))
+    };
+
+    private async Task InitializeObjectStorageAsync(CancellationToken cancellationToken)
+    {
+        Assert.NotNull(rustFs);
+        PlatformS3Endpoint = $"http://{rustFs.IpAddress}:{RustFsPort}";
+        var hostEndpoint = new Uri(
+            $"http://127.0.0.1:{rustFs.GetMappedPublicPort(RustFsPort)}");
+        objectStorage = new MinioClient()
+            .WithEndpoint(hostEndpoint.Host, hostEndpoint.Port)
+            .WithCredentials(RustFsAccessKey, RustFsSecretKey)
+            .Build();
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        while (!timeout.IsCancellationRequested)
+        {
+            try
+            {
+                await objectStorage.ListBucketsAsync(timeout.Token);
+                return;
+            }
+            catch when (!timeout.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
+            }
+        }
+
+        throw new TimeoutException("RustFS did not become ready for the Swarm backup compatibility test.");
     }
 
     private IContainer BuildDockerDaemon(
@@ -971,50 +1297,141 @@ internal sealed class SwarmCompatibilityEnvironment : IAsyncDisposable
         }
     }
 
-    private static async Task RunDockerAsync(
+    private async Task AddNestedDockerCommandDiagnosticsAsync(
+        ICollection<string> sections,
+        string label,
+        IList<string> command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await manager.ExecAsync(command, cancellationToken);
+            sections.Add(
+                $"{label} (exit code {result.ExitCode}):{Environment.NewLine}{result.Stdout}{Environment.NewLine}{result.Stderr}");
+        }
+        catch (Exception exception)
+        {
+            sections.Add($"{label} diagnostics unavailable: {exception.Message}");
+        }
+    }
+
+    private async Task ImportCandidateImageAsync(
+        string sourceImage,
+        string registryImage,
+        CancellationToken cancellationToken)
+    {
+        using var save = StartProcess(
+            "docker",
+            ["image", "save", sourceImage],
+            redirectStandardInput: false);
+        using var load = StartProcess(
+            "docker",
+            ["exec", "--interactive", manager.Id, "docker", "image", "load"],
+            redirectStandardInput: true);
+        var saveErrorTask = save.StandardError.ReadToEndAsync(cancellationToken);
+        var loadOutputTask = load.StandardOutput.ReadToEndAsync(cancellationToken);
+        var loadErrorTask = load.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await save.StandardOutput.BaseStream.CopyToAsync(
+                load.StandardInput.BaseStream,
+                cancellationToken);
+            load.StandardInput.Close();
+            await Task.WhenAll(
+                save.WaitForExitAsync(cancellationToken),
+                load.WaitForExitAsync(cancellationToken));
+        }
+        catch
+        {
+            load.StandardInput.Close();
+            await StopProcessAsync(save);
+            await StopProcessAsync(load);
+            throw;
+        }
+
+        var saveError = await saveErrorTask;
+        var loadOutput = await loadOutputTask;
+        var loadError = await loadErrorTask;
+        Assert.True(
+            save.ExitCode == 0 && load.ExitCode == 0,
+            $"""
+            Importing candidate image {sourceImage} into the Swarm manager failed.
+            docker save exit code: {save.ExitCode}
+            docker save stderr: {saveError}
+            docker load exit code: {load.ExitCode}
+            docker load stdout: {loadOutput}
+            docker load stderr: {loadError}
+            """);
+
+        var tag = await manager.ExecAsync(
+            ["docker", "image", "tag", sourceImage, registryImage],
+            cancellationToken);
+        AssertCommandSucceeded(tag, $"Tagging candidate image {sourceImage}");
+        var push = await manager.ExecAsync(
+            ["docker", "image", "push", registryImage],
+            cancellationToken);
+        AssertCommandSucceeded(push, $"Pushing candidate image {registryImage}");
+    }
+
+    private static Process StartProcess(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        bool redirectStandardInput)
+    {
+        var startInfo = new ProcessStartInfo(fileName)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = redirectStandardInput,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        return Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start {fileName}.");
+    }
+
+    private static async Task RunProcessAsync(
+        string fileName,
         IReadOnlyList<string> arguments,
         bool throwOnError,
         CancellationToken cancellationToken)
     {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "docker",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-
-        process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        using var process = StartProcess(
+            fileName,
+            arguments,
+            redirectStandardInput: false);
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
         try
         {
             await process.WaitForExitAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
-            }
-
+            await StopProcessAsync(process);
             throw;
         }
 
-        var output = await stdout;
-        var error = await stderr;
+        var output = await outputTask;
+        var error = await errorTask;
         if (throwOnError)
         {
             Assert.True(
                 process.ExitCode == 0,
-                $"docker {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {error}{Environment.NewLine}{output}");
+                $"{fileName} {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {error}{Environment.NewLine}{output}");
         }
+    }
+
+    private static async Task StopProcessAsync(Process process)
+    {
+        if (process.HasExited)
+            return;
+
+        process.Kill(entireProcessTree: true);
+        await process.WaitForExitAsync(CancellationToken.None);
     }
 }

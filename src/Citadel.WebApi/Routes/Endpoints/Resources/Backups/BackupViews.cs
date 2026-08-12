@@ -232,6 +232,7 @@ public sealed record PlatformBackupSummaryView(
     int DockerVolumePolicyCount,
     int StackPolicyCount,
     int DeploymentPolicyCount,
+    int SwarmServicePolicyCount,
     int AttentionPolicyCount,
     BackupRunStatus? LastRunStatus,
     DateTimeOffset? LastRunAt)
@@ -244,6 +245,7 @@ public sealed record PlatformBackupSummaryView(
             summary.DockerVolumePolicyCount,
             summary.StackPolicyCount,
             summary.DeploymentPolicyCount,
+            summary.SwarmServicePolicyCount,
             summary.AttentionPolicyCount,
             summary.LastRunStatus,
             summary.LastRunAt);
@@ -317,6 +319,8 @@ public sealed record BackupRunItemView(
     Guid BackupRunId,
     Guid PlatformId,
     string VolumeName,
+    string? DockerNodeId,
+    string? NodeHostname,
     BackupRunItemStatus Status,
     string? ResticSnapshotId,
     string? ParentSnapshotId,
@@ -335,6 +339,8 @@ public sealed record BackupRunItemView(
             item.BackupRunId,
             item.PlatformId,
             item.VolumeName,
+            item.DockerNodeId,
+            item.NodeHostname,
             item.Status,
             item.ResticSnapshotId,
             item.ParentSnapshotId,
@@ -358,8 +364,11 @@ public sealed record BackupRestoreRunView(
     Guid Id,
     Guid BackupRunId,
     Guid BackupRepositoryId,
+    Guid? SourceBackupRunItemId,
     BackupRestoreStatus Status,
     Guid TargetPlatformId,
+    string? TargetDockerNodeId,
+    string? TargetNodeHostname,
     string TargetVolumeName,
     bool OverwriteExisting,
     bool TargetVolumeCreatedByCitadel,
@@ -381,8 +390,11 @@ public sealed record BackupRestoreRunView(
             run.Id,
             run.BackupRunId,
             run.BackupRepositoryId,
+            run.SourceBackupRunItemId,
             run.Status,
             run.TargetPlatformId,
+            run.TargetDockerNodeId,
+            run.TargetNodeHostname,
             run.TargetVolumeName,
             run.OverwriteExisting,
             run.TargetVolumeCreatedByCitadel,
@@ -496,8 +508,13 @@ public sealed record QueueBackupRunInput(BackupRunTrigger Trigger = BackupRunTri
         => new(Trigger, TriggerSourceId);
 }
 
-public sealed record RestoreVolumeInput(Guid TargetPlatformId, string TargetVolumeName, bool OverwriteExisting)
+public sealed record RestoreVolumeInput(
+    Guid TargetPlatformId,
+    string TargetVolumeName,
+    bool OverwriteExisting,
+    string? TargetDockerNodeId = null,
+    Guid? SourceBackupRunItemId = null)
 {
     internal RestoreVolumeInputModel ToModel()
-        => new(TargetPlatformId, TargetVolumeName, OverwriteExisting);
+        => new(TargetPlatformId, TargetVolumeName, OverwriteExisting, TargetDockerNodeId, SourceBackupRunItemId);
 }

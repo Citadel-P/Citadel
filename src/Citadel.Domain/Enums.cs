@@ -1293,7 +1293,8 @@ public enum BackupSourceType
     DockerVolume,
     CitadelSystem,
     Stack,
-    Deployment
+    Deployment,
+    SwarmService
 }
 
 public enum VolumeBackupConsistency

@@ -1,4 +1,3 @@
-using DotNet.Testcontainers.Configurations;
 using Npgsql;
 using System.Text.Json;
 using Tests.Acceptance.Infrastructure;
@@ -35,22 +34,23 @@ public sealed class SwarmNodeAgentCompatibilityTests(
         {
             var databaseConnection =
                 new NpgsqlConnectionStringBuilder(hostConnectionString);
-            await TestcontainersSettings.ExposeHostPortsAsync(
-                checked((ushort)databaseConnection.Port),
-                cancellationToken);
-            databaseConnection.Host = "host.testcontainers.internal";
+            databaseConnection.Host =
+                SwarmCompatibilityEnvironment.PostgresNetworkAlias;
+            databaseConnection.Port = 5432;
 
             await using var environment =
                 await SwarmCompatibilityEnvironment.StartAsync(
                     coreImage,
                     agentImage,
                     databaseConnection.ConnectionString,
+                    postgres.ContainerId,
                     cancellationToken);
             await environment.AuthenticateAsAdminAsync(cancellationToken);
             var platformId = await environment.CreatePlatformAsync(
                 connectorMode,
                 cancellationToken);
 
+            await environment.WaitForSwarmNodesAsync(platformId, 3, cancellationToken);
             await environment.WaitForCoverageAsync(
                 platformId,
                 static coverage =>

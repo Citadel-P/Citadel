@@ -134,6 +134,7 @@ $env:CITADEL_ACCEPTANCE_AGENT_VERSION = "1.0.0" # Optional exact assertion
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.SwarmNodeAgentCompatibilityTests
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.SwarmBackupCompatibilityTests
 ```
 
 The image references may also be registry references or immutable digests.
@@ -142,10 +143,13 @@ Agent modes. The suites create disposable Core data, Agent identity,
 PostgreSQL, and Docker data volumes; they do not deploy test stacks to the host
 Docker daemon.
 
-The Swarm suite temporarily tags the local candidate Agent image and pushes it
-to its disposable Registry so the nested worker daemons exercise a real image
-pull. The generated tag, Registry, Swarm Nodes, and Docker volumes are removed
-when the test finishes.
+The Swarm suites temporarily tag the local candidate Agent and Core images and
+push them to a disposable Registry so the nested worker daemons exercise real
+image pulls. The backup suite writes a Volume on one worker, backs it up to a
+disposable RustFS repository, restores it on another worker, verifies the
+payload and node attribution, and checks helper cleanup. Generated tags,
+Registry, RustFS, Swarm Nodes, and Docker volumes are removed when the test
+finishes.
 
 Run only the Forgejo Git and webhook compatibility suite:
 
@@ -184,9 +188,13 @@ platform backup-helper image. RustFS is pinned by digest, and the bucket,
 PostgreSQL database, Docker daemon, volumes, and object data are disposable.
 The test does not create backup volumes or buckets in the host Docker daemon.
 
-The PostgreSQL container and databases are disposable. Do not modify
-`script0001.sql` after release. The acceptance suite pins its normalized SHA-256
-hash so accidental edits to the baseline fail explicitly.
+The PostgreSQL container and databases are disposable. Before the 1.0 baseline
+is released, a deliberate clean-migration regeneration must update
+`migration0001`, `script0001.sql`, and the normalized SHA-256 pin in
+`PreReleaseBaseline` together. Never edit generated migration SQL manually.
+After release, freeze all three baseline artifacts and add only incremental
+migrations and scripts. The hash guard makes accidental baseline changes fail
+explicitly.
 
 Once a stable Citadel image exists, add it as the previous-version baseline and
 run the candidate image against preserved PostgreSQL and Citadel data volumes.

@@ -1,6 +1,8 @@
 using Application.Permissions;
+using Application.Features.Backups.Models;
 using Application.Features.SwarmServices.Queries;
 using Domain;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.SwarmServices;
 using Hosting.Common;
@@ -10,6 +12,46 @@ using WebApi.Routes.Endpoints.Resources.Tags;
 using WebApi.Routes.Endpoints.Resources.Swarm;
 
 namespace WebApi.Routes.Endpoints.Resources.SwarmServices;
+
+public sealed record SwarmServiceBackupSourcePreviewView(
+    Guid SwarmServiceId,
+    string SwarmServiceName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<SwarmServiceBackupVolumeView> Volumes,
+    IReadOnlyList<string> Warnings)
+{
+    internal static SwarmServiceBackupSourcePreviewView Map(SwarmServiceBackupSourcePreviewResult result)
+        => new(
+            result.SwarmServiceId,
+            result.SwarmServiceName,
+            result.PlatformId,
+            result.PlatformName,
+            result.PlatformStatus,
+            [.. result.Volumes.Select(SwarmServiceBackupVolumeView.Map)],
+            result.Warnings);
+}
+
+public sealed record SwarmServiceBackupVolumeView(
+    string Name,
+    StackVolumeKind Kind,
+    bool IsExternal,
+    bool IsShared,
+    bool HasBackupCoverage,
+    string? DockerNodeId,
+    string? NodeHostname)
+{
+    internal static SwarmServiceBackupVolumeView Map(StackBackupVolumePreviewItem item)
+        => new(
+            item.Name,
+            item.Kind,
+            item.IsExternal,
+            item.IsShared,
+            item.HasBackupCoverage,
+            item.DockerNodeId,
+            item.NodeHostname);
+}
 
 public sealed record ManagedSwarmServicesView(
     IEnumerable<ManagedSwarmServiceView> SwarmServices,

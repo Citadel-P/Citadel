@@ -101,7 +101,9 @@ public sealed class BackupRun(
             throw new ArgumentException("Backup run failure status is invalid.", nameof(status));
 
         if (SnapshotAvailability == BackupSnapshotAvailability.Pending)
-            SnapshotAvailability = BackupSnapshotAvailability.NotCreated;
+            SnapshotAvailability = HasSnapshot(ResticSnapshotId)
+                ? BackupSnapshotAvailability.Available
+                : BackupSnapshotAvailability.NotCreated;
 
         Complete(status, exitCode, errorCode, errorMessage, now);
     }
@@ -112,7 +114,9 @@ public sealed class BackupRun(
             throw new InvalidOperationException($"Backup run cannot be cancelled from status {Status}.");
 
         if (SnapshotAvailability == BackupSnapshotAvailability.Pending)
-            SnapshotAvailability = BackupSnapshotAvailability.NotCreated;
+            SnapshotAvailability = HasSnapshot(ResticSnapshotId)
+                ? BackupSnapshotAvailability.Available
+                : BackupSnapshotAvailability.NotCreated;
 
         Complete(BackupRunStatus.Cancelled, null, "backup.cancelled", "Backup run cancelled.", now);
     }

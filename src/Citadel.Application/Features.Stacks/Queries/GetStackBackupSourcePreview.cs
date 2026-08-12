@@ -32,13 +32,15 @@ internal sealed class GetStackBackupSourcePreviewHandler(
         var volumes = resolved.Volumes
             .Select(volume =>
             {
-                coverage.TryGetValue(new VolumeBackupCoverageKey(volume.PlatformId, volume.VolumeName), out var item);
+                coverage.TryGetValue(new VolumeBackupCoverageKey(volume.PlatformId, volume.VolumeName, volume.DockerNodeId), out var item);
                 return new StackBackupVolumePreviewItem(
                     volume.VolumeName,
                     volume.Kind,
                     volume.IsExternal,
                     volume.IsShared,
-                    item?.Status is BackupCoverageStatus.Protected or BackupCoverageStatus.Warning);
+                    item?.Status is BackupCoverageStatus.Protected or BackupCoverageStatus.Warning,
+                    volume.DockerNodeId,
+                    volume.NodeHostname);
             })
             .ToArray();
 
@@ -60,7 +62,7 @@ internal sealed class GetStackBackupSourcePreviewHandler(
             return new Dictionary<VolumeBackupCoverageKey, BackupCoverageView>();
 
         var keys = resolved.Volumes
-            .Select(static volume => new VolumeBackupCoverageKey(volume.PlatformId, volume.VolumeName))
+            .Select(static volume => new VolumeBackupCoverageKey(volume.PlatformId, volume.VolumeName, volume.DockerNodeId))
             .ToArray();
 
         var user = userContextAccessor.Current;

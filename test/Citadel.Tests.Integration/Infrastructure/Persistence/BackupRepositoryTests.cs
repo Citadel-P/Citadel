@@ -6,6 +6,7 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
+using Domain.Entities.SwarmServices;
 using Domain.Entities.Tags;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -284,6 +285,18 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         await uow.BackupRuns.AddAsync(failedRun, cancellationToken);
 
         await AddVolumePolicyAsync(uow, repository.Id, platformId, "disabled-volume", enabled: false, actorId, cancellationToken);
+        var nodePolicy = await AddPolicyAsync(
+            uow,
+            repository.Id,
+            "policy-node-volume-1",
+            new DockerVolumeBackupSource(platformId, "node-volume", DockerNodeId: "node-1"),
+            enabled: true,
+            actorId,
+            cancellationToken);
+        var nodeRun = CreateRun(nodePolicy, repository);
+        nodeRun.MarkRunning(DateTimeOffset.UtcNow);
+        nodeRun.CompleteSucceeded("snapshot-node-1", null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(nodeRun, cancellationToken);
         await uow.CommitAsync(cancellationToken);
 
         var coverage = await uow.BackupPolicies.GetVolumeCoverageAsync(
@@ -292,7 +305,9 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
                 new VolumeBackupCoverageKey(platformId, "warning-volume"),
                 new VolumeBackupCoverageKey(platformId, "failed-volume"),
                 new VolumeBackupCoverageKey(platformId, "disabled-volume"),
-                new VolumeBackupCoverageKey(platformId, "unprotected-volume")
+                new VolumeBackupCoverageKey(platformId, "unprotected-volume"),
+                new VolumeBackupCoverageKey(platformId, "node-volume", "node-1"),
+                new VolumeBackupCoverageKey(platformId, "node-volume", "node-2")
             ],
             userId: null,
             ResourceType.BackupPolicy,
@@ -300,7 +315,9 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
             SpecificPermission.None,
             cancellationToken);
 
-        var byVolume = coverage.ToDictionary(static item => item.Resource.VolumeName, static item => item.Coverage);
+        var byVolume = coverage
+            .Where(static item => item.Resource.VolumeName != "node-volume")
+            .ToDictionary(static item => item.Resource.VolumeName, static item => item.Coverage);
 
         Assert.Equal(BackupCoverageStatus.Protected, byVolume["protected-volume"].Status);
         Assert.Equal(BackupRunStatus.Succeeded, byVolume["protected-volume"].LastRunStatus);
@@ -310,6 +327,14 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(BackupRunStatus.Failed, byVolume["failed-volume"].LastRunStatus);
         Assert.Equal(BackupCoverageStatus.Warning, byVolume["disabled-volume"].Status);
         Assert.Equal(BackupCoverageStatus.Unprotected, byVolume["unprotected-volume"].Status);
+        var nodeCoverage = coverage.Where(static item => item.Resource.VolumeName == "node-volume").ToArray();
+        Assert.Equal(2, nodeCoverage.Length);
+        Assert.Equal(
+            BackupCoverageStatus.Protected,
+            Assert.Single(nodeCoverage, static item => item.Resource.DockerNodeId == "node-1").Coverage.Status);
+        Assert.Equal(
+            BackupCoverageStatus.Unprotected,
+            Assert.Single(nodeCoverage, static item => item.Resource.DockerNodeId == "node-2").Coverage.Status);
     }
 
     [Fact]
@@ -325,8 +350,10 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         var otherPlatform = CreatePlatform(
             "backup-summary-other-platform",
             "unix:///var/run/backup-summary-other.sock");
+        var swarmPlatform = CreateSwarmPlatform("backup-summary-swarm-platform");
         await uow.Platforms.AddAsync(platform, cancellationToken);
         await uow.Platforms.AddAsync(otherPlatform, cancellationToken);
+        await uow.Platforms.AddAsync(swarmPlatform, cancellationToken);
 
         var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_PLATFORM_SUMMARY", SecretProviderType.InternalEncrypted);
         await uow.SecretDefinitions.AddAsync(
@@ -347,6 +374,26 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
             repository.Id,
             platform.Id,
             "summary-volume",
+            enabled: true,
+            actorId,
+            cancellationToken);
+
+        var swarmService = new SwarmService(
+            "backup-summary-service",
+            swarmPlatform.Id,
+            actorId,
+            new SwarmServiceSpec
+            {
+                Image = new SwarmExternalImage(Constants.DefaultRegistryId, "nginx:latest"),
+                SchedulingMode = SwarmServiceSchedulingMode.Replicated,
+                Replicas = 1
+            });
+        await uow.SwarmServices.AddAsync(swarmService, cancellationToken);
+        await AddPolicyAsync(
+            uow,
+            repository.Id,
+            "policy-summary-swarm-service",
+            new SwarmServiceBackupSource(swarmService.Id),
             enabled: true,
             actorId,
             cancellationToken);
@@ -413,7 +460,7 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         await uow.CommitAsync(cancellationToken);
 
         var summaries = await uow.BackupPolicies.GetPlatformSummariesAsync(
-            [platform.Id, otherPlatform.Id],
+            [platform.Id, otherPlatform.Id, swarmPlatform.Id],
             userId: null,
             ResourceType.BackupPolicy,
             PermissionLevel.Read,
@@ -434,6 +481,10 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(1, otherSummary.PolicyCount);
         Assert.Equal(1, otherSummary.DockerVolumePolicyCount);
         Assert.Null(otherSummary.LastRunStatus);
+
+        var swarmSummary = Assert.Single(summaries, item => item.PlatformId == swarmPlatform.Id);
+        Assert.Equal(1, swarmSummary.PolicyCount);
+        Assert.Equal(1, swarmSummary.SwarmServicePolicyCount);
     }
 
     [Fact]
@@ -496,12 +547,34 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         run.CompleteSucceeded(null, null, 3, 1024, 256, [], DateTimeOffset.UtcNow);
         await uow.BackupRuns.AddAsync(run, cancellationToken);
 
-        var item = new BackupRunItem(run.Id, platform.Id, "stack-db-data");
+        var item = new BackupRunItem(
+            run.Id,
+            platform.Id,
+            "stack-db-data",
+            dockerNodeId: "node-1",
+            nodeHostname: "worker-1");
         item.MarkRunning(DateTimeOffset.UtcNow);
         item.CompleteSucceeded("snapshot-stack-db", null, 3, 1024, 256, DateTimeOffset.UtcNow);
-        var pendingItem = new BackupRunItem(run.Id, platform.Id, "stack-cache");
+        var pendingItem = new BackupRunItem(
+            run.Id,
+            platform.Id,
+            "stack-cache",
+            dockerNodeId: "node-2",
+            nodeHostname: "worker-2");
         await uow.BackupRunItems.AddRangeAsync([item, pendingItem], cancellationToken);
         await uow.BackupRunItems.CancelPendingOrRunningAsync(run.Id, DateTimeOffset.UtcNow, cancellationToken);
+
+        var restoreRun = new BackupRestoreRun(
+            run.Id,
+            repository.Id,
+            platform.Id,
+            "stack-db-data-restored",
+            overwriteExisting: false,
+            triggeredByActorId: actorId,
+            targetDockerNodeId: "node-3",
+            targetNodeHostname: "worker-3",
+            sourceBackupRunItemId: item.Id);
+        await uow.BackupRestoreRuns.AddAsync(restoreRun, cancellationToken);
 
         var stack = Stack.Create(
             "stack-bindings",
@@ -538,6 +611,7 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         var storedRun = await uow.BackupRuns.GetAsync(run.Id, cancellationToken);
         var storedRuns = (await uow.BackupRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
         var storedItems = await uow.BackupRunItems.GetByRunAsync(run.Id, cancellationToken);
+        var storedRestoreRun = await uow.BackupRestoreRuns.GetAsync(restoreRun.Id, cancellationToken);
         var storedBindings = await uow.Stacks.GetReleaseVolumeBindingsAsync(stack.CurrentStackReleaseId, cancellationToken);
 
         Assert.NotNull(storedRun);
@@ -545,11 +619,17 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         var storedItem = Assert.Single(storedRun.Items, stored => stored.VolumeName == "stack-db-data");
         Assert.Equal("stack-db-data", storedItem.VolumeName);
         Assert.Equal("snapshot-stack-db", storedItem.ResticSnapshotId);
+        Assert.Equal("node-1", storedItem.DockerNodeId);
+        Assert.Equal("worker-1", storedItem.NodeHostname);
         var cancelledItem = Assert.Single(storedRun.Items, stored => stored.VolumeName == "stack-cache");
         Assert.Equal(BackupRunItemStatus.Cancelled, cancelledItem.Status);
         Assert.Single(storedRuns);
         Assert.Equal(2, storedRuns[0].Items.Count);
         Assert.Equal(2, storedItems.Count);
+        Assert.NotNull(storedRestoreRun);
+        Assert.Equal(item.Id, storedRestoreRun.SourceBackupRunItemId);
+        Assert.Equal("node-3", storedRestoreRun.TargetDockerNodeId);
+        Assert.Equal("worker-3", storedRestoreRun.TargetNodeHostname);
 
         var binding = Assert.Single(storedBindings);
         Assert.Equal("stack-bindings_db-data", binding.VolumeName);
@@ -677,6 +757,32 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
             PlatformStatus.Online,
             PlatformConnectorType.Local,
             new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
+
+    private static Platform CreateSwarmPlatform(string name)
+        => new(
+            name,
+            "http://localhost.docker",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1024,
+            serverVersion: "test",
+            agentVersion: "test",
+            PlatformStatus.Online,
+            PlatformConnectorType.EdgeAgent,
+            new DockerSwarmPlatformDescriptor(
+                "manager-1",
+                "10.0.0.1",
+                "Active",
+                true,
+                1,
+                1,
+                "daemon",
+                0,
+                0,
+                0,
+                0));
 
     private static BackupRun CreateCompletedRun(BackupPolicy policy, BackupRepository repository, string snapshotId)
     {

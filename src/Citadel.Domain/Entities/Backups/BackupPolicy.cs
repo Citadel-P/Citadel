@@ -285,10 +285,15 @@ public sealed class BackupPolicy(
     private static BackupSourceSpec NormalizeSource(BackupSourceSpec source)
         => source switch
         {
-            DockerVolumeBackupSource volume => volume with { VolumeName = volume.VolumeName.Trim() },
+            DockerVolumeBackupSource volume => volume with
+            {
+                VolumeName = volume.VolumeName.Trim(),
+                DockerNodeId = BackupRepository.NormalizeOptional(volume.DockerNodeId)
+            },
             CitadelSystemBackupSource system => system,
             StackBackupSource stack => stack,
             DeploymentBackupSource deployment => deployment,
+            SwarmServiceBackupSource service => service,
             _ => throw new ArgumentException("Unsupported backup source type.", nameof(source))
         };
 
@@ -324,6 +329,11 @@ public sealed class BackupPolicy(
             case DeploymentBackupSource deployment:
                 if (deployment.DeploymentId == Guid.Empty)
                     throw new ArgumentException("Deployment backup source requires a deployment ID.", nameof(source));
+                break;
+
+            case SwarmServiceBackupSource service:
+                if (service.SwarmServiceId == Guid.Empty)
+                    throw new ArgumentException("Swarm Service backup source requires a Service ID.", nameof(source));
                 break;
 
             default:

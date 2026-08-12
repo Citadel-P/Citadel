@@ -2358,57 +2358,6 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "backuprestoreruns",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    affectedcontainers = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
-                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
-                    backuprunid = table.Column<Guid>(type: "uuid", nullable: false),
-                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
-                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
-                    exitcode = table.Column<int>(type: "integer", nullable: true),
-                    overwriteexisting = table.Column<bool>(type: "boolean", nullable: false),
-                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
-                    targetplatformid = table.Column<Guid>(type: "uuid", nullable: false),
-                    targetvolumecreatedbycitadel = table.Column<bool>(type: "boolean", nullable: false),
-                    targetvolumename = table.Column<string>(type: "text", maxLength: 255, nullable: false),
-                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
-                    warnings = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_backuprestoreruns", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_backuprestoreruns_actors_triggeredbyactorid",
-                        column: x => x.triggeredbyactorid,
-                        principalTable: "actors",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_backuprestoreruns_backuprepositories_backuprepositoryid",
-                        column: x => x.backuprepositoryid,
-                        principalTable: "backuprepositories",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_backuprestoreruns_backupruns_backuprunid",
-                        column: x => x.backuprunid,
-                        principalTable: "backupruns",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_backuprestoreruns_platforms_targetplatformid",
-                        column: x => x.targetplatformid,
-                        principalTable: "platforms",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "backuprunitems",
                 columns: table => new
                 {
@@ -2418,10 +2367,12 @@ namespace Infrastructure.Migrations.Migrations
                     bytesprocessed = table.Column<long>(type: "bigint", nullable: true),
                     completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    dockernodeid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
                     exitcode = table.Column<int>(type: "integer", nullable: true),
                     filesprocessed = table.Column<long>(type: "bigint", nullable: true),
+                    nodehostname = table.Column<string>(type: "text", maxLength: 255, nullable: true),
                     parentsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     resticsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
@@ -2466,6 +2417,66 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "backupruns",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprestoreruns",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    affectedcontainers = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    overwriteexisting = table.Column<bool>(type: "boolean", nullable: false),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    sourcebackuprunitemid = table.Column<Guid>(type: "uuid", nullable: true),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    targetdockernodeid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    targetnodehostname = table.Column<string>(type: "text", maxLength: 255, nullable: true),
+                    targetplatformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    targetvolumecreatedbycitadel = table.Column<bool>(type: "boolean", nullable: false),
+                    targetvolumename = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    warnings = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprestoreruns", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_actors_triggeredbyactorid",
+                        column: x => x.triggeredbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_backuprepositories_backuprepositoryid",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_backuprunitems_sourcebackuprunitemid",
+                        column: x => x.sourcebackuprunitemid,
+                        principalTable: "backuprunitems",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_backupruns_backuprunid",
+                        column: x => x.backuprunid,
+                        principalTable: "backupruns",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_platforms_targetplatformid",
+                        column: x => x.targetplatformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -2932,6 +2943,11 @@ namespace Infrastructure.Migrations.Migrations
                 columns: new[] { "backuprepositoryid", "status" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_sourcerunitem",
+                table: "backuprestoreruns",
+                column: "sourcebackuprunitemid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_backuprestoreruns_status_queuedat",
                 table: "backuprestoreruns",
                 columns: new[] { "status", "queuedat" });
@@ -2939,7 +2955,7 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_backuprestoreruns_targetvolume",
                 table: "backuprestoreruns",
-                columns: new[] { "targetplatformid", "targetvolumename" });
+                columns: new[] { "targetplatformid", "targetdockernodeid", "targetvolumename" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_backuprestoreruns_triggeredbyactorid",
@@ -2947,9 +2963,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "triggeredbyactorid");
 
             migrationBuilder.CreateIndex(
-                name: "ix_backuprunitems_platform_volumename",
+                name: "ix_backuprunitems_platform_volume",
                 table: "backuprunitems",
-                columns: new[] { "platformid", "volumename" });
+                columns: new[] { "platformid", "dockernodeid", "volumename" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_backuprunitems_resticsnapshotid",
@@ -2957,14 +2973,23 @@ namespace Infrastructure.Migrations.Migrations
                 column: "resticsnapshotid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_backuprunitems_run_standalonevolume",
+                table: "backuprunitems",
+                columns: new[] { "backuprunid", "platformid", "volumename" },
+                unique: true,
+                filter: "dockernodeid IS NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_backuprunitems_run_status",
                 table: "backuprunitems",
                 columns: new[] { "backuprunid", "status" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_backuprunitems_run_volumename",
+                name: "ix_backuprunitems_run_swarmvolume",
                 table: "backuprunitems",
-                columns: new[] { "backuprunid", "volumename" });
+                columns: new[] { "backuprunid", "platformid", "dockernodeid", "volumename" },
+                unique: true,
+                filter: "dockernodeid IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_backuprunlogs_run_createdat",
@@ -3912,9 +3937,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backuprestorerunlogs");
 
             migrationBuilder.DropTable(
-                name: "backuprunitems");
-
-            migrationBuilder.DropTable(
                 name: "backuprunlogs");
 
             migrationBuilder.DropTable(
@@ -4077,7 +4099,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "users");
 
             migrationBuilder.DropTable(
-                name: "backupruns");
+                name: "backuprunitems");
 
             migrationBuilder.DropTable(
                 name: "buildprojects");
@@ -4095,7 +4117,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "stacks");
 
             migrationBuilder.DropTable(
-                name: "backuppolicies");
+                name: "backupruns");
 
             migrationBuilder.DropTable(
                 name: "buildagentpools");
@@ -4110,16 +4132,19 @@ namespace Infrastructure.Migrations.Migrations
                 name: "registries");
 
             migrationBuilder.DropTable(
-                name: "backuprepositories");
+                name: "backuppolicies");
 
             migrationBuilder.DropTable(
                 name: "gitaccounts");
 
             migrationBuilder.DropTable(
-                name: "secretdefinitions");
+                name: "backuprepositories");
 
             migrationBuilder.DropTable(
                 name: "actors");
+
+            migrationBuilder.DropTable(
+                name: "secretdefinitions");
 
             migrationBuilder.DropTable(
                 name: "secretproviders");

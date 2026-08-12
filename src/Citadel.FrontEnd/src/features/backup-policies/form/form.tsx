@@ -10,6 +10,7 @@ import {
   BackupSourceSpecDeploymentBackupSource,
   BackupSourceSpecDockerVolumeBackupSource,
   BackupSourceSpecStackBackupSource,
+  BackupSourceSpecSwarmServiceBackupSource,
   BackupWebhookConfig,
   BackupSourceType,
   LicenseCapability,
@@ -17,8 +18,10 @@ import {
   DockerVolumeResultView,
   LookupResourceType,
   PlatformConnectorType,
+  PlatformType,
   PlatformView,
   StackBackupSourcePreviewView,
+  SwarmServiceBackupSourcePreviewView,
   StackVolumeKind,
   UpdateBackupPolicyInput,
   VolumeBackupConsistency,
@@ -73,6 +76,10 @@ const sourceTypes = {
     label: 'Deployment',
     description: 'Back up all resolved named volumes used by a deployment.',
   },
+  SwarmService: {
+    label: 'Swarm service',
+    description: 'Back up local named volumes mounted by the current tasks of a managed Swarm service.',
+  },
 } as const;
 
 const consistencyTypes = {
@@ -123,7 +130,7 @@ export function BackupPolicyForm({
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
   const original = useMemo(() => toFormValue(resource), [resource]);
-  const currentSource = mergeSource(original.source, update.source);
+  const currentSource = useMemo(() => mergeSource(original.source, update.source), [original.source, update.source]);
   const currentSourceType = currentSource.$type ?? BackupSourceType.CitadelSystem;
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
   const currentPlatformId =
@@ -138,6 +145,10 @@ export function BackupPolicyForm({
     currentSource.$type === BackupSourceType.Deployment
       ? String((currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId ?? '')
       : '';
+  const currentSwarmServiceId =
+    currentSource.$type === BackupSourceType.SwarmService
+      ? String((currentSource as BackupSourceSpecSwarmServiceBackupSource).swarmServiceId ?? '')
+      : '';
   const volumeListArgs = useMemo(() => ({ platformId: currentPlatformId, query: {} }), [currentPlatformId]);
   const volumeList = useRead('listVolumes', volumeListArgs, {
     enabled: currentSourceType === BackupSourceType.DockerVolume && Boolean(currentPlatformId),
@@ -149,6 +160,10 @@ export function BackupPolicyForm({
   const deploymentPreviewArgs = useMemo(() => ({ deploymentId: currentDeploymentId }), [currentDeploymentId]);
   const deploymentPreview = useRead('getDeploymentBackupSourcePreview', deploymentPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Deployment && Boolean(currentDeploymentId),
+  });
+  const swarmServicePreviewArgs = useMemo(() => ({ id: currentSwarmServiceId }), [currentSwarmServiceId]);
+  const swarmServicePreview = useRead('getSwarmServiceBackupSourcePreview', swarmServicePreviewArgs, {
+    enabled: currentSourceType === BackupSourceType.SwarmService && Boolean(currentSwarmServiceId),
   });
   const backupRepositories = useRead('listBackupRepositories');
   const currentBackupRepositoryId = update.backupRepositoryId ?? original.backupRepositoryId;
@@ -164,9 +179,12 @@ export function BackupPolicyForm({
         ? stackPreview.data?.data.platformId
         : currentSourceType === BackupSourceType.Deployment
           ? deploymentPreview.data?.data.platformId
-          : undefined;
+          : currentSourceType === BackupSourceType.SwarmService
+            ? swarmServicePreview.data?.data.platformId
+            : undefined;
   const sourcePlatformArgs = useMemo(() => ({ id: currentSourcePlatformId ?? '' }), [currentSourcePlatformId]);
   const sourcePlatform = useRead('getPlatfom', sourcePlatformArgs, { enabled: Boolean(currentSourcePlatformId) });
+  const isSwarmSourcePlatform = sourcePlatform.data?.data.type === PlatformType.DockerSwarm;
   const repositoryCompatibilityMessage = getRepositoryCompatibilityMessage(
     currentSourceType,
     selectedRepository,
@@ -279,7 +297,9 @@ export function BackupPolicyForm({
                                 ? createStackSource()
                                 : nextType === BackupSourceType.Deployment
                                   ? createDeploymentSource()
-                                  : createCitadelSystemSource(),
+                                  : nextType === BackupSourceType.SwarmService
+                                    ? createSwarmServiceSource()
+                                    : createCitadelSystemSource(),
                         })
                       }
                     />
@@ -322,6 +342,7 @@ export function BackupPolicyForm({
                                 $type: BackupSourceType.DockerVolume,
                                 platformId: platform?.id ?? '',
                                 volumeName: '',
+                                dockerNodeId: null,
                               },
                             }))
                           }
@@ -342,29 +363,46 @@ export function BackupPolicyForm({
                       render: (value, set) => (
                         <VolumeSelector
                           value={value ?? ''}
+                          dockerNodeId={
+                            (currentSource as BackupSourceSpecDockerVolumeBackupSource).dockerNodeId ?? null
+                          }
                           volumes={volumeList.data?.data.volumes ?? []}
                           isLoading={volumeList.isLoading || volumeList.isFetching}
                           hasPlatform={Boolean(currentPlatformId)}
                           disabled={disabled || isSourceLocked(resource) || !currentPlatformId}
-                          onChange={(volumeName) => set({ source: { volumeName } as any })}
+                          isSwarm={isSwarmSourcePlatform}
+                          onChange={(volume) =>
+                            set({
+                              source: {
+                                volumeName: volume?.name ?? '',
+                                dockerNodeId: volume?.dockerNodeId ?? null,
+                              } as any,
+                            })
+                          }
                         />
                       ),
                     }),
-                    defineField<BackupPolicyFormValue, 'source.consistency'>({
-                      key: 'source.consistency',
-                      label: 'Consistency',
-                      required: true,
-                      disabled: isSourceLocked(resource),
-                      description: 'How Citadel handles containers that use the selected volume.',
-                      render: (value, set) => (
-                        <ItemSelector
-                          value={value ?? VolumeBackupConsistency.Live}
-                          collection={consistencyTypes}
-                          disabled={disabled || isSourceLocked(resource)}
-                          onChange={(consistency: VolumeBackupConsistency) => set({ source: { consistency } as any })}
-                        />
-                      ),
-                    }),
+                    ...(!isSwarmSourcePlatform
+                      ? [
+                          defineField<BackupPolicyFormValue, 'source.consistency'>({
+                            key: 'source.consistency',
+                            label: 'Consistency',
+                            required: true,
+                            disabled: isSourceLocked(resource),
+                            description: 'How Citadel handles containers that use the selected volume.',
+                            render: (value, set) => (
+                              <ItemSelector
+                                value={value ?? VolumeBackupConsistency.Live}
+                                collection={consistencyTypes}
+                                disabled={disabled || isSourceLocked(resource)}
+                                onChange={(consistency: VolumeBackupConsistency) =>
+                                  set({ source: { consistency } as any })
+                                }
+                              />
+                            ),
+                          }),
+                        ]
+                      : []),
                   ]
                 : []),
               ...(currentSourceType === BackupSourceType.Stack
@@ -442,6 +480,48 @@ export function BackupPolicyForm({
                             preview={deploymentPreview.data?.data}
                             isLoading={deploymentPreview.isLoading || deploymentPreview.isFetching}
                             hasSelection={Boolean(currentDeploymentId)}
+                          />
+                        </div>
+                      ),
+                    }),
+                  ]
+                : []),
+              ...(currentSourceType === BackupSourceType.SwarmService
+                ? [
+                    defineField<BackupPolicyFormValue, 'source.swarmServiceId'>({
+                      key: 'source.swarmServiceId',
+                      label: 'Swarm Service',
+                      required: true,
+                      disabled: isSourceLocked(resource),
+                      description: 'Managed Swarm Service whose current task Volumes will be backed up.',
+                      validate: (value) =>
+                        currentSourceType === BackupSourceType.SwarmService && !String(value ?? '').trim()
+                          ? 'Swarm Service is required'
+                          : null,
+                      render: (value, set) => (
+                        <div className="flex max-w-150 flex-col gap-4">
+                          <ResourceSelectorField
+                            targetType={LookupResourceType.SwarmService}
+                            selected={value}
+                            disabled={disabled || isSourceLocked(resource)}
+                            onSelect={(service: { id: string } | undefined) =>
+                              set((prev) => ({
+                                source: {
+                                  ...(mergeSource(
+                                    original.source,
+                                    prev.source,
+                                  ) as BackupSourceSpecSwarmServiceBackupSource),
+                                  $type: BackupSourceType.SwarmService,
+                                  swarmServiceId: service?.id ?? '',
+                                },
+                              }))
+                            }
+                            placeholder="Select Swarm Service"
+                          />
+                          <SwarmServiceSourcePreview
+                            preview={swarmServicePreview.data?.data}
+                            isLoading={swarmServicePreview.isLoading || swarmServicePreview.isFetching}
+                            hasSelection={Boolean(currentSwarmServiceId)}
                           />
                         </div>
                       ),
@@ -657,7 +737,9 @@ export function BackupPolicyForm({
     [
       currentPlatformId,
       currentDeploymentId,
+      currentSwarmServiceId,
       currentScheduleEnabled,
+      currentSource,
       automatedOperationsEnabled,
       currentStackId,
       currentSourceType,
@@ -668,11 +750,15 @@ export function BackupPolicyForm({
       id,
       mode,
       original.source,
+      isSwarmSourcePlatform,
       repositoryCompatibilityMessage,
       resource,
       stackPreview.data?.data,
       stackPreview.isFetching,
       stackPreview.isLoading,
+      swarmServicePreview.data?.data,
+      swarmServicePreview.isFetching,
+      swarmServicePreview.isLoading,
       volumeList.data?.data,
       volumeList.isFetching,
       volumeList.isLoading,
@@ -697,36 +783,52 @@ export function BackupPolicyForm({
 
 function VolumeSelector({
   value,
+  dockerNodeId,
   volumes,
   isLoading,
   hasPlatform,
   disabled,
+  isSwarm,
   onChange,
 }: {
   value?: string;
+  dockerNodeId?: string | null;
   volumes: DockerVolumeResultView[];
   isLoading: boolean;
   hasPlatform: boolean;
   disabled?: boolean;
-  onChange: (volumeName: string) => void;
+  isSwarm: boolean;
+  onChange: (volume?: DockerVolumeResultView) => void;
 }) {
+  const selectedId = volumeSelectorId(value ?? '', dockerNodeId);
   const options = useMemo(() => {
-    const items: VolumeSelectorItem[] = volumes.map((volume) => ({
-      id: volume.name,
-      name: volume.name,
+    const selectableVolumes = isSwarm
+      ? volumes.filter(
+          (volume) =>
+            Boolean(volume.dockerNodeId) &&
+            !volume.isStale &&
+            volume.driver.toLowerCase() === 'local' &&
+            !volume.clusterVolume &&
+            Object.keys(volume.options ?? {}).length === 0,
+        )
+      : volumes;
+    const items: VolumeSelectorItem[] = selectableVolumes.map((volume) => ({
+      ...volume,
+      id: volumeSelectorId(volume.name, volume.dockerNodeId),
       description: formatVolumeDescription(volume),
     }));
 
-    if (value && !items.some((item) => item.id === value)) {
+    if (value && !items.some((item) => item.id === selectedId)) {
       items.push({
-        id: value,
+        id: selectedId,
         name: value,
+        dockerNodeId: dockerNodeId ?? null,
         description: 'Saved volume name',
-      });
+      } as VolumeSelectorItem);
     }
 
     return items;
-  }, [value, volumes]);
+  }, [dockerNodeId, isSwarm, selectedId, value, volumes]);
 
   if (!hasPlatform) {
     return <div className="text-xs text-muted-foreground">Select a platform to load Docker volumes.</div>;
@@ -743,17 +845,17 @@ function VolumeSelector({
 
   return (
     <div className="flex max-w-150 flex-col gap-2">
-      {volumes.length > 0 || value ? (
+      {options.length > 0 || value ? (
         <ResourceSelectorField<VolumeSelectorItem>
           targetType={LookupResourceType.Volume}
-          selected={value}
+          selected={selectedId}
           items={options}
           queryEnabled={false}
           allowClear={false}
           disabled={disabled}
           searchPlaceholder="Search volumes..."
           placeholder="Select a volume"
-          onSelect={(volume) => onChange(volume?.name ?? '')}
+          onSelect={onChange}
           renderItem={(volume) => (
             <div className="flex min-w-0 flex-col">
               <span className="break-all font-medium leading-5">{volume.name}</span>
@@ -776,15 +878,19 @@ function VolumeSelector({
 
 type VolumeSelectorItem = {
   id: string;
-  name: string;
   description: string;
-};
+} & DockerVolumeResultView;
+
+function volumeSelectorId(volumeName: string, dockerNodeId?: string | null) {
+  return dockerNodeId ? `${dockerNodeId}:${volumeName}` : volumeName;
+}
 
 function formatVolumeDescription(volume: DockerVolumeResultView) {
   return [
     volume.driver || 'local',
     volume.inUse ? 'In use' : 'Not in use',
     volume.backupCoverage ? 'Protected' : 'Not protected',
+    volume.nodeHostname ?? volume.dockerNodeId,
     formatVolumeSize(volume.usageData?.size),
   ].join(' · ');
 }
@@ -834,12 +940,17 @@ function StackSourcePreview({
           <div className="flex flex-wrap gap-1.5">
             {preview.volumes.map((volume) => (
               <div
-                key={volume.name}
+                key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
                 className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
                 <Database className="size-3 shrink-0 text-muted-foreground" />
                 <span className="truncate" title={volume.name}>
                   {volume.name}
                 </span>
+                {volume.nodeHostname && (
+                  <span className="truncate text-muted-foreground" title={volume.nodeHostname}>
+                    {volume.nodeHostname}
+                  </span>
+                )}
                 <Badge variant="secondary" className="h-5 rounded-sm px-1.5 text-[10px]">
                   {volumeKindLabel(volume.kind)}
                 </Badge>
@@ -913,12 +1024,17 @@ function DeploymentSourcePreview({
           <div className="flex flex-wrap gap-1.5">
             {preview.volumes.map((volume) => (
               <div
-                key={volume.name}
+                key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
                 className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
                 <Database className="size-3 shrink-0 text-muted-foreground" />
                 <span className="truncate" title={volume.name}>
                   {volume.name}
                 </span>
+                {volume.nodeHostname && (
+                  <span className="truncate text-muted-foreground" title={volume.nodeHostname}>
+                    {volume.nodeHostname}
+                  </span>
+                )}
                 <Badge variant="secondary" className="h-5 rounded-sm px-1.5 text-[10px]">
                   {volumeKindLabel(volume.kind)}
                 </Badge>
@@ -934,6 +1050,87 @@ function DeploymentSourcePreview({
           <div className="text-xs text-muted-foreground">
             No named Docker volumes were resolved for this deployment.
           </div>
+        )}
+
+        {preview.warnings.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-dashed pt-3">
+            {preview.warnings.map((warning) => (
+              <div key={warning} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SwarmServiceSourcePreview({
+  preview,
+  isLoading,
+  hasSelection,
+}: {
+  preview?: SwarmServiceBackupSourcePreviewView;
+  isLoading: boolean;
+  hasSelection: boolean;
+}) {
+  if (!hasSelection) {
+    return <div className="text-xs text-muted-foreground">Select a Swarm Service to preview its task Volumes.</div>;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" />
+        Loading Swarm Service Volumes...
+      </div>
+    );
+  }
+
+  if (!preview) return null;
+
+  return (
+    <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+          <Layers className="size-3.5 text-muted-foreground" />
+          <span className="font-medium">{preview.swarmServiceName}</span>
+          <span className="text-muted-foreground">on</span>
+          <span className="truncate text-muted-foreground">{preview.platformName}</span>
+        </div>
+
+        {preview.volumes.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {preview.volumes.map((volume) => (
+              <div
+                key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
+                className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
+                <Database className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate" title={volume.name}>
+                  {volume.name}
+                </span>
+                <span
+                  className="truncate text-muted-foreground"
+                  title={volume.nodeHostname ?? volume.dockerNodeId ?? ''}>
+                  {volume.nodeHostname ?? volume.dockerNodeId}
+                </span>
+                {volume.isShared && (
+                  <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px]">
+                    Shared
+                  </Badge>
+                )}
+                {volume.hasBackupCoverage && (
+                  <Badge className="h-5 rounded-sm bg-green-500/15 px-1.5 text-[10px] text-green-700 dark:text-green-300">
+                    Protected
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">No supported local named Volumes were resolved.</div>
         )}
 
         {preview.warnings.length > 0 && (
@@ -997,6 +1194,14 @@ function createDeploymentSource(): BackupSourceSpecDeploymentBackupSource {
   };
 }
 
+function createSwarmServiceSource(): BackupSourceSpecSwarmServiceBackupSource {
+  return {
+    $type: BackupSourceType.SwarmService,
+    swarmServiceId: '',
+    stableKey: null,
+  };
+}
+
 function isSourceLocked(resource?: BackupPolicyView) {
   return Boolean(resource?.firstSuccessfulRunAt);
 }
@@ -1017,6 +1222,10 @@ function getRepositoryCompatibilityMessage(
   }
 
   if (!sourcePlatformId || !sourcePlatform) return null;
+
+  if (sourcePlatform.type === PlatformType.DockerSwarm) {
+    return 'Docker Swarm Volume backups require an S3-compatible repository.';
+  }
 
   if (spec.location === BackupExecutionLocation.Core && sourcePlatform.connectorType !== PlatformConnectorType.Local) {
     return 'Core filesystem repositories cannot back up Docker volumes on regular or edge agents. Use an S3-compatible repository or a filesystem repository on the same platform.';
@@ -1117,6 +1326,7 @@ function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {
       platformId: dockerSource.platformId,
       volumeName: dockerSource.volumeName,
       consistency: dockerSource.consistency ?? VolumeBackupConsistency.Live,
+      dockerNodeId: dockerSource.dockerNodeId ?? null,
       stableKey: dockerSource.stableKey ?? null,
     };
   }
@@ -1136,6 +1346,15 @@ function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {
       $type: BackupSourceType.Deployment,
       deploymentId: deploymentSource.deploymentId,
       stableKey: deploymentSource.stableKey ?? null,
+    };
+  }
+
+  if (source.$type === BackupSourceType.SwarmService) {
+    const serviceSource = source as BackupSourceSpecSwarmServiceBackupSource;
+    return {
+      $type: BackupSourceType.SwarmService,
+      swarmServiceId: serviceSource.swarmServiceId,
+      stableKey: serviceSource.stableKey ?? null,
     };
   }
 

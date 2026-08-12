@@ -173,6 +173,65 @@ internal sealed class SwarmNodeRuntimeConnector(
                 new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
     }
 
+    public async Task<Result<DockerVolumeResult>> CreateVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        CreateDockerVolumeCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+            return await volumeConnectorFactory.GetConnector(platform.ConnectorType)
+                .CreateVolumeAsync(command, cancellationToken);
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.VolumeCreate,
+            new CreateVolumeRequest
+            {
+                Name = command.Name,
+                Driver = command.Driver,
+                Labels = { command.Labels?.ToDictionary() ?? [] },
+                Options = { command.Options?.ToDictionary() ?? [] }
+            }.ToByteArray(),
+            TimeSpan.FromSeconds(30),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess && response.Payload is not null
+            ? VolumeResponse.Parser.ParseFrom(response.Payload).Map()
+            : Result.Failure<DockerVolumeResult>(
+                new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
+    public async Task<Result> DeleteVolumeAsync(
+        Platform platform,
+        string dockerNodeId,
+        DeleteDockerVolumeCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (UsesManager(platform, dockerNodeId))
+            return await volumeConnectorFactory.GetConnector(platform.ConnectorType)
+                .DeleteVolumeAsync(command, cancellationToken);
+
+        var response = await commandRouter.SendUnaryAsync(
+            platform.Id,
+            dockerNodeId,
+            EdgeAgentCommandKind.VolumeDelete,
+            new RemoveVolumeRequest
+            {
+                Names = { command.Names },
+                Force = command.Force ?? false
+            }.ToByteArray(),
+            TimeSpan.FromSeconds(30),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess
+            ? Result.Success()
+            : Result.Failure(new ServiceUnavailableError(response.ErrorMessage ?? "The owning Node Agent is unavailable."));
+    }
+
     public async Task<Result<DockerNetworkDetails>> InspectNetworkAsync(
         Platform platform,
         string dockerNodeId,

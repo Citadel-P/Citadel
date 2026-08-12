@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Entities.Backups;
+using System.Text.Json;
 
 namespace Tests.Unit.Domain.Entities.Backups;
 
@@ -139,6 +140,32 @@ public sealed class BackupEntitiesTests
     }
 
     [Fact]
+    public void DockerVolumeBackupSource_ShouldIncludeNodeInSwarmStableKey()
+    {
+        var platformId = Guid.CreateVersion7();
+        var standalone = new DockerVolumeBackupSource(platformId, "database");
+        var workerOne = new DockerVolumeBackupSource(platformId, "database", DockerNodeId: "node-1");
+        var workerTwo = new DockerVolumeBackupSource(platformId, "database", DockerNodeId: "node-2");
+
+        Assert.Equal($"{platformId}:database", standalone.StableKey);
+        Assert.Equal($"{platformId}:node-1:database", workerOne.StableKey);
+        Assert.Equal($"{platformId}:node-2:database", workerTwo.StableKey);
+        Assert.NotEqual(workerOne.StableKey, workerTwo.StableKey);
+    }
+
+    [Fact]
+    public void SwarmServiceBackupSource_ShouldRoundTripWithSourceGeneratedMetadata()
+    {
+        BackupSourceSpec source = new SwarmServiceBackupSource(Guid.CreateVersion7());
+
+        var json = JsonSerializer.Serialize(source, BackupJsonContext.Default.BackupSourceSpec);
+        var restored = JsonSerializer.Deserialize(json, BackupJsonContext.Default.BackupSourceSpec);
+
+        Assert.Equal(source, Assert.IsType<SwarmServiceBackupSource>(restored));
+        Assert.Contains("\"$type\":\"SwarmService\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BackupRun_ShouldSetSnapshotAvailabilityOnSuccessAndFailure()
     {
         var run = CreateRun();
@@ -184,6 +211,27 @@ public sealed class BackupEntitiesTests
     }
 
     [Fact]
+    public void BackupRun_ShouldRetainCompletedChildSnapshotWhenLaterChildFails()
+    {
+        var run = CreateRun(new StackBackupSource(Guid.CreateVersion7()));
+        var completed = new BackupRunItem(run.Id, Guid.CreateVersion7(), "database", dockerNodeId: "node-1");
+        var failed = new BackupRunItem(run.Id, Guid.CreateVersion7(), "cache", dockerNodeId: "node-2");
+        var now = DateTimeOffset.UtcNow;
+
+        run.MarkPreparing(now);
+        run.MarkRunning(now);
+        completed.MarkRunning(now);
+        completed.CompleteSucceeded("snapshot-database", null, 1, 10, 5, now);
+        failed.MarkRunning(now);
+        failed.Fail(1, "backup.failed", "Restic failed.", now);
+        run.AssignItems([completed, failed]);
+        run.Fail(BackupRunStatus.Failed, 1, "backup.failed", "Restic failed.", now);
+
+        Assert.Equal(BackupRunStatus.Failed, run.Status);
+        Assert.Equal(BackupSnapshotAvailability.Available, run.SnapshotAvailability);
+    }
+
+    [Fact]
     public void BackupRunItem_ShouldTrackVolumeSnapshotLifecycle()
     {
         var item = new BackupRunItem(Guid.NewGuid(), Guid.NewGuid(), "  postgres-data  ");
@@ -197,6 +245,19 @@ public sealed class BackupEntitiesTests
         Assert.Equal("snapshot-volume-1", item.ResticSnapshotId);
         Assert.Equal("parent-1", item.ParentSnapshotId);
         Assert.Equal(3, item.FilesProcessed);
+    }
+
+    [Fact]
+    public void BackupRunItem_ShouldRetainNodeIdentityForEqualVolumeNames()
+    {
+        var runId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var first = new BackupRunItem(runId, platformId, "data", dockerNodeId: " node-1 ", nodeHostname: " worker-1 ");
+        var second = new BackupRunItem(runId, platformId, "data", dockerNodeId: "node-2", nodeHostname: "worker-2");
+
+        Assert.Equal("node-1", first.DockerNodeId);
+        Assert.Equal("worker-1", first.NodeHostname);
+        Assert.NotEqual(first.DockerNodeId, second.DockerNodeId);
     }
 
     [Fact]

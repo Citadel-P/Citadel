@@ -15,8 +15,10 @@ reviewed import, Apply, safe rollback, and ownership-checked deletion.
 Citadel reaches the connected manager's node-local Docker resources by
 default. The optional node data plane extends current Container, Image,
 Volume, and local Network inventory to covered workers and routes Task runtime
-plus Volume browsing to the owning Node. Destructive Image, Volume, and local
-Network actions and node-routed Volume backup/restore remain unavailable.
+plus Volume browsing and bounded Volume backup/restore to the owning Node.
+General-purpose destructive Image, Volume, and local Network actions remain
+unavailable. See [`backups.md`](backups.md#docker-swarm) for the supported
+backup sources and safety limits.
 
 ## Before You Begin
 
@@ -579,8 +581,8 @@ The current Swarm milestone does not provide:
 - Citadel Deployments on Swarm Platforms;
 - rollback of a release whose required versioned Secret or Config is no longer
   retained;
-- cluster-wide Image distribution, destructive node-local Image/Volume/local
-  Network mutations, or node-routed Volume backup/restore;
+- cluster-wide Image distribution or general-purpose destructive node-local
+  Image/Volume/local Network mutations;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
 

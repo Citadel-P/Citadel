@@ -2,7 +2,7 @@ using Domain.Entities.Backups;
 
 namespace Domain.Contracts.Resources.Backups;
 
-public sealed record VolumeBackupCoverageKey(Guid PlatformId, string VolumeName);
+public sealed record VolumeBackupCoverageKey(Guid PlatformId, string VolumeName, string? DockerNodeId = null);
 
 public sealed record BackupCoverageView(
     BackupCoverageStatus Status,
@@ -22,6 +22,7 @@ public sealed record PlatformBackupSummary(
     int DockerVolumePolicyCount,
     int StackPolicyCount,
     int DeploymentPolicyCount,
+    int SwarmServicePolicyCount,
     int AttentionPolicyCount,
     BackupRunStatus? LastRunStatus,
     DateTimeOffset? LastRunAt);

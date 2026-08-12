@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Backups;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -15,7 +16,8 @@ namespace Application.Services.Backups;
 internal sealed class StackBackupVolumeResolver(
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
-    IConnectorFactory<IContainerConnector> containerConnectorFactory)
+    IConnectorFactory<IContainerConnector> containerConnectorFactory,
+    ISwarmWorkloadBackupVolumeResolver swarmVolumeResolver)
     : IStackBackupVolumeResolver
 {
     public async Task<Result<StackBackupVolumeResolution>> ResolveAsync(
@@ -27,6 +29,34 @@ internal sealed class StackBackupVolumeResolver(
             return Result.Failure<StackBackupVolumeResolution>(inputError);
 
         var warnings = new List<string>(input.Warnings);
+        if (input.PlatformEntity?.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+        {
+            var swarmVolumes = await swarmVolumeResolver.ResolveAsync(
+                input.PlatformEntity,
+                input.SwarmServices,
+                cancellationToken);
+            if (!swarmVolumes.IsSuccess(out var resolvedSwarmVolumes, out var swarmError))
+                return Result.Failure<StackBackupVolumeResolution>(swarmError);
+
+            foreach (var volume in resolvedSwarmVolumes.Where(static value => value.IsShared))
+            {
+                warnings.Add(
+                    $"Volume {volume.VolumeName} on Node {volume.NodeHostname ?? volume.DockerNodeId} is mounted by more than one current Task.");
+            }
+
+            if (resolvedSwarmVolumes.Count == 0)
+                warnings.Add("No supported Docker named volumes were resolved for this Swarm Stack.");
+
+            return Result.Success(new StackBackupVolumeResolution(
+                input.StackId,
+                input.StackName,
+                input.PlatformId,
+                input.PlatformName,
+                input.PlatformStatus,
+                resolvedSwarmVolumes,
+                [.. warnings.Distinct(StringComparer.Ordinal)]));
+        }
+
         var volumes = new Dictionary<string, ResolvedStackBackupVolume>(StringComparer.Ordinal);
         var mountCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -132,10 +162,18 @@ internal sealed class StackBackupVolumeResolver(
         var compose = GetComposeVolumeMetadata(release.Spec);
         var warnings = new List<string>();
         PlatformCacheEntry? platform = null;
+        var platformEntity = await unitOfWork.Platforms.GetByIdAsync(release.PlatformId, cancellationToken);
         IReadOnlyList<Container> containers = [];
+        IReadOnlyList<SwarmServiceProjection> swarmServices = [];
         var bindings = await unitOfWork.Stacks.GetReleaseVolumeBindingsAsync(release.Id, cancellationToken);
 
-        if (platformContainerCache.TryGetCacheEntry(release.PlatformId, out var platformEntry, out _))
+        if (platformEntity?.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+        {
+            swarmServices = (await unitOfWork.Swarm.GetServicesAsync(release.PlatformId, cancellationToken))
+                .Where(service => service.StackId == stack.Id)
+                .ToArray();
+        }
+        else if (platformContainerCache.TryGetCacheEntry(release.PlatformId, out var platformEntry, out _))
         {
             platform = platformEntry;
             if (bindings.Count == 0)
@@ -156,6 +194,8 @@ internal sealed class StackBackupVolumeResolver(
             platform,
             containers,
             bindings,
+            platformEntity,
+            swarmServices,
             warnings));
     }
 
@@ -249,5 +289,7 @@ internal sealed class StackBackupVolumeResolver(
         PlatformCacheEntry? Platform,
         IReadOnlyList<Container> Containers,
         IReadOnlyList<StackReleaseVolumeBinding> PersistedVolumeBindings,
+        Domain.Entities.Platforms.Platform? PlatformEntity,
+        IReadOnlyList<SwarmServiceProjection> SwarmServices,
         IReadOnlyList<string> Warnings);
 }

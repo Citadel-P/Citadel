@@ -16,13 +16,19 @@ public sealed class BackupRestoreRun(
     DateTimeOffset? completedAt = null,
     int? exitCode = null,
     string? errorCode = null,
-    string? errorMessage = null)
+    string? errorMessage = null,
+    string? targetDockerNodeId = null,
+    string? targetNodeHostname = null,
+    Guid? sourceBackupRunItemId = null)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid BackupRunId { get; private set; } = backupRunId;
     public Guid BackupRepositoryId { get; private set; } = backupRepositoryId;
+    public Guid? SourceBackupRunItemId { get; private set; } = sourceBackupRunItemId;
     public BackupRestoreStatus Status { get; private set; } = status;
     public Guid TargetPlatformId { get; private set; } = targetPlatformId;
+    public string? TargetDockerNodeId { get; private set; } = BackupRepository.NormalizeOptional(targetDockerNodeId);
+    public string? TargetNodeHostname { get; private set; } = BackupRepository.NormalizeOptional(targetNodeHostname);
     public string TargetVolumeName { get; private set; } = BackupRepository.NormalizeName(targetVolumeName);
     public bool OverwriteExisting { get; private set; } = overwriteExisting;
     public bool TargetVolumeCreatedByCitadel { get; private set; } = targetVolumeCreatedByCitadel;
@@ -96,7 +102,10 @@ public sealed class BackupRestoreRun(
         int? exitCode,
         string? errorCode,
         string? errorMessage,
-        Guid triggeredByActorId)
+        Guid triggeredByActorId,
+        string? targetDockerNodeId = null,
+        string? targetNodeHostname = null,
+        Guid? sourceBackupRunItemId = null)
         => new(
             backupRunId,
             backupRepositoryId,
@@ -113,7 +122,10 @@ public sealed class BackupRestoreRun(
             completedAt,
             exitCode,
             errorCode,
-            errorMessage)
+            errorMessage,
+            targetDockerNodeId,
+            targetNodeHostname,
+            sourceBackupRunItemId)
         {
             Id = id
         };

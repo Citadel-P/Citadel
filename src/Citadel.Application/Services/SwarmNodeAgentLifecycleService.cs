@@ -250,19 +250,18 @@ internal sealed class SwarmNodeAgentLifecycleService(
             AgentImageDigest = image.Digest,
             UpdatedAtUtc = DateTime.UtcNow
         };
-        var services = await unitOfWork.Swarm.GetServicesAsync(platform.Id, cancellationToken);
         var projectedService = string.IsNullOrWhiteSpace(installation.DockerServiceId)
             ? null
-            : services.FirstOrDefault(service => string.Equals(
-                service.DockerServiceId,
+            : await unitOfWork.Swarm.GetServiceAsync(
+                platform.Id,
                 installation.DockerServiceId,
-                StringComparison.Ordinal));
+                cancellationToken);
         if (projectedService is null)
         {
-            var serviceWithStableName = services.FirstOrDefault(service => string.Equals(
-                service.Name,
+            var serviceWithStableName = await unitOfWork.Swarm.GetServiceByNameAsync(
+                platform.Id,
                 installation.DockerServiceName,
-                StringComparison.Ordinal));
+                cancellationToken);
             if (serviceWithStableName is not null)
             {
                 if (!SwarmNodeAgentInfrastructure.HasOwnership(serviceWithStableName, platform))
@@ -804,6 +803,7 @@ internal sealed class SwarmNodeAgentLifecycleService(
             "CITADEL_EDGE_AGENT_KEY_PATH=/app/data/edge-agent.key",
             "CITADEL_EDGE_IDENTITY_PATH=/app/data/edge-agent.identity.json",
             $"CITADEL_PLATFORM_ID={platform.Id:D}",
+            $"CITADEL_SWARM_CLUSTER_ID={platform.ClusterId}",
             "CITADEL_SWARM_SERVICE_ID={{.Service.ID}}",
             "CITADEL_SWARM_TASK_ID={{.Task.ID}}",
             "CITADEL_SWARM_NODE_ID={{.Node.ID}}",

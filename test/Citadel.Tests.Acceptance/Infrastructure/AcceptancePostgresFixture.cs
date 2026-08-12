@@ -9,6 +9,8 @@ public sealed class AcceptancePostgresFixture : IAsyncLifetime
     private const string Password = "citadel-acceptance";
     private PostgreSqlContainer container = default!;
 
+    public string ContainerId => container.Id;
+
     public async ValueTask InitializeAsync()
     {
         container = new PostgreSqlBuilder("postgres:17.5-alpine")

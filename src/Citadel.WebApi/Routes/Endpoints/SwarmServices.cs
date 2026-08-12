@@ -37,6 +37,15 @@ public static class SwarmServices
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, ManagedSwarmServiceView.Map);
     }
 
+    public static async Task<Results<Ok<SwarmServiceBackupSourcePreviewView>, ProblemHttpResult>> GetBackupSourcePreview(
+        IMediator mediator,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetSwarmServiceBackupSourcePreview(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, SwarmServiceBackupSourcePreviewView.Map);
+    }
+
     public static async Task<Results<Ok<SwarmServiceDuplicateDraftView>, ProblemHttpResult>> GetDuplicateDraft(
         IMediator mediator,
         Guid id,

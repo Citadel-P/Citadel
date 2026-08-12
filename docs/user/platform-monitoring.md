@@ -16,7 +16,7 @@ as unavailable rather than zero.
 ## Backup Summary
 
 The platform summary counts backup policies attached to that platform through a
-Docker volume, stack, or deployment. Citadel control-plane backups are
+Docker volume, stack, deployment, or managed Swarm Service. Citadel control-plane backups are
 instance-wide, so they are shown on the main **Backups** page and are not
 included in a platform's total. See
 [`backups.md`](backups.md#backup-counts) for details.

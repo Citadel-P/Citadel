@@ -16,11 +16,15 @@ public sealed class BackupRunItem(
     string? errorCode = null,
     string? errorMessage = null,
     DateTimeOffset? createdAt = null,
-    DateTimeOffset? updatedAt = null)
+    DateTimeOffset? updatedAt = null,
+    string? dockerNodeId = null,
+    string? nodeHostname = null)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid BackupRunId { get; private set; } = backupRunId;
     public Guid PlatformId { get; private set; } = platformId;
+    public string? DockerNodeId { get; private set; } = BackupRepository.NormalizeOptional(dockerNodeId);
+    public string? NodeHostname { get; private set; } = BackupRepository.NormalizeOptional(nodeHostname);
     public string VolumeName { get; private set; } = BackupRepository.NormalizeName(volumeName);
     public BackupRunItemStatus Status { get; private set; } = status;
     public string? ResticSnapshotId { get; private set; } = BackupRepository.NormalizeOptional(resticSnapshotId);
@@ -94,7 +98,9 @@ public sealed class BackupRunItem(
         string? errorCode,
         string? errorMessage,
         DateTimeOffset createdAt,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        string? dockerNodeId = null,
+        string? nodeHostname = null)
         => new(
             backupRunId,
             platformId,
@@ -111,7 +117,9 @@ public sealed class BackupRunItem(
             errorCode,
             errorMessage,
             createdAt,
-            updatedAt)
+            updatedAt,
+            dockerNodeId,
+            nodeHostname)
         {
             Id = id
         };

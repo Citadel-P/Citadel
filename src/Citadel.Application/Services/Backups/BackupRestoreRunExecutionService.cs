@@ -6,6 +6,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
+using Domain.Entities.Platforms;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +77,7 @@ internal sealed class BackupRestoreRunExecutionService(
     IPlatformResticRunner platformResticRunner,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     IBackupRestoreRunCoordinator runCoordinator,
     IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
     INotificationQueue notificationQueue,
@@ -193,7 +195,15 @@ internal sealed class BackupRestoreRunExecutionService(
             using var timeoutCancel = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(60, options.DefaultTimeoutSeconds)));
             using var linkedCancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCancel.Token, operationToken.Token);
 
-            await WriteAsync(writer, Info(run.Id, BackupRestoreStatus.Preparing, $"Restore for snapshot \"{backupRun.ResticSnapshotId}\" is preparing."), cancellationToken);
+            await WriteAsync(
+                writer,
+                Info(
+                    run.Id,
+                    BackupRestoreStatus.Preparing,
+                    run.SourceBackupRunItemId.HasValue
+                        ? "Restore for the selected Volume snapshot is preparing."
+                        : $"Restore for snapshot \"{backupRun.ResticSnapshotId}\" is preparing."),
+                cancellationToken);
 
             if (!options.Enabled)
             {
@@ -202,7 +212,7 @@ internal sealed class BackupRestoreRunExecutionService(
                 return;
             }
 
-            if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available || string.IsNullOrWhiteSpace(backupRun.ResticSnapshotId))
+            if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available)
             {
                 const string message = "Backup snapshot is not available for restore.";
                 await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.snapshot_unavailable", message, cancellationToken);
@@ -219,8 +229,13 @@ internal sealed class BackupRestoreRunExecutionService(
                 return;
             }
 
-            var targetLeaseKey = $"{run.TargetPlatformId}:{run.TargetVolumeName}";
+            var targetLeaseKey = string.IsNullOrWhiteSpace(run.TargetDockerNodeId)
+                ? $"{run.TargetPlatformId}:{run.TargetVolumeName}"
+                : $"{run.TargetPlatformId}:{run.TargetDockerNodeId}:{run.TargetVolumeName}";
             var sourceLease = false;
+            BackupRestoreTargetPlan? activeTarget = null;
+            PlatformCacheEntry? activeTargetPlatform = null;
+            Platform? activeTargetPlatformEntity = null;
             try
             {
                 sourceLease = await AcquireSourceLeaseAsync(run, targetLeaseKey, linkedCancel.Token);
@@ -240,7 +255,16 @@ internal sealed class BackupRestoreRunExecutionService(
                     return;
                 }
 
-                var repositoryContext = ResolveRestoreExecutionContext(repository, targetPlatform);
+                var targetPlatformEntity = await LoadPlatformAsync(run.TargetPlatformId, linkedCancel.Token);
+                if (targetPlatformEntity is null)
+                {
+                    const string message = "Restore target Platform no longer exists.";
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.target_unavailable", message, cancellationToken);
+                    await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
+                    return;
+                }
+
+                var repositoryContext = ResolveRestoreExecutionContext(repository, targetPlatform, targetPlatformEntity);
                 if (!repositoryContext.IsSuccess(out var executionContext, out var contextError))
                 {
                     var message = contextError?.Message ?? "Backup repository cannot restore to the target platform.";
@@ -249,7 +273,16 @@ internal sealed class BackupRestoreRunExecutionService(
                     return;
                 }
 
-                var sourceResult = await ResolveSourceSnapshotAsync(backupRun, repository, linkedCancel.Token);
+                var sourceItem = await LoadSourceItemAsync(run, linkedCancel.Token);
+                if (run.SourceBackupRunItemId.HasValue && sourceItem is null)
+                {
+                    const string message = "The selected Volume snapshot no longer exists.";
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.snapshot_unavailable", message, cancellationToken);
+                    await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
+                    return;
+                }
+
+                var sourceResult = await ResolveSourceSnapshotAsync(backupRun, sourceItem, repository, linkedCancel.Token);
                 if (!sourceResult.IsSuccess(out var source, out var sourceError))
                 {
                     var message = sourceError?.Message ?? "Backup source could not be resolved.";
@@ -258,7 +291,7 @@ internal sealed class BackupRestoreRunExecutionService(
                     return;
                 }
 
-                var targetResult = await PrepareTargetVolumeAsync(run, targetPlatform, executionContext, linkedCancel.Token);
+                var targetResult = await PrepareTargetVolumeAsync(run, targetPlatform, targetPlatformEntity, executionContext, linkedCancel.Token);
                 if (!targetResult.IsSuccess(out var target, out var targetError))
                 {
                     var message = targetError?.Message ?? "Backup restore target could not be prepared.";
@@ -266,6 +299,9 @@ internal sealed class BackupRestoreRunExecutionService(
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                     return;
                 }
+                activeTarget = target;
+                activeTargetPlatform = targetPlatform;
+                activeTargetPlatformEntity = targetPlatformEntity;
 
                 var environmentResult = await BuildEnvironmentAsync(repository, executionContext, linkedCancel.Token);
                 if (!environmentResult.IsSuccess(out var environment, out var environmentError))
@@ -282,7 +318,8 @@ internal sealed class BackupRestoreRunExecutionService(
                     await PersistRunAsync(run, backupPolicyId, linkedCancel.Token);
                     await WriteAsync(writer, Info(run.Id, BackupRestoreStatus.Running, $"Restoring snapshot into volume \"{run.TargetVolumeName}\"."), cancellationToken);
 
-                    var restore = RunRestoreAsync(run, backupRun.ResticSnapshotId!, environment, source, target, linkedCancel.Token);
+                    var snapshotId = sourceItem?.ResticSnapshotId ?? backupRun.ResticSnapshotId!;
+                    var restore = RunRestoreAsync(run, snapshotId, environment, source, target, linkedCancel.Token);
                     await foreach (var item in restore.Stream)
                         await WriteAsync(writer, item, cancellationToken);
 
@@ -293,6 +330,10 @@ internal sealed class BackupRestoreRunExecutionService(
                             ? $"Restore exceeded the {options.DefaultTimeoutSeconds} second timeout."
                             : $"Restic restore exited with code {restore.Result.ExitCode}.";
 
+                        var cleanupWarning = await CleanupFailedTargetAsync(run, targetPlatform, targetPlatformEntity, target, CancellationToken.None);
+                        activeTarget = null;
+                        if (!string.IsNullOrWhiteSpace(cleanupWarning))
+                            message = $"{message} {cleanupWarning}";
                         await FailRunAsync(run, backupPolicyId, status, restore.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
                         await WriteAsync(writer, Error(run.Id, status, message, restore.Result.ExitCode), cancellationToken);
                         return;
@@ -301,6 +342,7 @@ internal sealed class BackupRestoreRunExecutionService(
                     var completedAt = DateTimeOffset.UtcNow;
                     run.CompleteSucceeded(target.CreatedByCitadel, [], [], completedAt);
                     await CompleteRunAsync(run, backupPolicyId, completedAt, CancellationToken.None);
+                    activeTarget = null;
                     await WriteAsync(writer, Info(run.Id, run.Status, $"Restore finished with status {run.Status}."), cancellationToken);
                 }
             }
@@ -328,6 +370,23 @@ internal sealed class BackupRestoreRunExecutionService(
             }
             finally
             {
+                if (activeTarget is not null && activeTargetPlatform is not null && activeTargetPlatformEntity is not null)
+                {
+                    var cleanupWarning = await CleanupFailedTargetAsync(
+                        run,
+                        activeTargetPlatform,
+                        activeTargetPlatformEntity,
+                        activeTarget,
+                        CancellationToken.None);
+                    if (!string.IsNullOrWhiteSpace(cleanupWarning))
+                    {
+                        logger.LogWarning(
+                            "Backup restore run {RestoreRunId} could not clean its partial target: {CleanupWarning}",
+                            run.Id,
+                            cleanupWarning);
+                    }
+                }
+
                 if (sourceLease)
                     await ReleaseSourceLeaseAsync(targetLeaseKey, run.Id, CancellationToken.None);
 
@@ -357,6 +416,26 @@ internal sealed class BackupRestoreRunExecutionService(
         return await uow.BackupRestoreRuns.GetExecutionPlanAsync(restoreRunId, cancellationToken);
     }
 
+    private async Task<Platform?> LoadPlatformAsync(Guid platformId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+    }
+
+    private async Task<BackupRunItem?> LoadSourceItemAsync(
+        BackupRestoreRun run,
+        CancellationToken cancellationToken)
+    {
+        if (!run.SourceBackupRunItemId.HasValue)
+            return null;
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var items = await uow.BackupRunItems.GetByRunAsync(run.BackupRunId, cancellationToken);
+        return items.FirstOrDefault(item => item.Id == run.SourceBackupRunItemId.Value);
+    }
+
     private async Task<Result<ResticRepositoryEnvironment>> BuildEnvironmentAsync(
         BackupRepository repository,
         BackupExecutionContext context,
@@ -369,9 +448,21 @@ internal sealed class BackupRestoreRunExecutionService(
 
     private async Task<Result<BackupRestoreSourcePlan>> ResolveSourceSnapshotAsync(
         BackupRun backupRun,
+        BackupRunItem? sourceItem,
         BackupRepository repository,
         CancellationToken cancellationToken)
     {
+        if (sourceItem is not null)
+        {
+            if (sourceItem.Status != BackupRunItemStatus.Succeeded || string.IsNullOrWhiteSpace(sourceItem.ResticSnapshotId))
+                return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("The selected Volume snapshot is not available."));
+
+            if (repository.Spec is not S3CompatibleBackupRepositorySpec)
+                return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Composite Volume snapshots require an S3-compatible Destination."));
+
+            return Result.Success(new BackupRestoreSourcePlan(PlatformSourceMountPath));
+        }
+
         if (backupRun.SourceSnapshot is not DockerVolumeBackupSource source)
             return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Only Docker volume backup snapshots can be restored to Docker volumes."));
 
@@ -410,13 +501,15 @@ internal sealed class BackupRestoreRunExecutionService(
     private async Task<Result<BackupRestoreTargetPlan>> PrepareTargetVolumeAsync(
         BackupRestoreRun run,
         PlatformCacheEntry platform,
+        Platform platformEntity,
         BackupExecutionContext executionContext,
         CancellationToken cancellationToken)
     {
         var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-        var listResult = await connector.ListVolumesAsync(
-            new ListdDockerVolumesCommand(platform.Address, Dangling: null, Driver: null, Name: run.TargetVolumeName),
-            cancellationToken);
+        var isSwarm = platformEntity.PlatformDescriptor is DockerSwarmPlatformDescriptor;
+        var listResult = isSwarm
+            ? await swarmNodeRuntimeConnector.ListVolumesAsync(platformEntity, run.TargetDockerNodeId!, cancellationToken)
+            : await ListVolumesAsync(connector, platform.Address, run.TargetVolumeName, cancellationToken);
         if (!listResult.IsSuccess(out var volumes, out var listError))
             return Result.Failure<BackupRestoreTargetPlan>(listError!);
 
@@ -429,20 +522,23 @@ internal sealed class BackupRestoreRunExecutionService(
             if (existing.InUse || existing.Containers.Any())
                 return Result.Failure<BackupRestoreTargetPlan>(new ConflictError("Target volume is in use and cannot be overwritten."));
 
-            var deleteResult = await connector.DeleteVolumeAsync(
-                new DeleteDockerVolumeCommand(platform.Address, Force: false, [run.TargetVolumeName]),
-                cancellationToken);
+            var deleteCommand = new DeleteDockerVolumeCommand(platform.Address, Force: false, [run.TargetVolumeName]);
+            var deleteResult = isSwarm
+                ? await swarmNodeRuntimeConnector.DeleteVolumeAsync(platformEntity, run.TargetDockerNodeId!, deleteCommand, cancellationToken)
+                : await connector.DeleteVolumeAsync(deleteCommand, cancellationToken);
             if (!deleteResult.IsSuccess())
                 return Result.Failure<BackupRestoreTargetPlan>(deleteResult.Errors);
         }
 
         var labels = new Dictionary<string, string>
         {
-            ["citadel.backup.restoreRunId"] = run.Id.ToString()
+            ["citadel.backup.restoreRunId"] = run.Id.ToString(),
+            ["citadel.platform-id"] = run.TargetPlatformId.ToString()
         };
-        var createResult = await connector.CreateVolumeAsync(
-            new CreateDockerVolumeCommand(platform.Address, run.TargetVolumeName, "local", labels, new Dictionary<string, string>()),
-            cancellationToken);
+        var createCommand = new CreateDockerVolumeCommand(platform.Address, run.TargetVolumeName, "local", labels, new Dictionary<string, string>());
+        var createResult = isSwarm
+            ? await swarmNodeRuntimeConnector.CreateVolumeAsync(platformEntity, run.TargetDockerNodeId!, createCommand, cancellationToken)
+            : await connector.CreateVolumeAsync(createCommand, cancellationToken);
         if (!createResult.IsSuccess(out var created, out var createError))
             return Result.Failure<BackupRestoreTargetPlan>(createError!);
 
@@ -462,6 +558,40 @@ internal sealed class BackupRestoreRunExecutionService(
         }
 
         return Result.Success(new BackupRestoreTargetPlan(path, CreatedByCitadel: true));
+    }
+
+    private static async Task<Result<IReadOnlyList<DockerVolumeResult>>> ListVolumesAsync(
+        IVolumeConnector connector,
+        string platformAddress,
+        string volumeName,
+        CancellationToken cancellationToken)
+    {
+        var result = await connector.ListVolumesAsync(
+            new ListdDockerVolumesCommand(platformAddress, Dangling: null, Driver: null, Name: volumeName),
+            cancellationToken);
+        return result.IsSuccess(out var volumes, out var error)
+            ? Result.Success<IReadOnlyList<DockerVolumeResult>>([.. volumes])
+            : Result.Failure<IReadOnlyList<DockerVolumeResult>>(error!);
+    }
+
+    private async Task<string?> CleanupFailedTargetAsync(
+        BackupRestoreRun run,
+        PlatformCacheEntry platform,
+        Platform platformEntity,
+        BackupRestoreTargetPlan target,
+        CancellationToken cancellationToken)
+    {
+        if (!target.CreatedByCitadel)
+            return null;
+
+        var command = new DeleteDockerVolumeCommand(platform.Address, Force: false, [run.TargetVolumeName]);
+        var result = platformEntity.PlatformDescriptor is DockerSwarmPlatformDescriptor
+            ? await swarmNodeRuntimeConnector.DeleteVolumeAsync(platformEntity, run.TargetDockerNodeId!, command, cancellationToken)
+            : await volumeConnectorFactory.GetConnector(platform.ConnectorType).DeleteVolumeAsync(command, cancellationToken);
+
+        return result.IsSuccess()
+            ? null
+            : "The partial Citadel-created target Volume could not be removed automatically.";
     }
 
     private BackupRestoreResticRun RunRestoreAsync(
@@ -571,7 +701,8 @@ internal sealed class BackupRestoreRunExecutionService(
                 SourceVolumeName: null,
                 TargetVolumeName: run.TargetVolumeName,
                 RepositoryHostPath: environment.PlatformRepositoryHostPath,
-                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
+                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none",
+                DockerNodeId: run.TargetDockerNodeId),
             cancellationToken);
     }
 
@@ -695,10 +826,14 @@ internal sealed class BackupRestoreRunExecutionService(
 
     private static Result<BackupExecutionContext> ResolveRestoreExecutionContext(
         BackupRepository repository,
-        PlatformCacheEntry targetPlatform)
+        PlatformCacheEntry targetPlatform,
+        Platform targetPlatformEntity)
     {
         if (repository.Spec is FileSystemBackupRepositorySpec fs)
         {
+            if (targetPlatformEntity.PlatformDescriptor is DockerSwarmPlatformDescriptor)
+                return Result.Failure<BackupExecutionContext>(new BadRequestError("Docker Swarm restore requires an S3-compatible Destination."));
+
             if (fs.Location == BackupExecutionLocation.Core)
             {
                 return targetPlatform.ConnectorType == PlatformConnectorType.Local

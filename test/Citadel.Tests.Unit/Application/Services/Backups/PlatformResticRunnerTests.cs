@@ -4,7 +4,9 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
+using Domain.Entities.Platforms;
 using LightResults;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -66,7 +68,9 @@ public sealed class PlatformResticRunnerTests
             containerFactory.Object,
             imageFactory.Object,
             helperImageResolver.Object,
-            Mock.Of<IAgentRuntimeImageResolver>());
+            Mock.Of<IAgentRuntimeImageResolver>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
+            Mock.Of<IServiceScopeFactory>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -99,6 +103,8 @@ public sealed class PlatformResticRunnerTests
         Assert.Equal("/host-parent", pathMount.Target);
         Assert.Equal("bind", pathMount.Type);
         Assert.Equal("none", pathHelper.NetworkMode);
+        Assert.True(pathHelper.AutoRemove);
+        Assert.Equal(["-c", "trap 'exit 0' TERM INT; sleep 330"], pathHelper.Command);
 
         Assert.Equal(["/bin/sh", "-c", "mkdir -p -- '/host-parent/backup-01'"], execRequests[0].Command);
 
@@ -107,6 +113,8 @@ public sealed class PlatformResticRunnerTests
         Assert.Equal("/srv/backup-01", repositoryMount.Source);
         Assert.Equal("/repository", repositoryMount.Target);
         Assert.Equal("bind", repositoryMount.Type);
+        Assert.True(resticHelper.AutoRemove);
+        Assert.Equal(["-c", "trap 'exit 0' TERM INT; sleep 330"], resticHelper.Command);
         Assert.Equal(["restic", "snapshots", "--json"], execRequests[1].Command);
     }
 
@@ -153,7 +161,9 @@ public sealed class PlatformResticRunnerTests
             containerFactory.Object,
             imageFactory.Object,
             helperImageResolver.Object,
-            Mock.Of<IAgentRuntimeImageResolver>());
+            Mock.Of<IAgentRuntimeImageResolver>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
+            Mock.Of<IServiceScopeFactory>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -243,7 +253,9 @@ public sealed class PlatformResticRunnerTests
             containerFactory.Object,
             imageFactory.Object,
             helperImageResolver.Object,
-            Mock.Of<IAgentRuntimeImageResolver>());
+            Mock.Of<IAgentRuntimeImageResolver>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
+            Mock.Of<IServiceScopeFactory>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -331,7 +343,9 @@ public sealed class PlatformResticRunnerTests
             containerFactory.Object,
             imageFactory.Object,
             helperImageResolver.Object,
-            agentRuntimeImageResolver.Object);
+            agentRuntimeImageResolver.Object,
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
+            Mock.Of<IServiceScopeFactory>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -419,7 +433,9 @@ public sealed class PlatformResticRunnerTests
             containerFactory.Object,
             imageFactory.Object,
             helperImageResolver.Object,
-            agentRuntimeImageResolver.Object);
+            agentRuntimeImageResolver.Object,
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
+            Mock.Of<IServiceScopeFactory>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -445,6 +461,183 @@ public sealed class PlatformResticRunnerTests
         Assert.NotNull(createCommand);
         Assert.Equal("citadel-agent:dev", createCommand.ImageId);
         Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldReusePinnedNodeAgentImageForWorkerBackupHelper()
+    {
+        var platform = new Platform(
+            "swarm",
+            "http://manager:2375",
+            0,
+            0,
+            0,
+            3,
+            1024,
+            "29.0",
+            null,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerSwarmPlatformDescriptor(
+                "manager-node", "10.0.0.1", "Active", true, 1, 1, "manager-daemon", 0, 0, 0, 0),
+            clusterId: "cluster-1");
+        const string serviceId = "node-agent-service";
+        const string pinnedAgentImage = "registry:5000/citadel-agent@sha256:test";
+        var now = DateTimeOffset.UtcNow;
+        var installation = new SwarmNodeAgentInstallation(
+            platform.Id,
+            platform.ClusterId!,
+            "manager-node",
+            "manager-daemon",
+            serviceId,
+            $"citadel-node-agent-{platform.Id:N}",
+            "registry:5000/citadel-agent:candidate",
+            "sha256:test",
+            null,
+            null,
+            SwarmNodeAgentDesiredState.Installed,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            now.UtcDateTime,
+            now.UtcDateTime);
+        var service = new SwarmServiceProjection(
+            platform.Id,
+            serviceId,
+            1,
+            installation.DockerServiceName,
+            "Global",
+            pinnedAgentImage,
+            2,
+            2,
+            "Completed",
+            null,
+            [],
+            [],
+            [],
+            [],
+            new Dictionary<string, string>
+            {
+                ["com.citadel.system"] = "true",
+                ["com.citadel.system-role"] = "swarm-node-agent",
+                ["com.citadel.platform-id"] = platform.Id.ToString("D"),
+                ["com.citadel.swarm-cluster-id"] = platform.ClusterId!
+            },
+            now,
+            now,
+            now,
+            false,
+            SwarmServiceOwnership.System);
+
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(repository => repository.GetByIdAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platform);
+        var edgeAgents = new Mock<IEdgeAgentRepository>();
+        edgeAgents
+            .Setup(repository => repository.GetNodeAgentInstallationAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(installation);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm
+            .Setup(repository => repository.GetServiceAsync(platform.Id, serviceId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(service);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(value => value.Platforms).Returns(platforms.Object);
+        unitOfWork.SetupGet(value => value.EdgeAgents).Returns(edgeAgents.Object);
+        unitOfWork.SetupGet(value => value.Swarm).Returns(swarm.Object);
+        await using var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+
+        CreateContainerCommand? createCommand = null;
+        var nodeRuntime = new Mock<ISwarmNodeRuntimeConnector>();
+        nodeRuntime
+            .Setup(connector => connector.CreateContainerAsync(
+                platform,
+                "worker-node",
+                It.IsAny<CreateContainerCommand>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Platform, string, CreateContainerCommand, CancellationToken>((_, _, command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("helper-id"));
+        nodeRuntime
+            .Setup(connector => connector.PatchContainersAsync(
+                platform, "worker-node", ContainerAction.START, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        nodeRuntime
+            .Setup(connector => connector.InspectContainerAsync(
+                platform, "worker-node", "helper-id", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(RunningContainer("helper-id")));
+        nodeRuntime
+            .Setup(connector => connector.ExecBinaryAsync(
+                platform, "worker-node", It.IsAny<ContainerBinaryExecRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("{}", TestContext.Current.CancellationToken),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+        nodeRuntime
+            .Setup(connector => connector.DeleteContainersAsync(
+                platform,
+                "worker-node",
+                It.IsAny<IReadOnlyCollection<string>>(),
+                false,
+                true,
+                false,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var containerFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Local))
+            .Returns(Mock.Of<IContainerConnector>());
+        var imageFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        imageFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Local))
+            .Returns(Mock.Of<IImageConnector>());
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns("registry:5000/unavailable-core-helper:candidate");
+        var runner = new PlatformResticRunner(
+            containerFactory.Object,
+            imageFactory.Object,
+            helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>(),
+            nodeRuntime.Object,
+            services.GetRequiredService<IServiceScopeFactory>());
+
+        var events = new List<ResticProcessEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new PlatformResticCommand(
+                               platform.Id,
+                               platform.Address,
+                               platform.ConnectorType,
+                               "restic",
+                               ["backup", "--json", "/source"],
+                               new Dictionary<string, string>(),
+                               TimeSpan.FromSeconds(60),
+                               [],
+                               4096,
+                               SourceVolumeName: "data",
+                               TargetVolumeName: null,
+                               RepositoryHostPath: null,
+                               NetworkMode: null,
+                               DockerNodeId: "worker-node"),
+                           TestContext.Current.CancellationToken))
+        {
+            events.Add(item);
+        }
+
+        Assert.NotNull(createCommand);
+        Assert.Equal(pinnedAgentImage, createCommand.ImageId);
+        Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
+        helperImageResolver.Verify(
+            resolver => resolver.Resolve(PlatformConnectorType.Agent),
+            Times.Never);
     }
 
     private static ContainerInspectionInfo RunningContainer(string id)

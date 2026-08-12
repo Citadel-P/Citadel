@@ -17,6 +17,13 @@ public interface IDeploymentBackupVolumeResolver
         CancellationToken cancellationToken);
 }
 
+public interface ISwarmServiceBackupVolumeResolver
+{
+    Task<Result<SwarmServiceBackupVolumeResolution>> ResolveAsync(
+        Guid swarmServiceId,
+        CancellationToken cancellationToken);
+}
+
 public sealed record StackBackupVolumeResolution(
     Guid StackId,
     string StackName,
@@ -31,11 +38,22 @@ public sealed record ResolvedStackBackupVolume(
     string VolumeName,
     StackVolumeKind Kind,
     bool IsExternal,
-    bool IsShared);
+    bool IsShared,
+    string? DockerNodeId = null,
+    string? NodeHostname = null);
 
 public sealed record DeploymentBackupVolumeResolution(
     Guid DeploymentId,
     string DeploymentName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<ResolvedStackBackupVolume> Volumes,
+    IReadOnlyList<string> Warnings);
+
+public sealed record SwarmServiceBackupVolumeResolution(
+    Guid SwarmServiceId,
+    string SwarmServiceName,
     Guid PlatformId,
     string PlatformName,
     PlatformStatus PlatformStatus,

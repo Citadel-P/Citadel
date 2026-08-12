@@ -310,7 +310,7 @@ internal sealed class GetBackupCoverageHandler(
             if (!resource.PlatformId.HasValue || string.IsNullOrWhiteSpace(resource.Name))
                 return Result.Failure<BackupCoverageResult>(new BadRequestError("Volume backup coverage requires platformId and name."));
 
-            volumeKeys.Add(new VolumeBackupCoverageKey(resource.PlatformId.Value, resource.Name));
+            volumeKeys.Add(new VolumeBackupCoverageKey(resource.PlatformId.Value, resource.Name, resource.DockerNodeId));
         }
 
         var user = userContextAccessor.Current;
@@ -326,7 +326,8 @@ internal sealed class GetBackupCoverageHandler(
             [.. coverage.Select(static item => new BackupCoverageItem(
                 new BackupCoverageResourceKey(
                     PlatformId: item.Resource.PlatformId,
-                    Name: item.Resource.VolumeName),
+                    Name: item.Resource.VolumeName,
+                    DockerNodeId: item.Resource.DockerNodeId),
                 item.Coverage))]));
     }
 }

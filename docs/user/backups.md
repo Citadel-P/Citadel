@@ -68,7 +68,7 @@ When creating an S3-compatible repository, configure:
 
 The restic password is separate from the S3 credentials. Losing the password secret means existing snapshots in that repository cannot be restored.
 
-For Docker volume, stack, and deployment backups, the S3 endpoint must be reachable from the selected Docker platform's helper container. For Citadel backups, the S3 endpoint must be reachable from Citadel Core.
+For Docker volume, stack, deployment, and Swarm Service backups, the S3 endpoint must be reachable from every helper container that executes the policy. For Citadel backups, the S3 endpoint must be reachable from Citadel Core.
 
 Examples:
 
@@ -126,6 +126,7 @@ Supported sources:
 - **Docker Volume**: backs up one selected Docker named volume.
 - **Stack**: backs up all resolved Docker named volumes used by a stack.
 - **Deployment**: backs up all resolved Docker named volumes used by a deployment.
+- **Swarm Service**: backs up the supported node-local named volumes mounted by the current Tasks of a managed Swarm Service.
 
 ### Backup Counts
 
@@ -136,6 +137,7 @@ belongs to that platform:
 - Docker volume policies created for the platform
 - Stack policies whose stack runs on the platform
 - Deployment policies whose deployment runs on the platform
+- Swarm Service policies whose managed Service runs on the platform
 
 Citadel control-plane backups are instance-wide and do not belong to a Docker
 platform. They appear on the main **Backups** page but are not included in any
@@ -168,14 +170,46 @@ Backups can run against:
 - Local platforms
 - Regular agent platforms
 - Edge agent platforms
+- Docker Swarm Nodes covered by Citadel Node Agents
 
-For Docker volume, stack, and deployment backups:
+For Docker volume, stack, deployment, and Swarm Service backups:
 
 - S3-compatible repositories run from the target platform and upload directly to the bucket.
 - Platform filesystem repositories run on the selected platform and write to the configured host path.
 - Core filesystem repositories are only valid for Citadel backups and local-platform backups.
 
 This means Citadel mounts Docker named volumes through the platform's Docker daemon, then runs restic in the backup helper container. For regular agent and edge agent platforms, this avoids routing remote volume contents through Citadel Core. For local Docker Desktop platforms, it also avoids relying on Docker's internal `/var/lib/docker/volumes/...` paths being visible to the host.
+
+### Docker Swarm
+
+Citadel supports node-scoped backup of Docker Swarm local named volumes. A
+Swarm volume is identified by its Platform, owning Node, and volume name. Equal
+volume names on two Nodes are treated as different backup sources.
+
+Supported Swarm sources are:
+
+- one named volume selected on an explicit Node
+- a managed Swarm Stack, resolved from its current Services and Tasks
+- a managed Swarm Service, resolved from its current Tasks
+
+Swarm backup requires:
+
+- a connected Citadel Node Agent on every Node needed by the source
+- current, stable Task placement with all desired Tasks running
+- Docker-managed named volumes using the `local` driver without driver options
+- an S3-compatible backup repository reachable from every required Node
+- **Live** consistency
+
+Citadel rejects stale or incomplete placement, missing Node coverage, scaled-to-zero workloads, cluster volumes, volume-plugin storage, and `local` volumes configured with driver options. Bind mounts, `tmpfs`, container writable layers, Docker Secrets, and Docker Configs are not included.
+
+For a Stack or Service, snapshots are created one volume at a time. They are
+crash-consistent at best and do not represent one atomic point in time across
+all Nodes. A failed child marks the workload run as failed, while snapshots
+already completed remain available for individual restore.
+
+Keep a Citadel control-plane backup alongside workload-volume policies. The
+control-plane backup protects Citadel configuration, bindings, encrypted
+secrets, and recovery assets; it does not replace an application-data backup.
 
 ## Running A Backup
 
@@ -244,6 +278,7 @@ Repository and platform rules for restore:
 - A Core filesystem repository can restore to the local platform only.
 - A Platform filesystem repository restores on the same platform that owns that repository path.
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
+- A Swarm child snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
 - Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
 
 For the PostgreSQL dump, security assets, clean-environment restore sequence,
@@ -256,6 +291,6 @@ Backup policies can alert on failure when **Alert on failure** is enabled. Deliv
 
 ## Practical Recommendations
 
-Use S3-compatible storage for remote platforms and edge agents. It keeps the backup path independent from where Citadel Core is running and avoids requiring shared host folders.
+Use S3-compatible storage for remote platforms, edge agents, and Docker Swarm. It keeps the backup path independent from where Citadel Core is running and avoids requiring shared host folders.
 
 Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.

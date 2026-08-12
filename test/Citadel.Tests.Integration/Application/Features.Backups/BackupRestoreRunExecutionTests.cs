@@ -96,6 +96,41 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
     }
 
     [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRestoreSelectedCompositeChildSnapshot()
+    {
+        var platformId = await SeedLocalPlatformAsync();
+        platformRestic.Enqueue(exitCode: 0, stdout: "composite child restored");
+        var accessKeySecretId = await CreateInternalSecretAsync("RESTORE_COMPOSITE_ACCESS_KEY", "access-key");
+        var secretKeySecretId = await CreateInternalSecretAsync("RESTORE_COMPOSITE_SECRET_KEY", "secret-key");
+        var setup = await CreateRepositoryBackupRunAndRestoreRunAsync(
+            "restore-composite-child",
+            platformId,
+            sourceVolumeName: "database",
+            targetVolumeName: "database-restored",
+            overwriteExisting: false,
+            repositorySpec: new S3CompatibleBackupRepositorySpec(
+                new Uri("https://minio.example.com"),
+                "citadel",
+                "restore-composite-child",
+                "us-east-1",
+                S3BucketLookup.Path,
+                accessKeySecretId,
+                secretKeySecretId,
+                SessionTokenSecretId: null),
+            useChildSnapshot: true);
+
+        var service = Services.GetRequiredService<IBackupRestoreRunExecutionService>();
+        var items = new List<BackupRestoreRunStreamItem>();
+        await foreach (var item in service.ExecuteQueuedAsync(setup.RestoreRun.Id, TestContext.Current.CancellationToken))
+            items.Add(item);
+
+        Assert.Contains(items, item => item.Status == BackupRestoreStatus.Succeeded);
+        var call = Assert.Single(platformRestic.Calls);
+        Assert.Contains("snapshot-child-001:/source", call.Command.Arguments);
+        Assert.Equal(setup.BackupRunItem?.Id, setup.RestoreRun.SourceBackupRunItemId);
+    }
+
+    [Fact]
     public async Task InterruptInProgressAsync_ShouldReleaseRestoreLeasesAfterRestart()
     {
         var platformId = await SeedLocalPlatformAsync();
@@ -397,7 +432,8 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         string sourceVolumeName,
         string targetVolumeName,
         bool overwriteExisting,
-        BackupRepositorySpec? repositorySpec = null)
+        BackupRepositorySpec? repositorySpec = null,
+        bool useChildSnapshot = false)
     {
         var passwordSecretId = await CreateInternalSecretAsync($"{name.Replace('-', '_').ToUpperInvariant()}_PASSWORD", "restic-password");
         var repositoryPath = Path.Combine(testRoot, "data", "backups", "repositories", name);
@@ -410,7 +446,9 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         var policy = new BackupPolicy(
             $"{name}-policy",
             null,
-            new DockerVolumeBackupSource(platformId, sourceVolumeName),
+            useChildSnapshot
+                ? new StackBackupSource(Guid.CreateVersion7())
+                : new DockerVolumeBackupSource(platformId, sourceVolumeName),
             repository.Id,
             enabled: true,
             cron: null,
@@ -439,7 +477,20 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         Assert.Equal(BackupRunQueueResultStatus.Queued, queue.Status);
         var backupRun = queue.Run!;
         backupRun.MarkRunning(DateTimeOffset.UtcNow);
-        backupRun.CompleteSucceeded("snapshot-restore-001", null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        BackupRunItem? backupRunItem = null;
+        if (useChildSnapshot)
+        {
+            backupRunItem = new BackupRunItem(backupRun.Id, platformId, sourceVolumeName);
+            backupRunItem.MarkRunning(DateTimeOffset.UtcNow);
+            backupRunItem.CompleteSucceeded("snapshot-child-001", null, 1, 1, 1, DateTimeOffset.UtcNow);
+            backupRun.AssignItems([backupRunItem]);
+            await uow.BackupRunItems.AddRangeAsync([backupRunItem], TestContext.Current.CancellationToken);
+            backupRun.CompleteSucceeded(null, null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        }
+        else
+        {
+            backupRun.CompleteSucceeded("snapshot-restore-001", null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        }
         await uow.BackupRuns.FinishRunAndMarkPolicyIdleAsync(
             backupRun,
             policy.Id,
@@ -453,11 +504,12 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
             platformId,
             targetVolumeName,
             overwriteExisting,
-            Constants.SystemId);
+            Constants.SystemId,
+            sourceBackupRunItemId: backupRunItem?.Id);
         await uow.BackupRestoreRuns.AddAsync(restoreRun, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
-        return new BackupRestoreRunSetup(repository, backupRun, restoreRun);
+        return new BackupRestoreRunSetup(repository, backupRun, restoreRun, backupRunItem);
     }
 
     private async Task<Guid> CreateInternalSecretAsync(string name, string value)
@@ -596,7 +648,11 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
                 Options: new Dictionary<string, string>());
     }
 
-    private sealed record BackupRestoreRunSetup(BackupRepository Repository, BackupRun BackupRun, BackupRestoreRun RestoreRun);
+    private sealed record BackupRestoreRunSetup(
+        BackupRepository Repository,
+        BackupRun BackupRun,
+        BackupRestoreRun RestoreRun,
+        BackupRunItem? BackupRunItem);
     private sealed record ResticResponse(int ExitCode, string? Stdout, string? Stderr);
     private sealed record ResticProcessCall(ResticProcessCommand Command);
     private sealed record PlatformResticProcessCall(PlatformResticCommand Command);

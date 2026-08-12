@@ -3,11 +3,13 @@ import {
   BackupPolicyView,
   BackupRestoreRunView,
   BackupRestoreStatus,
+  BackupRunItemStatus,
   BackupRunStatus,
   BackupRunView,
   BackupSnapshotAvailability,
   BackupSourceSpecDockerVolumeBackupSource,
   LookupResourceType,
+  PlatformType,
   PlatformView,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
@@ -20,6 +22,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -95,26 +98,23 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
     [resource.id],
   );
 
-  const handleBackupRestoreRunInfoUpdated = useCallback(
-    (run: BackupRestoreRunView, action: string) => {
-      setRestoreRuns((prev) => {
-        const current = prev ?? [];
-        if (action === 'delete') {
-          return current.filter((item) => item.id !== run.id);
-        }
+  const handleBackupRestoreRunInfoUpdated = useCallback((run: BackupRestoreRunView, action: string) => {
+    setRestoreRuns((prev) => {
+      const current = prev ?? [];
+      if (action === 'delete') {
+        return current.filter((item) => item.id !== run.id);
+      }
 
-        const index = current.findIndex((item) => item.id === run.id);
-        if (index === -1) {
-          return sortRestoreRuns([run, ...current]);
-        }
+      const index = current.findIndex((item) => item.id === run.id);
+      if (index === -1) {
+        return sortRestoreRuns([run, ...current]);
+      }
 
-        const updated = [...current];
-        updated[index] = run;
-        return sortRestoreRuns(updated);
-      });
-    },
-    [],
-  );
+      const updated = [...current];
+      updated[index] = run;
+      return sortRestoreRuns(updated);
+    });
+  }, []);
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
@@ -234,11 +234,7 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
       </div>
 
       {restoreRun && (
-        <BackupRestoreDialog
-          key={restoreRun.id}
-          run={restoreRun}
-          onClose={() => setRestoreRun(undefined)}
-        />
+        <BackupRestoreDialog key={restoreRun.id} run={restoreRun} onClose={() => setRestoreRun(undefined)} />
       )}
     </div>
   );
@@ -368,7 +364,8 @@ const restoreRunColumns = (
       ) : (
         <span className="text-sm text-muted-foreground">-</span>
       ),
-    sortingFn: (rowA, rowB) => String(rowA.original.completedAt ?? '').localeCompare(String(rowB.original.completedAt ?? '')),
+    sortingFn: (rowA, rowB) =>
+      String(rowA.original.completedAt ?? '').localeCompare(String(rowB.original.completedAt ?? '')),
   },
   {
     id: 'actions',
@@ -398,23 +395,48 @@ const restoreRunColumns = (
   },
 ];
 
-function BackupRestoreDialog({
-  run,
-  onClose,
-}: {
-  run: BackupRunView;
-  onClose: () => void;
-}) {
-  const source = run.sourceSnapshot as BackupSourceSpecDockerVolumeBackupSource;
-  const [targetPlatformId, setTargetPlatformId] = useState(source.platformId);
-  const [targetVolumeName, setTargetVolumeName] = useState(source.volumeName);
+function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: () => void }) {
+  const source = run.sourceSnapshot;
+  const successfulItems = useMemo(
+    () => run.items.filter((item) => item.status === BackupRunItemStatus.Succeeded && Boolean(item.resticSnapshotId)),
+    [run.items],
+  );
+  const directSource =
+    source.$type === 'DockerVolume' ? (source as BackupSourceSpecDockerVolumeBackupSource) : undefined;
+  const initialSourceItem = !directSource && successfulItems.length === 1 ? successfulItems[0] : undefined;
+  const [sourceBackupRunItemId, setSourceBackupRunItemId] = useState(initialSourceItem?.id ?? '');
+  const [targetPlatformId, setTargetPlatformId] = useState(
+    initialSourceItem?.platformId ?? directSource?.platformId ?? '',
+  );
+  const [targetDockerNodeId, setTargetDockerNodeId] = useState(
+    initialSourceItem?.dockerNodeId ?? directSource?.dockerNodeId ?? '',
+  );
+  const [targetVolumeName, setTargetVolumeName] = useState(
+    initialSourceItem?.volumeName ?? directSource?.volumeName ?? '',
+  );
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [overwriteConfirmation, setOverwriteConfirmation] = useState('');
   const { open: openSheet } = useTaskSheet('BackupPolicy');
+  const targetPlatformArgs = useMemo(() => ({ id: targetPlatformId }), [targetPlatformId]);
+  const targetPlatform = useRead('getPlatfom', targetPlatformArgs, { enabled: Boolean(targetPlatformId) });
+  const isTargetSwarm = targetPlatform.data?.data.type === PlatformType.DockerSwarm;
+  const targetNodesArgs = useMemo(() => ({ platformId: targetPlatformId }), [targetPlatformId]);
+  const targetNodes = useRead('listSwarmNodes', targetNodesArgs, {
+    enabled: Boolean(targetPlatformId) && isTargetSwarm,
+  });
 
   const targetName = targetVolumeName.trim();
   const overwriteConfirmed = !overwriteExisting || overwriteConfirmation === targetName;
-  const canSubmit = Boolean(targetPlatformId && targetName && overwriteConfirmed);
+  const sourceItemSelected = Boolean(directSource) || successfulItems.length <= 1 || Boolean(sourceBackupRunItemId);
+  const targetNodeSelected = !isTargetSwarm || Boolean(targetDockerNodeId);
+  const canSubmit = Boolean(
+    targetPlatformId &&
+    targetPlatform.data?.data &&
+    targetName &&
+    sourceItemSelected &&
+    targetNodeSelected &&
+    overwriteConfirmed,
+  );
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -427,6 +449,8 @@ function BackupRestoreDialog({
         targetPlatformId,
         targetVolumeName: targetName,
         overwriteExisting,
+        targetDockerNodeId: isTargetSwarm ? targetDockerNodeId : null,
+        sourceBackupRunItemId: sourceBackupRunItemId || null,
       },
     });
     onClose();
@@ -440,15 +464,71 @@ function BackupRestoreDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
+          {!directSource && successfulItems.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="backup-restore-source-item">Snapshot Volume</Label>
+              <Select
+                value={sourceBackupRunItemId}
+                onValueChange={(itemId) => {
+                  const item = successfulItems.find((candidate) => candidate.id === itemId);
+                  setSourceBackupRunItemId(itemId);
+                  if (!item) return;
+
+                  setTargetPlatformId(item.platformId);
+                  setTargetDockerNodeId(item.dockerNodeId ?? '');
+                  setTargetVolumeName(item.volumeName);
+                  setOverwriteExisting(false);
+                  setOverwriteConfirmation('');
+                }}>
+                <SelectTrigger id="backup-restore-source-item" className="w-full">
+                  <SelectValue placeholder="Select a successful Volume snapshot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {successfulItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {formatBackupRunItem(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label>Target Platform</Label>
             <ResourceSelectorField
               targetType={LookupResourceType.Platform}
               selected={targetPlatformId}
-              onSelect={(platform: PlatformView | undefined) => setTargetPlatformId(platform?.id ?? '')}
+              onSelect={(platform: PlatformView | undefined) => {
+                setTargetPlatformId(platform?.id ?? '');
+                setTargetDockerNodeId('');
+                setOverwriteExisting(false);
+                setOverwriteConfirmation('');
+              }}
               placeholder="Select Platform"
             />
           </div>
+          {isTargetSwarm && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="backup-restore-target-node">Target Node</Label>
+              <Select value={targetDockerNodeId} onValueChange={setTargetDockerNodeId}>
+                <SelectTrigger id="backup-restore-target-node" className="w-full">
+                  <SelectValue placeholder={targetNodes.isLoading ? 'Loading Nodes...' : 'Select a Node'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(targetNodes.data?.data.items ?? [])
+                    .filter((node) => !node.isStale && node.status.toLowerCase() === 'ready')
+                    .map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.hostname || node.id}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The restored local Volume is created only on this Swarm Node. Citadel does not reattach Services.
+              </p>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="backup-restore-volume-name">Target Volume</Label>
             <Input
@@ -458,21 +538,23 @@ function BackupRestoreDialog({
               placeholder="restored_volume"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="backup-restore-overwrite"
-              checked={overwriteExisting}
-              onCheckedChange={(checked) => {
-                setOverwriteExisting(checked);
-                if (!checked) {
-                  setOverwriteConfirmation('');
-                }
-              }}
-            />
-            <Label htmlFor="backup-restore-overwrite" className="font-normal">
-              Overwrite existing target volume
-            </Label>
-          </div>
+          {!isTargetSwarm && (
+            <div className="flex items-center gap-2">
+              <Switch
+                id="backup-restore-overwrite"
+                checked={overwriteExisting}
+                onCheckedChange={(checked) => {
+                  setOverwriteExisting(checked);
+                  if (!checked) {
+                    setOverwriteConfirmation('');
+                  }
+                }}
+              />
+              <Label htmlFor="backup-restore-overwrite" className="font-normal">
+                Overwrite existing target volume
+              </Label>
+            </div>
+          )}
           {overwriteExisting && (
             <div className="flex flex-col gap-3">
               <AlertMessage type="warning" title="Overwrite restore">
@@ -508,7 +590,7 @@ function BackupRestoreDialog({
 function BackupRunItemsSummary({ items }: { items: BackupRunItemView[] }) {
   if (!items.length) return <span className="text-muted-foreground text-sm">-</span>;
 
-  const label = items.length === 1 ? items[0].volumeName : `${items.length} volumes`;
+  const label = items.length === 1 ? formatBackupRunItem(items[0]) : `${items.length} volumes`;
 
   return <span className="block min-w-0 truncate text-sm">{label}</span>;
 }
@@ -531,7 +613,15 @@ function isActiveRestoreRun(run: Pick<BackupRestoreRunView, 'status'>) {
 }
 
 function canRestore(run: BackupRunView) {
-  return run.sourceSnapshot.$type === 'DockerVolume' && run.snapshotAvailability === BackupSnapshotAvailability.Available;
+  if (run.snapshotAvailability !== BackupSnapshotAvailability.Available) return false;
+  if (run.sourceSnapshot.$type === 'DockerVolume') return true;
+
+  return run.items.some((item) => item.status === BackupRunItemStatus.Succeeded && Boolean(item.resticSnapshotId));
+}
+
+function formatBackupRunItem(item: BackupRunItemView) {
+  const node = item.nodeHostname ?? item.dockerNodeId;
+  return node ? `${item.volumeName} on ${node}` : item.volumeName;
 }
 
 function sortRuns(runs: BackupRunView[]) {

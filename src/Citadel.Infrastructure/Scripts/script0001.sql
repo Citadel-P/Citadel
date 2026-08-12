@@ -1313,31 +1313,6 @@ CREATE TABLE buildrunlogs (
     CONSTRAINT fk_buildrunlogs_buildruns_buildrunid FOREIGN KEY (buildrunid) REFERENCES buildruns (id) ON DELETE CASCADE
 );
 
-CREATE TABLE backuprestoreruns (
-    id uuid NOT NULL,
-    affectedcontainers jsonb NOT NULL DEFAULT ('[]'::jsonb),
-    backuprepositoryid uuid NOT NULL,
-    backuprunid uuid NOT NULL,
-    completedat timestamp with time zone,
-    errorcode text,
-    errormessage text,
-    exitcode integer,
-    overwriteexisting boolean NOT NULL,
-    queuedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    startedat timestamp with time zone,
-    status text NOT NULL,
-    targetplatformid uuid NOT NULL,
-    targetvolumecreatedbycitadel boolean NOT NULL,
-    targetvolumename text NOT NULL,
-    triggeredbyactorid uuid NOT NULL,
-    warnings jsonb NOT NULL DEFAULT ('[]'::jsonb),
-    CONSTRAINT pk_backuprestoreruns PRIMARY KEY (id),
-    CONSTRAINT fk_backuprestoreruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_backuprestoreruns_backuprepositories_backuprepositoryid FOREIGN KEY (backuprepositoryid) REFERENCES backuprepositories (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_backuprestoreruns_backupruns_backuprunid FOREIGN KEY (backuprunid) REFERENCES backupruns (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_backuprestoreruns_platforms_targetplatformid FOREIGN KEY (targetplatformid) REFERENCES platforms (id) ON DELETE RESTRICT
-);
-
 CREATE TABLE backuprunitems (
     id uuid NOT NULL,
     backuprunid uuid NOT NULL,
@@ -1345,10 +1320,12 @@ CREATE TABLE backuprunitems (
     bytesprocessed bigint,
     completedat timestamp with time zone,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    dockernodeid text,
     errorcode text,
     errormessage text,
     exitcode integer,
     filesprocessed bigint,
+    nodehostname text,
     parentsnapshotid text,
     platformid uuid NOT NULL,
     resticsnapshotid text,
@@ -1369,6 +1346,35 @@ CREATE TABLE backuprunlogs (
     stream text NOT NULL,
     CONSTRAINT pk_backuprunlogs PRIMARY KEY (id),
     CONSTRAINT fk_backuprunlogs_backupruns_backuprunid FOREIGN KEY (backuprunid) REFERENCES backupruns (id) ON DELETE CASCADE
+);
+
+CREATE TABLE backuprestoreruns (
+    id uuid NOT NULL,
+    affectedcontainers jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    backuprepositoryid uuid NOT NULL,
+    backuprunid uuid NOT NULL,
+    completedat timestamp with time zone,
+    errorcode text,
+    errormessage text,
+    exitcode integer,
+    overwriteexisting boolean NOT NULL,
+    queuedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    sourcebackuprunitemid uuid,
+    startedat timestamp with time zone,
+    status text NOT NULL,
+    targetdockernodeid text,
+    targetnodehostname text,
+    targetplatformid uuid NOT NULL,
+    targetvolumecreatedbycitadel boolean NOT NULL,
+    targetvolumename text NOT NULL,
+    triggeredbyactorid uuid NOT NULL,
+    warnings jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    CONSTRAINT pk_backuprestoreruns PRIMARY KEY (id),
+    CONSTRAINT fk_backuprestoreruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_backuprestoreruns_backuprepositories_backuprepositoryid FOREIGN KEY (backuprepositoryid) REFERENCES backuprepositories (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_backuprestoreruns_backuprunitems_sourcebackuprunitemid FOREIGN KEY (sourcebackuprunitemid) REFERENCES backuprunitems (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_backuprestoreruns_backupruns_backuprunid FOREIGN KEY (backuprunid) REFERENCES backupruns (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_backuprestoreruns_platforms_targetplatformid FOREIGN KEY (targetplatformid) REFERENCES platforms (id) ON DELETE RESTRICT
 );
 
 CREATE TABLE backuprestorerunlogs (
@@ -1682,19 +1688,23 @@ CREATE INDEX ix_backuprestoreruns_queuedat ON backuprestoreruns (queuedat);
 
 CREATE INDEX ix_backuprestoreruns_repository_status ON backuprestoreruns (backuprepositoryid, status);
 
+CREATE INDEX ix_backuprestoreruns_sourcerunitem ON backuprestoreruns (sourcebackuprunitemid);
+
 CREATE INDEX ix_backuprestoreruns_status_queuedat ON backuprestoreruns (status, queuedat);
 
-CREATE INDEX ix_backuprestoreruns_targetvolume ON backuprestoreruns (targetplatformid, targetvolumename);
+CREATE INDEX ix_backuprestoreruns_targetvolume ON backuprestoreruns (targetplatformid, targetdockernodeid, targetvolumename);
 
 CREATE INDEX ix_backuprestoreruns_triggeredbyactorid ON backuprestoreruns (triggeredbyactorid);
 
-CREATE INDEX ix_backuprunitems_platform_volumename ON backuprunitems (platformid, volumename);
+CREATE INDEX ix_backuprunitems_platform_volume ON backuprunitems (platformid, dockernodeid, volumename);
 
 CREATE INDEX ix_backuprunitems_resticsnapshotid ON backuprunitems (resticsnapshotid);
 
+CREATE UNIQUE INDEX ix_backuprunitems_run_standalonevolume ON backuprunitems (backuprunid, platformid, volumename) WHERE dockernodeid IS NULL;
+
 CREATE INDEX ix_backuprunitems_run_status ON backuprunitems (backuprunid, status);
 
-CREATE INDEX ix_backuprunitems_run_volumename ON backuprunitems (backuprunid, volumename);
+CREATE UNIQUE INDEX ix_backuprunitems_run_swarmvolume ON backuprunitems (backuprunid, platformid, dockernodeid, volumename) WHERE dockernodeid IS NOT NULL;
 
 CREATE INDEX ix_backuprunlogs_run_createdat ON backuprunlogs (backuprunid, createdat);
 
@@ -2030,7 +2040,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260811145720_migration0001', '10.0.10');
+VALUES ('20260811204036_migration0001', '10.0.10');
 
 COMMIT;
 

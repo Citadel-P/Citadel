@@ -72,7 +72,9 @@ public sealed record BackupRestoreRunLogResult(Guid RunId, IReadOnlyList<BackupR
 public sealed record RestoreVolumeInputModel(
     Guid TargetPlatformId,
     string TargetVolumeName,
-    bool OverwriteExisting);
+    bool OverwriteExisting,
+    string? TargetDockerNodeId = null,
+    Guid? SourceBackupRunItemId = null);
 
 public sealed record BackupRestoreRunResult(BackupRestoreRun Run, Guid BackupPolicyId);
 
@@ -81,7 +83,8 @@ public sealed record BackupRestoreRunListResult(IReadOnlyList<BackupRestoreRun> 
 public sealed record BackupCoverageResourceKey(
     Guid? ResourceId = null,
     Guid? PlatformId = null,
-    string? Name = null);
+    string? Name = null,
+    string? DockerNodeId = null);
 
 public sealed record BackupCoverageItem(
     BackupCoverageResourceKey Resource,
@@ -103,11 +106,22 @@ public sealed record StackBackupVolumePreviewItem(
     StackVolumeKind Kind,
     bool IsExternal,
     bool IsShared,
-    bool HasBackupCoverage);
+    bool HasBackupCoverage,
+    string? DockerNodeId = null,
+    string? NodeHostname = null);
 
 public sealed record DeploymentBackupSourcePreviewResult(
     Guid DeploymentId,
     string DeploymentName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<StackBackupVolumePreviewItem> Volumes,
+    IReadOnlyList<string> Warnings);
+
+public sealed record SwarmServiceBackupSourcePreviewResult(
+    Guid SwarmServiceId,
+    string SwarmServiceName,
     Guid PlatformId,
     string PlatformName,
     PlatformStatus PlatformStatus,

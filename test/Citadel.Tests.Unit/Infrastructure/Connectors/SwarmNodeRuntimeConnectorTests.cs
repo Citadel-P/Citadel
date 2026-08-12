@@ -1,9 +1,13 @@
+using Citadel.SharedModels.V1;
+using Citadel.Volumes.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
+using Google.Protobuf;
 using Infrastructure.Connectors.EdgeAgentConnectors;
 using Moq;
 
@@ -11,6 +15,76 @@ namespace Tests.Unit.Infrastructure.Connectors;
 
 public sealed class SwarmNodeRuntimeConnectorTests
 {
+    [Fact]
+    public async Task VolumeMutations_WorkerNode_RouteStructuredCommandsToExactNode()
+    {
+        const string workerNodeId = "worker-node";
+        var calls = new List<(string NodeId, EdgeAgentCommandKind Kind, byte[] Payload)>();
+        var commandRouter = new Mock<IEdgeAgentCommandRouter>(MockBehavior.Strict);
+        commandRouter
+            .Setup(x => x.SendUnaryAsync(
+                It.IsAny<Guid>(),
+                workerNodeId,
+                It.IsAny<EdgeAgentCommandKind>(),
+                It.IsAny<byte[]>(),
+                It.IsAny<TimeSpan>(),
+                null,
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, string, EdgeAgentCommandKind, byte[], TimeSpan, string?, CancellationToken>(
+                (_, nodeId, kind, payload, _, _, _) => calls.Add((nodeId, kind, payload)))
+            .ReturnsAsync(EdgeAgentCommandRouterResult.Success(new VolumeResponse
+            {
+                Name = "restored-data",
+                Driver = "local",
+                Scope = "local"
+            }.ToByteArray()));
+        var platform = CreateSwarmPlatform("manager-node");
+        var connector = new SwarmNodeRuntimeConnector(
+            Mock.Of<IConnectorFactory<IContainerConnector>>(),
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            Mock.Of<IConnectorFactory<IVolumeConnector>>(),
+            Mock.Of<IConnectorFactory<INetworkConnector>>(),
+            commandRouter.Object);
+
+        var created = await connector.CreateVolumeAsync(
+            platform,
+            workerNodeId,
+            new CreateDockerVolumeCommand(
+                platform.Address,
+                "restored-data",
+                "local",
+                new Dictionary<string, string> { ["com.citadel.backup"] = "true" },
+                new Dictionary<string, string>()),
+            TestContext.Current.CancellationToken);
+        var deleted = await connector.DeleteVolumeAsync(
+            platform,
+            workerNodeId,
+            new DeleteDockerVolumeCommand(platform.Address, true, ["restored-data"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(created.IsSuccess());
+        Assert.True(deleted.IsSuccess());
+        Assert.Collection(
+            calls,
+            call =>
+            {
+                Assert.Equal(workerNodeId, call.NodeId);
+                Assert.Equal(EdgeAgentCommandKind.VolumeCreate, call.Kind);
+                var request = CreateVolumeRequest.Parser.ParseFrom(call.Payload);
+                Assert.Equal("restored-data", request.Name);
+                Assert.Equal("local", request.Driver);
+                Assert.Equal("true", request.Labels["com.citadel.backup"]);
+            },
+            call =>
+            {
+                Assert.Equal(workerNodeId, call.NodeId);
+                Assert.Equal(EdgeAgentCommandKind.VolumeDelete, call.Kind);
+                var request = RemoveVolumeRequest.Parser.ParseFrom(call.Payload);
+                Assert.Equal(["restored-data"], request.Names);
+                Assert.True(request.Force);
+            });
+    }
+
     [Fact]
     public async Task ExecBinaryAsync_WorkerNode_DisposeCancelsRoutedStream()
     {
@@ -162,4 +236,29 @@ public sealed class SwarmNodeRuntimeConnectorTests
         await Task.CompletedTask;
         yield break;
     }
+
+    private static Platform CreateSwarmPlatform(string managerNodeId) => new(
+        "swarm",
+        "http://localhost.docker",
+        0,
+        0,
+        0,
+        1,
+        1,
+        null,
+        null,
+        PlatformStatus.Online,
+        PlatformConnectorType.Local,
+        new DockerSwarmPlatformDescriptor(
+            managerNodeId,
+            "192.168.65.3",
+            "Active",
+            true,
+            1,
+            1,
+            "daemon-id",
+            1,
+            1,
+            0,
+            0));
 }

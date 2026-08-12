@@ -29,6 +29,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.ResourceBindings;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.SwarmServices;
 using WebApi.Routes.Endpoints.Resources.Tags;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 
@@ -2538,6 +2539,13 @@ public static class PublicEndpoints
             .WithSummary("Get a managed Docker Swarm Service")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getManagedSwarmService");
+
+        services.MapGet("/{id:guid}/backup-source-preview", SwarmServices.GetBackupSourcePreview)
+            .WithSummary("Preview Docker Swarm Service backup Volumes")
+            .Produces<SwarmServiceBackupSourcePreviewView>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getSwarmServiceBackupSourcePreview");
 
         services.MapGet("/{id:guid}/duplicate-draft", SwarmServices.GetDuplicateDraft)
             .WithSummary("Get managed Docker Swarm Service duplicate draft")

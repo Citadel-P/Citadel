@@ -104,6 +104,8 @@ file static class BackupPolicySourceValidator
         IUnitOfWork unitOfWork,
         IStackBackupVolumeResolver stackBackupVolumeResolver,
         IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+        ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
+        ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
         bool validateVolumeResolution,
         CancellationToken cancellationToken)
     {
@@ -113,18 +115,25 @@ file static class BackupPolicySourceValidator
                 source,
                 stackBackupVolumeResolver,
                 deploymentBackupVolumeResolver,
+                swarmServiceBackupVolumeResolver,
                 cancellationToken);
             if (volumeValidation.IsFailure(out var volumeError))
                 return Result.Failure(volumeError);
         }
 
-        return await ValidateRepositoryCompatibilityAsync(source, repository, unitOfWork, cancellationToken);
+        return await ValidateRepositoryCompatibilityAsync(
+            source,
+            repository,
+            unitOfWork,
+            swarmNodeRuntimeConnector,
+            cancellationToken);
     }
 
     private static async Task<Result> ValidateVolumesAsync(
         BackupSourceSpec source,
         IStackBackupVolumeResolver stackBackupVolumeResolver,
         IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+        ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
         CancellationToken cancellationToken)
     {
         if (source is DeploymentBackupSource deployment)
@@ -135,6 +144,19 @@ file static class BackupPolicySourceValidator
 
             return resolvedDeployment.Volumes.Count == 0
                 ? Result.Failure(new BadRequestError("Deployment has no resolved Docker named volumes to back up."))
+                : Result.Success();
+        }
+
+        if (source is SwarmServiceBackupSource swarmService)
+        {
+            var serviceResolution = await swarmServiceBackupVolumeResolver.ResolveAsync(
+                swarmService.SwarmServiceId,
+                cancellationToken);
+            if (!serviceResolution.IsSuccess(out var resolvedService, out var serviceError))
+                return Result.Failure(serviceError);
+
+            return resolvedService.Volumes.Count == 0
+                ? Result.Failure(new BadRequestError("Swarm Service has no supported local named Volumes to back up."))
                 : Result.Success();
         }
 
@@ -154,8 +176,17 @@ file static class BackupPolicySourceValidator
         BackupSourceSpec source,
         BackupRepository repository,
         IUnitOfWork unitOfWork,
+        ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
         CancellationToken cancellationToken)
     {
+        var sourceIdentity = await ValidateSourcePlatformIdentityAsync(
+            source,
+            unitOfWork,
+            swarmNodeRuntimeConnector,
+            cancellationToken);
+        if (sourceIdentity.IsFailure(out var sourceIdentityError))
+            return Result.Failure(sourceIdentityError);
+
         if (repository.Spec is not FileSystemBackupRepositorySpec fs)
             return Result.Success();
 
@@ -170,6 +201,10 @@ file static class BackupPolicySourceValidator
                 : Result.Failure(new BadRequestError("Citadel backups can only use a Core filesystem repository or an S3-compatible repository."));
         }
 
+        var platformEntity = await unitOfWork.Platforms.GetByIdAsync(platform.Id, cancellationToken);
+        if (platformEntity?.PlatformDescriptor is Domain.Entities.Platforms.DockerSwarmPlatformDescriptor)
+            return Result.Failure(new BadRequestError("Docker Swarm backups require an S3-compatible Destination."));
+
         if (fs.Location == BackupExecutionLocation.Core)
         {
             return platform.ConnectorType == PlatformConnectorType.Local
@@ -180,6 +215,63 @@ file static class BackupPolicySourceValidator
         return fs.PlatformId == platform.Id
             ? Result.Success()
             : Result.Failure(new BadRequestError("Filesystem backup repository platform must match the backup source platform."));
+    }
+
+    private static async Task<Result> ValidateSourcePlatformIdentityAsync(
+        BackupSourceSpec source,
+        IUnitOfWork unitOfWork,
+        ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
+        CancellationToken cancellationToken)
+    {
+        if (source is not DockerVolumeBackupSource volume)
+            return Result.Success();
+
+        var platformInfo = await unitOfWork.Platforms.GetInfoAsync(volume.PlatformId, cancellationToken);
+        if (platformInfo is null)
+            return Result.Failure(new NotFoundError("Platform not found."));
+
+        var platform = await unitOfWork.Platforms.GetByIdAsync(volume.PlatformId, cancellationToken);
+        var isSwarm = platform?.PlatformDescriptor is Domain.Entities.Platforms.DockerSwarmPlatformDescriptor;
+        if (isSwarm && string.IsNullOrWhiteSpace(volume.DockerNodeId))
+            return Result.Failure(new BadRequestError("Docker Swarm volume backup requires an explicit Node."));
+        if (!isSwarm && !string.IsNullOrWhiteSpace(volume.DockerNodeId))
+            return Result.Failure(new BadRequestError("Docker Standalone volume backup cannot target a Swarm Node."));
+        if (isSwarm && volume.Consistency != VolumeBackupConsistency.Live)
+            return Result.Failure(new BadRequestError("Docker Swarm supports live volume backup only."));
+
+        if (isSwarm)
+        {
+            if (platform is null)
+                return Result.Failure(new NotFoundError("Platform not found."));
+
+            var node = await unitOfWork.Swarm.GetNodeAsync(
+                platform.Id,
+                volume.DockerNodeId!,
+                cancellationToken);
+            if (node is null || node.IsStale || !string.Equals(node.Status, "ready", StringComparison.OrdinalIgnoreCase))
+                return Result.Failure(new BadRequestError("The selected Docker Swarm Node is unavailable or stale."));
+
+            var inspected = await swarmNodeRuntimeConnector.InspectVolumeAsync(
+                platform,
+                volume.DockerNodeId!,
+                volume.VolumeName,
+                cancellationToken);
+            if (!inspected.IsSuccess(out var dockerVolume, out var inspectError))
+            {
+                return Result.Failure(new ServiceUnavailableError(
+                    $"Could not inspect Volume '{volume.VolumeName}' on Node '{node.Hostname}': {inspectError.Message}"));
+            }
+
+            if (!string.Equals(dockerVolume.Driver, "local", StringComparison.OrdinalIgnoreCase)
+                || dockerVolume.ClusterVolume is not null
+                || dockerVolume.Options.Count != 0)
+            {
+                return Result.Failure(new BadRequestError(
+                    "Docker Swarm backup supports only Docker-managed local Volumes without driver options."));
+            }
+        }
+
+        return Result.Success();
     }
 
     private static async Task<Result<PlatformConnectionInfo?>> GetSourcePlatformAsync(
@@ -195,6 +287,7 @@ file static class BackupPolicySourceValidator
             DockerVolumeBackupSource volume => await unitOfWork.Platforms.GetInfoAsync(volume.PlatformId, cancellationToken),
             StackBackupSource stack => await unitOfWork.Stacks.GetPlatformByStackIdAsync(stack.StackId, cancellationToken),
             DeploymentBackupSource deployment => await unitOfWork.Deployments.GetPlatformByDeploymentIdAsync(deployment.DeploymentId, cancellationToken),
+            SwarmServiceBackupSource service => await GetSwarmServicePlatformAsync(service.SwarmServiceId, unitOfWork, cancellationToken),
             _ => null
         };
 
@@ -206,8 +299,20 @@ file static class BackupPolicySourceValidator
             DockerVolumeBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Platform not found.")),
             StackBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Stack not found.")),
             DeploymentBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Deployment not found.")),
+            SwarmServiceBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Swarm Service not found.")),
             _ => Result.Failure<PlatformConnectionInfo?>(new BadRequestError("Unsupported backup source type."))
         };
+    }
+
+    private static async Task<PlatformConnectionInfo?> GetSwarmServicePlatformAsync(
+        Guid swarmServiceId,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        var service = await unitOfWork.SwarmServices.GetAsync(swarmServiceId, cancellationToken);
+        return service is null
+            ? null
+            : await unitOfWork.Platforms.GetInfoAsync(service.PlatformId, cancellationToken);
     }
 }
 
@@ -216,6 +321,8 @@ internal sealed class CreateBackupPolicyHandler(
     IUserContextAccessor userContextAccessor,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
@@ -247,6 +354,8 @@ internal sealed class CreateBackupPolicyHandler(
             unitOfWork,
             stackBackupVolumeResolver,
             deploymentBackupVolumeResolver,
+            swarmServiceBackupVolumeResolver,
+            swarmNodeRuntimeConnector,
             validateVolumeResolution: true,
             cancellationToken);
         if (sourceValidation.IsFailure(out var sourceError))
@@ -310,6 +419,8 @@ internal sealed class UpdateBackupPolicyHandler(
     IUserContextAccessor userContextAccessor,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<UpdateBackupPolicy, Result<BackupPolicyResult>>
 {
@@ -359,6 +470,8 @@ internal sealed class UpdateBackupPolicyHandler(
                 unitOfWork,
                 stackBackupVolumeResolver,
                 deploymentBackupVolumeResolver,
+                swarmServiceBackupVolumeResolver,
+                swarmNodeRuntimeConnector,
                 validateVolumeResolution: command.UpdateSource && command.Policy.Source is not null,
                 cancellationToken);
             if (sourceValidation.IsFailure(out var sourceError))
@@ -821,16 +934,51 @@ file static class BackupRestoreRunQueuer
                 new ForbiddenError("Missing permission [Read] with specific [Restore] on [BackupPolicy]"));
         }
 
-        if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available)
-            return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Only available backup snapshots can be restored."));
-
         if (backupRun.SourceSnapshot is CitadelSystemBackupSource)
             return Result.Failure<BackupRestoreRunResult>(
                 new BadRequestError("Citadel backups must be restored offline. See the control-plane recovery documentation."));
 
-        if (backupRun.SourceSnapshot is not DockerVolumeBackupSource)
+        var sourceItem = ResolveSourceItem(backupRun, input.SourceBackupRunItemId);
+        if (!sourceItem.IsSuccess(out var selectedItem, out var sourceItemError))
+            return Result.Failure<BackupRestoreRunResult>(sourceItemError);
+
+        if (selectedItem is null && backupRun.SourceSnapshot is not DockerVolumeBackupSource)
             return Result.Failure<BackupRestoreRunResult>(
                 new BadRequestError("Only Docker volume backup snapshots can be restored through this operation."));
+
+        if (selectedItem is null && backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available)
+            return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Only available backup snapshots can be restored."));
+
+        var targetPlatform = await unitOfWork.Platforms.GetByIdAsync(input.TargetPlatformId, cancellationToken);
+        if (targetPlatform is null)
+            return Result.Failure<BackupRestoreRunResult>(new NotFoundError("Target Platform not found."));
+
+        var targetPermission = await permissionEvaluator.EvaluateAsync(
+            input.TargetPlatformId,
+            ResourceType.Platform,
+            cancellationToken);
+        if (!targetPermission.Has(PermissionLevel.Write, SpecificPermission.None))
+            return Result.Failure<BackupRestoreRunResult>(new ForbiddenError("Missing permission [Write] on target [Platform]"));
+
+        var isSwarm = targetPlatform.PlatformDescriptor is Domain.Entities.Platforms.DockerSwarmPlatformDescriptor;
+        if (isSwarm && string.IsNullOrWhiteSpace(input.TargetDockerNodeId))
+            return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Docker Swarm restore requires an explicit target Node."));
+        if (!isSwarm && !string.IsNullOrWhiteSpace(input.TargetDockerNodeId))
+            return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Docker Standalone restore cannot target a Swarm Node."));
+        if (isSwarm && input.OverwriteExisting)
+            return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Overwriting an existing Docker Swarm Volume is not supported."));
+
+        string? targetNodeHostname = null;
+        if (isSwarm)
+        {
+            var targetNode = (await unitOfWork.Swarm.GetNodesAsync(input.TargetPlatformId, cancellationToken))
+                .FirstOrDefault(node => string.Equals(node.DockerNodeId, input.TargetDockerNodeId, StringComparison.Ordinal));
+            if (targetNode is null
+                || targetNode.IsStale
+                || !string.Equals(targetNode.Status, "ready", StringComparison.OrdinalIgnoreCase))
+                return Result.Failure<BackupRestoreRunResult>(new BadRequestError("The selected target Node is unavailable or stale."));
+            targetNodeHostname = targetNode.Hostname;
+        }
 
         var run = new BackupRestoreRun(
             backupRun.Id,
@@ -838,12 +986,49 @@ file static class BackupRestoreRunQueuer
             input.TargetPlatformId,
             input.TargetVolumeName,
             input.OverwriteExisting,
-            userContextAccessor.Current.ActorId);
+            userContextAccessor.Current.ActorId,
+            targetDockerNodeId: input.TargetDockerNodeId,
+            targetNodeHostname: targetNodeHostname,
+            sourceBackupRunItemId: selectedItem?.Id);
 
         await unitOfWork.BackupRestoreRuns.AddAsync(run, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new BackupRestoreRunResult(run, backupRun.BackupPolicyId));
+    }
+
+    private static Result<BackupRunItem?> ResolveSourceItem(BackupRun backupRun, Guid? requestedItemId)
+    {
+        if (backupRun.SourceSnapshot is DockerVolumeBackupSource)
+        {
+            return requestedItemId.HasValue
+                ? Result.Failure<BackupRunItem?>(new BadRequestError(
+                    "A backup item can only be selected for a Stack, Deployment, or Swarm Service backup run."))
+                : Result.Success<BackupRunItem?>(null);
+        }
+
+        if (backupRun.Items.Count == 0)
+        {
+            return requestedItemId.HasValue
+                ? Result.Failure<BackupRunItem?>(new BadRequestError("The selected backup item does not belong to this run."))
+                : Result.Success<BackupRunItem?>(null);
+        }
+
+        var item = requestedItemId.HasValue
+            ? backupRun.Items.FirstOrDefault(candidate => candidate.Id == requestedItemId.Value)
+            : backupRun.Items.Count == 1 ? backupRun.Items[0] : null;
+
+        if (item is null)
+        {
+            return Result.Failure<BackupRunItem?>(new BadRequestError(
+                requestedItemId.HasValue
+                    ? "The selected backup item does not belong to this run."
+                    : "Select a Volume snapshot to restore."));
+        }
+
+        return item.Status == BackupRunItemStatus.Succeeded && !string.IsNullOrWhiteSpace(item.ResticSnapshotId)
+            ? Result.Success<BackupRunItem?>(item)
+            : Result.Failure<BackupRunItem?>(new BadRequestError("Only a completed Volume snapshot can be restored."));
     }
 }
 

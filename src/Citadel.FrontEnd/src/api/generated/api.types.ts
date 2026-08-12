@@ -617,6 +617,7 @@ export enum BackupSourceType {
   CitadelSystem = "CitadelSystem",
   Stack = "Stack",
   Deployment = "Deployment",
+  SwarmService = "SwarmService",
 }
 
 export enum BackupSnapshotAvailability {
@@ -1128,6 +1129,10 @@ export type BackupSourceSpec = BaseBackupSourceSpec &
     | BaseBackupSourceSpecTypeMapping<
         "Deployment",
         BackupSourceSpecDeploymentBackupSource
+      >
+    | BaseBackupSourceSpecTypeMapping<
+        "SwarmService",
+        BackupSourceSpecSwarmServiceBackupSource
       >
   );
 
@@ -3633,9 +3638,13 @@ export interface BackupRestoreRunView {
   backupRunId: string;
   /** @format uuid */
   backupRepositoryId: string;
+  /** @format uuid */
+  sourceBackupRunItemId: null | string;
   status: BackupRestoreStatus;
   /** @format uuid */
   targetPlatformId: string;
+  targetDockerNodeId: null | string;
+  targetNodeHostname: null | string;
   targetVolumeName: string;
   overwriteExisting: boolean;
   targetVolumeCreatedByCitadel: boolean;
@@ -3670,6 +3679,8 @@ export interface BackupRunItemView {
   /** @format uuid */
   platformId: string;
   volumeName: string;
+  dockerNodeId: null | string;
+  nodeHostname: null | string;
   status: BackupRunItemStatus;
   resticSnapshotId: null | string;
   parentSnapshotId: null | string;
@@ -3794,6 +3805,7 @@ export interface BackupSourceSpecDockerVolumeBackupSource {
   platformId: string;
   volumeName: string;
   consistency?: VolumeBackupConsistency;
+  dockerNodeId?: null | string;
   type?: BackupSourceType;
   stableKey?: null | string;
 }
@@ -3802,6 +3814,14 @@ export interface BackupSourceSpecStackBackupSource {
   $type?: "Stack";
   /** @format uuid */
   stackId: string;
+  type?: BackupSourceType;
+  stableKey?: null | string;
+}
+
+export interface BackupSourceSpecSwarmServiceBackupSource {
+  $type?: "SwarmService";
+  /** @format uuid */
+  swarmServiceId: string;
   type?: BackupSourceType;
   stableKey?: null | string;
 }
@@ -5009,6 +5029,8 @@ export interface DeploymentBackupVolumeView {
   isExternal: boolean;
   isShared: boolean;
   hasBackupCoverage: boolean;
+  dockerNodeId: null | string;
+  nodeHostname: null | string;
 }
 
 export interface DeploymentCapabilities {
@@ -6551,6 +6573,11 @@ export interface PlatformBackupSummaryView {
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
+  swarmServicePolicyCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
   attentionPolicyCount: number | string;
   lastRunStatus: null | BackupRunStatus;
   /** @format date-time */
@@ -7233,6 +7260,9 @@ export interface RestoreVolumeInput {
   targetPlatformId: string;
   targetVolumeName: string;
   overwriteExisting: boolean;
+  targetDockerNodeId?: null | string;
+  /** @format uuid */
+  sourceBackupRunItemId?: null | string;
 }
 
 export interface RevokeOtherProfileSessionsView {
@@ -7352,6 +7382,8 @@ export interface StackBackupVolumeView {
   isExternal: boolean;
   isShared: boolean;
   hasBackupCoverage: boolean;
+  dockerNodeId: null | string;
+  nodeHostname: null | string;
 }
 
 export interface StackBuildImageBinding {
@@ -8119,6 +8151,28 @@ export interface SwarmServiceAdoptionSourceView {
   /** @format uuid */
   platformId: string;
   platformName: string;
+}
+
+export interface SwarmServiceBackupSourcePreviewView {
+  /** @format uuid */
+  swarmServiceId: string;
+  swarmServiceName: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  platformStatus: PlatformStatus;
+  volumes: SwarmServiceBackupVolumeView[];
+  warnings: string[];
+}
+
+export interface SwarmServiceBackupVolumeView {
+  name: string;
+  kind: StackVolumeKind;
+  isExternal: boolean;
+  isShared: boolean;
+  hasBackupCoverage: boolean;
+  dockerNodeId: null | string;
+  nodeHostname: null | string;
 }
 
 export interface SwarmServiceCapabilities {
@@ -15721,6 +15775,30 @@ export class Api<
         method: "PATCH",
         body: data,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags SwarmServices
+     * @name GetSwarmServiceBackupSourcePreview
+     * @summary Preview Docker Swarm Service backup Volumes
+     * @request GET:/api/v1/swarmServices/{id}/backup-source-preview
+     * @response `200` `SwarmServiceBackupSourcePreviewView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getSwarmServiceBackupSourcePreview: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<SwarmServiceBackupSourcePreviewView, ProblemDetails>({
+        path: `/api/v1/swarmServices/${id}/backup-source-preview`,
+        method: "GET",
         format: "json",
         ...params,
       }),

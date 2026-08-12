@@ -82,6 +82,8 @@ internal sealed class BackupRunExecutionService(
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
+    ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
     ICitadelSystemBackupBuilder citadelSystemBackupBuilder,
     IBackupRunCoordinator runCoordinator,
     IBackupPolicyStreamManager backupPolicyStreamManager,
@@ -236,6 +238,7 @@ internal sealed class BackupRunExecutionService(
             }
 
             var sourceLease = false;
+            var childSourceLeases = new List<string>();
             BackupSourcePlan? activeSource = null;
             try
             {
@@ -276,6 +279,25 @@ internal sealed class BackupRunExecutionService(
                     return;
                 }
                 activeSource = source;
+
+                foreach (var sourceKey in GetChildSourceKeys(source))
+                {
+                    // An individual Volume already holds this exact aggregate lease.
+                    // Composite sources need the child leases to prevent overlapping
+                    // Stack/Service policies from backing up the same Volume together.
+                    if (string.Equals(sourceKey, run.SourceSnapshot.StableKey, StringComparison.Ordinal))
+                        continue;
+
+                    if (!await AcquireSourceLeaseAsync(run.Id, sourceKey, linkedCancel.Token))
+                    {
+                        var message = $"Backup source {sourceKey} already has an active operation.";
+                        await FailRunAsync(run, policy, BackupRunStatus.Rejected, null, "backup.source_busy", message, cancellationToken);
+                        await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, message), cancellationToken);
+                        return;
+                    }
+
+                    childSourceLeases.Add(sourceKey);
+                }
 
                 var environmentResult = await BuildEnvironmentAsync(repository, source.Context, linkedCancel.Token);
                 if (!environmentResult.IsSuccess(out var environment, out var environmentError))
@@ -446,6 +468,9 @@ internal sealed class BackupRunExecutionService(
                 }
                 finally
                 {
+                    foreach (var sourceKey in childSourceLeases)
+                        await ReleaseSourceLeaseAsync(run.Id, sourceKey, CancellationToken.None);
+
                     if (sourceLease)
                         await ReleaseSourceLeaseAsync(run, CancellationToken.None);
 
@@ -538,7 +563,7 @@ internal sealed class BackupRunExecutionService(
             return await BuildDockerVolumeSourcePlanAsync(
                 repository,
                 platform,
-                [(volume.PlatformId, volume.VolumeName)],
+                [(volume.PlatformId, volume.VolumeName, volume.DockerNodeId, (string?)null)],
                 $"Docker volume {volume.VolumeName}",
                 [],
                 cancellationToken);
@@ -559,7 +584,7 @@ internal sealed class BackupRunExecutionService(
             return await BuildDockerVolumeSourcePlanAsync(
                 repository,
                 platform,
-                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName))],
+                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName, volume.DockerNodeId, volume.NodeHostname))],
                 $"Stack {resolved.StackName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
                 [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.stack_volume_warning", warning))],
                 cancellationToken);
@@ -580,9 +605,32 @@ internal sealed class BackupRunExecutionService(
             return await BuildDockerVolumeSourcePlanAsync(
                 repository,
                 platform,
-                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName))],
+                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName, volume.DockerNodeId, volume.NodeHostname))],
                 $"Deployment {resolved.DeploymentName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
                 [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.deployment_volume_warning", warning))],
+                cancellationToken);
+        }
+
+        if (source is SwarmServiceBackupSource swarmService)
+        {
+            var resolution = await swarmServiceBackupVolumeResolver.ResolveAsync(
+                swarmService.SwarmServiceId,
+                cancellationToken);
+            if (!resolution.IsSuccess(out var resolved, out var resolutionError))
+                return Result.Failure<BackupSourcePlan>(resolutionError);
+
+            if (resolved.Volumes.Count == 0)
+                return Result.Failure<BackupSourcePlan>(new BadRequestError("Swarm Service has no supported local named Volumes to back up."));
+
+            if (!platformContainerCache.TryGetCacheEntry(resolved.PlatformId, out var platform, out var error))
+                return Result.Failure<BackupSourcePlan>(error);
+
+            return await BuildDockerVolumeSourcePlanAsync(
+                repository,
+                platform,
+                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName, volume.DockerNodeId, volume.NodeHostname))],
+                $"Swarm Service {resolved.SwarmServiceName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
+                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.swarm_service_volume_warning", warning))],
                 cancellationToken);
         }
 
@@ -592,12 +640,22 @@ internal sealed class BackupRunExecutionService(
     private async Task<Result<BackupSourcePlan>> BuildDockerVolumeSourcePlanAsync(
         BackupRepository repository,
         PlatformCacheEntry platform,
-        IReadOnlyCollection<(Guid PlatformId, string VolumeName)> volumes,
+        IReadOnlyCollection<(Guid PlatformId, string VolumeName, string? DockerNodeId, string? NodeHostname)> volumes,
         string displayName,
         IReadOnlyList<BackupRunWarning> warnings,
         CancellationToken cancellationToken)
     {
-        var context = ResolveDockerVolumeExecutionContext(repository, platform);
+        var platformEntity = await LoadPlatformAsync(platform.Id, cancellationToken);
+        if (platformEntity is null)
+            return Result.Failure<BackupSourcePlan>(new NotFoundError("Platform not found."));
+
+        var isSwarm = platformEntity.PlatformDescriptor is Domain.Entities.Platforms.DockerSwarmPlatformDescriptor;
+        if (isSwarm && volumes.Any(static volume => string.IsNullOrWhiteSpace(volume.DockerNodeId)))
+            return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker Swarm volume backup requires an explicit Node."));
+        if (!isSwarm && volumes.Any(static volume => !string.IsNullOrWhiteSpace(volume.DockerNodeId)))
+            return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker Standalone volume backup cannot target a Swarm Node."));
+
+        var context = ResolveDockerVolumeExecutionContext(repository, platform, isSwarm);
         if (!context.IsSuccess(out var executionContext, out var contextError))
             return Result.Failure<BackupSourcePlan>(contextError!);
 
@@ -605,12 +663,28 @@ internal sealed class BackupRunExecutionService(
         var items = new List<BackupSourceItem>(volumes.Count);
         foreach (var volume in volumes)
         {
-            var inspect = await connector.InspectVolumeAsync(
-                new InspectDockerVolumeCommand(platform.Address, volume.VolumeName),
-                cancellationToken);
+            var inspect = !string.IsNullOrWhiteSpace(volume.DockerNodeId)
+                ? await swarmNodeRuntimeConnector.InspectVolumeAsync(
+                    platformEntity,
+                    volume.DockerNodeId,
+                    volume.VolumeName,
+                    cancellationToken)
+                : await connector.InspectVolumeAsync(
+                    new InspectDockerVolumeCommand(platform.Address, volume.VolumeName),
+                    cancellationToken);
 
             if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
                 return Result.Failure<BackupSourcePlan>(inspectError!);
+
+            if (isSwarm
+                && (!string.Equals(dockerVolume.Driver, "local", StringComparison.OrdinalIgnoreCase)
+                    || dockerVolume.ClusterVolume is not null
+                    || dockerVolume.Options.Count != 0))
+            {
+                return Result.Failure<BackupSourcePlan>(
+                    new BadRequestError(
+                        $"Docker volume {volume.VolumeName} on Node {volume.NodeHostname ?? volume.DockerNodeId} is not a supported Docker-managed local Volume."));
+            }
 
             var path = PlatformSourceMountPath;
             var platformAddress = platform.Address;
@@ -639,7 +713,9 @@ internal sealed class BackupRunExecutionService(
                 volume.PlatformId,
                 volume.VolumeName,
                 platformAddress,
-                connectorType));
+                connectorType,
+                DockerNodeId: volume.DockerNodeId,
+                NodeHostname: volume.NodeHostname));
         }
 
         return Result.Success(new BackupSourcePlan(
@@ -652,10 +728,13 @@ internal sealed class BackupRunExecutionService(
 
     private static Result<BackupExecutionContext> ResolveDockerVolumeExecutionContext(
         BackupRepository repository,
-        PlatformCacheEntry platform)
+        PlatformCacheEntry platform,
+        bool isSwarm)
     {
         if (repository.Spec is FileSystemBackupRepositorySpec fs)
         {
+            if (isSwarm)
+                return Result.Failure<BackupExecutionContext>(new BadRequestError("Docker Swarm backups require an S3-compatible Destination."));
             if (fs.Location == BackupExecutionLocation.Core)
             {
                 return platform.ConnectorType == PlatformConnectorType.Local
@@ -675,6 +754,15 @@ internal sealed class BackupRunExecutionService(
         }
 
         return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
+    }
+
+    private async Task<Domain.Entities.Platforms.Platform?> LoadPlatformAsync(
+        Guid platformId,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
     }
 
     private BackupResticRun RunBackupAsync(
@@ -704,6 +792,11 @@ internal sealed class BackupRunExecutionService(
             args.Add($"backup-item:{runItem.Id}");
             args.Add("--tag");
             args.Add($"volume:{runItem.VolumeName}");
+            if (!string.IsNullOrWhiteSpace(runItem.DockerNodeId))
+            {
+                args.Add("--tag");
+                args.Add($"docker-node:{runItem.DockerNodeId}");
+            }
         }
         else if (run.SourceSnapshot is CitadelSystemBackupSource)
         {
@@ -851,7 +944,8 @@ internal sealed class BackupRunExecutionService(
                 SourceVolumeName: sourceItem?.VolumeName,
                 TargetVolumeName: null,
                 RepositoryHostPath: environment.PlatformRepositoryHostPath,
-                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
+                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none",
+                DockerNodeId: sourceItem?.DockerNodeId),
             cancellationToken);
     }
 
@@ -901,14 +995,17 @@ internal sealed class BackupRunExecutionService(
     }
 
     private async Task<bool> AcquireSourceLeaseAsync(BackupRun run, CancellationToken cancellationToken)
+        => await AcquireSourceLeaseAsync(run.Id, run.SourceSnapshot.StableKey, cancellationToken);
+
+    private async Task<bool> AcquireSourceLeaseAsync(Guid runId, string sourceKey, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var now = DateTimeOffset.UtcNow;
         var acquired = await uow.BackupSourceLeases.TryAcquireAsync(
-            run.SourceSnapshot.StableKey,
+            sourceKey,
             "Backup",
-            run.Id,
+            runId,
             now.AddSeconds(Math.Max(30, options.SourceLeaseSeconds)),
             now,
             cancellationToken);
@@ -917,12 +1014,24 @@ internal sealed class BackupRunExecutionService(
     }
 
     private async Task ReleaseSourceLeaseAsync(BackupRun run, CancellationToken cancellationToken)
+        => await ReleaseSourceLeaseAsync(run.Id, run.SourceSnapshot.StableKey, cancellationToken);
+
+    private async Task ReleaseSourceLeaseAsync(Guid runId, string sourceKey, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.BackupSourceLeases.ReleaseAsync(run.SourceSnapshot.StableKey, run.Id, cancellationToken);
+        await uow.BackupSourceLeases.ReleaseAsync(sourceKey, runId, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }
+
+    private static IReadOnlyList<string> GetChildSourceKeys(BackupSourcePlan source)
+        => [.. source.Items
+            .Where(static item => item.PlatformId.HasValue && !string.IsNullOrWhiteSpace(item.VolumeName))
+            .Select(static item => string.IsNullOrWhiteSpace(item.DockerNodeId)
+                ? $"{item.PlatformId}:{item.VolumeName}"
+                : $"{item.PlatformId}:{item.DockerNodeId}:{item.VolumeName}")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
 
     private async Task PersistRunAsync(BackupRun run, CancellationToken cancellationToken)
     {
@@ -1172,7 +1281,12 @@ internal sealed class BackupRunExecutionService(
     private static IReadOnlyList<BackupRunItem> CreateRunItems(BackupRun run, BackupSourcePlan source)
         => [.. source.Items
             .Where(static item => item.PlatformId.HasValue && !string.IsNullOrWhiteSpace(item.VolumeName))
-            .Select(item => new BackupRunItem(run.Id, item.PlatformId!.Value, item.VolumeName!))];
+            .Select(item => new BackupRunItem(
+                run.Id,
+                item.PlatformId!.Value,
+                item.VolumeName!,
+                dockerNodeId: item.DockerNodeId,
+                nodeHostname: item.NodeHostname))];
 
     private static BackupRunItem? FindRunItem(IReadOnlyList<BackupRunItem> runItems, BackupSourceItem sourceItem)
     {
@@ -1181,7 +1295,8 @@ internal sealed class BackupRunExecutionService(
 
         return runItems.FirstOrDefault(item =>
             item.PlatformId == sourceItem.PlatformId.Value
-            && string.Equals(item.VolumeName, sourceItem.VolumeName, StringComparison.Ordinal));
+            && string.Equals(item.VolumeName, sourceItem.VolumeName, StringComparison.Ordinal)
+            && string.Equals(item.DockerNodeId, sourceItem.DockerNodeId, StringComparison.Ordinal));
     }
 
     private static long? Sum(IReadOnlyCollection<ResticBackupResult> results, Func<ResticBackupResult, long?> selector)
@@ -1243,7 +1358,9 @@ internal sealed record BackupSourceItem(
     string? VolumeName = null,
     string? PlatformAddress = null,
     PlatformConnectorType? ConnectorType = null,
-    string? WorkingDirectory = null);
+    string? WorkingDirectory = null,
+    string? DockerNodeId = null,
+    string? NodeHostname = null);
 
 internal sealed record BackupResticRun(IAsyncEnumerable<BackupRunStreamItem> Stream, ResticBackupResult Result);
 

@@ -168,6 +168,26 @@ internal sealed class SwarmProjectionRepository(IDbConnection db, Func<IDbTransa
         return row?.ToDomain();
     }
 
+    public async Task<SwarmServiceProjection?> GetServiceByNameAsync(
+        Guid platformId,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT PlatformId, DockerServiceId, VersionIndex, Name, Mode, Image, RunningTaskCount,
+                   DesiredTaskCount, UpdateState, UpdateMessage, Ports, NetworkIds, SecretIds,
+                   ConfigIds, Labels, Ownership, DockerStackNamespace,
+                   OwnershipDiagnostic, SwarmServiceId, StackId, LiveRuntimeHash, ForceUpdate,
+                   DockerCreatedAt, DockerUpdatedAt, ObservedAt, IsStale
+            FROM SwarmServiceProjections WHERE PlatformId = @PlatformId AND Name = @Name
+            """;
+        var row = await db.QuerySingleOrDefaultAsync<SwarmServiceProjectionDto>(
+            sql,
+            new { PlatformId = platformId, Name = name },
+            transaction: tx());
+        return row?.ToDomain();
+    }
+
     public Task<int> TryAssignStackNamespaceAsync(
         Guid platformId,
         string stackNamespace,

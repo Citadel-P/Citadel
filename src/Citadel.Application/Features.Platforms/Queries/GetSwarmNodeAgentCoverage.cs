@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
@@ -19,6 +20,7 @@ public sealed record GetSwarmNodeAgentCoverage(Guid PlatformId) : IQuery<Result<
 internal sealed class GetSwarmNodeAgentCoverageHandler(
     IUnitOfWork unitOfWork,
     IEdgeAgentSessionStatus sessionStatus,
+    ISwarmReconciliationCoordinator reconciliationCoordinator,
     IOptions<EdgeAgentOptions> options)
     : IQueryHandler<GetSwarmNodeAgentCoverage, Result<SwarmNodeAgentCoverageResult>>
 {
@@ -33,12 +35,36 @@ internal sealed class GetSwarmNodeAgentCoverageHandler(
             return Result.Failure<SwarmNodeAgentCoverageResult>(new BadRequestError("Node Agent coverage is available only for Docker Swarm platforms."));
 
         var nodes = await unitOfWork.Swarm.GetNodesAsync(query.PlatformId, cancellationToken);
+        if (nodes.Count == 0)
+        {
+            var initialization = await reconciliationCoordinator.EnsureInitializedAsync(query.PlatformId, cancellationToken);
+            if (initialization.IsFailure(out var initializationError))
+                return Result.Failure<SwarmNodeAgentCoverageResult>(initializationError!);
+
+            nodes = await unitOfWork.Swarm.GetNodesAsync(query.PlatformId, cancellationToken);
+        }
+
         var bindings = (await unitOfWork.EdgeAgents.GetNodeBindingsAsync(query.PlatformId, cancellationToken))
             .Where(static binding => !binding.IsRevoked && binding.DockerNodeId is not null)
             .ToDictionary(static binding => binding.DockerNodeId!, StringComparer.Ordinal);
         var installation = await unitOfWork.EdgeAgents.GetNodeAgentInstallationAsync(query.PlatformId, cancellationToken);
         var bootstrap = await unitOfWork.EdgeAgents.GetLatestNodeAgentBootstrapAsync(query.PlatformId, cancellationToken);
-        var services = await unitOfWork.Swarm.GetServicesAsync(query.PlatformId, cancellationToken);
+        SwarmServiceProjection? installedService = null;
+        if (installation is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(installation.DockerServiceId))
+            {
+                installedService = await unitOfWork.Swarm.GetServiceAsync(
+                    query.PlatformId,
+                    installation.DockerServiceId,
+                    cancellationToken);
+            }
+            installedService ??= await unitOfWork.Swarm.GetServiceByNameAsync(
+                query.PlatformId,
+                installation.DockerServiceName,
+                cancellationToken);
+        }
+        var services = installedService is null ? [] : new[] { installedService };
         var runtimeStates = (await unitOfWork.Swarm.GetNodeRuntimeStatesAsync(query.PlatformId, cancellationToken))
             .ToDictionary(static state => state.DockerNodeId, StringComparer.Ordinal);
         var serviceTasks = string.IsNullOrWhiteSpace(installation?.DockerServiceId)

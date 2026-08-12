@@ -1519,6 +1519,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("queuedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<Guid?>("SourceBackupRunItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sourcebackuprunitemid");
+
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("startedat");
@@ -1528,6 +1532,16 @@ namespace Infrastructure.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("text")
                         .HasColumnName("status");
+
+                    b.Property<string>("TargetDockerNodeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("targetdockernodeid");
+
+                    b.Property<string>("TargetNodeHostname")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("targetnodehostname");
 
                     b.Property<Guid>("TargetPlatformId")
                         .HasColumnType("uuid")
@@ -1560,6 +1574,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("QueuedAt")
                         .HasDatabaseName("ix_backuprestoreruns_queuedat");
 
+                    b.HasIndex("SourceBackupRunItemId")
+                        .HasDatabaseName("ix_backuprestoreruns_sourcerunitem");
+
                     b.HasIndex("TriggeredByActorId")
                         .HasDatabaseName("ix_backuprestoreruns_triggeredbyactorid");
 
@@ -1572,7 +1589,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Status", "QueuedAt")
                         .HasDatabaseName("ix_backuprestoreruns_status_queuedat");
 
-                    b.HasIndex("TargetPlatformId", "TargetVolumeName")
+                    b.HasIndex("TargetPlatformId", "TargetDockerNodeId", "TargetVolumeName")
                         .HasDatabaseName("ix_backuprestoreruns_targetvolume");
 
                     b.ToTable("backuprestoreruns", (string)null);
@@ -1789,6 +1806,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("createdat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("DockerNodeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("dockernodeid");
+
                     b.Property<string>("ErrorCode")
                         .HasMaxLength(128)
                         .HasColumnType("text")
@@ -1806,6 +1828,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<long?>("FilesProcessed")
                         .HasColumnType("bigint")
                         .HasColumnName("filesprocessed");
+
+                    b.Property<string>("NodeHostname")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("nodehostname");
 
                     b.Property<string>("ParentSnapshotId")
                         .HasMaxLength(128)
@@ -1852,11 +1879,18 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("BackupRunId", "Status")
                         .HasDatabaseName("ix_backuprunitems_run_status");
 
-                    b.HasIndex("BackupRunId", "VolumeName")
-                        .HasDatabaseName("ix_backuprunitems_run_volumename");
+                    b.HasIndex("BackupRunId", "PlatformId", "VolumeName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backuprunitems_run_standalonevolume")
+                        .HasFilter("dockernodeid IS NULL");
 
-                    b.HasIndex("PlatformId", "VolumeName")
-                        .HasDatabaseName("ix_backuprunitems_platform_volumename");
+                    b.HasIndex("PlatformId", "DockerNodeId", "VolumeName")
+                        .HasDatabaseName("ix_backuprunitems_platform_volume");
+
+                    b.HasIndex("BackupRunId", "PlatformId", "DockerNodeId", "VolumeName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backuprunitems_run_swarmvolume")
+                        .HasFilter("dockernodeid IS NOT NULL");
 
                     b.ToTable("backuprunitems", (string)null);
                 });
@@ -7147,6 +7181,12 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_backuprestoreruns_backupruns_backuprunid");
+
+                    b.HasOne("BackupRunItem", null)
+                        .WithMany()
+                        .HasForeignKey("SourceBackupRunItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_backuprestoreruns_backuprunitems_sourcebackuprunitemid");
 
                     b.HasOne("Platform", null)
                         .WithMany()

@@ -9,8 +9,10 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Activities;
 using Domain.Entities.Backups;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
@@ -308,6 +310,62 @@ public sealed class BackupPolicyCommandsTests
     }
 
     [Fact]
+    public async Task CreateBackupPolicy_SwarmVolume_ShouldVerifyExactNodeAndVolume()
+    {
+        const string nodeId = "worker-1";
+        var platform = CreateSwarmPlatform();
+        var repository = CreateRepository(new S3CompatibleBackupRepositorySpec(
+            new Uri("https://s3.example.com"),
+            "citadel-backups",
+            null,
+            "us-east-1",
+            S3BucketLookup.Path,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            null));
+        var backupPolicies = CreateBackupPolicyRepository();
+        backupPolicies.Setup(x => x.AddAsync(
+                It.IsAny<BackupPolicy>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                It.IsAny<Guid?>()))
+            .ReturnsAsync(1);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(x => x.GetInfoAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlatformConnectionInfo(platform.Id, platform.Name, platform.Address, platform.ConnectorType));
+        platforms.Setup(x => x.GetByIdAsync(platform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platform);
+        var swarm = new Mock<ISwarmProjectionRepository>();
+        swarm.Setup(x => x.GetNodeAsync(platform.Id, nodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateSwarmNode(platform.Id, nodeId));
+        var unitOfWork = CreateUnitOfWork(repository, backupPolicies.Object, platforms.Object);
+        unitOfWork.Setup(x => x.Swarm).Returns(swarm.Object);
+        var nodeConnector = new Mock<ISwarmNodeRuntimeConnector>();
+        nodeConnector.Setup(x => x.InspectVolumeAsync(
+                platform,
+                nodeId,
+                "database",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(CreateDockerVolume("database")));
+        var handler = CreateCreateHandler(unitOfWork.Object, nodeConnector.Object);
+
+        var result = await handler.Handle(
+            CreatePolicyCommand(
+                repository.Id,
+                new DockerVolumeBackupSource(platform.Id, "database", DockerNodeId: nodeId)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var created, out var error), error?.Message);
+        var source = Assert.IsType<DockerVolumeBackupSource>(created.Policy.Source);
+        Assert.Equal(nodeId, source.DockerNodeId);
+        nodeConnector.Verify(x => x.InspectVolumeAsync(
+            platform,
+            nodeId,
+            "database",
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateBackupPolicy_ShouldRejectRemoteDockerVolumeSourceWithCoreFilesystemRepository()
     {
         var platformId = Guid.CreateVersion7();
@@ -506,6 +564,7 @@ public sealed class BackupPolicyCommandsTests
     public async Task RunBackupRestoreVolume_ShouldQueueRestoreRunAndStreamExecution()
     {
         var backupRun = CreateSuccessfulBackupRun();
+        var targetPlatform = CreateStandalonePlatform();
         BackupRestoreRun? restoreRun = null;
         var backupRuns = new Mock<IBackupRunRepository>();
         backupRuns
@@ -517,6 +576,11 @@ public sealed class BackupPolicyCommandsTests
             .Callback<BackupRestoreRun, CancellationToken>((run, _) => restoreRun = run)
             .ReturnsAsync(1);
         var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetByIdAsync(targetPlatform.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetPlatform);
+        unitOfWork.Setup(x => x.Platforms).Returns(platforms.Object);
         var executionService = new Mock<IBackupRestoreRunExecutionService>();
         executionService
             .Setup(x => x.ExecuteQueuedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
@@ -537,7 +601,7 @@ public sealed class BackupPolicyCommandsTests
         var items = await ToListAsync(handler.Handle(
             new RunBackupRestoreVolume(
                 backupRun.Id,
-                new RestoreVolumeInputModel(Guid.CreateVersion7(), "restored-data", OverwriteExisting: true)),
+                new RestoreVolumeInputModel(targetPlatform.Id, "restored-data", OverwriteExisting: true)),
             TestContext.Current.CancellationToken));
 
         Assert.NotNull(restoreRun);
@@ -581,12 +645,16 @@ public sealed class BackupPolicyCommandsTests
             RunAsActorId: null,
             TagIds: []));
 
-    private static CreateBackupPolicyHandler CreateCreateHandler(IUnitOfWork unitOfWork)
+    private static CreateBackupPolicyHandler CreateCreateHandler(
+        IUnitOfWork unitOfWork,
+        ISwarmNodeRuntimeConnector? swarmNodeRuntimeConnector = null)
         => new(
             unitOfWork,
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
+            Mock.Of<ISwarmServiceBackupVolumeResolver>(),
+            swarmNodeRuntimeConnector ?? Mock.Of<ISwarmNodeRuntimeConnector>(),
             new PermissiveLicenseEntitlementService());
 
     private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
@@ -595,6 +663,8 @@ public sealed class BackupPolicyCommandsTests
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
+            Mock.Of<ISwarmServiceBackupVolumeResolver>(),
+            Mock.Of<ISwarmNodeRuntimeConnector>(),
             new PermissiveLicenseEntitlementService());
 
     private static Mock<IBackupPolicyRepository> CreateBackupPolicyRepository()
@@ -730,6 +800,83 @@ public sealed class BackupPolicyCommandsTests
             trigger: BackupRunTrigger.Manual,
             triggerSourceId: null,
             triggeredByActorId: Guid.CreateVersion7());
+
+    private static Platform CreateSwarmPlatform() => new(
+        "swarm",
+        "edge://swarm",
+        0,
+        0,
+        0,
+        2,
+        2_048,
+        "test",
+        "test",
+        PlatformStatus.Online,
+        PlatformConnectorType.EdgeAgent,
+        new DockerSwarmPlatformDescriptor(
+            "manager-1",
+            "10.0.0.1",
+            "Active",
+            true,
+            2,
+            1,
+            "daemon-1",
+            2,
+            2,
+            0,
+            0));
+
+    private static Platform CreateStandalonePlatform() => new(
+        "standalone",
+        "http://localhost.docker",
+        0,
+        0,
+        0,
+        2,
+        2_048,
+        "test",
+        null,
+        PlatformStatus.Online,
+        PlatformConnectorType.Local,
+        new DockerPlatformDescriptor("daemon-1", 0, 0, 0, 0));
+
+    private static SwarmNodeProjection CreateSwarmNode(Guid platformId, string nodeId) => new(
+        platformId,
+        nodeId,
+        1,
+        "worker-1",
+        "Worker",
+        false,
+        "Unknown",
+        "Ready",
+        null,
+        "Active",
+        "test",
+        "linux",
+        "amd64",
+        "10.0.0.2",
+        new Dictionary<string, string>(),
+        1,
+        1,
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        IsStale: false);
+
+    private static DockerVolumeResult CreateDockerVolume(string name) => new(
+        name,
+        name,
+        true,
+        "local",
+        "local",
+        $"/var/lib/docker/volumes/{name}/_data",
+        string.Empty,
+        null,
+        null,
+        [],
+        new Dictionary<string, string>(),
+        new Dictionary<string, string>(),
+        new Dictionary<string, string>());
 
     private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> stream)
     {

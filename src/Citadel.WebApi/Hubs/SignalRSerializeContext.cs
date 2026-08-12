@@ -126,6 +126,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<CitadelSystemBackupSource>]
 [GenerateShapeFor<StackBackupSource>]
 [GenerateShapeFor<DeploymentBackupSource>]
+[GenerateShapeFor<SwarmServiceBackupSource>]
 [GenerateShapeFor<BackupWebhookConfig>]
 [GenerateShapeFor<BuildProjectView>]
 [GenerateShapeFor<BuildProjectsView>]
@@ -320,6 +321,7 @@ internal static class DerivedTypesMapping
         [nameof(BackupSourceType.CitadelSystem)] = typeof(CitadelSystemBackupSource),
         [nameof(BackupSourceType.Stack)] = typeof(StackBackupSource),
         [nameof(BackupSourceType.Deployment)] = typeof(DeploymentBackupSource),
+        [nameof(BackupSourceType.SwarmService)] = typeof(SwarmServiceBackupSource),
     };
 
     internal static DerivedTypeMapping<BuildAgentPoolProviderSpec> BuildAgentPoolProviderSpecMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)

@@ -7,6 +7,7 @@ namespace Domain.Entities.Backups;
 [JsonDerivedType(typeof(CitadelSystemBackupSource), "CitadelSystem")]
 [JsonDerivedType(typeof(StackBackupSource), "Stack")]
 [JsonDerivedType(typeof(DeploymentBackupSource), "Deployment")]
+[JsonDerivedType(typeof(SwarmServiceBackupSource), "SwarmService")]
 public abstract record BackupSourceSpec
 {
     public abstract BackupSourceType Type { get; }
@@ -16,10 +17,13 @@ public abstract record BackupSourceSpec
 public sealed record DockerVolumeBackupSource(
     Guid PlatformId,
     string VolumeName,
-    VolumeBackupConsistency Consistency = VolumeBackupConsistency.Live) : BackupSourceSpec
+    VolumeBackupConsistency Consistency = VolumeBackupConsistency.Live,
+    string? DockerNodeId = null) : BackupSourceSpec
 {
     public override BackupSourceType Type => BackupSourceType.DockerVolume;
-    public override string StableKey => $"{PlatformId}:{VolumeName}";
+    public override string StableKey => string.IsNullOrWhiteSpace(DockerNodeId)
+        ? $"{PlatformId}:{VolumeName}"
+        : $"{PlatformId}:{DockerNodeId.Trim()}:{VolumeName}";
 }
 
 public sealed record CitadelSystemBackupSource() : BackupSourceSpec
@@ -38,6 +42,12 @@ public sealed record DeploymentBackupSource(Guid DeploymentId) : BackupSourceSpe
 {
     public override BackupSourceType Type => BackupSourceType.Deployment;
     public override string StableKey => $"deployment:{DeploymentId}";
+}
+
+public sealed record SwarmServiceBackupSource(Guid SwarmServiceId) : BackupSourceSpec
+{
+    public override BackupSourceType Type => BackupSourceType.SwarmService;
+    public override string StableKey => $"swarm-service:{SwarmServiceId}";
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]

@@ -46,6 +46,14 @@ export const globalSearchResourceMetadata: Record<GlobalSearchResourceType, Reso
     listPath: '/deployments',
     getDetailsPath: (id) => `/deployments/edit/${id}`,
   },
+  [GlobalSearchResourceType.SwarmService]: {
+    category: GlobalSearchCategory.SwarmServices,
+    label: 'Swarm Services',
+    singularLabel: 'Swarm Service',
+    icon: iconFor(GlobalSearchResourceType.SwarmService),
+    listPath: '/swarm-services',
+    getDetailsPath: (id) => `/swarm-services/edit/${id}`,
+  },
   [GlobalSearchResourceType.GitRepository]: {
     category: GlobalSearchCategory.Repositories,
     label: 'Repositories',
@@ -122,6 +130,12 @@ export const globalSearchCategories: CategorySearchMetadata[] = [
     label: 'Deployments',
     icon: iconFor(GlobalSearchResourceType.Deployment),
     listPath: '/deployments',
+  },
+  {
+    category: GlobalSearchCategory.SwarmServices,
+    label: 'Swarm Services',
+    icon: iconFor(GlobalSearchResourceType.SwarmService),
+    listPath: '/swarm-services',
   },
   {
     category: GlobalSearchCategory.Repositories,

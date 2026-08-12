@@ -251,6 +251,94 @@ public sealed class SwarmNodeAgentLifecycleTests(PostgresTestFixture fixture) : 
     }
 
     [Fact]
+    public async Task Coverage_ShouldFindInstalledSystemServiceWithoutExposingItInInventory()
+    {
+        var platform = await CreatePlatformWithManagerNodeAsync();
+        var now = DateTimeOffset.UtcNow;
+        const string serviceId = "node-agent-service";
+        var serviceName = $"citadel-node-agent-{platform.Id:N}";
+        var service = new SwarmServiceProjection(
+            platform.Id,
+            serviceId,
+            1,
+            serviceName,
+            "Global",
+            "ghcr.io/citadel-p/citadel.agent@sha256:test",
+            1,
+            1,
+            "Completed",
+            null,
+            [],
+            [],
+            [],
+            [],
+            new Dictionary<string, string>
+            {
+                ["com.citadel.system"] = "true",
+                ["com.citadel.system-role"] = "swarm-node-agent",
+                ["com.citadel.platform-id"] = platform.Id.ToString("D"),
+                ["com.citadel.swarm-cluster-id"] = platform.ClusterId!
+            },
+            now,
+            now,
+            now,
+            false,
+            SwarmServiceOwnership.System);
+        var installation = new SwarmNodeAgentInstallation(
+            platform.Id,
+            platform.ClusterId!,
+            "manager-node",
+            "manager-daemon",
+            serviceId,
+            serviceName,
+            "ghcr.io/citadel-p/citadel.agent:latest",
+            "sha256:test",
+            null,
+            null,
+            SwarmNodeAgentDesiredState.Installed,
+            Guid.CreateVersion7(),
+            SwarmNodeAgentOperationKind.Install,
+            SwarmNodeAgentOperationState.Completed,
+            now.UtcDateTime,
+            Constants.SystemId,
+            null,
+            now.UtcDateTime,
+            now.UtcDateTime);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var manager = Assert.Single(await uow.Swarm.GetNodesAsync(
+                platform.Id,
+                TestContext.Current.CancellationToken));
+            await uow.Swarm.ReplaceAsync(
+                platform.Id,
+                new SwarmProjectionSnapshot([manager], [service], [], [], [], []),
+                TestContext.Current.CancellationToken);
+            await uow.EdgeAgents.UpsertNodeAgentInstallationAsync(
+                installation,
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+            Assert.Empty(await uow.Swarm.GetServicesAsync(
+                platform.Id,
+                TestContext.Current.CancellationToken));
+        }
+
+        using var response = await Client.GetAsync(
+            $"/api/v1/platforms/{platform.Id:D}/node-agent-coverage",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("Complete", body.RootElement.GetProperty("state").GetString());
+        Assert.DoesNotContain(
+            body.RootElement.GetProperty("reasons").EnumerateArray(),
+            item => item.GetString() == "NodeAgentServiceDrifted");
+    }
+
+    [Fact]
     public async Task Coverage_WithInstalledManagerOnlyDataPlane_ShouldRemainCompleteWithoutSatelliteService()
     {
         var platform = await CreatePlatformWithManagerNodeAsync();

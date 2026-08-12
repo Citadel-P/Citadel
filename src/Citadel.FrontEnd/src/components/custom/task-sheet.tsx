@@ -1475,7 +1475,8 @@ function useBackupRunProgress(params: BackupRunParams) {
 }
 
 function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
-  const { id, targetPlatformId, targetVolumeName, overwriteExisting } = params;
+  const { id, targetPlatformId, targetVolumeName, overwriteExisting, targetDockerNodeId, sourceBackupRunItemId } =
+    params;
   const queryClient = useQueryClient();
 
   const request: RestoreVolumeInput = useMemo(
@@ -1483,8 +1484,10 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
       targetPlatformId,
       targetVolumeName,
       overwriteExisting,
+      targetDockerNodeId,
+      sourceBackupRunItemId,
     }),
-    [overwriteExisting, targetPlatformId, targetVolumeName],
+    [overwriteExisting, sourceBackupRunItemId, targetDockerNodeId, targetPlatformId, targetVolumeName],
   );
 
   const state = useStreamProgress<RestoreVolumeInput, BackupRestoreRunStreamItem>({

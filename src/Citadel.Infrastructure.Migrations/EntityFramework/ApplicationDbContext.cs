@@ -1952,6 +1952,8 @@ internal static class Configuration
         runItem.Property<Guid>("BackupRunId").IsRequired();
         runItem.Property<Guid>("PlatformId").IsRequired();
         runItem.Property<string>("VolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        runItem.Property<string>("DockerNodeId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        runItem.Property<string>("NodeHostname").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         runItem.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
         runItem.Property<string>("ResticSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
         runItem.Property<string>("ParentSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
@@ -1978,9 +1980,16 @@ internal static class Configuration
             .HasForeignKey("PlatformId")
             .OnDelete(DeleteBehavior.Cascade);
 
-        runItem.HasIndex("BackupRunId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Run_VolumeName");
+        runItem.HasIndex("BackupRunId", "PlatformId", "VolumeName")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NULL")
+            .HasDatabaseName($"IX_{runItemTable}_Run_StandaloneVolume");
+        runItem.HasIndex("BackupRunId", "PlatformId", "DockerNodeId", "VolumeName")
+            .IsUnique()
+            .HasFilter("dockernodeid IS NOT NULL")
+            .HasDatabaseName($"IX_{runItemTable}_Run_SwarmVolume");
         runItem.HasIndex("BackupRunId", "Status").HasDatabaseName($"IX_{runItemTable}_Run_Status");
-        runItem.HasIndex("PlatformId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Platform_VolumeName");
+        runItem.HasIndex("PlatformId", "DockerNodeId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Platform_Volume");
         runItem.HasIndex("ResticSnapshotId").HasDatabaseName($"IX_{runItemTable}_ResticSnapshotId");
 
         var runLogTable = "BackupRunLogs";
@@ -2006,10 +2015,13 @@ internal static class Configuration
         restore.Property<Guid>("Id").IsRequired();
         restore.HasKey("Id");
         restore.Property<Guid>("BackupRunId").IsRequired();
+        restore.Property<Guid?>("SourceBackupRunItemId").IsRequired(false);
         restore.Property<Guid>("BackupRepositoryId").IsRequired();
         restore.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
         restore.Property<Guid>("TargetPlatformId").IsRequired();
         restore.Property<string>("TargetVolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        restore.Property<string>("TargetDockerNodeId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        restore.Property<string>("TargetNodeHostname").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
         restore.Property<bool>("OverwriteExisting").HasColumnType("boolean").IsRequired();
         restore.Property<bool>("TargetVolumeCreatedByCitadel").HasColumnType("boolean").IsRequired();
         restore.Property<string>("AffectedContainers").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
@@ -2026,6 +2038,12 @@ internal static class Configuration
             .HasOne("BackupRun")
             .WithMany()
             .HasForeignKey("BackupRunId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        restore
+            .HasOne("BackupRunItem")
+            .WithMany()
+            .HasForeignKey("SourceBackupRunItemId")
             .OnDelete(DeleteBehavior.Restrict);
 
         restore
@@ -2047,8 +2065,9 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Restrict);
 
         restore.HasIndex("BackupRunId", "QueuedAt").HasDatabaseName($"IX_{restoreTable}_BackupRun_QueuedAt");
+        restore.HasIndex("SourceBackupRunItemId").HasDatabaseName($"IX_{restoreTable}_SourceRunItem");
         restore.HasIndex("BackupRepositoryId", "Status").HasDatabaseName($"IX_{restoreTable}_Repository_Status");
-        restore.HasIndex("TargetPlatformId", "TargetVolumeName").HasDatabaseName($"IX_{restoreTable}_TargetVolume");
+        restore.HasIndex("TargetPlatformId", "TargetDockerNodeId", "TargetVolumeName").HasDatabaseName($"IX_{restoreTable}_TargetVolume");
         restore.HasIndex("QueuedAt").HasDatabaseName($"IX_{restoreTable}_QueuedAt");
         restore.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{restoreTable}_Status_QueuedAt");
 
