@@ -71,6 +71,29 @@ public sealed class SecretValueProtectorTests
         }
     }
 
+    [Fact]
+    public async Task GetJwtSecretFromFile_Should_Generate_One_Key_For_Concurrent_Callers()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"citadel-jwt-key-{Guid.NewGuid():N}");
+        var path = Path.Combine(root, "data", "jwtsecret");
+        try
+        {
+            var calls = Enumerable.Range(0, 32)
+                .Select(_ => Task.Run(() => Helpers.GetJwtSecretFromFile(path)))
+                .ToArray();
+
+            var keys = await Task.WhenAll(calls);
+
+            Assert.Single(keys.Distinct(StringComparer.Ordinal));
+            Assert.Equal(keys[0], await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static SecretValueProtector CreateProtector(byte fill)
     {
         var key = Enumerable.Repeat(fill, SecretsConfiguration.EncryptionKeySize).ToArray();
