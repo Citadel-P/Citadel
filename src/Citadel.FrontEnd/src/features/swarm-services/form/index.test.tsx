@@ -359,8 +359,8 @@ describe('SwarmServiceFormComponents', () => {
     const taskLink = await screen.findByRole('link', { name: 'redis.1' });
     const taskRow = taskLink.closest('tr');
     expect(taskRow).not.toBeNull();
-    expect(await within(taskRow!).findByText(/10.*00/)).toBeVisible();
-    expect(await within(taskRow!).findByText(/128.*512/)).toBeVisible();
+    expect(await within(taskRow!).findByText(/^10(?:[.,])00\s*%$/)).toBeVisible();
+    expect(await within(taskRow!).findByText('128 B / 512 B')).toBeVisible();
 
     await user.click(screen.getByRole('tab', { name: 'Stats' }));
     expect(await screen.findByText('CPU Usage')).toBeVisible();
@@ -379,8 +379,8 @@ describe('SwarmServiceFormComponents', () => {
       ]);
     });
 
-    await waitFor(() => expect(within(taskRow!).getByText(/25.*00/)).toBeVisible());
-    expect(screen.getAllByText(/25.*00/).length).toBeGreaterThanOrEqual(2);
+    await waitFor(() => expect(within(taskRow!).getByText(/^25(?:[.,])00\s*%$/)).toBeVisible());
+    expect(screen.getAllByText(/^25(?:[.,])00\s*%$/).length).toBeGreaterThanOrEqual(2);
     await waitFor(() => expect(screen.queryByText('Partial Service statistics')).not.toBeInTheDocument());
   });
 });
