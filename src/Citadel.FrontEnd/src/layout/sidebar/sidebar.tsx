@@ -17,9 +17,11 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const { sidebarMinimized } = useLayoutContext();
   const { data: applicationInfo } = useRead('getApplicationInfo');
+  const { data: profileResponse } = useRead('getCurrentProfile');
   const { entitlements } = useLicenseEntitlements();
   const version = applicationInfo?.data?.version ?? '-';
   const licenseType = entitlements?.effectiveEdition ?? '-';
+  const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;
 
   return (
     <SidebarRoot collapsible="icon">
@@ -58,9 +60,13 @@ export const Sidebar = () => {
               className="truncate rounded-md bg-sidebar-accent px-2 text-foreground hover:underline">
               v {version}
             </a>
-            <Link to="/license" className="truncate rounded-md bg-sidebar-accent px-2 text-foreground">
-              {licenseType}
-            </Link>
+            {isAdministrator ? (
+              <Link to="/license" className="truncate rounded-md bg-sidebar-accent px-2 text-foreground">
+                {licenseType}
+              </Link>
+            ) : (
+              <span className="truncate rounded-md bg-sidebar-accent px-2 text-foreground">{licenseType}</span>
+            )}
           </div>
         )}
       </SidebarFooter>

@@ -1,0 +1,222 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.ACCESS_TOKEN || github.token }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore tests
+        run: |
+          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
+          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
+
+      - name: Build tests
+        run: |
+          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release -p:OpenApiGenerateDocumentsOnBuild=false
+          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release -p:OpenApiGenerateDocumentsOnBuild=false
+
+      - name: Run backend unit tests
+        run: dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
+
+      - name: Run backend integration tests
+        run: dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
+
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: src/Citadel.FrontEnd
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/Citadel.FrontEnd/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests
+        run: npm run test:run
+
+  release-image:
+    name: Publish release image
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [backend-tests, frontend-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN || github.token }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate release tag
+        id: version
+        shell: bash
+        run: |
+          git fetch origin main --no-tags
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Release tag '${GITHUB_REF_NAME}' does not point to a commit on main." >&2
+            exit 1
+          fi
+
+          dotnet tool restore
+          version="$(dotnet nbgv get-version -v NuGetPackageVersion)"
+          simple_version="$(dotnet nbgv get-version -v SimpleVersion)"
+          assembly_version="$(dotnet nbgv get-version -v AssemblyVersion)"
+          file_version="$(dotnet nbgv get-version -v AssemblyFileVersion)"
+          public_release="$(dotnet nbgv get-version -v PublicRelease)"
+
+          if [[ "${GITHUB_REF_NAME}" != "v${simple_version}" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' does not match version.json ('v${simple_version}')." >&2
+            exit 1
+          fi
+          if [[ "${public_release}" != "True" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' is not recognized as a public release." >&2
+            exit 1
+          fi
+
+          {
+            echo "version=${version}"
+            echo "assembly-version=${assembly_version}"
+            echo "file-version=${file_version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Validate Docker Hub configuration
+        shell: bash
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "${DOCKERHUB_NAMESPACE}" ]] || { echo "DOCKERHUB_NAMESPACE is not configured." >&2; exit 1; }
+          [[ -n "${DOCKERHUB_USERNAME}" ]] || { echo "DOCKERHUB_USERNAME is not configured." >&2; exit 1; }
+          [[ -n "${DOCKERHUB_TOKEN}" ]] || { echo "DOCKERHUB_TOKEN is not configured." >&2; exit 1; }
+
+      - name: Log into GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Log into Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tags
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/citadel
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+
+      - name: Build and publish release image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/Citadel.WebApi/Dockerfile
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            ASSEMBLY_VERSION=${{ steps.version.outputs.assembly-version }}
+            FILE_VERSION=${{ steps.version.outputs.file-version }}
+            INFORMATIONAL_VERSION=${{ steps.version.outputs.version }}
+
+      - name: Verify published image aliases
+        env:
+          TAGS: ${{ steps.metadata.outputs.tags }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            remote_digest="$(docker buildx imagetools inspect "${tag}" --format '{{.Manifest.Digest}}')"
+            if [[ "${remote_digest}" != "${DIGEST}" ]]; then
+              echo "Published alias '${tag}' resolved to '${remote_digest}', expected '${DIGEST}'." >&2
+              exit 1
+            fi
+          done <<< "${TAGS}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign published image
+        env:
+          TAGS: ${{ steps.metadata.outputs.tags }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          while IFS= read -r tag; do
+            [[ -n "${tag}" ]] && cosign sign --yes "${tag}@${DIGEST}"
+          done <<< "${TAGS}"
+
+          {
+            echo "### Published Citadel ${GITHUB_REF_NAME}"
+            echo
+            echo "- Manifest digest: \`${DIGEST}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -255,7 +255,7 @@ public sealed class ExternalSecretProviderClientTests
                 BaseAddress = new Uri(providerAddress.TrimEnd('/'))
             };
 
-            return RestService.For<IVaultKvV2Api>(
+            return RestService.ForGenerated<IVaultKvV2Api>(
                 httpClient,
                 new RefitSettings { ContentSerializer = new STJSourceGeneratorSerializer() });
         }

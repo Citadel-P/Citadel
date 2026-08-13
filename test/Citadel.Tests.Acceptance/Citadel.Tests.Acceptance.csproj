@@ -48,6 +48,7 @@
     <PackageReference Include="Minio" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="NSec.Cryptography" />
+    <PackageReference Include="SSH.NET" />
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>

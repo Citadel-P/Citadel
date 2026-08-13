@@ -159,11 +159,11 @@ public static class InfrastructureModule
     /// <returns>The updated service collection.</returns>
     private static IServiceCollection AddHttpClients(this IServiceCollection services)
         => services
-            .AddRefitClient<IDockerHubApi>(refitSettings)
+            .AddRefitGeneratedClient<IDockerHubApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://hub.docker.com"))
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services
-            .AddRefitClient<IGithubCrApi>(refitSettings)
+            .AddRefitGeneratedClient<IGithubCrApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services

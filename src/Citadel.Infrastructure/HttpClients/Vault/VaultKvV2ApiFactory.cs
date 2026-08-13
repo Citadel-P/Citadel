@@ -19,6 +19,6 @@ internal sealed class VaultKvV2ApiFactory(IHttpClientFactory httpClientFactory) 
     {
         var client = httpClientFactory.CreateClient("VaultKvV2");
         client.BaseAddress = new Uri(providerAddress.TrimEnd('/'));
-        return RestService.For<IVaultKvV2Api>(client, settings);
+        return RestService.ForGenerated<IVaultKvV2Api>(client, settings);
     }
 }

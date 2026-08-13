@@ -81,6 +81,24 @@ const activityLookupTargets = {
   [ActivityResourceType.ServiceAccount]: LookupResourceType.ServiceAccount,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
+const administratorActivityResourceTypes = new Set<ActivityResourceType>([
+  ActivityResourceType.OidcProvider,
+  ActivityResourceType.User,
+  ActivityResourceType.Team,
+  ActivityResourceType.Role,
+  ActivityResourceType.License,
+  ActivityResourceType.ServiceAccount,
+]);
+
+export const getActivityResourceOptions = (isAdministrator: boolean) =>
+  Object.values(ActivityResourceType)
+    .filter((type) => isAdministrator || !administratorActivityResourceTypes.has(type))
+    .map((type) => ({
+      value: type,
+      label: activityResourceLabels[type] ?? type,
+      icon: activityResourceIcons[type],
+    }));
+
 export const ActivityComponents: RequiredComponents = {
   Icon: Activity,
   Content: ({ items, isLoading }) => {
@@ -115,23 +133,7 @@ function SearchSection() {
   const { data: profileResponse } = useRead('getCurrentProfile');
   const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;
 
-  const resourceOptions = useMemo(() => {
-    return Object.values(ActivityResourceType)
-      .filter(
-        (type) =>
-          isAdministrator ||
-          (type !== ActivityResourceType.OidcProvider &&
-            type !== ActivityResourceType.User &&
-            type !== ActivityResourceType.Team &&
-            type !== ActivityResourceType.Role &&
-            type !== ActivityResourceType.License),
-      )
-      .map((type) => ({
-        value: type,
-        label: activityResourceLabels[type] ?? type,
-        icon: activityResourceIcons[type],
-      }));
-  }, [isAdministrator]);
+  const resourceOptions = useMemo(() => getActivityResourceOptions(isAdministrator), [isAdministrator]);
 
   const eventOptions = useMemo(() => {
     const all = Object.values(ActivityEventType);
