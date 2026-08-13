@@ -146,6 +146,14 @@ describe('SwarmServiceFormComponents', () => {
   it('opens a platform-scoped duplicate draft from the resource header', async () => {
     const Tags = SwarmServiceFormComponents.EditForm!.Header.Tags;
     const resource = managedService();
+    server.use(
+      http.get('http://localhost/api/v1/tags', () =>
+        HttpResponse.json({
+          tags: [],
+          capabilities: { canRead: true, canWrite: true, canExecute: false },
+        }),
+      ),
+    );
     const { user } = renderCitadel(
       <Routes>
         <Route path="/swarm-services/edit/:id" element={<Tags resource={resource} />} />
@@ -351,12 +359,12 @@ describe('SwarmServiceFormComponents', () => {
     const taskLink = await screen.findByRole('link', { name: 'redis.1' });
     const taskRow = taskLink.closest('tr');
     expect(taskRow).not.toBeNull();
-    expect(within(taskRow!).getByText(/10.*00/)).toBeVisible();
-    expect(within(taskRow!).getByText(/128.*512/)).toBeVisible();
+    expect(await within(taskRow!).findByText(/10.*00/)).toBeVisible();
+    expect(await within(taskRow!).findByText(/128.*512/)).toBeVisible();
 
     await user.click(screen.getByRole('tab', { name: 'Stats' }));
     expect(await screen.findByText('CPU Usage')).toBeVisible();
-    expect(screen.getByText('Partial Service statistics')).toBeVisible();
+    expect(await screen.findByText('Partial Service statistics')).toBeVisible();
     await waitFor(() => expect(fake.listenerCount('ContainersStatsUpdated')).toBe(2));
 
     act(() => {
@@ -373,7 +381,7 @@ describe('SwarmServiceFormComponents', () => {
 
     await waitFor(() => expect(within(taskRow!).getByText(/25.*00/)).toBeVisible());
     expect(screen.getAllByText(/25.*00/).length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText('Partial Service statistics')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Partial Service statistics')).not.toBeInTheDocument());
   });
 });
 

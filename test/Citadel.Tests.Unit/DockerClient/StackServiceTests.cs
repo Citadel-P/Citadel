@@ -3,8 +3,10 @@ using Hosting.DockerClient.Services;
 
 namespace Tests.Unit.DockerClient;
 
-public class StackServiceTests
+public class StackServiceTests : IDisposable
 {
+    private readonly TempDirectory stacksDirectory = new();
+
     [Fact]
     public async Task ApplyStreamAsync_ComposeToSwarmConversion_StopsComposeBeforeDeploying()
     {
@@ -85,7 +87,7 @@ public class StackServiceTests
         var generatedDirectory = Path.Combine(temp.Path, "generated");
         Directory.CreateDirectory(generatedDirectory);
         var staleRunDirectory = Path.Combine(
-            Hosting.Common.Constants.StacksDir,
+            stacksDirectory.Path,
             "runs",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staleRunDirectory);
@@ -251,7 +253,7 @@ public class StackServiceTests
             }
         });
 
-        var runsRoot = Path.Combine(Hosting.Common.Constants.StacksDir, "runs");
+        var runsRoot = Path.Combine(stacksDirectory.Path, "runs");
         var remainingMarkers = Directory.Exists(runsRoot)
             ? Directory.EnumerateFiles(runsRoot, marker, SearchOption.AllDirectories).ToArray()
             : [];
@@ -834,7 +836,7 @@ public class StackServiceTests
         Assert.Single(Directory.GetFiles(Path.Combine(generatedDirectory, "secrets"), "POSTGRES_PASSWORD", SearchOption.AllDirectories));
     }
 
-    private static async Task<List<StackApplyResult>> ApplyAndCollectStatusAsync(string composePsJson)
+    private async Task<List<StackApplyResult>> ApplyAndCollectStatusAsync(string composePsJson)
     {
         using var temp = new TempDirectory();
         var workingDirectory = Path.Combine(temp.Path, "source", "app");
@@ -876,7 +878,7 @@ public class StackServiceTests
         return results;
     }
 
-    private static StackService CreateStackService(
+    private StackService CreateStackService(
         CapturingCommandExecutor executor,
         List<TimeSpan>? settleDelays = null)
         => new(
@@ -885,7 +887,10 @@ public class StackServiceTests
             {
                 settleDelays?.Add(delay);
                 return ValueTask.CompletedTask;
-            });
+            },
+            stacksDirectory.Path);
+
+    public void Dispose() => stacksDirectory.Dispose();
 
     private sealed class CapturingCommandExecutor(
         int exitCode = 0,
