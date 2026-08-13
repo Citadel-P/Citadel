@@ -56,6 +56,7 @@ export const GenericActionBar = <T,>({
   actions,
   standaloneActions = [],
   selectedCount,
+  resourceLabel,
 }: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
   if (!selectedItems?.length) return null;
@@ -67,7 +68,8 @@ export const GenericActionBar = <T,>({
         sidebarMinimized ? 'lg:left-[var(--sidebar-width-icon)]' : 'lg:left-[var(--sidebar-width)]',
       )}>
       <div className="w-full text-center text-xs text-muted-foreground sm:mt-2 sm:w-auto sm:flex-1 sm:text-left">
-        {selectedCount ?? selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
+        {selectedCount ?? selectedItems.length} of {allItems?.length} {resourceLabel ?? resource.toLowerCase()}(s)
+        selected.
       </div>
       <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
         {standaloneActions.map((Action, id) => (
@@ -179,6 +181,7 @@ interface ActionBarProps<T> {
   actions: ButtonGroupComponent<T>[];
   standaloneActions?: ButtonGroupComponent<T>[];
   selectedCount?: number;
+  resourceLabel?: string;
 }
 
 interface ActionButtonsProps {

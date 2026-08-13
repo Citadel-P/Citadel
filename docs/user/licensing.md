@@ -3,7 +3,7 @@
 Citadel works without an installed license. An unlicensed installation runs as
 the Community edition.
 
-A license is needed only for paid operational capabilities. Citadel does not
+A license is needed only for paid product capabilities. Citadel does not
 license ordinary resource counts such as platforms, stacks, deployments,
 builds, backup definitions, or automation definitions.
 
@@ -15,8 +15,8 @@ builds, backup definitions, or automation definitions.
 | Intended for | Individuals, evaluation, labs, and manually operated environments | Teams operating shared or production environments | Organizations requiring centralized governance, resilience, and formal assurance |
 | Resource counts | No license-enforced limits | No license-enforced limits | No license-enforced limits |
 | Users and teams | Included | Included | Included |
+| Custom access control | Existing custom access and retained Service Accounts remain visible and removable after downgrade, but expansion, machine authentication, and run-as use are unavailable | Custom roles, scoped access, non-human identities, API tokens, and run-as execution | Team capability plus future organizational identity and access governance |
 | Authentication | Local authentication, MFA, and existing OIDC | Same as Community | Future enterprise identity lifecycle, such as SCIM and enforced organizational SSO |
-| Roles and permissions | Built-in Admin, Operator, and Viewer roles | Custom roles, custom permissions, resource overrides, and scoped grants | Future separation of duties, delegated administration, and policy-controlled access |
 | Automation actions | Define, test, and run manually | Manual, scheduled, and webhook-triggered execution | Team capabilities plus future approval and change-control policies |
 | Backups | Define policies, run on demand, and restore | On-demand, scheduled, and webhook-triggered backups | Team capabilities plus future governed and validated recovery workflows |
 | Webhooks and GitOps | Receive and authenticate repository webhooks, synchronize source, and show pending updates | Automatically build, deploy, apply, run an action, or start a backup from a webhook | Future approval and organization-wide deployment policy |
@@ -68,6 +68,9 @@ people need more precise access control.
 
 Consider Team when you need any of the following:
 
+- non-human API identities for CI/CD runners or external integrations
+- stable Service Account run-as identities for Automation Actions or Backup
+  Policies
 - custom roles instead of only Admin, Operator, and Viewer
 - different permissions for particular resources or teams
 - backups that run without an administrator starting them
@@ -113,6 +116,7 @@ Before removing the Team license, review:
 - custom alert rules that will pause; notification channels and seeded-rule
   delivery remain active
 - continuous guardrails and auto-update settings that will pause
+- Service Account API tokens and run-as bindings that will be suspended
 
 Citadel retains this configuration and continues enforcing existing custom-role
 assignments. Manual operation, recovery, restore, history, and data access
@@ -165,7 +169,7 @@ collaboration.
 
 | Capability | What Team Adds |
 | --- | --- |
-| Custom access control | Custom roles, custom permissions, resource overrides, and scoped access grants |
+| Custom access control | Custom roles, custom permissions, resource overrides, scoped access grants, Service Accounts, API credentials, and Service Account run-as execution |
 | Automated operations | Schedules and webhooks that execute automation actions, backups, builds, deployments, or stack applies |
 | Advanced alerting | Custom alert rules and advanced conditions including quiet hours, cooldowns, thresholds, required matches, severity, and resource scoping |
 | Operational guardrails | Continuous drift monitoring, opt-in automatic reconciliation, and resource auto-update safeguards |
@@ -197,7 +201,7 @@ not enable those workflows or any future Enterprise functionality.
 
 The following operations remain available regardless of license status:
 
-- signing in and enforcing existing permissions
+- User sign-in and enforcement of existing permissions
 - MFA and existing OIDC login
 - reading customer data and configuration
 - viewing logs, history, activities, and existing alerts
@@ -311,6 +315,10 @@ After the grace period:
 - notification channels and external delivery from seeded system rules continue
 - continuous guardrails and auto-update are paused
 - existing custom-role authorization continues to be evaluated
+- Service Account credentials and new Service Account run-as work are suspended
+  without revoking tokens or changing saved bindings
+- administrators can inspect, disable, revoke, and archive retained Service
+  Accounts
 - paid configuration remains stored and visible
 - operations already running are allowed to finish
 
@@ -319,6 +327,11 @@ the resource's configured enabled state.
 
 Installing a replacement license reactivates eligible configuration without
 requiring every schedule, rule, or resource to be edited.
+
+For Service Accounts, eligible means the account remains enabled and
+non-archived and its token is unrevoked and either unexpired or non-expiring.
+Citadel does not change token state merely because the capability became
+unavailable.
 
 ## Removing A License
 
@@ -420,3 +433,14 @@ administrators.
 Administrators can remove assignments, reduce permissions, or delete custom
 roles. Creating new custom access configuration requires the corresponding
 Team capability.
+
+### A Service Account Token Returns Unauthorized
+
+Check whether the installed license includes **Custom access control** and remains
+active or in its grace period. Also verify that the account is enabled and the
+token is unrevoked and either unexpired or non-expiring.
+
+Citadel intentionally returns the same Unauthorized response for invalid and
+license-suspended machine credentials. An administrator can see the exact
+license state from **Settings > License** and inspect retained accounts under
+**Settings > Access > Service Accounts**.

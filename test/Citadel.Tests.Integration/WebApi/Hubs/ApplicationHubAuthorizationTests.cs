@@ -283,7 +283,10 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
         var backupPolicyId = Guid.CreateVersion7();
         var platformId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
+        var teamId = Guid.CreateVersion7();
+        var roleId = Guid.CreateVersion7();
         var licenseId = Guid.CreateVersion7();
+        var serviceAccountId = Guid.CreateVersion7();
         var subject = await CreateAuthorizationSubjectAsync(
             resourceGrants:
             [
@@ -291,7 +294,10 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
                 new ResourceGrant(ResourceType.BackupPolicy, backupPolicyId, PermissionLevel.Read),
                 new ResourceGrant(ResourceType.Platform, platformId, PermissionLevel.Read),
                 new ResourceGrant(ResourceType.User, userId, PermissionLevel.Read),
-                new ResourceGrant(ResourceType.License, licenseId, PermissionLevel.Read)
+                new ResourceGrant(ResourceType.Team, teamId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Role, roleId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.License, licenseId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.ServiceAccount, serviceAccountId, PermissionLevel.Read)
             ]);
 
         await AssertAuthorizationAllowedAsync(
@@ -308,7 +314,18 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
             Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.User), userId));
         await AssertAuthorizationDeniedAsync(
             subject,
+            Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.Team), teamId));
+        await AssertAuthorizationDeniedAsync(
+            subject,
+            Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.Role), roleId));
+        await AssertAuthorizationDeniedAsync(
+            subject,
             Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.License), licenseId));
+        await AssertAuthorizationAllowedAsync(
+            subject,
+            Constants.WellKnownSignalRGroups.ActivityGroup(
+                nameof(ActivityResourceType.ServiceAccount),
+                serviceAccountId));
         await AssertAuthorizationAllowedAsync(subject, Constants.WellKnownSignalRGroups.AlertEventsGroup);
         await AssertAuthorizationDeniedAsync(subject, $"activity:{resourceId}");
         await AssertAuthorizationDeniedAsync(

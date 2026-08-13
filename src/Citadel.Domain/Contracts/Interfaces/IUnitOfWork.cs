@@ -32,6 +32,7 @@ namespace Domain.Contracts.Interfaces;
 public interface IUnitOfWork : IAsyncDisposable
 {
     IUserRepository Users { get; }
+    IServiceAccountRepository ServiceAccounts { get; }
     ITeamRepository Teams { get; }
     IRoleRepository Roles { get; }
     IActorRepository Actors { get; }
@@ -89,6 +90,61 @@ public interface IUnitOfWork : IAsyncDisposable
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
+}
+
+public interface IServiceAccountRepository
+{
+    Task<ServiceAccount?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<ServiceAccountDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken);
+    Task<PagedResult<ServiceAccountDetails>> GetPagedAsync(
+        int page,
+        int pageSize,
+        string? name,
+        bool includeArchived,
+        CancellationToken cancellationToken);
+    Task<PagedResult<ServiceAccountDetails>> GetAuthorizedPagedAsync(
+        Guid actorId,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        int page,
+        int pageSize,
+        string? name,
+        bool includeArchived,
+        CancellationToken cancellationToken);
+    Task AcquireNameLockAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
+    Task<int> AddAsync(ServiceAccount account, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(ServiceAccount account, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Guid>> GetTeamIdsAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<int> ReplaceTeamsAsync(Guid actorId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
+    Task<PagedResult<ServiceAccountTokenDetails>> GetTokensAsync(
+        Guid serviceAccountId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+    Task<ServiceAccountCredentialInfo?> GetCredentialAsync(Guid credentialId, CancellationToken cancellationToken);
+    Task<ServiceAccountTokenInsertResult> TryAddTokenAsync(
+        ServiceAccountToken token,
+        int maximumActiveTokens,
+        DateTime now,
+        CancellationToken cancellationToken);
+    Task<int> RevokeTokenAsync(
+        Guid serviceAccountId,
+        Guid tokenId,
+        Guid revokedByActorId,
+        DateTime revokedAtUtc,
+        CancellationToken cancellationToken);
+    Task<int> RevokeAllTokensAsync(
+        Guid serviceAccountId,
+        Guid revokedByActorId,
+        DateTime revokedAtUtc,
+        CancellationToken cancellationToken);
+    Task<int> UpdateLastUsedAsync(Guid tokenId, DateTime usedAtUtc, CancellationToken cancellationToken);
+    Task<IReadOnlyList<RunAsActorUsage>> GetRunAsUsagesAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ResourceInfo>> GetRunAsCandidatesAsync(
+        Guid actorId,
+        bool isAdministrator,
+        CancellationToken cancellationToken);
 }
 
 public interface IStackWebhookDeployQueueRepository
@@ -713,7 +769,10 @@ public sealed record ExternalSecretValueResult(bool IsSuccess, string? Value, st
 
 public interface IActorRepository
 {
+    Task AcquireRunAsLockAsync(Guid actorId, CancellationToken cancellationToken);
     Task<Actor?> GetById(Guid id, CancellationToken cancellationToken);
+    Task<RunAsActorInfo?> GetRunAsInfoAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<string[]?> GetRoleNamesAsync(Guid actorId, CancellationToken cancellationToken);
     Task<bool> HasCustomAccessConfigurationAsync(
         IEnumerable<Guid> actorIds,
         CancellationToken cancellationToken);
@@ -740,10 +799,11 @@ public interface IResourceAccessRepository
         PermissionLevel permissionLevel,
         IEnumerable<SpecificPermission>? specificPermissions,
         CancellationToken cancellationToken);
+    Task<int> RemoveByIdAsync(Guid actorId, Guid id, CancellationToken cancellationToken);
     Task<int> ReplaceAsync(Guid actorId, IEnumerable<ResourceAccess> resourceAccesses, CancellationToken cancellationToken);
 }
 
-public interface IUserRepository 
+public interface IUserRepository
 {
     Task<PermissionMetadata> GetEffectivePermissionsAsync(
         Guid[] actorIds, 
@@ -758,6 +818,8 @@ public interface IUserRepository
         CancellationToken ct = default);
 
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
+    Task<IEnumerable<Guid>> GetActorIdsAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetUserIdsByActorIdsAsync(IEnumerable<Guid> actorIds, CancellationToken cancellationToken);
     Task<bool> HasEnabledAdministratorAsync(CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken);
@@ -1082,11 +1144,11 @@ public interface ITeamRepository
     Task<int> UpdateAsync(Team team, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetUserIdsAsync(Guid teamId, CancellationToken cancellationToken);
-    Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken);
-    Task<int> AddMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken);
-    Task<int> RemoveMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken);
+    Task<(TeamDetails? Team, bool MemberExists, bool IsServiceAccount, bool IsArchived, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken);
+    Task<int> AddMemberAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken);
+    Task<int> RemoveMemberAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken);
     Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken);
-    Task<IEnumerable<Guid>> GetUserIdsByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetAffectedPrincipalActorIdsAsync(Guid actorId, CancellationToken cancellationToken);
 }
 
 public interface IRoleRepository

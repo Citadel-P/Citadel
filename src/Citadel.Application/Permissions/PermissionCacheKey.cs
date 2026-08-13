@@ -3,6 +3,6 @@ using Hosting.Common;
 namespace Application.Permissions;
 
 public readonly record struct PermissionCacheKey(
-    Guid UserId,
+    Guid ActorId,
     ResourceType ResourceType,
     Guid? ResourceId);

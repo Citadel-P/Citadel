@@ -31,18 +31,17 @@ public class LoginRoleCacheIntegrationTests(PostgresTestFixture fixture) : Integ
         using var doc = JsonDocument.Parse(body);
         var token = doc.RootElement.GetProperty("accessToken").GetString();
 
-        // Extract user id from token
+        // Extract the actor id used by the server-side role cache.
         var handler = new JwtSecurityTokenHandler();
         var jwt = handler.ReadJwtToken(token!);
-        var sub = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value
-                  ?? jwt.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var actorIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == "actorId")?.Value;
 
-        Assert.False(string.IsNullOrEmpty(sub));
-        var userId = Guid.Parse(sub!);
+        Assert.False(string.IsNullOrEmpty(actorIdClaim));
+        var actorId = Guid.Parse(actorIdClaim!);
 
         // Assert cache
         var roleCache = Services.GetRequiredService<IRoleCache>();
-        var roles = roleCache.GetRoles(userId);
+        var roles = roleCache.GetRoles(actorId);
         Assert.NotNull(roles);
         Assert.Contains("admin", roles, StringComparer.OrdinalIgnoreCase);
     }

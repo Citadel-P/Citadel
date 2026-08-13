@@ -74,7 +74,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         var user = userContext.Current;
         if (!user.IsAdmin
-            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, patchedDeployment.PlatformId, cancellationToken))
+            && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, patchedDeployment.PlatformId, cancellationToken))
         {
             return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }

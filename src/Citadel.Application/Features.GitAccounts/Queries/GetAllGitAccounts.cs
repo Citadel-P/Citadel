@@ -15,7 +15,7 @@ internal sealed class GetAllGitAccountsHandler(IUnitOfWork unitOfWork, IUserCont
     {
         var user = userContextAccessor.Current;
         var gitAccounts = user is not null && !user.IsAdmin
-            ? await unitOfWork.GitAccounts.GetAuthorizedAsync(user.UserId, ResourceType.GitAccount, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
+            ? await unitOfWork.GitAccounts.GetAuthorizedAsync(user.ActorId, ResourceType.GitAccount, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.GitAccounts.GetAllAsync(cancellationToken);
 
         IEnumerable<GitAccount> orderedGitAccounts = gitAccounts.OrderByDescending(x => x.CreatedAt);

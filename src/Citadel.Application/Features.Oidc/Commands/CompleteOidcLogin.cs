@@ -103,7 +103,7 @@ internal sealed class CompleteOidcLoginHandler(
 
         await unitOfWork.CommitAsync(cancellationToken);
         refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
-        roleCache.SetRoles(authInfo.Id, authInfo.Roles);
+        roleCache.SetRoles(authInfo.ActorId, authInfo.Roles);
 
         return Result.Success(new OidcLoginCompleteResult(new LoginResponse(accessToken, LoginNextStep.Completed), state.ReturnUrl));
     }

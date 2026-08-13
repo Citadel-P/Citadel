@@ -15,7 +15,7 @@ internal sealed class GetUnresolvedAlertEventsCountHandler(IUnitOfWork unitOfWor
         var user = userContextAccessor.Current;
         var count = user is not null && !user.IsAdmin
             ? await unitOfWork.AlertEvents.CountAuthorizedUnresolvedAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.Alert,
                 PermissionLevel.Read,
                 SpecificPermission.None,

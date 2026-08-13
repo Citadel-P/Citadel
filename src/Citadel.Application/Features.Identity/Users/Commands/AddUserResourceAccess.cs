@@ -1,8 +1,12 @@
 using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Domain;
+using Domain.Entities.Activities;
+using Domain.Entities.Identity;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -34,7 +38,10 @@ public sealed record AddUserResourceAccess(
     }
 }
 
-internal sealed class AddUserResourceAccessHandler(IUnitOfWork unitOfWork, IActorResourceAccessService actorResourceAccessService)
+internal sealed class AddUserResourceAccessHandler(
+    IUnitOfWork unitOfWork,
+    IActorResourceAccessService actorResourceAccessService,
+    IUserContextAccessor userContext)
     : ICommandHandler<AddUserResourceAccess, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(AddUserResourceAccess command, CancellationToken cancellationToken)
@@ -46,6 +53,25 @@ internal sealed class AddUserResourceAccessHandler(IUnitOfWork unitOfWork, IActo
         var actor = await unitOfWork.Actors.GetById(user.ActorId, cancellationToken);
         if (actor is null)
             return Result.Failure<UserDetails>(new NotFoundError("The provided actor does not exist"));
+
+        var oldSnapshot = await IdentityActivity.CaptureUserAsync(unitOfWork, user.Id, cancellationToken);
+        if (oldSnapshot is null)
+            return Result.Failure<UserDetails>(new NotFoundError("The provided user does not exist"));
+
+        var access = new IdentityResourceAccessSnapshot(
+            command.ResourceType,
+            command.ResourceId,
+            command.PermissionLevel,
+            Permission.ToSpecificPermissionsMask(command.SpecificPermissions));
+        var newSnapshot = IdentityActivity.WithResourceAccess(oldSnapshot, access, add: true);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            IdentityActivity.Create(
+                user.Id,
+                user.Name,
+                userContext.Current.ActorId,
+                ActivityEventType.UserUpdated,
+                new UserUpdated(oldSnapshot, newSnapshot, PasswordChanged: false)),
+            cancellationToken);
 
         var result = await actorResourceAccessService.AddResourceAccessAsync(
             user.ActorId,

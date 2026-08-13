@@ -5,6 +5,7 @@ using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Automation;
 using Domain.Entities.Activities;
 using Domain.Entities.Automation;
@@ -19,7 +20,6 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using User = Domain.Entities.Identity.User;
 
 namespace Application.Services;
 
@@ -45,13 +45,9 @@ public interface IAutomationRunQueueService
         DateTime scheduledMinuteUtc,
         CancellationToken cancellationToken);
 
-    Task<Result<ActionRun>> QueueDraftTestAsync(
+    Task<Result<ActionRun>> QueueTestAsync(
         Guid actionId,
-        string code,
         string? argsJson,
-        string? defaultArgsJson,
-        int? timeoutSeconds,
-        Guid? runAsActorId,
         Guid? triggeredByActorId,
         CancellationToken cancellationToken);
 }
@@ -336,15 +332,28 @@ internal sealed class AutomationExecutionService(
     private async Task<string> CreateRunTokenAsync(ActionRun run, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var authInfo = await unitOfWork.Users.GetUserAuthInfoByActorIdAsync(run.RunAsActorId, cancellationToken)
-            ?? throw new InvalidOperationException("Run-as actor does not map to an enabled Citadel user.");
+        var authorization = scope.ServiceProvider.GetRequiredService<IRunAsActorAuthorization>();
+        var validation = await authorization.ValidateExecutionAsync(run.RunAsActorId, cancellationToken);
+        if (!validation.IsSuccess(out var authInfo, out var error))
+            throw new InvalidOperationException(error.Message);
 
-        var claims = User
-            .GetJwtClaims(authInfo)
+        var claims = GetRunAsClaims(authInfo)
             .Append(new Claim("automationRunId", run.Id.ToString()));
 
         return jwtService.CreateAccessToken(claims);
+    }
+
+    private static IEnumerable<Claim> GetRunAsClaims(RunAsActorInfo actor)
+    {
+        yield return new Claim("name", actor.Name);
+        yield return new Claim("actorId", actor.ActorId.ToString());
+        yield return new Claim(
+            "principalType",
+            actor.Type == ActorType.ServiceAccount ? "ServiceAccount" : "User");
+        yield return new Claim("sub", actor.PrincipalId.ToString());
+        yield return new Claim("jti", Guid.CreateVersion7().ToString());
+        foreach (var role in actor.Roles)
+            yield return new Claim("role", role);
     }
 
     private async Task<ActionRun?> TryClaimRunAsync(Guid runId, CancellationToken cancellationToken)
@@ -734,13 +743,9 @@ internal sealed class AutomationRunQueueService(
             cancellationToken);
     }
 
-    public async Task<Result<ActionRun>> QueueDraftTestAsync(
+    public async Task<Result<ActionRun>> QueueTestAsync(
         Guid actionId,
-        string code,
         string? argsJson,
-        string? defaultArgsJson,
-        int? timeoutSeconds,
-        Guid? runAsActorId,
         Guid? triggeredByActorId,
         CancellationToken cancellationToken)
     {
@@ -750,21 +755,14 @@ internal sealed class AutomationRunQueueService(
         if (action is null)
             return Result.Failure<ActionRun>(new NotFoundError("Automation action not found."));
 
-        if (string.IsNullOrWhiteSpace(code))
-            return Result.Failure<ActionRun>(new BadRequestError("Code is required."));
-
-        var resolvedRunAsActorId = runAsActorId.GetValueOrDefault();
-        if (resolvedRunAsActorId == Guid.Empty)
-            resolvedRunAsActorId = action.RunAsActorId;
-
         return await QueueCoreAsync(
             unitOfWork,
             action,
             ActionRunTrigger.Test,
-            argsJson ?? defaultArgsJson ?? action.DefaultArgsJson,
-            timeoutSeconds ?? action.TimeoutSeconds,
-            resolvedRunAsActorId,
-            code,
+            argsJson ?? action.DefaultArgsJson,
+            action.TimeoutSeconds,
+            action.RunAsActorId,
+            action.Code,
             triggeredByActorId,
             cancellationToken);
     }

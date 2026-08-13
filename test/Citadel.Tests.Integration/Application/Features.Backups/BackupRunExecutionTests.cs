@@ -696,7 +696,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             keepLastSuccessful,
             timeoutSeconds: 120,
             alertOnFailure: false,
-            runAsActorId: Constants.SystemId,
+            runAsActorId: Constants.DefaultAdminId,
             createdByActorId: Constants.SystemId);
 
         await using var scope = Services.CreateAsyncScope();
@@ -708,7 +708,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             Guid.CreateVersion7(),
             BackupRunTrigger.Manual,
             null,
-            Constants.SystemId,
+            Constants.DefaultAdminId,
             usePolicyActor: false,
             DateTimeOffset.UtcNow,
             TestContext.Current.CancellationToken);
@@ -796,7 +796,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             keepLastSuccessful,
             timeoutSeconds: 120,
             alertOnFailure: false,
-            runAsActorId: Constants.SystemId,
+            runAsActorId: Constants.DefaultAdminId,
             createdByActorId: Constants.SystemId);
 
         await using var scope = Services.CreateAsyncScope();
@@ -809,7 +809,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             Guid.CreateVersion7(),
             BackupRunTrigger.Manual,
             null,
-            Constants.SystemId,
+            Constants.DefaultAdminId,
             usePolicyActor: false,
             DateTimeOffset.UtcNow,
             TestContext.Current.CancellationToken);

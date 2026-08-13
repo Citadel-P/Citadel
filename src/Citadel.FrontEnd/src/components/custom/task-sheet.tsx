@@ -409,6 +409,69 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     </span>
   ),
 
+  ServiceAccountRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Service Account renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  UserCreated: (info, activity) => (
+    <SpecViewer spec={info.user} resourceId={activity.resourceId} title="Initial access configuration" />
+  ),
+
+  UserUpdated: (info) => (
+    <div className="flex flex-col gap-4">
+      <MonacoDiff original={info.oldUser} modified={info.newUser} format="json" title="Access changes" />
+      {info.passwordChanged && <KeyValueBlock label="Password" value="Changed" />}
+    </div>
+  ),
+
+  UserRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      User renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  UserDeleted: (info, activity) => (
+    <SpecViewer spec={info.user} resourceId={activity.resourceId} title="Deleted access configuration" />
+  ),
+
+  TeamCreated: (info, activity) => (
+    <SpecViewer spec={info.team} resourceId={activity.resourceId} title="Initial access configuration" />
+  ),
+
+  TeamUpdated: (info) => (
+    <MonacoDiff original={info.oldTeam} modified={info.newTeam} format="json" title="Access changes" />
+  ),
+
+  TeamRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Team renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  TeamDeleted: (info, activity) => (
+    <SpecViewer spec={info.team} resourceId={activity.resourceId} title="Deleted access configuration" />
+  ),
+
+  RoleCreated: (info, activity) => (
+    <SpecViewer spec={info.role} resourceId={activity.resourceId} title="Initial permission configuration" />
+  ),
+
+  RoleUpdated: (info) => (
+    <MonacoDiff original={info.oldRole} modified={info.newRole} format="json" title="Permission changes" />
+  ),
+
+  RoleRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Role renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  RoleDeleted: (info, activity) => (
+    <SpecViewer spec={info.role} resourceId={activity.resourceId} title="Deleted permission configuration" />
+  ),
+
   DeploymentStarted: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentStopped: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
@@ -1532,13 +1595,7 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
       return { argsJson: params.argsJson, timeoutSeconds: params.timeoutSeconds };
     }
 
-    return {
-      code: params.code,
-      argsJson: params.argsJson,
-      defaultArgsJson: params.defaultArgsJson,
-      timeoutSeconds: params.timeoutSeconds,
-      runAsActorId: params.runAsActorId,
-    };
+    return { argsJson: params.argsJson };
   }, [params]);
 
   const state = useStreamProgress<RunAutomationActionInput | TestAutomationActionInput, AutomationActionRunStreamItem>({

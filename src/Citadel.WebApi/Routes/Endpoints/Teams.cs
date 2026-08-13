@@ -64,9 +64,9 @@ public static class Teams
         return EndpointHandlers.HandleResult(result, TeamView.Map);
     }
 
-    public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> RemoveMember(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, [FromRoute][Description("User ID")] Guid userId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> RemoveMember(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, [FromRoute][Description("Member Actor ID")] Guid memberActorId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new RemoveTeamMember(id, userId), cancellationToken);
+        var result = await mediator.Send(new RemoveTeamMember(id, memberActorId), cancellationToken);
         return EndpointHandlers.HandleResult(result, TeamView.Map);
     }
 

@@ -16,7 +16,9 @@ public class Permission
         (int)SpecificPermission.Restore |
         (int)SpecificPermission.Browse |
         (int)SpecificPermission.Download |
-        (int)SpecificPermission.ManageNodeAgents;
+        (int)SpecificPermission.ManageNodeAgents |
+        (int)SpecificPermission.Use |
+        (int)SpecificPermission.ManageCredentials;
 
     public Guid Id { get; private set; }
     public Guid RoleId { get; private set; }
@@ -121,6 +123,12 @@ public class Permission
 
         if ((mask & (int)SpecificPermission.ManageNodeAgents) != 0)
             permissions.Add(SpecificPermission.ManageNodeAgents);
+
+        if ((mask & (int)SpecificPermission.Use) != 0)
+            permissions.Add(SpecificPermission.Use);
+
+        if ((mask & (int)SpecificPermission.ManageCredentials) != 0)
+            permissions.Add(SpecificPermission.ManageCredentials);
 
         return [.. permissions];
     }

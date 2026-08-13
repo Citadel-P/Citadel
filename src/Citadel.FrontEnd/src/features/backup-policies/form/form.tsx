@@ -605,15 +605,15 @@ export function BackupPolicyForm({
               }),
               defineField<BackupPolicyFormValue, 'runAsActorId'>({
                 key: 'runAsActorId',
-                label: 'Run As User',
-                description: 'Permissions are evaluated at run time for this user.',
+                label: 'Run as',
+                description: 'Permissions are evaluated at run time for this identity.',
                 render: (value, set) => (
                   <ResourceSelectorField
-                    targetType={LookupResourceType.UserActor}
+                    targetType={LookupResourceType.RunAsActor}
                     selected={value ?? undefined}
                     placeholder="Current user"
                     disabled={disabled}
-                    onSelect={(user) => set({ runAsActorId: user?.id ?? null })}
+                    onSelect={(actor) => set({ runAsActorId: actor?.id ?? null })}
                   />
                 ),
               }),

@@ -120,6 +120,22 @@ After creating a repository:
 
 A backup policy defines what to back up, where to store it, and when it should run.
 
+The policy's **Run As** identity supplies permissions for scheduled and
+webhook-triggered runs. Choose an enabled User or, preferably for unattended
+operation, a least-privileged Service Account. Manual runs use the
+authenticated caller; runs started by an Automation Action use that Action
+run's identity.
+
+A Service Account run-as identity requires Team's **Custom access control**
+capability. Scheduled and webhook-triggered policies additionally require
+**Automated Operations**. If the Custom access control capability becomes
+unavailable, Citadel preserves the binding as `Paused by license` and does not
+start new runs under it.
+
+See [Service Accounts](service-accounts.md) for creating an account, assigning
+access, and understanding **Use** permission. Backup Policies never store the
+Service Account's persistent API token.
+
 Supported sources:
 
 - **Citadel backup**: creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
@@ -253,7 +269,10 @@ Common uses:
 
 After the policy is saved, copy the listener URL from the Webhook section into the external provider. Citadel validates the configured provider signature or token when a secret is set, then queues a normal backup run.
 
-Webhook runs use the policy's **Run As User** setting and appear in the same run history as manual and scheduled runs. Disabled policies do not run from webhooks.
+Webhook runs use the policy's **Run As** User or Service Account and appear in
+the same run history as manual and scheduled runs. The webhook secret
+authenticates the delivery; it is not the execution identity. Disabled policies
+do not run from webhooks.
 
 ## Retention
 

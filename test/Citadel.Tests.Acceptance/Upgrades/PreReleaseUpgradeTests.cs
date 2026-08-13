@@ -186,6 +186,7 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
         var result = DeployChanges.To
             .PostgresqlDatabase(connectionString)
             .WithScript(scriptName, failingScript)
+            .WithVariablesDisabled()
             .Build()
             .PerformUpgrade();
 

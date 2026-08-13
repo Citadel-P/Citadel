@@ -22,7 +22,7 @@ public sealed record RegistryView(
     /// <summary>
     /// Default registry cannot be edited or deleted
     /// </summary>
-    public bool IsDefault => CreatedByActorId == Constants.SystemId;
+    public bool IsDefault => Id == Constants.DefaultRegistryId;
     internal static async Task<RegistryView> Map(Registry registry, IPermissionEvaluator permissionEvaluator)
     {
         var permissions = await permissionEvaluator.EvaluateAsync(registry.Id, ResourceType.Registry);

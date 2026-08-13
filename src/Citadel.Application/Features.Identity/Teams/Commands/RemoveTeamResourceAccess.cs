@@ -1,8 +1,12 @@
 using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Domain;
+using Domain.Entities.Activities;
+using Domain.Entities.Identity;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -34,7 +38,10 @@ public sealed record RemoveTeamResourceAccess(
     }
 }
 
-internal sealed class RemoveTeamResourceAccessHandler(IUnitOfWork unitOfWork, IActorResourceAccessService actorResourceAccessService)
+internal sealed class RemoveTeamResourceAccessHandler(
+    IUnitOfWork unitOfWork,
+    IActorResourceAccessService actorResourceAccessService,
+    IUserContextAccessor userContext)
     : ICommandHandler<RemoveTeamResourceAccess, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(RemoveTeamResourceAccess command, CancellationToken cancellationToken)
@@ -42,6 +49,24 @@ internal sealed class RemoveTeamResourceAccessHandler(IUnitOfWork unitOfWork, IA
         var team = await unitOfWork.Teams.GetDetailsAsync(command.TeamId, cancellationToken);
         if (team is null)
             return Result.Failure<TeamDetails>(new NotFoundError("The provided team does not exist"));
+
+        var oldSnapshot = await IdentityActivity.CaptureTeamAsync(unitOfWork, team.Id, cancellationToken);
+        if (oldSnapshot is null)
+            return Result.Failure<TeamDetails>(new NotFoundError("The provided team does not exist"));
+        var access = new IdentityResourceAccessSnapshot(
+            command.ResourceType,
+            command.ResourceId,
+            command.PermissionLevel,
+            Permission.ToSpecificPermissionsMask(command.SpecificPermissions));
+        var newSnapshot = IdentityActivity.WithResourceAccess(oldSnapshot, access, add: false);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            IdentityActivity.Create(
+                team.Id,
+                team.Name,
+                userContext.Current.ActorId,
+                ActivityEventType.TeamUpdated,
+                new TeamUpdated(oldSnapshot, newSnapshot)),
+            cancellationToken);
 
         var result = await actorResourceAccessService.RemoveResourceAccessAsync(
             team.ActorId,

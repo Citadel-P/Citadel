@@ -6,6 +6,8 @@ namespace Application.Services.Identity;
 internal interface IActorScopeEvictor
 {
     Task EvictPermissionsForActorAsync(Guid actorId, CancellationToken cancellationToken = default);
+    Task EvictActorAsync(Guid actorId, CancellationToken cancellationToken = default);
+    Task EvictActors(IEnumerable<Guid> actorIds, CancellationToken cancellationToken = default);
     Task EvictUsers(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default);
     Task EvictPermissionsForRoleAsync(Guid roleId, CancellationToken cancellationToken = default);
 }
@@ -17,12 +19,28 @@ internal sealed class ActorScopeEvictor(
     IPermissionCache permissionCache,
     IUserConnectionRevoker connectionRevoker) : IActorScopeEvictor
 {
+    public async Task EvictActorAsync(Guid actorId, CancellationToken cancellationToken = default)
+        => await EvictActors([actorId], cancellationToken);
+
+    public async Task EvictActors(
+        IEnumerable<Guid> actorIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = actorIds.Distinct().ToArray();
+        if (ids.Length == 0)
+            return;
+        EvictCaches(ids);
+        var userIds = await unitOfWork.Users.GetUserIdsByActorIdsAsync(ids, cancellationToken);
+        connectionRevoker.RevokeUsers(userIds);
+        await actorScopeProvider.InvalidateManyAsync(ids, cancellationToken);
+    }
+
     public async Task EvictPermissionsForActorAsync(
         Guid actorId,
         CancellationToken cancellationToken = default)
     {
-        var userIds = await unitOfWork.Teams.GetUserIdsByActorIdAsync(actorId, cancellationToken);
-        await EvictUsers(userIds, cancellationToken);
+        var actorIds = await unitOfWork.Teams.GetAffectedPrincipalActorIdsAsync(actorId, cancellationToken);
+        await EvictActors(actorIds, cancellationToken);
     }
 
     public async Task EvictPermissionsForRoleAsync(
@@ -30,12 +48,12 @@ internal sealed class ActorScopeEvictor(
         CancellationToken cancellationToken = default)
     {
         var actorIds = await unitOfWork.Roles.GetActorIdsByRoleIdAsync(roleId, cancellationToken);
-        var userIds = new List<Guid>();
+        var affectedActorIds = new List<Guid>();
 
         foreach (var actorId in actorIds)
-            userIds.AddRange(await unitOfWork.Teams.GetUserIdsByActorIdAsync(actorId, cancellationToken));
+            affectedActorIds.AddRange(await unitOfWork.Teams.GetAffectedPrincipalActorIdsAsync(actorId, cancellationToken));
 
-        await EvictUsers(userIds, cancellationToken);
+        await EvictActors(affectedActorIds, cancellationToken);
     }
 
     public async Task EvictUsers(
@@ -46,16 +64,21 @@ internal sealed class ActorScopeEvictor(
         if (ids.Length == 0)
             return;
 
-        foreach (var userId in ids)
-        {
-            roleCache.RemoveRoles(userId);
-            permissionCache.InvalidateUser(userId);
-        }
+        var actorIds = (await unitOfWork.Users.GetActorIdsAsync(ids, cancellationToken)).Distinct().ToArray();
+        if (actorIds.Length == 0)
+            return;
 
-        // Active subscriptions are an authorization boundary. Revoke them before the
-        // cancelable distributed invalidation so a failed cache operation cannot leave a
-        // connection receiving data under its old permissions.
+        EvictCaches(actorIds);
         connectionRevoker.RevokeUsers(ids);
-        await actorScopeProvider.InvalidateManyAsync(ids, cancellationToken);
+        await actorScopeProvider.InvalidateManyAsync(actorIds, cancellationToken);
+    }
+
+    private void EvictCaches(IEnumerable<Guid> actorIds)
+    {
+        foreach (var actorId in actorIds)
+        {
+            roleCache.RemoveRoles(actorId);
+            permissionCache.InvalidateActor(actorId);
+        }
     }
 }

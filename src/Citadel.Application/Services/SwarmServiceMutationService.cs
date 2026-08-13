@@ -379,7 +379,7 @@ internal sealed class SwarmServiceMutationService(
             || (actorId != Constants.SystemId
                 && !userContext.Current.IsAdmin
                 && !await unitOfWork.Platforms.CanAccessAsync(
-                    userContext.Current.UserId, platformId, cancellationToken)))
+                    userContext.Current.ActorId, platformId, cancellationToken)))
             return Result.Failure<Platform>(new NotFoundError("The Docker Swarm platform does not exist."));
         if (platform.PlatformDescriptor is not DockerSwarmPlatformDescriptor descriptor)
             return Result.Failure<Platform>(new BadRequestError("Managed Services require a Docker Swarm platform."));
@@ -400,7 +400,7 @@ internal sealed class SwarmServiceMutationService(
         actorId == Constants.SystemId || userContext.Current.IsAdmin
             ? Task.FromResult(true)
             : unitOfWork.SwarmServices.CanAccessAsync(
-                userContext.Current.UserId,
+                userContext.Current.ActorId,
                 serviceId,
                 permissionLevel,
                 specificPermission,

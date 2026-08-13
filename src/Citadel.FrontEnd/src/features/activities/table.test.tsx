@@ -81,4 +81,36 @@ describe('ActivitiesTable', () => {
     expect(screen.getByText('queued - A newer image digest is available.')).toBeVisible();
     expect(screen.getByText('Swarm Service Webhook Received')).toBeVisible();
   });
+
+  it('links identity activity targets to the Access screens', () => {
+    const activity = {
+      id: '019fbf2c-1c80-790f-a50a-11bbec0241da',
+      platformId: null,
+      resourceId: '019fbf2c-1c80-790f-a50a-11bbec0241db',
+      platformName: null,
+      resourceName: 'Operators',
+      platformStatus: null,
+      resourceType: 'Team',
+      eventType: 'TeamRenamed',
+      status: 'Success',
+      createdAt: '2026-08-13T00:00:00Z',
+      info: { $type: 'TeamRenamed', oldName: 'Old Operators', newName: 'Operators' },
+      actorId: '019fbf2c-1c80-790f-a50a-11bbec0241dc',
+      actorName: 'Administrator',
+      actorType: 'User',
+    } as ActivityView;
+
+    renderCitadel(
+      <ActivitiesTable
+        pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }}
+        isLoading={false}
+        displayTarget
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Operators' })).toHaveAttribute(
+      'href',
+      '/access/teams/edit/019fbf2c-1c80-790f-a50a-11bbec0241db',
+    );
+  });
 });

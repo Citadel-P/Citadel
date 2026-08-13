@@ -68,7 +68,7 @@ internal sealed class CreateStackHandler(
         }
 
         if (!user.IsAdmin
-            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, command.PlatformId, cancellationToken))
+            && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, command.PlatformId, cancellationToken))
         {
             return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }
@@ -212,7 +212,7 @@ internal sealed class CreateStackHandler(
             return Result.Failure<ActivitySourceResource?>(new NotFoundError("Duplicate source stack does not exist."));
 
         var user = userContext.Current;
-        if (!user.IsAdmin && !await unitOfWork.Stacks.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
+        if (!user.IsAdmin && !await unitOfWork.Stacks.CanAccessAsync(user.ActorId, source.ResourceId, cancellationToken))
             return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source stack."));
 
         if (sourceStack.CurrentStackRelease?.Platform?.PlatformDescriptor.Type != targetPlatformType)

@@ -20,7 +20,7 @@ internal sealed class GetAllStacksHandler(IUnitOfWork unitOfWork, IUserContextAc
 
         var user = userContextAccessor.Current;
         var stacks = user is not null && !user.IsAdmin
-            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.UserId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds, query.PlatformId)
+            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.ActorId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds, query.PlatformId)
             : await unitOfWork.Stacks.GetInfoAsync(cancellationToken, tagFilter.TagIds, query.PlatformId);
 
         return Result.Success(stacks);

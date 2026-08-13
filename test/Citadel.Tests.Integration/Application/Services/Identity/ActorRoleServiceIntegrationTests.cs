@@ -36,23 +36,23 @@ public class ActorRoleServiceIntegrationTests(PostgresTestFixture fixture) : Int
         var actorRoleService = Services.GetRequiredService<IActorRoleService>();
 
         // Seed role cache for the created user
-        roleCache.SetRoles(user.Id, new[] { "integration-role" });
-        Assert.NotNull(roleCache.GetRoles(user.Id));
+        roleCache.SetRoles(actor.Id, new[] { "integration-role" });
+        Assert.NotNull(roleCache.GetRoles(actor.Id));
 
         // Assign role
         var assignResult = await actorRoleService.AssignRoleAsync(actor.Id, role.Id, TestContext.Current.CancellationToken);
         Assert.True(assignResult.IsSuccess());
 
         // After assign, actor scope evictor should have removed cached roles for user (commit + eviction)
-        var rolesAfterAssign = roleCache.GetRoles(user.Id);
+        var rolesAfterAssign = roleCache.GetRoles(actor.Id);
         Assert.Null(rolesAfterAssign);
 
         // Re-seed and then remove role
-        roleCache.SetRoles(user.Id, new[] { "integration-role" });
+        roleCache.SetRoles(actor.Id, new[] { "integration-role" });
         var removeResult = await actorRoleService.RemoveRoleAsync(actor.Id, role.Id, TestContext.Current.CancellationToken);
         Assert.True(removeResult.IsSuccess());
 
-        var rolesAfterRemove = roleCache.GetRoles(user.Id);
+        var rolesAfterRemove = roleCache.GetRoles(actor.Id);
         Assert.Null(rolesAfterRemove);
     }
 }

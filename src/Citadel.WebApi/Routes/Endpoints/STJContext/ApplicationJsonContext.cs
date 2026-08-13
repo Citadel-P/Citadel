@@ -54,6 +54,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
+using WebApi.Routes.Endpoints.Resources.Identity.ServiceAccounts;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Licensing;
 using WebApi.Routes.Endpoints.Resources.Lookup;
@@ -605,6 +606,21 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceAccessView))]
 [JsonSerializable(typeof(IEnumerable<ResourceAccessView>))]
 [JsonSerializable(typeof(CreateUserInput))]
+[JsonSerializable(typeof(CreateServiceAccountInput))]
+[JsonSerializable(typeof(PatchServiceAccountInput))]
+[JsonSerializable(typeof(PatchServiceAccountInputPatchDocument))]
+[JsonSerializable(typeof(AddServiceAccountRoleInput))]
+[JsonSerializable(typeof(DeleteServiceAccountsInput))]
+[JsonSerializable(typeof(ServiceAccountResourceAccessInput))]
+[JsonSerializable(typeof(CreateServiceAccountTokenInput))]
+[JsonSerializable(typeof(ServiceAccountView))]
+[JsonSerializable(typeof(ServiceAccountsView))]
+[JsonSerializable(typeof(ServiceAccountTokenView))]
+[JsonSerializable(typeof(ServiceAccountTokensView))]
+[JsonSerializable(typeof(CreatedServiceAccountTokenView))]
+[JsonSerializable(typeof(ServiceAccountLimitsView))]
+[JsonSerializable(typeof(RunAsActorUsageView))]
+[JsonSerializable(typeof(IEnumerable<RunAsActorUsageView>))]
 [JsonSerializable(typeof(PatchUserInput))]
 [JsonSerializable(typeof(AddUserResourceAccessInput))]
 [JsonSerializable(typeof(RemoveUserResourceAccessInput))]

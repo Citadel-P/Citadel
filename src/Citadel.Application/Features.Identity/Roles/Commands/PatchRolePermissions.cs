@@ -1,8 +1,10 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
@@ -53,13 +55,16 @@ public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchR
 internal sealed class PatchRolePermissionsHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
+    ILicenseEntitlementService entitlementService,
+    IUserContextAccessor userContext) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(PatchRolePermissions command, CancellationToken cancellationToken)
     {
         var role = await unitOfWork.Roles.GetAsync(command.Id, cancellationToken);
         if (role is null)
             return Result.Failure<RoleDetails>(new NotFoundError("The provided role does not exist"));
+
+        var oldSnapshot = IdentityActivity.Snapshot(role);
 
         var current = new PatchRolePermissionsModel(role.Permissions.Select(x => new PatchPermissionModel(x.ResourceType, x.PermissionLevel, x.SpecificPermissions)));
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchRolePermissionsModel);
@@ -80,6 +85,18 @@ internal sealed class PatchRolePermissionsHandler(
             return Result.Failure<RoleDetails>(error);
 
         await unitOfWork.Roles.ReplacePermissionsAsync(role.Id, permissions, cancellationToken);
+        var newSnapshot = IdentityActivity.Snapshot(role);
+        if (!IdentityActivity.Same(oldSnapshot, newSnapshot))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    role.Id,
+                    role.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.RoleUpdated,
+                    new RoleUpdated(oldSnapshot, newSnapshot)),
+                cancellationToken);
+        }
         await unitOfWork.CommitAsync(cancellationToken);
 
         // Invalidate permission caches for all users affected by this role change

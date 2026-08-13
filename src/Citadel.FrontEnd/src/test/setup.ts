@@ -3,6 +3,8 @@ import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { server } from './server';
 
+document.queryCommandSupported ??= () => false;
+
 class ResizeObserverStub implements ResizeObserver {
   observe() {}
   unobserve() {}

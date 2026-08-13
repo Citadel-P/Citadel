@@ -7,6 +7,7 @@ using Hosting.Common.Extensions;
 using Hosting.Common.Security;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Connections;
@@ -24,6 +25,7 @@ using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
 using WebApi.Transport;
+using WebApi.Security;
 using static Nerdbank.MessagePack.OptionalConverters;
 
 namespace WebApi;
@@ -55,8 +57,25 @@ internal static class WebApiModule
             .AddCors();
 
         services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
+            .AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = CitadelAuthenticationSchemes.CompositeBearer;
+                options.DefaultChallengeScheme = CitadelAuthenticationSchemes.CompositeBearer;
+            })
+            .AddPolicyScheme(CitadelAuthenticationSchemes.CompositeBearer, "Citadel bearer", options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                {
+                    var authorization = context.Request.Headers.Authorization.ToString();
+                    var isBearer = authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
+                    var isServiceAccount = isBearer
+                        && authorization.AsSpan("Bearer ".Length).StartsWith("cit_sa_", StringComparison.Ordinal);
+                    return isServiceAccount
+                        ? CitadelAuthenticationSchemes.ServiceAccount
+                        : CitadelAuthenticationSchemes.UserJwt;
+                };
+            })
+            .AddJwtBearer(CitadelAuthenticationSchemes.UserJwt, options =>
             {
                 var key = (string.IsNullOrEmpty(configuration["Jwt:Key"])
                                         ? Helpers.GetJwtSecretFromFile()
@@ -92,7 +111,14 @@ internal static class WebApiModule
                         return Task.CompletedTask;
                     }
                 };
-            });
+            })
+            .AddScheme<AuthenticationSchemeOptions, ServiceAccountAuthenticationHandler>(
+                CitadelAuthenticationSchemes.ServiceAccount,
+                _ => { });
+
+        services.AddSingleton<ServiceAccountLastUsedTracker>();
+        services.AddSingleton<IServiceAccountLastUsedTracker>(provider => provider.GetRequiredService<ServiceAccountLastUsedTracker>());
+        services.AddHostedService(provider => provider.GetRequiredService<ServiceAccountLastUsedTracker>());
 
         services.AddAuthorization();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultHandler>();
@@ -119,6 +145,7 @@ internal static class WebApiModule
         app.UseMiddleware<SetupRequiredMiddleware>();
         app.UseAuthentication();
         app.UseMiddleware<UserAuthorizationContextMiddleware>();
+        app.UseMiddleware<ServiceAccountTokenSafetyMiddleware>();
         app.UseMiddleware<AutomationRunTokenSafetyMiddleware>();
         app.UseAuthorization();
 
@@ -297,6 +324,15 @@ internal static class WebApiModule
         builder.Services
             .AddOptions<BootstrapOptions>()
             .BindConfiguration(BootstrapOptions.SectionName);
+        builder.Services
+            .AddOptions<ServiceAccountOptions>()
+            .BindConfiguration(ServiceAccountOptions.SectionName)
+            .Validate(options => options.DefaultTokenLifetimeDays > 0, "ServiceAccounts:DefaultTokenLifetimeDays must be greater than zero.")
+            .Validate(options => options.MaximumTokenLifetimeDays >= options.DefaultTokenLifetimeDays, "ServiceAccounts:MaximumTokenLifetimeDays must be greater than or equal to the default lifetime.")
+            .Validate(options => options.MaximumActiveTokensPerAccount > 0, "ServiceAccounts:MaximumActiveTokensPerAccount must be greater than zero.")
+            .Validate(options => options.LastUsedWriteIntervalMinutes > 0, "ServiceAccounts:LastUsedWriteIntervalMinutes must be greater than zero.")
+            .Validate(options => options.LastUsedTrackingCapacity >= 100, "ServiceAccounts:LastUsedTrackingCapacity must be at least 100.")
+            .ValidateOnStart();
         builder.Services
             .AddOptions<AutomationOptions>()
             .BindConfiguration(AutomationOptions.SectionName)

@@ -270,14 +270,14 @@ internal sealed class SecretValueProtector(IOptions<SecretsConfiguration> secret
         => secretsOptions.Value.GetEncryptionKey();
 }
 
-internal sealed class SecretRedactor : ISecretRedactor
+internal sealed partial class SecretRedactor : ISecretRedactor
 {
     public string Redact(string? value, IEnumerable<string> secrets)
     {
         if (string.IsNullOrEmpty(value))
             return string.Empty;
 
-        var redacted = value;
+        var redacted = ServiceAccountTokenRegex().Replace(value, "[redacted Service Account token]");
         foreach (var secret in secrets
             .Where(x => !string.IsNullOrEmpty(x))
             .Distinct(StringComparer.Ordinal)
@@ -288,6 +288,9 @@ internal sealed class SecretRedactor : ISecretRedactor
 
         return redacted;
     }
+
+    [GeneratedRegex("cit_sa_[0-9a-fA-F]{32}\\.[A-Za-z0-9_-]{43}", RegexOptions.Compiled)]
+    private static partial Regex ServiceAccountTokenRegex();
 }
 
 internal sealed record ResolvedResourceBindings(

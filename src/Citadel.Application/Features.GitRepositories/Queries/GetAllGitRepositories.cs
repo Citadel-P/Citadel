@@ -20,7 +20,7 @@ internal sealed class GetAllGitRepositoriesHandler(IUnitOfWork unitOfWork, IUser
 
         var user = userContextAccessor.Current;
         var gitRepositories = user is not null && !user.IsAdmin
-            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.UserId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
+            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.ActorId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
             : await unitOfWork.GitRepositories.GetAllAsync(cancellationToken, tagFilter.TagIds);
 
         return Result.Success(gitRepositories);

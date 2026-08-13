@@ -24,6 +24,60 @@ internal static class IdentityMappers
     internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
         => dtos.Select(ToDetails);
 
+    internal static ServiceAccount ToDomain(this ServiceAccountDto dto)
+        => ServiceAccount.FromPersistence(
+            dto.Id,
+            dto.Name,
+            dto.Description,
+            dto.ActorId,
+            dto.CreatedByActorId,
+            dto.CreatedAt,
+            dto.UpdatedAt,
+            dto.ArchivedAtUtc);
+
+    internal static ServiceAccountDetails ToDetails(this ServiceAccountDetailsDto dto)
+        => new(
+            dto.Id,
+            dto.Name,
+            dto.Description,
+            dto.ActorId,
+            dto.IsEnabled,
+            dto.CreatedAt,
+            dto.CreatedByActorId,
+            dto.UpdatedAt,
+            dto.ArchivedAtUtc,
+            dto.ActiveTokenCount,
+            dto.LastUsedAtUtc,
+            ParseResources(dto.Teams),
+            ParseResources(dto.Roles));
+
+    internal static IEnumerable<ServiceAccountDetails> ToDetails(this IEnumerable<ServiceAccountDetailsDto> dtos)
+        => dtos.Select(ToDetails);
+
+    internal static ServiceAccountTokenDetails ToDetails(this ServiceAccountTokenDto dto)
+        => new(
+            dto.Id,
+            dto.Name,
+            dto.ExpiresAtUtc,
+            dto.LastUsedAtUtc,
+            dto.RevokedAtUtc,
+            dto.RevokedByActorId,
+            dto.CreatedByActorId,
+            dto.CreatedByName,
+            dto.CreatedAtUtc);
+
+    internal static ServiceAccountCredentialInfo ToCredentialInfo(this ServiceAccountCredentialDto dto)
+        => new(
+            dto.CredentialId,
+            dto.ServiceAccountId,
+            dto.ActorId,
+            dto.Name,
+            dto.SecretHash,
+            dto.ExpiresAtUtc,
+            dto.RevokedAtUtc,
+            dto.IsEnabled,
+            dto.ArchivedAtUtc);
+
     internal static CurrentProfileDetails ToDetails(this CurrentProfileDto dto)
         => new(
             dto.Id,
@@ -53,8 +107,20 @@ internal static class IdentityMappers
     private static IEnumerable<ResourceInfo> ParseResources(string json)
         => JsonSerializer.Deserialize(json, RoleJsonContext.Default.IEnumerableResourceInfo) ?? EmptyResources;
 
+    private static IEnumerable<ActorTeamMemberInfo> ParseTeamMembers(string json)
+        => JsonSerializer.Deserialize(json, RoleJsonContext.Default.IEnumerableActorTeamMemberInfo) ?? [];
+
     internal static TeamDetails ToDetails(this TeamWithActorDto dto)
-        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled, dto.TotalMembers, ParseResources(dto.Users), ParseResources(dto.Roles));
+        => new(
+            dto.Id,
+            dto.Name,
+            dto.ActorId,
+            dto.IsEnabled,
+            dto.TotalMembers,
+            ParseResources(dto.Users),
+            ParseResources(dto.Roles),
+            null,
+            ParseTeamMembers(dto.Members));
 
     internal static IEnumerable<TeamDetails> ToDetails(this IEnumerable<TeamWithActorDto> dtos)
         => dtos.Select(ToDetails);

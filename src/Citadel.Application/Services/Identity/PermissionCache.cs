@@ -24,7 +24,7 @@ internal sealed class PermissionCache(IMemoryCache memoryCache) : IPermissionCac
             var options = new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = PermissionCacheTtl };
             memoryCache.Set(key, meta, options);
 
-            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(key.UserId);
+            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(key.ActorId);
             if (!memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(indexKey, out var keys) || keys is null)
             {
                 keys = [];
@@ -41,11 +41,11 @@ internal sealed class PermissionCache(IMemoryCache memoryCache) : IPermissionCac
         }
     }
 
-    public IReadOnlyCollection<PermissionCacheKey> GetIndex(Guid userId)
+    public IReadOnlyCollection<PermissionCacheKey> GetIndex(Guid actorId)
     {
         lock (sync)
         {
-            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(userId);
+            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(actorId);
             return memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(indexKey, out var keys) && keys is not null
                 ? [.. keys]
                 : [];
@@ -57,17 +57,17 @@ internal sealed class PermissionCache(IMemoryCache memoryCache) : IPermissionCac
         lock (sync)
         {
             memoryCache.Remove(key);
-            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(key.UserId);
+            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(key.ActorId);
             if (memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(indexKey, out var keys) && keys is not null)
                 keys.Remove(key);
         }
     }
 
-    public void InvalidateUser(Guid userId)
+    public void InvalidateActor(Guid actorId)
     {
         lock (sync)
         {
-            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(userId);
+            var indexKey = Hosting.Common.Constants.CacheKeys.PermIndex(actorId);
             if (memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(indexKey, out var keys) && keys is not null)
             {
                 foreach (var key in keys)

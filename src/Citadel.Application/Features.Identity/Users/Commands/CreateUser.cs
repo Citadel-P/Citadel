@@ -4,6 +4,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -133,6 +134,20 @@ internal sealed class CreateUserHandler(
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(user.ActorId, accessRows, cancellationToken);
         }
+
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            IdentityActivity.Create(
+                user.Id,
+                user.Name,
+                actorId,
+                ActivityEventType.UserCreated,
+                new UserCreated(IdentityActivity.Snapshot(
+                    user.Email,
+                    userActor.IsEnabled,
+                    teamIds,
+                    roleIds,
+                    resourceAccesses))),
+            cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
         if (teamIds.Length > 0 || roleIds.Length > 0 || resourceAccesses.Length > 0)

@@ -22,12 +22,15 @@ const activityResourceIcons = {
   [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
   [ActivityResourceType.AutomationAction]: CitadelIcons.AutomationAction,
   [ActivityResourceType.User]: CitadelIcons.User,
+  [ActivityResourceType.Team]: CitadelIcons.Team,
+  [ActivityResourceType.Role]: CitadelIcons.Role,
   [ActivityResourceType.License]: CitadelIcons.License,
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
   [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
   [ActivityResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
   [ActivityResourceType.SwarmService]: CitadelIcons.SwarmService,
+  [ActivityResourceType.ServiceAccount]: CitadelIcons.ServiceAccount,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -40,17 +43,21 @@ const activityEventPrefixes = {
   [ActivityResourceType.OidcProvider]: 'OidcProvider',
   [ActivityResourceType.AutomationAction]: 'Action',
   [ActivityResourceType.User]: 'User',
+  [ActivityResourceType.Team]: 'Team',
+  [ActivityResourceType.Role]: 'Role',
   [ActivityResourceType.License]: 'License',
   [ActivityResourceType.Volume]: 'Volume',
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
   [ActivityResourceType.BackupPolicy]: 'BackupPolicy',
   [ActivityResourceType.SwarmService]: 'SwarmService',
+  [ActivityResourceType.ServiceAccount]: 'ServiceAccount',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityResourceLabels: Partial<Record<ActivityResourceType, string>> = {
   [ActivityResourceType.BuildAgentPool]: 'Build Agent Pool',
   [ActivityResourceType.BackupPolicy]: 'Backup Policy',
+  [ActivityResourceType.ServiceAccount]: 'Service Account',
 };
 
 const activityLookupTargets = {
@@ -63,12 +70,15 @@ const activityLookupTargets = {
   [ActivityResourceType.OidcProvider]: LookupResourceType.OidcProvider,
   [ActivityResourceType.AutomationAction]: LookupResourceType.AutomationAction,
   [ActivityResourceType.User]: LookupResourceType.User,
+  [ActivityResourceType.Team]: LookupResourceType.Team,
+  [ActivityResourceType.Role]: LookupResourceType.Role,
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
   [ActivityResourceType.BackupPolicy]: LookupResourceType.BackupPolicy,
   [ActivityResourceType.SwarmService]: LookupResourceType.SwarmService,
+  [ActivityResourceType.ServiceAccount]: LookupResourceType.ServiceAccount,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {
@@ -112,6 +122,8 @@ function SearchSection() {
           isAdministrator ||
           (type !== ActivityResourceType.OidcProvider &&
             type !== ActivityResourceType.User &&
+            type !== ActivityResourceType.Team &&
+            type !== ActivityResourceType.Role &&
             type !== ActivityResourceType.License),
       )
       .map((type) => ({

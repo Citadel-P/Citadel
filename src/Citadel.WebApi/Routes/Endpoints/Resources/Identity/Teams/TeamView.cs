@@ -11,7 +11,17 @@ public sealed record TeamView(
     int TotalMembers, 
     IEnumerable<ResourceInfo>? Users = null,
     IEnumerable<ResourceInfo>? Roles = null,
-    IEnumerable<ResourceAccessView>? ResourceAccesses = null)
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null,
+    IEnumerable<ActorTeamMemberInfo>? Members = null)
 {
-    internal static TeamView Map(TeamDetails team) => new(team.Id, team.Name, team.ActorId, team.IsEnabled, team.TotalMembers ?? 0, team.Users, team.Roles, team.ResourceAccesses);
+    internal static TeamView Map(TeamDetails team) => new(
+        team.Id,
+        team.Name,
+        team.ActorId,
+        team.IsEnabled,
+        team.TotalMembers ?? 0,
+        team.Users,
+        team.Roles,
+        team.ResourceAccesses,
+        team.Members);
 }

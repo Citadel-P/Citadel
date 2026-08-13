@@ -85,7 +85,7 @@ internal sealed class GetBackupPoliciesHandler(
         var user = userContextAccessor.Current;
         var policies = (user is not null && !user.IsAdmin
             ? await unitOfWork.BackupPolicies.GetAuthorizedAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.BackupPolicy,
                 PermissionLevel.Read,
                 SpecificPermission.None,
@@ -113,7 +113,7 @@ internal sealed class GetPlatformBackupSummariesHandler(
         var user = userContextAccessor.Current;
         var summaries = await unitOfWork.BackupPolicies.GetPlatformSummariesAsync(
             query.PlatformIds,
-            user is not null && !user.IsAdmin ? user.UserId : null,
+            user is not null && !user.IsAdmin ? user.ActorId : null,
             ResourceType.BackupPolicy,
             PermissionLevel.Read,
             SpecificPermission.None,
@@ -316,7 +316,7 @@ internal sealed class GetBackupCoverageHandler(
         var user = userContextAccessor.Current;
         var coverage = await unitOfWork.BackupPolicies.GetVolumeCoverageAsync(
             volumeKeys,
-            user is not null && !user.IsAdmin ? user.UserId : null,
+            user is not null && !user.IsAdmin ? user.ActorId : null,
             ResourceType.BackupPolicy,
             PermissionLevel.Read,
             SpecificPermission.None,

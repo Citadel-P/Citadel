@@ -29,7 +29,7 @@ internal sealed class ApplyStackHandler(
             var stack = await unitOfWork.Stacks.GetAsync(request.Id, cancellationToken);
             if (stack?.CurrentStackRelease is not null
                 && !await unitOfWork.Platforms.CanAccessAsync(
-                    user.UserId,
+                    user.ActorId,
                     stack.CurrentStackRelease.PlatformId,
                     cancellationToken))
             {

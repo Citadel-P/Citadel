@@ -267,7 +267,7 @@ public sealed class BackupEndpointTests(PostgresTestFixture fixture) : Integrati
                 keepLastSuccessful = 5,
                 timeoutSeconds = 300,
                 alertOnFailure = true,
-                runAsActorId = (Guid?)null,
+                runAsActorId = Constants.DefaultAdminId,
                 tagIds = Array.Empty<Guid>()
             },
             cancellationToken);

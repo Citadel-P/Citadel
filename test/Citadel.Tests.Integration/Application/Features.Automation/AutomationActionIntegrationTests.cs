@@ -383,19 +383,15 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
     }
 
     [Fact]
-    public async Task TestAutomationAction_ShouldExecuteDraftCodeWithoutPersistingIt()
+    public async Task TestAutomationAction_ShouldExecutePersistedConfiguration()
     {
         var createResponse = await CreateActionAsync("action-test", "console.log('persisted');");
         var actionId = ReadId(await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         createResponse.EnsureSuccessStatusCode();
 
-        var testJson = $$"""
+        var testJson = """
         {
-          "code": "console.log('draft');",
-          "argsJson": "{\"draft\":true}",
-          "defaultArgsJson": "{\"default\":true}",
-          "timeoutSeconds": 30,
-          "runAsActorId": "{{Constants.DefaultAdminId}}"
+          "argsJson": "{\"test\":true}"
         }
         """;
 
@@ -416,8 +412,8 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         Assert.NotNull(run);
         Assert.Equal("console.log('persisted');", action.Code);
         Assert.Equal(ActionRunTrigger.Test, run.Trigger);
-        Assert.Equal("console.log('draft');", run.CodeSnapshot);
-        AssertJsonEqual("""{"draft":true}""", run.ArgsJson);
+        Assert.Equal("console.log('persisted');", run.CodeSnapshot);
+        AssertJsonEqual("""{"test":true}""", run.ArgsJson);
         Assert.Equal(ActionRunStatus.Succeeded, run.Status);
     }
 
@@ -437,10 +433,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
             $"/api/v1/automation/actions/{actionId}/test",
             JsonContent("""
             {
-              "code": "console.log('draft');",
-              "argsJson": "{}",
-              "defaultArgsJson": "{}",
-              "timeoutSeconds": 30
+              "argsJson": "{}"
             }
             """),
             TestContext.Current.CancellationToken);

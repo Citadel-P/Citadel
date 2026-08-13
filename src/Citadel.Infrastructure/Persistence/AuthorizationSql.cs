@@ -4,22 +4,22 @@ internal static class AuthorizationSql
 {
     internal const string ActorScopeCte = """
         ActorScope AS (
-            SELECT Users.ActorId
-            FROM Users
-            JOIN Actors userActor ON userActor.Id = Users.ActorId
-            WHERE Users.Id = @UserId
-              AND userActor.IsEnabled
+            SELECT principalActor.Id AS ActorId
+            FROM Actors principalActor
+            LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id
+            WHERE (principalActor.Id = @UserId OR principalUser.Id = @UserId)
+              AND principalActor.IsEnabled
 
             UNION
 
             SELECT t.ActorId
             FROM Teams t
-            JOIN UsersTeams ut ON ut.TeamId = t.Id
-            JOIN Users u ON u.Id = ut.UserId
-            JOIN Actors userActor ON userActor.Id = u.ActorId
+            JOIN ActorTeamMemberships membership ON membership.TeamId = t.Id
+            JOIN Actors principalActor ON principalActor.Id = membership.MemberActorId
+            LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id
             JOIN Actors teamActor ON teamActor.Id = t.ActorId
-            WHERE ut.UserId = @UserId
-              AND userActor.IsEnabled
+            WHERE (principalActor.Id = @UserId OR principalUser.Id = @UserId)
+              AND principalActor.IsEnabled
               AND teamActor.IsEnabled
         )
         """;

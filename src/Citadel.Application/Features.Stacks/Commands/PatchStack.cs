@@ -114,7 +114,7 @@ internal sealed class PatchStackHandler(
 
         var user = userContext.Current;
         if (!user.IsAdmin
-            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, patched.PlatformId.Value, cancellationToken))
+            && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, patched.PlatformId.Value, cancellationToken))
         {
             return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }

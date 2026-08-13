@@ -29,6 +29,7 @@ import { GitRepoFormComponents } from './git-repos/form';
 import { AccessComponents } from './access';
 import { UserFormComponents } from './access/users/form';
 import { TeamFormComponents } from './access/teams/form';
+import { ServiceAccountFormComponents } from './access/service-accounts/form';
 import { StackFormComponents } from './stacks/form';
 import { StackComponents } from './stacks';
 import { BindingComponents } from './bindings';
@@ -92,6 +93,7 @@ export const ResourceComponents: {
   User: AccessComponents,
   Team: AccessComponents,
   Role: AccessComponents,
+  ServiceAccount: AccessComponents,
   Binding: BindingComponents,
   Tag: TagComponents,
   OidcProvider: OidcProviderComponents,
@@ -131,6 +133,7 @@ export const ResourceFormComponents: {
   User: UserFormComponents,
   Team: TeamFormComponents,
   Role: undefined,
+  ServiceAccount: ServiceAccountFormComponents,
   Binding: undefined,
   Tag: undefined,
   OidcProvider: OidcProviderFormComponents,

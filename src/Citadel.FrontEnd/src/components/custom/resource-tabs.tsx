@@ -67,7 +67,7 @@ export const ResourceTabs = ({
         <TabsList className={cn('w-full overflow-x-auto', isStuck && 'px-4')}>
           {tabs.map((tab) => (
             <TabsTrigger key={tab.label} value={tab.label} disabled={tab.disabled?.(resource) ?? false}>
-              {tab.label}
+              {tab.Label ? <tab.Label /> : tab.label}
             </TabsTrigger>
           ))}
         </TabsList>

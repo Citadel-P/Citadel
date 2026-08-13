@@ -103,7 +103,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
                   value={t.label}
                   disabled={t.disabled?.(null as any) ?? false}
                   onClick={() => navigateToTab(t)}>
-                  {t.label}
+                  {t.Label ? <t.Label /> : t.label}
                 </TabsTrigger>
               ))}
             </TabsList>

@@ -21,6 +21,7 @@ internal class UnitOfWork : IUnitOfWork
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         Users = new Lazy<IUserRepository>(() => new UserRepository(connection, GetTransaction));
+        ServiceAccounts = new Lazy<IServiceAccountRepository>(() => new ServiceAccountRepository(connection, GetTransaction));
         Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
         Roles = new Lazy<IRoleRepository>(() => new RoleRepository(connection, GetTransaction));
         Actors = new Lazy<IActorRepository>(() => new ActorRepository(connection, GetTransaction));
@@ -79,6 +80,7 @@ internal class UnitOfWork : IUnitOfWork
     }
 
     private Lazy<IUserRepository> Users { get; }
+    private Lazy<IServiceAccountRepository> ServiceAccounts { get; }
     private Lazy<ITeamRepository> Teams { get; }
     private Lazy<IRoleRepository> Roles { get; }
     private Lazy<IImageRepository> Images { get; }
@@ -135,6 +137,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<ISwarmServiceStatRepository> SwarmServiceStats { get; }
 
     IUserRepository IUnitOfWork.Users => Users.Value;
+    IServiceAccountRepository IUnitOfWork.ServiceAccounts => ServiceAccounts.Value;
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
     IRoleRepository IUnitOfWork.Roles => Roles.Value;
     IImageRepository IUnitOfWork.Images => Images.Value;

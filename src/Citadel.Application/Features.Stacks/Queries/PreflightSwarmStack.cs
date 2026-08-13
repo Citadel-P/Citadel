@@ -41,7 +41,7 @@ internal sealed class PreflightSwarmStackHandler(
 
         var user = userContext.Current;
         if (!user.IsAdmin
-            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, query.PlatformId, cancellationToken))
+            && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, query.PlatformId, cancellationToken))
         {
             return Result.Failure<SwarmStackCompatibilityReport>(
                 new NotFoundError("The provided platform does not exist or is not accessible."));
@@ -82,7 +82,7 @@ internal sealed class PreflightSwarmStackHandler(
         if (!user.IsAdmin)
         {
             var permissions = await permissionService.ResolvePermissionsAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.GitRepository,
                 git.GitRepoId,
                 cancellationToken);

@@ -26,14 +26,19 @@ public class ActorScopeEvictorRoleTests
             .ReturnsAsync(new[] { actorA, actorB });
 
         var teams = new Mock<ITeamRepository>();
-        teams.Setup(t => t.GetUserIdsByActorIdAsync(actorA, It.IsAny<CancellationToken>()))
+        teams.Setup(t => t.GetAffectedPrincipalActorIdsAsync(actorA, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { userA, userB });
-        teams.Setup(t => t.GetUserIdsByActorIdAsync(actorB, It.IsAny<CancellationToken>()))
+        teams.Setup(t => t.GetAffectedPrincipalActorIdsAsync(actorB, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { userC });
+
+        var users = new Mock<IUserRepository>();
+        users.Setup(x => x.GetUserIdsByActorIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(x => x.Roles).Returns(roles.Object);
         uow.SetupGet(x => x.Teams).Returns(teams.Object);
+        uow.SetupGet(x => x.Users).Returns(users.Object);
 
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
@@ -49,9 +54,9 @@ public class ActorScopeEvictorRoleTests
         await evictor.EvictPermissionsForRoleAsync(roleId, TestContext.Current.CancellationToken);
 
         // Ensure permission cache invalidation was attempted for each user
-        permissionCache.Verify(p => p.InvalidateUser(userA), Times.Once);
-        permissionCache.Verify(p => p.InvalidateUser(userB), Times.Once);
-        permissionCache.Verify(p => p.InvalidateUser(userC), Times.Once);
+        permissionCache.Verify(p => p.InvalidateActor(userA), Times.Once);
+        permissionCache.Verify(p => p.InvalidateActor(userB), Times.Once);
+        permissionCache.Verify(p => p.InvalidateActor(userC), Times.Once);
 
         actorScopeProvider.Verify(
             provider => provider.InvalidateManyAsync(

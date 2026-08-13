@@ -45,14 +45,14 @@ internal sealed class ContainerAuthorizationService(
             return true;
         }
 
-        if (user.UserId == Guid.Empty)
+        if (user.ActorId == Guid.Empty)
         {
             return false;
         }
 
         foreach (var platformId in platformIds)
         {
-            var metadata = await permissionService.ResolvePermissionsAsync(user.UserId, resourceType, platformId, cancellationToken);
+            var metadata = await permissionService.ResolvePermissionsAsync(user.ActorId, resourceType, platformId, cancellationToken);
             var hasPermission = metadata.Has(permissionLevel, specificPermission);
 
             if (!hasPermission)

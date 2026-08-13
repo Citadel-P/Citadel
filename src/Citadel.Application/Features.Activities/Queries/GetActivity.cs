@@ -18,7 +18,7 @@ internal sealed class GetActivityHandler(
         var user = userContextAccessor.Current;
         var activity = user.IsAdmin
             ? await unitOfWork.ActivityEventRepository.GetByIdAsync(query.Id, cancellationToken)
-            : await unitOfWork.ActivityEventRepository.GetAuthorizedByIdAsync(query.Id, user.UserId, cancellationToken);
+            : await unitOfWork.ActivityEventRepository.GetAuthorizedByIdAsync(query.Id, user.ActorId, cancellationToken);
 
         return activity ?? Result.Failure<ActivityEvent>(new NotFoundError("Activity does not exist"));
     }

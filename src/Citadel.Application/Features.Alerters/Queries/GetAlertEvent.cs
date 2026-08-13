@@ -19,7 +19,7 @@ internal sealed class GetAlertEventHandler(IUnitOfWork unitOfWork, IUserContextA
         var user = userContextAccessor.Current;
         var alertEvent = user is not null && !user.IsAdmin
             ? await unitOfWork.AlertEvents.GetAuthorizedByIdAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.Alert,
                 PermissionLevel.Read,
                 SpecificPermission.None,

@@ -94,6 +94,18 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(UserMfaRecoveryCodeUsed), nameof(ActivityEventType.UserMfaRecoveryCodeUsed))]
 [JsonDerivedType(typeof(UserMfaRecoveryCodesRegenerated), nameof(ActivityEventType.UserMfaRecoveryCodesRegenerated))]
 [JsonDerivedType(typeof(UserMfaResetByAdministrator), nameof(ActivityEventType.UserMfaResetByAdministrator))]
+[JsonDerivedType(typeof(UserCreated), nameof(ActivityEventType.UserCreated))]
+[JsonDerivedType(typeof(UserUpdated), nameof(ActivityEventType.UserUpdated))]
+[JsonDerivedType(typeof(UserRenamed), nameof(ActivityEventType.UserRenamed))]
+[JsonDerivedType(typeof(UserDeleted), nameof(ActivityEventType.UserDeleted))]
+[JsonDerivedType(typeof(TeamCreated), nameof(ActivityEventType.TeamCreated))]
+[JsonDerivedType(typeof(TeamUpdated), nameof(ActivityEventType.TeamUpdated))]
+[JsonDerivedType(typeof(TeamRenamed), nameof(ActivityEventType.TeamRenamed))]
+[JsonDerivedType(typeof(TeamDeleted), nameof(ActivityEventType.TeamDeleted))]
+[JsonDerivedType(typeof(RoleCreated), nameof(ActivityEventType.RoleCreated))]
+[JsonDerivedType(typeof(RoleUpdated), nameof(ActivityEventType.RoleUpdated))]
+[JsonDerivedType(typeof(RoleRenamed), nameof(ActivityEventType.RoleRenamed))]
+[JsonDerivedType(typeof(RoleDeleted), nameof(ActivityEventType.RoleDeleted))]
 [JsonDerivedType(typeof(LicenseInstalled), nameof(ActivityEventType.LicenseInstalled))]
 [JsonDerivedType(typeof(LicenseReplaced), nameof(ActivityEventType.LicenseReplaced))]
 [JsonDerivedType(typeof(LicenseRemoved), nameof(ActivityEventType.LicenseRemoved))]
@@ -132,6 +144,14 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(SwarmServiceOperationFailed), nameof(ActivityEventType.SwarmServiceOperationFailed))]
 [JsonDerivedType(typeof(SwarmServiceDuplicated), nameof(ActivityEventType.SwarmServiceDuplicated))]
 [JsonDerivedType(typeof(SwarmServiceWebhookReceived), nameof(ActivityEventType.SwarmServiceWebhookReceived))]
+[JsonDerivedType(typeof(ServiceAccountCreated), nameof(ActivityEventType.ServiceAccountCreated))]
+[JsonDerivedType(typeof(ServiceAccountUpdated), nameof(ActivityEventType.ServiceAccountUpdated))]
+[JsonDerivedType(typeof(ServiceAccountRenamed), nameof(ActivityEventType.ServiceAccountRenamed))]
+[JsonDerivedType(typeof(ServiceAccountEnabled), nameof(ActivityEventType.ServiceAccountEnabled))]
+[JsonDerivedType(typeof(ServiceAccountDisabled), nameof(ActivityEventType.ServiceAccountDisabled))]
+[JsonDerivedType(typeof(ServiceAccountArchived), nameof(ActivityEventType.ServiceAccountArchived))]
+[JsonDerivedType(typeof(ServiceAccountTokenCreated), nameof(ActivityEventType.ServiceAccountTokenCreated))]
+[JsonDerivedType(typeof(ServiceAccountTokenRevoked), nameof(ActivityEventType.ServiceAccountTokenRevoked))]
 
 public abstract record ActivityEventInfo;
 
@@ -141,6 +161,49 @@ public sealed record ActivitySourceResource(
     string ResourceName);
 
 public sealed record ActivityChangedField(string Name, string? OldValue, string? NewValue);
+
+public sealed record IdentityResourceAccessSnapshot(
+    Hosting.Common.ResourceType ResourceType,
+    Guid ResourceId,
+    Hosting.Common.PermissionLevel PermissionLevel,
+    int SpecificPermissions);
+
+public sealed record UserActivitySnapshot(
+    string Email,
+    bool IsEnabled,
+    IReadOnlyCollection<Guid> TeamIds,
+    IReadOnlyCollection<Guid> RoleIds,
+    IReadOnlyCollection<IdentityResourceAccessSnapshot> ResourceAccesses);
+
+public sealed record TeamActivitySnapshot(
+    bool IsEnabled,
+    IReadOnlyCollection<Guid> MemberActorIds,
+    IReadOnlyCollection<Guid> RoleIds,
+    IReadOnlyCollection<IdentityResourceAccessSnapshot> ResourceAccesses);
+
+public sealed record RolePermissionActivitySnapshot(
+    Hosting.Common.ResourceType ResourceType,
+    Hosting.Common.PermissionLevel PermissionLevel,
+    int SpecificPermissions);
+
+public sealed record RoleActivitySnapshot(
+    RoleType RoleType,
+    IReadOnlyCollection<RolePermissionActivitySnapshot> Permissions);
+
+public sealed record UserCreated(UserActivitySnapshot User) : ActivityEventInfo;
+public sealed record UserUpdated(UserActivitySnapshot OldUser, UserActivitySnapshot NewUser, bool PasswordChanged) : ActivityEventInfo;
+public sealed record UserRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record UserDeleted(UserActivitySnapshot User) : ActivityEventInfo;
+
+public sealed record TeamCreated(TeamActivitySnapshot Team) : ActivityEventInfo;
+public sealed record TeamUpdated(TeamActivitySnapshot OldTeam, TeamActivitySnapshot NewTeam) : ActivityEventInfo;
+public sealed record TeamRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record TeamDeleted(TeamActivitySnapshot Team) : ActivityEventInfo;
+
+public sealed record RoleCreated(RoleActivitySnapshot Role) : ActivityEventInfo;
+public sealed record RoleUpdated(RoleActivitySnapshot OldRole, RoleActivitySnapshot NewRole) : ActivityEventInfo;
+public sealed record RoleRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record RoleDeleted(RoleActivitySnapshot Role) : ActivityEventInfo;
 
 public sealed record SwarmServiceActivitySnapshot(
     Guid Id,
@@ -487,3 +550,34 @@ public sealed record VolumeContentDownloaded(
     string Path,
     bool IsDirectory,
     string FileName) : ActivityEventInfo;
+
+public sealed record ServiceAccountActivitySnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    bool IsEnabled,
+    IReadOnlyCollection<Guid> TeamIds,
+    IReadOnlyCollection<Guid> RoleIds,
+    IReadOnlyCollection<ServiceAccountResourceAccessSnapshot> ResourceAccesses);
+
+public sealed record ServiceAccountResourceAccessSnapshot(
+    Hosting.Common.ResourceType ResourceType,
+    Guid ResourceId,
+    Hosting.Common.PermissionLevel PermissionLevel,
+    int SpecificPermissions);
+
+public sealed record ServiceAccountCreated(ServiceAccountActivitySnapshot Account) : ActivityEventInfo;
+public sealed record ServiceAccountUpdated(
+    ServiceAccountActivitySnapshot OldAccount,
+    ServiceAccountActivitySnapshot NewAccount) : ActivityEventInfo;
+public sealed record ServiceAccountRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record ServiceAccountEnabled(Guid AccountId) : ActivityEventInfo;
+public sealed record ServiceAccountDisabled(Guid AccountId) : ActivityEventInfo;
+public sealed record ServiceAccountArchived(Guid AccountId) : ActivityEventInfo;
+public sealed record ServiceAccountTokenCreated(
+    Guid AccountId,
+    Guid TokenId,
+    string TokenName,
+    string PublicHint,
+    DateTime? ExpiresAtUtc) : ActivityEventInfo;
+public sealed record ServiceAccountTokenRevoked(Guid AccountId, Guid TokenId, string PublicHint) : ActivityEventInfo;

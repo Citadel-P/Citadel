@@ -52,8 +52,10 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .InstalledLicenseConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
+            .ServiceAccountConfiguration()
+            .ServiceAccountTokenConfiguration()
             .TeamConfiguration()
-            .UserTeamConfiguration()
+            .ActorTeamMembershipConfiguration()
             .PermissionConfiguration()
             .ResourceAccessConfiguration()
             .RoleConfiguration()
@@ -1131,28 +1133,27 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder UserTeamConfiguration(this ModelBuilder builder)
+    public static ModelBuilder ActorTeamMembershipConfiguration(this ModelBuilder builder)
     {
-        var tableName = "UsersTeams";
-        var userTeam = builder.Entity("UserTeam");
+        var tableName = "ActorTeamMemberships";
+        var membership = builder.Entity("ActorTeamMembership");
 
-        userTeam.ToTable(tableName);
+        membership.ToTable(tableName);
 
-        userTeam.Property<Guid>("UserId").IsRequired();
-        userTeam.Property<Guid>("TeamId").IsRequired();
-        userTeam.HasKey("UserId", "TeamId");
-        userTeam
-            .HasOne("User")
+        membership.Property<Guid>("MemberActorId").IsRequired();
+        membership.Property<Guid>("TeamId").IsRequired();
+        membership.HasKey("TeamId", "MemberActorId");
+        membership
+            .HasOne("Actor")
             .WithMany()
-            .HasForeignKey("UserId")
+            .HasForeignKey("MemberActorId")
             .OnDelete(DeleteBehavior.Cascade);
-        userTeam
+        membership
             .HasOne("Team")
             .WithMany()
             .HasForeignKey("TeamId")
             .OnDelete(DeleteBehavior.Cascade);
-        userTeam.HasIndex("TeamId").HasDatabaseName($"IX_{tableName}_TeamId");
-        userTeam.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+        membership.HasIndex("MemberActorId").HasDatabaseName($"IX_{tableName}_MemberActorId");
 
         return builder;
     }
@@ -2227,6 +2228,78 @@ internal static class Configuration
         runLog.Property<string>("Message").HasColumnType(Text).IsRequired();
         runLog.HasOne("BuildRun").WithMany().HasForeignKey("BuildRunId").OnDelete(DeleteBehavior.Cascade);
         runLog.HasIndex("BuildRunId", "CreatedAt").HasDatabaseName($"IX_{runLogTable}_Run_CreatedAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder ServiceAccountConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ServiceAccounts";
+        var account = builder.Entity("ServiceAccount");
+
+        account.ToTable(tableName);
+        account.Property<Guid>("Id").IsRequired();
+        account.HasKey("Id");
+        account.Property<Guid>("ActorId").IsRequired();
+        account.Property<string>("Name").HasColumnType(Text).HasMaxLength(100).IsRequired();
+        account.Property<string>("Description").HasColumnType(Text).IsRequired(false);
+        account.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        account.Property<Guid>("CreatedByActorId").IsRequired();
+        account.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired();
+        account.Property<DateTime?>("ArchivedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+
+        account.HasIndex("ActorId")
+            .IsUnique()
+            .HasDatabaseName($"IX_{tableName}_ActorId");
+        account.HasIndex("Name")
+            .IsUnique()
+            .HasFilter("\"archivedatutc\" IS NULL")
+            .HasDatabaseName($"IX_{tableName}_ActiveName");
+        account
+            .HasOne("Actor")
+            .WithOne()
+            .HasForeignKey("ServiceAccount", "ActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        return builder;
+    }
+
+    public static ModelBuilder ServiceAccountTokenConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ServiceAccountTokens";
+        var token = builder.Entity("ServiceAccountToken");
+
+        token.ToTable(tableName);
+        token.Property<Guid>("Id").IsRequired();
+        token.HasKey("Id");
+        token.Property<Guid>("ServiceAccountId").IsRequired();
+        token.Property<string>("Name").HasColumnType(Text).HasMaxLength(100).IsRequired();
+        token.Property<byte[]>("SecretHash").HasColumnType("bytea").IsRequired();
+        token.Property<DateTime?>("ExpiresAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        token.Property<DateTime?>("LastUsedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        token.Property<DateTime?>("RevokedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        token.Property<Guid?>("RevokedByActorId").IsRequired(false);
+        token.Property<Guid>("CreatedByActorId").IsRequired();
+        token.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired();
+
+        token.HasIndex("ServiceAccountId", "Name")
+            .IsUnique()
+            .HasDatabaseName($"IX_{tableName}_AccountName");
+        token.HasIndex("ServiceAccountId", "CreatedAtUtc")
+            .IsDescending(false, true)
+            .HasDatabaseName($"IX_{tableName}_Account_CreatedAt");
+        token.HasIndex("ServiceAccountId", "RevokedAtUtc", "ExpiresAtUtc")
+            .HasDatabaseName($"IX_{tableName}_ActiveLookup");
+        token
+            .HasOne("ServiceAccount")
+            .WithMany()
+            .HasForeignKey("ServiceAccountId")
+            .OnDelete(DeleteBehavior.Restrict);
+        token.ToTable(table =>
+        {
+            table.HasCheckConstraint($"CK_{tableName}_SecretHashLength", "octet_length(\"secrethash\") = 32");
+            table.HasCheckConstraint($"CK_{tableName}_Expiration", "\"expiresatutc\" IS NULL OR \"expiresatutc\" > \"createdatutc\"");
+        });
 
         return builder;
     }

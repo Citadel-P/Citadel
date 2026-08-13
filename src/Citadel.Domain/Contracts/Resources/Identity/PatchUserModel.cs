@@ -7,7 +7,8 @@ public sealed record ResourceAccessView(
     Guid ResourceId,
     string? ResourceName,
     PermissionLevel PermissionLevel,
-    IEnumerable<SpecificPermission>? SpecificPermissions);
+    IEnumerable<SpecificPermission>? SpecificPermissions,
+    Guid? Id = null);
 
 public sealed record PatchUserModel(
     string? Email,

@@ -17,7 +17,7 @@ internal sealed class GetAllRolesHandler(IUnitOfWork unitOfWork, IUserContextAcc
     {
         var user = userContextAccessor.Current;
         var roles = user is not null && !user.IsAdmin
-            ? await unitOfWork.Roles.GetAuthorizedAsync(user.UserId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
+            ? await unitOfWork.Roles.GetAuthorizedAsync(user.ActorId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.Roles.GetAllAsync(cancellationToken);
 
         return Result.Success(roles.Select(role => new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions)));

@@ -32,7 +32,7 @@ internal static class ResourceBindingsFeatureHelpers
             return Result.Success<IReadOnlyList<ResourceBinding>>(entries);
 
         var sourcePermissions = await permissionService.ResolvePermissionsAsync(
-            user.UserId,
+            user.ActorId,
             resourceType,
             sourceResourceId,
             cancellationToken);
@@ -43,7 +43,7 @@ internal static class ResourceBindingsFeatureHelpers
         }
 
         var targetPermissions = await permissionService.ResolvePermissionsAsync(
-            user.UserId,
+            user.ActorId,
             resourceType,
             resourceId: null,
             cancellationToken);

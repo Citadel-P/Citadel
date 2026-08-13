@@ -35,7 +35,7 @@ internal sealed class GetAlertEventsHandler(IUnitOfWork unitOfWork, IUserContext
         var user = userContextAccessor.Current;
         var alertEvents = user is not null && !user.IsAdmin
             ? await unitOfWork.AlertEvents.GetAuthorizedPagedAsync(
-                userId: user.UserId,
+                userId: user.ActorId,
                 permissionResourceType: Hosting.Common.ResourceType.Alert,
                 permissionLevel: PermissionLevel.Read,
                 specificPermission: SpecificPermission.None,

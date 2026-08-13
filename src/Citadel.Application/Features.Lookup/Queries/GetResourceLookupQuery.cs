@@ -1,5 +1,6 @@
 using Application.Features.Networks.Queries;
 using Application.Services;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -25,12 +26,13 @@ internal sealed class GetResourceLookupQueryHandler(
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IUserContextAccessor userContextAccessor,
     TimeProvider timeProvider,
+    ILicenseEntitlementService entitlementService,
     IUnitOfWork unitOfWork) : IQueryHandler<GetResourceLookupQuery, Result<IEnumerable<ResourceInfo>>>
 {
     public async ValueTask<Result<IEnumerable<ResourceInfo>>> Handle(GetResourceLookupQuery query, CancellationToken cancellationToken)
     {
         var user = userContextAccessor.Current;
-        if (user is null || user.UserId == Guid.Empty)
+        if (user is null || user.ActorId == Guid.Empty)
         {
             return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("Invalid user ID."));
         }
@@ -53,6 +55,7 @@ internal sealed class GetResourceLookupQueryHandler(
             query.SourceResourceType,
             query.SourceResourceId,
             query.TargetResourceType,
+            user.ActorId,
             user.UserId,
             user.IsAdmin,
             query.Context,
@@ -67,13 +70,15 @@ internal sealed class GetResourceLookupQueryHandler(
                or LookupResourceType.Team
                or LookupResourceType.Role
                or LookupResourceType.OidcProvider
-               or LookupResourceType.License;
+               or LookupResourceType.License
+               or LookupResourceType.ServiceAccount;
 
     private async Task<Result<IEnumerable<ResourceInfo>>> ResolveAsync(
         LookupResourceType? sourceType,
         Guid? sourceId,
         LookupResourceType targetType,
         Guid userId,
+        Guid principalUserId,
         bool isAdministrator,
         LookupContext context,
         CancellationToken cancellationToken)
@@ -122,9 +127,15 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.Alert) => await GetAlertLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.User) => await GetUserLookupAsync(cancellationToken),
             (null, LookupResourceType.UserActor) => await GetUserActorLookupAsync(
+                principalUserId,
+                isAdministrator,
+                cancellationToken),
+            (null, LookupResourceType.RunAsActor) => await GetRunAsActorLookupAsync(
+                principalUserId,
                 userId,
                 isAdministrator,
                 cancellationToken),
+            (null, LookupResourceType.ServiceAccount) => await GetServiceAccountLookupAsync(cancellationToken),
             (null, LookupResourceType.Team) => await GetTeamLookupAsync(cancellationToken),
             (null, LookupResourceType.Role) => await GetRoleLookupAsync(cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
@@ -387,6 +398,41 @@ internal sealed class GetResourceLookupQueryHandler(
             ? Result.Success<IEnumerable<ResourceInfo>>([])
             : Result.Success<IEnumerable<ResourceInfo>>([new ResourceInfo(user.ActorId, user.Name)]);
     }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetRunAsActorLookupAsync(
+        Guid userId,
+        Guid actorId,
+        bool isAdministrator,
+        CancellationToken cancellationToken)
+    {
+        IEnumerable<ResourceInfo> users;
+        if (isAdministrator)
+        {
+            users = (await unitOfWork.Users.GetPagedAsync(1, 50, null, cancellationToken))
+                .Items
+                .Select(static item => new ResourceInfo(item.ActorId, item.Name, "Users"));
+        }
+        else
+        {
+            var user = await unitOfWork.Users.GetDetailsAsync(userId, cancellationToken);
+            users = user is null ? [] : [new ResourceInfo(user.ActorId, user.Name, "Users")];
+        }
+
+        if (!await entitlementService.IsEnabledAsync(LicenseCapability.CustomAccessControl, cancellationToken))
+            return Result.Success(users);
+
+        var serviceAccounts = await unitOfWork.ServiceAccounts.GetRunAsCandidatesAsync(
+            actorId,
+            isAdministrator,
+            cancellationToken);
+        return Result.Success(serviceAccounts.Concat(users));
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetServiceAccountLookupAsync(
+        CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.ServiceAccounts.GetPagedAsync(1, 50, null, false, cancellationToken))
+            .Items
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(userId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken))

@@ -34,7 +34,7 @@ internal sealed class GetAutomationActionsHandler(IUnitOfWork unitOfWork, IUserC
 
         var user = userContextAccessor.Current;
         var actions = (user is not null && !user.IsAdmin
-            ? await unitOfWork.AutomationActions.GetAuthorizedAsync(user.UserId, ResourceType.AutomationAction, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
+            ? await unitOfWork.AutomationActions.GetAuthorizedAsync(user.ActorId, ResourceType.AutomationAction, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
             : await unitOfWork.AutomationActions.GetAllAsync(cancellationToken, tagFilter.TagIds)).ToArray();
         var latest = new Dictionary<Guid, ActionRun>();
 

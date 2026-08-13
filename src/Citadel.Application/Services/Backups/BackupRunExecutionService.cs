@@ -89,6 +89,7 @@ internal sealed class BackupRunExecutionService(
     IBackupPolicyStreamManager backupPolicyStreamManager,
     IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue,
+    IRunAsActorAuthorization runAsActorAuthorization,
     ILicenseEntitlementService entitlementService,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
@@ -207,6 +208,23 @@ internal sealed class BackupRunExecutionService(
             {
                 await FailRunAsync(run, policy, BackupRunStatus.Rejected, null, "backup.disabled", "Backups are disabled.", cancellationToken);
                 await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, "Backups are disabled."), cancellationToken);
+                return;
+            }
+
+            var runAsValidation = await runAsActorAuthorization.ValidateExecutionAsync(
+                run.TriggeredByActorId,
+                cancellationToken);
+            if (runAsValidation.IsFailure(out var runAsError))
+            {
+                await FailRunAsync(
+                    run,
+                    policy,
+                    BackupRunStatus.Rejected,
+                    null,
+                    "backup.run_as_unavailable",
+                    runAsError.Message,
+                    cancellationToken);
+                await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, runAsError.Message), cancellationToken);
                 return;
             }
 

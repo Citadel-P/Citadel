@@ -1,7 +1,10 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -22,7 +25,7 @@ public sealed record RenameTeam(Guid Id, string Name) : ICommand<Result<TeamDeta
     }
 }
 
-internal sealed class RenameTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler<RenameTeam, Result<TeamDetails>>
+internal sealed class RenameTeamHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<RenameTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(RenameTeam command, CancellationToken cancellationToken)
     {
@@ -33,8 +36,22 @@ internal sealed class RenameTeamHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (state.NameExists)
             return Result.Failure<TeamDetails>(new ConflictError("Name already exists"));
 
+        var oldName = state.Team.Name;
         state.Team.Rename(command.Name);
         await unitOfWork.Teams.UpdateAsync(state.Team, cancellationToken);
+
+        if (!string.Equals(oldName, state.Team.Name, StringComparison.Ordinal))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    state.Team.Id,
+                    state.Team.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.TeamRenamed,
+                    new TeamRenamed(oldName, state.Team.Name)),
+                cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new TeamDetails(state.Team.Id, state.Team.Name, state.Team.ActorId, state.IsEnabled);

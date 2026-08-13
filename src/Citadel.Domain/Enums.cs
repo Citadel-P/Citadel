@@ -683,7 +683,7 @@ public enum ActorType
     User = 0,
     System,
     Agent,
-    Service,
+    ServiceAccount,
     Team
 }
 
@@ -842,12 +842,15 @@ public enum ActivityResourceType
     OidcProvider,
     AutomationAction,
     User,
+    Team,
+    Role,
     License,
     Build,
     BuildAgentPool,
     Volume,
     BackupPolicy,
-    SwarmService
+    SwarmService,
+    ServiceAccount
 }
 
 public enum ActivityEventType
@@ -955,6 +958,24 @@ public enum ActivityEventType
     UserMfaRecoveryCodeUsed,
     UserMfaRecoveryCodesRegenerated,
     UserMfaResetByAdministrator,
+    UserCreated,
+    UserUpdated,
+    UserRenamed,
+    UserDeleted,
+    #endregion
+
+    #region Team Events
+    TeamCreated,
+    TeamUpdated,
+    TeamRenamed,
+    TeamDeleted,
+    #endregion
+
+    #region Role Events
+    RoleCreated,
+    RoleUpdated,
+    RoleRenamed,
+    RoleDeleted,
     #endregion
 
     #region License Events
@@ -1008,6 +1029,17 @@ public enum ActivityEventType
     SwarmServiceOperationFailed,
     SwarmServiceDuplicated,
     SwarmServiceWebhookReceived,
+    #endregion
+
+    #region Service Account Events
+    ServiceAccountCreated,
+    ServiceAccountUpdated,
+    ServiceAccountRenamed,
+    ServiceAccountEnabled,
+    ServiceAccountDisabled,
+    ServiceAccountArchived,
+    ServiceAccountTokenCreated,
+    ServiceAccountTokenRevoked,
     #endregion
 }
 
@@ -1218,6 +1250,8 @@ public enum LookupResourceType
     Build,
     BuildAgentPool,
     SwarmService,
+    RunAsActor,
+    ServiceAccount,
 }
 
 public enum StackApplyEventType

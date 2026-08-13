@@ -39,7 +39,7 @@ internal sealed class GetBuildProjectsHandler(
         var user = userContextAccessor.Current;
         var projects = (user is not null && !user.IsAdmin
             ? await unitOfWork.BuildProjects.GetAuthorizedAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.Build,
                 PermissionLevel.Read,
                 SpecificPermission.None,

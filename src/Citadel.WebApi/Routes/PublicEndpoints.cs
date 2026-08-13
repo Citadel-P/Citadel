@@ -18,6 +18,7 @@ using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
+using WebApi.Routes.Endpoints.Resources.Identity.ServiceAccounts;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
@@ -47,6 +48,7 @@ public static class PublicEndpoints
     const string AlertRulesName = nameof(AlertRules);
     const string ActorsName = nameof(Actors);
     const string UsersName = nameof(Users);
+    const string ServiceAccountsName = nameof(ServiceAccounts);
     const string TeamsName = nameof(Teams);
     const string RolesName = nameof(Roles);
     const string GitAccountsName = nameof(GitAccounts);
@@ -105,6 +107,10 @@ public static class PublicEndpoints
             var users = group.MapGroup("/users").WithTags(UsersName).RequireAuthorization();
             {
                 MapUserEndpoints(users);
+            }
+            var serviceAccounts = group.MapGroup("/serviceAccounts").WithTags(ServiceAccountsName).RequireAuthorization();
+            {
+                MapServiceAccountEndpoints(serviceAccounts);
             }
             var teams = group.MapGroup("/teams").WithTags(TeamsName).RequireAuthorization();
             {
@@ -855,6 +861,27 @@ public static class PublicEndpoints
         resourceBindings.MapDelete("secret-providers/{id:guid}", ResourceBindings.DeleteSecretProvider)
             .WithName("deleteSecretProvider")
             .WithSummary("Delete a secret provider");
+    }
+
+    private static void MapServiceAccountEndpoints(RouteGroupBuilder serviceAccounts)
+    {
+        serviceAccounts.MapGet("/", ServiceAccounts.List).WithName("listServiceAccounts");
+        serviceAccounts.MapGet("/limits", ServiceAccounts.GetLimits).WithName("getServiceAccountLimits");
+          serviceAccounts.MapGet("/{id:guid}", ServiceAccounts.Get).WithName("getServiceAccount");
+          serviceAccounts.MapPost("/", ServiceAccounts.Create).WithName("createServiceAccount");
+          serviceAccounts.MapPatch("/{id:guid}", ServiceAccounts.Patch)
+              .Accepts<PatchServiceAccountInput>("application/merge-patch+json", "application/json")
+              .WithName("updateServiceAccount");
+          serviceAccounts.MapPost("/rename", ServiceAccounts.Rename).WithName("renameServiceAccount");
+          serviceAccounts.MapDelete("/", ServiceAccounts.Archive).WithName("archiveServiceAccounts");
+          serviceAccounts.MapPost("/{id:guid}/roles", ServiceAccounts.AddRole).WithName("addServiceAccountRole");
+          serviceAccounts.MapDelete("/{id:guid}/roles/{roleId:guid}", ServiceAccounts.RemoveRole).WithName("removeServiceAccountRole");
+          serviceAccounts.MapPost("/{id:guid}/resource-accesses", ServiceAccounts.AddResourceAccess).WithName("addServiceAccountResourceAccess");
+          serviceAccounts.MapDelete("/{id:guid}/resource-accesses/{resourceAccessId:guid}", ServiceAccounts.RemoveResourceAccess).WithName("removeServiceAccountResourceAccess");
+        serviceAccounts.MapGet("/{id:guid}/usages", ServiceAccounts.ListUsages).WithName("listServiceAccountUsages");
+        serviceAccounts.MapGet("/{id:guid}/tokens", ServiceAccounts.ListTokens).WithName("listServiceAccountTokens");
+        serviceAccounts.MapPost("/{id:guid}/tokens", ServiceAccounts.CreateToken).WithName("createServiceAccountToken");
+        serviceAccounts.MapDelete("/{id:guid}/tokens/{tokenId:guid}", ServiceAccounts.RevokeToken).WithName("revokeServiceAccountToken");
     }
 
     private static void MapTagEndpoints(RouteGroupBuilder tags)
@@ -3297,7 +3324,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("addTeamMember");
 
-        teams.MapDelete("{id}/members/{userId}", Teams.RemoveMember)
+        teams.MapDelete("{id}/members/{memberActorId}", Teams.RemoveMember)
             .WithSummary("Remove a member from a team")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)

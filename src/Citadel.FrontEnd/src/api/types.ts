@@ -38,6 +38,7 @@ export type ResourceType =
   | 'User'
   | 'Team'
   | 'Role'
+  | 'ServiceAccount'
   | 'Binding'
   | 'Tag'
   | 'OidcProvider';
@@ -74,6 +75,7 @@ export const PluralResourceMap = {
   User: 'Users',
   Team: 'Teams',
   Role: 'Roles',
+  ServiceAccount: 'service-accounts',
   Binding: 'Bindings',
   Tag: 'Tags',
   OidcProvider: 'OidcProviders',

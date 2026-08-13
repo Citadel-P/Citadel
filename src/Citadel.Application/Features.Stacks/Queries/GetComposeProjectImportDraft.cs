@@ -647,7 +647,7 @@ internal static class ComposeProjectImportDraftFactory
         if (!user.IsAdmin)
         {
             var permissions = await permissionService.ResolvePermissionsAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.GitRepository,
                 git.GitRepoId,
                 cancellationToken);

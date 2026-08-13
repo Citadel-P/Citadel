@@ -26,7 +26,7 @@ internal sealed class PermissionEvaluator(IPermissionService permissionService, 
             return default!;
         }
 
-        var userId = user.UserId;
+        var userId = user.ActorId;
 
         if (userId == Guid.Empty)
         {
@@ -51,7 +51,7 @@ internal sealed class PermissionEvaluator(IPermissionService permissionService, 
             return default!;
         }
 
-        var userId = user.UserId;
+        var userId = user.ActorId;
 
         if (userId == Guid.Empty)
         {
@@ -75,7 +75,7 @@ internal sealed class PermissionEvaluator(IPermissionService permissionService, 
             return new Dictionary<Guid, PermissionMetadata>();
         }
 
-        var userId = user.UserId;
+        var userId = user.ActorId;
 
         if (userId == Guid.Empty)
         {

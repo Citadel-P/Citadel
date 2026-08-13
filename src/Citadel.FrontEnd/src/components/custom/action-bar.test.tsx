@@ -84,6 +84,25 @@ describe('GenericActionBar', () => {
     expect(screen.getByText('2 of 2 container(s) selected.')).toBeVisible();
   });
 
+  it('supports scoped selection labels', () => {
+    const RevokeAction = () => <button type="button">Revoke</button>;
+
+    render(
+      <LayoutContext.Provider value={layoutContext}>
+        <GenericActionBar
+          selectedItems={[{ id: 'token-1' }]}
+          allItems={[{ id: 'token-1' }, { id: 'token-2' }]}
+          resource="ServiceAccount"
+          resourceLabel="token"
+          actions={[RevokeAction]}
+        />
+      </LayoutContext.Provider>,
+    );
+
+    expect(screen.getByText('1 of 2 token(s) selected.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Revoke' }).closest('[role="group"]')).not.toBeNull();
+  });
+
   it.each([
     [false, 'lg:left-[var(--sidebar-width)]'],
     [true, 'lg:left-[var(--sidebar-width-icon)]'],

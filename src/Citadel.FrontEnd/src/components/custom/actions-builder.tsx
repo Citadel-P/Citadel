@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react';
+import { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
@@ -22,6 +23,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
   isVisible?: (resources: R | R[]) => boolean;
   canExecute?: (r: R | R[]) => boolean;
   confirm?: boolean;
+  confirmationDescription?: ReactNode;
   destructive?: boolean;
   invalidate?: K;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
@@ -141,6 +143,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
                   onClick: run,
                   disabled: !canExecute,
                   variant: variant,
+                  description: act.confirmationDescription,
                 })
             : run
         }
@@ -161,6 +164,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
           variant={variant}
           icon={<act.icon className="h-4 w-4" />}
           onClick={run}
+          description={act.confirmationDescription}
           disabled={!canExecute || isPending}
         />
       );

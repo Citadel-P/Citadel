@@ -39,6 +39,7 @@ public sealed record CreateAutomationAction(AutomationActionInputModel Action) :
 internal sealed class CreateAutomationActionHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IRunAsActorAuthorization runAsActorAuthorization,
     ILicenseEntitlementService licenseEntitlementService,
     IOptions<AutomationOptions> options)
     : ICommandHandler<CreateAutomationAction, Result<AutomationActionResult>>
@@ -73,9 +74,9 @@ internal sealed class CreateAutomationActionHandler(
         }
 
         var runAsActorId = input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId);
-        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
-            userContextAccessor.Current,
-            runAsActorId);
+        var runAsAuthorization = await runAsActorAuthorization.EnsureAllowedAsync(
+            runAsActorId,
+            cancellationToken);
         if (runAsAuthorization.IsFailure(out var runAsError))
             return Result.Failure<AutomationActionResult>(runAsError);
 

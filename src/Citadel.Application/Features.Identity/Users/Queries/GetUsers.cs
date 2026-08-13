@@ -28,7 +28,7 @@ internal sealed class GetUsersHandler(IUnitOfWork unitOfWork, IUserContextAccess
     {
         var user = userContextAccessor.Current;
         var pagedUsers = user is not null && !user.IsAdmin
-            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.UserId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
+            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.ActorId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
             : await unitOfWork.Users.GetPagedAsync(query.Page, query.PageSize, query.Name, cancellationToken);
 
         return Result.Success(pagedUsers);

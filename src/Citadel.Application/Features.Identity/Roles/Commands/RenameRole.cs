@@ -1,7 +1,10 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -22,7 +25,7 @@ public sealed record RenameRole(Guid Id, string Name) : ICommand<Result<RoleDeta
     }
 }
 
-internal sealed class RenameRoleHandler(IUnitOfWork unitOfWork) : ICommandHandler<RenameRole, Result<RoleDetails>>
+internal sealed class RenameRoleHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<RenameRole, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(RenameRole command, CancellationToken cancellationToken)
     {
@@ -34,11 +37,23 @@ internal sealed class RenameRoleHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
 
+        var oldName = role.Name;
         var renameResult = role.Rename(command.Name);
         if (renameResult.IsFailure(out var error))
             return Result.Failure<RoleDetails>(error);
 
         await unitOfWork.Roles.RenameAsync(role, cancellationToken);
+        if (!string.Equals(oldName, role.Name, StringComparison.Ordinal))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    role.Id,
+                    role.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.RoleRenamed,
+                    new RoleRenamed(oldName, role.Name)),
+                cancellationToken);
+        }
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions);

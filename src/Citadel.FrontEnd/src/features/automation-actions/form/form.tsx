@@ -86,11 +86,14 @@ export function AutomationActionForm({
   const original = useMemo(() => toFormValue(resource), [resource]);
   const current = useMemo(() => ({ ...original, ...update }), [original, update]);
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
+  const hasUnsavedChanges = metadataChanged === true || Object.keys(update).length > 0;
   const testDisabledReason =
     resource?.capabilities?.canExecute !== true
-      ? 'Execute permission is required to test draft code.'
+      ? 'Execute permission is required to test this Action.'
       : resource.controlState === ResourceControlState.Processing
         ? 'Wait for the current run to finish.'
+        : hasUnsavedChanges
+          ? 'Save your changes before testing the Action.'
         : undefined;
 
   const refreshData = useCallback(() => {
@@ -111,31 +114,13 @@ export function AutomationActionForm({
 
   const handleTestDraft = useCallback(() => {
     if (mode !== 'edit' || !id) return;
-
-    const code = current.code ?? '';
-    if (!code.trim()) {
-      toast.error('Code is required');
-      return;
-    }
-
-    const argsError = validateJsonObject(current.defaultArgsJson, 'Default args');
-    if (argsError) {
-      toast.error(argsError);
-      return;
-    }
-
-    const timeoutSeconds = Number(current.timeoutSeconds);
-    if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 1) {
-      toast.error('Timeout must be at least 1 second');
+    if (hasUnsavedChanges) {
+      toast.error('Save your changes before testing the Action.');
       return;
     }
 
     const payload: TestAutomationActionInput = {
-      code,
       argsJson: null,
-      defaultArgsJson: normalizeJsonObject(current.defaultArgsJson),
-      timeoutSeconds,
-      runAsActorId: current.runAsActorId?.trim() || null,
     };
 
     openSheet({
@@ -147,7 +132,7 @@ export function AutomationActionForm({
         ...payload,
       },
     });
-  }, [current, id, mode, openSheet, resource?.name]);
+  }, [current.name, hasUnsavedChanges, id, mode, openSheet, resource?.name]);
 
   const schema = useMemo(
     () => ({
@@ -286,15 +271,15 @@ export function AutomationActionForm({
             items: [
               defineField({
                 key: 'runAsActorId',
-                label: 'Run As User',
-                description: 'Permissions are evaluated at run time for this user.',
+                label: 'Run as',
+                description: 'Permissions are evaluated at run time for this identity.',
                 render: (value, set) => (
                   <ResourceSelectorField
-                    targetType={LookupResourceType.UserActor}
+                    targetType={LookupResourceType.RunAsActor}
                     selected={value ?? undefined}
                     placeholder="Current user"
                     disabled={disabled}
-                    onSelect={(user) => set({ runAsActorId: user?.id ?? '' })}
+                    onSelect={(actor) => set({ runAsActorId: actor?.id ?? '' })}
                   />
                 ),
               }),

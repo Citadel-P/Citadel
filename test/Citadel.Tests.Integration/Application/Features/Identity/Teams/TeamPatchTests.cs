@@ -106,7 +106,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var user = await SeedUserAsync("team-member-user", "team-member-user@citadel.local");
         var addMemberJson = $$"""
         {
-          "userId": "{{user.UserId}}"
+          "memberActorId": "{{user.ActorId}}"
         }
         """;
         var content = new StringContent(addMemberJson, Encoding.UTF8, "application/json");
@@ -130,11 +130,11 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await uow.Teams.AddMemberAsync(seeded.TeamId, user.UserId, TestContext.Current.CancellationToken);
+            await uow.Teams.AddMemberAsync(seeded.TeamId, user.ActorId, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
-        var response = await Client.DeleteAsync($"/api/v1/teams/{seeded.TeamId}/members/{user.UserId}", TestContext.Current.CancellationToken);
+        var response = await Client.DeleteAsync($"/api/v1/teams/{seeded.TeamId}/members/{user.ActorId}", TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var verificationScope = Services.CreateAsyncScope();
@@ -156,7 +156,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.UserId, TestContext.Current.CancellationToken);
+            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.ActorId, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
@@ -201,7 +201,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.UserId, TestContext.Current.CancellationToken);
+            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.ActorId, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 

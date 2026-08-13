@@ -72,8 +72,8 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
 
                 SELECT Teams.ActorId
                 FROM TargetUser
-                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
-                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN ActorTeamMemberships membership ON TargetUser.ActorId = membership.MemberActorId
+                JOIN Teams ON Teams.Id = membership.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
                 WHERE teamActor.IsEnabled
             )

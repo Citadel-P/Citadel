@@ -31,7 +31,7 @@ internal sealed class GetBuildAgentPoolsHandler(
         var user = userContextAccessor.Current;
         var pools = user is not null && !user.IsAdmin
             ? await unitOfWork.BuildAgentPools.GetAuthorizedAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.BuildAgentPool,
                 PermissionLevel.Read,
                 SpecificPermission.None,

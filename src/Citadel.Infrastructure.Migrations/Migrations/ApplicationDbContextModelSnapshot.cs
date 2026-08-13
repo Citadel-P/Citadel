@@ -276,6 +276,25 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ActorTeamMembership", b =>
+                {
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("teamid");
+
+                    b.Property<Guid>("MemberActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("memberactorid");
+
+                    b.HasKey("TeamId", "MemberActorId")
+                        .HasName("pk_actorteammemberships");
+
+                    b.HasIndex("MemberActorId")
+                        .HasDatabaseName("ix_actorteammemberships_memberactorid");
+
+                    b.ToTable("actorteammemberships", (string)null);
+                });
+
             modelBuilder.Entity("AlertChannel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4028,6 +4047,14 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("b83ca9a1-2725-6927-8cd6-99b0fe489c44"),
+                            PermissionLevel = 4,
+                            ResourceType = 21,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 6144
+                        },
+                        new
+                        {
                             Id = new Guid("de0d45da-a297-0302-9357-99247a89afe2"),
                             PermissionLevel = 4,
                             ResourceType = 0,
@@ -4982,6 +5009,126 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_secretproviders_name");
 
                     b.ToTable("secretproviders", (string)null);
+                });
+
+            modelBuilder.Entity("ServiceAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actorid");
+
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivedatutc");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat");
+
+                    b.HasKey("Id")
+                        .HasName("pk_serviceaccounts");
+
+                    b.HasIndex("ActorId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_serviceaccounts_actorid");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_serviceaccounts_activename")
+                        .HasFilter("\"archivedatutc\" IS NULL");
+
+                    b.ToTable("serviceaccounts", (string)null);
+                });
+
+            modelBuilder.Entity("ServiceAccountToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdatutc");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresatutc");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastusedatutc");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revokedatutc");
+
+                    b.Property<Guid?>("RevokedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revokedbyactorid");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("secrethash");
+
+                    b.Property<Guid>("ServiceAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("serviceaccountid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_serviceaccounttokens");
+
+                    b.HasIndex("ServiceAccountId", "CreatedAtUtc")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_serviceaccounttokens_account_createdat");
+
+                    b.HasIndex("ServiceAccountId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_serviceaccounttokens_accountname");
+
+                    b.HasIndex("ServiceAccountId", "RevokedAtUtc", "ExpiresAtUtc")
+                        .HasDatabaseName("ix_serviceaccounttokens_activelookup");
+
+                    b.ToTable("serviceaccounttokens", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceAccountTokens_Expiration", "\"expiresatutc\" IS NULL OR \"expiresatutc\" > \"createdatutc\"");
+
+                            t.HasCheckConstraint("CK_ServiceAccountTokens_SecretHashLength", "octet_length(\"secrethash\") = 32");
+                        });
                 });
 
             modelBuilder.Entity("Stack", b =>
@@ -6940,28 +7087,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("userpreferences", (string)null);
                 });
 
-            modelBuilder.Entity("UserTeam", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("userid");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("teamid");
-
-                    b.HasKey("UserId", "TeamId")
-                        .HasName("pk_usersteams");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_usersteams_teamid");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_usersteams_userid");
-
-                    b.ToTable("usersteams", (string)null);
-                });
-
             modelBuilder.Entity("ActionRun", b =>
                 {
                     b.HasOne("AutomationAction", null)
@@ -7016,6 +7141,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_actorroles_roles_roleid");
+                });
+
+            modelBuilder.Entity("ActorTeamMembership", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("MemberActorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_actorteammemberships_actors_memberactorid");
+
+                    b.HasOne("Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_actorteammemberships_teams_teamid");
                 });
 
             modelBuilder.Entity("AlertChannel", b =>
@@ -7657,6 +7799,26 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_secretdefinitions_secretproviders_providerid");
                 });
 
+            modelBuilder.Entity("ServiceAccount", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithOne()
+                        .HasForeignKey("ServiceAccount", "ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_serviceaccounts_actors_actorid");
+                });
+
+            modelBuilder.Entity("ServiceAccountToken", b =>
+                {
+                    b.HasOne("ServiceAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_serviceaccounttokens_serviceaccounts_serviceaccountid");
+                });
+
             modelBuilder.Entity("Stack", b =>
                 {
                     b.HasOne("Actor", null)
@@ -8002,23 +8164,6 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_userpreferences_users_userid");
-                });
-
-            modelBuilder.Entity("UserTeam", b =>
-                {
-                    b.HasOne("Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_usersteams_teams_teamid");
-
-                    b.HasOne("User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_usersteams_users_userid");
                 });
 #pragma warning restore 612, 618
         }

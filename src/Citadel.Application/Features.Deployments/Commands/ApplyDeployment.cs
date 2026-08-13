@@ -27,7 +27,7 @@ internal sealed class ApplyDeploymentHandler(
         {
             var deployment = await unitOfWork.Deployments.GetAsync(command.Id, ct);
             if (deployment is not null
-                && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, deployment.PlatformId, ct))
+                && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, deployment.PlatformId, ct))
             {
                 const string message = "The deployment platform does not exist or is not accessible.";
                 yield return new DeploymentStreamItem(

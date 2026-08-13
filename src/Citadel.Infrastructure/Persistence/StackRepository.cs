@@ -69,7 +69,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.CreatedByActorId,
         p.Name AS Platform_Name,
         p.Status AS Platform_Status,
-        u.Name AS Actor_Name,
+        COALESCE(u.Name, serviceAccount.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
         ac.Type AS Actor_Type
     FROM StackReleases sr
     LEFT JOIN Platforms p
@@ -78,6 +78,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         ON sr.CreatedByActorId = ac.Id
     LEFT JOIN Users u
         ON sr.CreatedByActorId = u.ActorId
+    LEFT JOIN ServiceAccounts serviceAccount
+        ON sr.CreatedByActorId = serviceAccount.ActorId
     """;
 
     public async Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken)

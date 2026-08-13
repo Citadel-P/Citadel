@@ -218,8 +218,8 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         await uow.Teams.AddAsync(visibleTeam, TestContext.Current.CancellationToken);
         await uow.Teams.AddAsync(hiddenTeam, TestContext.Current.CancellationToken);
         await uow.Teams.AddAsync(extraTeam, TestContext.Current.CancellationToken);
-        await uow.Teams.AddMemberAsync(visibleTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
-        await uow.Teams.AddMemberAsync(hiddenTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
+        await uow.Teams.AddMemberAsync(visibleTeam.Id, lookupUser.ActorId, TestContext.Current.CancellationToken);
+        await uow.Teams.AddMemberAsync(hiddenTeam.Id, lookupUser.ActorId, TestContext.Current.CancellationToken);
         _visibleTeamId = visibleTeam.Id;
         _extraTeamId = extraTeam.Id;
 

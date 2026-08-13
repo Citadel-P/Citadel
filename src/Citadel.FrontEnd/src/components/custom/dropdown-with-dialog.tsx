@@ -9,7 +9,7 @@ import {
 } from '../ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { forwardRef, ReactNode, startTransition, useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
 import { ConfirmButton } from './action-with-dialog';
@@ -172,13 +172,14 @@ const ActionDialog = ({ action, onClose }: { action: { key: string; data?: Actio
 
   if (!hasData) return null
 
-  const { name, title, icon, variant } = action.data!;
+  const { name, title, icon, variant, description } = action.data!;
 
   return (
     <Dialog open={hasData} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Confirm {title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4">
           <p

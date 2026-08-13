@@ -11,7 +11,7 @@ namespace Tests.Unit.Application.Services.Identity;
 public class PermissionCacheTests
 {
     [Fact]
-    public async Task AddManyToIndex_And_InvalidateUser_RemovesKeys()
+    public async Task AddManyToIndex_And_InvalidateActor_RemovesKeys()
     {
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var cache = new PermissionCache(memoryCache);
@@ -27,7 +27,7 @@ public class PermissionCacheTests
         Assert.Contains(key1, idxBefore);
         Assert.Contains(key2, idxBefore);
 
-        cache.InvalidateUser(userId);
+        cache.InvalidateActor(userId);
 
         var idxAfter = cache.GetIndex(userId);
         Assert.Empty(idxAfter);

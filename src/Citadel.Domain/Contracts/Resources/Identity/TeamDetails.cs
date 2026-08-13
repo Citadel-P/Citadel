@@ -8,4 +8,11 @@ public sealed record TeamDetails(
     int? TotalMembers = 0,
     IEnumerable<ResourceInfo>? Users = null,
     IEnumerable<ResourceInfo>? Roles = null,
-    IEnumerable<ResourceAccessView>? ResourceAccesses = null);
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null,
+    IEnumerable<ActorTeamMemberInfo>? Members = null);
+
+public sealed record ActorTeamMemberInfo(
+    Guid ActorId,
+    Guid ResourceId,
+    string Name,
+    ActorType PrincipalType);

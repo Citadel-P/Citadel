@@ -34,12 +34,7 @@ public sealed record RunAutomationActionInputModel(
     string? ArgsJson,
     int? TimeoutSeconds);
 
-public sealed record TestAutomationActionInputModel(
-    string Code,
-    string? ArgsJson,
-    string? DefaultArgsJson,
-    int? TimeoutSeconds,
-    Guid? RunAsActorId);
+public sealed record TestAutomationActionInputModel(string? ArgsJson);
 
 public sealed record AutomationActionResult(AutomationAction Action);
 

@@ -20,9 +20,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 JSONB_BUILD_OBJECT('id', t.Id, 'name', t.Name)
                 ORDER BY t.Name, t.Id
             )::text AS Teams
-            FROM UsersTeams ut
-            JOIN Teams t ON t.Id = ut.TeamId
-            WHERE ut.UserId = u.Id
+            FROM ActorTeamMemberships membership
+            JOIN Teams t ON t.Id = membership.TeamId
+            WHERE membership.MemberActorId = u.ActorId
         ) teams ON TRUE
         LEFT JOIN LATERAL (
             SELECT JSONB_AGG(
@@ -436,7 +436,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT TeamId FROM UsersTeams WHERE UserId = @UserId";
+        const string sql = "SELECT membership.TeamId FROM ActorTeamMemberships membership JOIN Users u ON u.ActorId = membership.MemberActorId WHERE u.Id = @UserId";
         return db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken }, transaction: tx());
     }
 
@@ -453,9 +453,10 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 UNION
 
                 SELECT t.Id, t.Name
-                FROM UsersTeams ut
-                JOIN Teams t ON t.Id = ut.TeamId
-                WHERE ut.UserId = @SourceUserId
+                FROM ActorTeamMemberships membership
+                JOIN Users sourceUser ON sourceUser.ActorId = membership.MemberActorId
+                JOIN Teams t ON t.Id = membership.TeamId
+                WHERE sourceUser.Id = @SourceUserId
             ) lookup
             ORDER BY lookup.Name
             """;
@@ -475,7 +476,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)
     {
-        const string deleteSql = "DELETE FROM UsersTeams WHERE UserId = @UserId";
+        const string deleteSql = "DELETE FROM ActorTeamMemberships WHERE MemberActorId = (SELECT ActorId FROM Users WHERE Id = @UserId)";
         await db.ExecuteAsync(deleteSql, new { UserId = userId, cancellationToken }, transaction: tx());
 
         var teamIdArray = teamIds as Guid[] ?? [.. teamIds];
@@ -483,8 +484,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             return 0;
 
         const string insertSql = """
-            INSERT INTO UsersTeams (UserId, TeamId)
-            SELECT @UserId, teamId
+            INSERT INTO ActorTeamMemberships (MemberActorId, TeamId)
+            SELECT (SELECT ActorId FROM Users WHERE Id = @UserId), teamId
             FROM unnest(@TeamIds::uuid[]) AS teamId
             """;
 
@@ -549,28 +550,54 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = """
             SELECT ActorId FROM (
-                SELECT Users.ActorId
-                FROM Users
-                JOIN Actors userActor ON userActor.Id = Users.ActorId
-                WHERE Users.Id = @UserId
-                  AND userActor.IsEnabled
+                SELECT principalActor.Id AS ActorId
+                FROM Actors principalActor
+                LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id
+                WHERE (principalActor.Id = @UserId OR principalUser.Id = @UserId)
+                  AND principalActor.IsEnabled
 
                 UNION
 
                 SELECT t.ActorId
                 FROM Teams t
-                JOIN UsersTeams ut ON ut.TeamId = t.Id
-                JOIN Users u ON u.Id = ut.UserId
-                JOIN Actors userActor ON userActor.Id = u.ActorId
+                JOIN ActorTeamMemberships membership ON membership.TeamId = t.Id
+                JOIN Actors principalActor ON principalActor.Id = membership.MemberActorId
+                LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id
                 JOIN Actors teamActor ON teamActor.Id = t.ActorId
-                WHERE ut.UserId = @UserId
-                  AND userActor.IsEnabled
+                WHERE (principalActor.Id = @UserId OR principalUser.Id = @UserId)
+                  AND principalActor.IsEnabled
                   AND teamActor.IsEnabled
             ) s
         """;
 
         var result = await db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken = ct }, transaction: tx());
         return [.. result];
+    }
+
+    public Task<IEnumerable<Guid>> GetActorIdsAsync(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = userIds as Guid[] ?? [.. userIds];
+        if (ids.Length == 0)
+            return Task.FromResult<IEnumerable<Guid>>([]);
+        return db.QueryAsync<Guid>(
+            "SELECT ActorId FROM Users WHERE Id = ANY(@Ids)",
+            new { Ids = ids, cancellationToken },
+            transaction: tx());
+    }
+
+    public Task<IEnumerable<Guid>> GetUserIdsByActorIdsAsync(
+        IEnumerable<Guid> actorIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = actorIds as Guid[] ?? [.. actorIds];
+        if (ids.Length == 0)
+            return Task.FromResult<IEnumerable<Guid>>([]);
+        return db.QueryAsync<Guid>(
+            "SELECT Id FROM Users WHERE ActorId = ANY(@Ids)",
+            new { Ids = ids, cancellationToken },
+            transaction: tx());
     }
 
     public async Task<bool> HasEnabledAdministratorAsync(CancellationToken cancellationToken)
@@ -593,10 +620,10 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                             actorRole.ActorId = u.ActorId
                             OR EXISTS (
                                 SELECT 1
-                                FROM UsersTeams userTeam
-                                JOIN Teams team ON team.Id = userTeam.TeamId
+                                FROM ActorTeamMemberships membership
+                                JOIN Teams team ON team.Id = membership.TeamId
                                 JOIN Actors teamActor ON teamActor.Id = team.ActorId
-                                WHERE userTeam.UserId = u.Id
+                                WHERE membership.MemberActorId = u.ActorId
                                   AND team.ActorId = actorRole.ActorId
                                   AND teamActor.IsEnabled
                             )
@@ -640,8 +667,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
                 SELECT Teams.ActorId
                 FROM TargetUser
-                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
-                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN ActorTeamMemberships membership ON TargetUser.ActorId = membership.MemberActorId
+                JOIN Teams ON Teams.Id = membership.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
                 WHERE teamActor.IsEnabled
             )
@@ -690,8 +717,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
                 SELECT Teams.ActorId
                 FROM TargetUser
-                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
-                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN ActorTeamMemberships membership ON TargetUser.ActorId = membership.MemberActorId
+                JOIN Teams ON Teams.Id = membership.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
                 WHERE teamActor.IsEnabled
             )
@@ -740,8 +767,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
                 SELECT Teams.ActorId
                 FROM TargetUser
-                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
-                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN ActorTeamMemberships membership ON TargetUser.ActorId = membership.MemberActorId
+                JOIN Teams ON Teams.Id = membership.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
                 WHERE teamActor.IsEnabled
             )
@@ -790,8 +817,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
                 SELECT Teams.ActorId
                 FROM TargetUser
-                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
-                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN ActorTeamMemberships membership ON TargetUser.ActorId = membership.MemberActorId
+                JOIN Teams ON Teams.Id = membership.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
                 WHERE teamActor.IsEnabled
             )

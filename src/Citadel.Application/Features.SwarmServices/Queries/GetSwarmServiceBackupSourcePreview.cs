@@ -36,7 +36,7 @@ internal sealed class GetSwarmServiceBackupSourcePreviewHandler(
             ? []
             : await unitOfWork.BackupPolicies.GetVolumeCoverageAsync(
                 keys,
-                user is not null && !user.IsAdmin ? user.UserId : null,
+                user is not null && !user.IsAdmin ? user.ActorId : null,
                 ResourceType.BackupPolicy,
                 PermissionLevel.Read,
                 SpecificPermission.None,

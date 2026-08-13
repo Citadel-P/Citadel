@@ -9,8 +9,12 @@ public sealed class PermissionTests
     [Fact]
     public void Admin_Permissions_Should_Include_All_Current_Specific_Capabilities()
     {
-        Assert.True(Helpers.AdminPermissions.Has(PermissionLevel.Read, SpecificPermission.ResourceBindings));
-        Assert.True(Helpers.AdminPermissions.Has(PermissionLevel.Read, SpecificPermission.Releases));
+        foreach (var permission in Enum.GetValues<SpecificPermission>())
+        {
+            Assert.True(
+                Helpers.AdminPermissions.Has(PermissionLevel.Read, permission),
+                $"Administrator permissions do not include {permission}.");
+        }
     }
 
     [Fact]

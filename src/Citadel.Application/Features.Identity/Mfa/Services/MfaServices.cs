@@ -174,7 +174,7 @@ internal sealed class AuthenticationSessionIssuer(
         await unitOfWork.CommitAsync(cancellationToken);
 
         refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
-        roleCache.SetRoles(user.Id, user.Roles);
+        roleCache.SetRoles(user.ActorId, user.Roles);
 
         return accessToken;
     }

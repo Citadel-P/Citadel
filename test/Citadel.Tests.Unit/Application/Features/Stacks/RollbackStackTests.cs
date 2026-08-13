@@ -422,6 +422,9 @@ public class RollbackStackTests
     private sealed record TestUserContext(Guid ActorId) : IUserContext
     {
         public Guid UserId { get; init; } = Guid.CreateVersion7();
+        public Hosting.Common.AuthenticatedPrincipalType PrincipalType { get; init; } = Hosting.Common.AuthenticatedPrincipalType.User;
+        public Guid PrincipalResourceId { get; init; } = Guid.CreateVersion7();
+        public Guid? CredentialId { get; init; }
         public bool IsAdmin { get; init; } = true;
         public bool IsAuthenticated { get; init; } = true;
         public string[] Roles { get; init; } = ["admin"];

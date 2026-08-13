@@ -1,9 +1,11 @@
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
+using Domain.Entities.Activities;
 using Domain;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
@@ -56,12 +58,17 @@ internal sealed class PatchUserHandler(
     IActorScopeEvictor evictor,
     IAdministratorGuard administratorGuard,
     ILicenseEntitlementService entitlementService,
-    ICitadelPasswordHasher passwordHasher) : ICommandHandler<PatchUser, Result<UserDetails>>
+    ICitadelPasswordHasher passwordHasher,
+    IUserContextAccessor userContext) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(PatchUser command, CancellationToken cancellationToken)
     {
         var state = await unitOfWork.Users.GetUserUpdateStateAsync(command.Id, null, null, cancellationToken);
         if (state.User is null)
+            return Result.Failure<UserDetails>(new NotFoundError("The provided user does not exist"));
+
+        var oldSnapshot = await IdentityActivity.CaptureUserAsync(unitOfWork, state.User.Id, cancellationToken);
+        if (oldSnapshot is null)
             return Result.Failure<UserDetails>(new NotFoundError("The provided user does not exist"));
 
         var actor = await unitOfWork.Actors.GetById(state.User.ActorId, cancellationToken);
@@ -194,6 +201,23 @@ internal sealed class PatchUserHandler(
             var guardResult = await administratorGuard.EnsureAdministratorRemainsAsync(cancellationToken);
             if (guardResult.IsFailure(out var guardError))
                 return Result.Failure<UserDetails>(guardError);
+        }
+
+        var newSnapshot = await IdentityActivity.CaptureUserAsync(unitOfWork, state.User.Id, cancellationToken);
+        if (newSnapshot is null)
+            return Result.Failure<UserDetails>(new NotFoundError("The provided user does not exist"));
+
+        var passwordChanged = patched.Password is not null;
+        if (passwordChanged || !IdentityActivity.Same(oldSnapshot, newSnapshot))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    state.User.Id,
+                    state.User.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.UserUpdated,
+                    new UserUpdated(oldSnapshot, newSnapshot, passwordChanged)),
+                cancellationToken);
         }
 
         await unitOfWork.CommitAsync(cancellationToken);

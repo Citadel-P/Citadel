@@ -42,6 +42,9 @@ import {
   Settings,
   Tags,
   User,
+  Users,
+  Shield,
+  Bot,
   Unlink,
 } from 'lucide-react';
 import { cn, filterBySplit, normalizeDockerId, toFixedNumber } from '@/lib/utils';
@@ -337,6 +340,16 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
       : selected;
 
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
+  const grouped = useMemo(() => {
+    const entries = new Map<string, T[]>();
+    for (const item of filtered) {
+      const group = (item as T & { group?: string | null }).group ?? '';
+      const current = entries.get(group);
+      if (current) current.push(item);
+      else entries.set(group, [item]);
+    }
+    return [...entries.entries()];
+  }, [filtered]);
 
   const handleSelect = (item: T | undefined) => {
     onSelect?.(item);
@@ -397,21 +410,24 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                 </CommandItem>
               )}
 
-              {filtered.map((item) => {
-                const isSelected = selectedItem?.id === item.id;
-
-                return (
-                  <CommandItem
-                    key={item.id}
-                    value={defaultDisplay(item)}
-                    onSelect={() => handleSelect(item)}
-                    className="flex items-start justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
-                    <div className="min-w-0 flex-1">{renderItem?.(item) ?? <span>{defaultDisplay(item)}</span>}</div>
-                    <Check className={cn('h-4 w-4 transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
-                  </CommandItem>
-                );
-              })}
             </CommandGroup>
+            {grouped.map(([group, groupItems]) => (
+              <CommandGroup key={group || '__ungrouped__'} heading={group || undefined}>
+                {groupItems.map((item) => {
+                  const isSelected = selectedItem?.id === item.id;
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={defaultDisplay(item)}
+                      onSelect={() => handleSelect(item)}
+                      className="flex items-start justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
+                      <div className="min-w-0 flex-1">{renderItem?.(item) ?? <span>{defaultDisplay(item)}</span>}</div>
+                      <Check className={cn('h-4 w-4 transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -1458,6 +1474,12 @@ export const TargetCell = ({
     [ActivityResourceType.Build]: { Icon: Hammer, path: `/builds/edit/${resourceId}` },
     [ActivityResourceType.BuildAgentPool]: { Icon: ServerPlus, path: `/build-pools/edit/${resourceId}` },
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
+    [ActivityResourceType.Team]: { Icon: Users, path: `/access/teams/edit/${resourceId}` },
+    [ActivityResourceType.Role]: { Icon: Shield, path: '/access/roles' },
+    [ActivityResourceType.ServiceAccount]: {
+      Icon: Bot,
+      path: `/access/service-accounts/edit/${resourceId}`,
+    },
     [ActivityResourceType.Volume]: {
       Icon: Database,
       path: resourceName
@@ -1586,6 +1608,7 @@ type PagedDataTableProps<TData extends { id?: string | null }, TValue> = {
   showPagination?: boolean;
   onSelectionChange?: (selectedRows: TData[]) => void;
   getRowId?: (row: TData) => string;
+  enableRowSelection?: (row: TData) => boolean;
 };
 
 export function PagedDataTable<TData extends { id?: string | null }, TValue>({
@@ -1598,6 +1621,7 @@ export function PagedDataTable<TData extends { id?: string | null }, TValue>({
   showPagination = true,
   onSelectionChange,
   getRowId,
+  enableRowSelection,
 }: PagedDataTableProps<TData, TValue>) {
   const tableTopRef = useRef<HTMLDivElement | null>(null);
   const totalPages = Math.max(1, Math.ceil(Number(totalCount ?? 0) / query.pageSize));
@@ -1624,6 +1648,7 @@ export function PagedDataTable<TData extends { id?: string | null }, TValue>({
         isLoading={isLoading}
         onSelectionChange={onSelectionChange}
         getRowId={getRowId}
+        enableRowSelection={enableRowSelection}
       />
       {showPagination && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

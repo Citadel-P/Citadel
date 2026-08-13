@@ -7,4 +7,5 @@ internal sealed record TeamWithActorDto(
     bool IsEnabled,
     int TotalMembers,
     string Users,
-    string Roles);
+    string Roles,
+    string Members);

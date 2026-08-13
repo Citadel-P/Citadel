@@ -80,11 +80,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
+            COALESCE(au.Name, serviceAccount.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN ServiceAccounts serviceAccount ON serviceAccount.ActorId = ac.Id
         LEFT JOIN Teams at ON at.ActorId = ac.Id
         WHERE a.Id = @Id
         LIMIT 1;
@@ -122,11 +123,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
+            COALESCE(au.Name, serviceAccount.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN ServiceAccounts serviceAccount ON serviceAccount.ActorId = ac.Id
         LEFT JOIN Teams at ON at.ActorId = ac.Id
         WHERE a.Id = @Id
             AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
@@ -169,11 +171,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
+            COALESCE(au.Name, serviceAccount.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN ServiceAccounts serviceAccount ON serviceAccount.ActorId = ac.Id
         LEFT JOIN Teams at ON at.ActorId = ac.Id
         WHERE a.Id = ANY(@Ids);
         """;
@@ -253,8 +256,8 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             SELECT u.Id AS UserId, t.ActorId
             FROM Users u
             JOIN Actors userActor ON userActor.Id = u.ActorId
-            JOIN UsersTeams ut ON ut.UserId = u.Id
-            JOIN Teams t ON t.Id = ut.TeamId
+            JOIN ActorTeamMemberships membership ON membership.MemberActorId = u.ActorId
+            JOIN Teams t ON t.Id = membership.TeamId
             JOIN Actors teamActor ON teamActor.Id = t.ActorId
             WHERE userActor.IsEnabled
               AND teamActor.IsEnabled

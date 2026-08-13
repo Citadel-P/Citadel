@@ -58,6 +58,7 @@ public sealed class User(
         yield return new Claim("name", userAuthInfo.Name);
         yield return new Claim("email", userAuthInfo.Email);
         yield return new Claim("actorId", userAuthInfo.ActorId.ToString());
+        yield return new Claim("principalType", "User");
         yield return new Claim("sub", userAuthInfo.Id.ToString());
         yield return new Claim("jti", Guid.CreateVersion7().ToString());
 

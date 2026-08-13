@@ -82,9 +82,37 @@ const EditFormData = ({
 
   if (isLoading || !item) return <Loader />;
 
-  const Content = skipMetadataUpdate ? EditFormContent : EditFormPageWithMetadata;
+  const Content = skipMetadataUpdate
+    ? Components.supportsHeaderRename
+      ? EditFormPageWithRename
+      : EditFormContent
+    : EditFormPageWithMetadata;
 
   return <Content key={id} id={id!} item={item} Components={Components} type={type} />;
+};
+
+const EditFormPageWithRename = ({
+  id,
+  item,
+  Components,
+  type,
+}: {
+  id: string;
+  item: RequiredFormFields;
+  Components: any;
+  type: ResourceType;
+}) => {
+  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
+
+  return (
+    <EditFormContent
+      id={id}
+      item={item}
+      renameResource={renameResource}
+      Components={Components}
+      type={type}
+    />
+  );
 };
 
 const EditFormPageWithMetadata = ({

@@ -41,7 +41,7 @@ public sealed class StreamPermissionBehaviorTests
         var nextCalled = false;
         var command = new TestAutomationAction(
             Guid.CreateVersion7(),
-            new TestAutomationActionInputModel("console.log('test')", null, null, 30, null));
+            new TestAutomationActionInputModel(null));
 
         await foreach (var _ in behavior.Handle(command, Next, TestContext.Current.CancellationToken))
         {

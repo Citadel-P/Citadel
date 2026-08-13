@@ -7,5 +7,7 @@ internal sealed record TeamMemberAssignmentStateDto(
     bool? IsEnabled,
     int TotalMembers,
     string Roles,
-    bool UserExists,
+    bool MemberExists,
+    bool IsServiceAccount,
+    bool IsArchived,
     bool HasMember);

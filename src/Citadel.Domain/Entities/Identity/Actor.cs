@@ -23,7 +23,7 @@ public sealed class Actor
 
     public Result SetEnabled(bool isEnabled)
     {
-        if (Type is not ActorType.User and not ActorType.Team)
+        if (Type is not ActorType.User and not ActorType.Team and not ActorType.ServiceAccount)
         {
             return Result.Failure(new BadRequestError($"Actors of type {Type} cannot be enabled or disabled."));
         }

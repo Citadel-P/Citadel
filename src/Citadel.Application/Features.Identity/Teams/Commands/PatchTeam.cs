@@ -4,8 +4,10 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
@@ -45,12 +47,17 @@ internal sealed class PatchTeamHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
     IAdministratorGuard administratorGuard,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchTeam, Result<TeamDetails>>
+    ILicenseEntitlementService entitlementService,
+    IUserContextAccessor userContext) : ICommandHandler<PatchTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(PatchTeam command, CancellationToken cancellationToken)
     {
         var team = await unitOfWork.Teams.GetDetailsAsync(command.Id, cancellationToken);
         if (team is null)
+            return Result.Failure<TeamDetails>(new NotFoundError("The provided team does not exist"));
+
+        var oldSnapshot = await IdentityActivity.CaptureTeamAsync(unitOfWork, team.Id, cancellationToken);
+        if (oldSnapshot is null)
             return Result.Failure<TeamDetails>(new NotFoundError("The provided team does not exist"));
 
         var actor = await unitOfWork.Actors.GetById(team.ActorId, cancellationToken);
@@ -169,6 +176,22 @@ internal sealed class PatchTeamHandler(
                 return Result.Failure<TeamDetails>(guardError);
         }
 
+        var newSnapshot = await IdentityActivity.CaptureTeamAsync(unitOfWork, team.Id, cancellationToken);
+        if (newSnapshot is null)
+            return Result.Failure<TeamDetails>(new NotFoundError("The provided team does not exist"));
+
+        if (!IdentityActivity.Same(oldSnapshot, newSnapshot))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    team.Id,
+                    team.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.TeamUpdated,
+                    new TeamUpdated(oldSnapshot, newSnapshot)),
+                cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
         if (patched.UserIds is not null
             || patched.RoleIds is not null
@@ -178,8 +201,15 @@ internal sealed class PatchTeamHandler(
             await evictor.EvictUsers(
                 currentUserIds.Union(userIds ?? currentUserIds),
                 cancellationToken);
+            await evictor.EvictPermissionsForActorAsync(team.ActorId, cancellationToken);
         }
 
-        return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled, team.TotalMembers, team.Roles);
+        return new TeamDetails(
+            team.Id,
+            team.Name,
+            team.ActorId,
+            actor.IsEnabled,
+            team.TotalMembers,
+            Roles: team.Roles);
     }
 }

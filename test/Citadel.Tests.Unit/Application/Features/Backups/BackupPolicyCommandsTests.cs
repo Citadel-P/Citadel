@@ -1,6 +1,7 @@
 using Application.Features.Backups.Commands;
 using Application.Features.Backups.Models;
 using Application.Permissions;
+using Application.Services;
 using Application.Services.Backups;
 using Application.Services.Licensing;
 using Application.Services.SignalR;
@@ -64,6 +65,40 @@ public sealed class BackupPolicyCommandsTests
         await notification.ExecuteAsync(TestContext.Current.CancellationToken);
 
         streamManager.Verify(x => x.SendBackupRunInfo(run, "create"), Times.Once);
+    }
+
+    [Fact]
+    public async Task QueueBackupRun_Webhook_ShouldUseConfiguredPolicyActor()
+    {
+        var run = CreateQueuedBackupRun();
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.QueueAsync(
+                run.BackupPolicyId,
+                It.IsAny<Guid>(),
+                BackupRunTrigger.Webhook,
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid>(),
+                true,
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, run));
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object);
+        var handler = new QueueBackupRunHandler(
+            unitOfWork.Object,
+            CreateUserContextAccessor(),
+            Mock.Of<IBackupRunStreamManager>(),
+            Mock.Of<INotificationQueue>(),
+            new PermissiveLicenseEntitlementService());
+
+        var result = await handler.Handle(
+            new QueueBackupRun(
+                run.BackupPolicyId,
+                new QueueBackupRunInputModel(BackupRunTrigger.Webhook, Guid.CreateVersion7())),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        backupRuns.VerifyAll();
     }
 
     [Fact]
@@ -648,24 +683,41 @@ public sealed class BackupPolicyCommandsTests
     private static CreateBackupPolicyHandler CreateCreateHandler(
         IUnitOfWork unitOfWork,
         ISwarmNodeRuntimeConnector? swarmNodeRuntimeConnector = null)
-        => new(
+    {
+        var runAsAuthorization = CreateRunAsAuthorization();
+        return new(
             unitOfWork,
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
             Mock.Of<ISwarmServiceBackupVolumeResolver>(),
             swarmNodeRuntimeConnector ?? Mock.Of<ISwarmNodeRuntimeConnector>(),
+            runAsAuthorization.Object,
             new PermissiveLicenseEntitlementService());
+    }
 
     private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
-        => new(
+    {
+        var runAsAuthorization = CreateRunAsAuthorization();
+        return new(
             unitOfWork,
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
             Mock.Of<ISwarmServiceBackupVolumeResolver>(),
             Mock.Of<ISwarmNodeRuntimeConnector>(),
+            runAsAuthorization.Object,
             new PermissiveLicenseEntitlementService());
+    }
+
+    private static Mock<IRunAsActorAuthorization> CreateRunAsAuthorization()
+    {
+        var authorization = new Mock<IRunAsActorAuthorization>();
+        authorization
+            .Setup(x => x.EnsureAllowedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        return authorization;
+    }
 
     private static Mock<IBackupPolicyRepository> CreateBackupPolicyRepository()
     {

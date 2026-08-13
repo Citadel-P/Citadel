@@ -267,6 +267,19 @@ CREATE TABLE registries (
     CONSTRAINT fk_registries_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE serviceaccounts (
+    id uuid NOT NULL,
+    actorid uuid NOT NULL,
+    archivedatutc timestamp with time zone,
+    createdat timestamp with time zone NOT NULL,
+    createdbyactorid uuid NOT NULL,
+    description text,
+    name text NOT NULL,
+    updatedat timestamp with time zone NOT NULL,
+    CONSTRAINT pk_serviceaccounts PRIMARY KEY (id),
+    CONSTRAINT fk_serviceaccounts_actors_actorid FOREIGN KEY (actorid) REFERENCES actors (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE stacks (
     id uuid NOT NULL,
     controlstartedat bigint,
@@ -819,6 +832,23 @@ CREATE TABLE images (
     CONSTRAINT fk_images_registries_registryid FOREIGN KEY (registryid) REFERENCES registries (id) ON DELETE SET NULL
 );
 
+CREATE TABLE serviceaccounttokens (
+    id uuid NOT NULL,
+    createdatutc timestamp with time zone NOT NULL,
+    createdbyactorid uuid NOT NULL,
+    expiresatutc timestamp with time zone,
+    lastusedatutc timestamp with time zone,
+    name text NOT NULL,
+    revokedatutc timestamp with time zone,
+    revokedbyactorid uuid,
+    secrethash bytea NOT NULL,
+    serviceaccountid uuid NOT NULL,
+    CONSTRAINT pk_serviceaccounttokens PRIMARY KEY (id),
+    CONSTRAINT "CK_ServiceAccountTokens_Expiration" CHECK ("expiresatutc" IS NULL OR "expiresatutc" > "createdatutc"),
+    CONSTRAINT "CK_ServiceAccountTokens_SecretHashLength" CHECK (octet_length("secrethash") = 32),
+    CONSTRAINT fk_serviceaccounttokens_serviceaccounts_serviceaccountid FOREIGN KEY (serviceaccountid) REFERENCES serviceaccounts (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE stackreleases (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
@@ -889,6 +919,14 @@ CREATE TABLE resourcetags (
     CONSTRAINT fk_resourcetags_tags_tagid FOREIGN KEY (tagid) REFERENCES tags (id) ON DELETE CASCADE
 );
 
+CREATE TABLE actorteammemberships (
+    teamid uuid NOT NULL,
+    memberactorid uuid NOT NULL,
+    CONSTRAINT pk_actorteammemberships PRIMARY KEY (teamid, memberactorid),
+    CONSTRAINT fk_actorteammemberships_actors_memberactorid FOREIGN KEY (memberactorid) REFERENCES actors (id) ON DELETE CASCADE,
+    CONSTRAINT fk_actorteammemberships_teams_teamid FOREIGN KEY (teamid) REFERENCES teams (id) ON DELETE CASCADE
+);
+
 CREATE TABLE mfachallenges (
     id uuid NOT NULL,
     consumedat timestamp with time zone,
@@ -951,14 +989,6 @@ CREATE TABLE userpreferences (
     updatedat timestamp with time zone NOT NULL,
     CONSTRAINT pk_userpreferences PRIMARY KEY (userid),
     CONSTRAINT fk_userpreferences_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
-);
-
-CREATE TABLE usersteams (
-    userid uuid NOT NULL,
-    teamid uuid NOT NULL,
-    CONSTRAINT pk_usersteams PRIMARY KEY (userid, teamid),
-    CONSTRAINT fk_usersteams_teams_teamid FOREIGN KEY (teamid) REFERENCES teams (id) ON DELETE CASCADE,
-    CONSTRAINT fk_usersteams_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE oidcexternallogins (
@@ -1539,6 +1569,8 @@ VALUES ('b2298835-c351-7367-ad8d-e5884be235f3', 2, 12, '30000000-0000-0000-0000-
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b3abb382-80da-8170-b011-05af044e7908', 2, 3, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('b83ca9a1-2725-6927-8cd6-99b0fe489c44', 4, 21, '30000000-0000-0000-0000-000000000001', 6144);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ba1393e4-1090-990e-aee3-a3e36ede0fee', 4, 16, '30000000-0000-0000-0000-000000000001', 128);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('c472d905-c03c-a9a8-0527-c2b540274078', 2, 18, '30000000-0000-0000-0000-000000000002', 4);
@@ -1617,6 +1649,8 @@ CREATE INDEX ix_activityevents_status ON activityevents (status);
 CREATE INDEX ix_actorroles_actorid ON actorroles (actorid);
 
 CREATE INDEX ix_actorroles_roleid ON actorroles (roleid);
+
+CREATE INDEX ix_actorteammemberships_memberactorid ON actorteammemberships (memberactorid);
 
 CREATE INDEX ix_alertchannels_createdbyactorid ON alertchannels (createdbyactorid);
 
@@ -1938,6 +1972,16 @@ CREATE INDEX ix_secretdefinitions_providerid ON secretdefinitions (providerid);
 
 CREATE UNIQUE INDEX ix_secretproviders_name ON secretproviders (name);
 
+CREATE UNIQUE INDEX ix_serviceaccounts_activename ON serviceaccounts (name) WHERE "archivedatutc" IS NULL;
+
+CREATE UNIQUE INDEX ix_serviceaccounts_actorid ON serviceaccounts (actorid);
+
+CREATE INDEX ix_serviceaccounttokens_account_createdat ON serviceaccounttokens (serviceaccountid, createdatutc DESC);
+
+CREATE UNIQUE INDEX ix_serviceaccounttokens_accountname ON serviceaccounttokens (serviceaccountid, name);
+
+CREATE INDEX ix_serviceaccounttokens_activelookup ON serviceaccounttokens (serviceaccountid, revokedatutc, expiresatutc);
+
 CREATE INDEX ix_stackreleases_createdbyactorid ON stackreleases (createdbyactorid);
 
 CREATE INDEX ix_stackreleases_platformid ON stackreleases (platformid);
@@ -2028,10 +2072,6 @@ CREATE INDEX ix_users_createdbyactorid ON users (createdbyactorid);
 
 CREATE UNIQUE INDEX ix_users_email ON users (email);
 
-CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
-
-CREATE INDEX ix_usersteams_userid ON usersteams (userid);
-
 SELECT setval(
     pg_get_serial_sequence('instancesetupstates', 'id'),
     GREATEST(
@@ -2040,7 +2080,7 @@ SELECT setval(
     false);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260811204036_migration0001', '10.0.10');
+VALUES ('20260812230200_migration0001', '10.0.10');
 
 COMMIT;
 

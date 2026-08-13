@@ -262,6 +262,8 @@ export enum SpecificPermission {
   Browse = "Browse",
   Download = "Download",
   ManageNodeAgents = "ManageNodeAgents",
+  Use = "Use",
+  ManageCredentials = "ManageCredentials",
 }
 
 export enum SecretProviderType {
@@ -315,6 +317,7 @@ export enum ResourceType {
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   SwarmService = "SwarmService",
+  ServiceAccount = "ServiceAccount",
 }
 
 export enum ResourceControlState {
@@ -413,6 +416,8 @@ export enum LookupResourceType {
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   SwarmService = "SwarmService",
+  RunAsActor = "RunAsActor",
+  ServiceAccount = "ServiceAccount",
 }
 
 export enum LoginNextStep {
@@ -806,7 +811,7 @@ export enum ActorType {
   User = "User",
   System = "System",
   Agent = "Agent",
-  Service = "Service",
+  ServiceAccount = "ServiceAccount",
   Team = "Team",
 }
 
@@ -827,12 +832,15 @@ export enum ActivityResourceType {
   OidcProvider = "OidcProvider",
   AutomationAction = "AutomationAction",
   User = "User",
+  Team = "Team",
+  Role = "Role",
   License = "License",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
   BackupPolicy = "BackupPolicy",
   SwarmService = "SwarmService",
+  ServiceAccount = "ServiceAccount",
 }
 
 export enum ActivityEventType {
@@ -914,6 +922,18 @@ export enum ActivityEventType {
   UserMfaRecoveryCodeUsed = "UserMfaRecoveryCodeUsed",
   UserMfaRecoveryCodesRegenerated = "UserMfaRecoveryCodesRegenerated",
   UserMfaResetByAdministrator = "UserMfaResetByAdministrator",
+  UserCreated = "UserCreated",
+  UserUpdated = "UserUpdated",
+  UserRenamed = "UserRenamed",
+  UserDeleted = "UserDeleted",
+  TeamCreated = "TeamCreated",
+  TeamUpdated = "TeamUpdated",
+  TeamRenamed = "TeamRenamed",
+  TeamDeleted = "TeamDeleted",
+  RoleCreated = "RoleCreated",
+  RoleUpdated = "RoleUpdated",
+  RoleRenamed = "RoleRenamed",
+  RoleDeleted = "RoleDeleted",
   LicenseInstalled = "LicenseInstalled",
   LicenseReplaced = "LicenseReplaced",
   LicenseRemoved = "LicenseRemoved",
@@ -952,6 +972,14 @@ export enum ActivityEventType {
   SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
   SwarmServiceDuplicated = "SwarmServiceDuplicated",
   SwarmServiceWebhookReceived = "SwarmServiceWebhookReceived",
+  ServiceAccountCreated = "ServiceAccountCreated",
+  ServiceAccountUpdated = "ServiceAccountUpdated",
+  ServiceAccountRenamed = "ServiceAccountRenamed",
+  ServiceAccountEnabled = "ServiceAccountEnabled",
+  ServiceAccountDisabled = "ServiceAccountDisabled",
+  ServiceAccountArchived = "ServiceAccountArchived",
+  ServiceAccountTokenCreated = "ServiceAccountTokenCreated",
+  ServiceAccountTokenRevoked = "ServiceAccountTokenRevoked",
 }
 
 export enum ActionRunTrigger {
@@ -1599,6 +1627,54 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoUserMfaResetByAdministrator
       >
     | BaseActivityEventInfoTypeMapping<
+        "UserCreated",
+        ActivityEventInfoUserCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserUpdated",
+        ActivityEventInfoUserUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserRenamed",
+        ActivityEventInfoUserRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserDeleted",
+        ActivityEventInfoUserDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "TeamCreated",
+        ActivityEventInfoTeamCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "TeamUpdated",
+        ActivityEventInfoTeamUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "TeamRenamed",
+        ActivityEventInfoTeamRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "TeamDeleted",
+        ActivityEventInfoTeamDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RoleCreated",
+        ActivityEventInfoRoleCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RoleUpdated",
+        ActivityEventInfoRoleUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RoleRenamed",
+        ActivityEventInfoRoleRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RoleDeleted",
+        ActivityEventInfoRoleDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
         "LicenseInstalled",
         ActivityEventInfoLicenseInstalled
       >
@@ -1749,6 +1825,38 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "SwarmServiceWebhookReceived",
         ActivityEventInfoSwarmServiceWebhookReceived
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountCreated",
+        ActivityEventInfoServiceAccountCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountUpdated",
+        ActivityEventInfoServiceAccountUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountRenamed",
+        ActivityEventInfoServiceAccountRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountEnabled",
+        ActivityEventInfoServiceAccountEnabled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountDisabled",
+        ActivityEventInfoServiceAccountDisabled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountArchived",
+        ActivityEventInfoServiceAccountArchived
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountTokenCreated",
+        ActivityEventInfoServiceAccountTokenCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ServiceAccountTokenRevoked",
+        ActivityEventInfoServiceAccountTokenRevoked
       >
   );
 
@@ -2282,6 +2390,84 @@ export interface ActivityEventInfoRegistryUpdated {
   newRegistry: RegistrySnapshot;
 }
 
+export interface ActivityEventInfoRoleCreated {
+  $type?: "RoleCreated";
+  role: RoleActivitySnapshot;
+}
+
+export interface ActivityEventInfoRoleDeleted {
+  $type?: "RoleDeleted";
+  role: RoleActivitySnapshot;
+}
+
+export interface ActivityEventInfoRoleRenamed {
+  $type?: "RoleRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoRoleUpdated {
+  $type?: "RoleUpdated";
+  oldRole: RoleActivitySnapshot;
+  newRole: RoleActivitySnapshot;
+}
+
+export interface ActivityEventInfoServiceAccountArchived {
+  $type?: "ServiceAccountArchived";
+  /** @format uuid */
+  accountId: string;
+}
+
+export interface ActivityEventInfoServiceAccountCreated {
+  $type?: "ServiceAccountCreated";
+  account: ServiceAccountActivitySnapshot;
+}
+
+export interface ActivityEventInfoServiceAccountDisabled {
+  $type?: "ServiceAccountDisabled";
+  /** @format uuid */
+  accountId: string;
+}
+
+export interface ActivityEventInfoServiceAccountEnabled {
+  $type?: "ServiceAccountEnabled";
+  /** @format uuid */
+  accountId: string;
+}
+
+export interface ActivityEventInfoServiceAccountRenamed {
+  $type?: "ServiceAccountRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoServiceAccountTokenCreated {
+  $type?: "ServiceAccountTokenCreated";
+  /** @format uuid */
+  accountId: string;
+  /** @format uuid */
+  tokenId: string;
+  tokenName: string;
+  publicHint: string;
+  /** @format date-time */
+  expiresAtUtc: any;
+}
+
+export interface ActivityEventInfoServiceAccountTokenRevoked {
+  $type?: "ServiceAccountTokenRevoked";
+  /** @format uuid */
+  accountId: string;
+  /** @format uuid */
+  tokenId: string;
+  publicHint: string;
+}
+
+export interface ActivityEventInfoServiceAccountUpdated {
+  $type?: "ServiceAccountUpdated";
+  oldAccount: ServiceAccountActivitySnapshot;
+  newAccount: ServiceAccountActivitySnapshot;
+}
+
 export interface ActivityEventInfoStackApplied {
   $type?: "StackApplied";
   stack: null | StackSnapshot;
@@ -2489,6 +2675,38 @@ export interface ActivityEventInfoSwarmServiceWebhookReceived {
   deliveryId: null | string;
 }
 
+export interface ActivityEventInfoTeamCreated {
+  $type?: "TeamCreated";
+  team: TeamActivitySnapshot;
+}
+
+export interface ActivityEventInfoTeamDeleted {
+  $type?: "TeamDeleted";
+  team: TeamActivitySnapshot;
+}
+
+export interface ActivityEventInfoTeamRenamed {
+  $type?: "TeamRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoTeamUpdated {
+  $type?: "TeamUpdated";
+  oldTeam: TeamActivitySnapshot;
+  newTeam: TeamActivitySnapshot;
+}
+
+export interface ActivityEventInfoUserCreated {
+  $type?: "UserCreated";
+  user: UserActivitySnapshot;
+}
+
+export interface ActivityEventInfoUserDeleted {
+  $type?: "UserDeleted";
+  user: UserActivitySnapshot;
+}
+
 export interface ActivityEventInfoUserMfaDisabled {
   $type?: "UserMfaDisabled";
 }
@@ -2538,10 +2756,23 @@ export interface ActivityEventInfoUserProfileUpdated {
   changes: ActivityChangedField[];
 }
 
+export interface ActivityEventInfoUserRenamed {
+  $type?: "UserRenamed";
+  oldName: string;
+  newName: string;
+}
+
 export interface ActivityEventInfoUserSessionRevoked {
   $type?: "UserSessionRevoked";
   /** @format uuid */
   sessionId: string;
+}
+
+export interface ActivityEventInfoUserUpdated {
+  $type?: "UserUpdated";
+  oldUser: UserActivitySnapshot;
+  newUser: UserActivitySnapshot;
+  passwordChanged: boolean;
 }
 
 export interface ActivityEventInfoVolumeContentDownloaded {
@@ -2581,6 +2812,15 @@ export interface ActivityView {
   actorType: ActorType;
 }
 
+export interface ActorTeamMemberInfo {
+  /** @format uuid */
+  actorId: string;
+  /** @format uuid */
+  resourceId: string;
+  name: string;
+  principalType: ActorType;
+}
+
 export interface ActorView {
   /** @format uuid */
   id: string;
@@ -2589,9 +2829,14 @@ export interface ActorView {
   isEnabled: boolean;
 }
 
+export interface AddServiceAccountRoleInput {
+  /** @format uuid */
+  roleId: string;
+}
+
 export interface AddTeamMemberInput {
   /** @format uuid */
-  userId: string;
+  memberActorId: string;
 }
 
 export interface AddTeamResourceAccessInput {
@@ -4816,6 +5061,24 @@ export interface CreateRegistryInput {
   tagIds?: null | string[];
 }
 
+export interface CreateServiceAccountInput {
+  name: string;
+  description: null | string;
+  /** @default true */
+  isEnabled?: boolean;
+  teamIds?: null | string[];
+  roleIds?: null | string[];
+  resourceAccesses?: null | ServiceAccountResourceAccessInput[];
+}
+
+export interface CreateServiceAccountTokenInput {
+  name: string;
+  /** @format date-time */
+  expiresAtUtc?: null | string;
+  /** @default false */
+  neverExpires?: boolean;
+}
+
 export interface CreateStackInput {
   name: string;
   /** @format uuid */
@@ -4887,6 +5150,27 @@ export interface CreateVolumeInput {
   driver: string;
   labels?: null | Record<string, string>;
   options?: null | Record<string, string>;
+}
+
+export interface CreatedServiceAccountTokenView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  hint: string;
+  /** @format date-time */
+  expiresAtUtc: any;
+  /** @format date-time */
+  lastUsedAtUtc: any;
+  /** @format date-time */
+  revokedAtUtc: any;
+  /** @format uuid */
+  revokedByActorId: null | string;
+  /** @format uuid */
+  createdByActorId: string;
+  createdByName: string;
+  /** @format date-time */
+  createdAtUtc: any;
+  token: string;
 }
 
 export type CurrentProfileAuthenticationType = any;
@@ -4980,6 +5264,10 @@ export interface DeleteRegistriesInput {
 }
 
 export interface DeleteRolesInput {
+  ids: string[];
+}
+
+export interface DeleteServiceAccountsInput {
   ids: string[];
 }
 
@@ -5859,6 +6147,18 @@ export interface IPAMInput {
   options?: null | Record<string, string>;
 }
 
+export interface IdentityResourceAccessSnapshot {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  permissionLevel: PermissionLevel;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  specificPermissions: number | string;
+}
+
 export interface ImageCapabilities {
   canInspect: boolean;
   canPull: boolean;
@@ -6380,6 +6680,44 @@ export interface PagedResultViewOfAlertEventView {
   pageSize: number | string;
 }
 
+export interface PagedResultViewOfServiceAccountTokenView {
+  items: ServiceAccountTokenView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
+export interface PagedResultViewOfServiceAccountView {
+  items: ServiceAccountView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
 export interface PagedResultViewOfTeamView {
   items: TeamView[];
   /**
@@ -6482,6 +6820,11 @@ export interface PatchResourceMetadata {
 
 export interface PatchRolePermissionsInput {
   permissions: PermissionInput[];
+}
+
+export interface PatchServiceAccountInput {
+  description: null | string;
+  isEnabled: null | boolean;
 }
 
 export interface PatchStackInput {
@@ -7172,6 +7515,8 @@ export interface ResourceAccessView {
   resourceName: null | string;
   permissionLevel: PermissionLevel;
   specificPermissions: null | SpecificPermission[];
+  /** @format uuid */
+  id?: null | string;
 }
 
 export interface ResourceBindingInput {
@@ -7227,6 +7572,7 @@ export interface ResourceInfo {
   /** @format uuid */
   id: string;
   name: string;
+  group?: null | string;
 }
 
 export interface ResourceSpec {
@@ -7273,9 +7619,24 @@ export interface RevokeOtherProfileSessionsView {
   count: number | string;
 }
 
+export interface RoleActivitySnapshot {
+  roleType: RoleType;
+  permissions: RolePermissionActivitySnapshot[];
+}
+
 export interface RoleInput {
   name: string;
   permissions: null | PermissionInput[];
+}
+
+export interface RolePermissionActivitySnapshot {
+  resourceType: ResourceType;
+  permissionLevel: PermissionLevel;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  specificPermissions: number | string;
 }
 
 export interface RoleView {
@@ -7296,6 +7657,14 @@ export interface RollbackStackInput {
   stackId: string;
   /** @format uuid */
   releaseId: string;
+}
+
+export interface RunAsActorUsageView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  resourceType: ResourceType;
+  isActive: boolean;
 }
 
 export interface RunAutomationActionInput {
@@ -7358,6 +7727,121 @@ export interface SecretProviderView {
 
 export interface SecretProvidersView {
   providers: SecretProviderView[];
+}
+
+export interface ServiceAccountActivitySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  isEnabled: boolean;
+  teamIds: string[];
+  roleIds: string[];
+  resourceAccesses: ServiceAccountResourceAccessSnapshot[];
+}
+
+export interface ServiceAccountCapabilities {
+  canUse: boolean;
+  canManageCredentials: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
+export interface ServiceAccountLimitsView {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  defaultTokenLifetimeDays: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumTokenLifetimeDays: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumActiveTokensPerAccount: number | string;
+}
+
+export interface ServiceAccountResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
+}
+
+export interface ServiceAccountResourceAccessSnapshot {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  permissionLevel: PermissionLevel;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  specificPermissions: number | string;
+}
+
+export interface ServiceAccountTokenView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  hint: string;
+  /** @format date-time */
+  expiresAtUtc: any;
+  /** @format date-time */
+  lastUsedAtUtc: any;
+  /** @format date-time */
+  revokedAtUtc: any;
+  /** @format uuid */
+  revokedByActorId: null | string;
+  /** @format uuid */
+  createdByActorId: string;
+  createdByName: string;
+  /** @format date-time */
+  createdAtUtc: any;
+}
+
+export interface ServiceAccountTokensView {
+  pagedResult: PagedResultViewOfServiceAccountTokenView;
+}
+
+export interface ServiceAccountView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  /** @format uuid */
+  actorId: string;
+  isEnabled: boolean;
+  /** @format date-time */
+  createdAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format date-time */
+  archivedAtUtc: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  activeTokenCount: number | string;
+  /** @format date-time */
+  lastUsedAtUtc: any;
+  teams: null | ResourceInfo[];
+  roles: null | ResourceInfo[];
+  resourceAccesses: null | ResourceAccessView[];
+  capabilities?: null | ServiceAccountCapabilities;
+}
+
+export interface ServiceAccountsView {
+  pagedResult: PagedResultViewOfServiceAccountView;
+  capabilities: ResourceCapabilities;
 }
 
 export interface SetupStatusView {
@@ -8604,6 +9088,13 @@ export interface TagsView {
   capabilities: ResourceCapabilities;
 }
 
+export interface TeamActivitySnapshot {
+  isEnabled: boolean;
+  memberActorIds: string[];
+  roleIds: string[];
+  resourceAccesses: IdentityResourceAccessSnapshot[];
+}
+
 export interface TeamResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
@@ -8633,6 +9124,7 @@ export interface TeamView {
   users?: null | ResourceInfo[];
   roles?: null | ResourceInfo[];
   resourceAccesses?: null | ResourceAccessView[];
+  members?: null | ActorTeamMemberInfo[];
 }
 
 export interface TeamsView {
@@ -8641,16 +9133,7 @@ export interface TeamsView {
 }
 
 export interface TestAutomationActionInput {
-  code: string;
   argsJson: null | string;
-  defaultArgsJson: null | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  timeoutSeconds: null | number | string;
-  /** @format uuid */
-  runAsActorId: null | string;
 }
 
 export interface TestExternalSecretInput {
@@ -8919,6 +9402,14 @@ export interface UpdateVaultKvV2SecretProviderInput {
   address: null | string;
   mountPath: null | string;
   token: null | string;
+}
+
+export interface UserActivitySnapshot {
+  email: string;
+  isEnabled: boolean;
+  teamIds: string[];
+  roleIds: string[];
+  resourceAccesses: IdentityResourceAccessSnapshot[];
 }
 
 export interface UserPreferencesView {
@@ -10643,6 +11134,360 @@ export class Api<
     /**
      * No description
      *
+     * @tags ServiceAccounts
+     * @name ListServiceAccounts
+     * @request GET:/api/v1/serviceAccounts
+     * @response `200` `ServiceAccountsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listServiceAccounts: (
+      query?: {
+        Name?: string;
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+        /** @default false */
+        IncludeArchived?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountsView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name CreateServiceAccount
+     * @request POST:/api/v1/serviceAccounts
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createServiceAccount: (
+      data: CreateServiceAccountInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name ArchiveServiceAccounts
+     * @request DELETE:/api/v1/serviceAccounts
+     * @response `204` `void` No Content
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    archiveServiceAccounts: (
+      data: DeleteServiceAccountsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/serviceAccounts`,
+        method: "DELETE",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name GetServiceAccountLimits
+     * @request GET:/api/v1/serviceAccounts/limits
+     * @response `200` `ServiceAccountLimitsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getServiceAccountLimits: (params: RequestParams = {}) =>
+      this.request<ServiceAccountLimitsView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/limits`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name GetServiceAccount
+     * @request GET:/api/v1/serviceAccounts/{id}
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getServiceAccount: (id: string, params: RequestParams = {}) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name UpdateServiceAccount
+     * @request PATCH:/api/v1/serviceAccounts/{id}
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateServiceAccount: (
+      id: string,
+      data: PatchServiceAccountInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name RenameServiceAccount
+     * @request POST:/api/v1/serviceAccounts/rename
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameServiceAccount: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/rename`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name AddServiceAccountRole
+     * @request POST:/api/v1/serviceAccounts/{id}/roles
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addServiceAccountRole: (
+      id: string,
+      data: AddServiceAccountRoleInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/roles`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name RemoveServiceAccountRole
+     * @request DELETE:/api/v1/serviceAccounts/{id}/roles/{roleId}
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeServiceAccountRole: (
+      id: string,
+      roleId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/roles/${roleId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name AddServiceAccountResourceAccess
+     * @request POST:/api/v1/serviceAccounts/{id}/resource-accesses
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addServiceAccountResourceAccess: (
+      id: string,
+      data: ServiceAccountResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/resource-accesses`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name RemoveServiceAccountResourceAccess
+     * @request DELETE:/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}
+     * @response `200` `ServiceAccountView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeServiceAccountResourceAccess: (
+      id: string,
+      resourceAccessId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/resource-accesses/${resourceAccessId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name ListServiceAccountUsages
+     * @request GET:/api/v1/serviceAccounts/{id}/usages
+     * @response `200` `(RunAsActorUsageView)[]` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listServiceAccountUsages: (id: string, params: RequestParams = {}) =>
+      this.request<RunAsActorUsageView[], ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/usages`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name ListServiceAccountTokens
+     * @request GET:/api/v1/serviceAccounts/{id}/tokens
+     * @response `200` `ServiceAccountTokensView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listServiceAccountTokens: (
+      id: string,
+      query?: {
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ServiceAccountTokensView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/tokens`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name CreateServiceAccountToken
+     * @request POST:/api/v1/serviceAccounts/{id}/tokens
+     * @response `201` `CreatedServiceAccountTokenView` Created
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createServiceAccountToken: (
+      id: string,
+      data: CreateServiceAccountTokenInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<CreatedServiceAccountTokenView, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/tokens`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ServiceAccounts
+     * @name RevokeServiceAccountToken
+     * @request DELETE:/api/v1/serviceAccounts/{id}/tokens/{tokenId}
+     * @response `204` `void` No Content
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    revokeServiceAccountToken: (
+      id: string,
+      tokenId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/serviceAccounts/${id}/tokens/${tokenId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Teams
      * @name ListTeams
      * @summary Get all teams
@@ -10925,7 +11770,7 @@ export class Api<
      * @tags Teams
      * @name RemoveTeamMember
      * @summary Remove a member from a team
-     * @request DELETE:/api/v1/teams/{id}/members/{userId}
+     * @request DELETE:/api/v1/teams/{id}/members/{memberActorId}
      * @secure
      * @response `200` `TeamView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -10937,11 +11782,11 @@ export class Api<
      */
     removeTeamMember: (
       id: string,
-      userId: string,
+      memberActorId: string,
       params: RequestParams = {},
     ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/teams/${id}/members/${userId}`,
+        path: `/api/v1/teams/${id}/members/${memberActorId}`,
         method: "DELETE",
         secure: true,
         format: "json",

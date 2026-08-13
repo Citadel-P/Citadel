@@ -16,6 +16,13 @@ public class ActorScopeEvictorBatchTests
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
         var userC = Guid.NewGuid();
+        var actorA = Guid.NewGuid();
+        var actorB = Guid.NewGuid();
+        var actorC = Guid.NewGuid();
+        uow.Setup(x => x.Users.GetActorIdsAsync(
+                It.IsAny<IEnumerable<Guid>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([actorA, actorB, actorC]);
 
         var roleCache = new Mock<IRoleCache>();
         var actorScopeProvider = new Mock<IActorScopeProvider>();
@@ -31,11 +38,11 @@ public class ActorScopeEvictorBatchTests
             new[] { userA, userB, userA, userC },
             TestContext.Current.CancellationToken);
 
-        roleCache.Verify(rc => rc.RemoveRoles(userA), Times.Once);
-        roleCache.Verify(rc => rc.RemoveRoles(userB), Times.Once);
-        roleCache.Verify(rc => rc.RemoveRoles(userC), Times.Once);
-        permissionCache.Verify(cache => cache.InvalidateUser(userA), Times.Once);
-        permissionCache.Verify(cache => cache.InvalidateUser(userB), Times.Once);
-        permissionCache.Verify(cache => cache.InvalidateUser(userC), Times.Once);
+        roleCache.Verify(rc => rc.RemoveRoles(actorA), Times.Once);
+        roleCache.Verify(rc => rc.RemoveRoles(actorB), Times.Once);
+        roleCache.Verify(rc => rc.RemoveRoles(actorC), Times.Once);
+        permissionCache.Verify(cache => cache.InvalidateActor(actorA), Times.Once);
+        permissionCache.Verify(cache => cache.InvalidateActor(actorB), Times.Once);
+        permissionCache.Verify(cache => cache.InvalidateActor(actorC), Times.Once);
     }
 }

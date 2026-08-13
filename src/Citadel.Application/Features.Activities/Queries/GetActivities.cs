@@ -42,7 +42,7 @@ internal sealed class GetActivitiesHandler(
                 pageSize: query.PageSize,
                 cancellationToken)
             : await unitOfWork.ActivityEventRepository.GetAuthorizedPagedAsync(
-                userId: user.UserId,
+                userId: user.ActorId,
                 resourceId: query.ResourceId,
                 resourceType: query.ResourceType,
                 eventType: query.EventType,

@@ -9,6 +9,14 @@ public record ResourceCapabilities(
     bool CanExecute
 );
 
+public sealed record ServiceAccountCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanUse,
+    bool CanManageCredentials)
+    : ResourceCapabilities(CanRead, CanWrite, CanExecute);
+
 public sealed record PlatformCapabilities(
     bool CanRead,
     bool CanWrite,
@@ -118,6 +126,17 @@ public sealed record StackCapabilities(
 
 public static class CapabilityMapper
 {
+    public static ServiceAccountCapabilities ToServiceAccountCapabilities(PermissionMetadata permission)
+    {
+        var common = ToResourceCapabilities(permission);
+        return new ServiceAccountCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+            permission.Has(PermissionLevel.Read, SpecificPermission.Use),
+            permission.Has(PermissionLevel.Read, SpecificPermission.ManageCredentials));
+    }
+
     public static PlatformCapabilities ToPlatformCapabilities(PermissionMetadata permission)
     {
         var common = ToResourceCapabilities(permission);

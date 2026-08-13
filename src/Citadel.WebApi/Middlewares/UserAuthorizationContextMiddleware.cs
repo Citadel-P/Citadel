@@ -13,27 +13,25 @@ internal sealed class UserAuthorizationContextMiddleware(RequestDelegate next)
         IRoleCache roleCache)
     {
         if (context.User.Identity?.IsAuthenticated == true
-            && TryGetUserId(context.User, out var userId)
-            && roleCache.GetRoles(userId) is null)
+            && TryGetActorId(context.User, out var actorId)
+            && roleCache.GetRoles(actorId) is null)
         {
-            var user = await unitOfWork.Users.GetUserAuthInfoByIdAsync(userId, context.RequestAborted);
-            if (user is null)
+            var roles = await unitOfWork.Actors.GetRoleNamesAsync(actorId, context.RequestAborted);
+            if (roles is null)
             {
                 context.User = new ClaimsPrincipal(new ClaimsIdentity());
             }
             else
             {
-                roleCache.SetRoles(userId, user.Roles);
+                roleCache.SetRoles(actorId, roles);
             }
         }
 
         await next(context);
     }
 
-    private static bool TryGetUserId(ClaimsPrincipal principal, out Guid userId)
+    private static bool TryGetActorId(ClaimsPrincipal principal, out Guid actorId)
     {
-        var value = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(value, out userId);
+        return Guid.TryParse(principal.FindFirst("actorId")?.Value, out actorId);
     }
 }

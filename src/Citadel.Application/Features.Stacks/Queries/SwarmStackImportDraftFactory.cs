@@ -49,11 +49,11 @@ internal static class SwarmStackImportDraftFactory
         var user = userContext.Current;
         if (!user.IsAdmin)
         {
-            if (!await unitOfWork.Platforms.CanAccessAsync(user.UserId, platformId, cancellationToken))
+            if (!await unitOfWork.Platforms.CanAccessAsync(user.ActorId, platformId, cancellationToken))
                 return Result.Failure<SwarmStackImportContext>(new NotFoundError("Swarm platform does not exist."));
 
             var permissions = await permissionService.ResolvePermissionsAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.Platform,
                 platformId,
                 cancellationToken);

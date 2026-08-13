@@ -104,7 +104,7 @@ public sealed class OidcAuthenticationCommandTests(PostgresTestFixture fixture) 
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(complete.Login.AccessToken);
         Assert.Equal(SeededAdminUserId.ToString(), jwt.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Sub).Value);
-        Assert.Contains("Admin", scope.ServiceProvider.GetRequiredService<IRoleCache>().GetRoles(SeededAdminUserId)!);
+        Assert.Contains("Admin", scope.ServiceProvider.GetRequiredService<IRoleCache>().GetRoles(Constants.DefaultAdminId)!);
     }
 
     [Fact]

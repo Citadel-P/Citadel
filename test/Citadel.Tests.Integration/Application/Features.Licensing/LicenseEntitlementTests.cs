@@ -95,6 +95,19 @@ public sealed class LicenseEntitlementTests(PostgresTestFixture fixture) : Integ
     }
 
     [Fact]
+    public async Task Community_Should_Reject_Service_Account_Creation_As_Custom_Access_Control()
+    {
+        var response = await Client.PostAsJsonAsync(
+            "/api/v1/serviceAccounts",
+            new { name = "community-service-account", description = "license gate" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var problem = await ReadJsonAsync(response, TestContext.Current.CancellationToken);
+        Assert.Equal("CustomAccessControl", problem.GetProperty("capability").GetString());
+    }
+
+    [Fact]
     public async Task Team_Capability_Should_Enable_Custom_Roles_Without_Row_Quotas()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -215,8 +228,8 @@ public sealed class LicenseEntitlementTests(PostgresTestFixture fixture) : Integ
             },
             cancellationToken);
         userResponse.EnsureSuccessStatusCode();
-        var userId = (await ReadJsonAsync(userResponse, cancellationToken))
-            .GetProperty("id")
+        var memberActorId = (await ReadJsonAsync(userResponse, cancellationToken))
+            .GetProperty("actorId")
             .GetGuid();
 
         var removeResponse = await Client.DeleteAsync("/api/v1/license", cancellationToken);
@@ -224,7 +237,7 @@ public sealed class LicenseEntitlementTests(PostgresTestFixture fixture) : Integ
 
         var addMemberResponse = await Client.PostAsJsonAsync(
             $"/api/v1/teams/{teamId}/members",
-            new { userId },
+            new { memberActorId },
             cancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, addMemberResponse.StatusCode);

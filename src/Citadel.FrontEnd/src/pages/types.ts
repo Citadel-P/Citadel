@@ -73,6 +73,7 @@ export interface RequiredFormComponents<T = any> {
       ActionButtons: React.FC<{ resource: T }>;
     };
     skipMetadataUpdate?: boolean;
+    supportsHeaderRename?: boolean;
     /** Optional subheader */
     SubHeader?: React.FC<{ resource: T }>;
     /** Tabs configuration */
@@ -131,6 +132,8 @@ export interface TabHeaderOptions {
 export interface TabElement<T> {
   /** Tab label shown in the UI */
   label: string;
+  /** Optional richer label renderer. The plain label remains the route and tab value. */
+  Label?: React.FC;
   /** Optional route segment used when a tab is represented in the URL */
   slug?: string;
   /** Wether this tab is disabled */
@@ -157,6 +160,8 @@ export type ResourceTabContentProps<T> = {
 export interface ResourceTabElement<T> {
   /** Tab label shown in the UI */
   label: string;
+  /** Optional richer label renderer. The plain label remains the tab value. */
+  Label?: React.FC;
   /** Optional route segment used when a tab is represented in the URL */
   slug?: string;
   /** Wether this tab is disabled */
@@ -200,6 +205,7 @@ export type ActionData = {
   name: string;
   title: string;
   icon: React.ReactNode;
+  description?: React.ReactNode;
   disabled?: boolean;
   loading?: boolean;
   onClick?: () => void | Promise<unknown>;

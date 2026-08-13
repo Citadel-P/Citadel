@@ -17,7 +17,7 @@ export const useActivitiesGroup = (
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
-      ResourceType: (resourceType ?? query.resourceType === 'All') ? undefined : query.resourceType,
+      ResourceType: resourceType ?? (query.resourceType === 'All' ? undefined : query.resourceType),
       EventType: query.eventType === 'All' ? undefined : query.eventType,
       ResourceId: resourceId ?? query.resourceId,
     },

@@ -10,7 +10,7 @@ namespace Tests.Acceptance.Upgrades;
 internal static class PreReleaseBaseline
 {
     private const string BaselineScriptName = "Infrastructure.Scripts.script0001.sql";
-    private const string BaselineSchemaHash = "b6594233b2ff842cb36767726d8b556736eadf87565621411c8133077a585cf3";
+    private const string BaselineSchemaHash = "d710a0b916700eff111d6c2e80830290cf56d411a414329380a78c83ce5b2dec";
     private const string FixtureDirectory = "Fixtures/Upgrades";
 
     public static async Task RestoreAsync(
@@ -23,6 +23,7 @@ internal static class PreReleaseBaseline
         var baseline = DeployChanges.To
             .PostgresqlDatabase(connectionString)
             .WithScript(BaselineScriptName, schema)
+            .WithVariablesDisabled()
             .Build()
             .PerformUpgrade();
         Assert.True(baseline.Successful, baseline.Error?.ToString());
@@ -39,6 +40,7 @@ internal static class PreReleaseBaseline
         var candidate = DeployChanges.To
             .PostgresqlDatabase(connectionString)
             .WithScriptsAndCodeEmbeddedInAssembly(typeof(InfrastructureModule).Assembly)
+            .WithVariablesDisabled()
             .Build()
             .PerformUpgrade();
 

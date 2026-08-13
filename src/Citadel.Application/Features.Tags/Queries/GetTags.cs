@@ -18,7 +18,7 @@ internal sealed class GetTagsHandler(
         var user = userContextAccessor.Current;
         var tags = user is not null && !user.IsAdmin
             ? await unitOfWork.Tags.ListAuthorizedAsync(
-                user.UserId,
+                user.ActorId,
                 ResourceType.Tag,
                 PermissionLevel.Read,
                 SpecificPermission.None,

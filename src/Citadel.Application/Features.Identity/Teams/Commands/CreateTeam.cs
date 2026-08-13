@@ -2,8 +2,10 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -37,7 +39,8 @@ public sealed record CreateTeam(
 internal sealed class CreateTeamHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
-    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateTeam, Result<TeamDetails>>
+    ILicenseEntitlementService entitlementService,
+    IUserContextAccessor userContext) : ICommandHandler<CreateTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(CreateTeam command, CancellationToken cancellationToken)
     {
@@ -54,6 +57,7 @@ internal sealed class CreateTeamHandler(
         var userIds = command.UserIds?.Distinct().ToArray() ?? [];
         var roleIds = command.RoleIds?.Distinct().ToArray() ?? [];
         var resourceAccesses = command.ResourceAccesses?.Distinct().ToArray() ?? [];
+        var memberActorIds = Array.Empty<Guid>();
 
         if (resourceAccesses.Length > 0)
         {
@@ -72,6 +76,7 @@ internal sealed class CreateTeamHandler(
             if (missingUserId != Guid.Empty)
                 return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
 
+            memberActorIds = users.Select(static user => user.ActorId).Order().ToArray();
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
         }
 
@@ -103,6 +108,19 @@ internal sealed class CreateTeamHandler(
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(team.ActorId, accessRows, cancellationToken);
         }
+
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            IdentityActivity.Create(
+                team.Id,
+                team.Name,
+                userContext.Current.ActorId,
+                ActivityEventType.TeamCreated,
+                new TeamCreated(IdentityActivity.Snapshot(
+                    actor.IsEnabled,
+                    memberActorIds,
+                    roleIds,
+                    resourceAccesses))),
+            cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
         await evictor.EvictUsers(userIds, cancellationToken);

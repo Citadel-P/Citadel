@@ -44,6 +44,7 @@ public sealed record UpdateAutomationAction(
 internal sealed class UpdateAutomationActionHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IRunAsActorAuthorization runAsActorAuthorization,
     ILicenseEntitlementService licenseEntitlementService,
     IOptions<AutomationOptions> options)
     : ICommandHandler<UpdateAutomationAction, Result<AutomationActionResult>>
@@ -84,11 +85,24 @@ internal sealed class UpdateAutomationActionHandler(
         }
 
         var runAsActorId = input.RunAsActorId ?? action.RunAsActorId;
-        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
-            userContextAccessor.Current,
-            runAsActorId);
-        if (runAsAuthorization.IsFailure(out var runAsError))
-            return Result.Failure<AutomationActionResult>(runAsError);
+        var changesExecutableBehavior = input.RunAsActorId.HasValue
+            || input.Code is not null
+            || input.DefaultArgsJson is not null
+            || input.Enabled.HasValue
+            || input.ScheduleEnabled.HasValue
+            || command.UpdateScheduleCron
+            || input.ScheduleTimeZone is not null
+            || command.UpdateWebhook
+            || input.TimeoutSeconds.HasValue
+            || input.AlertOnFailure.HasValue;
+        if (changesExecutableBehavior)
+        {
+            var runAsAuthorization = await runAsActorAuthorization.EnsureAllowedAsync(
+                runAsActorId,
+                cancellationToken);
+            if (runAsAuthorization.IsFailure(out var runAsError))
+                return Result.Failure<AutomationActionResult>(runAsError);
+        }
 
         var oldAction = AutomationActionActivity.ToSnapshot(action);
 

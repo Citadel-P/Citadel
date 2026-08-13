@@ -17,14 +17,28 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     private const string TeamAggregateJoins = """
         LEFT JOIN LATERAL (
             SELECT
-                COUNT(*)::int AS TotalMembers,
+                COUNT(*) FILTER (WHERE COALESCE(u.Id, sa.Id) IS NOT NULL)::int AS TotalMembers,
                 JSONB_AGG(
                     JSONB_BUILD_OBJECT('id', u.Id, 'name', u.Name)
                     ORDER BY u.Name, u.Id
-                )::text AS Users
-            FROM UsersTeams ut
-            JOIN Users u ON u.Id = ut.UserId
-            WHERE ut.TeamId = t.Id
+                ) FILTER (WHERE u.Id IS NOT NULL)::text AS Users,
+                JSONB_AGG(
+                    JSONB_BUILD_OBJECT(
+                        'actorId', memberActor.Id,
+                        'resourceId', COALESCE(u.Id, sa.Id),
+                        'name', COALESCE(u.Name, sa.Name),
+                        'principalType', CASE
+                            WHEN memberActor.Type IN ('Service', 'ServiceAccount') THEN 'ServiceAccount'
+                            ELSE memberActor.Type
+                        END
+                    )
+                    ORDER BY COALESCE(u.Name, sa.Name), memberActor.Id
+                ) FILTER (WHERE COALESCE(u.Id, sa.Id) IS NOT NULL)::text AS Members
+            FROM ActorTeamMemberships membership
+            JOIN Actors memberActor ON memberActor.Id = membership.MemberActorId
+            LEFT JOIN Users u ON u.ActorId = memberActor.Id
+            LEFT JOIN ServiceAccounts sa ON sa.ActorId = memberActor.Id
+            WHERE membership.TeamId = t.Id
         ) members ON TRUE
         LEFT JOIN LATERAL (
             SELECT JSONB_AGG(
@@ -41,8 +55,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         LEFT JOIN LATERAL (
             SELECT COUNT(*)::int AS TotalMembers
-            FROM UsersTeams ut
-            WHERE ut.TeamId = tt.Id
+            FROM ActorTeamMemberships membership
+            WHERE membership.TeamId = tt.Id
         ) members ON TRUE
         LEFT JOIN LATERAL (
             SELECT JSONB_AGG(
@@ -79,7 +93,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
                 COALESCE(members.Users, '[]') AS Users,
-                COALESCE(roles.Roles, '[]') AS Roles
+                COALESCE(roles.Roles, '[]') AS Roles,
+                COALESCE(members.Members, '[]') AS Members
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
             {{TeamAggregateJoins}}
@@ -101,7 +116,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
                 COALESCE(members.Users, '[]') AS Users,
-                COALESCE(roles.Roles, '[]') AS Roles
+                COALESCE(roles.Roles, '[]') AS Roles,
+                COALESCE(members.Members, '[]') AS Members
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
             {{TeamAggregateJoins}}
@@ -134,7 +150,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
                 COALESCE(members.Users, '[]') AS Users,
-                COALESCE(roles.Roles, '[]') AS Roles
+                COALESCE(roles.Roles, '[]') AS Roles,
+                COALESCE(members.Members, '[]') AS Members
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
             {{TeamAggregateJoins}}
@@ -278,24 +295,25 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<Guid>> GetUserIdsAsync(Guid teamId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT UserId FROM UsersTeams WHERE TeamId = @TeamId";
+        const string sql = "SELECT u.Id FROM ActorTeamMemberships membership JOIN Users u ON u.ActorId = membership.MemberActorId WHERE membership.TeamId = @TeamId";
         return db.QueryAsync<Guid>(sql, new { TeamId = teamId, cancellationToken }, transaction: tx());
     }
 
-    public Task<IEnumerable<Guid>> GetUserIdsByActorIdAsync(Guid actorId, CancellationToken cancellationToken)
+    public Task<IEnumerable<Guid>> GetAffectedPrincipalActorIdsAsync(Guid actorId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id FROM Users WHERE ActorId = @ActorId
+            SELECT Id FROM Actors
+            WHERE Id = @ActorId AND Type IN ('User', 'Service', 'ServiceAccount')
             UNION
-            SELECT ut.UserId FROM UsersTeams ut
-            JOIN Teams t ON t.Id = ut.TeamId
+            SELECT membership.MemberActorId FROM ActorTeamMemberships membership
+            JOIN Teams t ON t.Id = membership.TeamId
             WHERE t.ActorId = @ActorId
             """;
 
         return db.QueryAsync<Guid>(sql, new { ActorId = actorId, cancellationToken }, transaction: tx());
     }
 
-    public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
+    public async Task<(TeamDetails? Team, bool MemberExists, bool IsServiceAccount, bool IsArchived, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken)
     {
         const string sql = $$"""
             WITH  TargetTeam AS (
@@ -308,16 +326,25 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 JOIN Actors a ON a.Id = t.ActorId
                 WHERE t.Id = @TeamId
             ),
-            TargetUser AS (
-                SELECT 1 AS ExistsFlag
-                FROM Users
-                WHERE Id = @UserId
+            TargetMember AS (
+                SELECT
+                    1 AS ExistsFlag,
+                    a.Type IN ('Service', 'ServiceAccount') AS IsServiceAccount,
+                    COALESCE(sa.ArchivedAtUtc IS NOT NULL, false) AS IsArchived
+                FROM Actors a
+                LEFT JOIN Users u ON u.ActorId = a.Id
+                LEFT JOIN ServiceAccounts sa ON sa.ActorId = a.Id
+                WHERE a.Id = @MemberActorId
+                  AND (
+                    (a.Type = 'User' AND u.Id IS NOT NULL)
+                    OR (a.Type IN ('Service', 'ServiceAccount') AND sa.Id IS NOT NULL)
+                  )
             ),
             ExistingMember AS (
                 SELECT 1 AS ExistsFlag
-                FROM UsersTeams ut
-                WHERE ut.TeamId = @TeamId
-                  AND ut.UserId = @UserId
+                FROM ActorTeamMemberships membership
+                WHERE membership.TeamId = @TeamId
+                  AND membership.MemberActorId = @MemberActorId
             )
             SELECT
                 tt.Id,
@@ -326,42 +353,55 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 tt.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
                 COALESCE(roles.Roles, '[]') AS Roles,
-                EXISTS (SELECT 1 FROM TargetUser) AS UserExists,
+                EXISTS (SELECT 1 FROM TargetMember) AS MemberExists,
+                COALESCE((SELECT IsServiceAccount FROM TargetMember), false) AS IsServiceAccount,
+                COALESCE((SELECT IsArchived FROM TargetMember), false) AS IsArchived,
                 EXISTS (SELECT 1 FROM ExistingMember) AS HasMember
             FROM (SELECT 1) seed
             LEFT JOIN TargetTeam tt ON 1 = 1
             {{TargetTeamAggregateJoins}}
         """;
 
-        var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, MemberActorId = memberActorId, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null
-            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value, result.TotalMembers, JsonSerializer.Deserialize(result.Roles, RoleJsonContext.Default.IEnumerableResourceInfo) ?? [])
+            ? new TeamDetails(
+                result.Id.Value,
+                result.Name,
+                result.ActorId.Value,
+                result.IsEnabled.Value,
+                result.TotalMembers,
+                Roles: JsonSerializer.Deserialize(result.Roles, RoleJsonContext.Default.IEnumerableResourceInfo) ?? [])
             : null;
 
-        return (team, result.UserExists, result.HasMember);
+        return (team, result.MemberExists, result.IsServiceAccount, result.IsArchived, result.HasMember);
     }
 
-    public Task<int> AddMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
+    public Task<int> AddMemberAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken)
     {
-        const string sql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
-        return db.ExecuteAsync(sql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
+        const string sql = "INSERT INTO ActorTeamMemberships (MemberActorId, TeamId) VALUES (@MemberActorId, @TeamId)";
+        return db.ExecuteAsync(sql, new { MemberActorId = memberActorId, TeamId = teamId, cancellationToken }, transaction: tx());
     }
 
-    public Task<int> RemoveMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
+    public Task<int> RemoveMemberAsync(Guid teamId, Guid memberActorId, CancellationToken cancellationToken)
     {
-        const string sql = "DELETE FROM UsersTeams WHERE TeamId = @TeamId AND UserId = @UserId";
-        return db.ExecuteAsync(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
+        const string sql = "DELETE FROM ActorTeamMemberships WHERE TeamId = @TeamId AND MemberActorId = @MemberActorId";
+        return db.ExecuteAsync(sql, new { TeamId = teamId, MemberActorId = memberActorId, cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken)
     {
-        const string deleteSql = "DELETE FROM UsersTeams WHERE TeamId = @TeamId";
+        const string deleteSql = """
+            DELETE FROM ActorTeamMemberships membership
+            USING Users u
+            WHERE membership.TeamId = @TeamId
+              AND u.ActorId = membership.MemberActorId
+            """;
         await db.ExecuteAsync(deleteSql, new { TeamId = teamId, cancellationToken }, transaction: tx());
 
         var rows = 0;
         foreach (var userId in userIds)
         {
-            const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
+            const string insertSql = "INSERT INTO ActorTeamMemberships (MemberActorId, TeamId) SELECT ActorId, @TeamId FROM Users WHERE Id = @UserId";
             rows += await db.ExecuteAsync(insertSql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
         }
 

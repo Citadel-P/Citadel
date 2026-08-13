@@ -44,12 +44,13 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
         var sql = """
             SELECT 
                 a.*,
-                u.Name AS Actor_Name,
+                COALESCE(u.Name, serviceAccount.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
                 ac.Type AS Actor_Type
             FROM ActivityEvents a
             LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
+            LEFT JOIN ServiceAccounts serviceAccount ON a.CreatedByActorId = serviceAccount.ActorId
             LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
             LEFT JOIN Platforms p ON a.PlatformId = p.Id
             WHERE a.Id = @Id
@@ -67,12 +68,13 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.AuthorizedResourcesCte + """
             SELECT 
                 a.*,
-                u.Name AS Actor_Name,
+                COALESCE(u.Name, serviceAccount.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
                 ac.Type AS Actor_Type
             FROM ActivityEvents a
             LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
+            LEFT JOIN ServiceAccounts serviceAccount ON a.CreatedByActorId = serviceAccount.ActorId
             LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
             LEFT JOIN Platforms p ON a.PlatformId = p.Id
             WHERE a.Id = @Id
@@ -91,6 +93,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
                       WHEN 'BuildAgentPool' THEN @BuildAgentPoolResourceType
                       WHEN 'Volume' THEN @PlatformResourceType
                       WHEN 'BackupPolicy' THEN @BackupPolicyResourceType
+                      WHEN 'ServiceAccount' THEN @ServiceAccountResourceType
                   END
                     AND (authorized.ResourceId IS NULL OR authorized.ResourceId = a.ResourceId)
               )
@@ -113,7 +116,8 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
                 AutomationActionResourceType = (int)ResourceType.AutomationAction,
                 BuildResourceType = (int)ResourceType.Build,
                 BuildAgentPoolResourceType = (int)ResourceType.BuildAgentPool,
-                BackupPolicyResourceType = (int)ResourceType.BackupPolicy
+                BackupPolicyResourceType = (int)ResourceType.BackupPolicy,
+                ServiceAccountResourceType = (int)ResourceType.ServiceAccount
             },
             transaction: tx());
 
@@ -142,11 +146,12 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             a.Info,
             p.Name AS Platform_Name,
             p.Status AS Platform_Status,
-            u.Name AS Actor_Name,
+            COALESCE(u.Name, serviceAccount.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM ActivityEvents a
         LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
         LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
+        LEFT JOIN ServiceAccounts serviceAccount ON a.CreatedByActorId = serviceAccount.ActorId
         LEFT JOIN Platforms p ON a.PlatformId = p.Id
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
@@ -212,6 +217,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
                     WHEN 'BuildAgentPool' THEN @BuildAgentPoolResourceType
                     WHEN 'Volume' THEN @PlatformResourceType
                     WHEN 'BackupPolicy' THEN @BackupPolicyResourceType
+                    WHEN 'ServiceAccount' THEN @ServiceAccountResourceType
                 END
                   AND (authorized.ResourceId IS NULL OR authorized.ResourceId = a.ResourceId)
             )
@@ -231,11 +237,12 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
                 a.Info,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
-                u.Name AS Actor_Name,
+                COALESCE(u.Name, serviceAccount.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
                 ac.Type AS Actor_Type
             FROM ActivityEvents a
             LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
             LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
+            LEFT JOIN ServiceAccounts serviceAccount ON a.CreatedByActorId = serviceAccount.ActorId
             LEFT JOIN Platforms p ON a.PlatformId = p.Id
             WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
                 AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
@@ -270,6 +277,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             BuildResourceType = (int)ResourceType.Build,
             BuildAgentPoolResourceType = (int)ResourceType.BuildAgentPool,
             BackupPolicyResourceType = (int)ResourceType.BackupPolicy,
+            ServiceAccountResourceType = (int)ResourceType.ServiceAccount,
             ResourceId = resourceId,
             ResourceType = resourceType is null ? null : EnumFormatter<ActivityResourceType>.GetValue(resourceType.Value),
             EventType = eventType is null ? null : EnumFormatter<ActivityEventType>.GetValue(eventType.Value),

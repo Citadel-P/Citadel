@@ -240,13 +240,8 @@ public sealed record RunAutomationActionInput(string? ArgsJson, int? TimeoutSeco
     internal RunAutomationActionInputModel ToModel() => new(ArgsJson, TimeoutSeconds);
 }
 
-public sealed record TestAutomationActionInput(
-    string Code,
-    string? ArgsJson,
-    string? DefaultArgsJson,
-    int? TimeoutSeconds,
-    Guid? RunAsActorId)
+public sealed record TestAutomationActionInput(string? ArgsJson)
 {
     internal TestAutomationActionInputModel ToModel()
-        => new(Code, ArgsJson, DefaultArgsJson, TimeoutSeconds, RunAsActorId);
+        => new(ArgsJson);
 }

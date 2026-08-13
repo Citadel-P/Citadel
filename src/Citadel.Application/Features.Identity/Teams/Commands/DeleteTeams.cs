@@ -1,7 +1,10 @@
 using Application.Services.Identity;
+using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -22,7 +25,8 @@ public sealed record DeleteTeams(IEnumerable<Guid> Ids) : ICommand<Result>, IAdm
 internal sealed class DeleteTeamsHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
-    IAdministratorGuard administratorGuard) : ICommandHandler<DeleteTeams, Result>
+    IAdministratorGuard administratorGuard,
+    IUserContextAccessor userContext) : ICommandHandler<DeleteTeams, Result>
 {
     public async ValueTask<Result> Handle(DeleteTeams command, CancellationToken cancellationToken)
     {
@@ -31,9 +35,15 @@ internal sealed class DeleteTeamsHandler(
             return Result.Failure(new NotFoundError("No teams found matching the provided IDs."));
 
         var teamArray = teams.ToArray();
-        var affectedUserIds = new List<Guid>();
+        var snapshots = new List<(Domain.Entities.Identity.Team Team, TeamActivitySnapshot Snapshot)>(teamArray.Length);
+        var affectedActorIds = new List<Guid>();
         foreach (var team in teamArray)
-            affectedUserIds.AddRange(await unitOfWork.Teams.GetUserIdsByActorIdAsync(team.ActorId, cancellationToken));
+        {
+            var snapshot = await IdentityActivity.CaptureTeamAsync(unitOfWork, team.Id, cancellationToken);
+            if (snapshot is not null)
+                snapshots.Add((team, snapshot));
+            affectedActorIds.AddRange(await unitOfWork.Teams.GetAffectedPrincipalActorIdsAsync(team.ActorId, cancellationToken));
+        }
 
         await unitOfWork.Teams.RemoveRangeAsync(teamArray.Select(static team => team.Id), cancellationToken);
 
@@ -41,8 +51,20 @@ internal sealed class DeleteTeamsHandler(
         if (guardResult.IsFailure(out var guardError))
             return Result.Failure(guardError);
 
+        foreach (var (team, snapshot) in snapshots)
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    team.Id,
+                    team.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.TeamDeleted,
+                    new TeamDeleted(snapshot)),
+                cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
-        await evictor.EvictUsers(affectedUserIds, cancellationToken);
+        await evictor.EvictActors(affectedActorIds, cancellationToken);
         return Result.Success();
     }
 }

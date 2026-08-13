@@ -90,7 +90,7 @@ internal static class ManagedSwarmServiceRuntime
         if (platform is null
             || (!userContext.Current.IsAdmin
                 && !await unitOfWork.Platforms.CanAccessAsync(
-                    userContext.Current.UserId, service.PlatformId, cancellationToken)))
+                    userContext.Current.ActorId, service.PlatformId, cancellationToken)))
             return Result.Failure<Context>(new NotFoundError("The Docker Swarm platform does not exist or is not accessible."));
         if (platform.PlatformDescriptor is not DockerSwarmPlatformDescriptor)
             return Result.Failure<Context>(new BadRequestError("Managed Services require a Docker Swarm platform."));

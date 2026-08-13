@@ -81,6 +81,14 @@ When a secret is configured, Citadel validates the provider signature or token b
 
 GitHub and GitLab-compatible configurations may accept unsigned deliveries when their secret is empty. Generic / CI webhooks always require a non-empty shared secret. This credential is scoped to the configured webhook and is not a Citadel user access token.
 
+It is also not a Citadel Service Account token. A webhook shared secret only
+authenticates delivery to that one listener; it does not receive roles, Team
+permissions, or resource access. Use a Service Account token when an external
+system needs to call authenticated `/api/v1` endpoints, and never paste that
+token into a webhook secret field. Service Account authentication requires
+Team's **Custom access control** capability. See
+[Service Accounts](service-accounts.md).
+
 ### Generic / CI
 
 Use Generic / CI when the caller is not sending GitHub or GitLab signatures. Send the configured secret in the HTTP `Authorization` header; never put it in the URL:

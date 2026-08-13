@@ -31,7 +31,7 @@ internal static class SwarmServiceValidation
         userContext.Current.IsAdmin
         || userContext.Current.ActorId == Constants.SystemId
         || await unitOfWork.Platforms.CanAccessAsync(
-            userContext.Current.UserId,
+            userContext.Current.ActorId,
             platformId,
             cancellationToken);
 
@@ -264,7 +264,7 @@ internal static class SwarmServiceValidation
                 return Result.Failure(new NotFoundError("The selected Registry does not exist."));
             case SwarmExternalImage external when !userContext.Current.IsAdmin
                 && !(await unitOfWork.Registries.GetAuthorizedAsync(
-                    userContext.Current.UserId,
+                    userContext.Current.ActorId,
                     ResourceType.Registry,
                     PermissionLevel.Read,
                     SpecificPermission.None,
@@ -276,7 +276,7 @@ internal static class SwarmServiceValidation
                 return Result.Failure(new NotFoundError("The selected build project does not exist."));
             case SwarmBuildImage build when !userContext.Current.IsAdmin
                 && !await unitOfWork.BuildProjects.CanAccessAsync(
-                    userContext.Current.UserId,
+                    userContext.Current.ActorId,
                     build.BuildProjectId,
                     ResourceType.Build,
                     PermissionLevel.Read,

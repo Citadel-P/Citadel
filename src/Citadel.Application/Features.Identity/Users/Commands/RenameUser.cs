@@ -1,7 +1,10 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -22,7 +25,7 @@ public sealed record RenameUser(Guid Id, string Name) : ICommand<Result<UserDeta
     }
 }
 
-internal sealed class RenameUserHandler(IUnitOfWork unitOfWork) : ICommandHandler<RenameUser, Result<UserDetails>>
+internal sealed class RenameUserHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<RenameUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(RenameUser command, CancellationToken cancellationToken)
     {
@@ -33,8 +36,22 @@ internal sealed class RenameUserHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (state.NameExists)
             return Result.Failure<UserDetails>(new ConflictError("Name already exists"));
 
+        var oldName = state.User.Name;
         state.User.UpdateMetadata(name: command.Name);
         await unitOfWork.Users.UpdateAsync(state.User, cancellationToken);
+
+        if (!string.Equals(oldName, state.User.Name, StringComparison.Ordinal))
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(
+                IdentityActivity.Create(
+                    state.User.Id,
+                    state.User.Name,
+                    userContext.Current.ActorId,
+                    ActivityEventType.UserRenamed,
+                    new UserRenamed(oldName, state.User.Name)),
+                cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new UserDetails(state.User.Id, state.User.Name, state.User.Email, state.User.ActorId, state.IsEnabled, state.User.CreatedAt, state.User.CreatedByActorId);

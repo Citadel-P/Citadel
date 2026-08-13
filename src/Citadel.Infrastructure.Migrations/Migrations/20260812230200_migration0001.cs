@@ -438,6 +438,30 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "serviceaccounts",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    actorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    archivedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    description = table.Column<string>(type: "text", nullable: true),
+                    name = table.Column<string>(type: "text", maxLength: 100, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_serviceaccounts", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_serviceaccounts_actors_actorid",
+                        column: x => x.actorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "stacks",
                 columns: table => new
                 {
@@ -1415,6 +1439,34 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "serviceaccounttokens",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    expiresatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastusedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    name = table.Column<string>(type: "text", maxLength: 100, nullable: false),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    revokedbyactorid = table.Column<Guid>(type: "uuid", nullable: true),
+                    secrethash = table.Column<byte[]>(type: "bytea", nullable: false),
+                    serviceaccountid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_serviceaccounttokens", x => x.id);
+                    table.CheckConstraint("CK_ServiceAccountTokens_Expiration", "\"expiresatutc\" IS NULL OR \"expiresatutc\" > \"createdatutc\"");
+                    table.CheckConstraint("CK_ServiceAccountTokens_SecretHashLength", "octet_length(\"secrethash\") = 32");
+                    table.ForeignKey(
+                        name: "fk_serviceaccounttokens_serviceaccounts_serviceaccountid",
+                        column: x => x.serviceaccountid,
+                        principalTable: "serviceaccounts",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "stackreleases",
                 columns: table => new
                 {
@@ -1554,6 +1606,30 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "actorteammemberships",
+                columns: table => new
+                {
+                    teamid = table.Column<Guid>(type: "uuid", nullable: false),
+                    memberactorid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_actorteammemberships", x => new { x.teamid, x.memberactorid });
+                    table.ForeignKey(
+                        name: "fk_actorteammemberships_actors_memberactorid",
+                        column: x => x.memberactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_actorteammemberships_teams_teamid",
+                        column: x => x.teamid,
+                        principalTable: "teams",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "mfachallenges",
                 columns: table => new
                 {
@@ -1677,30 +1753,6 @@ namespace Infrastructure.Migrations.Migrations
                     table.PrimaryKey("pk_userpreferences", x => x.userid);
                     table.ForeignKey(
                         name: "fk_userpreferences_users_userid",
-                        column: x => x.userid,
-                        principalTable: "users",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "usersteams",
-                columns: table => new
-                {
-                    userid = table.Column<Guid>(type: "uuid", nullable: false),
-                    teamid = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_usersteams", x => new { x.userid, x.teamid });
-                    table.ForeignKey(
-                        name: "fk_usersteams_teams_teamid",
-                        column: x => x.teamid,
-                        principalTable: "teams",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_usersteams_users_userid",
                         column: x => x.userid,
                         principalTable: "users",
                         principalColumn: "id",
@@ -2620,6 +2672,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("a3cd7182-baa1-324f-79f0-3a04d7647032"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("b2298835-c351-7367-ad8d-e5884be235f3"), 2, 12, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("b83ca9a1-2725-6927-8cd6-99b0fe489c44"), 4, 21, new Guid("30000000-0000-0000-0000-000000000001"), 6144 },
                     { new Guid("ba1393e4-1090-990e-aee3-a3e36ede0fee"), 4, 16, new Guid("30000000-0000-0000-0000-000000000001"), 128 },
                     { new Guid("c472d905-c03c-a9a8-0527-c2b540274078"), 2, 18, new Guid("30000000-0000-0000-0000-000000000002"), 4 },
                     { new Guid("d1af8dbf-ef7d-d81d-33f9-e3be5ee72243"), 4, 18, new Guid("30000000-0000-0000-0000-000000000001"), 4 },
@@ -2752,6 +2805,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_actorroles_roleid",
                 table: "actorroles",
                 column: "roleid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actorteammemberships_memberactorid",
+                table: "actorteammemberships",
+                column: "memberactorid");
 
             migrationBuilder.CreateIndex(
                 name: "ix_alertchannels_createdbyactorid",
@@ -3645,6 +3703,36 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_serviceaccounts_activename",
+                table: "serviceaccounts",
+                column: "name",
+                unique: true,
+                filter: "\"archivedatutc\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_serviceaccounts_actorid",
+                table: "serviceaccounts",
+                column: "actorid",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_serviceaccounttokens_account_createdat",
+                table: "serviceaccounttokens",
+                columns: new[] { "serviceaccountid", "createdatutc" },
+                descending: new[] { false, true });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_serviceaccounttokens_accountname",
+                table: "serviceaccounttokens",
+                columns: new[] { "serviceaccountid", "name" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_serviceaccounttokens_activelookup",
+                table: "serviceaccounttokens",
+                columns: new[] { "serviceaccountid", "revokedatutc", "expiresatutc" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_stackreleases_createdbyactorid",
                 table: "stackreleases",
                 column: "createdbyactorid");
@@ -3894,16 +3982,6 @@ namespace Infrastructure.Migrations.Migrations
                 table: "users",
                 column: "email",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_usersteams_teamid",
-                table: "usersteams",
-                column: "teamid");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_usersteams_userid",
-                table: "usersteams",
-                column: "userid");
         }
 
         /// <inheritdoc />
@@ -3917,6 +3995,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "actorroles");
+
+            migrationBuilder.DropTable(
+                name: "actorteammemberships");
 
             migrationBuilder.DropTable(
                 name: "alertevents");
@@ -4000,6 +4081,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "resourcetags");
 
             migrationBuilder.DropTable(
+                name: "serviceaccounttokens");
+
+            migrationBuilder.DropTable(
                 name: "stackreleaseswarmresources");
 
             migrationBuilder.DropTable(
@@ -4063,10 +4147,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "userpreferences");
 
             migrationBuilder.DropTable(
-                name: "usersteams");
+                name: "actions");
 
             migrationBuilder.DropTable(
-                name: "actions");
+                name: "teams");
 
             migrationBuilder.DropTable(
                 name: "alertchannels");
@@ -4090,10 +4174,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "tags");
 
             migrationBuilder.DropTable(
-                name: "stackreleases");
+                name: "serviceaccounts");
 
             migrationBuilder.DropTable(
-                name: "teams");
+                name: "stackreleases");
 
             migrationBuilder.DropTable(
                 name: "users");

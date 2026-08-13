@@ -41,7 +41,7 @@ internal sealed class GetSwarmServicesHandler(
                 tagFilter.TagIds,
                 query.PlatformId)
             : await unitOfWork.SwarmServices.GetAuthorizedInfoAsync(
-                user.UserId,
+                user.ActorId,
                 PermissionLevel.Read,
                 SpecificPermission.None,
                 cancellationToken,
@@ -86,7 +86,7 @@ internal sealed class GetSwarmServiceHandler(
         if (!userContext.Current.IsAdmin
             && userContext.Current.ActorId != Constants.SystemId
             && !await unitOfWork.Platforms.CanAccessAsync(
-                userContext.Current.UserId, service.PlatformId, cancellationToken))
+                userContext.Current.ActorId, service.PlatformId, cancellationToken))
             return Result.Failure<SwarmService>(new NotFoundError("The managed Swarm Service does not exist."));
 
         service.ApplyObservation(service.DockerServiceId is null

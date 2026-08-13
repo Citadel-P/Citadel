@@ -166,7 +166,7 @@ internal sealed class CreateSwarmServiceHandler(
         if (!user.IsAdmin
             && user.ActorId != Constants.SystemId
             && !await unitOfWork.SwarmServices.CanAccessAsync(
-                user.UserId,
+                user.ActorId,
                 source.ResourceId,
                 PermissionLevel.Read,
                 SpecificPermission.None,

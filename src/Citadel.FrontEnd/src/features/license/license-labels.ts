@@ -9,7 +9,7 @@ export const LICENSE_CAPABILITY_LABELS: Record<LicenseCapability, string> = {
 };
 
 export const LICENSE_CAPABILITY_DESCRIPTIONS: Record<LicenseCapability, string> = {
-  [LicenseCapability.CustomAccessControl]: 'Custom roles, scoped grants, and resource overrides.',
+  [LicenseCapability.CustomAccessControl]: 'Custom roles, scoped grants, resource overrides, and Service Accounts.',
   [LicenseCapability.AutomatedOperations]: 'Scheduled and webhook-triggered mutating workflows.',
   [LicenseCapability.AdvancedAlerting]: 'Custom alert rules, conditions, thresholds, and scoping.',
   [LicenseCapability.OperationalGuardrails]: 'Continuous drift checks, reconciliation, and automatic image updates.',

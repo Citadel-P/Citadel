@@ -22,9 +22,7 @@ public sealed record TestAutomationAction(Guid Id, TestAutomationActionInputMode
         public Validator()
         {
             RuleFor(x => x.Id).NotEmpty();
-            RuleFor(x => x.Input.Code).NotEmpty().MaximumLength(262_144);
             RuleFor(x => x.Input.ArgsJson).MaximumLength(65_536).When(x => x.Input.ArgsJson is not null);
-            RuleFor(x => x.Input.DefaultArgsJson).MaximumLength(65_536).When(x => x.Input.DefaultArgsJson is not null);
         }
     }
 }
@@ -39,25 +37,9 @@ internal sealed class TestAutomationActionHandler(
         TestAutomationAction command,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (command.Input.RunAsActorId.HasValue)
-        {
-            var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
-                userContextAccessor.Current,
-                command.Input.RunAsActorId.Value);
-            if (runAsAuthorization.IsFailure(out var runAsError))
-            {
-                yield return Error(runAsError);
-                yield break;
-            }
-        }
-
-        var result = await queueService.QueueDraftTestAsync(
+        var result = await queueService.QueueTestAsync(
             command.Id,
-            command.Input.Code,
             command.Input.ArgsJson,
-            command.Input.DefaultArgsJson,
-            command.Input.TimeoutSeconds,
-            command.Input.RunAsActorId,
             userContextAccessor.Current.ActorId,
             cancellationToken);
 

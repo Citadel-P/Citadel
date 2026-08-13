@@ -150,6 +150,12 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
         }, transaction: tx());
     }
 
+    public Task<int> RemoveByIdAsync(Guid actorId, Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM ResourceAccesses WHERE ActorId = @ActorId AND Id = @Id";
+        return db.ExecuteAsync(sql, new { ActorId = actorId, Id = id, cancellationToken }, transaction: tx());
+    }
+
     public async Task<int> ReplaceAsync(Guid actorId, IEnumerable<ResourceAccess> resourceAccesses, CancellationToken cancellationToken)
     {
         const string deleteSql = "DELETE FROM ResourceAccesses WHERE ActorId = @ActorId";

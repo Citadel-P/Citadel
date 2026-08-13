@@ -6,6 +6,7 @@ import { UserView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { UserActions } from './actions';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { ActivitiesTab } from '@/features/activities';
 
 export const UserFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -16,6 +17,7 @@ export const UserFormComponents: RequiredFormComponents = {
   },
   EditForm: {
     skipMetadataUpdate: true,
+    supportsHeaderRename: true,
     Header: {
       canEditDescription: false,
       Indicator: ({ resource }: { resource: UserView }) => (
@@ -31,6 +33,10 @@ export const UserFormComponents: RequiredFormComponents = {
         Content: ({ resource }) => (
           <UserForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
         ),
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }) => <ActivitiesTab resourceId={resource.id} resourceType="User" />,
       },
     ],
 

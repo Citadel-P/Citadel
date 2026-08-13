@@ -6,6 +6,7 @@ import { TeamView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { TeamActions } from './actions';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { ActivitiesTab } from '@/features/activities';
 
 export const TeamFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -16,6 +17,7 @@ export const TeamFormComponents: RequiredFormComponents = {
   },
   EditForm: {
     skipMetadataUpdate: true,
+    supportsHeaderRename: true,
     Header: {
       canEditDescription: false,
       Indicator: ({ resource }: { resource: TeamView }) => (
@@ -31,6 +33,10 @@ export const TeamFormComponents: RequiredFormComponents = {
         Content: ({ resource }) => (
           <TeamForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
         ),
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }) => <ActivitiesTab resourceId={resource.id} resourceType="Team" />,
       },
     ],
 

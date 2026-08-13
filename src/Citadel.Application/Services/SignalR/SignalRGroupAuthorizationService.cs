@@ -348,12 +348,15 @@ internal sealed class SignalRGroupAuthorizationService(
             ActivityResourceType.OidcProvider => new AuthorizationTarget(TargetKind.AdminOnly),
             ActivityResourceType.AutomationAction => Permission(ResourceType.AutomationAction, resourceId),
             ActivityResourceType.User => new AuthorizationTarget(TargetKind.AdminOnly),
+            ActivityResourceType.Team => new AuthorizationTarget(TargetKind.AdminOnly),
+            ActivityResourceType.Role => new AuthorizationTarget(TargetKind.AdminOnly),
             ActivityResourceType.License => new AuthorizationTarget(TargetKind.AdminOnly),
             ActivityResourceType.Build => Permission(ResourceType.Build, resourceId),
             ActivityResourceType.BuildAgentPool => Permission(ResourceType.BuildAgentPool, resourceId),
             ActivityResourceType.Volume => Permission(ResourceType.Platform, resourceId),
             ActivityResourceType.BackupPolicy => Permission(ResourceType.BackupPolicy, resourceId),
             ActivityResourceType.SwarmService => Permission(ResourceType.SwarmService, resourceId),
+            ActivityResourceType.ServiceAccount => Permission(ResourceType.ServiceAccount, resourceId),
             _ => default
         };
 

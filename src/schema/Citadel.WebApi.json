@@ -362,7 +362,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -429,7 +429,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -516,7 +516,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -606,7 +606,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -881,7 +881,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -937,7 +937,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -1011,7 +1011,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1067,7 +1067,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -1146,7 +1146,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1215,7 +1215,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1271,7 +1271,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -1335,7 +1335,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1405,7 +1405,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1461,7 +1461,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1537,7 +1537,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1613,7 +1613,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1682,7 +1682,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1758,7 +1758,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1814,7 +1814,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -1880,7 +1880,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -1964,7 +1964,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -2028,7 +2028,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2094,7 +2094,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2192,7 +2192,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2300,7 +2300,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2411,7 +2411,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -2505,7 +2505,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -2592,7 +2592,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2693,7 +2693,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -2791,7 +2791,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -2912,7 +2912,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3030,7 +3030,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3138,7 +3138,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3256,7 +3256,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -3362,7 +3362,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3468,7 +3468,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3559,9 +3559,871 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
+      }
+    },
+    "/api/v1/serviceAccounts": {
+      "get": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "listServiceAccounts",
+        "parameters": [
+          {
+            "name": "Name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          },
+          {
+            "name": "IncludeArchived",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "createServiceAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceAccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "archiveServiceAccounts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteServiceAccountsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/limits": {
+      "get": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "getServiceAccountLimits",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountLimitsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}": {
+      "get": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "getServiceAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "updateServiceAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchServiceAccountInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchServiceAccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/rename": {
+      "post": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "renameServiceAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/roles": {
+      "post": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "addServiceAccountRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServiceAccountRoleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/roles/{roleId}": {
+      "delete": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "removeServiceAccountRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/resource-accesses": {
+      "post": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "addServiceAccountResourceAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceAccountResourceAccessInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}": {
+      "delete": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "removeServiceAccountResourceAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resourceAccessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/usages": {
+      "get": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "listServiceAccountUsages",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunAsActorUsageView"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/tokens": {
+      "get": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "listServiceAccountTokens",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountTokensView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "createServiceAccountToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceAccountTokenInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedServiceAccountTokenView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/tokens/{tokenId}": {
+      "delete": {
+        "tags": [
+          "ServiceAccounts"
+        ],
+        "operationId": "revokeServiceAccountToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/teams": {
@@ -3670,7 +4532,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -3764,7 +4626,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -3851,7 +4713,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -3952,7 +4814,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4050,7 +4912,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -4161,7 +5023,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4279,7 +5141,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4387,7 +5249,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4505,12 +5367,12 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
     },
-    "/api/v1/teams/{id}/members/{userId}": {
+    "/api/v1/teams/{id}/members/{memberActorId}": {
       "delete": {
         "tags": [
           "Teams"
@@ -4529,9 +5391,9 @@
             }
           },
           {
-            "name": "userId",
+            "name": "memberActorId",
             "in": "path",
-            "description": "User ID",
+            "description": "Member Actor ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -4613,7 +5475,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4731,7 +5593,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -4837,7 +5699,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -4943,7 +5805,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5019,7 +5881,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -5113,7 +5975,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -5200,7 +6062,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5298,7 +6160,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5411,7 +6273,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5517,7 +6379,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5657,7 +6519,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5753,7 +6615,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5849,7 +6711,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -5960,7 +6822,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6057,7 +6919,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6165,7 +7027,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6283,7 +7145,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6375,7 +7237,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6467,7 +7329,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6559,7 +7421,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6651,7 +7513,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6743,7 +7605,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6832,7 +7694,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -6930,7 +7792,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7041,7 +7903,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7152,7 +8014,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7263,7 +8125,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7374,7 +8236,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7471,7 +8333,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7568,7 +8430,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7673,7 +8535,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -7789,7 +8651,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -7904,7 +8766,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8014,7 +8876,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8111,7 +8973,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -8219,7 +9081,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8324,7 +9186,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8439,7 +9301,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8554,7 +9416,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8679,7 +9541,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8807,7 +9669,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -8935,7 +9797,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9043,7 +9905,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9160,7 +10022,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9265,7 +10127,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9380,7 +10242,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9508,7 +10370,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9623,7 +10485,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9751,7 +10613,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9848,7 +10710,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -9953,7 +10815,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -10050,7 +10912,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -10158,7 +11020,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -10266,7 +11128,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -10371,7 +11233,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -10489,7 +11351,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -10586,7 +11448,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -10694,7 +11556,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -10802,7 +11664,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -10907,7 +11769,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11022,7 +11884,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11140,7 +12002,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11264,7 +12126,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11391,7 +12253,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11518,7 +12380,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11616,7 +12478,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -11710,7 +12572,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -11797,7 +12659,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11873,7 +12735,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -11949,7 +12811,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12047,7 +12909,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -12168,7 +13030,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12266,7 +13128,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -12372,7 +13234,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12470,7 +13332,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12589,7 +13451,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12701,7 +13563,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12813,7 +13675,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -12921,7 +13783,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13029,7 +13891,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13127,7 +13989,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13218,7 +14080,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13324,7 +14186,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13437,7 +14299,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13532,7 +14394,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -13706,7 +14568,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -13793,7 +14655,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -13891,7 +14753,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -14171,7 +15033,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -14269,7 +15131,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -14392,7 +15254,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -14498,7 +15360,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -14596,7 +15458,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -14702,7 +15564,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -14778,7 +15640,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -14872,7 +15734,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -14959,7 +15821,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -15057,7 +15919,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -15178,7 +16040,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -15276,7 +16138,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -15364,7 +16226,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -15468,7 +16330,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -15555,7 +16417,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -15653,7 +16515,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -15774,7 +16636,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -15872,7 +16734,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -15978,7 +16840,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16076,7 +16938,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16174,7 +17036,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16306,7 +17168,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16439,7 +17301,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16573,7 +17435,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16671,7 +17533,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16776,7 +17638,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16889,7 +17751,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -16994,7 +17856,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17100,7 +17962,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17188,7 +18050,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17278,7 +18140,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17377,7 +18239,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17467,7 +18329,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17566,7 +18428,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17678,7 +18540,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17784,7 +18646,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17873,7 +18735,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -17969,7 +18831,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18095,7 +18957,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18207,7 +19069,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18303,7 +19165,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -18390,7 +19252,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18509,7 +19371,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18621,7 +19483,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18717,7 +19579,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -18804,7 +19666,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -18910,7 +19772,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -19004,7 +19866,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -19095,7 +19957,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19193,7 +20055,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19311,7 +20173,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19409,7 +20271,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -19515,7 +20377,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19627,7 +20489,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19725,7 +20587,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19823,7 +20685,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -19921,7 +20783,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20018,7 +20880,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20114,7 +20976,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20237,7 +21099,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20360,7 +21222,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20449,7 +21311,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20542,7 +21404,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20635,7 +21497,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20728,7 +21590,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20821,7 +21683,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -20914,7 +21776,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -21012,7 +21874,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -21489,7 +22351,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -22279,7 +23141,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -22383,7 +23245,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -22474,7 +23336,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -22572,7 +23434,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -22690,7 +23552,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -22788,7 +23650,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -22894,7 +23756,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -22992,7 +23854,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23090,7 +23952,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23188,7 +24050,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23286,7 +24148,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23382,7 +24244,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23488,7 +24350,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23611,7 +24473,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23734,7 +24596,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23823,7 +24685,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -23912,7 +24774,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24005,7 +24867,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24098,7 +24960,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24191,7 +25053,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24284,7 +25146,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24377,7 +25239,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24474,7 +25336,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24586,7 +25448,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24684,7 +25546,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24792,7 +25654,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24890,7 +25752,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -24997,7 +25859,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26157,7 +27019,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -26251,7 +27113,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26349,7 +27211,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -26470,7 +27332,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -26559,7 +27421,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26665,7 +27527,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26788,7 +27650,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26885,7 +27747,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -26971,7 +27833,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -27059,7 +27921,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -27153,7 +28015,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -27251,7 +28113,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -27372,7 +28234,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -27461,7 +28323,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -27559,7 +28421,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -27665,7 +28527,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -27771,7 +28633,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -27884,7 +28746,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28005,7 +28867,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28126,7 +28988,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28237,7 +29099,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28347,7 +29209,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28455,7 +29317,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28563,7 +29425,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28629,7 +29491,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -28723,7 +29585,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -28811,7 +29673,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -28932,7 +29794,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -29031,7 +29893,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29139,7 +30001,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29240,7 +30102,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29341,7 +30203,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29442,7 +30304,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29520,7 +30382,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -29614,7 +30476,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29694,7 +30556,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -29782,7 +30644,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -29903,7 +30765,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -30002,7 +30864,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30100,7 +30962,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -30206,7 +31068,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30312,7 +31174,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30435,7 +31297,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30553,7 +31415,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30674,7 +31536,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30762,7 +31624,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30850,7 +31712,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -30938,7 +31800,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31026,7 +31888,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31117,7 +31979,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31225,7 +32087,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31336,7 +32198,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31432,7 +32294,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31520,7 +32382,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31608,7 +32470,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31696,7 +32558,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31787,7 +32649,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -31865,7 +32727,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -31959,7 +32821,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32047,7 +32909,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -32168,7 +33030,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -32267,7 +33129,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32365,7 +33227,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -32471,7 +33333,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32577,7 +33439,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32700,7 +33562,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32818,7 +33680,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -32896,7 +33758,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -32990,7 +33852,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33078,7 +33940,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -33199,7 +34061,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -33298,7 +34160,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33396,7 +34258,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -33502,7 +34364,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33608,7 +34470,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33731,7 +34593,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33839,7 +34701,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -33947,7 +34809,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34045,7 +34907,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34136,7 +34998,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34224,7 +35086,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34312,7 +35174,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34400,7 +35262,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34491,7 +35353,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34626,7 +35488,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34744,7 +35606,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -34823,7 +35685,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -34910,7 +35772,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35036,7 +35898,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35133,7 +35995,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35266,7 +36128,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35332,7 +36194,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35421,7 +36283,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35510,7 +36372,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35607,7 +36469,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -35718,7 +36580,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35815,7 +36677,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -35891,7 +36753,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -35985,7 +36847,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -36072,7 +36934,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36168,7 +37030,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36281,7 +37143,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36378,7 +37240,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -36489,7 +37351,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36555,7 +37417,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -36649,7 +37511,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       },
@@ -36736,7 +37598,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36815,7 +37677,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -36937,7 +37799,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -37033,7 +37895,7 @@
         },
         "security": [
           {
-            "Bearer": [ ]
+            "CitadelBearer": [ ]
           }
         ]
       }
@@ -37411,6 +38273,42 @@
             "$ref": "#/components/schemas/ActivityEventInfoUserMfaResetByAdministrator"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoUserCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoTeamCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoTeamUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoTeamRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoTeamDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRoleCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRoleUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRoleRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRoleDeleted"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoLicenseInstalled"
           },
           {
@@ -37523,6 +38421,30 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoSwarmServiceWebhookReceived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountEnabled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountDisabled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountArchived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountTokenCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoServiceAccountTokenRevoked"
           }
         ],
         "discriminator": {
@@ -37606,6 +38528,18 @@
             "UserMfaRecoveryCodeUsed": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodeUsed",
             "UserMfaRecoveryCodesRegenerated": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodesRegenerated",
             "UserMfaResetByAdministrator": "#/components/schemas/ActivityEventInfoUserMfaResetByAdministrator",
+            "UserCreated": "#/components/schemas/ActivityEventInfoUserCreated",
+            "UserUpdated": "#/components/schemas/ActivityEventInfoUserUpdated",
+            "UserRenamed": "#/components/schemas/ActivityEventInfoUserRenamed",
+            "UserDeleted": "#/components/schemas/ActivityEventInfoUserDeleted",
+            "TeamCreated": "#/components/schemas/ActivityEventInfoTeamCreated",
+            "TeamUpdated": "#/components/schemas/ActivityEventInfoTeamUpdated",
+            "TeamRenamed": "#/components/schemas/ActivityEventInfoTeamRenamed",
+            "TeamDeleted": "#/components/schemas/ActivityEventInfoTeamDeleted",
+            "RoleCreated": "#/components/schemas/ActivityEventInfoRoleCreated",
+            "RoleUpdated": "#/components/schemas/ActivityEventInfoRoleUpdated",
+            "RoleRenamed": "#/components/schemas/ActivityEventInfoRoleRenamed",
+            "RoleDeleted": "#/components/schemas/ActivityEventInfoRoleDeleted",
             "LicenseInstalled": "#/components/schemas/ActivityEventInfoLicenseInstalled",
             "LicenseReplaced": "#/components/schemas/ActivityEventInfoLicenseReplaced",
             "LicenseRemoved": "#/components/schemas/ActivityEventInfoLicenseRemoved",
@@ -37643,7 +38577,15 @@
             "SwarmServiceForceUpdated": "#/components/schemas/ActivityEventInfoSwarmServiceForceUpdated",
             "SwarmServiceOperationFailed": "#/components/schemas/ActivityEventInfoSwarmServiceOperationFailed",
             "SwarmServiceDuplicated": "#/components/schemas/ActivityEventInfoSwarmServiceDuplicated",
-            "SwarmServiceWebhookReceived": "#/components/schemas/ActivityEventInfoSwarmServiceWebhookReceived"
+            "SwarmServiceWebhookReceived": "#/components/schemas/ActivityEventInfoSwarmServiceWebhookReceived",
+            "ServiceAccountCreated": "#/components/schemas/ActivityEventInfoServiceAccountCreated",
+            "ServiceAccountUpdated": "#/components/schemas/ActivityEventInfoServiceAccountUpdated",
+            "ServiceAccountRenamed": "#/components/schemas/ActivityEventInfoServiceAccountRenamed",
+            "ServiceAccountEnabled": "#/components/schemas/ActivityEventInfoServiceAccountEnabled",
+            "ServiceAccountDisabled": "#/components/schemas/ActivityEventInfoServiceAccountDisabled",
+            "ServiceAccountArchived": "#/components/schemas/ActivityEventInfoServiceAccountArchived",
+            "ServiceAccountTokenCreated": "#/components/schemas/ActivityEventInfoServiceAccountTokenCreated",
+            "ServiceAccountTokenRevoked": "#/components/schemas/ActivityEventInfoServiceAccountTokenRevoked"
           }
         }
       },
@@ -39351,6 +40293,245 @@
           }
         }
       },
+      "ActivityEventInfoRoleCreated": {
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RoleCreated"
+            ],
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoRoleDeleted": {
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RoleDeleted"
+            ],
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoRoleRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RoleRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoRoleUpdated": {
+        "required": [
+          "oldRole",
+          "newRole"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RoleUpdated"
+            ],
+            "type": "string"
+          },
+          "oldRole": {
+            "$ref": "#/components/schemas/RoleActivitySnapshot"
+          },
+          "newRole": {
+            "$ref": "#/components/schemas/RoleActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountArchived": {
+        "required": [
+          "accountId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountArchived"
+            ],
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountCreated": {
+        "required": [
+          "account"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountCreated"
+            ],
+            "type": "string"
+          },
+          "account": {
+            "$ref": "#/components/schemas/ServiceAccountActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountDisabled": {
+        "required": [
+          "accountId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountDisabled"
+            ],
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountEnabled": {
+        "required": [
+          "accountId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountEnabled"
+            ],
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountTokenCreated": {
+        "required": [
+          "accountId",
+          "tokenId",
+          "tokenName",
+          "publicHint",
+          "expiresAtUtc"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountTokenCreated"
+            ],
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tokenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tokenName": {
+            "type": "string"
+          },
+          "publicHint": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountTokenRevoked": {
+        "required": [
+          "accountId",
+          "tokenId",
+          "publicHint"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountTokenRevoked"
+            ],
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tokenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "publicHint": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoServiceAccountUpdated": {
+        "required": [
+          "oldAccount",
+          "newAccount"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ServiceAccountUpdated"
+            ],
+            "type": "string"
+          },
+          "oldAccount": {
+            "$ref": "#/components/schemas/ServiceAccountActivitySnapshot"
+          },
+          "newAccount": {
+            "$ref": "#/components/schemas/ServiceAccountActivitySnapshot"
+          }
+        }
+      },
       "ActivityEventInfoStackApplied": {
         "required": [
           "stack",
@@ -40103,6 +41284,110 @@
           }
         }
       },
+      "ActivityEventInfoTeamCreated": {
+        "required": [
+          "team"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "TeamCreated"
+            ],
+            "type": "string"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoTeamDeleted": {
+        "required": [
+          "team"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "TeamDeleted"
+            ],
+            "type": "string"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoTeamRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "TeamRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoTeamUpdated": {
+        "required": [
+          "oldTeam",
+          "newTeam"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "TeamUpdated"
+            ],
+            "type": "string"
+          },
+          "oldTeam": {
+            "$ref": "#/components/schemas/TeamActivitySnapshot"
+          },
+          "newTeam": {
+            "$ref": "#/components/schemas/TeamActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoUserCreated": {
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserCreated"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoUserDeleted": {
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserDeleted"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserActivitySnapshot"
+          }
+        }
+      },
       "ActivityEventInfoUserMfaDisabled": {
         "properties": {
           "$type": {
@@ -40239,6 +41524,26 @@
           }
         }
       },
+      "ActivityEventInfoUserRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoUserSessionRevoked": {
         "required": [
           "sessionId"
@@ -40253,6 +41558,30 @@
           "sessionId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "ActivityEventInfoUserUpdated": {
+        "required": [
+          "oldUser",
+          "newUser",
+          "passwordChanged"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserUpdated"
+            ],
+            "type": "string"
+          },
+          "oldUser": {
+            "$ref": "#/components/schemas/UserActivitySnapshot"
+          },
+          "newUser": {
+            "$ref": "#/components/schemas/UserActivitySnapshot"
+          },
+          "passwordChanged": {
+            "type": "boolean"
           }
         }
       },
@@ -40364,6 +41693,18 @@
           "UserMfaRecoveryCodeUsed",
           "UserMfaRecoveryCodesRegenerated",
           "UserMfaResetByAdministrator",
+          "UserCreated",
+          "UserUpdated",
+          "UserRenamed",
+          "UserDeleted",
+          "TeamCreated",
+          "TeamUpdated",
+          "TeamRenamed",
+          "TeamDeleted",
+          "RoleCreated",
+          "RoleUpdated",
+          "RoleRenamed",
+          "RoleDeleted",
           "LicenseInstalled",
           "LicenseReplaced",
           "LicenseRemoved",
@@ -40401,7 +41742,15 @@
           "SwarmServiceForceUpdated",
           "SwarmServiceOperationFailed",
           "SwarmServiceDuplicated",
-          "SwarmServiceWebhookReceived"
+          "SwarmServiceWebhookReceived",
+          "ServiceAccountCreated",
+          "ServiceAccountUpdated",
+          "ServiceAccountRenamed",
+          "ServiceAccountEnabled",
+          "ServiceAccountDisabled",
+          "ServiceAccountArchived",
+          "ServiceAccountTokenCreated",
+          "ServiceAccountTokenRevoked"
         ]
       },
       "ActivityResourceType": {
@@ -40415,12 +41764,15 @@
           "OidcProvider",
           "AutomationAction",
           "User",
+          "Team",
+          "Role",
           "License",
           "Build",
           "BuildAgentPool",
           "Volume",
           "BackupPolicy",
-          "SwarmService"
+          "SwarmService",
+          "ServiceAccount"
         ]
       },
       "ActivitySourceResource": {
@@ -40524,12 +41876,37 @@
           }
         }
       },
+      "ActorTeamMemberInfo": {
+        "required": [
+          "actorId",
+          "resourceId",
+          "name",
+          "principalType"
+        ],
+        "type": "object",
+        "properties": {
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "principalType": {
+            "$ref": "#/components/schemas/ActorType"
+          }
+        }
+      },
       "ActorType": {
         "enum": [
           "User",
           "System",
           "Agent",
-          "Service",
+          "ServiceAccount",
           "Team"
         ]
       },
@@ -40557,13 +41934,25 @@
           }
         }
       },
-      "AddTeamMemberInput": {
+      "AddServiceAccountRoleInput": {
         "required": [
-          "userId"
+          "roleId"
         ],
         "type": "object",
         "properties": {
-          "userId": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AddTeamMemberInput": {
+        "required": [
+          "memberActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "memberActorId": {
             "type": "string",
             "format": "uuid"
           }
@@ -48891,6 +50280,79 @@
           }
         }
       },
+      "CreateServiceAccountInput": {
+        "required": [
+          "name",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isEnabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "teamIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "roleIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "resourceAccesses": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResourceAccessInput"
+            }
+          }
+        }
+      },
+      "CreateServiceAccountTokenInput": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "neverExpires": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
       "CreateStackInput": {
         "required": [
           "name",
@@ -49215,6 +50677,63 @@
           }
         }
       },
+      "CreatedServiceAccountTokenView": {
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "expiresAtUtc",
+          "lastUsedAtUtc",
+          "revokedAtUtc",
+          "revokedByActorId",
+          "createdByActorId",
+          "createdByName",
+          "createdAtUtc",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time"
+          },
+          "revokedAtUtc": {
+            "format": "date-time"
+          },
+          "revokedByActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "CurrentProfileAuthenticationType": { },
       "CurrentProfileAuthenticationView": {
         "required": [
@@ -49533,6 +51052,21 @@
         }
       },
       "DeleteRolesInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DeleteServiceAccountsInput": {
         "required": [
           "ids"
         ],
@@ -53126,6 +54660,35 @@
           }
         }
       },
+      "IdentityResourceAccessSnapshot": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ImageCapabilities": {
         "required": [
           "canInspect",
@@ -54112,7 +55675,9 @@
           "BackupPolicy",
           "Build",
           "BuildAgentPool",
-          "SwarmService"
+          "SwarmService",
+          "RunAsActor",
+          "ServiceAccount"
         ]
       },
       "ManagedSwarmServiceView": {
@@ -55092,6 +56657,88 @@
           }
         }
       },
+      "PagedResultViewOfServiceAccountTokenView": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountTokenView"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PagedResultViewOfServiceAccountView": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountView"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PagedResultViewOfTeamView": {
         "required": [
           "items",
@@ -55401,6 +57048,27 @@
             "items": {
               "$ref": "#/components/schemas/PermissionInput"
             }
+          }
+        }
+      },
+      "PatchServiceAccountInput": {
+        "required": [
+          "description",
+          "isEnabled"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -57666,6 +59334,13 @@
             "items": {
               "$ref": "#/components/schemas/SpecificPermission"
             }
+          },
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -57910,6 +59585,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "group": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -57976,7 +59657,8 @@
           "Volume",
           "Build",
           "BuildAgentPool",
-          "SwarmService"
+          "SwarmService",
+          "ServiceAccount"
         ]
       },
       "RestartPolicy": {
@@ -58052,6 +59734,24 @@
           }
         }
       },
+      "RoleActivitySnapshot": {
+        "required": [
+          "roleType",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "roleType": {
+            "$ref": "#/components/schemas/RoleType"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePermissionActivitySnapshot"
+            }
+          }
+        }
+      },
       "RoleInput": {
         "required": [
           "name",
@@ -58070,6 +59770,30 @@
             "items": {
               "$ref": "#/components/schemas/PermissionInput"
             }
+          }
+        }
+      },
+      "RolePermissionActivitySnapshot": {
+        "required": [
+          "resourceType",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -58138,6 +59862,30 @@
           "releaseId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "RunAsActorUsageView": {
+        "required": [
+          "id",
+          "name",
+          "resourceType",
+          "isActive"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "isActive": {
+            "type": "boolean"
           }
         }
       },
@@ -58345,6 +60093,357 @@
           }
         }
       },
+      "ServiceAccountActivitySnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "isEnabled",
+          "teamIds",
+          "roleIds",
+          "resourceAccesses"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "teamIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "roleIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "resourceAccesses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResourceAccessSnapshot"
+            }
+          }
+        }
+      },
+      "ServiceAccountCapabilities": {
+        "required": [
+          "canUse",
+          "canManageCredentials",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canUse": {
+            "type": "boolean"
+          },
+          "canManageCredentials": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ServiceAccountLimitsView": {
+        "required": [
+          "defaultTokenLifetimeDays",
+          "maximumTokenLifetimeDays",
+          "maximumActiveTokensPerAccount"
+        ],
+        "type": "object",
+        "properties": {
+          "defaultTokenLifetimeDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumTokenLifetimeDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumActiveTokensPerAccount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ServiceAccountResourceAccessInput": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
+          }
+        }
+      },
+      "ServiceAccountResourceAccessSnapshot": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ServiceAccountTokenView": {
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "expiresAtUtc",
+          "lastUsedAtUtc",
+          "revokedAtUtc",
+          "revokedByActorId",
+          "createdByActorId",
+          "createdByName",
+          "createdAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time"
+          },
+          "revokedAtUtc": {
+            "format": "date-time"
+          },
+          "revokedByActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "format": "date-time"
+          }
+        }
+      },
+      "ServiceAccountTokensView": {
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object",
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedResultViewOfServiceAccountTokenView"
+          }
+        }
+      },
+      "ServiceAccountView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "actorId",
+          "isEnabled",
+          "createdAt",
+          "createdByActorId",
+          "updatedAt",
+          "archivedAtUtc",
+          "activeTokenCount",
+          "lastUsedAtUtc",
+          "teams",
+          "roles",
+          "resourceAccesses"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "archivedAtUtc": {
+            "format": "date-time"
+          },
+          "activeTokenCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time"
+          },
+          "teams": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            }
+          },
+          "roles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            }
+          },
+          "resourceAccesses": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceAccessView"
+            }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceAccountCapabilities"
+              }
+            ]
+          }
+        }
+      },
+      "ServiceAccountsView": {
+        "required": [
+          "pagedResult",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedResultViewOfServiceAccountView"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
       "SetupStatusView": {
         "required": [
           "requiresSetup"
@@ -58369,7 +60468,9 @@
           "Restore",
           "Browse",
           "Download",
-          "ManageNodeAgents"
+          "ManageNodeAgents",
+          "Use",
+          "ManageCredentials"
         ]
       },
       "StackApplyEventType": {
@@ -62871,6 +64972,40 @@
           }
         }
       },
+      "TeamActivitySnapshot": {
+        "required": [
+          "isEnabled",
+          "memberActorIds",
+          "roleIds",
+          "resourceAccesses"
+        ],
+        "type": "object",
+        "properties": {
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "memberActorIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "roleIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "resourceAccesses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityResourceAccessSnapshot"
+            }
+          }
+        }
+      },
       "TeamResourceAccessInput": {
         "required": [
           "resourceType",
@@ -62975,6 +65110,15 @@
             "items": {
               "$ref": "#/components/schemas/ResourceAccessView"
             }
+          },
+          "members": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ActorTeamMemberInfo"
+            }
           }
         }
       },
@@ -62995,44 +65139,15 @@
       },
       "TestAutomationActionInput": {
         "required": [
-          "code",
-          "argsJson",
-          "defaultArgsJson",
-          "timeoutSeconds",
-          "runAsActorId"
+          "argsJson"
         ],
         "type": "object",
         "properties": {
-          "code": {
-            "type": "string"
-          },
           "argsJson": {
             "type": [
               "null",
               "string"
             ]
-          },
-          "defaultArgsJson": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "timeoutSeconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "runAsActorId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
           }
         }
       },
@@ -63938,6 +66053,44 @@
           }
         }
       },
+      "UserActivitySnapshot": {
+        "required": [
+          "email",
+          "isEnabled",
+          "teamIds",
+          "roleIds",
+          "resourceAccesses"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "teamIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "roleIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "resourceAccesses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityResourceAccessSnapshot"
+            }
+          }
+        }
+      },
       "UserDateTimeFormat": {
         "enum": [
           "System",
@@ -64598,10 +66751,11 @@
       }
     },
     "securitySchemes": {
-      "Bearer": {
+      "CitadelBearer": {
         "type": "http",
-        "scheme": "Bearer",
-        "bearerFormat": "Json Web Token"
+        "description": "Use a Citadel User JWT or Service Account bearer token in the Authorization header.",
+        "scheme": "bearer",
+        "bearerFormat": "Citadel JWT or cit_sa_ Service Account token"
       }
     }
   },
@@ -64626,6 +66780,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "ServiceAccounts"
     },
     {
       "name": "Teams"

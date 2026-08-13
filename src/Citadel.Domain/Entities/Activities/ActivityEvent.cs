@@ -157,7 +157,23 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.UserMfaRecoveryCodeUsed
             or ActivityEventType.UserMfaRecoveryCodesRegenerated
             or ActivityEventType.UserMfaResetByAdministrator
+            or ActivityEventType.UserCreated
+            or ActivityEventType.UserUpdated
+            or ActivityEventType.UserRenamed
+            or ActivityEventType.UserDeleted
                 => ActivityResourceType.User,
+
+            ActivityEventType.TeamCreated
+            or ActivityEventType.TeamUpdated
+            or ActivityEventType.TeamRenamed
+            or ActivityEventType.TeamDeleted
+                => ActivityResourceType.Team,
+
+            ActivityEventType.RoleCreated
+            or ActivityEventType.RoleUpdated
+            or ActivityEventType.RoleRenamed
+            or ActivityEventType.RoleDeleted
+                => ActivityResourceType.Role,
 
             ActivityEventType.LicenseInstalled
             or ActivityEventType.LicenseReplaced
@@ -208,6 +224,16 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.SwarmServiceDuplicated
             or ActivityEventType.SwarmServiceWebhookReceived
                 => ActivityResourceType.SwarmService,
+
+            ActivityEventType.ServiceAccountCreated
+            or ActivityEventType.ServiceAccountUpdated
+            or ActivityEventType.ServiceAccountRenamed
+            or ActivityEventType.ServiceAccountEnabled
+            or ActivityEventType.ServiceAccountDisabled
+            or ActivityEventType.ServiceAccountArchived
+            or ActivityEventType.ServiceAccountTokenCreated
+            or ActivityEventType.ServiceAccountTokenRevoked
+                => ActivityResourceType.ServiceAccount,
 
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
@@ -347,6 +373,20 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.UserMfaRecoveryCodeUsed, UserMfaRecoveryCodeUsed) => true,
             (ActivityEventType.UserMfaRecoveryCodesRegenerated, UserMfaRecoveryCodesRegenerated) => true,
             (ActivityEventType.UserMfaResetByAdministrator, UserMfaResetByAdministrator) => true,
+            (ActivityEventType.UserCreated, UserCreated) => true,
+            (ActivityEventType.UserUpdated, UserUpdated) => true,
+            (ActivityEventType.UserRenamed, UserRenamed) => true,
+            (ActivityEventType.UserDeleted, UserDeleted) => true,
+
+            (ActivityEventType.TeamCreated, TeamCreated) => true,
+            (ActivityEventType.TeamUpdated, TeamUpdated) => true,
+            (ActivityEventType.TeamRenamed, TeamRenamed) => true,
+            (ActivityEventType.TeamDeleted, TeamDeleted) => true,
+
+            (ActivityEventType.RoleCreated, RoleCreated) => true,
+            (ActivityEventType.RoleUpdated, RoleUpdated) => true,
+            (ActivityEventType.RoleRenamed, RoleRenamed) => true,
+            (ActivityEventType.RoleDeleted, RoleDeleted) => true,
 
             (ActivityEventType.LicenseInstalled, LicenseInstalled) => true,
             (ActivityEventType.LicenseReplaced, LicenseReplaced) => true,
@@ -391,6 +431,15 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.SwarmServiceOperationFailed, SwarmServiceOperationFailed) => true,
             (ActivityEventType.SwarmServiceDuplicated, SwarmServiceDuplicated) => true,
             (ActivityEventType.SwarmServiceWebhookReceived, SwarmServiceWebhookReceived) => true,
+
+            (ActivityEventType.ServiceAccountCreated, ServiceAccountCreated) => true,
+            (ActivityEventType.ServiceAccountUpdated, ServiceAccountUpdated) => true,
+            (ActivityEventType.ServiceAccountRenamed, ServiceAccountRenamed) => true,
+            (ActivityEventType.ServiceAccountEnabled, ServiceAccountEnabled) => true,
+            (ActivityEventType.ServiceAccountDisabled, ServiceAccountDisabled) => true,
+            (ActivityEventType.ServiceAccountArchived, ServiceAccountArchived) => true,
+            (ActivityEventType.ServiceAccountTokenCreated, ServiceAccountTokenCreated) => true,
+            (ActivityEventType.ServiceAccountTokenRevoked, ServiceAccountTokenRevoked) => true,
 
             _ => false
         };

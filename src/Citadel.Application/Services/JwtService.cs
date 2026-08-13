@@ -44,12 +44,12 @@ internal sealed class JwtService(
         // Populate server-side role cache from claims 
         if (claims is not null)
         {
-            var sub = claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-            if (Guid.TryParse(sub, out var userId))
+            var actorIdClaim = claims.FirstOrDefault(c => c.Type == "actorId")?.Value;
+            if (Guid.TryParse(actorIdClaim, out var actorId))
             {
                 var roles = claims.Where(c => c.Type == ClaimTypes.Role || string.Equals(c.Type, "role", StringComparison.OrdinalIgnoreCase))
                                   .Select(c => c.Value);
-                roleCache.SetRoles(userId, roles);
+                roleCache.SetRoles(actorId, roles);
             }
         }
 

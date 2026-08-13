@@ -74,6 +74,7 @@ export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ c
   ['Access']: UserKey,
   ['Team']: Users,
   ['User']: User,
+  ['ServiceAccount']: UserKey,
   ['Role']: Shield,
   ['Binding']: ChevronsLeftRightEllipsis,
   ['Tag']: TagIcon,

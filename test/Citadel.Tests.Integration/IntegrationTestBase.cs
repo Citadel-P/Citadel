@@ -284,10 +284,10 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                 });
 
             await ExecuteNonQueryAsync(connection, transaction,
-                "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId);",
+                "INSERT INTO ActorTeamMemberships (MemberActorId, TeamId) VALUES (@MemberActorId, @TeamId);",
                 new Dictionary<string, object?>
                 {
-                    ["@UserId"] = userId,
+                    ["@MemberActorId"] = actorId,
                     ["@TeamId"] = teamId.Value
                 });
 

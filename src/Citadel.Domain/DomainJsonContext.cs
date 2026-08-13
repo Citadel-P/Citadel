@@ -301,6 +301,23 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(UserMfaRecoveryCodeUsed))]
 [JsonSerializable(typeof(UserMfaRecoveryCodesRegenerated))]
 [JsonSerializable(typeof(UserMfaResetByAdministrator))]
+[JsonSerializable(typeof(IdentityResourceAccessSnapshot))]
+[JsonSerializable(typeof(UserActivitySnapshot))]
+[JsonSerializable(typeof(TeamActivitySnapshot))]
+[JsonSerializable(typeof(RolePermissionActivitySnapshot))]
+[JsonSerializable(typeof(RoleActivitySnapshot))]
+[JsonSerializable(typeof(UserCreated))]
+[JsonSerializable(typeof(UserUpdated))]
+[JsonSerializable(typeof(UserRenamed))]
+[JsonSerializable(typeof(UserDeleted))]
+[JsonSerializable(typeof(TeamCreated))]
+[JsonSerializable(typeof(TeamUpdated))]
+[JsonSerializable(typeof(TeamRenamed))]
+[JsonSerializable(typeof(TeamDeleted))]
+[JsonSerializable(typeof(RoleCreated))]
+[JsonSerializable(typeof(RoleUpdated))]
+[JsonSerializable(typeof(RoleRenamed))]
+[JsonSerializable(typeof(RoleDeleted))]
 [JsonSerializable(typeof(LicenseActivitySnapshot))]
 [JsonSerializable(typeof(LicenseInstalled))]
 [JsonSerializable(typeof(LicenseReplaced))]
@@ -630,7 +647,8 @@ public partial class BuildJsonContext : JsonSerializerContext
     {
         typeof(JsonStringEnumConverter<ResourceType>),
         typeof(JsonStringEnumConverter<PermissionLevel>),
-        typeof(JsonStringEnumConverter<SpecificPermission>)
+        typeof(JsonStringEnumConverter<SpecificPermission>),
+        typeof(JsonStringEnumConverter<ActorType>)
     })]
 [JsonSerializable(typeof(PatchRolePermissionsModel))]
 [JsonSerializable(typeof(PatchPermissionModel))]
@@ -638,11 +656,14 @@ public partial class BuildJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IEnumerable<ResourceAccessView>))]
 [JsonSerializable(typeof(ResourceInfo))]
 [JsonSerializable(typeof(IEnumerable<ResourceInfo>))]
+[JsonSerializable(typeof(ActorTeamMemberInfo))]
+[JsonSerializable(typeof(IEnumerable<ActorTeamMemberInfo>))]
 [JsonSerializable(typeof(TeamResourceAccessModel))]
 [JsonSerializable(typeof(IEnumerable<TeamResourceAccessModel>))]
 [JsonSerializable(typeof(IEnumerable<SpecificPermission>))]
 [JsonSerializable(typeof(PatchUserModel))]
 [JsonSerializable(typeof(PatchTeamModel))]
+[JsonSerializable(typeof(PatchServiceAccountModel))]
 public partial class RoleJsonContext : JsonSerializerContext
 {
 }

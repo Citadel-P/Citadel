@@ -7,3 +7,12 @@ public sealed record UserAuthInfo(
     string Email, 
     string? Password,
     IEnumerable<string> Roles);
+
+public sealed record RunAsActorInfo(
+    Guid ActorId,
+    Guid PrincipalId,
+    ActorType Type,
+    string Name,
+    bool IsEnabled,
+    bool IsArchived,
+    string[] Roles);

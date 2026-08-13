@@ -14,20 +14,20 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
     // Request-local dedupe store.
     private readonly Dictionary<PermissionCacheKey, PermissionMetadata> requestCache = [];
 
-    public Task<Result> EnforceAsync<TMessage>(TMessage message, Guid userId, CancellationToken cancellationToken = default) where TMessage : notnull
+    public Task<Result> EnforceAsync<TMessage>(TMessage message, Guid actorId, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
             message,
-            userId,
+            actorId,
             this,
             cancellationToken
         );
 
-    public async Task<PermissionMetadata> ResolvePermissionsAsync(Guid userId, ResourceType resourceType, Guid? resourceId, CancellationToken ct = default)
+    public async Task<PermissionMetadata> ResolvePermissionsAsync(Guid actorId, ResourceType resourceType, Guid? resourceId, CancellationToken ct = default)
     {
-        if (userId == Guid.Empty)
+        if (actorId == Guid.Empty)
             return PermissionMetadata.Empty;
 
-        var key = new PermissionCacheKey(userId, resourceType, resourceId);
+        var key = new PermissionCacheKey(actorId, resourceType, resourceId);
 
         if (requestCache.TryGetValue(key, out var requestCached))
             return requestCached;
@@ -38,7 +38,7 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
             return memCached;
         }
 
-        var actorIds = await actorScopeProvider.GetActorScopeAsync(userId, ct);
+        var actorIds = await actorScopeProvider.GetActorScopeAsync(actorId, ct);
 
         var permissions = await uow.Users.GetEffectivePermissionsAsync(actorIds, resourceType, resourceId, ct);
 
@@ -48,9 +48,9 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
         return permissions;
     }
 
-    public async Task<IReadOnlyDictionary<Guid, PermissionMetadata>> ResolvePermissionsAsyncForIds(Guid userId, ResourceType resourceType, Guid[] resourceIds, CancellationToken ct = default)
+    public async Task<IReadOnlyDictionary<Guid, PermissionMetadata>> ResolvePermissionsAsyncForIds(Guid actorId, ResourceType resourceType, Guid[] resourceIds, CancellationToken ct = default)
     {
-        if (userId == Guid.Empty)
+        if (actorId == Guid.Empty)
             return resourceIds?.ToDictionary(id => id, id => PermissionMetadata.Empty) ?? [];
 
         // Short-circuit empty
@@ -67,7 +67,7 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
         // First pass: request-local and memory cache
         foreach (var rid in uniqueIds)
         {
-            var key = new PermissionCacheKey(userId, resourceType, rid);
+            var key = new PermissionCacheKey(actorId, resourceType, rid);
             if (requestCache.TryGetValue(key, out var reqCached))
             {
                 result[rid] = reqCached;
@@ -88,7 +88,7 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
             return result;
 
         // Fetch actor scope once
-        var actorIds = await actorScopeProvider.GetActorScopeAsync(userId, ct);
+        var actorIds = await actorScopeProvider.GetActorScopeAsync(actorId, ct);
 
         // Fetch all missing permissions
         var toFetchArray = toFetch.ToArray();
@@ -99,7 +99,7 @@ internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCac
             if (!fetched.TryGetValue(rid, out var permissions))
                 permissions = PermissionMetadata.Empty;
 
-            var cacheKey = new PermissionCacheKey(userId, resourceType, rid);
+            var cacheKey = new PermissionCacheKey(actorId, resourceType, rid);
             permissionCache.Set(cacheKey, permissions);
             requestCache[cacheKey] = permissions;
             result[rid] = permissions;

@@ -2,9 +2,11 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
 using Domain.Entities.Identity;
+using Domain.Entities.Activities;
 using Application.Services.Licensing;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -41,7 +43,8 @@ public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel>? 
 
 internal sealed class CreateRoleHandler(
     IUnitOfWork unitOfWork,
-    ILicenseEntitlementService licenseEntitlementService) : ICommandHandler<CreateRole, Result<RoleDetails>>
+    ILicenseEntitlementService licenseEntitlementService,
+    IUserContextAccessor userContext) : ICommandHandler<CreateRole, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(CreateRole command, CancellationToken cancellationToken)
     {
@@ -58,6 +61,14 @@ internal sealed class CreateRoleHandler(
         var permissions = command.Permissions!.Select(x => x.ToDomain(Guid.Empty)).ToArray();
         var role = Role.Create(command.Name, RoleType.Custom, permissions);
         await unitOfWork.Roles.AddAsync(role, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            IdentityActivity.Create(
+                role.Id,
+                role.Name,
+                userContext.Current.ActorId,
+                ActivityEventType.RoleCreated,
+                new RoleCreated(IdentityActivity.Snapshot(role))),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new RoleDetails(role.Id, role.Name, role.RoleType, permissions);

@@ -64,7 +64,7 @@ internal class CreateDeploymentHandler(
         }
 
         if (!user.IsAdmin
-            && !await unitOfWork.Platforms.CanAccessAsync(user.UserId, command.PlatformId, cancellationToken))
+            && !await unitOfWork.Platforms.CanAccessAsync(user.ActorId, command.PlatformId, cancellationToken))
         {
             return Result.Failure<Deployment>(new NotFoundError("The provided platform does not exist or is not accessible."));
         }
@@ -205,7 +205,7 @@ internal class CreateDeploymentHandler(
             return Result.Failure<ActivitySourceResource?>(new NotFoundError("Duplicate source deployment does not exist."));
 
         var user = userContext.Current;
-        if (!user.IsAdmin && !await unitOfWork.Deployments.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
+        if (!user.IsAdmin && !await unitOfWork.Deployments.CanAccessAsync(user.ActorId, source.ResourceId, cancellationToken))
             return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source deployment."));
 
         if (sourceDeployment.Platform?.PlatformDescriptor.Type != targetPlatformType)

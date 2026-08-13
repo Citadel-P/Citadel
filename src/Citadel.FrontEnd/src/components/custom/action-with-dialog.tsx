@@ -263,6 +263,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
   additional,
   targetClassName,
   variant,
+  description,
 }: {
   name: string;
   title: string;
@@ -274,6 +275,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
   additional?: ReactNode;
   targetClassName?: string;
   variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
+  description?: ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
@@ -314,6 +316,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Group Execute - {title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4 whitespace-nowrap overflow-x-auto">
           <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-75 overflow-y-auto">

@@ -176,6 +176,7 @@ public sealed class PostgresTestFixture : IAsyncLifetime
         var upgrader = DeployChanges.To
             .PostgresqlDatabase(connectionString)
             .WithScriptsAndCodeEmbeddedInAssembly(typeof(InfrastructureModule).Assembly)
+            .WithVariablesDisabled()
             .Build();
 
         var result = upgrader.PerformUpgrade();

@@ -17,6 +17,8 @@ internal class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandle
             context.Response.StatusCode = authorizeResult.Forbidden
                 ? StatusCodes.Status403Forbidden
                 : StatusCodes.Status401Unauthorized;
+            if (context.Response.StatusCode == StatusCodes.Status401Unauthorized)
+                context.Response.Headers.WWWAuthenticate = "Bearer";
 
             var problemDetailsService = context.RequestServices.GetRequiredService<IProblemDetailsService>();
             await problemDetailsService.WriteAsync(

@@ -63,7 +63,8 @@ Set:
 - `Enabled`: whether manual and scheduled runs are allowed
 - `Code`: TypeScript code executed by Deno
 - `Default Args`: JSON object available as `args`
-- `Run As User`: user whose current Citadel permissions are used for runs
+- `Run As`: enabled User or Service Account whose current Citadel permissions
+  are used for runs
 - `Timeout`: maximum run duration in seconds
 - `Alert On Failure`: record failed or timed-out runs as alert-worthy events
 
@@ -157,6 +158,7 @@ Test runs:
 - create an action run with trigger `Test`
 - can run even when the action is disabled
 - use the saved action code and default args
+- use the configured **Run As** identity
 - write logs to the Runs tab
 
 Use test runs before enabling schedules or webhooks.
@@ -291,7 +293,7 @@ Updated action events show a Monaco diff of the old and new action values.
 
 Actions use the `AutomationAction` permission resource.
 
-Users need permission to:
+Callers need permission to:
 
 - view actions
 - create actions
@@ -299,9 +301,36 @@ Users need permission to:
 - delete actions
 - run or test actions
 
-An action runs as its configured `Run As User`. Citadel checks that user's current permissions when the action calls Citadel APIs.
+An action runs as its configured **Run As** User or Service Account. Citadel
+checks that Actor's current roles, enabled Team memberships, resource access,
+and license capabilities when the Action calls Citadel APIs.
 
-Citadel does not store the user's normal access token or refresh token for actions.
+Manual and API-triggered run history distinguishes the identity that requested
+the run from the identity that executed it. For example:
+
+```text
+Triggered by ci-release
+Ran as production-deployer
+```
+
+Selecting a Service Account or changing executable Action configuration under
+that account requires permission to **Use** it. Running an already saved Action
+requires Execute permission on the Action. The run request cannot replace its
+saved code or run-as identity.
+
+Using a Service Account requires Team's **Custom access control** capability.
+Schedules and webhook-triggered execution under that account additionally
+require **Automated Operations**. If the Custom access control capability becomes
+unavailable, Citadel preserves the binding as `Paused by license` and rejects
+new runs before starting the script.
+
+Citadel does not store a User access/refresh token or a persistent Service
+Account token inside the Action. It creates a restricted, short-lived token for
+each run.
+
+Use a least-privileged Service Account for schedules and webhooks so unattended
+execution does not depend on a human account. See
+[Service Accounts](service-accounts.md).
 
 ## Safety Notes
 
@@ -342,4 +371,10 @@ The script ran longer than the configured timeout. Increase the timeout or chang
 
 `Forbidden` from a Citadel API call.
 
-The configured run-as user does not currently have permission for the operation the script attempted.
+The configured run-as User or Service Account does not currently have
+permission for the operation the script attempted.
+
+`Run-as identity is disabled or unavailable.`
+
+Enable the configured identity or select another enabled User or Service
+Account. Citadel does not fall back to the Action creator or System.

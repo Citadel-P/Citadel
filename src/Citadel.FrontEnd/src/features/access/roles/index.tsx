@@ -33,6 +33,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CitadelIcons } from '@/lib/icons';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
+import { ActivitiesTab } from '@/features/activities';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type PermissionMatrix = Record<string, PermissionMatrixViewItem>;
 
@@ -274,7 +276,7 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
   };
 
   return (
-    <div className="flex-1 overflow-auto p-4 space-y-6">
+    <div className="flex-1 overflow-auto p-4 space-y-4">
       <div>
         <div className="flex flex-row gap-2 items-center">
           <h2 className="text-base font-semibold">{role.name}</h2>
@@ -296,18 +298,25 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
           )}
         </p>
       </div>
-      <div className="-mx-4 border-t border-border" />
-
-      <div>
-        <h6 className="font-medium mb-4">Permissions Matrix</h6>
-        <PermissionsMatrixTable
-          permissionMatrix={permissionMatrix}
-          selectedPermissions={selectedPermissions}
-          onPermissionChange={handleChange}
-          disabled={role.roleType === RoleType.System}
-          allowExpansion={canExpandPermissions}
-        />
-      </div>
+      <Tabs defaultValue="config" className="w-full">
+        <TabsList className="w-fit">
+          <TabsTrigger value="config">Config</TabsTrigger>
+          <TabsTrigger value="activities">Activities</TabsTrigger>
+        </TabsList>
+        <TabsContent value="config" className="pt-3">
+          <h6 className="font-medium mb-4">Permissions Matrix</h6>
+          <PermissionsMatrixTable
+            permissionMatrix={permissionMatrix}
+            selectedPermissions={selectedPermissions}
+            onPermissionChange={handleChange}
+            disabled={role.roleType === RoleType.System}
+            allowExpansion={canExpandPermissions}
+          />
+        </TabsContent>
+        <TabsContent value="activities" className="pt-3">
+          <ActivitiesTab resourceId={role.id} resourceType="Role" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

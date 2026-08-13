@@ -323,6 +323,7 @@ internal sealed class CreateBackupPolicyHandler(
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
     ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
+    IRunAsActorAuthorization runAsActorAuthorization,
     ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
@@ -362,9 +363,9 @@ internal sealed class CreateBackupPolicyHandler(
             return Result.Failure<BackupPolicyResult>(sourceError);
 
         var runAsActorId = input.RunAsActorId.GetValueOrDefault(userContextAccessor.Current.ActorId);
-        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
-            userContextAccessor.Current,
-            runAsActorId);
+        var runAsAuthorization = await runAsActorAuthorization.EnsureAllowedAsync(
+            runAsActorId,
+            cancellationToken);
         if (runAsAuthorization.IsFailure(out var runAsError))
             return Result.Failure<BackupPolicyResult>(runAsError);
 
@@ -421,6 +422,7 @@ internal sealed class UpdateBackupPolicyHandler(
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     ISwarmServiceBackupVolumeResolver swarmServiceBackupVolumeResolver,
     ISwarmNodeRuntimeConnector swarmNodeRuntimeConnector,
+    IRunAsActorAuthorization runAsActorAuthorization,
     ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<UpdateBackupPolicy, Result<BackupPolicyResult>>
 {
@@ -479,11 +481,24 @@ internal sealed class UpdateBackupPolicyHandler(
         }
 
         var runAsActorId = command.Policy.RunAsActorId ?? policy.RunAsActorId;
-        var runAsAuthorization = RunAsActorAuthorization.EnsureAllowed(
-            userContextAccessor.Current,
-            runAsActorId);
-        if (runAsAuthorization.IsFailure(out var runAsError))
-            return Result.Failure<BackupPolicyResult>(runAsError);
+        var changesExecutableBehavior = command.Policy.RunAsActorId.HasValue
+            || command.UpdateSource
+            || command.UpdateBackupRepository
+            || command.Policy.Enabled.HasValue
+            || command.UpdateCron
+            || command.UpdateTimeZone
+            || command.UpdateWebhook
+            || command.Policy.KeepLastSuccessful.HasValue
+            || command.Policy.TimeoutSeconds.HasValue
+            || command.Policy.AlertOnFailure.HasValue;
+        if (changesExecutableBehavior)
+        {
+            var runAsAuthorization = await runAsActorAuthorization.EnsureAllowedAsync(
+                runAsActorId,
+                cancellationToken);
+            if (runAsAuthorization.IsFailure(out var runAsError))
+                return Result.Failure<BackupPolicyResult>(runAsError);
+        }
 
         try
         {
@@ -699,7 +714,7 @@ internal sealed class QueueBackupRunHandler(
             command.Input.Trigger,
             command.Input.TriggerSourceId,
             userContextAccessor.Current.ActorId,
-            command.Input.Trigger == BackupRunTrigger.Schedule,
+            command.Input.Trigger is BackupRunTrigger.Schedule or BackupRunTrigger.Webhook,
             DateTimeOffset.UtcNow,
             cancellationToken);
 
@@ -754,7 +769,7 @@ internal sealed class RunBackupPolicyHandler(
             command.Input.Trigger,
             command.Input.TriggerSourceId,
             userContextAccessor.Current.ActorId,
-            command.Input.Trigger == BackupRunTrigger.Schedule,
+            command.Input.Trigger is BackupRunTrigger.Schedule or BackupRunTrigger.Webhook,
             DateTimeOffset.UtcNow,
             cancellationToken);
 

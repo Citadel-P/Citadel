@@ -23,7 +23,7 @@ internal class GetPlatformsHandler(
 
         var user = userContextAccessor.Current;
         var platforms = user is not null && !user.IsAdmin
-            ? await unitOfWork.Platforms.GetAuthorizedWithLatestStatAsync(user.UserId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
+            ? await unitOfWork.Platforms.GetAuthorizedWithLatestStatAsync(user.ActorId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
             : await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken, tagFilter.TagIds) ?? [];
 
         return Result.Success(platforms ?? []);

@@ -11,5 +11,5 @@
     canWrite: true,
     canExecute: true
   },
-  isDefault: true
+  isDefault: false
 }

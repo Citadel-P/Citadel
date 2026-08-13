@@ -28,7 +28,7 @@ internal sealed class GetTeamsHandler(IUnitOfWork unitOfWork, IUserContextAccess
     {
         var user = userContextAccessor.Current;
         var pagedTeams = user is not null && !user.IsAdmin
-            ? await unitOfWork.Teams.GetAuthorizedPagedAsync(user.UserId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
+            ? await unitOfWork.Teams.GetAuthorizedPagedAsync(user.ActorId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
             : await unitOfWork.Teams.GetPagedAsync(query.Page, query.PageSize, query.Name, cancellationToken);
 
         return Result.Success(pagedTeams);

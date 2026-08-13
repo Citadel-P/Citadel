@@ -9,11 +9,14 @@ import { useTeamsList } from './teams/hooks/useTeamsList';
 import { TeamDropdownActions, TeamGroupActions } from './teams/actions';
 import { useRead } from '@/lib/hooks';
 import { CitadelIcons } from '@/lib/icons';
+import { AddServiceAccountButton, ServiceAccounts, ServiceAccountsTabLabel } from './service-accounts';
+import { useServiceAccountsList } from './service-accounts/hooks/useServiceAccountsList';
+import { ServiceAccountDropdownActions, ServiceAccountGroupActions } from './service-accounts/actions';
 
 export const AccessComponents: TabbedResourceComponents = {
   Icon: CitadelIcons.Access,
   header: {
-    subtitle: 'Manage users, teams, and their access.',
+    subtitle: 'Manage users, teams, roles, and non-human access.',
     showSearch: false,
     showAdd: false,
   },
@@ -82,6 +85,27 @@ export const AccessComponents: TabbedResourceComponents = {
           items: data?.data.roles as any,
           isLoading,
         };
+      },
+    },
+    {
+      label: 'Service Accounts',
+      Label: ServiceAccountsTabLabel,
+      slug: 'service-accounts',
+      DropdownActions: ServiceAccountDropdownActions,
+      GroupActions: ({ items }) => (
+        <ActionBar type="ServiceAccount" items={items} actions={Object.values(ServiceAccountGroupActions)} />
+      ),
+      Content: ({ items, isLoading, actions }) => (
+        <ServiceAccounts items={items} isLoading={isLoading} actions={actions} />
+      ),
+      Header: {
+        showAdd: false,
+        showSearch: false,
+        Extra: AddServiceAccountButton,
+      },
+      useData: () => {
+        const { pagedServiceAccounts, isLoading } = useServiceAccountsList();
+        return { items: pagedServiceAccounts as any, isLoading };
       },
     },
   ],

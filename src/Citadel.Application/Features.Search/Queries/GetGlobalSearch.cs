@@ -52,7 +52,7 @@ internal sealed class GetGlobalSearchQueryHandler(
         _ = parsedTypes.IsSuccess(out var searchTypes);
 
         var user = userContextAccessor.Current;
-        if (user is null || !user.IsAuthenticated || user.UserId == Guid.Empty)
+        if (user is null || !user.IsAuthenticated || user.ActorId == Guid.Empty)
         {
             return Result.Failure<GlobalSearchResponse>(new UnauthorizedError("Authentication is required."));
         }
@@ -64,7 +64,7 @@ internal sealed class GetGlobalSearchQueryHandler(
         }
 
         var matches = await unitOfWork.GlobalSearch.SearchAsync(
-            user.UserId,
+            user.ActorId,
             user.IsAdmin,
             resourceTypes,
             normalizedQuery,

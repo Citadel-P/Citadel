@@ -37,7 +37,7 @@ internal sealed class SearchUsersHandler(IUnitOfWork unitOfWork, IUserContextAcc
 
         var user = userContextAccessor.Current;
         var items = user is not null && !user.IsAdmin
-            ? await unitOfWork.Users.SearchAuthorizedAsync(user.UserId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, search, query.Limit, cancellationToken)
+            ? await unitOfWork.Users.SearchAuthorizedAsync(user.ActorId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, search, query.Limit, cancellationToken)
             : await unitOfWork.Users.SearchAsync(search, query.Limit, cancellationToken);
 
         return Result.Success(items);
