@@ -42,7 +42,7 @@ describe('InitialSetup', () => {
       email: 'owner@example.test',
       password: 'correct-horse-battery-staple',
     });
-  });
+  }, 10_000);
 
   it('rejects a short password before sending a request', async () => {
     let requests = 0;

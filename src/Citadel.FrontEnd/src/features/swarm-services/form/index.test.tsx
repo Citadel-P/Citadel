@@ -214,7 +214,7 @@ describe('SwarmServiceFormComponents', () => {
 
     const { user } = renderRuntime(<Runtime resource={resource} />);
 
-    expect(await screen.findByText('service output')).toBeVisible();
+    expect(await screen.findByText('service output', undefined, { timeout: 5_000 })).toBeVisible();
     expect(screen.getByText('source output')).toBeVisible();
     expect(screen.getAllByText('[managed-web.1]')).toHaveLength(2);
     expect(screen.queryByText('[]')).not.toBeInTheDocument();

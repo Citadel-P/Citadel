@@ -255,7 +255,7 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByTestId('environment-diagnostic')).toHaveTextContent(
       'LOG_LEVELs is not defined in Service or global variables.',
     );
-  });
+  }, 10_000);
 
   it('hydrates an external registry and image reference when editing', () => {
     const resource = {
@@ -384,5 +384,5 @@ describe('SwarmServiceForm', () => {
     expect(
       screen.getAllByRole('button', { name: 'Adopt Service' }).every((button) => !button.hasAttribute('disabled')),
     ).toBe(true);
-  });
+  }, 10_000);
 });

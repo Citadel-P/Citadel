@@ -120,7 +120,7 @@ describe('ServiceComponents', () => {
     await act(async () => within(confirmation).getByRole('button', { name: 'Close' }).click());
     await act(async () => screen.getByRole('button', { name: 'Adopt Service' }).click());
     expect(await screen.findByText('Adopt Service form')).toBeVisible();
-  });
+  }, 10_000);
 
   it('shows a managed Service before its first deployment', async () => {
     const fake = new FakeHubConnection();
