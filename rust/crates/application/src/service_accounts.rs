@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Clock, EntitlementService, IdentityError, PatchField, ServiceAccountTokenCodec, validate_name,
+    Clock, EntitlementService, IdentityError, PagedResult, PatchField, ResourceInfo,
+    ServiceAccountTokenCodec, StoredPage, validate_name,
 };
 
 pub const DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS: i64 = 90;
@@ -34,14 +35,6 @@ pub struct ServiceAccountView {
     pub teams: Vec<ResourceInfo>,
     pub roles: Vec<ResourceInfo>,
     pub resource_accesses: Vec<ServiceAccountResourceAccess>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceInfo {
-    pub id: Uuid,
-    pub name: String,
-    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,21 +141,6 @@ pub struct ServiceAccountLimitsView {
     pub default_token_lifetime_days: i64,
     pub maximum_token_lifetime_days: i64,
     pub maximum_active_tokens_per_account: i64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PagedResult<T> {
-    pub items: Vec<T>,
-    pub total_count: i64,
-    pub page: i64,
-    pub page_size: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct StoredPage<T> {
-    pub total_items: i64,
-    pub items: Vec<T>,
 }
 
 #[derive(Debug, Clone)]

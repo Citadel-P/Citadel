@@ -1,12 +1,15 @@
 #![forbid(unsafe_code)]
 
+mod activities;
 mod bounded_queue;
 mod identity;
 mod patch;
 mod profile;
+mod resources;
 mod service_account_last_used;
 mod service_accounts;
 mod supervisor;
+mod users;
 
 use std::pin::Pin;
 use std::time::Duration;
@@ -18,15 +21,18 @@ use futures_util::future::BoxFuture;
 use futures_util::stream::Stream;
 use tokio_util::sync::CancellationToken;
 
+pub use activities::*;
 pub use bounded_queue::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,
 };
 pub use identity::*;
 pub use patch::*;
 pub use profile::*;
+pub use resources::*;
 pub use service_account_last_used::*;
 pub use service_accounts::*;
 pub use supervisor::{SupervisedTaskError, TaskSupervisor};
+pub use users::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthorizedReadError {

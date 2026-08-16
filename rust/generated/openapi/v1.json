@@ -13,6 +13,285 @@
         ],
         "type": "object"
       },
+      "ActivitiesView": {
+        "additionalProperties": false,
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedActivityView"
+          }
+        },
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object"
+      },
+      "ActivityEventInfo": {
+        "additionalProperties": true,
+        "properties": {
+          "$type": {
+            "$ref": "#/components/schemas/ActivityEventType"
+          }
+        },
+        "required": [
+          "$type"
+        ],
+        "type": "object"
+      },
+      "ActivityEventType": {
+        "enum": [
+          "DeploymentCreated",
+          "DeploymentDuplicated",
+          "DeploymentUpdated",
+          "DeploymentRenamed",
+          "DeploymentDeleted",
+          "DeploymentStarted",
+          "DeploymentStopped",
+          "DeploymentPaused",
+          "DeploymentApplied",
+          "DeploymentDegraded",
+          "DeploymentAdopted",
+          "PlatformCreated",
+          "PlatformDeleted",
+          "PlatformConnected",
+          "PlatformDisconnected",
+          "PlatformRenamed",
+          "PlatformNodeAgentLifecycle",
+          "RegistryCreated",
+          "RegistryRenamed",
+          "RegistryUpdated",
+          "RegistryDeleted",
+          "AlertRuleCreated",
+          "AlertRuleUpdated",
+          "AlertRuleDeleted",
+          "AlertRuleRenamed",
+          "GitRepoCreated",
+          "GitRepoUpdated",
+          "GitRepoDeleted",
+          "GitRepoRenamed",
+          "GitRepoPulled",
+          "GitRepoCloned",
+          "GitRepoWebhookReceived",
+          "OidcProviderCreated",
+          "OidcProviderUpdated",
+          "OidcProviderRenamed",
+          "OidcProviderDeleted",
+          "ActionCreated",
+          "ActionUpdated",
+          "ActionRenamed",
+          "ActionDeleted",
+          "ActionRunQueued",
+          "ActionRunStarted",
+          "ActionRunSucceeded",
+          "ActionRunFailed",
+          "ActionRunTimedOut",
+          "ActionRunCancelled",
+          "ActionRunRejected",
+          "StackCreated",
+          "StackDuplicated",
+          "StackUpdated",
+          "StackRenamed",
+          "StackDeleted",
+          "StackStarted",
+          "StackStopped",
+          "StackPaused",
+          "StackApplied",
+          "StackRollback",
+          "StackDegraded",
+          "StackDriftDetected",
+          "StackDriftResolved",
+          "StackReconciliationAttempted",
+          "StackGitUpdateAvailable",
+          "StackGitAutoUpdated",
+          "StackGitAutoDeployFailed",
+          "StackImported",
+          "StackWebhookReceived",
+          "InitialAdministratorCreated",
+          "UserProfileUpdated",
+          "UserPreferencesUpdated",
+          "UserPasswordChanged",
+          "UserSessionRevoked",
+          "UserOtherSessionsRevoked",
+          "UserMfaEnabled",
+          "UserMfaDisabled",
+          "UserMfaVerificationFailed",
+          "UserMfaRecoveryCodeUsed",
+          "UserMfaRecoveryCodesRegenerated",
+          "UserMfaResetByAdministrator",
+          "UserCreated",
+          "UserUpdated",
+          "UserRenamed",
+          "UserDeleted",
+          "TeamCreated",
+          "TeamUpdated",
+          "TeamRenamed",
+          "TeamDeleted",
+          "RoleCreated",
+          "RoleUpdated",
+          "RoleRenamed",
+          "RoleDeleted",
+          "LicenseInstalled",
+          "LicenseReplaced",
+          "LicenseRemoved",
+          "LicenseEnteredGracePeriod",
+          "LicenseExpired",
+          "LicenseValidationFailed",
+          "VolumeContentDownloaded",
+          "BuildCreated",
+          "BuildUpdated",
+          "BuildRenamed",
+          "BuildDeleted",
+          "BuildRunQueued",
+          "BuildRunStarted",
+          "BuildRunSucceeded",
+          "BuildRunFailed",
+          "BuildRunTimedOut",
+          "BuildRunCancelled",
+          "BuildWebhookReceived",
+          "BuildAgentPoolCreated",
+          "BuildAgentPoolUpdated",
+          "BuildAgentPoolRenamed",
+          "BuildAgentPoolDeleted",
+          "BuildAgentPoolTested",
+          "BackupPolicyCreated",
+          "BackupPolicyUpdated",
+          "BackupPolicyRenamed",
+          "BackupPolicyArchived",
+          "SwarmServiceCreated",
+          "SwarmServiceAdopted",
+          "SwarmServiceUpdated",
+          "SwarmServiceRenamed",
+          "SwarmServiceDeleted",
+          "SwarmServiceApplied",
+          "SwarmServiceScaled",
+          "SwarmServiceForceUpdated",
+          "SwarmServiceOperationFailed",
+          "SwarmServiceDuplicated",
+          "SwarmServiceWebhookReceived",
+          "ServiceAccountCreated",
+          "ServiceAccountUpdated",
+          "ServiceAccountRenamed",
+          "ServiceAccountEnabled",
+          "ServiceAccountDisabled",
+          "ServiceAccountArchived",
+          "ServiceAccountTokenCreated",
+          "ServiceAccountTokenRevoked"
+        ],
+        "type": "string"
+      },
+      "ActivityResourceType": {
+        "enum": [
+          "Platform",
+          "Registry",
+          "Deployment",
+          "Stack",
+          "AlertRule",
+          "GitRepository",
+          "OidcProvider",
+          "AutomationAction",
+          "User",
+          "Team",
+          "Role",
+          "License",
+          "Build",
+          "BuildAgentPool",
+          "Volume",
+          "BackupPolicy",
+          "SwarmService",
+          "ServiceAccount"
+        ],
+        "type": "string"
+      },
+      "ActivityStatus": {
+        "enum": [
+          "Success",
+          "Failure",
+          "Warning",
+          "Information"
+        ],
+        "type": "string"
+      },
+      "ActivityView": {
+        "additionalProperties": false,
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "actorType": {
+            "enum": [
+              "User",
+              "System",
+              "Agent",
+              "ServiceAccount",
+              "Team"
+            ],
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/ActivityEventType"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "info": {
+            "$ref": "#/components/schemas/ActivityEventInfo"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "platformStatus": {
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          }
+        },
+        "required": [
+          "id",
+          "platformId",
+          "resourceId",
+          "platformName",
+          "resourceName",
+          "platformStatus",
+          "resourceType",
+          "eventType",
+          "status",
+          "createdAt",
+          "info",
+          "actorId",
+          "actorName",
+          "actorType"
+        ],
+        "type": "object"
+      },
       "AddServiceAccountResourceAccessRequest": {
         "additionalProperties": false,
         "properties": {
@@ -439,6 +718,74 @@
         ],
         "type": "object"
       },
+      "PagedActivityView": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityView"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "PagedUserView": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserView"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "maximum": 500,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
       "PatchUserPreferencesRequest": {
         "additionalProperties": false,
         "minProperties": 1,
@@ -581,6 +928,51 @@
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "ResourceAccessView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "resourceName",
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object"
       },
@@ -1207,6 +1599,33 @@
         ],
         "type": "object"
       },
+      "UserSearchItemView": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "type": "object"
+      },
+      "UserSearchItems": {
+        "items": {
+          "$ref": "#/components/schemas/UserSearchItemView"
+        },
+        "type": "array"
+      },
       "UserSessionSummaryView": {
         "additionalProperties": false,
         "properties": {
@@ -1283,6 +1702,79 @@
           "Dark"
         ],
         "type": "string"
+      },
+      "UserView": {
+        "additionalProperties": false,
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceAccessView"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "actorId",
+          "isEnabled"
+        ],
+        "type": "object"
+      },
+      "UsersView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedUserView"
+          }
+        },
+        "required": [
+          "pagedResult",
+          "capabilities"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1298,6 +1790,135 @@
   },
   "openapi": "3.1.1",
   "paths": {
+    "/api/v1/activities": {
+      "get": {
+        "operationId": "listActivities",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ResourceId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ResourceType",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ActivityResourceType"
+            }
+          },
+          {
+            "in": "query",
+            "name": "EventType",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ActivityEventType"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int32",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivitiesView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List authorized activities",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/activities/{id}": {
+      "get": {
+        "operationId": "getActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get an authorized activity",
+        "x-citadel-principal": "actor"
+      }
+    },
     "/api/v1/application/info": {
       "get": {
         "operationId": "getApplicationInfo",
@@ -1790,6 +2411,47 @@
       },
       "get": {
         "operationId": "listServiceAccounts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "Page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "IncludeArchived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2269,6 +2931,28 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -2470,6 +3154,174 @@
         "security": [],
         "summary": "Get setup status",
         "x-citadel-principal": "anonymous"
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "listUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "Name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int32",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get all Users",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/users/search": {
+      "get": {
+        "operationId": "searchUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "Query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "format": "int32",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSearchItems"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Search Users for assignment",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a User by ID",
+        "x-citadel-principal": "administrator"
       }
     },
     "/health": {

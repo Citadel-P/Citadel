@@ -5,7 +5,6 @@ use axum::Router;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
 use citadel_application::{
     AddServiceAccountResourceAccessRequest, AddServiceAccountRoleRequest,
     ArchiveServiceAccountsRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
@@ -14,13 +13,16 @@ use citadel_application::{
     PagedResult, RenameServiceAccountRequest, ServiceAccountLimitsView, ServiceAccountService,
     ServiceAccountTokenView, ServiceAccountView, UpdateServiceAccountRequest,
 };
+use citadel_contracts::http::routes;
 use citadel_domain::{
     ActorPrincipal, PermissionGrant, PermissionLevel, ResourceType, SpecificPermission,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::identity_http::identity_error_response;
+use crate::capabilities::ResourceCapabilities;
+use crate::contract_router::ContractRouterExt;
+use crate::identity_http::{identity_error_response, require_human, require_human_administrator};
 
 #[derive(Clone)]
 pub struct ServiceAccountHttpState {
@@ -30,45 +32,41 @@ pub struct ServiceAccountHttpState {
 
 pub fn router(state: ServiceAccountHttpState) -> Router {
     Router::new()
-        .route(
-            "/api/v1/serviceAccounts",
-            get(list).post(create).delete(archive),
+        .contract_route(routes::LIST_SERVICE_ACCOUNTS, list)
+        .contract_route(routes::CREATE_SERVICE_ACCOUNT, create)
+        .contract_route(routes::ARCHIVE_SERVICE_ACCOUNTS, archive)
+        .contract_route(routes::GET_SERVICE_ACCOUNT_LIMITS, limits)
+        .contract_route(routes::GET_SERVICE_ACCOUNT, get_one)
+        .contract_route(routes::UPDATE_SERVICE_ACCOUNT, update)
+        .contract_route(routes::RENAME_SERVICE_ACCOUNT, rename)
+        .contract_route(routes::ADD_SERVICE_ACCOUNT_ROLE, add_role)
+        .contract_route(routes::REMOVE_SERVICE_ACCOUNT_ROLE, remove_role)
+        .contract_route(
+            routes::ADD_SERVICE_ACCOUNT_RESOURCE_ACCESS,
+            add_resource_access,
         )
-        .route("/api/v1/serviceAccounts/limits", get(limits))
-        .route("/api/v1/serviceAccounts/{id}", get(get_one).patch(update))
-        .route("/api/v1/serviceAccounts/rename", post(rename))
-        .route("/api/v1/serviceAccounts/{id}/roles", post(add_role))
-        .route(
-            "/api/v1/serviceAccounts/{id}/roles/{roleId}",
-            delete(remove_role),
+        .contract_route(
+            routes::REMOVE_SERVICE_ACCOUNT_RESOURCE_ACCESS,
+            remove_resource_access,
         )
-        .route(
-            "/api/v1/serviceAccounts/{id}/resource-accesses",
-            post(add_resource_access),
-        )
-        .route(
-            "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}",
-            delete(remove_resource_access),
-        )
-        .route(
-            "/api/v1/serviceAccounts/{id}/tokens",
-            get(list_tokens).post(create_token),
-        )
-        .route(
-            "/api/v1/serviceAccounts/{id}/tokens/{tokenId}",
-            delete(revoke_token),
-        )
+        .contract_route(routes::LIST_SERVICE_ACCOUNT_TOKENS, list_tokens)
+        .contract_route(routes::CREATE_SERVICE_ACCOUNT_TOKEN, create_token)
+        .contract_route(routes::REVOKE_SERVICE_ACCOUNT_TOKEN, revoke_token)
         .with_state(state)
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ListFilter {
+    #[serde(alias = "Page")]
     #[serde(default = "first_page")]
     page: i64,
+    #[serde(alias = "PageSize")]
     #[serde(default = "default_page_size")]
     page_size: i64,
+    #[serde(alias = "Name")]
     name: Option<String>,
+    #[serde(alias = "IncludeArchived")]
     #[serde(default)]
     include_archived: bool,
 }
@@ -514,33 +512,13 @@ async fn revoke_token(
     }
 }
 
-fn require_human(
-    principal: Option<Extension<ActorPrincipal>>,
-) -> Result<ActorPrincipal, IdentityError> {
-    let Some(Extension(principal)) = principal else {
-        return Err(IdentityError::Unauthenticated);
-    };
-    if !principal.is_human() {
-        return Err(IdentityError::Forbidden);
-    }
-    Ok(principal)
-}
-
-fn require_human_administrator(
-    principal: Option<Extension<ActorPrincipal>>,
-) -> Result<ActorPrincipal, IdentityError> {
-    let principal = require_human(principal)?;
-    if !principal.is_administrator() {
-        return Err(IdentityError::Forbidden);
-    }
-    Ok(principal)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TokenFilter {
+    #[serde(alias = "Page")]
     #[serde(default = "first_page")]
     page: i64,
+    #[serde(alias = "PageSize")]
     #[serde(default = "default_page_size")]
     page_size: i64,
 }
@@ -572,24 +550,6 @@ struct ServiceAccountDetailResponse {
     #[serde(flatten)]
     account: ServiceAccountView,
     capabilities: ServiceAccountCapabilities,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ResourceCapabilities {
-    can_read: bool,
-    can_write: bool,
-    can_execute: bool,
-}
-
-impl From<PermissionGrant> for ResourceCapabilities {
-    fn from(permission: PermissionGrant) -> Self {
-        Self {
-            can_read: permission.level.grants(PermissionLevel::Read),
-            can_write: permission.level.grants(PermissionLevel::Write),
-            can_execute: permission.level.grants(PermissionLevel::Execute),
-        }
-    }
 }
 
 #[derive(Serialize)]

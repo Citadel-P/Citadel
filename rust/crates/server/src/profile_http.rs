@@ -5,13 +5,14 @@ use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
 use citadel_application::{
     ChangeCurrentPasswordRequest, IdentityError, PatchUserPreferencesRequest, ProfileService,
     UpdateCurrentProfileRequest,
 };
+use citadel_contracts::http::routes;
 use citadel_domain::ActorPrincipal;
 
+use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{current_refresh_token, identity_error_response, no_store};
 
 #[derive(Clone)]
@@ -21,20 +22,14 @@ pub struct ProfileHttpState {
 
 pub fn router(state: ProfileHttpState) -> Router {
     Router::new()
-        .route("/api/v1/profile", get(get_current).patch(update_current))
-        .route(
-            "/api/v1/profile/preferences",
-            get(get_preferences).patch(patch_preferences),
-        )
-        .route("/api/v1/profile/change-password", post(change_password))
-        .route(
-            "/api/v1/profile/sessions",
-            get(list_sessions).delete(revoke_other_sessions),
-        )
-        .route(
-            "/api/v1/profile/sessions/{sessionId}",
-            delete(revoke_session),
-        )
+        .contract_route(routes::GET_CURRENT_PROFILE, get_current)
+        .contract_route(routes::UPDATE_CURRENT_PROFILE, update_current)
+        .contract_route(routes::GET_PROFILE_PREFERENCES, get_preferences)
+        .contract_route(routes::PATCH_PROFILE_PREFERENCES, patch_preferences)
+        .contract_route(routes::CHANGE_CURRENT_PASSWORD, change_password)
+        .contract_route(routes::LIST_PROFILE_SESSIONS, list_sessions)
+        .contract_route(routes::REVOKE_OTHER_PROFILE_SESSIONS, revoke_other_sessions)
+        .contract_route(routes::REVOKE_PROFILE_SESSION, revoke_session)
         .with_state(state)
 }
 

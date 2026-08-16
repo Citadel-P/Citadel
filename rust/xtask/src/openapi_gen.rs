@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::Path;
 
-use citadel_contracts::http::{ROUTES, RouteAuthentication, RouteContract};
+use citadel_contracts::http::{
+    ParameterContract, ParameterSchema, ROUTES, RouteAuthentication, RouteContract,
+};
 use serde_json::{Map, Value, json};
 
 pub fn generate(check: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -41,7 +43,7 @@ fn document(public_only: bool) -> Value {
             .or_insert_with(|| Value::Object(Map::new()));
         path.as_object_mut()
             .expect("generated path is an object")
-            .insert(route.method.to_owned(), operation(route));
+            .insert(route.method.as_openapi_str().to_owned(), operation(route));
     }
     json!({
         "openapi": "3.1.1",
@@ -209,6 +211,66 @@ fn schemas() -> Value {
             "type": "object", "required": ["count"], "additionalProperties": false,
             "properties": { "count": { "type": "integer", "format": "int64", "minimum": 0 } }
         },
+        "ActivityStatus": {
+            "type": "string", "enum": ["Success", "Failure", "Warning", "Information"]
+        },
+        "ActivityResourceType": {
+            "type": "string",
+            "enum": ["Platform", "Registry", "Deployment", "Stack", "AlertRule", "GitRepository", "OidcProvider", "AutomationAction", "User", "Team", "Role", "License", "Build", "BuildAgentPool", "Volume", "BackupPolicy", "SwarmService", "ServiceAccount"]
+        },
+        "ActivityEventType": {
+            "type": "string",
+            "enum": [
+                "DeploymentCreated", "DeploymentDuplicated", "DeploymentUpdated", "DeploymentRenamed", "DeploymentDeleted", "DeploymentStarted", "DeploymentStopped", "DeploymentPaused", "DeploymentApplied", "DeploymentDegraded", "DeploymentAdopted",
+                "PlatformCreated", "PlatformDeleted", "PlatformConnected", "PlatformDisconnected", "PlatformRenamed", "PlatformNodeAgentLifecycle",
+                "RegistryCreated", "RegistryRenamed", "RegistryUpdated", "RegistryDeleted",
+                "AlertRuleCreated", "AlertRuleUpdated", "AlertRuleDeleted", "AlertRuleRenamed",
+                "GitRepoCreated", "GitRepoUpdated", "GitRepoDeleted", "GitRepoRenamed", "GitRepoPulled", "GitRepoCloned", "GitRepoWebhookReceived",
+                "OidcProviderCreated", "OidcProviderUpdated", "OidcProviderRenamed", "OidcProviderDeleted",
+                "ActionCreated", "ActionUpdated", "ActionRenamed", "ActionDeleted", "ActionRunQueued", "ActionRunStarted", "ActionRunSucceeded", "ActionRunFailed", "ActionRunTimedOut", "ActionRunCancelled", "ActionRunRejected",
+                "StackCreated", "StackDuplicated", "StackUpdated", "StackRenamed", "StackDeleted", "StackStarted", "StackStopped", "StackPaused", "StackApplied", "StackRollback", "StackDegraded", "StackDriftDetected", "StackDriftResolved", "StackReconciliationAttempted", "StackGitUpdateAvailable", "StackGitAutoUpdated", "StackGitAutoDeployFailed", "StackImported", "StackWebhookReceived",
+                "InitialAdministratorCreated", "UserProfileUpdated", "UserPreferencesUpdated", "UserPasswordChanged", "UserSessionRevoked", "UserOtherSessionsRevoked", "UserMfaEnabled", "UserMfaDisabled", "UserMfaVerificationFailed", "UserMfaRecoveryCodeUsed", "UserMfaRecoveryCodesRegenerated", "UserMfaResetByAdministrator", "UserCreated", "UserUpdated", "UserRenamed", "UserDeleted",
+                "TeamCreated", "TeamUpdated", "TeamRenamed", "TeamDeleted", "RoleCreated", "RoleUpdated", "RoleRenamed", "RoleDeleted",
+                "LicenseInstalled", "LicenseReplaced", "LicenseRemoved", "LicenseEnteredGracePeriod", "LicenseExpired", "LicenseValidationFailed", "VolumeContentDownloaded",
+                "BuildCreated", "BuildUpdated", "BuildRenamed", "BuildDeleted", "BuildRunQueued", "BuildRunStarted", "BuildRunSucceeded", "BuildRunFailed", "BuildRunTimedOut", "BuildRunCancelled", "BuildWebhookReceived", "BuildAgentPoolCreated", "BuildAgentPoolUpdated", "BuildAgentPoolRenamed", "BuildAgentPoolDeleted", "BuildAgentPoolTested",
+                "BackupPolicyCreated", "BackupPolicyUpdated", "BackupPolicyRenamed", "BackupPolicyArchived",
+                "SwarmServiceCreated", "SwarmServiceAdopted", "SwarmServiceUpdated", "SwarmServiceRenamed", "SwarmServiceDeleted", "SwarmServiceApplied", "SwarmServiceScaled", "SwarmServiceForceUpdated", "SwarmServiceOperationFailed", "SwarmServiceDuplicated", "SwarmServiceWebhookReceived",
+                "ServiceAccountCreated", "ServiceAccountUpdated", "ServiceAccountRenamed", "ServiceAccountEnabled", "ServiceAccountDisabled", "ServiceAccountArchived", "ServiceAccountTokenCreated", "ServiceAccountTokenRevoked"
+            ]
+        },
+        "ActivityEventInfo": {
+            "type": "object", "required": ["$type"],
+            "properties": { "$type": { "$ref": "#/components/schemas/ActivityEventType" } },
+            "additionalProperties": true
+        },
+        "ActivityView": {
+            "type": "object",
+            "required": ["id", "platformId", "resourceId", "platformName", "resourceName", "platformStatus", "resourceType", "eventType", "status", "createdAt", "info", "actorId", "actorName", "actorType"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "platformId": nullable_uuid(), "resourceId": nullable_uuid(),
+                "platformName": string(), "resourceName": string(), "platformStatus": string(),
+                "resourceType": { "$ref": "#/components/schemas/ActivityResourceType" },
+                "eventType": { "$ref": "#/components/schemas/ActivityEventType" },
+                "status": { "$ref": "#/components/schemas/ActivityStatus" },
+                "createdAt": { "type": "string", "format": "date-time" },
+                "info": { "$ref": "#/components/schemas/ActivityEventInfo" },
+                "actorId": uuid(), "actorName": string(), "actorType": { "type": "string", "enum": ["User", "System", "Agent", "ServiceAccount", "Team"] }
+            }
+        },
+        "PagedActivityView": {
+            "type": "object", "required": ["items", "totalCount", "page", "pageSize"], "additionalProperties": false,
+            "properties": {
+                "items": { "type": "array", "items": { "$ref": "#/components/schemas/ActivityView" } },
+                "totalCount": { "type": "integer", "format": "int64", "minimum": 0 },
+                "page": { "type": "integer", "format": "int32", "minimum": 1 },
+                "pageSize": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 500 }
+            }
+        },
+        "ActivitiesView": {
+            "type": "object", "required": ["pagedResult"], "additionalProperties": false,
+            "properties": { "pagedResult": { "$ref": "#/components/schemas/PagedActivityView" } }
+        },
         "ProfileResourceInfo": {
             "type": "object", "required": ["id", "name"], "additionalProperties": false,
             "properties": { "id": uuid(), "name": string() }
@@ -255,6 +317,57 @@ fn schemas() -> Value {
         "ResourceInfo": {
             "type": "object", "required": ["id", "name", "group"], "additionalProperties": false,
             "properties": { "id": uuid(), "name": string(), "group": nullable_string() }
+        },
+        "ResourceAccessView": {
+            "type": "object",
+            "required": ["resourceType", "resourceId", "resourceName", "permissionLevel", "specificPermissions"],
+            "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" },
+                "resourceId": uuid(),
+                "resourceName": nullable_string(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": {
+                    "type": ["array", "null"],
+                    "items": { "$ref": "#/components/schemas/SpecificPermission" }
+                },
+                "id": nullable_uuid()
+            }
+        },
+        "UserView": {
+            "type": "object",
+            "required": ["id", "name", "email", "actorId", "isEnabled"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "name": string(), "email": string(), "actorId": uuid(),
+                "isEnabled": { "type": "boolean" },
+                "teams": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceInfo" } },
+                "roles": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceInfo" } },
+                "resourceAccesses": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceAccessView" } }
+            }
+        },
+        "PagedUserView": {
+            "type": "object", "required": ["items", "totalCount", "page", "pageSize"], "additionalProperties": false,
+            "properties": {
+                "items": { "type": "array", "items": { "$ref": "#/components/schemas/UserView" } },
+                "totalCount": { "type": "integer", "format": "int32", "minimum": 0 },
+                "page": { "type": "integer", "format": "int32", "minimum": 0 },
+                "pageSize": { "type": "integer", "format": "int32", "minimum": 0, "maximum": 500 }
+            }
+        },
+        "UsersView": {
+            "type": "object", "required": ["pagedResult", "capabilities"], "additionalProperties": false,
+            "properties": {
+                "pagedResult": { "$ref": "#/components/schemas/PagedUserView" },
+                "capabilities": { "$ref": "#/components/schemas/ResourceCapabilities" }
+            }
+        },
+        "UserSearchItemView": {
+            "type": "object", "required": ["id", "name", "email"], "additionalProperties": false,
+            "properties": { "id": uuid(), "name": string(), "email": string() }
+        },
+        "UserSearchItems": {
+            "type": "array", "items": { "$ref": "#/components/schemas/UserSearchItemView" }
         },
         "ServiceAccountResourceAccess": {
             "type": "object",
@@ -534,29 +647,63 @@ fn operation(route: &RouteContract) -> Value {
             }),
         );
     }
-    let path_parameters = uuid_path_parameters(route.path);
-    if !path_parameters.is_empty() {
+    if !route.parameters.is_empty() {
         operation
             .as_object_mut()
             .expect("operation is an object")
-            .insert("parameters".to_owned(), Value::Array(path_parameters));
+            .insert(
+                "parameters".to_owned(),
+                Value::Array(route.parameters.iter().map(parameter).collect()),
+            );
     }
     operation
 }
 
-fn uuid_path_parameters(path: &str) -> Vec<Value> {
-    path.split('{')
-        .skip(1)
-        .filter_map(|remainder| remainder.split_once('}').map(|(name, _)| name))
-        .map(|name| {
-            json!({
-                "name": name,
-                "in": "path",
-                "required": true,
-                "schema": { "type": "string", "format": "uuid" }
-            })
-        })
-        .collect()
+fn parameter(parameter: &ParameterContract) -> Value {
+    json!({
+        "name": parameter.name,
+        "in": parameter.location.as_openapi_str(),
+        "required": parameter.required,
+        "schema": parameter_schema(parameter.schema),
+    })
+}
+
+fn parameter_schema(schema: ParameterSchema) -> Value {
+    match schema {
+        ParameterSchema::String => string(),
+        ParameterSchema::Boolean { default } => {
+            let mut schema = Map::from_iter([("type".to_owned(), json!("boolean"))]);
+            if let Some(default) = default {
+                schema.insert("default".to_owned(), json!(default));
+            }
+            Value::Object(schema)
+        }
+        ParameterSchema::Uuid => uuid(),
+        ParameterSchema::Integer {
+            format,
+            minimum,
+            maximum,
+            default,
+        } => {
+            let mut schema = Map::from_iter([
+                ("type".to_owned(), json!("integer")),
+                ("format".to_owned(), json!(format.as_openapi_str())),
+            ]);
+            if let Some(minimum) = minimum {
+                schema.insert("minimum".to_owned(), json!(minimum));
+            }
+            if let Some(maximum) = maximum {
+                schema.insert("maximum".to_owned(), json!(maximum));
+            }
+            if let Some(default) = default {
+                schema.insert("default".to_owned(), json!(default));
+            }
+            Value::Object(schema)
+        }
+        ParameterSchema::Reference(schema) => {
+            json!({ "$ref": format!("#/components/schemas/{schema}") })
+        }
+    }
 }
 
 fn frontend_types() -> String {
@@ -566,7 +713,7 @@ fn frontend_types() -> String {
             format!(
                 "  {}: {{ method: '{}', path: '{}' }},",
                 route.operation_id,
-                route.method.to_ascii_uppercase(),
+                route.method.as_openapi_str().to_ascii_uppercase(),
                 route.path
             )
         })
@@ -635,15 +782,17 @@ mod tests {
                 "UUID path inference requires an ID-named parameter: {}",
                 route.path
             );
-            let operation = &document["paths"][route.path][route.method];
+            let operation = &document["paths"][route.path][route.method.as_openapi_str()];
             let parameters = operation["parameters"]
                 .as_array()
                 .expect("parameterized routes declare path parameters");
-            assert_eq!(parameters.len(), route.path.matches('{').count());
-            assert!(parameters.iter().all(|parameter| {
-                parameter["in"] == "path"
-                    && parameter["required"] == true
-                    && parameter["schema"]["format"] == "uuid"
+            let path_parameters = parameters
+                .iter()
+                .filter(|parameter| parameter["in"] == "path")
+                .collect::<Vec<_>>();
+            assert_eq!(path_parameters.len(), route.path.matches('{').count());
+            assert!(path_parameters.iter().all(|parameter| {
+                parameter["required"] == true && parameter["schema"]["format"] == "uuid"
             }));
         }
     }

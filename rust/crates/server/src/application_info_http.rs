@@ -3,11 +3,12 @@ use axum::Router;
 use axum::extract::Extension;
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
 use citadel_application::IdentityError;
+use citadel_contracts::http::routes;
 use citadel_domain::ActorPrincipal;
 use serde::Serialize;
 
+use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{identity_error_response, no_store};
 
 const NAME: &str = "Citadel";
@@ -23,7 +24,7 @@ pub struct ApplicationInfoView {
 }
 
 pub fn router() -> Router {
-    Router::new().route("/api/v1/application/info", get(get_application_info))
+    Router::new().contract_route(routes::GET_APPLICATION_INFO, get_application_info)
 }
 
 async fn get_application_info(

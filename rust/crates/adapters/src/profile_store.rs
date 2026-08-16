@@ -2,10 +2,15 @@ use citadel_application::{
     CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileResourceInfo, ProfileStore,
     UserPreferencesUpdate,
 };
-use citadel_domain::{ActorId, User, UserDateTimeFormat, UserPreferences, UserTheme};
+use citadel_domain::{
+    ActivityChangedField, ActivityEvent, ActivityEventInfo, ActorId, User, UserDateTimeFormat,
+    UserPreferences, UserTheme,
+};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
+
+use crate::activity_store::{insert_activity, invalid_activity};
 
 const CURRENT_PROFILE_SQL: &str = r#"
 WITH latest_oidc AS (
@@ -102,18 +107,33 @@ impl ProfileStore for PostgresProfileStore {
         })
     }
 
-    fn update_user<'a>(
+    fn rename_user<'a>(
         &'a self,
-        user: &'a User,
+        user_id: Uuid,
+        new_name: &'a str,
+        actor_id: ActorId,
+        renamed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<CurrentProfileRecord, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            lock_enabled_user(&mut transaction, user.id()).await?;
+            let old_name = lock_enabled_user(&mut transaction, user_id).await?;
+            if old_name == new_name {
+                let profile = sqlx::query(CURRENT_PROFILE_SQL)
+                    .bind(user_id)
+                    .fetch_optional(&mut *transaction)
+                    .await
+                    .map_err(storage)?
+                    .map(map_profile)
+                    .transpose()?
+                    .ok_or(IdentityError::NotFound)?;
+                transaction.commit().await.map_err(storage)?;
+                return Ok(profile);
+            }
             let name_conflict = sqlx::query_scalar::<_, bool>(
                 "SELECT EXISTS(SELECT 1 FROM users WHERE id <> $1 AND lower(name) = lower($2))",
             )
-            .bind(user.id())
-            .bind(user.name())
+            .bind(user_id)
+            .bind(new_name)
             .fetch_one(&mut *transaction)
             .await
             .map_err(storage)?;
@@ -123,8 +143,8 @@ impl ProfileStore for PostgresProfileStore {
                 ));
             }
             let updated = sqlx::query("UPDATE users SET name = $2 WHERE id = $1")
-                .bind(user.id())
-                .bind(user.name())
+                .bind(user_id)
+                .bind(new_name)
                 .execute(&mut *transaction)
                 .await
                 .map_err(storage)?
@@ -132,8 +152,17 @@ impl ProfileStore for PostgresProfileStore {
             if updated != 1 {
                 return Err(IdentityError::NotFound);
             }
+            let activity = ActivityEvent::new_user_event(
+                user_id,
+                new_name.to_owned(),
+                actor_id,
+                ActivityEventInfo::user_profile_updated(old_name, new_name.to_owned()),
+                renamed_at,
+            )
+            .map_err(invalid_activity)?;
+            insert_activity(&mut transaction, &activity).await?;
             let profile = sqlx::query(CURRENT_PROFILE_SQL)
-                .bind(user.id())
+                .bind(user_id)
                 .fetch_optional(&mut *transaction)
                 .await
                 .map_err(storage)?
@@ -165,10 +194,11 @@ impl ProfileStore for PostgresProfileStore {
         user_id: Uuid,
         update: &'a UserPreferencesUpdate,
         updated_at: chrono::DateTime<chrono::Utc>,
+        actor_id: ActorId,
     ) -> BoxFuture<'a, Result<UserPreferences, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            lock_enabled_user(&mut transaction, user_id).await?;
+            let resource_name = lock_enabled_user(&mut transaction, user_id).await?;
             let current = sqlx::query(USER_PREFERENCES_SQL)
                 .bind(user_id)
                 .fetch_optional(&mut *transaction)
@@ -193,14 +223,43 @@ impl ProfileStore for PostgresProfileStore {
                     .as_ref()
                     .map_or(UserTheme::System, UserPreferences::theme)
             });
-            let changed = current.as_ref().is_none_or(|value| {
-                value.time_zone() != time_zone
-                    || value.date_time_format() != date_time_format
-                    || value.theme() != theme
-            });
-            if !changed {
+            let mut changes = Vec::with_capacity(3);
+            if update.time_zone.as_ref().is_some_and(|value| {
+                current
+                    .as_ref()
+                    .is_none_or(|preferences| preferences.time_zone() != value)
+            }) {
+                changes.push(ActivityChangedField::time_zone(
+                    current
+                        .as_ref()
+                        .map(|preferences| preferences.time_zone().to_owned()),
+                    time_zone.clone(),
+                ));
+            }
+            let old_date_time_format = current.as_ref().map_or(
+                UserDateTimeFormat::System,
+                UserPreferences::date_time_format,
+            );
+            if update
+                .date_time_format
+                .is_some_and(|value| value != old_date_time_format)
+            {
+                changes.push(ActivityChangedField::date_time_format(
+                    old_date_time_format,
+                    date_time_format,
+                ));
+            }
+            let old_theme = current
+                .as_ref()
+                .map_or(UserTheme::System, UserPreferences::theme);
+            if update.theme.is_some_and(|value| value != old_theme) {
+                changes.push(ActivityChangedField::theme(old_theme, theme));
+            }
+            if changes.is_empty()
+                && let Some(current) = current
+            {
                 transaction.commit().await.map_err(storage)?;
-                return Ok(current.expect("an unchanged preference set is persisted"));
+                return Ok(current);
             }
 
             let mut preferences = current.unwrap_or_else(|| {
@@ -232,6 +291,19 @@ SET timezone = EXCLUDED.timezone,
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
+            if !changes.is_empty() {
+                let info = ActivityEventInfo::user_preferences_updated(changes)
+                    .map_err(invalid_activity)?;
+                let activity = ActivityEvent::new_user_event(
+                    user_id,
+                    resource_name,
+                    actor_id,
+                    info,
+                    updated_at,
+                )
+                .map_err(invalid_activity)?;
+                insert_activity(&mut transaction, &activity).await?;
+            }
             transaction.commit().await.map_err(storage)?;
             Ok(preferences)
         })
@@ -244,12 +316,14 @@ SET timezone = EXCLUDED.timezone,
         new_password_hash: &'a str,
         current_session_id: Option<Uuid>,
         changed_at: chrono::DateTime<chrono::Utc>,
+        actor_id: ActorId,
     ) -> BoxFuture<'a, Result<PasswordChangeOutcome, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let row = sqlx::query(
                 r#"
 SELECT u.password,
+       u.name,
        EXISTS(SELECT 1 FROM oidcexternallogins login WHERE login.userid = u.id) AS externally_managed
 FROM users u
 JOIN actors actor ON actor.id = u.actorid AND actor.type = 'User' AND actor.isenabled
@@ -276,6 +350,7 @@ FOR UPDATE OF u
             {
                 return Ok(PasswordChangeOutcome::CurrentPasswordMismatch);
             }
+            let resource_name = row.try_get::<String, _>("name").map_err(storage)?;
 
             let updated = sqlx::query("UPDATE users SET password = $2 WHERE id = $1")
                 .bind(user_id)
@@ -312,6 +387,15 @@ WHERE userid = $1
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
+            let activity = ActivityEvent::new_user_event(
+                user_id,
+                resource_name,
+                actor_id,
+                ActivityEventInfo::user_password_changed(),
+                changed_at,
+            )
+            .map_err(invalid_activity)?;
+            insert_activity(&mut transaction, &activity).await?;
             transaction.commit().await.map_err(storage)?;
             Ok(PasswordChangeOutcome::Changed)
         })
@@ -321,10 +405,10 @@ WHERE userid = $1
 async fn lock_enabled_user(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
-) -> Result<(), IdentityError> {
-    sqlx::query_scalar::<_, Uuid>(
+) -> Result<String, IdentityError> {
+    sqlx::query_scalar::<_, String>(
         r#"
-SELECT u.id
+SELECT u.name
 FROM users u
 JOIN actors actor ON actor.id = u.actorid AND actor.type = 'User' AND actor.isenabled
 WHERE u.id = $1
@@ -335,8 +419,7 @@ FOR UPDATE OF u
     .fetch_optional(&mut **transaction)
     .await
     .map_err(storage)?
-    .ok_or(IdentityError::NotFound)?;
-    Ok(())
+    .ok_or(IdentityError::NotFound)
 }
 
 fn map_profile(row: sqlx::postgres::PgRow) -> Result<CurrentProfileRecord, IdentityError> {

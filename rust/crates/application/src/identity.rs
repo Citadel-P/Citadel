@@ -187,6 +187,8 @@ pub trait IdentityStore: Send + Sync {
         session_id: Uuid,
         user_id: Uuid,
         current_session_id: Option<Uuid>,
+        actor_id: ActorId,
+        revoked_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<bool, IdentityError>>;
 
     fn delete_other_sessions(
@@ -194,6 +196,7 @@ pub trait IdentityStore: Send + Sync {
         user_id: Uuid,
         current_session_id: Uuid,
         now: DateTime<Utc>,
+        actor_id: ActorId,
     ) -> BoxFuture<'_, Result<Option<i64>, IdentityError>>;
 
     fn load_principal(
@@ -450,9 +453,17 @@ impl IdentityService {
         session_id: Uuid,
         user_id: Uuid,
         current_session_id: Option<Uuid>,
+        actor_id: ActorId,
+        revoked_at: DateTime<Utc>,
     ) -> Result<bool, IdentityError> {
         self.store
-            .delete_owned_session(session_id, user_id, current_session_id)
+            .delete_owned_session(
+                session_id,
+                user_id,
+                current_session_id,
+                actor_id,
+                revoked_at,
+            )
             .await
     }
 
@@ -460,9 +471,10 @@ impl IdentityService {
         &self,
         user_id: Uuid,
         current_session_id: Uuid,
+        actor_id: ActorId,
     ) -> Result<Option<i64>, IdentityError> {
         self.store
-            .delete_other_sessions(user_id, current_session_id, self.clock.now())
+            .delete_other_sessions(user_id, current_session_id, self.clock.now(), actor_id)
             .await
     }
 

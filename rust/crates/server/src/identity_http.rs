@@ -10,15 +10,16 @@ use axum::http::header::{
 use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
 use chrono::{DateTime, Utc};
 use citadel_application::{
     IdentityError, IdentityService, InitializeCitadelRequest, LoginRequest, SessionMetadata,
 };
+use citadel_contracts::http::routes;
 use citadel_domain::{ActorPrincipal, permission_matrix};
 use serde::Serialize;
 
 use crate::Readiness;
+use crate::contract_router::ContractRouterExt;
 
 const REFRESH_COOKIE: &str = "citadel_refresh_token";
 const REQUEST_ID: &str = "x-request-id";
@@ -32,15 +33,12 @@ pub struct IdentityHttpState {
 
 pub fn router(state: IdentityHttpState) -> Router {
     Router::new()
-        .route("/api/v1/setup/status", get(setup_status))
-        .route("/api/v1/setup/initialize", post(initialize))
-        .route("/api/v1/authentication/login", post(login))
-        .route("/api/v1/authentication/refresh", get(refresh))
-        .route("/api/v1/authentication/logout", post(logout))
-        .route(
-            "/api/v1/roles/permissions/matrix",
-            get(get_permission_matrix),
-        )
+        .contract_route(routes::GET_SETUP_STATUS, setup_status)
+        .contract_route(routes::INITIALIZE_CITADEL, initialize)
+        .contract_route(routes::LOGIN, login)
+        .contract_route(routes::REFRESH_TOKEN, refresh)
+        .contract_route(routes::LOGOUT, logout)
+        .contract_route(routes::GET_PERMISSION_MATRIX, get_permission_matrix)
         .with_state(state)
 }
 
@@ -245,6 +243,28 @@ pub(crate) fn no_store(mut response: Response) -> Response {
     response
 }
 
+pub(crate) fn require_human(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, IdentityError> {
+    let Some(Extension(principal)) = principal else {
+        return Err(IdentityError::Unauthenticated);
+    };
+    if !principal.is_human() {
+        return Err(IdentityError::Forbidden);
+    }
+    Ok(principal)
+}
+
+pub(crate) fn require_human_administrator(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, IdentityError> {
+    let principal = require_human(principal)?;
+    if !principal.is_administrator() {
+        return Err(IdentityError::Forbidden);
+    }
+    Ok(principal)
+}
+
 pub(crate) fn identity_error_response(error: IdentityError, headers: &HeaderMap) -> Response {
     let request_id = headers
         .get(REQUEST_ID)
@@ -380,5 +400,39 @@ mod tests {
         assert_eq!(bearer(&headers), None);
         headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer token"));
         assert_eq!(bearer(&headers), Some("token"));
+    }
+
+    #[test]
+    fn administrator_boundary_rejects_non_administrators_and_service_accounts() {
+        for principal_type in [
+            citadel_domain::AuthenticatedPrincipalType::User,
+            citadel_domain::AuthenticatedPrincipalType::ServiceAccount,
+        ] {
+            let principal = ActorPrincipal {
+                subject_id: uuid::Uuid::now_v7(),
+                actor_id: citadel_domain::ActorId::new(uuid::Uuid::now_v7()),
+                name: "reader".to_owned(),
+                principal_type,
+                credential_id: None,
+                roles: vec!["Viewer".to_owned()],
+            };
+            assert!(matches!(
+                require_human_administrator(Some(Extension(principal))),
+                Err(IdentityError::Forbidden)
+            ));
+        }
+    }
+
+    #[test]
+    fn administrator_boundary_accepts_a_human_admin_role() {
+        let principal = ActorPrincipal {
+            subject_id: uuid::Uuid::now_v7(),
+            actor_id: citadel_domain::ActorId::new(uuid::Uuid::now_v7()),
+            name: "owner".to_owned(),
+            principal_type: citadel_domain::AuthenticatedPrincipalType::User,
+            credential_id: None,
+            roles: vec!["Admin".to_owned()],
+        };
+        assert!(require_human_administrator(Some(Extension(principal))).is_ok());
     }
 }

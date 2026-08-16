@@ -1,24 +1,28 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
+use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_application::{
-    AddServiceAccountResourceAccessRequest, ArchiveServiceAccountsRequest,
-    ChangeCurrentPasswordRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
-    IdentityError, IdentityService, IdentityStore, InitializeCitadelRequest, NewSession,
-    NoopServiceAccountLastUsedTracker, PatchField, PatchUserPreferencesRequest, ProfileService,
-    ServiceAccountResourceAccess, ServiceAccountService, SessionMetadata, SystemClock,
-    UpdateCurrentProfileRequest,
+    ActivityFilter, ActivityService, AddServiceAccountResourceAccessRequest,
+    ArchiveServiceAccountsRequest, ChangeCurrentPasswordRequest, CreateServiceAccountRequest,
+    CreateServiceAccountTokenRequest, IdentityError, IdentityService, IdentityStore,
+    InitializeCitadelRequest, NewSession, NoopServiceAccountLastUsedTracker, PatchField,
+    PatchUserPreferencesRequest, ProfileService, ProfileStore, ServiceAccountResourceAccess,
+    ServiceAccountService, SessionMetadata, SystemClock, UpdateCurrentProfileRequest,
+    UserReadService,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::{
-    ADMIN_ROLE_ID, ActorId, ActorPrincipal, AuthenticatedPrincipalType, PermissionLevel,
-    ResourceType, SYSTEM_ACTOR_ID, SpecificPermission, UserDateTimeFormat, UserTheme,
+    ADMIN_ROLE_ID, ActivityEventType, ActivityResourceType, ActorId, ActorPrincipal,
+    AuthenticatedPrincipalType, PermissionLevel, ResourceType, SYSTEM_ACTOR_ID, SpecificPermission,
+    UserDateTimeFormat, UserTheme,
 };
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -59,11 +63,9 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         entitlement,
         clock.clone(),
     ));
-    let profiles = ProfileService::new(
-        Arc::new(PostgresProfileStore::new(pool.clone())),
-        Arc::clone(&identity),
-        clock,
-    );
+    let profile_store = Arc::new(PostgresProfileStore::new(pool.clone()));
+    let profiles = ProfileService::new(profile_store.clone(), Arc::clone(&identity), clock);
+    let users = UserReadService::new(Arc::new(PostgresUserReadStore::new(pool.clone())));
 
     assert!(identity.setup_status().await.unwrap().requires_setup);
     let (login, session) = identity
@@ -187,6 +189,25 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         .await
         .unwrap();
     assert_eq!(profile.display_name, "owner-renamed");
+    assert!(
+        profile_store
+            .rename_user(
+                owner.subject_id,
+                "must-roll-back",
+                ActorId::new(Uuid::now_v7()),
+                Utc::now(),
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT name FROM users WHERE id = $1")
+            .bind(owner.subject_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "owner-renamed"
+    );
     let (renamed_login, renamed_session) = identity
         .login(
             citadel_application::LoginRequest {
@@ -222,6 +243,50 @@ VALUES ($1, $2, $3, $4, 'other@example.test', 'other-user', NULL)
     .execute(&pool)
     .await
     .unwrap();
+    let platform_override_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+INSERT INTO resourceaccesses
+    (id, actorid, permissionlevel, resourceid, resourcetype, specificpermissions)
+VALUES ($1, $2, 1, $3, 0, 1)
+"#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(foreign_actor_id)
+    .bind(platform_override_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let listed_users = users.list(1, 10, None).await.unwrap();
+    assert_eq!(listed_users.total_count, 2);
+    assert!(
+        listed_users
+            .items
+            .iter()
+            .any(|user| user.id == owner.subject_id && user.name == "owner-renamed")
+    );
+    assert!(
+        listed_users
+            .items
+            .iter()
+            .any(|user| user.id == foreign_user_id && user.resource_accesses.is_none())
+    );
+    let filtered_users = users.list(1, 10, Some(" other ")).await.unwrap();
+    assert_eq!(filtered_users.total_count, 1);
+    assert_eq!(filtered_users.items[0].id, foreign_user_id);
+    let searched_users = users.search("OTHER@EXAMPLE", 10).await.unwrap();
+    assert_eq!(searched_users.len(), 1);
+    assert_eq!(searched_users[0].id, foreign_user_id);
+    let foreign_user = users.get(foreign_user_id).await.unwrap();
+    assert!(foreign_user.is_enabled);
+    assert_eq!(
+        foreign_user.resource_accesses.as_ref().unwrap()[0].resource_id,
+        platform_override_id
+    );
+    assert!(matches!(
+        users.get(Uuid::now_v7()).await,
+        Err(IdentityError::NotFound)
+    ));
     sqlx::query(
         r#"
 INSERT INTO refreshtokens (id, createdat, expiresat, ipaddress, lastseenat, useragent, userid)
@@ -724,6 +789,64 @@ VALUES
                 owner.actor_id,
             )
             .await,
+        Err(IdentityError::NotFound)
+    ));
+
+    let activities = ActivityService::new(Arc::new(PostgresActivityStore::new(pool.clone())));
+    let user_activities = activities
+        .list(
+            &owner,
+            ActivityFilter {
+                resource_id: Some(owner.subject_id),
+                resource_type: Some(ActivityResourceType::User),
+                page_size: Some(100),
+                ..ActivityFilter::default()
+            },
+        )
+        .await
+        .unwrap();
+    for required in [
+        ActivityEventType::UserProfileUpdated,
+        ActivityEventType::UserPreferencesUpdated,
+        ActivityEventType::UserPasswordChanged,
+        ActivityEventType::UserSessionRevoked,
+        ActivityEventType::UserOtherSessionsRevoked,
+    ] {
+        assert!(
+            user_activities
+                .items
+                .iter()
+                .any(|activity| activity.event_type == required),
+            "missing {required:?}"
+        );
+    }
+    assert!(user_activities.items.iter().all(|activity| {
+        let normalized = activity.info_json.to_ascii_lowercase();
+        !normalized.contains("correct-horse")
+            && !normalized.contains("passwordhash")
+            && !normalized.contains("refreshtoken")
+    }));
+    let first_activity = user_activities.items[0].id;
+    assert_eq!(
+        activities.get(&owner, first_activity).await.unwrap().id,
+        first_activity
+    );
+    assert_eq!(
+        activities
+            .list(
+                &oidc_principal,
+                ActivityFilter {
+                    resource_type: Some(ActivityResourceType::User),
+                    ..ActivityFilter::default()
+                },
+            )
+            .await
+            .unwrap()
+            .total_count,
+        0
+    );
+    assert!(matches!(
+        activities.get(&oidc_principal, first_activity).await,
         Err(IdentityError::NotFound)
     ));
 

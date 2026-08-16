@@ -389,6 +389,88 @@ try {
         throw 'The new password could not authenticate.'
     }
 
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/activities" | Out-Null
+        throw 'Activity history was returned without authentication.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    $activityPage = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($profile.id)&resourceType=User&page=1&pageSize=100" `
+        -Headers $authorization
+    $profileActivities = @($activityPage.pagedResult.items)
+    foreach ($eventType in @(
+        'UserProfileUpdated',
+        'UserPreferencesUpdated',
+        'UserPasswordChanged',
+        'UserSessionRevoked',
+        'UserOtherSessionsRevoked'
+    )) {
+        if ($profileActivities.eventType -notcontains $eventType) {
+            throw "Profile activity history is missing '$eventType'."
+        }
+    }
+    $activityJson = $activityPage | ConvertTo-Json -Depth 20 -Compress
+    if ($activityJson -match 'correct-horse-battery-staple') {
+        throw 'Profile activity history exposed password material.'
+    }
+    $activityDetail = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities/$($profileActivities[0].id)" `
+        -Headers $authorization
+    if ($activityDetail.id -ne $profileActivities[0].id -or `
+        [string]::IsNullOrWhiteSpace($activityDetail.info.'$type')) {
+        throw 'Activity detail did not preserve the existing frontend contract.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/activities?pageSize=501" `
+            -Headers $authorization | Out-Null
+        throw 'The bounded Activity page size was not enforced.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
+    }
+
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/users?Page=1&PageSize=10" | Out-Null
+        throw 'The administrator User list was returned without authentication.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    $users = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/users?Page=1&PageSize=10&Name=owner" `
+        -Headers $authorization
+    $userItems = @($users.pagedResult.items)
+    if ($users.pagedResult.totalCount -ne 1 -or $userItems.Count -ne 1 -or `
+        $userItems[0].id -ne $profile.id -or $userItems[0].name -ne 'owner-renamed' -or `
+        -not $users.capabilities.canRead) {
+        throw 'The administrator User list did not preserve paging, filtering, or capabilities.'
+    }
+    $searchedUsers = @(Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/users/search?Query=OWNER%40EXAMPLE&Limit=10" `
+        -Headers $authorization)
+    if ($searchedUsers.Count -ne 1 -or $searchedUsers[0].id -ne $profile.id) {
+        throw 'The administrator User search did not match email case-insensitively.'
+    }
+    $userDetail = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/users/$($profile.id)" -Headers $authorization
+    if ($userDetail.name -ne 'owner-renamed' -or $userDetail.email -ne 'owner@example.test' -or `
+        -not $userDetail.isEnabled -or $null -eq $userDetail.resourceAccesses) {
+        throw 'The administrator User detail did not include the expected identity and ACL shape.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/users/search?Query=x" -Headers $authorization | Out-Null
+        throw 'A one-character User search query was accepted.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
+    }
+
     $accounts = Invoke-WebRequest -UseBasicParsing -Uri "$serverOrigin/api/v1/serviceAccounts" -Headers $authorization
     if ($accounts.StatusCode -ne 200 -or $accounts.Content -notmatch 'pagedResult') {
         throw 'The administrator could not list Service Accounts.'
@@ -462,6 +544,19 @@ try {
         $persistedPreferences.dateTimeFormat -ne 'TwentyFourHour' -or `
         $persistedPreferences.theme -ne 'Dark') {
         throw 'Profile preferences were not preserved across restart.'
+    }
+    $persistedActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($profile.id)&resourceType=User&pageSize=100" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if ($persistedActivities.pagedResult.totalCount -lt $profileActivities.Count) {
+        throw 'Profile activity history was not preserved across restart.'
+    }
+    $persistedUsers = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/users?Page=1&PageSize=10&Name=owner" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if ($persistedUsers.pagedResult.totalCount -ne 1 -or `
+        @($persistedUsers.pagedResult.items)[0].name -ne 'owner-renamed') {
+        throw 'The administrator User projection was not preserved across restart.'
     }
 
     $password = & docker exec $postgres psql --username citadel_phase3 --dbname $serverDatabase `

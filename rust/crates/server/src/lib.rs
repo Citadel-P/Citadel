@@ -1,7 +1,10 @@
 #![forbid(unsafe_code)]
 
+pub mod activities_http;
 pub mod application_info_http;
+mod capabilities;
 pub mod config;
+pub mod contract_router;
 pub mod diagnostics;
 pub mod identity_http;
 pub mod metrics;
@@ -9,6 +12,7 @@ pub mod profile_http;
 pub mod realtime;
 pub mod service_accounts_http;
 pub mod transport;
+pub mod users_http;
 pub mod workers;
 
 use std::sync::atomic::{AtomicBool, Ordering};

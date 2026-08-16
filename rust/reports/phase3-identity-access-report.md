@@ -4,7 +4,7 @@ Date: 2026-08-16
 
 ## Outcome
 
-Phase 3A and the bounded Phase 3B/C/D/E/F profile foundation are implemented.
+Phase 3A and the bounded Phase 3B/C/D/E/F/G/H identity foundation are implemented.
 Rust now owns the first production identity slices:
 first-run administrator setup, local password login, browser sessions, Actor
 authentication/authorization, the permission matrix, offline entitlement
@@ -12,9 +12,10 @@ verification, the complete Service Account credential lifecycle, and
 authenticated current-profile read/display-name update and preference
 read/update operations, browser-session listing and revocation, and local
 password changes. Authenticated clients can also read the Core build identity
-used by the shared layout.
+used by the shared layout, authorized Activity history, and administrator User
+reads through the existing frontend contracts.
 
-This is not the full Phase 3 exit. Administrator User APIs, Team, Role,
+This is not the full Phase 3 exit. Administrator User mutations, Team, Role,
 installed-license, MFA, and OIDC
 administration remain on the .NET reference implementation. The frontend must
 not be cut over to the Rust server until those flows and their differential
@@ -65,6 +66,37 @@ tests move together.
   accept the existing version pipeline values; local builds deterministically
   fall back to the root `version.json`. The endpoint requires an authenticated
   Actor, remains setup-gated, performs no database read, and sets `no-store`.
+- Rust ports every persisted `ActivityStatus`, `ActivityResourceType`, and
+  `ActivityEventType` discriminator from .NET. The command-side Activity
+  aggregate currently owns the five profile payloads required by this slice:
+  profile rename, preference update, password change, individual session
+  revoke, and revoke-other.
+- Activity changed fields are constructed from a four-value allow-list rather
+  than arbitrary strings. Password-change evidence has only its discriminator;
+  passwords, password hashes, refresh tokens, cookies, and session secrets
+  cannot be supplied to its payload.
+- Profile rename, changed preferences, password replacement/session cleanup,
+  and session revocation insert their required Activity row before the same
+  SQLx transaction commits. No-op rename/preference/revoke operations remain
+  quiet. A failed activity insert rolls back the state mutation.
+- `GET /api/v1/activities` and `GET /api/v1/activities/{id}` preserve the .NET
+  response shape, typed string discriminators, actor/platform projections,
+  bounded paging, filter names, and `no-store` behavior. Administrators see the
+  full ledger; other Actors see only resource types/IDs granted through their
+  direct or Team Role permissions and resource overrides. Administrator-only
+  identity/license/OIDC activity remains hidden from non-administrators.
+- The read adapter accepts existing .NET rows, bounds Activity JSON at 256 KiB,
+  verifies that `$type` matches `EventType`, and maps persisted Pascal-case
+  payload fields to the camel-case HTTP contract. The existing Citadel frontend
+  already calls these two operation IDs, so no duplicate Activity UI was added.
+- Administrator-only `GET /api/v1/users`, `/api/v1/users/search`, and
+  `/api/v1/users/{id}` preserve the current list, assignment-search, and detail
+  response shapes. Service Accounts and non-administrator Users cannot use the
+  routes even if they hold a User permission.
+- The User read adapter uses bounded paging/search, deterministic ordering, and
+  aggregate PostgreSQL projections for Roles, Teams, enabled state, and detail
+  resource overrides. List rows deliberately omit detail-only overrides, so it
+  does not create an N+1 query or load unnecessary ACL data on the table path.
 - Passwords use the versioned `cit_pwd_v1$` Argon2id format. Unknown login names
   still execute a real dummy verification to reduce account-enumeration timing.
 - Access and refresh JWTs use an explicit issuer, audience, token type, version,
@@ -97,10 +129,13 @@ tests move together.
 - Internal AES-256-GCM secret envelopes use the versioned `cit_secret_v1`
   format and authenticated encryption. Production configuration requires a
   separate 32-byte secret-encryption key.
-- The explicit route catalog generates 32 full and 16 public OpenAPI operations
+- The explicit route catalog generates 37 full and 18 public OpenAPI operations
   plus matching frontend metadata. Browser-only setup/session operations remain
   outside the public API document, as do the UI-only profile operations.
-  Parameterized operations now declare their UUID path parameters explicitly.
+  Axum registration and generation now consume the same typed method, path, and
+  parameter contracts. UUID path parameters and Activity, User, and Service
+  Account query filters are declared explicitly without operation-specific
+  generator logic.
 
 ## Verification
 
@@ -122,7 +157,10 @@ denial, graceful process/container restart, Actor-scoped ACLs, immediate token
 revocation, active browser-session ordering, current-session protection,
 individual and revoke-other session invalidation, wrong/weak/external-password
 rejection, current/all-session password-change invalidation, stale-login
-rejection, Role and resource-access
+rejection, atomic Activity writes and forced rollback, safe Activity payloads,
+authorized Activity list/detail filtering, Activity HTTP contract compatibility,
+Activity restart persistence, administrator User list/search/detail shape,
+User projection restart persistence, Role and resource-access
 assignment/removal, duplicate-token rejection, archive behavior, and concurrent
 token limits.
 
@@ -135,18 +173,17 @@ login or uniqueness semantics.
 
 ## Remaining Phase 3 work
 
-- Safe profile activity ledger.
-- Administrator User, Team, Role, Actor-enabled-state, and installed-license APIs.
+- Administrator User mutations, Team, Role, Actor-enabled-state, and
+  installed-license APIs.
 - TOTP MFA and the accepted MFA policy behavior.
 - OIDC provider administration and browser login/callback behavior.
 - Frontend session bootstrap and identity/access screens against the Rust API.
 - Differential endpoint/authorization matrices against the .NET reference.
 
-The Rust activity ledger is not implemented yet, so the profile, preference,
-password, and session mutations are not ready for frontend cutover even though
-their state changes are covered here. Their required safe activity records must
-move atomically with the activity subsystem rather than introducing a second
-temporary audit format.
+The safe profile Activity ledger is complete. Other Rust-owned resource slices
+must add typed command payloads and atomic evidence when their mutations move;
+the compatibility reader intentionally supports their existing .NET rows
+without introducing an untyped Rust write path.
 
 Phase 4 Docker read ownership must not depend on an identity behavior that is
 still available only from the .NET process.

@@ -22,9 +22,9 @@ slices migrate behavior behind differential tests.
   Direct-mode TLS/HSTS, CORS, request IDs, bounded request bodies, a bounded
   global foundation rate limit, centralized Problem Details, setup gating, and
   optional SPA fallback.
-- One explicit route catalog generates deterministic full/public OpenAPI and
-  frontend operation/type metadata. Production startup does not generate API
-  artifacts.
+- One explicit typed route catalog supplies Axum registration and generates
+  deterministic full/public OpenAPI plus frontend operation/type metadata.
+  Production startup does not generate API artifacts.
 - The representative Actor-scoped PostgreSQL query uses `query_file!` and
   committed SQLx offline metadata. Application queries remain in `adapters`;
   the database crate is not an ORM or generic repository.
