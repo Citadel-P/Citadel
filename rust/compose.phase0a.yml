@@ -1,0 +1,62 @@
+name: citadel-phase0a
+
+services:
+  phase0-postgres:
+    image: postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44
+    container_name: citadel-rust-phase0a-postgres
+    environment:
+      POSTGRES_USER: citadel_phase0
+      POSTGRES_PASSWORD: citadel_phase0
+      POSTGRES_DB: citadel_phase0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U citadel_phase0 -d citadel_phase0"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    volumes:
+      - phase0_postgres:/var/lib/postgresql
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "phase0-database"
+
+  phase0-server:
+    image: ${CITADEL_PHASE0_IMAGE:-citadel-phase0a:local}
+    build:
+      context: ..
+      dockerfile: rust/Dockerfile.phase0a
+    container_name: citadel-rust-phase0a
+    depends_on:
+      phase0-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://citadel_phase0:citadel_phase0@phase0-postgres:5432/citadel_phase0
+      RUST_LOG: citadel_server=info,citadel_adapters=info
+      CITADEL_RUST_DB_MAX_CONNECTIONS: "5"
+      CITADEL_RUST_EVENT_QUEUE_CAPACITY: "256"
+      JobConfiguration__MonitoringInterval: "10"
+    ports:
+      - "18000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 100m
+    memswap_limit: 100m
+    stop_grace_period: 15s
+    restart: unless-stopped
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "phase0-core"
+
+volumes:
+  phase0_postgres:
+
+networks:
+  default:
+    name: citadel-phase0a

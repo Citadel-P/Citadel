@@ -1,0 +1,27 @@
+FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS build
+
+WORKDIR /source
+COPY rust ./rust
+COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml \
+    ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml
+
+WORKDIR /source/rust
+RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=citadel-rust-target,target=/source/rust/target \
+    cargo run --locked -p xtask -- generate-docker --check \
+    && cargo test --locked --workspace \
+    && cargo build --locked --release -p citadel-server \
+    && cp target/release/citadel-server /tmp/citadel-server
+
+FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+
+WORKDIR /app
+COPY --from=build /tmp/citadel-server /app/citadel-server
+
+USER 65532:0
+EXPOSE 8000
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \
+    CMD ["/app/citadel-server", "healthcheck"]
+ENTRYPOINT ["/app/citadel-server"]
+CMD ["serve"]

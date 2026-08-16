@@ -250,3 +250,6 @@ _Pvt_Extensions
 # Data folder
 src/Citadel.WebApi/data/
 /tls/
+# Rust Phase 0 prototype build output
+rust/target/
+rust/artifacts/
