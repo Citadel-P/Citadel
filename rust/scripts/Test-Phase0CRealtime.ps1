@@ -103,18 +103,19 @@ try {
         Start-Sleep -Seconds 1
     }
 
+    & docker run --rm --network $networkName `
+        --env "DATABASE_URL=postgres://phase0:phase0@${postgresContainer}:5432/phase0" `
+        --env 'Transport__Mode=Disabled' `
+        $CoreImage migrate | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not apply the Rust database baseline.' }
+
     $fixtureSql = @"
-CREATE TABLE Actors (Id uuid PRIMARY KEY, IsEnabled boolean NOT NULL);
-CREATE TABLE Users (Id uuid PRIMARY KEY, ActorId uuid NOT NULL);
-CREATE TABLE Teams (Id uuid PRIMARY KEY, ActorId uuid NOT NULL);
-CREATE TABLE ActorTeamMemberships (TeamId uuid NOT NULL, MemberActorId uuid NOT NULL);
-CREATE TABLE ActorRoles (ActorId uuid NOT NULL, RoleId uuid NOT NULL);
-CREATE TABLE Permissions (Id uuid PRIMARY KEY, RoleId uuid NOT NULL, ResourceType integer NOT NULL, PermissionLevel integer NOT NULL, SpecificPermissions integer NOT NULL);
-CREATE TABLE ResourceAccesses (Id uuid PRIMARY KEY, ResourceId uuid NOT NULL, ActorId uuid NOT NULL, ResourceType integer NOT NULL, PermissionLevel integer NOT NULL, SpecificPermissions integer NOT NULL);
-CREATE TABLE Platforms (Id uuid PRIMARY KEY, Name text NOT NULL, Address text NOT NULL, Status text NOT NULL, ConnectorType text NOT NULL);
-INSERT INTO Actors VALUES ('$actorId', true);
-INSERT INTO Platforms VALUES ('$platformId', 'phase0-local', 'unix:///var/run/docker.sock', 'Healthy', 'Local');
-INSERT INTO ResourceAccesses VALUES ('$resourceAccessId', '$platformId', '$actorId', 0, 1, 0);
+INSERT INTO Actors (Id, IsEnabled, Type) VALUES ('$actorId', true, 'User');
+INSERT INTO Platforms (Id, Name, Address, Status, ConnectorType, CpuCount, ImageCount, MemTotal, NetworkCount, PlatformDescriptor, VolumeCount)
+VALUES ('$platformId', 'phase0-local', 'unix:///var/run/docker.sock', 'Healthy', 'Local', 0, 0, 0, 0, '{}', 0);
+INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions)
+VALUES ('$resourceAccessId', '$platformId', '$actorId', 0, 1, 0);
+UPDATE InstanceSetupStates SET InitializedAt = CURRENT_TIMESTAMP, UpdatedAt = CURRENT_TIMESTAMP WHERE Id = 1;
 "@
     [IO.File]::WriteAllText($fixtureSqlPath, $fixtureSql, [Text.UTF8Encoding]::new($false))
     & docker cp $fixtureSqlPath "${postgresContainer}:/tmp/phase0c.sql"
@@ -138,6 +139,7 @@ INSERT INTO ResourceAccesses VALUES ('$resourceAccessId', '$platformId', '$actor
     & docker run --detach --name $serverContainer --network $networkName `
         --publish '127.0.0.1::8000' `
         --env "DATABASE_URL=postgres://phase0:phase0@${postgresContainer}:5432/phase0" `
+        --env 'Transport__Mode=Disabled' `
         --env "CITADEL_RUST_AGENT_ADDRESS=http://${agentContainer}:9000" `
         --env "CITADEL_RUST_AGENT_PRIVATE_KEY_PATH=/phase0c-key/$keyFileName" `
         --env 'CITADEL_RUST_AGENT_TIMEOUT_SECONDS=30' `

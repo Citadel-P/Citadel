@@ -3,10 +3,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use citadel_adapters::agent::AgentClient;
 use citadel_adapters::docker::{DockerClient, DockerError};
-use citadel_application::{PlatformRuntimePort, RuntimeCapabilityError, TaskSupervisor};
+use citadel_application::{
+    BoundedReceiver, BoundedSender, PlatformRuntimePort, QueueOverflowPolicy,
+    RuntimeCapabilityError, TaskSupervisor, bounded_channel,
+};
 use futures_util::StreamExt;
 use sqlx::PgPool;
-use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::Readiness;
@@ -42,7 +44,7 @@ pub fn register(
         agent,
         realtime,
     } = dependencies;
-    let (sender, receiver) = mpsc::channel(settings.queue_capacity);
+    let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
 
     supervisor.spawn(
         "docker-event-source",
@@ -232,7 +234,7 @@ async fn wait_to_reconnect(cancellation: &CancellationToken, reconnect_delay: Du
 async fn event_source(
     cancellation: CancellationToken,
     docker: DockerClient,
-    sender: mpsc::Sender<citadel_adapters::docker::generated::DockerEvent>,
+    sender: BoundedSender<citadel_adapters::docker::generated::DockerEvent>,
     metrics: Arc<Metrics>,
 ) -> Result<(), DockerError> {
     let _task = metrics.task_guard();
@@ -266,15 +268,10 @@ async fn event_source(
             };
             match event {
                 Some(Ok(event)) => {
-                    let permit = tokio::select! {
-                        () = cancellation.cancelled() => return Ok(()),
-                        permit = sender.reserve() => match permit {
-                            Ok(permit) => permit,
-                            Err(_) => return Ok(()),
-                        }
-                    };
+                    if sender.send(event, &cancellation).await.is_err() {
+                        return Ok(());
+                    }
                     metrics.event_enqueued();
-                    permit.send(event);
                 }
                 Some(Err(error)) => {
                     metrics.stream_reconnected();
@@ -292,18 +289,15 @@ async fn event_source(
 
 async fn event_consumer(
     cancellation: CancellationToken,
-    mut receiver: mpsc::Receiver<citadel_adapters::docker::generated::DockerEvent>,
+    mut receiver: BoundedReceiver<citadel_adapters::docker::generated::DockerEvent>,
     metrics: Arc<Metrics>,
     realtime: Option<RealtimeHub>,
 ) -> Result<(), std::convert::Infallible> {
     let _task = metrics.task_guard();
     loop {
-        let event = tokio::select! {
-            () = cancellation.cancelled() => return Ok(()),
-            event = receiver.recv() => match event {
-                Some(event) => event,
-                None => return Ok(()),
-            }
+        let event = match receiver.recv(&cancellation).await {
+            Some(event) => event,
+            None => return Ok(()),
         };
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -342,7 +336,20 @@ async fn readiness_probe(
                     .await
                     .is_ok();
                 let docker_ready = docker.ping().await.is_ok();
+                let setup = if readiness.is_setup() {
+                    true
+                } else {
+                    sqlx::query_scalar::<_, bool>(
+                        "SELECT initializedat IS NOT NULL FROM instancesetupstates ORDER BY id LIMIT 1"
+                    )
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or(false)
+                };
                 readiness.set(database_ready, docker_ready);
+                readiness.set_setup(setup);
                 if !database_ready || !docker_ready {
                     metrics.readiness_failed();
                 }

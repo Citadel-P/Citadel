@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,17 +11,18 @@ use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
 use citadel_adapters::docker::DockerClient;
+use citadel_adapters::postgres_runtime;
 use citadel_application::{AuthorizedPlatformReader, PlatformRuntimePort, TaskSupervisor};
+use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
-use citadel_server::config::Config;
+use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
-use citadel_server::{Readiness, workers};
+use citadel_server::{Readiness, transport, workers};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use serde::Serialize;
 use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
@@ -30,10 +30,7 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 #[derive(Parser)]
-#[command(
-    name = "citadel-server",
-    about = "Citadel Rust Phase 0 viability prototype"
-)]
+#[command(name = "citadel-server", about = "Citadel Rust migration server")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -41,9 +38,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run the Phase 0A health/readiness server and bounded Docker event worker.
+    /// Run the Rust foundation server and supervised workers.
     Serve,
-    /// Print the effective non-secret Phase 0A configuration as JSON.
+    /// Apply the embedded Citadel schema migrations and exit.
+    Migrate,
+    /// Print bounded process and cgroup diagnostics as JSON.
+    Diagnostics,
+    /// Print the effective non-secret configuration as JSON.
     PrintEffectiveConfig,
     /// Exercise the generated Docker subset and optional Actor-authorized read.
     Phase0Smoke {
@@ -82,6 +83,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     match cli.command.unwrap_or(Command::Serve) {
         Command::Serve => serve(Config::from_env()?).await,
+        Command::Migrate => migrate(DatabaseConfig::from_env()?).await,
+        Command::Diagnostics => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&citadel_server::diagnostics::snapshot())?
+            );
+            Ok(())
+        }
         Command::PrintEffectiveConfig => {
             println!(
                 "{}",
@@ -124,7 +133,18 @@ fn init_tracing() {
 async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         effective_configuration = %serde_json::to_string(&config.effective()?)?,
-        "starting Phase 0 server"
+        "starting Rust foundation server"
+    );
+    if config.transport.mode == citadel_server::config::TransportMode::Disabled {
+        tracing::warn!(
+            "Citadel transport security is disabled; API and Agent traffic is not encrypted"
+        );
+    }
+    let migration = MigrationRunner::migrate(&config.database_url).await?;
+    tracing::info!(
+        applied = migration.applied,
+        already_applied = migration.already_applied,
+        "database migrations completed"
     );
     let pool = connect_database(&config).await?;
     let docker = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
@@ -178,7 +198,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let state = AppState {
-        readiness,
+        readiness: Arc::clone(&readiness),
         metrics,
         pool: pool.clone(),
     };
@@ -187,19 +207,35 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .route("/ready", get(ready))
         .route("/metrics", get(open_metrics))
         .with_state(state);
-    let app = if let Some(realtime) = realtime {
+    let mut app = if let Some(realtime) = realtime {
         app.merge(realtime.router())
     } else {
         app
+    };
+    if config.transport.openapi_enabled {
+        app = app
+            .route("/openapi/v1.json", get(openapi_full))
+            .route("/openapi/public/v1.json", get(openapi_public));
     }
-    .layer(CatchPanicLayer::new())
-    .layer(TraceLayer::new_for_http());
-    let listener = tokio::net::TcpListener::bind(config.listen_address).await?;
-    tracing::info!(address = %config.listen_address, "Phase 0 server listening");
+    let app = transport::secure_router(
+        app.layer(CatchPanicLayer::custom(transport::panic_response))
+            .layer(TraceLayer::new_for_http()),
+        &config.transport,
+        Arc::clone(&readiness),
+    )?;
+    tracing::info!(
+        address = %config.listen_address,
+        mode = ?config.transport.mode,
+        "Rust foundation server listening"
+    );
 
-    let server = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(cancellation.clone()))
-        .into_future();
+    let server = run_server(
+        config.listen_address,
+        config.transport.clone(),
+        app,
+        cancellation.clone(),
+        config.shutdown_timeout,
+    );
     tokio::pin!(server);
     let exit = tokio::select! {
         server_result = &mut server => ServerExit::Server(server_result),
@@ -223,18 +259,48 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+async fn migrate(config: DatabaseConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = MigrationRunner::migrate(&config.database_url).await?;
+    println!(
+        "database ready: {} migration(s) applied, {} already applied",
+        outcome.applied, outcome.already_applied
+    );
+    Ok(())
+}
+
 enum ServerExit {
     Server(std::io::Result<()>),
     Task(Result<(), citadel_application::SupervisedTaskError>),
 }
 
+async fn run_server(
+    address: std::net::SocketAddr,
+    transport_config: citadel_server::config::TransportConfig,
+    app: Router,
+    cancellation: CancellationToken,
+    shutdown_timeout: Duration,
+) -> std::io::Result<()> {
+    let http = transport::serve(
+        address,
+        &transport_config,
+        app,
+        cancellation.clone(),
+        shutdown_timeout,
+    );
+    tokio::pin!(http);
+    tokio::select! {
+        result = &mut http => result,
+        () = shutdown_signal(cancellation) => http.await,
+    }
+}
+
 async fn connect_database(config: &Config) -> Result<PgPool, sqlx::Error> {
-    PgPoolOptions::new()
-        .min_connections(0)
-        .max_connections(config.database_max_connections)
-        .acquire_timeout(config.docker_request_timeout)
-        .connect(&config.database_url)
-        .await
+    postgres_runtime::connect_pool(
+        &config.database_url,
+        config.database_max_connections,
+        config.docker_request_timeout,
+    )
+    .await
 }
 
 async fn phase0_smoke(
@@ -384,6 +450,22 @@ async fn open_metrics(State(state): State<AppState>) -> Response {
             "application/openmetrics-text; version=1.0.0; charset=utf-8",
         )],
         state.metrics.render(&state.pool),
+    )
+        .into_response()
+}
+
+async fn openapi_full() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        include_str!("../../../generated/openapi/v1.json"),
+    )
+        .into_response()
+}
+
+async fn openapi_public() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        include_str!("../../../generated/openapi/public-v1.json"),
     )
         .into_response()
 }

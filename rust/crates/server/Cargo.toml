@@ -7,12 +7,17 @@ publish = false
 
 [dependencies]
 axum.workspace = true
+axum-server.workspace = true
 citadel-adapters = { path = "../adapters" }
 citadel-application = { path = "../application" }
+citadel-contracts = { path = "../contracts" }
+citadel-database = { path = "../database" }
 citadel-domain = { path = "../domain" }
 clap.workspace = true
 futures-util.workspace = true
+ipnet.workspace = true
 reqwest.workspace = true
+rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -29,3 +34,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite.workspace = true
+tower.workspace = true

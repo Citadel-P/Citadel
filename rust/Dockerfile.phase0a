@@ -6,12 +6,14 @@ COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yam
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml
 COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos \
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos
-
 WORKDIR /source/rust
+ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=citadel-rust-target,target=/source/rust/target \
-    cargo run --locked -p xtask -- generate-docker --check \
+    cargo run --locked -p xtask -- docker --check \
+    && cargo run --locked -p xtask -- database verify \
+    && cargo run --locked -p xtask -- openapi --check \
     && cargo test --locked --workspace \
     && cargo build --locked --release -p citadel-server \
     && cp target/release/citadel-server /tmp/citadel-server

@@ -5,7 +5,7 @@ Run these commands from the repository root in PowerShell.
 ```powershell
 # Rebuild and verify the generated Docker subset.
 docker run --rm --mount type=bind,source=${PWD},target=/repo -w /repo/rust `
-  rust:1.97.1-bookworm cargo run --locked -p xtask -- generate-docker --check
+  rust:1.97.1-bookworm cargo run --locked -p xtask -- docker --check
 
 # Format, lint, and run unit/Unix-socket compatibility tests.
 ./rust/scripts/Test-Phase0A.ps1
@@ -72,3 +72,11 @@ Rejected candidate evaluations remain as reproducible negative evidence:
 All evaluations use exact disposable Docker resource names and temporary
 directories and clean them in `finally` blocks. They do not touch Citadel's
 configured PostgreSQL database.
+# Phase 2 foundation
+
+Run `./rust/scripts/Test-Phase2Foundation.ps1` from the repository root to
+exercise the embedded Rust migration runner against a disposable PostgreSQL
+database and verify the generated database, Docker, OpenAPI, and frontend
+artifacts. The script tests concurrent startup, restart idempotence, seed data,
+and checksum refusal. It removes its uniquely named container and network when
+the run finishes.

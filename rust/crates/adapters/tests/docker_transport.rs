@@ -15,7 +15,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..7 {
+        for _ in 0..8 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -74,6 +74,9 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             .name,
         "/fixture"
     );
+    let swarm = client.inspect_swarm().await.unwrap();
+    assert_eq!(swarm.id, "swarm-fixture");
+    assert_eq!(swarm.version.index, 7);
     let mut events = client.events(None, None).await.unwrap();
     assert_eq!(events.next().await.unwrap().unwrap().action, "start");
     drop(events);
@@ -93,6 +96,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/info",
             "/v1.49/containers/json?all=true",
             "/v1.49/containers/container-fixture/json",
+            "/v1.49/swarm",
             "/v1.49/events",
             "/v1.49/containers/container-fixture/stats?stream=true",
         ]
@@ -114,6 +118,9 @@ fn response_for(path: &str) -> Vec<u8> {
         }
         "/v1.49/containers/container-fixture/json" => {
             r#"{"Id":"container-fixture","Created":"2026-01-01T00:00:00Z","Path":"nginx","Args":[],"State":{"Status":"running","Running":true},"Image":"sha256:fixture","Name":"/fixture","Config":{"Image":"nginx:alpine","Labels":{}}}"#
+        }
+        "/v1.49/swarm" => {
+            r#"{"ID":"swarm-fixture","Version":{"Index":7},"CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-02T00:00:00Z","JoinTokens":{"Worker":"worker-secret","Manager":"manager-secret"}}"#
         }
         "/v1.49/events" => {
             "{\"Type\":\"container\",\"Action\":\"start\",\"Actor\":{\"ID\":\"container-fixture\",\"Attributes\":{}},\"scope\":\"local\",\"time\":1,\"timeNano\":1000000000}\n"
