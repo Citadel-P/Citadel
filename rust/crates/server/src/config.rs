@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use url::Url;
+use uuid::Uuid;
 
 const DEFAULT_API_PORT: u16 = 8000;
 const DEFAULT_MONITORING_INTERVAL_SECONDS: u64 = 10;
@@ -13,6 +15,12 @@ const DEFAULT_EVENT_QUEUE_CAPACITY: usize = 256;
 const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 5;
 const DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_SHUTDOWN_TIMEOUT_SECONDS: u64 = 10;
+const DEFAULT_REALTIME_QUEUE_CAPACITY: usize = 64;
+const DEFAULT_REALTIME_MAX_CONNECTIONS: usize = 8;
+const DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS: u64 = 5;
+const DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS: u64 = 2;
+const DEFAULT_REALTIME_AUTH_RECHECK_SECONDS: u64 = 30;
+const DEFAULT_REALTIME_SNAPSHOT_LIMIT: usize = 1_024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -34,7 +42,31 @@ pub struct Config {
     pub probe_interval: Duration,
     pub event_queue_capacity: usize,
     pub shutdown_timeout: Duration,
+    pub agent: Option<AgentConfig>,
+    pub realtime: Option<RealtimeConfig>,
     database_source: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgentConfig {
+    pub address: String,
+    pub private_key_path: PathBuf,
+    pub operation_timeout: Duration,
+    pub allow_insecure: bool,
+    pub reconnect_delay: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct RealtimeConfig {
+    pub actor_id: Uuid,
+    pub platform_id: Uuid,
+    pub token_hash: [u8; 32],
+    pub queue_capacity: usize,
+    pub max_connections: usize,
+    pub subscribe_timeout: Duration,
+    pub send_timeout: Duration,
+    pub authorization_recheck_interval: Duration,
+    pub snapshot_limit: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,6 +83,20 @@ pub struct EffectiveConfig {
     pub probe_interval_seconds: u64,
     pub event_queue_capacity: usize,
     pub shutdown_timeout_seconds: u64,
+    pub agent_configured: bool,
+    pub agent_address: Option<String>,
+    pub agent_allow_insecure: Option<bool>,
+    pub agent_operation_timeout_seconds: Option<u64>,
+    pub agent_reconnect_delay_seconds: Option<u64>,
+    pub realtime_configured: bool,
+    pub realtime_actor_id: Option<Uuid>,
+    pub realtime_platform_id: Option<Uuid>,
+    pub realtime_queue_capacity: Option<usize>,
+    pub realtime_max_connections: Option<usize>,
+    pub realtime_subscribe_timeout_seconds: Option<u64>,
+    pub realtime_send_timeout_seconds: Option<u64>,
+    pub realtime_authorization_recheck_seconds: Option<u64>,
+    pub realtime_snapshot_limit: Option<usize>,
 }
 
 impl Config {
@@ -90,6 +136,8 @@ impl Config {
             "CITADEL_RUST_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
+        let agent = agent_config()?;
+        let realtime = realtime_config()?;
 
         Ok(Self {
             listen_address,
@@ -102,6 +150,8 @@ impl Config {
             probe_interval: Duration::from_secs(probe_interval_seconds),
             event_queue_capacity,
             shutdown_timeout: Duration::from_secs(shutdown_timeout_seconds),
+            agent,
+            realtime,
             database_source,
         })
     }
@@ -123,7 +173,135 @@ impl Config {
             probe_interval_seconds: self.probe_interval.as_secs(),
             event_queue_capacity: self.event_queue_capacity,
             shutdown_timeout_seconds: self.shutdown_timeout.as_secs(),
+            agent_configured: self.agent.is_some(),
+            agent_address: self.agent.as_ref().map(|agent| agent.address.clone()),
+            agent_allow_insecure: self.agent.as_ref().map(|agent| agent.allow_insecure),
+            agent_operation_timeout_seconds: self
+                .agent
+                .as_ref()
+                .map(|agent| agent.operation_timeout.as_secs()),
+            agent_reconnect_delay_seconds: self
+                .agent
+                .as_ref()
+                .map(|agent| agent.reconnect_delay.as_secs()),
+            realtime_configured: self.realtime.is_some(),
+            realtime_actor_id: self.realtime.as_ref().map(|realtime| realtime.actor_id),
+            realtime_platform_id: self.realtime.as_ref().map(|realtime| realtime.platform_id),
+            realtime_queue_capacity: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.queue_capacity),
+            realtime_max_connections: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.max_connections),
+            realtime_subscribe_timeout_seconds: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.subscribe_timeout.as_secs()),
+            realtime_send_timeout_seconds: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.send_timeout.as_secs()),
+            realtime_authorization_recheck_seconds: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.authorization_recheck_interval.as_secs()),
+            realtime_snapshot_limit: self
+                .realtime
+                .as_ref()
+                .map(|realtime| realtime.snapshot_limit),
         })
+    }
+}
+
+fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
+    let actor_id = env::var("CITADEL_RUST_REALTIME_ACTOR_ID").ok();
+    let platform_id = env::var("CITADEL_RUST_REALTIME_PLATFORM_ID").ok();
+    let token = env::var("CITADEL_RUST_REALTIME_TOKEN").ok();
+    match (actor_id, platform_id, token) {
+        (None, None, None) => Ok(None),
+        (Some(actor_id), Some(platform_id), Some(token)) => {
+            if token.len() < 32 {
+                return Err(ConfigError::Invalid {
+                    name: "CITADEL_RUST_REALTIME_TOKEN",
+                    message: "must contain at least 32 characters".to_owned(),
+                });
+            }
+            let queue_capacity = parse_env(
+                "CITADEL_RUST_REALTIME_QUEUE_CAPACITY",
+                DEFAULT_REALTIME_QUEUE_CAPACITY,
+            )?;
+            let snapshot_limit = parse_env(
+                "CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+                DEFAULT_REALTIME_SNAPSHOT_LIMIT,
+            )?;
+            let max_connections = parse_env(
+                "CITADEL_RUST_REALTIME_MAX_CONNECTIONS",
+                DEFAULT_REALTIME_MAX_CONNECTIONS,
+            )?;
+            if queue_capacity == 0 || snapshot_limit == 0 || max_connections == 0 {
+                return Err(ConfigError::Invalid {
+                    name: "CITADEL_RUST_REALTIME_QUEUE_CAPACITY/CITADEL_RUST_REALTIME_MAX_CONNECTIONS/CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+                    message: "values must be greater than zero".to_owned(),
+                });
+            }
+            Ok(Some(RealtimeConfig {
+                actor_id: parse_uuid("CITADEL_RUST_REALTIME_ACTOR_ID", &actor_id)?,
+                platform_id: parse_uuid("CITADEL_RUST_REALTIME_PLATFORM_ID", &platform_id)?,
+                token_hash: Sha256::digest(token.as_bytes()).into(),
+                queue_capacity,
+                max_connections,
+                subscribe_timeout: Duration::from_secs(nonzero_seconds(
+                    "CITADEL_RUST_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
+                    DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
+                )?),
+                send_timeout: Duration::from_secs(nonzero_seconds(
+                    "CITADEL_RUST_REALTIME_SEND_TIMEOUT_SECONDS",
+                    DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS,
+                )?),
+                authorization_recheck_interval: Duration::from_secs(nonzero_seconds(
+                    "CITADEL_RUST_REALTIME_AUTH_RECHECK_SECONDS",
+                    DEFAULT_REALTIME_AUTH_RECHECK_SECONDS,
+                )?),
+                snapshot_limit,
+            }))
+        }
+        _ => Err(ConfigError::Invalid {
+            name: "CITADEL_RUST_REALTIME_ACTOR_ID/CITADEL_RUST_REALTIME_PLATFORM_ID/CITADEL_RUST_REALTIME_TOKEN",
+            message: "all three values must be set together".to_owned(),
+        }),
+    }
+}
+
+fn parse_uuid(name: &'static str, value: &str) -> Result<Uuid, ConfigError> {
+    Uuid::parse_str(value).map_err(|error| ConfigError::Invalid {
+        name,
+        message: error.to_string(),
+    })
+}
+
+fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
+    let address = env::var("CITADEL_RUST_AGENT_ADDRESS").ok();
+    let private_key_path = env::var_os("CITADEL_RUST_AGENT_PRIVATE_KEY_PATH");
+    match (address, private_key_path) {
+        (None, None) => Ok(None),
+        (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
+            let timeout = required_nonzero_seconds("CITADEL_RUST_AGENT_TIMEOUT_SECONDS")?;
+            let allow_insecure = parse_env("AgentTransport__AllowInsecure", true)?;
+            Ok(Some(AgentConfig {
+                address,
+                private_key_path: PathBuf::from(private_key_path),
+                operation_timeout: Duration::from_secs(timeout),
+                allow_insecure,
+                reconnect_delay: Duration::from_secs(DEFAULT_MONITORING_INTERVAL_SECONDS),
+            }))
+        }
+        _ => Err(ConfigError::Invalid {
+            name: "CITADEL_RUST_AGENT_ADDRESS/CITADEL_RUST_AGENT_PRIVATE_KEY_PATH",
+            message: "both values must be set together and the address must not be empty"
+                .to_owned(),
+        }),
     }
 }
 
@@ -235,6 +413,24 @@ where
 
 fn nonzero_seconds(name: &'static str, default: u64) -> Result<u64, ConfigError> {
     let value = parse_env(name, default)?;
+    if value == 0 {
+        return Err(ConfigError::Invalid {
+            name,
+            message: "must be greater than zero".to_owned(),
+        });
+    }
+    Ok(value)
+}
+
+fn required_nonzero_seconds(name: &'static str) -> Result<u64, ConfigError> {
+    let value = env::var(name).map_err(|_| ConfigError::Invalid {
+        name,
+        message: "must be set when the Agent transport is configured".to_owned(),
+    })?;
+    let value = value.parse::<u64>().map_err(|error| ConfigError::Invalid {
+        name,
+        message: error.to_string(),
+    })?;
     if value == 0 {
         return Err(ConfigError::Invalid {
             name,

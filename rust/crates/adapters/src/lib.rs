@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod agent;
 pub mod docker;
 mod postgres;
 

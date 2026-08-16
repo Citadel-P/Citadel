@@ -1,12 +1,7 @@
 #![forbid(unsafe_code)]
 
-mod config;
-mod metrics;
-mod workers;
-
 use std::future::IntoFuture;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use axum::Router;
@@ -15,9 +10,14 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
+use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
 use citadel_adapters::docker::DockerClient;
-use citadel_application::{AuthorizedPlatformReader, TaskSupervisor};
+use citadel_application::{AuthorizedPlatformReader, PlatformRuntimePort, TaskSupervisor};
 use citadel_domain::ActorId;
+use citadel_server::config::Config;
+use citadel_server::metrics::Metrics;
+use citadel_server::realtime::RealtimeService;
+use citadel_server::{Readiness, workers};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -29,13 +29,10 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-use crate::config::Config;
-use crate::metrics::Metrics;
-
 #[derive(Parser)]
 #[command(
     name = "citadel-server",
-    about = "Citadel Rust Phase 0A viability prototype"
+    about = "Citadel Rust Phase 0 viability prototype"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -53,38 +50,18 @@ enum Command {
         #[arg(long)]
         actor_id: Option<Uuid>,
     },
+    /// Print the Base64 public key corresponding to a raw 32-byte Agent private key.
+    AgentPublicKey {
+        #[arg(long)]
+        private_key_path: std::path::PathBuf,
+    },
+    /// Prove signed .NET Agent handshake, read, stream, cancellation, and Local equivalence.
+    Phase0AgentSmoke,
     /// Probe an already-running Phase 0A server without curl in the image.
     Healthcheck {
         #[arg(long, default_value = "http://127.0.0.1:8000/health")]
         url: String,
     },
-}
-
-#[derive(Default)]
-struct Readiness {
-    database: AtomicBool,
-    docker: AtomicBool,
-}
-
-impl Readiness {
-    fn set(&self, database: bool, docker: bool) {
-        self.database.store(database, Ordering::Release);
-        self.docker.store(docker, Ordering::Release);
-    }
-
-    fn snapshot(&self) -> ReadinessResponse {
-        let database = self.database.load(Ordering::Acquire);
-        let docker = self.docker.load(Ordering::Acquire);
-        ReadinessResponse {
-            status: if database && docker {
-                "ready"
-            } else {
-                "not-ready"
-            },
-            database,
-            docker,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -97,14 +74,6 @@ struct AppState {
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReadinessResponse {
-    status: &'static str,
-    database: bool,
-    docker: bool,
 }
 
 #[tokio::main]
@@ -121,6 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::Phase0Smoke { actor_id } => phase0_smoke(Config::from_env()?, actor_id).await,
+        Command::AgentPublicKey { private_key_path } => {
+            println!(
+                "{}",
+                AgentRequestSigner::from_file(&private_key_path)?.public_key_base64()
+            );
+            Ok(())
+        }
+        Command::Phase0AgentSmoke => phase0_agent_smoke(Config::from_env()?).await,
         Command::Healthcheck { url } => {
             reqwest::Client::builder()
                 .timeout(Duration::from_secs(2))
@@ -147,24 +124,56 @@ fn init_tracing() {
 async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         effective_configuration = %serde_json::to_string(&config.effective()?)?,
-        "starting Phase 0A server"
+        "starting Phase 0 server"
     );
     let pool = connect_database(&config).await?;
     let docker = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
     let cancellation = CancellationToken::new();
     let readiness = Arc::new(Readiness::default());
     let metrics = Arc::new(Metrics::default());
+    let agent = if let Some(agent) = &config.agent {
+        let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
+        Some(
+            AgentClient::connect(
+                &agent.address,
+                signer,
+                agent.operation_timeout,
+                agent.allow_insecure,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let realtime = config.realtime.as_ref().map(|realtime_config| {
+        RealtimeService::new(
+            realtime_config,
+            Arc::new(PostgresAuthorizedPlatformReader::new(pool.clone())),
+            Arc::new(docker.clone()),
+            Arc::clone(&metrics),
+            cancellation.clone(),
+        )
+    });
+    let realtime_hub = realtime.as_ref().map(RealtimeService::hub);
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     workers::register(
         &mut supervisor,
         &cancellation,
-        docker,
-        pool.clone(),
-        Arc::clone(&readiness),
-        Arc::clone(&metrics),
+        workers::WorkerDependencies {
+            docker,
+            pool: pool.clone(),
+            readiness: Arc::clone(&readiness),
+            metrics: Arc::clone(&metrics),
+            agent,
+            realtime: realtime_hub,
+        },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
             probe_interval: config.probe_interval,
+            agent_reconnect_delay: config
+                .agent
+                .as_ref()
+                .map_or(Duration::from_secs(10), |agent| agent.reconnect_delay),
         },
     );
 
@@ -177,11 +186,16 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(open_metrics))
-        .layer(CatchPanicLayer::new())
-        .layer(TraceLayer::new_for_http())
         .with_state(state);
+    let app = if let Some(realtime) = realtime {
+        app.merge(realtime.router())
+    } else {
+        app
+    }
+    .layer(CatchPanicLayer::new())
+    .layer(TraceLayer::new_for_http());
     let listener = tokio::net::TcpListener::bind(config.listen_address).await?;
-    tracing::info!(address = %config.listen_address, "Phase 0A server listening");
+    tracing::info!(address = %config.listen_address, "Phase 0 server listening");
 
     let server = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(cancellation.clone()))
@@ -278,6 +292,77 @@ async fn phase0_smoke(
     Ok(())
 }
 
+async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
+    let agent_config = config
+        .agent
+        .as_ref()
+        .ok_or("CITADEL_RUST_AGENT_ADDRESS and CITADEL_RUST_AGENT_PRIVATE_KEY_PATH are required")?;
+    let local = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
+    let agent = AgentClient::connect(
+        &agent_config.address,
+        AgentRequestSigner::from_file(&agent_config.private_key_path)?,
+        agent_config.operation_timeout,
+        agent_config.allow_insecure,
+    )
+    .await?;
+    let cancellation = CancellationToken::new();
+    let local_info = local.get_info(&cancellation).await?;
+    let agent_info = agent.get_info(&cancellation).await?;
+    let local_containers = PlatformRuntimePort::list_containers(&local, &cancellation).await?;
+    let agent_containers = agent.list_containers(&cancellation).await?;
+    let local_ids = local_containers
+        .iter()
+        .map(|container| container.id.as_str())
+        .collect::<Vec<_>>();
+    let agent_ids = agent_containers
+        .iter()
+        .map(|container| container.id.as_str())
+        .collect::<Vec<_>>();
+    let equivalent = local_info.daemon_id == agent_info.daemon_id
+        && local_info.api_version == agent_info.api_version
+        && local_info.minimum_api_version == agent_info.minimum_api_version
+        && local_ids == agent_ids;
+    if !equivalent {
+        return Err("Local and Agent capability results differ".into());
+    }
+
+    let mut stream = agent
+        .stream_stats(config.probe_interval, &cancellation)
+        .await?;
+    let stats = tokio::time::timeout(Duration::from_secs(15), stream.next())
+        .await
+        .map_err(|_| "Agent did not produce a stats sample within 15 seconds")?
+        .ok_or("Agent ended the stats stream before producing a sample")??;
+
+    let stream_cancellation = cancellation.child_token();
+    let mut cancellation_stream = agent
+        .stream_stats(config.probe_interval, &stream_cancellation)
+        .await?;
+    stream_cancellation.cancel();
+    let cancellation_observed =
+        tokio::time::timeout(Duration::from_secs(2), cancellation_stream.next())
+            .await
+            .is_ok_and(|item| item.is_none());
+    if !cancellation_observed {
+        return Err("Agent stats stream did not observe cancellation within two seconds".into());
+    }
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "agentVersion": agent_info.agent_version,
+            "daemonId": agent_info.daemon_id,
+            "apiVersion": agent_info.api_version,
+            "minimumApiVersion": agent_info.minimum_api_version,
+            "containerCount": agent_containers.len(),
+            "localAndAgentEquivalent": equivalent,
+            "streamSample": stats,
+            "streamCancellationObserved": cancellation_observed,
+        }))?
+    );
+    Ok(())
+}
+
 async fn health() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse { status: "ok" })
 }
@@ -329,18 +414,4 @@ async fn shutdown_signal(cancellation: CancellationToken) {
         () = cancellation.cancelled() => return,
     }
     cancellation.cancel();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn readiness_requires_database_and_docker() {
-        let readiness = Readiness::default();
-        readiness.set(true, false);
-        assert_eq!(readiness.snapshot().status, "not-ready");
-        readiness.set(true, true);
-        assert_eq!(readiness.snapshot().status, "ready");
-    }
 }

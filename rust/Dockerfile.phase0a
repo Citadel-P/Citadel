@@ -4,6 +4,8 @@ WORKDIR /source
 COPY rust ./rust
 COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml \
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml
+COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos \
+    ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos
 
 WORKDIR /source/rust
 RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
