@@ -4,6 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ipnet::IpNet;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -21,6 +22,10 @@ const DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS: u64 = 5;
 const DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS: u64 = 2;
 const DEFAULT_REALTIME_AUTH_RECHECK_SECONDS: u64 = 30;
 const DEFAULT_REALTIME_SNAPSHOT_LIMIT: usize = 1_024;
+const DEFAULT_EDGE_GRPC_PORT: u16 = 8001;
+const DEFAULT_FORWARD_LIMIT: usize = 1;
+const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
+const DEFAULT_REQUESTS_PER_MINUTE: u64 = 600;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -44,7 +49,38 @@ pub struct Config {
     pub shutdown_timeout: Duration,
     pub agent: Option<AgentConfig>,
     pub realtime: Option<RealtimeConfig>,
+    pub transport: TransportConfig,
     database_source: &'static str,
+}
+
+pub struct DatabaseConfig {
+    pub database_url: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum TransportMode {
+    ReverseProxy,
+    Direct,
+    Disabled,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransportConfig {
+    pub mode: TransportMode,
+    pub public_url: Url,
+    pub edge_agent_public_url: Url,
+    pub edge_grpc_port: u16,
+    pub allowed_hosts: Vec<String>,
+    pub known_proxies: Vec<IpAddr>,
+    pub known_networks: Vec<IpNet>,
+    pub forward_limit: usize,
+    pub certificate_path: Option<PathBuf>,
+    pub certificate_private_key_path: Option<PathBuf>,
+    pub cors_origins: Vec<String>,
+    pub body_limit_bytes: usize,
+    pub requests_per_minute: u64,
+    pub openapi_enabled: bool,
+    pub static_root: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -97,11 +133,26 @@ pub struct EffectiveConfig {
     pub realtime_send_timeout_seconds: Option<u64>,
     pub realtime_authorization_recheck_seconds: Option<u64>,
     pub realtime_snapshot_limit: Option<usize>,
+    pub transport_mode: TransportMode,
+    pub public_url: String,
+    pub edge_agent_public_url: String,
+    pub edge_grpc_port: u16,
+    pub allowed_hosts: Vec<String>,
+    pub trusted_proxy_count: usize,
+    pub trusted_network_count: usize,
+    pub forward_limit: usize,
+    pub certificate_configured: bool,
+    pub cors_origins: Vec<String>,
+    pub body_limit_bytes: usize,
+    pub requests_per_minute: u64,
+    pub openapi_enabled: bool,
+    pub static_root_configured: bool,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         let port = parse_env("Transport__ApiPort", DEFAULT_API_PORT)?;
+        let transport = transport_config(port)?;
         let listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let (database_url, database_source) = database_url()?;
         let database_max_connections = parse_env(
@@ -152,6 +203,7 @@ impl Config {
             shutdown_timeout: Duration::from_secs(shutdown_timeout_seconds),
             agent,
             realtime,
+            transport,
             database_source,
         })
     }
@@ -211,8 +263,302 @@ impl Config {
                 .realtime
                 .as_ref()
                 .map(|realtime| realtime.snapshot_limit),
+            transport_mode: self.transport.mode,
+            public_url: self.transport.public_url.to_string(),
+            edge_agent_public_url: self.transport.edge_agent_public_url.to_string(),
+            edge_grpc_port: self.transport.edge_grpc_port,
+            allowed_hosts: self.transport.allowed_hosts.clone(),
+            trusted_proxy_count: self.transport.known_proxies.len(),
+            trusted_network_count: self.transport.known_networks.len(),
+            forward_limit: self.transport.forward_limit,
+            certificate_configured: self.transport.certificate_path.is_some(),
+            cors_origins: self.transport.cors_origins.clone(),
+            body_limit_bytes: self.transport.body_limit_bytes,
+            requests_per_minute: self.transport.requests_per_minute,
+            openapi_enabled: self.transport.openapi_enabled,
+            static_root_configured: self.transport.static_root.is_some(),
         })
     }
+}
+
+impl DatabaseConfig {
+    pub fn from_env() -> Result<Self, ConfigError> {
+        let (database_url, _) = database_url()?;
+        Ok(Self { database_url })
+    }
+}
+
+fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
+    let mode = parse_transport_mode(env::var("Transport__Mode").ok().as_deref())?;
+    let edge_grpc_port = parse_env("Transport__EdgeGrpcPort", DEFAULT_EDGE_GRPC_PORT)?;
+    if api_port == edge_grpc_port {
+        return Err(ConfigError::Invalid {
+            name: "Transport__EdgeGrpcPort",
+            message: "must differ from Transport__ApiPort".to_owned(),
+        });
+    }
+
+    let public_url = parse_origin(
+        "Transport__PublicUrl",
+        env::var("Transport__PublicUrl").ok(),
+        mode,
+        format!("http://localhost:{api_port}"),
+    )?;
+    let edge_agent_public_url = parse_origin(
+        "EdgeAgent__PublicGrpcUrl",
+        env::var("EdgeAgent__PublicGrpcUrl").ok(),
+        mode,
+        format!("http://localhost:{edge_grpc_port}"),
+    )?;
+    let allowed_hosts = split_values(env::var("AllowedHosts").ok().as_deref(), ';')?;
+    if mode != TransportMode::Disabled {
+        if allowed_hosts.is_empty() || allowed_hosts.iter().any(|host| host == "*") {
+            return Err(ConfigError::Invalid {
+                name: "AllowedHosts",
+                message: "must explicitly include the configured public hosts".to_owned(),
+            });
+        }
+        for host in [public_url.host_str(), edge_agent_public_url.host_str()]
+            .into_iter()
+            .flatten()
+        {
+            if !allowed_hosts
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(host))
+            {
+                return Err(ConfigError::Invalid {
+                    name: "AllowedHosts",
+                    message: format!("does not include configured public host '{host}'"),
+                });
+            }
+        }
+    }
+
+    let known_proxies = split_values(
+        env::var("Transport__ForwardedHeaders__KnownProxies")
+            .ok()
+            .as_deref(),
+        ',',
+    )?
+    .into_iter()
+    .map(|value| {
+        value
+            .parse()
+            .map_err(|error: std::net::AddrParseError| ConfigError::Invalid {
+                name: "Transport__ForwardedHeaders__KnownProxies",
+                message: error.to_string(),
+            })
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+    let known_networks = split_values(
+        env::var("Transport__ForwardedHeaders__KnownNetworks")
+            .ok()
+            .as_deref(),
+        ',',
+    )?
+    .into_iter()
+    .map(|value| {
+        value
+            .parse::<IpNet>()
+            .map_err(|error| ConfigError::Invalid {
+                name: "Transport__ForwardedHeaders__KnownNetworks",
+                message: error.to_string(),
+            })
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+    let forwarded_configured = !known_proxies.is_empty() || !known_networks.is_empty();
+    let certificate_path = env::var_os("Transport__Certificate__Path").map(PathBuf::from);
+    let certificate_private_key_path =
+        env::var_os("Transport__Certificate__PrivateKeyPath").map(PathBuf::from);
+    let certificate_configured =
+        certificate_path.is_some() || certificate_private_key_path.is_some();
+
+    match mode {
+        TransportMode::ReverseProxy if !forwarded_configured => {
+            return Err(ConfigError::Invalid {
+                name: "Transport__ForwardedHeaders",
+                message: "ReverseProxy mode requires a known proxy or network".to_owned(),
+            });
+        }
+        TransportMode::ReverseProxy if certificate_configured => {
+            return Err(ConfigError::Invalid {
+                name: "Transport__Certificate",
+                message: "certificate settings are not valid in ReverseProxy mode".to_owned(),
+            });
+        }
+        TransportMode::Direct if forwarded_configured => {
+            return Err(ConfigError::Invalid {
+                name: "Transport__ForwardedHeaders",
+                message: "forwarded-header settings are not valid in Direct mode".to_owned(),
+            });
+        }
+        TransportMode::Direct
+            if certificate_path.is_none() || certificate_private_key_path.is_none() =>
+        {
+            return Err(ConfigError::Invalid {
+                name: "Transport__Certificate",
+                message: "Direct mode requires a PEM certificate and private key".to_owned(),
+            });
+        }
+        TransportMode::Direct
+            if !certificate_path.as_ref().is_some_and(|path| path.is_file())
+                || !certificate_private_key_path
+                    .as_ref()
+                    .is_some_and(|path| path.is_file()) =>
+        {
+            return Err(ConfigError::Invalid {
+                name: "Transport__Certificate",
+                message: "certificate and private-key paths must identify readable files"
+                    .to_owned(),
+            });
+        }
+        TransportMode::Disabled if forwarded_configured || certificate_configured => {
+            return Err(ConfigError::Invalid {
+                name: "Transport",
+                message: "Disabled mode cannot configure certificates or forwarded headers"
+                    .to_owned(),
+            });
+        }
+        _ => {}
+    }
+
+    let forward_limit = parse_env(
+        "Transport__ForwardedHeaders__ForwardLimit",
+        DEFAULT_FORWARD_LIMIT,
+    )?;
+    let body_limit_bytes = parse_env("CITADEL_RUST_BODY_LIMIT_BYTES", DEFAULT_BODY_LIMIT_BYTES)?;
+    let requests_per_minute = parse_env(
+        "CITADEL_RUST_REQUESTS_PER_MINUTE",
+        DEFAULT_REQUESTS_PER_MINUTE,
+    )?;
+    if forward_limit == 0 || body_limit_bytes == 0 || requests_per_minute == 0 {
+        return Err(ConfigError::Invalid {
+            name: "transport numeric limits",
+            message: "must be greater than zero".to_owned(),
+        });
+    }
+    if requests_per_minute > u64::from(u32::MAX) {
+        return Err(ConfigError::Invalid {
+            name: "CITADEL_RUST_REQUESTS_PER_MINUTE",
+            message: format!("must not exceed {}", u32::MAX),
+        });
+    }
+
+    let cors_origins = indexed_env("Cors__")?;
+    for origin in &cors_origins {
+        parse_origin("Cors__N", Some(origin.clone()), mode, String::new())?;
+    }
+
+    Ok(TransportConfig {
+        mode,
+        public_url,
+        edge_agent_public_url,
+        edge_grpc_port,
+        allowed_hosts,
+        known_proxies,
+        known_networks,
+        forward_limit,
+        certificate_path,
+        certificate_private_key_path,
+        cors_origins,
+        body_limit_bytes,
+        requests_per_minute,
+        openapi_enabled: parse_env("EnableSwagger", false)?,
+        static_root: env::var_os("CITADEL_RUST_STATIC_ROOT").map(PathBuf::from),
+    })
+}
+
+fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigError> {
+    match value.map(str::trim) {
+        Some(value) if value.eq_ignore_ascii_case("reverseproxy") => {
+            Ok(TransportMode::ReverseProxy)
+        }
+        Some(value) if value.eq_ignore_ascii_case("direct") => Ok(TransportMode::Direct),
+        Some(value) if value.eq_ignore_ascii_case("disabled") => Ok(TransportMode::Disabled),
+        _ => Err(ConfigError::Invalid {
+            name: "Transport__Mode",
+            message: "must be ReverseProxy, Direct, or Disabled".to_owned(),
+        }),
+    }
+}
+
+fn parse_origin(
+    name: &'static str,
+    value: Option<String>,
+    mode: TransportMode,
+    disabled_fallback: String,
+) -> Result<Url, ConfigError> {
+    let candidate = match value.filter(|value| !value.trim().is_empty()) {
+        Some(value) => value,
+        None if mode == TransportMode::Disabled => disabled_fallback,
+        None => {
+            return Err(ConfigError::Invalid {
+                name,
+                message: "must be configured".to_owned(),
+            });
+        }
+    };
+    let url = Url::parse(candidate.trim()).map_err(|error| ConfigError::Invalid {
+        name,
+        message: error.to_string(),
+    })?;
+    let expected_scheme = if mode == TransportMode::Disabled {
+        "http"
+    } else {
+        "https"
+    };
+    if url.scheme() != expected_scheme
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(ConfigError::Invalid {
+            name,
+            message: format!(
+                "must be a {expected_scheme} origin without credentials, path, query, or fragment"
+            ),
+        });
+    }
+    Ok(url)
+}
+
+fn split_values(value: Option<&str>, separator: char) -> Result<Vec<String>, ConfigError> {
+    let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let entries = value
+        .split(separator)
+        .map(str::trim)
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if entries.iter().any(String::is_empty) {
+        return Err(ConfigError::Invalid {
+            name: "transport list",
+            message: "cannot contain empty entries".to_owned(),
+        });
+    }
+    Ok(entries)
+}
+
+fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
+    let mut entries = env::vars()
+        .filter_map(|(name, value)| {
+            name.strip_prefix(prefix)
+                .and_then(|index| index.parse::<usize>().ok())
+                .map(|index| (index, value))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|(index, _)| *index);
+    if entries.iter().any(|(_, value)| value.trim().is_empty()) {
+        return Err(ConfigError::Invalid {
+            name: "Cors__N",
+            message: "origins cannot be empty".to_owned(),
+        });
+    }
+    Ok(entries.into_iter().map(|(_, value)| value).collect())
 }
 
 fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
@@ -466,5 +812,39 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn transport_mode_is_explicit_and_case_insensitive() {
+        assert_eq!(
+            parse_transport_mode(Some("reverseProxy")).unwrap(),
+            TransportMode::ReverseProxy
+        );
+        assert!(parse_transport_mode(None).is_err());
+        assert!(parse_transport_mode(Some("0")).is_err());
+    }
+
+    #[test]
+    fn secure_transport_requires_https_origins() {
+        assert!(
+            parse_origin(
+                "fixture",
+                Some("http://citadel.example.com".to_owned()),
+                TransportMode::Direct,
+                String::new(),
+            )
+            .is_err()
+        );
+        assert_eq!(
+            parse_origin(
+                "fixture",
+                Some("https://citadel.example.com".to_owned()),
+                TransportMode::Direct,
+                String::new(),
+            )
+            .unwrap()
+            .host_str(),
+            Some("citadel.example.com")
+        );
     }
 }

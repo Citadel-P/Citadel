@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ActorScope AS (\n    SELECT principalActor.Id AS ActorId\n    FROM Actors principalActor\n    LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id\n    WHERE (principalActor.Id = $1 OR principalUser.Id = $1)\n      AND principalActor.IsEnabled\n\n    UNION\n\n    SELECT t.ActorId\n    FROM Teams t\n    JOIN ActorTeamMemberships membership ON membership.TeamId = t.Id\n    JOIN Actors principalActor ON principalActor.Id = membership.MemberActorId\n    LEFT JOIN Users principalUser ON principalUser.ActorId = principalActor.Id\n    JOIN Actors teamActor ON teamActor.Id = t.ActorId\n    WHERE (principalActor.Id = $1 OR principalUser.Id = $1)\n      AND principalActor.IsEnabled\n      AND teamActor.IsEnabled\n),\nGlobalAccess AS (\n    SELECT 1 AS HasAccess\n    FROM ActorRoles ar\n    JOIN Permissions p ON p.RoleId = ar.RoleId\n    JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId\n    WHERE p.ResourceType = $2\n      AND (p.PermissionLevel & $3) <> 0\n      AND ($4 = 0 OR (p.SpecificPermissions & $4) = $4)\n    LIMIT 1\n)\nSELECT p.Id, p.Name, p.Address, p.Status, p.ConnectorType\nFROM Platforms p\nWHERE EXISTS (SELECT 1 FROM GlobalAccess)\n   OR EXISTS (\n        SELECT 1\n        FROM ResourceAccesses ra\n        JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId\n        WHERE ra.ResourceType = $2\n          AND (ra.PermissionLevel & $3) <> 0\n          AND ($4 = 0 OR (ra.SpecificPermissions & $4) = $4)\n          AND ra.ResourceId = p.Id\n   )\nORDER BY p.Name\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "platforms",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "platforms",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "platforms",
+            "name": "address"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "platforms",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "connectortype",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "platforms",
+            "name": "connectortype"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "01b87885f009b38e6641d7102caa9c60f219c60c400f35836d166e7711b91e12"
+}

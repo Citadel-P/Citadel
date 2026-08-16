@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod bounded_queue;
 mod supervisor;
 
 use std::pin::Pin;
@@ -12,6 +13,9 @@ use futures_util::future::BoxFuture;
 use futures_util::stream::Stream;
 use tokio_util::sync::CancellationToken;
 
+pub use bounded_queue::{
+    BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,
+};
 pub use supervisor::{SupervisedTaskError, TaskSupervisor};
 
 #[derive(Debug, thiserror::Error)]

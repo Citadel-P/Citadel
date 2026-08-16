@@ -12,7 +12,7 @@ $dockerArgs = @(
     'rust:1.97.1-bookworm'
 )
 
-& docker @dockerArgs cargo run --locked -p xtask -- generate-docker --check
+& docker @dockerArgs cargo run --locked -p xtask -- docker --check
 if ($LASTEXITCODE -ne 0) { throw 'Docker subset verification failed.' }
 
 & docker @dockerArgs cargo fmt --all --check
@@ -23,4 +23,3 @@ if ($LASTEXITCODE -ne 0) { throw 'Clippy failed.' }
 
 & docker @dockerArgs cargo test --workspace --locked
 if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed.' }
-

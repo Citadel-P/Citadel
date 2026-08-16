@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod http;
+
 pub mod citadel {
     pub mod shared_models {
         pub mod v1 {

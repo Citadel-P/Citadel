@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
 pub mod config;
+pub mod diagnostics;
 pub mod metrics;
 pub mod realtime;
+pub mod transport;
 pub mod workers;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,6 +15,7 @@ use serde::Serialize;
 pub struct Readiness {
     database: AtomicBool,
     docker: AtomicBool,
+    setup: AtomicBool,
 }
 
 impl Readiness {
@@ -21,10 +24,25 @@ impl Readiness {
         self.docker.store(docker, Ordering::Release);
     }
 
+    pub fn set_setup(&self, setup: bool) {
+        self.setup.store(setup, Ordering::Release);
+    }
+
+    #[must_use]
+    pub fn is_setup(&self) -> bool {
+        self.setup.load(Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn is_database_ready(&self) -> bool {
+        self.database.load(Ordering::Acquire)
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> ReadinessResponse {
         let database = self.database.load(Ordering::Acquire);
         let docker = self.docker.load(Ordering::Acquire);
+        let setup = self.setup.load(Ordering::Acquire);
         ReadinessResponse {
             status: if database && docker {
                 "ready"
@@ -33,6 +51,7 @@ impl Readiness {
             },
             database,
             docker,
+            setup,
         }
     }
 }
@@ -43,6 +62,7 @@ pub struct ReadinessResponse {
     pub status: &'static str,
     pub database: bool,
     pub docker: bool,
+    pub setup: bool,
 }
 
 #[cfg(test)]

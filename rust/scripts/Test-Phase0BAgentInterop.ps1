@@ -63,6 +63,7 @@ try {
         $ErrorActionPreference = 'Continue'
         $result = & docker run --rm --network $networkName `
             --env 'DATABASE_URL=postgres://phase0:phase0@unused:5432/phase0' `
+            --env 'Transport__Mode=Disabled' `
             --env "CITADEL_RUST_AGENT_ADDRESS=http://${agentContainer}:9000" `
             --env "CITADEL_RUST_AGENT_PRIVATE_KEY_PATH=/phase0b-key/$keyFileName" `
             --env 'CITADEL_RUST_AGENT_TIMEOUT_SECONDS=30' `
@@ -102,6 +103,7 @@ try {
     & docker run --detach --name $serverContainer --network $networkName `
         --publish '127.0.0.1::8000' `
         --env "DATABASE_URL=postgres://phase0:phase0@${postgresContainer}:5432/phase0" `
+        --env 'Transport__Mode=Disabled' `
         --env "CITADEL_RUST_AGENT_ADDRESS=http://${agentContainer}:9000" `
         --env "CITADEL_RUST_AGENT_PRIVATE_KEY_PATH=/phase0b-key/$keyFileName" `
         --env 'CITADEL_RUST_AGENT_TIMEOUT_SECONDS=30' `

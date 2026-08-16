@@ -13,8 +13,8 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::generated::{
     CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS, ContainerInspect, ContainerStats,
-    ContainerSummary, DockerEvent, DockerInfo, DockerVersion, Endpoint, SYSTEM_EVENTS, SYSTEM_INFO,
-    SYSTEM_PING, SYSTEM_VERSION,
+    ContainerSummary, DockerEvent, DockerInfo, DockerVersion, Endpoint, SWARM_INSPECT,
+    SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmInspect,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -198,6 +198,11 @@ impl DockerClient {
             .path
             .replace("{id}", &urlencoding::encode(id));
         self.get_json(&CONTAINER_INSPECT, &path, None).await
+    }
+
+    pub async fn inspect_swarm(&self) -> Result<SwarmInspect, DockerError> {
+        self.get_json(&SWARM_INSPECT, SWARM_INSPECT.path, None)
+            .await
     }
 
     pub async fn events(
