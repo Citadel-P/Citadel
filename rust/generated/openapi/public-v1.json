@@ -1,6 +1,208 @@
 {
   "components": {
     "schemas": {
+      "AccessTokenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ],
+        "type": "object"
+      },
+      "AddServiceAccountResourceAccessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
+        ],
+        "type": "object"
+      },
+      "AddServiceAccountRoleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "roleId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "roleId"
+        ],
+        "type": "object"
+      },
+      "ArchiveServiceAccountsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "CreateServiceAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResourceAccess"
+            },
+            "type": "array"
+          },
+          "roleIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "teamIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateServiceAccountTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "neverExpires": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreatedServiceAccountTokenView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAtUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "revokedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revokedByActorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "expiresAtUtc",
+          "lastUsedAtUtc",
+          "revokedAtUtc",
+          "revokedByActorId",
+          "createdByActorId",
+          "createdByName",
+          "createdAtUtc",
+          "token"
+        ],
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -14,6 +216,105 @@
           "status"
         ],
         "type": "object"
+      },
+      "InitializeCitadelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "emailOrName": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emailOrName",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextStep": {
+            "enum": [
+              "Completed",
+              "VerifyMfa",
+              "EnrollMfa"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "nextStep"
+        ],
+        "type": "object"
+      },
+      "PermissionLevel": {
+        "enum": [
+          "None",
+          "Read",
+          "Write",
+          "Execute"
+        ],
+        "type": "string"
+      },
+      "PermissionMatrixEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "maximumLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermissionEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "maximumLevel",
+          "specificPermissions"
+        ],
+        "type": "object"
+      },
+      "PermissionMatrixResponse": {
+        "items": {
+          "$ref": "#/components/schemas/PermissionMatrixEntry"
+        },
+        "type": "array"
       },
       "ProblemDetails": {
         "properties": {
@@ -71,6 +372,591 @@
           "setup"
         ],
         "type": "object"
+      },
+      "RenameServiceAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ResourceCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "canExecute": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object"
+      },
+      "ResourceInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "group": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "group"
+        ],
+        "type": "object"
+      },
+      "ResourceType": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack",
+          "Registry",
+          "GitRepository",
+          "GitAccount",
+          "Alert",
+          "AlertChannel",
+          "User",
+          "Team",
+          "Role",
+          "Binding",
+          "Tag",
+          "AutomationAction",
+          "License",
+          "BackupRepository",
+          "BackupPolicy",
+          "Volume",
+          "Build",
+          "BuildAgentPool",
+          "SwarmService",
+          "ServiceAccount"
+        ],
+        "type": "string"
+      },
+      "ServiceAccountCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "canExecute": {
+            "type": "boolean"
+          },
+          "canManageCredentials": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canUse": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canRead",
+          "canWrite",
+          "canExecute",
+          "canUse",
+          "canManageCredentials"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "activeTokenCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "archivedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ServiceAccountCapabilities"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResourceAccess"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": "array"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "actorId",
+          "isEnabled",
+          "createdAt",
+          "createdByActorId",
+          "updatedAt",
+          "archivedAtUtc",
+          "activeTokenCount",
+          "lastUsedAtUtc",
+          "teams",
+          "roles",
+          "resourceAccesses",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountLimitsView": {
+        "additionalProperties": false,
+        "properties": {
+          "defaultTokenLifetimeDays": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maximumActiveTokensPerAccount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maximumTokenLifetimeDays": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "defaultTokenLifetimeDays",
+          "maximumTokenLifetimeDays",
+          "maximumActiveTokensPerAccount"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountResourceAccess": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "resourceType",
+          "resourceId",
+          "resourceName",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountTokenView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAtUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "revokedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revokedByActorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "expiresAtUtc",
+          "lastUsedAtUtc",
+          "revokedAtUtc",
+          "revokedByActorId",
+          "createdByActorId",
+          "createdByName",
+          "createdAtUtc"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountTokensResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "pagedResult": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/ServiceAccountTokenView"
+                },
+                "type": "array"
+              },
+              "page": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "pageSize": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "totalCount": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "totalCount",
+              "page",
+              "pageSize"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "activeTokenCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "archivedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "lastUsedAtUtc": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResourceAccess"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": "array"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "actorId",
+          "isEnabled",
+          "createdAt",
+          "createdByActorId",
+          "updatedAt",
+          "archivedAtUtc",
+          "activeTokenCount",
+          "lastUsedAtUtc",
+          "teams",
+          "roles",
+          "resourceAccesses"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "pagedResult": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                },
+                "type": "array"
+              },
+              "page": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "pageSize": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "totalCount": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "totalCount",
+              "page",
+              "pageSize"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "pagedResult",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "SetupStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "requiresSetup": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requiresSetup"
+        ],
+        "type": "object"
+      },
+      "SpecificPermission": {
+        "enum": [
+          "Logs",
+          "Inspect",
+          "Apply",
+          "Pull",
+          "Terminal",
+          "ResourceBindings",
+          "Releases",
+          "Restore",
+          "Browse",
+          "Download",
+          "ManageNodeAgents",
+          "Use",
+          "ManageCredentials"
+        ],
+        "type": "string"
+      },
+      "SpecificPermissionEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "minimumLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/SpecificPermission"
+          }
+        },
+        "required": [
+          "permission",
+          "minimumLevel"
+        ],
+        "type": "object"
+      },
+      "UpdateServiceAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -80,6 +966,560 @@
   },
   "openapi": "3.1.1",
   "paths": {
+    "/api/v1/roles/permissions/matrix": {
+      "get": {
+        "operationId": "getPermissionMatrix",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionMatrixResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [],
+        "summary": "Get permission matrix",
+        "x-citadel-principal": "anonymous"
+      }
+    },
+    "/api/v1/serviceAccounts": {
+      "delete": {
+        "operationId": "archiveServiceAccounts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveServiceAccountsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Archive Service Accounts",
+        "x-citadel-principal": "administrator"
+      },
+      "get": {
+        "operationId": "listServiceAccounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List Service Accounts",
+        "x-citadel-principal": "actor"
+      },
+      "post": {
+        "operationId": "createServiceAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/limits": {
+      "get": {
+        "operationId": "getServiceAccountLimits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountLimitsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Service Account limits",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/serviceAccounts/rename": {
+      "post": {
+        "operationId": "renameServiceAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameServiceAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rename a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}": {
+      "get": {
+        "operationId": "getServiceAccount",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountDetailResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a Service Account",
+        "x-citadel-principal": "actor"
+      },
+      "patch": {
+        "operationId": "updateServiceAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/resource-accesses": {
+      "post": {
+        "operationId": "addServiceAccountResourceAccess",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServiceAccountResourceAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Add a resource override to a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}": {
+      "delete": {
+        "operationId": "removeServiceAccountResourceAccess",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Remove a resource override from a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/roles": {
+      "post": {
+        "operationId": "addServiceAccountRole",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServiceAccountRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Assign a Role to a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/roles/{roleId}": {
+      "delete": {
+        "operationId": "removeServiceAccountRole",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Remove a Role from a Service Account",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/tokens": {
+      "get": {
+        "operationId": "listServiceAccountTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountTokensResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List Service Account tokens",
+        "x-citadel-principal": "actor"
+      },
+      "post": {
+        "operationId": "createServiceAccountToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceAccountTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedServiceAccountTokenView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create a Service Account token",
+        "x-citadel-principal": "human"
+      }
+    },
+    "/api/v1/serviceAccounts/{id}/tokens/{tokenId}": {
+      "delete": {
+        "operationId": "revokeServiceAccountToken",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Revoke a Service Account token",
+        "x-citadel-principal": "human"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "getHealth",
@@ -94,7 +1534,7 @@
             },
             "description": "Success"
           },
-          "500": {
+          "default": {
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -102,10 +1542,12 @@
                 }
               }
             },
-            "description": "Internal server error"
+            "description": "Request failed"
           }
         },
-        "summary": "Process liveness"
+        "security": [],
+        "summary": "Process liveness",
+        "x-citadel-principal": "anonymous"
       }
     }
   }

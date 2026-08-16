@@ -4,11 +4,14 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use ipnet::IpNet;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use url::Url;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 const DEFAULT_API_PORT: u16 = 8000;
 const DEFAULT_MONITORING_INTERVAL_SECONDS: u64 = 10;
@@ -26,6 +29,9 @@ const DEFAULT_EDGE_GRPC_PORT: u16 = 8001;
 const DEFAULT_FORWARD_LIMIT: usize = 1;
 const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const DEFAULT_REQUESTS_PER_MINUTE: u64 = 600;
+const DEFAULT_ACCESS_TOKEN_MINUTES: u64 = 15;
+const DEFAULT_REFRESH_TOKEN_DAYS: u64 = 30;
+const DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY: usize = 10_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -50,7 +56,35 @@ pub struct Config {
     pub agent: Option<AgentConfig>,
     pub realtime: Option<RealtimeConfig>,
     pub transport: TransportConfig,
+    pub identity: IdentityConfig,
     database_source: &'static str,
+}
+
+#[derive(Clone)]
+pub struct SecretBytes(Zeroizing<Vec<u8>>);
+
+impl std::fmt::Debug for SecretBytes {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("[REDACTED]")
+    }
+}
+
+impl SecretBytes {
+    #[must_use]
+    pub fn expose(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IdentityConfig {
+    pub jwt_key: SecretBytes,
+    pub secret_encryption_key: SecretBytes,
+    pub issuer: String,
+    pub audience: String,
+    pub access_token_lifetime: Duration,
+    pub refresh_token_lifetime: Duration,
+    pub service_account_last_used_capacity: usize,
 }
 
 pub struct DatabaseConfig {
@@ -147,6 +181,13 @@ pub struct EffectiveConfig {
     pub requests_per_minute: u64,
     pub openapi_enabled: bool,
     pub static_root_configured: bool,
+    pub identity_issuer: String,
+    pub identity_audience: String,
+    pub access_token_lifetime_minutes: u64,
+    pub refresh_token_lifetime_days: u64,
+    pub jwt_key_configured: bool,
+    pub secret_encryption_key_configured: bool,
+    pub service_account_last_used_capacity: usize,
 }
 
 impl Config {
@@ -189,6 +230,7 @@ impl Config {
         )?;
         let agent = agent_config()?;
         let realtime = realtime_config()?;
+        let identity = identity_config(&transport)?;
 
         Ok(Self {
             listen_address,
@@ -204,6 +246,7 @@ impl Config {
             agent,
             realtime,
             transport,
+            identity,
             database_source,
         })
     }
@@ -277,6 +320,13 @@ impl Config {
             requests_per_minute: self.transport.requests_per_minute,
             openapi_enabled: self.transport.openapi_enabled,
             static_root_configured: self.transport.static_root.is_some(),
+            identity_issuer: self.identity.issuer.clone(),
+            identity_audience: self.identity.audience.clone(),
+            access_token_lifetime_minutes: self.identity.access_token_lifetime.as_secs() / 60,
+            refresh_token_lifetime_days: self.identity.refresh_token_lifetime.as_secs() / 86_400,
+            jwt_key_configured: true,
+            secret_encryption_key_configured: true,
+            service_account_last_used_capacity: self.identity.service_account_last_used_capacity,
         })
     }
 }
@@ -480,6 +530,88 @@ fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigErro
             message: "must be ReverseProxy, Direct, or Disabled".to_owned(),
         }),
     }
+}
+
+fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, ConfigError> {
+    let jwt_key = env::var("Jwt__Key").map_err(|_| ConfigError::Invalid {
+        name: "Jwt__Key",
+        message: "must be configured with at least 32 bytes".to_owned(),
+    })?;
+    if jwt_key.len() < 32 {
+        return Err(ConfigError::Invalid {
+            name: "Jwt__Key",
+            message: "must contain at least 32 bytes".to_owned(),
+        });
+    }
+    let encrypted_secrets_key =
+        env::var("Secrets__EncryptionKey").map_err(|_| ConfigError::Invalid {
+            name: "Secrets__EncryptionKey",
+            message: "must be a base64-encoded 32-byte key".to_owned(),
+        })?;
+    let secret_encryption_key =
+        STANDARD
+            .decode(encrypted_secrets_key.trim())
+            .map_err(|_| ConfigError::Invalid {
+                name: "Secrets__EncryptionKey",
+                message: "must be a base64-encoded 32-byte key".to_owned(),
+            })?;
+    if secret_encryption_key.len() != 32 {
+        return Err(ConfigError::Invalid {
+            name: "Secrets__EncryptionKey",
+            message: "must decode to exactly 32 bytes".to_owned(),
+        });
+    }
+    let issuer = env::var("Jwt__Issuer").unwrap_or_else(|_| {
+        transport
+            .public_url
+            .as_str()
+            .trim_end_matches('/')
+            .to_owned()
+    });
+    let audience = env::var("Jwt__Audience").unwrap_or_else(|_| issuer.clone());
+    if issuer.trim().is_empty() || audience.trim().is_empty() {
+        return Err(ConfigError::Invalid {
+            name: "Jwt__Issuer/Jwt__Audience",
+            message: "must not be empty".to_owned(),
+        });
+    }
+    let access_token_minutes = nonzero_seconds(
+        "Jwt__AccessToken__ValidForMinutes",
+        DEFAULT_ACCESS_TOKEN_MINUTES,
+    )?;
+    let refresh_token_days = nonzero_seconds(
+        "Jwt__RefreshToken__ValidForDays",
+        DEFAULT_REFRESH_TOKEN_DAYS,
+    )?;
+    let service_account_last_used_capacity = parse_env(
+        "ServiceAccounts__LastUsedTrackingCapacity",
+        DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY,
+    )?;
+    if service_account_last_used_capacity == 0 {
+        return Err(ConfigError::Invalid {
+            name: "ServiceAccounts__LastUsedTrackingCapacity",
+            message: "must be greater than zero".to_owned(),
+        });
+    }
+    Ok(IdentityConfig {
+        jwt_key: SecretBytes(Zeroizing::new(jwt_key.into_bytes())),
+        secret_encryption_key: SecretBytes(Zeroizing::new(secret_encryption_key)),
+        issuer,
+        audience,
+        access_token_lifetime: Duration::from_secs(access_token_minutes.checked_mul(60).ok_or(
+            ConfigError::Invalid {
+                name: "Jwt__AccessToken__ValidForMinutes",
+                message: "is too large".to_owned(),
+            },
+        )?),
+        refresh_token_lifetime: Duration::from_secs(refresh_token_days.checked_mul(86_400).ok_or(
+            ConfigError::Invalid {
+                name: "Jwt__RefreshToken__ValidForDays",
+                message: "is too large".to_owned(),
+            },
+        )?),
+        service_account_last_used_capacity,
+    })
 }
 
 fn parse_origin(

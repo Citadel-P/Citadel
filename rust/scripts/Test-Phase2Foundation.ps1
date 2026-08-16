@@ -58,6 +58,8 @@ try {
         --workdir /source/rust `
         --env "DATABASE_URL=postgres://citadel_phase2:citadel_phase2@${postgres}:5432/citadel_phase2_server" `
         --env 'Transport__Mode=Disabled' `
+        --env 'Jwt__Key=phase2-only-jwt-key-at-least-32-bytes' `
+        --env 'Secrets__EncryptionKey=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' `
         --env 'EnableSwagger=true' `
         --env 'JobConfiguration__MonitoringInterval=1' `
         $rustImage `

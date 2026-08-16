@@ -47,18 +47,20 @@ pub fn bounded_channel<T>(
 }
 
 impl<T> BoundedSender<T> {
+    pub fn try_send(&self, value: T) -> Result<(), QueueSendError<T>> {
+        self.inner.try_send(value).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(value) => QueueSendError::Full(value),
+            mpsc::error::TrySendError::Closed(value) => QueueSendError::Closed(value),
+        })
+    }
+
     pub async fn send(
         &self,
         value: T,
         cancellation: &CancellationToken,
     ) -> Result<(), QueueSendError<T>> {
         match self.overflow_policy {
-            QueueOverflowPolicy::Reject => {
-                self.inner.try_send(value).map_err(|error| match error {
-                    mpsc::error::TrySendError::Full(value) => QueueSendError::Full(value),
-                    mpsc::error::TrySendError::Closed(value) => QueueSendError::Closed(value),
-                })
-            }
+            QueueOverflowPolicy::Reject => self.try_send(value),
             QueueOverflowPolicy::Wait => tokio::select! {
                 biased;
                 () = cancellation.cancelled() => Err(QueueSendError::Cancelled(value)),
