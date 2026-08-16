@@ -1,4 +1,4 @@
-# Phase 0A commands
+# Rust migration commands
 
 Run these commands from the repository root in PowerShell.
 
@@ -40,3 +40,35 @@ Windows-native Cargo commands additionally require the Visual Studio Build
 Tools C++ workload because the installed Rust host is `x86_64-pc-windows-msvc`.
 The scripts use the pinned Linux toolchain so the release path does not depend
 on the host linker.
+
+## Phase 1 inventory and contracts
+
+```powershell
+# Regenerate deterministic inventories and contract hashes.
+./rust/scripts/Generate-Phase1Inventory.ps1
+
+# Fail when generated inventories drift or HTTP/protobuf/specification coverage
+# is inconsistent.
+./rust/scripts/Test-Phase1Inventory.ps1
+```
+
+The selected schema-tool proof imports the generated .NET baseline without EF
+history metadata, retains all product seeds, and proves structural convergence:
+
+```powershell
+./rust/scripts/Evaluate-Phase1DpmCandidate.ps1
+```
+
+Rejected candidate evaluations remain as reproducible negative evidence:
+
+```powershell
+# Exits non-zero because Atlas Community converts rename intent to drop/add.
+./rust/scripts/Evaluate-Phase1AtlasCandidate.ps1
+
+# Exits non-zero because Drizzle cannot converge its generated 83-table schema.
+./rust/scripts/Evaluate-Phase1DrizzleCandidate.ps1
+```
+
+All evaluations use exact disposable Docker resource names and temporary
+directories and clean them in `finally` blocks. They do not touch Citadel's
+configured PostgreSQL database.

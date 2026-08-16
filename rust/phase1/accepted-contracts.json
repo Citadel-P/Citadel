@@ -1,0 +1,102 @@
+{
+    "schemaVersion":  1,
+    "note":  "Hashes freeze accepted Phase 1 inputs; sources remain the canonical language-neutral descriptors.",
+    "files":  [
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/network_service.proto",
+                      "sha256":  "985de6773e990f70579c763708efc17ff51ec43ac4887334c118e22cc25df59f",
+                      "bytes":  2349
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/platform_service.proto",
+                      "sha256":  "06e20b5342070c6f3bb371774300dcb0f0b61ecc70ab3e254bcac33c087882d7",
+                      "bytes":  3193
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/edge_agent_service.proto",
+                      "sha256":  "f3280c2f341ad5860ed5b34f2e4371356052aa1b66204957e6f0de177efaff32",
+                      "bytes":  5380
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/image_service.proto",
+                      "sha256":  "18ddaa92969df4b908910cf1a839c944cc2b6860d4bc057e2633732113cbf7ea",
+                      "bytes":  7801
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/swarm_service.proto",
+                      "sha256":  "994ef109395cfaf35d4491ab1fdd8931829fe3665dd4ba38670277285471dfbe",
+                      "bytes":  10624
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/volume_service.proto",
+                      "sha256":  "35a94668ee3042379cc54b40fb92e572ff65a131eb9935e9fc4c8c5247e838a3",
+                      "bytes":  1090
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/shared_models.proto",
+                      "sha256":  "1e1622aa981facebf02e3621008d3ae9a4383e18cc0df50c8f853b68b209b596",
+                      "bytes":  15352
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/stack_service.proto",
+                      "sha256":  "4deb6439dccc4d2e659af7be12f81c90969fa165bbc9cf7f35a5b66dca89f9de",
+                      "bytes":  2485
+                  },
+                  {
+                      "kind":  "frontend-operation-catalog",
+                      "path":  "src/Citadel.FrontEnd/src/api/generated/resources.ts",
+                      "sha256":  "4223ee961a98b329a23014551a13c82dd0d7e2eb54149c43fd017a104f9832a0",
+                      "bytes":  142439
+                  },
+                  {
+                      "kind":  "frontend-types",
+                      "path":  "src/Citadel.FrontEnd/src/api/generated/api.types.ts",
+                      "sha256":  "d266a6126c465491f8913612884b4c7e9d40559bea09ab10c282f67eda3b9c33",
+                      "bytes":  608798
+                  },
+                  {
+                      "kind":  "openapi-full",
+                      "path":  "src/schema/Citadel.WebApi.json",
+                      "sha256":  "9c6398f6639e3e19f598648d3ad7e6d969824c0c1d550c33c343325f36e05e23",
+                      "bytes":  1709440
+                  },
+                  {
+                      "kind":  "openapi-public",
+                      "path":  "src/schema/Citadel.WebApi_public.json",
+                      "sha256":  "356faffa6a1de71928baa2f031ae2dadb797ecec6521aabb98411c46bf9f60d7",
+                      "bytes":  1433111
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/container_service.proto",
+                      "sha256":  "45d315b3a214abccbdfcde347b96cd4a81664426ac6ab0b5b6c479a8d4215a84",
+                      "bytes":  4927
+                  },
+                  {
+                      "kind":  "protobuf-source",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos/deployment_service.proto",
+                      "sha256":  "e3d9866c5f5ef811b5138c2a8c72d71fd2fcc6852ddf7d879ce4c9392f1153aa",
+                      "bytes":  1354
+                  },
+                  {
+                      "kind":  "docker-openapi",
+                      "path":  "src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml",
+                      "sha256":  "1d54f6c4ab950646d97d1256a0a4cdcecbb963cc6c7c3312b885540a9b49694c",
+                      "bytes":  472587
+                  },
+                  {
+                      "kind":  "dotnet-development-baseline-evidence",
+                      "path":  "src/Citadel.Infrastructure/Scripts/script0001.sql",
+                      "sha256":  "ee5185a5ffe026237edeb30a12e5cfa76caf508c9a51845c78492203d3c20596",
+                      "bytes":  107361
+                  }
+              ]
+}

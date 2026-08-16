@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "note": "These changes are authorized only for the unreleased Rust cutover. Any additional divergence is a defect until added here with updated tests and contracts.",
+  "entries": [
+    {
+      "id": "RUST-BC-001",
+      "feature": "Database baseline",
+      "oldBehavior": "The development database is described by the current EF-generated migration and __EFMigrationsHistory.",
+      "newBehavior": "Rust v1 starts from one squashed Rust-owned baseline and its own migration history table. EF metadata is not part of the product schema.",
+      "reason": "Citadel is unreleased and one migration authority is safer than retaining the .NET migration project.",
+      "impact": "Development and dogfood databases may be reset. A latest-schema converter is optional and is not a release requirement.",
+      "proof": "Phase 2 clean-install, restart, drift, and baseline tests",
+      "status": "planned"
+    },
+    {
+      "id": "RUST-BC-002",
+      "feature": "Authentication sessions",
+      "oldBehavior": "Existing .NET-issued cookies, refresh tokens, setup/OIDC state, and MFA challenges may still be present in development environments.",
+      "newBehavior": "Rust cutover requires browser reauthentication and does not preserve ephemeral authentication state.",
+      "reason": "Migrating ephemeral security artifacts increases risk without user value before the first release.",
+      "impact": "All users sign in again after cutover; durable identities, roles, teams, and access rules remain product behavior.",
+      "proof": "Phase 3 login, refresh, OIDC, MFA, and authorization matrix tests",
+      "status": "planned"
+    },
+    {
+      "id": "RUST-BC-003",
+      "feature": "Realtime transport",
+      "oldBehavior": "The React client receives SignalR hub messages and group subscriptions.",
+      "newBehavior": "Rust uses the accepted versioned WebSocket envelope behind the existing frontend realtime adapter.",
+      "reason": "Rust has no reason to reproduce SignalR framing when subscription, authorization, revision, overflow, and resync semantics can be preserved.",
+      "impact": "Generated HTTP contracts and frontend resource/query semantics do not change; only the adapter protocol changes at cutover.",
+      "proof": "Phase 0C protocol tests plus Phase 2-4 frontend reconnect and differential tests",
+      "status": "prototype-proved-cutover-pending"
+    },
+    {
+      "id": "RUST-BC-004",
+      "feature": "Internal .NET architecture",
+      "oldBehavior": "Handlers are dispatched through Mediator pipelines and persistence is exposed through IUnitOfWork repositories.",
+      "newBehavior": "Axum routes invoke typed application use cases directly; use cases use explicit SQLx transactions and focused query modules.",
+      "reason": "Validation, permission, licensing, transaction, and error order are product behavior; framework and locator shapes are not.",
+      "impact": "No public API or frontend change. Internal extension points based on .NET types are removed.",
+      "proof": "Phase 2-7 route/use-case authorization and transaction tests",
+      "status": "planned"
+    },
+    {
+      "id": "RUST-BC-005",
+      "feature": "Durable cryptography",
+      "oldBehavior": "Current .NET password, token, and encrypted-secret representations are development-era formats.",
+      "newBehavior": "Rust uses versioned reviewed formats; unreleased environments may re-enter secrets and credentials instead of receiving a general legacy decoder.",
+      "reason": "A permanent compatibility parser for unreleased crypto formats broadens the attack surface.",
+      "impact": "The cutover runbook identifies which credentials must be recreated; plaintext is never exported for migration.",
+      "proof": "Phase 3 crypto vectors, redaction tests, and clean-cutover acceptance",
+      "status": "planned"
+    },
+    {
+      "id": "RUST-BC-006",
+      "feature": "Agent implementation language",
+      "oldBehavior": "Core, regular Agent, and Edge Agent are implemented in .NET.",
+      "newBehavior": "Rust Core continues to interoperate with the active .NET Agents; an Agent rewrite is optional after Core burn-in.",
+      "reason": "Core-first migration avoids simultaneous control-plane and data-plane replacement.",
+      "impact": "The shared protobuf sources remain the compatibility boundary. No Agent deployment change is required for the first Rust Core release.",
+      "proof": "Phase 0B and Phase 4-8 cross-language transport-equivalence tests",
+      "status": "accepted"
+    }
+  ]
+}

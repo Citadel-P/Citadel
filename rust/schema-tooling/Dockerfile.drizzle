@@ -1,0 +1,12 @@
+FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97
+
+RUN --mount=type=cache,id=citadel-phase1-drizzle-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=citadel-phase1-drizzle-target,target=/tmp/drizzle-target \
+    CARGO_TARGET_DIR=/tmp/drizzle-target \
+    cargo install drizzle-cli \
+        --version 0.1.15 \
+        --features postgres-sync \
+        --locked \
+        --root /usr/local
+
+ENTRYPOINT ["drizzle"]

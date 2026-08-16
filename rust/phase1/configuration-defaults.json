@@ -1,0 +1,271 @@
+{
+    "schemaVersion":  1,
+    "note":  "Local .env files are excluded. Sensitive defaults and placeholders are redacted.",
+    "values":  [
+                   {
+                       "name":  "Jwt__RefreshToken__ValidForDays",
+                       "value":  "30",
+                       "source":  ".env.example:57"
+                   },
+                   {
+                       "name":  "Jwt__AccessToken__ValidForMinutes",
+                       "value":  "15",
+                       "source":  ".env.example:55"
+                   },
+                   {
+                       "name":  "Jwt__Audience",
+                       "value":  "https://citadel.example.com",
+                       "source":  ".env.example:53"
+                   },
+                   {
+                       "name":  "Mfa__Policy",
+                       "value":  "Optional",
+                       "source":  ".env.example:67"
+                   },
+                   {
+                       "name":  "Secrets__EncryptionKey",
+                       "value":  "\u003credacted-or-generated\u003e",
+                       "source":  ".env.example:64"
+                   },
+                   {
+                       "name":  "Jwt__Key",
+                       "value":  "\u003credacted-or-generated\u003e",
+                       "source":  ".env.example:60"
+                   },
+                   {
+                       "name":  "Jwt__Issuer",
+                       "value":  "https://citadel.example.com",
+                       "source":  ".env.example:52"
+                   },
+                   {
+                       "name":  "Transport__Mode",
+                       "value":  "Direct",
+                       "source":  ".env.example:44"
+                   },
+                   {
+                       "name":  "AgentTransport__CaCertificatePath",
+                       "value":  "/etc/citadel/tls/agent-ca.pem",
+                       "source":  ".env.example:39"
+                   },
+                   {
+                       "name":  "AgentTransport__AllowInsecure",
+                       "value":  "true",
+                       "source":  ".env.example:38"
+                   },
+                   {
+                       "name":  "CITADEL_TLS_HOST_DIRECTORY",
+                       "value":  "./tls",
+                       "source":  ".env.example:47"
+                   },
+                   {
+                       "name":  "Transport__Certificate__PrivateKeyPath",
+                       "value":  "/etc/citadel/tls/core-key.pem",
+                       "source":  ".env.example:46"
+                   },
+                   {
+                       "name":  "Transport__Certificate__Path",
+                       "value":  "/etc/citadel/tls/core-fullchain.pem",
+                       "source":  ".env.example:45"
+                   },
+                   {
+                       "name":  "PG_HOST",
+                       "value":  "pg_db",
+                       "source":  ".env.example:97"
+                   },
+                   {
+                       "name":  "Automations__InternalBaseUrl",
+                       "value":  "http://localhost:8000",
+                       "source":  ".env.example:91"
+                   },
+                   {
+                       "name":  "Automations__MaxParallelRuns",
+                       "value":  "4",
+                       "source":  ".env.example:88"
+                   },
+                   {
+                       "name":  "PG_DATABASE",
+                       "value":  "citadel",
+                       "source":  ".env.example:100"
+                   },
+                   {
+                       "name":  "PG_PASSWORD",
+                       "value":  "\u003credacted-or-generated\u003e",
+                       "source":  ".env.example:99"
+                   },
+                   {
+                       "name":  "PG_USER",
+                       "value":  "citadel",
+                       "source":  ".env.example:98"
+                   },
+                   {
+                       "name":  "Automations__Enabled",
+                       "value":  "true",
+                       "source":  ".env.example:87"
+                   },
+                   {
+                       "name":  "Bootstrap__AdminPasswordFile",
+                       "value":  "\u003credacted-or-generated\u003e",
+                       "source":  ".env.example:73"
+                   },
+                   {
+                       "name":  "Bootstrap__AdminEmail",
+                       "value":  "admin@example.com",
+                       "source":  ".env.example:72"
+                   },
+                   {
+                       "name":  "Bootstrap__AdminName",
+                       "value":  "citadel-admin",
+                       "source":  ".env.example:71"
+                   },
+                   {
+                       "name":  "EnableLogColor",
+                       "value":  "false",
+                       "source":  ".env.example:82"
+                   },
+                   {
+                       "name":  "EnableSwagger",
+                       "value":  "false",
+                       "source":  ".env.example:80"
+                   },
+                   {
+                       "name":  "Cors__0",
+                       "value":  "https://citadel.example.com",
+                       "source":  ".env.example:77"
+                   },
+                   {
+                       "name":  "Transport__ForwardedHeaders__ForwardLimit",
+                       "value":  "1",
+                       "source":  ".env.example:34"
+                   },
+                   {
+                       "name":  "JobConfiguration:MonitoringInterval",
+                       "value":  10,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "JobConfiguration:FlashInterval",
+                       "value":  60,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "JobConfiguration:BatchSize",
+                       "value":  500,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Jwt:Issuer",
+                       "value":  "http://localhost:8000",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Jwt:Audience",
+                       "value":  "http://localhost:8000",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Jwt:AccessToken:ValidForMinutes",
+                       "value":  15,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "EnableSwagger",
+                       "value":  false,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Cors:0",
+                       "value":  "http://localhost:8000",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "ConnectionStrings:Postgres",
+                       "value":  "Host=localhost;Database=citadel_db;Username=admin;Password=admin",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "AllowedHosts",
+                       "value":  "*",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "EnableLogColor",
+                       "value":  false,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "EdgeAgent:PublicGrpcUrl",
+                       "value":  "",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Cors:1",
+                       "value":  "http://localhost:5173",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Transport__ApiPort",
+                       "value":  "8000",
+                       "source":  ".env.example:27"
+                   },
+                   {
+                       "name":  "AllowedHosts",
+                       "value":  "citadel.example.com;localhost",
+                       "source":  ".env.example:24"
+                   },
+                   {
+                       "name":  "EdgeAgent__PublicGrpcUrl",
+                       "value":  "https://citadel.example.com:8444",
+                       "source":  ".env.example:23"
+                   },
+                   {
+                       "name":  "Transport__ForwardedHeaders__KnownNetworks",
+                       "value":  "172.30.0.0/24",
+                       "source":  ".env.example:33"
+                   },
+                   {
+                       "name":  "Transport__ForwardedHeaders__KnownProxies",
+                       "value":  "172.30.0.2",
+                       "source":  ".env.example:32"
+                   },
+                   {
+                       "name":  "Transport__EdgeGrpcPort",
+                       "value":  "8001",
+                       "source":  ".env.example:28"
+                   },
+                   {
+                       "name":  "Transport__PublicUrl",
+                       "value":  "https://citadel.example.com",
+                       "source":  ".env.example:22"
+                   },
+                   {
+                       "name":  "CITADEL_IMAGE_TAG",
+                       "value":  "replace-with-release-version",
+                       "source":  ".env.example:10"
+                   },
+                   {
+                       "name":  "Jwt:RefreshToken:ValidForDays",
+                       "value":  30,
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Jwt:Key",
+                       "value":  "",
+                       "source":  "src/Citadel.WebApi/appsettings.json"
+                   },
+                   {
+                       "name":  "Transport__Mode",
+                       "value":  "ReverseProxy",
+                       "source":  ".env.example:21"
+                   },
+                   {
+                       "name":  "JobConfiguration__FlashInterval",
+                       "value":  "60",
+                       "source":  ".env.example:15"
+                   },
+                   {
+                       "name":  "JobConfiguration__MonitoringInterval",
+                       "value":  "15",
+                       "source":  ".env.example:13"
+                   }
+               ]
+}
