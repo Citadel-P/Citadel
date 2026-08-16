@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod application_info_http;
 pub mod config;
 pub mod diagnostics;
 pub mod identity_http;

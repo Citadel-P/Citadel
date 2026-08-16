@@ -4,14 +4,15 @@ Date: 2026-08-16
 
 ## Outcome
 
-Phase 3A and the bounded Phase 3B/C/D/E profile foundation are implemented.
+Phase 3A and the bounded Phase 3B/C/D/E/F profile foundation are implemented.
 Rust now owns the first production identity slices:
 first-run administrator setup, local password login, browser sessions, Actor
 authentication/authorization, the permission matrix, offline entitlement
 verification, the complete Service Account credential lifecycle, and
 authenticated current-profile read/display-name update and preference
 read/update operations, browser-session listing and revocation, and local
-password changes.
+password changes. Authenticated clients can also read the Core build identity
+used by the shared layout.
 
 This is not the full Phase 3 exit. Administrator User APIs, Team, Role,
 installed-license, MFA, and OIDC
@@ -59,6 +60,11 @@ tests move together.
   retained; without one, every refresh session is removed. Session creation
   locks the same User row and rechecks the password hash used for authentication,
   so a login verified against a stale password cannot commit after the change.
+- `GET /api/v1/application/info` returns `Citadel`, a display-safe version, and
+  the complete informational version embedded at compile time. Release builds
+  accept the existing version pipeline values; local builds deterministically
+  fall back to the root `version.json`. The endpoint requires an authenticated
+  Actor, remains setup-gated, performs no database read, and sets `no-store`.
 - Passwords use the versioned `cit_pwd_v1$` Argon2id format. Unknown login names
   still execute a real dummy verification to reduce account-enumeration timing.
 - Access and refresh JWTs use an explicit issuer, audience, token type, version,
@@ -91,7 +97,7 @@ tests move together.
 - Internal AES-256-GCM secret envelopes use the versioned `cit_secret_v1`
   format and authenticated encryption. Production configuration requires a
   separate 32-byte secret-encryption key.
-- The explicit route catalog generates 31 full and 16 public OpenAPI operations
+- The explicit route catalog generates 32 full and 16 public OpenAPI operations
   plus matching frontend metadata. Browser-only setup/session operations remain
   outside the public API document, as do the UI-only profile operations.
   Parameterized operations now declare their UUID path parameters explicitly.
@@ -107,8 +113,10 @@ The following passed in the pinned Linux Rust environment:
 
 The Phase 3 harness uses two disposable PostgreSQL databases. It proves clean
 setup, versioned password persistence, login/refresh, local-HTTP cookie behavior,
-profile read/rename, lazy preference defaults, preference validation/upsert and
-restart persistence, concurrent partial-patch safety, direct Role projection,
+authenticated and setup-gated application information with restart-stable build
+metadata, profile read/rename, lazy preference defaults, preference
+validation/upsert and restart persistence, concurrent partial-patch safety,
+direct Role projection,
 authorization metadata, anonymous permission-matrix access after setup, license
 denial, graceful process/container restart, Actor-scoped ACLs, immediate token
 revocation, active browser-session ordering, current-session protection,
@@ -127,7 +135,7 @@ login or uniqueness semantics.
 
 ## Remaining Phase 3 work
 
-- Application-information API and the safe profile activity ledger.
+- Safe profile activity ledger.
 - Administrator User, Team, Role, Actor-enabled-state, and installed-license APIs.
 - TOTP MFA and the accepted MFA policy behavior.
 - OIDC provider administration and browser login/callback behavior.

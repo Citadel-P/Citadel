@@ -1,6 +1,11 @@
 FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS build
 
 WORKDIR /source
+ARG VERSION
+ARG INFORMATIONAL_VERSION
+ENV CITADEL_VERSION=${VERSION} \
+    CITADEL_INFORMATIONAL_VERSION=${INFORMATIONAL_VERSION}
+COPY version.json ./version.json
 COPY rust ./rust
 COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml \
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml

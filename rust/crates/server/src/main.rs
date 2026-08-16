@@ -30,7 +30,8 @@ use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
 use citadel_server::{
-    Readiness, identity_http, profile_http, service_accounts_http, transport, workers,
+    Readiness, application_info_http, identity_http, profile_http, service_accounts_http,
+    transport, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -267,6 +268,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             secure_cookies: config.transport.mode
                 != citadel_server::config::TransportMode::Disabled,
         }))
+        .merge(application_info_http::router())
         .merge(service_accounts_http::router(
             service_accounts_http::ServiceAccountHttpState {
                 identity: Arc::clone(&identity),

@@ -118,6 +118,14 @@ try {
 
     $setup = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/setup/status"
     if (-not $setup.requiresSetup) { throw 'A clean Phase 3 database did not require setup.' }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/application/info" | Out-Null
+        throw 'Application information bypassed the first-run setup gate.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 409) { throw }
+    }
 
     $browser = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $initializeBody = @{
@@ -143,6 +151,22 @@ try {
     }
 
     $authorization = @{ Authorization = "Bearer $($initializeResult.accessToken)" }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/application/info" | Out-Null
+        throw 'Application information was returned without authentication.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    $applicationInfoBeforeRestart = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/application/info" -Headers $authorization
+    $expectedDisplayVersion = ($applicationInfoBeforeRestart.informationalVersion -split '\+', 2)[0]
+    if ($applicationInfoBeforeRestart.name -ne 'Citadel' -or `
+        [string]::IsNullOrWhiteSpace($applicationInfoBeforeRestart.informationalVersion) -or `
+        $applicationInfoBeforeRestart.version -ne $expectedDisplayVersion) {
+        throw 'Application information did not use the embedded build metadata.'
+    }
     $profile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" -Headers $authorization
     if ($profile.displayName -ne 'owner' -or $profile.email -ne 'owner@example.test') {
         throw 'The initialized administrator profile was not returned.'
@@ -416,6 +440,14 @@ try {
         -Body (@{ emailOrName = 'owner@example.test'; password = 'new-correct-horse-battery-staple' } | ConvertTo-Json)
     if ([string]::IsNullOrWhiteSpace($login.accessToken)) {
         throw 'The persisted administrator could not sign in after restart.'
+    }
+    $applicationInfoAfterRestart = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/application/info" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if ($applicationInfoAfterRestart.name -ne $applicationInfoBeforeRestart.name -or `
+        $applicationInfoAfterRestart.version -ne $applicationInfoBeforeRestart.version -or `
+        $applicationInfoAfterRestart.informationalVersion -ne $applicationInfoBeforeRestart.informationalVersion) {
+        throw 'Application build information changed after restart.'
     }
     $persistedProfile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" `
         -Headers @{ Authorization = "Bearer $($login.accessToken)" }

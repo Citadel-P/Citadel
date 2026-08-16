@@ -53,6 +53,27 @@
         ],
         "type": "object"
       },
+      "ApplicationInfoView": {
+        "additionalProperties": false,
+        "properties": {
+          "informationalVersion": {
+            "type": "string"
+          },
+          "name": {
+            "const": "Citadel",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "informationalVersion"
+        ],
+        "type": "object"
+      },
       "ArchiveServiceAccountsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1277,6 +1298,40 @@
   },
   "openapi": "3.1.1",
   "paths": {
+    "/api/v1/application/info": {
+      "get": {
+        "operationId": "getApplicationInfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationInfoView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get application information",
+        "x-citadel-principal": "actor"
+      }
+    },
     "/api/v1/authentication/login": {
       "post": {
         "operationId": "login",
