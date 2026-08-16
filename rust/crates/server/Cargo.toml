@@ -38,3 +38,6 @@ zeroize.workspace = true
 [dev-dependencies]
 tokio-tungstenite.workspace = true
 tower.workspace = true
+
+[build-dependencies]
+serde_json.workspace = true

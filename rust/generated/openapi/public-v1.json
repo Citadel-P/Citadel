@@ -53,6 +53,27 @@
         ],
         "type": "object"
       },
+      "ApplicationInfoView": {
+        "additionalProperties": false,
+        "properties": {
+          "informationalVersion": {
+            "type": "string"
+          },
+          "name": {
+            "const": "Citadel",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "informationalVersion"
+        ],
+        "type": "object"
+      },
       "ArchiveServiceAccountsRequest": {
         "additionalProperties": false,
         "properties": {

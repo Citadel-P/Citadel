@@ -139,6 +139,14 @@ fn schemas() -> Value {
             "type": "string",
             "enum": ["Logs", "Inspect", "Apply", "Pull", "Terminal", "ResourceBindings", "Releases", "Restore", "Browse", "Download", "ManageNodeAgents", "Use", "ManageCredentials"]
         },
+        "ApplicationInfoView": {
+            "type": "object", "required": ["name", "version", "informationalVersion"], "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string", "const": "Citadel" },
+                "version": string(),
+                "informationalVersion": string()
+            }
+        },
         "UpdateCurrentProfileRequest": {
             "type": "object", "required": ["displayName"], "additionalProperties": false,
             "properties": { "displayName": string() }

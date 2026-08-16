@@ -16,6 +16,7 @@ export const foundationOperations = {
   refreshToken: { method: 'GET', path: '/api/v1/authentication/refresh' },
   logout: { method: 'POST', path: '/api/v1/authentication/logout' },
   getPermissionMatrix: { method: 'GET', path: '/api/v1/roles/permissions/matrix' },
+  getApplicationInfo: { method: 'GET', path: '/api/v1/application/info' },
   getCurrentProfile: { method: 'GET', path: '/api/v1/profile' },
   updateCurrentProfile: { method: 'PATCH', path: '/api/v1/profile' },
   getProfilePreferences: { method: 'GET', path: '/api/v1/profile/preferences' },

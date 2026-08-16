@@ -149,6 +149,18 @@ pub const ROUTES: &[RouteContract] = &[
     ),
     route!(
         "get",
+        "/api/v1/application/info",
+        "getApplicationInfo",
+        "Get application information",
+        false,
+        false,
+        Actor,
+        None,
+        Some("ApplicationInfoView"),
+        200
+    ),
+    route!(
+        "get",
         "/api/v1/profile",
         "getCurrentProfile",
         "Get current profile",
