@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 
+mod activity;
 mod enums;
 mod identity;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use activity::*;
 pub use enums::*;
 pub use identity::*;
 

@@ -1,0 +1,20 @@
+use citadel_domain::{PermissionGrant, PermissionLevel};
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResourceCapabilities {
+    pub can_read: bool,
+    pub can_write: bool,
+    pub can_execute: bool,
+}
+
+impl From<PermissionGrant> for ResourceCapabilities {
+    fn from(permission: PermissionGrant) -> Self {
+        Self {
+            can_read: permission.level.grants(PermissionLevel::Read),
+            can_write: permission.level.grants(PermissionLevel::Write),
+            can_execute: permission.level.grants(PermissionLevel::Execute),
+        }
+    }
+}

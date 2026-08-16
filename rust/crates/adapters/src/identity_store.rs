@@ -4,13 +4,15 @@ use citadel_application::{
     SessionMetadata, UserSessionRecord,
 };
 use citadel_domain::{
-    ADMIN_ROLE_ID, ActorId, ActorPrincipal, AuthenticatedPrincipalType, AuthorizationSnapshot,
-    PermissionGrant, PermissionLevel, ResourceType, ServiceAccountCredential, User,
-    UserAuthentication,
+    ADMIN_ROLE_ID, ActivityEvent, ActivityEventInfo, ActorId, ActorPrincipal,
+    AuthenticatedPrincipalType, AuthorizationSnapshot, PermissionGrant, PermissionLevel,
+    ResourceType, ServiceAccountCredential, User, UserAuthentication,
 };
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
+
+use crate::activity_store::{insert_activity, invalid_activity};
 
 #[derive(Clone)]
 pub struct PostgresIdentityStore {
@@ -377,8 +379,18 @@ ORDER BY lastseenat DESC, createdat DESC, id DESC
         session_id: Uuid,
         user_id: Uuid,
         current_session_id: Option<Uuid>,
+        actor_id: ActorId,
+        revoked_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
+            let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let resource_name =
+                sqlx::query_scalar::<_, String>("SELECT name FROM users WHERE id = $1 FOR UPDATE")
+                    .bind(user_id)
+                    .fetch_optional(&mut *transaction)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(IdentityError::NotFound)?;
             let affected = sqlx::query(
                 r#"
 DELETE FROM refreshtokens
@@ -390,10 +402,22 @@ WHERE id = $1
             .bind(session_id)
             .bind(user_id)
             .bind(current_session_id)
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await
             .map_err(storage)?
             .rows_affected();
+            if affected == 1 {
+                let activity = ActivityEvent::new_user_event(
+                    user_id,
+                    resource_name,
+                    actor_id,
+                    ActivityEventInfo::user_session_revoked(session_id),
+                    revoked_at,
+                )
+                .map_err(invalid_activity)?;
+                insert_activity(&mut transaction, &activity).await?;
+            }
+            transaction.commit().await.map_err(storage)?;
             Ok(affected == 1)
         })
     }
@@ -403,18 +427,19 @@ WHERE id = $1
         user_id: Uuid,
         current_session_id: Uuid,
         now: DateTime<Utc>,
+        actor_id: ActorId,
     ) -> BoxFuture<'_, Result<Option<i64>, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id = $1 FOR UPDATE")
-                .bind(user_id)
-                .fetch_optional(&mut *transaction)
-                .await
-                .map_err(storage)?
-                .is_none()
-            {
+            let Some(resource_name) =
+                sqlx::query_scalar::<_, String>("SELECT name FROM users WHERE id = $1 FOR UPDATE")
+                    .bind(user_id)
+                    .fetch_optional(&mut *transaction)
+                    .await
+                    .map_err(storage)?
+            else {
                 return Ok(None);
-            }
+            };
             let row = sqlx::query(
                 r#"
 WITH current_session AS MATERIALIZED (
@@ -442,6 +467,14 @@ SELECT EXISTS (SELECT 1 FROM current_session) AS current_exists,
             .map_err(storage)?;
             let current_exists = row.try_get::<bool, _>("current_exists").map_err(storage)?;
             let deleted_count = row.try_get::<i64, _>("deleted_count").map_err(storage)?;
+            if current_exists && deleted_count > 0 {
+                let info = ActivityEventInfo::user_other_sessions_revoked(deleted_count)
+                    .map_err(invalid_activity)?;
+                let activity =
+                    ActivityEvent::new_user_event(user_id, resource_name, actor_id, info, now)
+                        .map_err(invalid_activity)?;
+                insert_activity(&mut transaction, &activity).await?;
+            }
             transaction.commit().await.map_err(storage)?;
             Ok(current_exists.then_some(deleted_count))
         })

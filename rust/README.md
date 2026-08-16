@@ -6,7 +6,9 @@ v1 database baseline and migration runner and now hosts the Phase 3A identity
 and Service Account routes, the Phase 3B current-profile foundation, the Phase
 3C profile-preferences API, Phase 3D browser-session management, and Phase 3E
 local password changes. Phase 3F exposes authenticated application build
-information. It does not yet replace the .NET Core.
+information. Phase 3G adds the compatible Activity read API and atomic safe
+activity evidence for profile mutations. Phase 3H adds the administrator User
+list, search, and detail boundary. It does not yet replace the .NET Core.
 
 The prototype proves a small release server, Citadel's existing authorized
 Platform read, a generated Docker Engine read/stream subset over a Unix socket,
@@ -43,12 +45,19 @@ verifies and replaces local passwords transactionally, revokes the appropriate
 refresh sessions, and prevents a login verified with a stale password from
 creating a session after the change. Phase 3F reads version information embedded
 at compile time from release inputs or the repository `version.json`; it never
-depends on frontend constants or runtime Git access. Run
+depends on frontend constants or runtime Git access. Phase 3G ports the complete
+Activity discriminator set, owns typed safe profile event payloads, writes state
+and evidence in one transaction, and exposes the existing authorized
+`listActivities`/`getActivity` contract so the current frontend resource can use
+the Rust server unchanged. Phase 3H exposes the existing administrator-only
+`listUsers`, `searchUsers`, and `getUser` contracts from bounded PostgreSQL
+projections, including Roles, Teams, enabled state, resource overrides, paging,
+and capabilities. User mutations remain a later atomic slice. Run
 `./rust/scripts/Test-Phase3Identity.ps1` for the disposable PostgreSQL,
 HTTP-session, application-info, profile/preference/password, restart, ACL,
-revocation, and concurrent-token checks.
+revocation, activity, and concurrent-token checks.
 The full Phase 3 exit is intentionally still open for the remaining Profile and
-User operations, Team, Role, License, MFA, OIDC, and frontend cutover; see
+User mutations, Team, Role, License, MFA, OIDC, and frontend cutover; see
 `reports/phase3-identity-access-report.md`.
 
 ## Repository direction

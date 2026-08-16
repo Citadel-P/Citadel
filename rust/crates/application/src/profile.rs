@@ -163,9 +163,12 @@ pub trait ProfileStore: Send + Sync {
 
     fn get_user(&self, user_id: Uuid) -> BoxFuture<'_, Result<Option<User>, IdentityError>>;
 
-    fn update_user<'a>(
+    fn rename_user<'a>(
         &'a self,
-        user: &'a User,
+        user_id: Uuid,
+        new_name: &'a str,
+        actor_id: citadel_domain::ActorId,
+        renamed_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<CurrentProfileRecord, IdentityError>>;
 
     fn get_preferences(
@@ -178,6 +181,7 @@ pub trait ProfileStore: Send + Sync {
         user_id: Uuid,
         update: &'a UserPreferencesUpdate,
         updated_at: DateTime<Utc>,
+        actor_id: citadel_domain::ActorId,
     ) -> BoxFuture<'a, Result<UserPreferences, IdentityError>>;
 
     fn change_password<'a>(
@@ -187,6 +191,7 @@ pub trait ProfileStore: Send + Sync {
         new_password_hash: &'a str,
         current_session_id: Option<Uuid>,
         changed_at: DateTime<Utc>,
+        actor_id: citadel_domain::ActorId,
     ) -> BoxFuture<'a, Result<PasswordChangeOutcome, IdentityError>>;
 }
 
@@ -230,7 +235,7 @@ impl ProfileService {
     ) -> Result<CurrentProfileView, IdentityError> {
         require_human(principal)?;
         validate_name(&request.display_name)?;
-        let mut user = self
+        let user = self
             .store
             .get_user(principal.subject_id)
             .await?
@@ -242,8 +247,14 @@ impl ProfileService {
                 .await?
                 .ok_or(IdentityError::NotFound)?
         } else {
-            user.rename(display_name.to_owned());
-            self.store.update_user(&user).await?
+            self.store
+                .rename_user(
+                    principal.subject_id,
+                    display_name,
+                    principal.actor_id,
+                    self.clock.now(),
+                )
+                .await?
         };
         self.map(principal, record).await
     }
@@ -302,6 +313,7 @@ impl ProfileService {
                     theme,
                 },
                 self.clock.now(),
+                principal.actor_id,
             )
             .await
             .map(persisted_preferences)
@@ -353,7 +365,13 @@ impl ProfileService {
             .await?;
         if self
             .identity
-            .revoke_owned_session(session_id, principal.subject_id, current_session_id)
+            .revoke_owned_session(
+                session_id,
+                principal.subject_id,
+                current_session_id,
+                principal.actor_id,
+                self.clock.now(),
+            )
             .await?
         {
             Ok(())
@@ -375,7 +393,7 @@ impl ProfileService {
             .ok_or_else(current_session_required)?;
         let count = self
             .identity
-            .revoke_other_sessions(principal.subject_id, current_session_id)
+            .revoke_other_sessions(principal.subject_id, current_session_id, principal.actor_id)
             .await?
             .ok_or_else(current_session_required)?;
         Ok(RevokeOtherProfileSessionsView { count })
@@ -431,6 +449,7 @@ impl ProfileService {
                 &new_hash,
                 current_session_id,
                 changed_at,
+                principal.actor_id,
             )
             .await?
         {

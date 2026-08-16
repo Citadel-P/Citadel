@@ -10,6 +10,7 @@ use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
+use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
@@ -20,18 +21,22 @@ use citadel_adapters::license::PostgresLicenseEntitlementService;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_application::{
-    AuthorizedPlatformReader, IdentityService, PlatformRuntimePort, ProfileService,
-    ServiceAccountService, SystemClock, TaskSupervisor, service_account_last_used_channel,
+    ActivityService, AuthorizedPlatformReader, IdentityService, PlatformRuntimePort,
+    ProfileService, ServiceAccountService, SystemClock, TaskSupervisor, UserReadService,
+    service_account_last_used_channel,
 };
+use citadel_contracts::http::routes;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_server::config::{Config, DatabaseConfig};
+use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
 use citadel_server::{
-    Readiness, application_info_http, identity_http, profile_http, service_accounts_http,
-    transport, workers,
+    Readiness, activities_http, application_info_http, identity_http, profile_http,
+    service_accounts_http, transport, users_http, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -202,6 +207,12 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&identity),
         clock,
     ));
+    let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
+        pool.clone(),
+    ))));
+    let users = Arc::new(UserReadService::new(Arc::new(PostgresUserReadStore::new(
+        pool.clone(),
+    ))));
     let agent = if let Some(agent) = &config.agent {
         let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
         Some(
@@ -258,9 +269,9 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         pool: pool.clone(),
     };
     let app = Router::new()
-        .route("/health", get(health))
-        .route("/ready", get(ready))
-        .route("/metrics", get(open_metrics))
+        .contract_route(routes::GET_HEALTH, health)
+        .contract_route(routes::GET_READINESS, ready)
+        .contract_route(routes::GET_METRICS, open_metrics)
         .with_state(state)
         .merge(identity_http::router(identity_http::IdentityHttpState {
             identity: Arc::clone(&identity),
@@ -269,6 +280,13 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 != citadel_server::config::TransportMode::Disabled,
         }))
         .merge(application_info_http::router())
+        .merge(activities_http::router(
+            activities_http::ActivitiesHttpState { activities },
+        ))
+        .merge(users_http::router(users_http::UsersHttpState {
+            identity: Arc::clone(&identity),
+            users,
+        }))
         .merge(service_accounts_http::router(
             service_accounts_http::ServiceAccountHttpState {
                 identity: Arc::clone(&identity),
