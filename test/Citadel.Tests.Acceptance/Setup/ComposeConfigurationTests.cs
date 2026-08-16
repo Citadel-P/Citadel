@@ -8,6 +8,7 @@ public sealed class ComposeConfigurationTests
 {
     private static readonly string[] RequiredProductionSettings =
     [
+        "CITADEL_IMAGE_TAG",
         "Transport__Mode",
         "Transport__PublicUrl",
         "EdgeAgent__PublicGrpcUrl",
@@ -41,7 +42,10 @@ public sealed class ComposeConfigurationTests
             environment["AllowedHosts"].Split(';'),
             StringComparer.OrdinalIgnoreCase);
         Assert.StartsWith("replace-", environment["PG_PASSWORD"]);
-        Assert.Contains("# CITADEL_IMAGE_TAG=latest", template);
+        Assert.Equal(
+            "replace-with-release-version",
+            environment["CITADEL_IMAGE_TAG"]);
+        Assert.DoesNotContain("CITADEL_IMAGE_TAG=latest", template);
         Assert.Contains("# PG_HOST=pg_db", template);
         Assert.Contains("# Jwt__Key=", template);
         Assert.Contains(
@@ -68,6 +72,7 @@ public sealed class ComposeConfigurationTests
                          ".env.example",
                          "docker-compose.yml",
                          "docker-compose.override.yml",
+                         "docker-compose.local.yml",
                          "docker-compose.direct-tls.yml"
                      })
             {
@@ -125,6 +130,31 @@ public sealed class ComposeConfigurationTests
                 Assert.Equal(2, server.GetProperty("ports").GetArrayLength());
             }
 
+            using (var local = await RenderComposeAsync(
+                       directory,
+                       [
+                           "docker-compose.yml",
+                           "docker-compose.local.yml"
+                       ],
+                       cancellationToken))
+            {
+                var server = GetServer(local);
+                var environment = server.GetProperty("environment");
+
+                Assert.Equal(
+                    "Disabled",
+                    environment.GetProperty("Transport__Mode").GetString());
+                Assert.Equal(
+                    "http://localhost:8000",
+                    environment.GetProperty("Transport__PublicUrl").GetString());
+                Assert.Equal(
+                    "http://localhost:8000",
+                    environment.GetProperty("Jwt__Issuer").GetString());
+                var port = Assert.Single(server.GetProperty("ports").EnumerateArray());
+                Assert.Equal("127.0.0.1", port.GetProperty("host_ip").GetString());
+                Assert.Equal("8000", port.GetProperty("published").GetString());
+            }
+
             var directEnvironment = ReadEnvironment(
                 Path.Combine(directory, ".env"));
             directEnvironment["Transport__Mode"] = "Direct";
@@ -175,6 +205,31 @@ public sealed class ComposeConfigurationTests
                 Directory.Delete(directory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void ProductionImage_ShouldRetainItsHealthProbeAndConserveGcMemory()
+    {
+        var dependencies = File.ReadAllText(
+            FixturePath("install-server-deps.sh"));
+        var webApiProject = File.ReadAllText(
+            FixturePath("Citadel.WebApi.csproj"));
+        var dockerfile = File.ReadAllText(
+            FixturePath("Dockerfile"));
+
+        Assert.Contains("apk add --no-cache curl", dependencies);
+        Assert.DoesNotContain("apk del curl", dependencies);
+        Assert.Contains(
+            "<ServerGarbageCollection>false</ServerGarbageCollection>",
+            webApiProject);
+        Assert.Contains(
+            "<RuntimeHostConfigurationOption Include=\"System.GC.ConserveMemory\" Value=\"7\" />",
+            webApiProject);
+        Assert.DoesNotContain(
+            "<PreserveCompilationContext>true</PreserveCompilationContext>",
+            webApiProject);
+        Assert.Contains("rm -rf /app/publish/refs", dockerfile);
+        Assert.Contains("/app/publish/*.pdb", dockerfile);
     }
 
     private static string FixturePath(string fileName)

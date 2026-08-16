@@ -1,6 +1,6 @@
 services:
   server:
-    image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-latest}
+    image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-release-tag-required}
     restart: unless-stopped
     env_file: .env
     environment:

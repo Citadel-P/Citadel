@@ -1,0 +1,21 @@
+---
+title: "Create the first Deployment"
+description: "Deploy one container from an external image through Citadel."
+---
+
+1. Open **Deployments** and select **Add**.
+2. Select the target Docker platform.
+3. Enter a name.
+4. Choose **External image**, select the built-in **Docker Hub** registry, and enter `nginx:alpine`.
+5. Add ports, volumes, variables, or secrets only when the workload needs them.
+6. Save, review the configuration, and select **Apply**.
+7. Keep the progress sheet open until Citadel reports the completed operation.
+
+The Deployment and its container should turn green.
+
+The Deployment is configuration owned by Citadel. Applying it can recreate the
+runtime container. A container discovered outside Citadel remains unmanaged
+until it is adopted.
+
+See [Deployments](/docs/guides/deployments) for updates, drift, image sources,
+backups, and adoption behavior.

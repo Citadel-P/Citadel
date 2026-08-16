@@ -1,10 +1,14 @@
 **/.classpath
+**/.artifacts
+**/.dotnet
 **/.dockerignore
 **/.env
 **/.git
 **/.gitignore
+**/.next
 **/.project
 **/.settings
+**/.tmp-build
 **/.toolstarget
 **/.vs
 **/.vscode
@@ -20,6 +24,7 @@
 **/npm-debug.log
 **/obj
 **/secrets.dev.yaml
+**/TestResults
 **/values.dev.yaml
 LICENSE
 README.md

@@ -24,5 +24,5 @@ deno --version
 restic version
 pg_dump --version
 
-apk del curl tar gzip
+apk del tar gzip
 rm -rf /var/cache/apk/* /tmp/*

@@ -1,0 +1,31 @@
+---
+title: "Environment variables"
+description: "Reference the production settings exposed by Citadel's Docker Compose environment template."
+---
+
+Citadel uses ASP.NET Core configuration names with double underscores between
+sections. The committed `.env.example` is the authoritative production
+template.
+
+| Setting | Required when | Purpose |
+| --- | --- | --- |
+| `CITADEL_IMAGE_TAG` | Released Compose installation | Exact Citadel image version |
+| `PG_HOST` | External or renamed PostgreSQL | PostgreSQL hostname; Compose defaults to `pg_db` |
+| `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` | Always | PostgreSQL credentials and database |
+| `Transport__Mode` | Always | `ReverseProxy`, `Direct`, or development-only `Disabled` |
+| `Transport__PublicUrl` | Always | Canonical browser and API origin |
+| `EdgeAgent__PublicGrpcUrl` | Edge Agent use | Public Edge gRPC address |
+| `AllowedHosts` | Always | Hostnames accepted by Core |
+| `Transport__ForwardedHeaders__KnownProxies` | Reverse proxy | Immediate trusted proxy address |
+| `Transport__ForwardedHeaders__KnownNetworks` | Reverse proxy alternative | Immediate trusted proxy network |
+| `Transport__Certificate__Path` | Direct TLS | PEM certificate chain inside Core |
+| `Transport__Certificate__PrivateKeyPath` | Direct TLS | PEM private key inside Core |
+| `Jwt__Issuer`, `Jwt__Audience` | Always | Token validation identities |
+| `Jwt__Key` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
+| `Secrets__EncryptionKey` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
+| `Mfa__Policy` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
+| `EnableSwagger` | Optional | Exposes the internal Swagger UI; false by default |
+
+See [Docker Compose configuration](/docs/getting-started/configuration) for
+defaults, bootstrap settings, automation, monitoring intervals, and safe key
+handling.

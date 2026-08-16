@@ -1,0 +1,17 @@
+extends:
+  - recommended
+
+apis:
+  citadel@preview:
+    root: ../src/schema/Citadel.WebApi_public.json
+
+rules:
+  info-license: off
+  operation-description: off
+  operation-4xx-response: warn
+  tag-description: off
+  no-server-example.com: off
+  no-unused-components: error
+  # ASP.NET route constraints keep /alertRules/{id:guid}/_cfg distinct from
+  # /alertRules/channels/{id}, but OpenAPI cannot encode route constraints.
+  no-ambiguous-paths: off

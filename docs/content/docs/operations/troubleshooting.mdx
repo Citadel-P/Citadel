@@ -1,0 +1,38 @@
+---
+title: "Troubleshooting"
+description: "Diagnose Citadel health, connectivity, operations, and managed workloads without exposing secrets."
+---
+
+## Start with scope
+
+Identify whether the failure belongs to Core, PostgreSQL, a connector, Docker,
+or one managed resource. Check the operation progress and Activity entry before
+retrying a mutation; a request timeout does not prove that Docker rejected it.
+
+## Basic checks
+
+```bash
+docker compose -f docker-compose.yml ps
+docker compose -f docker-compose.yml logs --tail=200 server pg_db
+curl --fail https://citadel.example.com/health
+```
+
+For an Agent or Edge Agent, verify the configured public URL, DNS, certificate
+chain, firewall direction, enrollment state, and version compatibility. For
+Swarm, also verify manager quorum and node-agent coverage.
+
+## Safe diagnostic bundle
+
+Include:
+
+- Citadel version and exact image digest;
+- platform and connector type;
+- operation/activity timestamps and non-secret error text;
+- relevant sanitized Core, Agent, and Docker errors;
+- whether the issue persists after reconnecting, not after deleting state.
+
+Never include `.env`, bearer tokens, Service Account tokens, private keys,
+provider credentials, secret values, or an unsanitized database dump.
+
+Use the project's GitHub issue tracker for reproducible defects. Security issues
+must be reported privately according to the repository security policy.

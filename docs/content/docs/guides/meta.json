@@ -1,0 +1,18 @@
+{
+  "title": "Guides",
+  "pages": [
+    "deployments",
+    "manual-stacks",
+    "git-stacks",
+    "adopting-existing-workloads",
+    "registries",
+    "git-repositories",
+    "builds",
+    "backups",
+    "alert-rules",
+    "automation-actions",
+    "webhooks",
+    "oidc-providers",
+    "two-factor-authentication"
+  ]
+}

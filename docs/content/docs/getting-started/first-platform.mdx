@@ -1,0 +1,20 @@
+---
+title: "Connect the first platform"
+description: "Connect a local or remote Docker Standalone or Swarm platform to Citadel."
+---
+
+1. Sign in as an administrator or an account allowed to create Platforms.
+2. Open **Platforms** and select **Add**.
+3. Choose Docker Standalone or Docker Swarm.
+4. Choose the connector: local Docker, regular Agent, or Edge Agent.
+5. Enter the connector settings shown by the form and save.
+6. Wait for the health indicator and inventory counts to update.
+
+For a local connector, Core must have access to the Docker socket. For a remote
+connector, follow [Regular Agent](/docs/operations/agent) or
+[Edge Agent](/docs/operations/edge-agent). A Swarm platform must connect to a
+manager, and node-local functionality requires node-agent coverage on the
+relevant Nodes.
+
+The platform page reports connectivity separately from Swarm quorum. Resolve a
+disconnected connector or unhealthy manager quorum before applying workloads.

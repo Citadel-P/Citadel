@@ -1,0 +1,20 @@
+---
+title: "Network ports"
+description: "Plan Citadel browser, API, Agent, Edge Agent, Docker, and PostgreSQL traffic."
+---
+
+| Traffic | Default | Direction | Exposure |
+| --- | ---: | --- | --- |
+| Browser and API upstream | TCP 8000 | Reverse proxy to Core | Private in reverse-proxy mode |
+| Edge Agent gRPC upstream | TCP 8001 | Reverse proxy or Edge Agent to Core | Publish through TLS when Edge Agents are used |
+| PostgreSQL | TCP 5432 | Core to PostgreSQL | Private only |
+| Docker socket | Unix socket | Core/Agent to local Docker | Host-local, never public |
+
+The public HTTPS and gRPC ports are selected by your proxy and may differ from
+Core's upstream ports. Direct TLS publishes the configured API and Edge gRPC
+ports through the provided Compose overlay.
+
+Regular Agent and Edge Agent connectivity differs. Follow the generated setup
+shown by Citadel and the [Agent](/docs/operations/agent) or
+[Edge Agent](/docs/operations/edge-agent) guide. Allow only the required
+direction and protect every non-loopback hop.

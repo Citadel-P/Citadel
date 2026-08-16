@@ -1,0 +1,34 @@
+---
+title: "What is Citadel?"
+description: "A simple introduction to Citadel and what it can manage for you."
+---
+
+Citadel is a self-hosted web application for managing Docker. It shows what is
+running, lets you deploy containers and Compose stacks, and helps you operate
+Docker Standalone and Swarm from one place.
+
+## What can I do with it?
+
+- See containers, images, volumes, networks, logs, and resource usage.
+- Deploy a container or a multi-service Compose stack.
+- Manage Docker Swarm Nodes, Services, Tasks, Configs, and Secrets.
+- Pull from registries or build images from Git repositories.
+- Check for updates and control when workloads are redeployed.
+- Run backups, alerts, webhooks, and scheduled automations.
+- Give other users only the access they need.
+
+Docker still runs your workloads. Citadel gives you a clearer place to
+configure, inspect, and operate them.
+
+## How does it work?
+
+Citadel Core hosts the web interface and stores your configuration. It can
+manage Docker on the same machine through the Docker socket. To manage another
+machine, connect a Citadel Agent or Edge Agent from the platform form.
+
+You do not need an Agent for the first local setup.
+
+<Cards>
+  <Card title="Quick start" href="/docs/getting-started/quick-start" description="Run Citadel locally and deploy your first container." />
+  <Card title="Architecture" href="/docs/overview/architecture" description="Learn about Core, Agents, PostgreSQL, and remote Docker hosts." />
+</Cards>

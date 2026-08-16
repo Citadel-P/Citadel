@@ -245,6 +245,7 @@ _Pvt_Extensions
 # Local design verification artifacts
 /.artifacts/
 /design-qa.md
+/.tmp-build/
 
 # Data folder
 src/Citadel.WebApi/data/

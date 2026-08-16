@@ -1,0 +1,23 @@
+---
+title: "Permissions"
+description: "Understand Citadel Roles, resource permissions, specific permissions, and overrides."
+---
+
+Citadel evaluates access through the current actor, assigned Roles and Teams,
+resource-level access, and explicit overrides. A visible UI control is not the
+authorization boundary; the API evaluates permissions again.
+
+Use **Access > Roles** to view the permission matrix for the running release.
+It is the authoritative list because Citadel adds resource types and specific
+operations as features are implemented.
+
+General permission levels progress from no access through read and mutation
+capabilities. Some operations, such as logs, terminal access, statistics,
+deployment, restore, or administrative identity management, also require a
+specific permission. Resource overrides should be exceptional and narrowly
+scoped.
+
+Service Accounts use the same authorization model as users but cannot use an
+interactive browser session. Avoid the built-in Admin Role for integrations;
+create a dedicated Role containing only the required resource and operation
+permissions.

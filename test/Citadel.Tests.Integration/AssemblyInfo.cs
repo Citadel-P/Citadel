@@ -1,4 +1,5 @@
 using Tests.Integration;
+using Xunit.v3;
 
 [assembly: AssemblyFixture(typeof(PostgresTestFixture))]
-[assembly: CollectionBehavior(MaxParallelThreads = 8)]
+[assembly: Parallelization(MaxThreads = 8)]

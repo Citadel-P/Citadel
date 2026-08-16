@@ -1,0 +1,45 @@
+{
+  "name": "citadel-docs",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run validate && next build",
+    "build:api": "npm run generate:api && npm run validate:api && redocly build-docs ../src/schema/Citadel.WebApi_public.json --output api-out/index.html --disableGoogleFont --title \"Citadel API Preview\" && node scripts/finalize-api-output.mjs",
+    "dev": "next dev",
+    "generate:api": "node scripts/generate-api-schema.mjs",
+    "start": "serve out",
+    "start:api": "serve api-out",
+    "types:check": "next typegen && tsc --noEmit",
+    "lint": "eslint",
+    "lint:api": "redocly lint ../src/schema/Citadel.WebApi_public.json",
+    "validate": "node scripts/validate-content.mjs && node scripts/validate-links.mjs",
+    "validate:api": "node scripts/validate-api-schema.mjs && npm run lint:api",
+    "test:static": "node scripts/smoke-static.mjs",
+    "test:api": "node scripts/smoke-api-static.mjs"
+  },
+  "dependencies": {
+    "cnfast": "0.1.0",
+    "fumadocs-core": "16.14.4",
+    "fumadocs-mdx": "15.2.3",
+    "fumadocs-ui": "npm:@fumadocs/base-ui@16.14.4",
+    "lucide-react": "1.31.0",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.46.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/mdx": "2.0.14",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "postcss": "8.5.26",
+    "redoc": "2.5.3",
+    "serve": "14.2.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.0"
+  }
+}

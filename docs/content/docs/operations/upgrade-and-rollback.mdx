@@ -1,0 +1,35 @@
+---
+title: "Upgrade and rollback"
+description: "Upgrade Citadel with immutable image tags and recover safely from a failed release."
+---
+
+## Before an upgrade
+
+1. Read the target release notes and migration warnings.
+2. Back up PostgreSQL and the `citadel_data` volume together.
+3. Record the current exact Core and Agent image versions.
+4. Confirm the current installation is healthy.
+
+## Upgrade
+
+Set `CITADEL_IMAGE_TAG` to the target exact patch version, then run:
+
+```bash
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml ps
+```
+
+Citadel applies generated database migrations during startup. Do not create or
+edit production schema objects manually. Keep the previous database and data
+backup until the new release has passed the operational checks.
+
+## Rollback
+
+A container-image rollback does not reverse database migrations. Use a previous
+exact image tag only when the release notes say the schema remains compatible.
+Otherwise stop Core and restore the matched pre-upgrade PostgreSQL and
+`citadel_data` backup before starting the previous image.
+
+Never move a release tag or replace an immutable patch image. Citadel does not
+publish `latest`.

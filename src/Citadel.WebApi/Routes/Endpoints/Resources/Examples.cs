@@ -48,46 +48,13 @@ internal static class Examples
                 return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
             }
         }
-        internal static class Update
-        {
-            internal static OpenApiExample UpdateAzureRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "my-azure-registry", RegistryHost: "myproject.azurecr.io", Status: RegistryStatus.Active, AzureRegistry.Create("johnDoe", "myPassword"));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-            internal static OpenApiExample UpdateAwsRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "my-ecr-registry", RegistryHost: "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/", Status: RegistryStatus.Active, AWSRegistry.Create(true, "", "", "us-east-2"));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-            internal static OpenApiExample UpdateGitlabRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "", RegistryHost: "https://registry.gitlab.com", Status: RegistryStatus.Active, GitlabRegistry.Create("", "", "https://gitlab.com"));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-            internal static OpenApiExample UpdateDockerHubRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, DockerHubRegistry.Create("", ""));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-            internal static OpenApiExample UpdateGitHubRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, GitHubRegistry.Create("citadel-p", true, "PAT HERE"));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-            internal static OpenApiExample UpdateCustomRegistryExample()
-            {
-                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "localhost:9965", Status: RegistryStatus.Active, CustomRegistry.Create(true, "fake-user", "fake-password"));
-                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
-            }
-        }
-
         internal static ApplicationJsonContext GetJsonContext()
         {
             var options = new JsonSerializerOptions()
             {
                 Converters = { new JsonStringEnumConverter<RegistryStatus>() },
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             return new ApplicationJsonContext(options);
         }

@@ -5,12 +5,51 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using WebApi.OpenApi;
 
 namespace Tests.Integration.WebApi;
 
 public sealed partial class PublicEndpointContractTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private static readonly Guid MissingId = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
+    [Fact]
+    public void PublicApiMetadata_ShouldExposeSupportedResourcesAndExcludeControlPlaneAdministration()
+    {
+        var endpoints = Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<PublicApiMetadata>() is not null)
+            .ToArray();
+
+        Assert.NotEmpty(endpoints);
+        Assert.Contains(endpoints, endpoint => RouteStartsWith(endpoint, "api/v1/platforms"));
+        Assert.Contains(endpoints, endpoint => RouteStartsWith(endpoint, "api/v1/deployments"));
+        Assert.Contains(endpoints, endpoint => RouteStartsWith(endpoint, "api/v1/swarmServices"));
+        Assert.Contains(endpoints, endpoint => RouteStartsWith(endpoint, "api/v1/stacks"));
+
+        string[] excludedPrefixes =
+        [
+            "api/v1/setup",
+            "api/v1/authentication",
+            "api/v1/profile",
+            "api/v1/users",
+            "api/v1/serviceAccounts",
+            "api/v1/teams",
+            "api/v1/roles",
+            "api/v1/lookup",
+            "api/v1/search",
+            "listener/"
+        ];
+
+        Assert.DoesNotContain(
+            endpoints,
+            endpoint => excludedPrefixes.Any(prefix => RouteStartsWith(endpoint, prefix)));
+        Assert.All(endpoints, endpoint =>
+        {
+            Assert.NotNull(endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName);
+            Assert.NotNull(endpoint.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary);
+        });
+    }
 
     [Fact]
     public async Task EveryApiEndpoint_ShouldResolveAndAvoidServerErrorsForPlaceholderInput()
@@ -118,6 +157,11 @@ public sealed partial class PublicEndpointContractTests(PostgresTestFixture fixt
         return normalizedRoute.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase)
                || normalizedRoute.StartsWith("listener/", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool RouteStartsWith(RouteEndpoint endpoint, string prefix)
+        => (endpoint.RoutePattern.RawText ?? string.Empty)
+            .TrimStart('/')
+            .StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 
     private static string Placeholder(string routeParameter)
     {

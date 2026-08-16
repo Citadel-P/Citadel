@@ -40,19 +40,10 @@ internal static class WebApiModule
             .AddDataProtection()
             .PersistKeysToFileSystem(new DirectoryInfo(Constants.DataProtectionKeysPath));
 
+        AddOpenApiDocument(services, "v1");
+        AddOpenApiDocument(services, "public", publicOnly: true);
+
         services
-            .AddOpenApi(options =>
-            {
-                options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1; 
-                options.AddSchemaTransformer<DateTimeOffsetSchemaTransformer>();
-                options.AddDocumentTransformer<ServerTransformer>();
-                options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
-                options.AddDocumentTransformer<KnownEnumSchemaDocumentTransformer>();
-                options.AddOperationTransformer<AddCookieOperationTransformer>();
-                options.AddOperationTransformer<ProduceCookieOperationTransformer>();
-                options.AddOperationTransformer<ExampleOperationTransformer>();
-                options.AddOperationTransformer<RateLimitOperationTransformer>();
-            })
             .AddSingleton<IAutomationApiEndpointCatalog, EndpointDataSourceAutomationApiEndpointCatalog>()
             .AddCors();
 
@@ -125,6 +116,34 @@ internal static class WebApiModule
         services.AddSingleton<ICitadelPublicEndpoints, CitadelPublicEndpoints>();
         services.AddSignalRDependencies();
         return services;
+    }
+
+    private static void AddOpenApiDocument(
+        IServiceCollection services,
+        string documentName,
+        bool publicOnly = false)
+    {
+        services.AddOpenApi(documentName, options =>
+        {
+            options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
+            if (publicOnly)
+            {
+                options.ShouldInclude = description => description.IsPublicApi();
+            }
+
+            options.AddSchemaTransformer<DateTimeOffsetSchemaTransformer>();
+            options.AddDocumentTransformer<ServerTransformer>();
+            options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+            options.AddDocumentTransformer<KnownEnumSchemaDocumentTransformer>();
+            options.AddOperationTransformer<AddCookieOperationTransformer>();
+            options.AddOperationTransformer<ProduceCookieOperationTransformer>();
+            options.AddOperationTransformer<ExampleOperationTransformer>();
+            options.AddOperationTransformer<RateLimitOperationTransformer>();
+            if (publicOnly)
+            {
+                options.AddDocumentTransformer<PublicApiDocumentTransformer>();
+            }
+        });
     }
 
     public static WebApplication UseWebApiModule(this WebApplication app)

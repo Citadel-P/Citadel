@@ -1,0 +1,37 @@
+---
+title: "Architecture"
+description: "Understand Citadel Core, PostgreSQL, connectors, Agents, and managed Docker platforms."
+---
+
+Citadel has a central control plane and one or more Docker data-plane
+connections.
+
+## Components
+
+| Component | Responsibility |
+| --- | --- |
+| Core | Hosts the API and web UI, authorization, jobs, reconciliation, and orchestration |
+| PostgreSQL | Stores configuration, identity, ownership, activities, operations, and retained statistics |
+| Citadel data volume | Stores encryption, signing, data-protection, repository-cache, and other local control-plane files |
+| Local connector | Uses the Docker socket mounted into Core |
+| Regular Agent | Connects Core to a remote Docker host over the configured Agent transport |
+| Edge Agent | Establishes an enrolled outbound connection from a remote host |
+| Swarm node agent | Reports node-local container, log, terminal, volume, and statistics data that a manager cannot provide for other Nodes |
+
+Core reconciles persisted desired state with Docker's observed state. Docker
+events provide prompt updates, while bounded reconciliation repairs missed
+events and state after disconnects or restarts.
+
+## State ownership
+
+Docker remains the runtime source for observed state. Citadel's database is the
+source for managed configuration, ownership, authorization, and operation
+history. Back up PostgreSQL and the Citadel data volume together; restoring
+only one can leave encrypted data or sessions unusable.
+
+## Trust boundaries
+
+- Protect browser and API traffic with TLS.
+- Treat Docker socket access and Agent connections as administrative access to the target host.
+- Grant Service Accounts only the permissions their integration requires.
+- Do not expose PostgreSQL or Core's private upstream listeners publicly.

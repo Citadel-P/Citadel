@@ -1,0 +1,21 @@
+---
+title: "Uninstall Citadel"
+description: "Remove Citadel while making an explicit decision about persistent control-plane state."
+---
+
+Stop and remove the Citadel containers without deleting persistent volumes:
+
+```bash
+docker compose -f docker-compose.yml down
+```
+
+This does not remove workloads that Citadel previously deployed. Decide whether
+those Docker resources should remain before removing the control plane.
+
+The `citadel_data` and `postgres_data` volumes contain the recoverable Citadel
+control plane. Back them up before deletion. Deleting those volumes is permanent
+and removes configuration, identity, history, encryption material, and database
+state; it is not a normal uninstall or upgrade step.
+
+Remove reverse-proxy routes, DNS, TLS files, Agent or Edge Agent installations,
+and firewall rules separately after confirming no other service uses them.

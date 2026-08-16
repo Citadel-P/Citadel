@@ -1,0 +1,26 @@
+---
+title: "API Preview"
+description: "Use Citadel's independently hosted, read-only ReDoc API reference."
+---
+
+Citadel generates a separate public OpenAPI document from endpoints that
+explicitly opt in to the public contract. The full schema used by the web UI is
+not a supported external API.
+
+The API reference is hosted independently with ReDoc. It is documentation only:
+it has no request executor, proxy, credential input, or persisted authorization.
+The final API-reference hostname must be configured by the project owner before
+publication; the product documentation does not guess that URL.
+
+## Authentication
+
+Public operations use an `Authorization: Bearer` header with either a user JWT
+or a `cit_sa_` Service Account token, subject to the operation's authentication
+and authorization requirements. Prefer a dedicated Service Account with a
+narrow Role for CI/CD and external integrations.
+
+## Stability
+
+The contract is labelled **API Preview** until Citadel publishes a compatibility
+and deprecation policy. Operation IDs and the downloadable public schema are the
+reference for an individual release.

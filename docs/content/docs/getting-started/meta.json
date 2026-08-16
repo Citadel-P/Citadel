@@ -1,0 +1,14 @@
+{
+  "title": "Getting started",
+  "pages": [
+    "index",
+    "quick-start",
+    "first-run-setup",
+    "first-platform",
+    "first-deployment",
+    "first-stack",
+    "install",
+    "requirements",
+    "configuration"
+  ]
+}

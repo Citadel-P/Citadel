@@ -1,0 +1,13 @@
+{
+  "title": "Operations",
+  "pages": [
+    "upgrade-and-rollback",
+    "control-plane-recovery",
+    "tls-and-secure-agent-transport",
+    "agent",
+    "edge-agent",
+    "platform-monitoring",
+    "troubleshooting",
+    "uninstallation"
+  ]
+}

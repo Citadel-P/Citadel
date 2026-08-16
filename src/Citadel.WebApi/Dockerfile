@@ -1,5 +1,5 @@
 # .NET Debug Stage (Kept for Visual Studio compatibility)
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS vs.build
+FROM mcr.microsoft.com/dotnet/sdk:11.0.100-preview.7-alpine3.24-aot AS vs.build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 COPY src/Citadel.Contracts/install-deps.sh .
 COPY install-server-deps.sh .
@@ -20,7 +20,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build:image
 
 # Build and publish the application
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS restore
+FROM mcr.microsoft.com/dotnet/sdk:11.0.100-preview.7-alpine3.24-aot AS restore
 ENV NBGV_GitEngine=Disabled
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
@@ -78,12 +78,14 @@ RUN dotnet publish Citadel.WebApi.csproj --no-restore -c Release -o /app/publish
         /p:AssemblyVersion="${ASSEMBLY_VERSION}" /p:FileVersion="${FILE_VERSION}" \
         /p:InformationalVersion="${INFORMATIONAL_VERSION}" \
     && cp /app/volume-helper/Citadel.VolumeHelper /app/publish/Citadel.VolumeHelper \
-    && rm -f /app/publish/*.dbg /app/volume-helper/*.dbg
+    && rm -rf /app/publish/refs \
+    && rm -f /app/publish/*.dbg /app/publish/*.pdb \
+        /app/volume-helper/*.dbg /app/volume-helper/*.pdb
 
 COPY --from=frontend-build /src/Citadel.FrontEnd/dist /app/publish/wwwroot
 
 # Final
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0.0-preview.7-alpine3.24
 WORKDIR /app
 
 LABEL com.citadel.system="true" \

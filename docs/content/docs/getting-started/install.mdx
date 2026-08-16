@@ -1,0 +1,59 @@
+---
+title: "Production installation"
+description: "Install Citadel with persistent storage and secure network access."
+---
+
+If you are evaluating Citadel on your own machine, follow the
+[quick start](/docs/getting-started/quick-start). This page covers a permanent
+installation behind a reverse proxy or with direct TLS.
+
+> Citadel has not published a stable v1 tag yet. The commands below are the
+> stable-release procedure and become usable when the corresponding tag and
+> images exist. Do not substitute `latest`; Citadel does not publish that tag.
+
+## Download one release
+
+Set `VERSION` to an exact version shown on the Citadel releases page, without
+the leading `v`:
+
+```bash
+export VERSION=1.0.0
+mkdir citadel && cd citadel
+curl -fsSLo docker-compose.yml "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/docker-compose.yml"
+curl -fsSLo docker-compose.direct-tls.yml "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/docker-compose.direct-tls.yml"
+curl -fsSLo .env.example "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/.env.example"
+cp .env.example .env
+chmod 600 .env
+```
+
+Set this active value in `.env`:
+
+```text
+CITADEL_IMAGE_TAG=1.0.0
+```
+
+Replace the hostname, proxy, JWT issuer/audience, and PostgreSQL placeholders
+described in [Docker Compose configuration](/docs/getting-started/configuration).
+
+## Start the services
+
+For the recommended reverse-proxy mode:
+
+```bash
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml ps
+```
+
+The Compose file exposes the API and Edge gRPC ports only to its Docker network;
+the reverse proxy must share that network and publish TLS. For direct TLS, mount
+the configured certificate files and include `docker-compose.direct-tls.yml`.
+
+## Verify
+
+Confirm both containers are healthy, then open the configured
+`Transport__PublicUrl`. A clean database redirects to the setup page. Continue
+with [first-run setup](/docs/getting-started/first-run-setup).
+
+The `citadel_data` and `postgres_data` volumes are persistent control-plane
+state. Never delete them as an upgrade step.

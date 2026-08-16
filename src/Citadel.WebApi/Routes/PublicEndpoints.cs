@@ -33,6 +33,7 @@ using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.SwarmServices;
 using WebApi.Routes.Endpoints.Resources.Tags;
 using WebApi.Routes.Endpoints.Resources.Volumes;
+using WebApi.OpenApi;
 
 namespace WebApi.Routes;
 
@@ -120,15 +121,15 @@ public static class PublicEndpoints
             {
                 MapRoleEndpoints(roles);
             }
-            var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization();
+            var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization().WithPublicApi();
             {
                 MapContainerEndpoints(containers);
             }
-            var platforms = group.MapGroup("/platforms").WithTags(PlatformsName).RequireAuthorization();
+            var platforms = group.MapGroup("/platforms").WithTags(PlatformsName).RequireAuthorization().WithPublicApi();
             {
                 MapPlatformEndpoints(platforms);
             }
-            var registries = group.MapGroup("/registries").WithTags(RegistriesName).RequireAuthorization();
+            var registries = group.MapGroup("/registries").WithTags(RegistriesName).RequireAuthorization().WithPublicApi();
             {
                 MapRegistryEndpoints(registries);
             }
@@ -136,35 +137,35 @@ public static class PublicEndpoints
             {
                 MapGitAccountEndpoints(gitAccounts);
             }
-            var gitRepositories = group.MapGroup("/gitRepositories").WithTags(GitRepositoriesName).RequireAuthorization();
+            var gitRepositories = group.MapGroup("/gitRepositories").WithTags(GitRepositoriesName).RequireAuthorization().WithPublicApi();
             {
                 MapGitRepositoryEndpoints(gitRepositories);
             }
-            var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
+            var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization().WithPublicApi();
             {
                 MapImageEndpoints(images);
             }
-            var networks = group.MapGroup("/networks").WithTags(NetworksName).RequireAuthorization();
+            var networks = group.MapGroup("/networks").WithTags(NetworksName).RequireAuthorization().WithPublicApi();
             {
                 MapNetworkEndpoints(networks);
             }
-            var volumes = group.MapGroup("/volumes").WithTags(VolumesName).RequireAuthorization();
+            var volumes = group.MapGroup("/volumes").WithTags(VolumesName).RequireAuthorization().WithPublicApi();
             {
                 MapVolumeEndpoints(volumes);
             }
-            var deployments = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization();
+            var deployments = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization().WithPublicApi();
             {
                 MapDeploymentEndpoints(deployments);
             }
-            var swarmServices = group.MapGroup("/swarmServices").WithTags(SwarmServicesName).RequireAuthorization();
+            var swarmServices = group.MapGroup("/swarmServices").WithTags(SwarmServicesName).RequireAuthorization().WithPublicApi();
             {
                 MapSwarmServiceEndpoints(swarmServices);
             }
-            var stacks = group.MapGroup("/stacks").WithTags(StacksName).RequireAuthorization();
+            var stacks = group.MapGroup("/stacks").WithTags(StacksName).RequireAuthorization().WithPublicApi();
             {
                 MapStackEndpoints(stacks);
             }
-            var resourceBindings = group.MapGroup("/resourceBindings").WithTags(ResourceBindingsName).RequireAuthorization();
+            var resourceBindings = group.MapGroup("/resourceBindings").WithTags(ResourceBindingsName).RequireAuthorization().WithPublicApi();
             {
                 MapResourceBindingEndpoints(resourceBindings);
                 MapResourceBindingSecretEndpoints(resourceBindings);
@@ -173,51 +174,51 @@ public static class PublicEndpoints
             {
                 MapOidcProviderEndpoints(oidcProviders);
             }
-            var automationActions = group.MapGroup("/automation/actions").WithTags(AutomationActionsName).RequireAuthorization();
+            var automationActions = group.MapGroup("/automation/actions").WithTags(AutomationActionsName).RequireAuthorization().WithPublicApi();
             {
                 MapAutomationActionEndpoints(automationActions);
             }
-            var backupRepositories = group.MapGroup("/backupRepositories").WithTags(BackupRepositoriesName).RequireAuthorization();
+            var backupRepositories = group.MapGroup("/backupRepositories").WithTags(BackupRepositoriesName).RequireAuthorization().WithPublicApi();
             {
                 MapBackupRepositoryEndpoints(backupRepositories);
             }
-            var backupPolicies = group.MapGroup("/backupPolicies").WithTags(BackupPoliciesName).RequireAuthorization();
+            var backupPolicies = group.MapGroup("/backupPolicies").WithTags(BackupPoliciesName).RequireAuthorization().WithPublicApi();
             {
                 MapBackupPolicyEndpoints(backupPolicies);
             }
-            var backupRuns = group.MapGroup("/backupRuns").WithTags(BackupRunsName).RequireAuthorization();
+            var backupRuns = group.MapGroup("/backupRuns").WithTags(BackupRunsName).RequireAuthorization().WithPublicApi();
             {
                 MapBackupRunEndpoints(backupRuns);
             }
-            var backupRestoreRuns = group.MapGroup("/backupRestoreRuns").WithTags(BackupRestoreRunsName).RequireAuthorization();
+            var backupRestoreRuns = group.MapGroup("/backupRestoreRuns").WithTags(BackupRestoreRunsName).RequireAuthorization().WithPublicApi();
             {
                 MapBackupRestoreRunEndpoints(backupRestoreRuns);
             }
-            var buildProjects = group.MapGroup("/buildProjects").WithTags(BuildProjectsName).RequireAuthorization();
+            var buildProjects = group.MapGroup("/buildProjects").WithTags(BuildProjectsName).RequireAuthorization().WithPublicApi();
             {
                 MapBuildProjectEndpoints(buildProjects);
             }
-            var buildAgentPools = group.MapGroup("/buildAgentPools").WithTags(BuildAgentPoolsName).RequireAuthorization();
+            var buildAgentPools = group.MapGroup("/buildAgentPools").WithTags(BuildAgentPoolsName).RequireAuthorization().WithPublicApi();
             {
                 MapBuildAgentPoolEndpoints(buildAgentPools);
             }
-            var buildRuns = group.MapGroup("/buildRuns").WithTags(BuildRunsName).RequireAuthorization();
+            var buildRuns = group.MapGroup("/buildRuns").WithTags(BuildRunsName).RequireAuthorization().WithPublicApi();
             {
                 MapBuildRunEndpoints(buildRuns);
             }
-            var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
+            var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization().WithPublicApi();
             {
                 MapTagEndpoints(tags);
             }
-            var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
+            var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization().WithPublicApi();
             {
                 MapActivityEndpoints(activities);
             }
-            var alertEvents = group.MapGroup("/alertEvents").WithTags(AlertEventsName).RequireAuthorization();
+            var alertEvents = group.MapGroup("/alertEvents").WithTags(AlertEventsName).RequireAuthorization().WithPublicApi();
             {
                 MapAlertEventsEndpoints(alertEvents);
             }
-            var alertRules = group.MapGroup("/alertRules").WithTags(AlertRulesName).RequireAuthorization();
+            var alertRules = group.MapGroup("/alertRules").WithTags(AlertRulesName).RequireAuthorization().WithPublicApi();
             {
                 MapAlertRulesEndpoints(alertRules);
             }
@@ -2360,12 +2361,6 @@ public static class PublicEndpoints
             .WithSummary("Update a registry")
             .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryType)} enum")
             .Accepts<PatchRegistryInput>("application/merge-patch+json", "application/json")
-            .WithExample(RegistryType.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
-            .WithExample(RegistryType.AWS.ToString(), Examples.Registries.Update.UpdateAwsRegistryExample())
-            .WithExample(RegistryType.Gitlab.ToString(), Examples.Registries.Update.UpdateGitlabRegistryExample())
-            .WithExample(RegistryType.DockerHub.ToString(), Examples.Registries.Update.UpdateDockerHubRegistryExample())
-            .WithExample(RegistryType.GitHub.ToString(), Examples.Registries.Update.UpdateGitHubRegistryExample())
-            .WithExample(RegistryType.Custom.ToString(), Examples.Registries.Update.UpdateCustomRegistryExample())
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -3100,7 +3095,7 @@ public static class PublicEndpoints
     {
         var rules = alertRules.MapGroup("/");
 
-        rules.MapGet("{id}", AlertRules.GetRule)
+        rules.MapGet("{id:guid}", AlertRules.GetRule)
             .WithSummary("Get alert rule by id")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -3108,7 +3103,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getAlertRule");
 
-        rules.MapGet("{id}/_cfg", AlertRules.GetConfig)
+        rules.MapGet("{id:guid}/_cfg", AlertRules.GetConfig)
             .WithSummary("Get alert rule configuration")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -3139,7 +3134,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("renameAlertRule");
 
-        rules.MapPatch("{id}", AlertRules.PatchRule)
+        rules.MapPatch("{id:guid}", AlertRules.PatchRule)
             .WithSummary("Update an alert rule")
             .Accepts<PatchAlertRuleInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
@@ -3148,7 +3143,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updateAlertRule");
 
-        rules.MapPatch("{id}/_metadata", AlertRules.PatchRuleMetadata)
+        rules.MapPatch("{id:guid}/_metadata", AlertRules.PatchRuleMetadata)
             .WithSummary("Update alert rule metadata")
             .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
@@ -3167,7 +3162,7 @@ public static class PublicEndpoints
 
         var channels = alertRules.MapGroup("/channels");
 
-        channels.MapGet("{id}", AlertRules.GetChannel)
+        channels.MapGet("{id:guid}", AlertRules.GetChannel)
             .WithSummary("Get alert channel by id")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -3197,7 +3192,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("verifyAlertChannel");
 
-        channels.MapPatch("{id}", AlertRules.PatchChannel)
+        channels.MapPatch("{id:guid}", AlertRules.PatchChannel)
             .WithSummary("Update an alert channel")
             .Accepts<AlertChannelInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()

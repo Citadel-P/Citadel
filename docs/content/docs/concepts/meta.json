@@ -1,0 +1,10 @@
+{
+  "title": "Concepts",
+  "pages": [
+    "access-control",
+    "service-accounts",
+    "docker-swarm",
+    "variables-and-secrets",
+    "resource-tags"
+  ]
+}

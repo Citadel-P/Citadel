@@ -1,0 +1,28 @@
+---
+title: "Deploy the first Stack"
+description: "Deploy a small manual Compose Stack to Docker Standalone or Swarm."
+---
+
+1. Open **Stacks** and select **Add**.
+2. Select a Docker Standalone or Docker Swarm platform.
+3. Choose the manual/web-editor source.
+4. Enter a Stack name and this Compose document:
+
+```yaml
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+```
+
+5. Resolve every editor error or preflight blocker.
+6. Save and select **Apply**.
+7. Watch the progress sheet, then verify Services/containers in the Runtime tab.
+
+The platform type is part of Stack orchestration. Standalone uses Docker Compose;
+Swarm uses a native Docker Stack deployment and rejects Compose fields that
+Swarm cannot represent.
+
+See [Manual Stacks](/docs/guides/manual-stacks), [Git Stacks](/docs/guides/git-stacks),
+and [Docker Swarm](/docs/concepts/docker-swarm).

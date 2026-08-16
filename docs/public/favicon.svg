@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="citadel-fortress" x1="19" y1="15" x2="45" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#168BFF" />
+      <stop offset="1" stop-color="#0752B8" />
+    </linearGradient>
+  </defs>
+
+  <path fill="#0B2A66" d="M32 2 59 15v34L32 62 5 49V15L32 2Z" />
+  <path fill="#F8FAFC" d="m32 6.5 23 11v29l-23 11-23-11v-29l23-11Z" />
+  <path fill="#0B2A66" d="m9 43 23 11.5L55 43v4.5L32 59 9 47.5V43Z" />
+
+  <path
+    fill="url(#citadel-fortress)"
+    d="M13 39V18h3v-4h4v4h3v-4h4v4h2v11h2v-3h4v3h2V18h3v-4h4v4h3v-4h4v4h3v21L32 50 13 39Z"
+  />
+  <path fill="#F8FAFC" d="M17 32v-5a2 2 0 0 1 4 0v5h-4Zm26 0v-5a2 2 0 0 1 4 0v5h-4Z" />
+  <path fill="#F8FAFC" d="M28 47.7V42a4 4 0 0 1 8 0v5.7l-4 2.3-4-2.3Z" />
+</svg>

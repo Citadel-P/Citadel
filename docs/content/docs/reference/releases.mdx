@@ -1,0 +1,19 @@
+---
+title: "Releases"
+description: "Understand Citadel version tags, image aliases, release validation, and documentation publication."
+---
+
+Stable Citadel releases use annotated `vMAJOR.MINOR.PATCH` Git tags. The release
+workflow verifies that the tag matches `version.json`, runs the required tests,
+then publishes one image digest under exact patch, minor, and major aliases.
+
+For example, release `v1.0.1` publishes `1.0.1`, `1.0`, and `1`. The exact patch
+tag is immutable; the minor and major aliases can move to a newer stable patch.
+Citadel does not publish `latest`.
+
+Product documentation is built from the same stable release commit and does not
+publish arbitrary `main` behavior as stable documentation. The independent API
+Preview is generated from that commit's explicitly public OpenAPI document.
+
+Citadel currently has no stable v1 tag. Check the GitHub releases page before
+using an installation command or image version.

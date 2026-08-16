@@ -1,0 +1,99 @@
+---
+title: "Quick start"
+description: "Run Citadel locally, connect Docker, and deploy a first container."
+---
+
+This guide starts Citadel and PostgreSQL on one Docker machine. Citadel will
+also manage Docker on that machine. You only need Docker with the Compose
+plugin installed.
+
+> The local setup uses HTTP and listens only on `127.0.0.1`. Use the
+> [production installation](/docs/getting-started/install) before exposing
+> Citadel to a network.
+
+## 1. Start Citadel
+
+> Citadel has not published its first stable tag yet. For now, use the
+> [source-build instructions](#try-the-current-source). The release commands
+> below become available with the first stable release.
+
+Choose an exact version from the
+[Citadel releases page](https://github.com/Citadel-P/Citadel/releases) and run:
+
+```bash
+export VERSION=1.0.0
+mkdir citadel && cd citadel
+
+curl -fsSLO "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/docker-compose.yml"
+curl -fsSLO "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/docker-compose.local.yml"
+
+cat > .env <<EOF
+CITADEL_IMAGE_TAG=${VERSION}
+PG_USER=citadel
+PG_PASSWORD=$(openssl rand -hex 24)
+PG_DATABASE=citadel
+EOF
+
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+```
+
+Wait for both services to become healthy:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml ps
+```
+
+## 2. Create your account
+
+Open [http://localhost:8000](http://localhost:8000). Citadel asks you to create
+the first administrator account and signs you in.
+
+There is no default username or password.
+
+## 3. Connect Docker
+
+1. Open **Platforms** and select **Add**.
+2. Choose **Docker Standalone**.
+3. Choose the **Local** connector.
+4. Enter a name such as `Local Docker` and save.
+
+The platform indicator turns green after Citadel reads the Docker inventory.
+
+## 4. Deploy a container
+
+1. Open **Deployments** and select **Add**.
+2. Select `Local Docker`.
+3. Name the Deployment `nginx`.
+4. Choose **External image**, then select the built-in **Docker Hub** registry.
+5. Enter `nginx:alpine` as the image reference.
+6. Save the Deployment and select **Apply**.
+
+When the progress sheet completes, the Deployment and its container should be
+green. You can now open its logs, inspect it, or add a published port from the
+Config tab.
+
+## What next?
+
+- [Deploy a Compose Stack](/docs/getting-started/first-stack).
+- [Connect another Docker host](/docs/getting-started/first-platform).
+- [Prepare a production installation](/docs/getting-started/install).
+- [Configure backups](/docs/guides/backups).
+
+To stop the local installation without deleting its data:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml down
+```
+
+## Try the current source
+
+Until the first stable image is published, run the current source locally:
+
+```bash
+git clone https://github.com/Citadel-P/Citadel.git
+cd Citadel
+cp .env.example .env
+docker compose up -d --build
+```
+
+Then continue at [create your account](#2-create-your-account).
