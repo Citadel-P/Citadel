@@ -7,16 +7,28 @@ publish = false
 
 [dependencies]
 async-stream.workspace = true
+base64.workspace = true
 bytes.workspace = true
 citadel-application = { path = "../application" }
+citadel-contracts = { path = "../contracts" }
 citadel-domain = { path = "../domain" }
+ed25519-dalek.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
+prost.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
 tracing.workspace = true
+url.workspace = true
 urlencoding.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tonic = { workspace = true, features = ["router"] }

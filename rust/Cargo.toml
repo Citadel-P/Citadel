@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/domain",
+  "crates/contracts",
   "crates/application",
   "crates/adapters",
   "crates/server",
@@ -15,21 +16,32 @@ repository = "https://github.com/citadel-p/citadel"
 
 [workspace.dependencies]
 async-stream = "=0.3.6"
-axum = "=0.8.9"
+axum = { version = "=0.8.9", features = ["ws"] }
+base64 = "=0.23.1"
 bytes = "=1.12.1"
 clap = { version = "=4.6.6", features = ["derive"] }
+ed25519-dalek = "=3.0.0"
 futures-util = "=0.3.34"
+getrandom = "=0.4.3"
+prost = "=0.14.4"
+prost-types = "=0.14.4"
+protoc-bin-vendored = "=3.2.0"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "stream"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = "=0.11.0"
 sqlx = { version = "=0.9.0", default-features = false, features = ["postgres", "runtime-tokio", "uuid"] }
+subtle = "=2.6.1"
 thiserror = "=2.0.20"
 tokio = { version = "=1.53.1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = { version = "=0.7.19", features = ["rt"] }
+tonic = { version = "=0.14.6", default-features = false, features = ["channel", "codegen", "transport"] }
+tonic-prost = "=0.14.6"
+tonic-prost-build = { version = "=0.14.6", default-features = false, features = ["transport"] }
 tower-http = { version = "=0.7.0", features = ["catch-panic", "request-id", "trace"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "fmt", "json"] }
+tokio-tungstenite = { version = "=0.29.0", default-features = false, features = ["connect", "handshake"] }
 urlencoding = "=2.1.3"
 url = "=2.5.8"
 uuid = { version = "=1.24.1", features = ["serde", "v7"] }
