@@ -1,9 +1,16 @@
 #![forbid(unsafe_code)]
 
-use serde::Serialize;
+mod enums;
+mod identity;
+
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub use enums::*;
+pub use identity::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ActorId(Uuid);
 
 impl ActorId {

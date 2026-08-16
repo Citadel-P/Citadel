@@ -6,19 +6,29 @@ use std::time::Duration;
 use axum::Router;
 use axum::extract::State;
 use axum::http::{StatusCode, header};
+use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::crypto::{
+    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+};
 use citadel_adapters::docker::DockerClient;
+use citadel_adapters::identity_store::PostgresIdentityStore;
+use citadel_adapters::license::PostgresLicenseEntitlementService;
 use citadel_adapters::postgres_runtime;
-use citadel_application::{AuthorizedPlatformReader, PlatformRuntimePort, TaskSupervisor};
+use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use citadel_application::{
+    AuthorizedPlatformReader, IdentityService, PlatformRuntimePort, ServiceAccountService,
+    SystemClock, TaskSupervisor, service_account_last_used_channel,
+};
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
-use citadel_server::{Readiness, transport, workers};
+use citadel_server::{Readiness, identity_http, service_accounts_http, transport, workers};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -151,6 +161,38 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let cancellation = CancellationToken::new();
     let readiness = Arc::new(Readiness::default());
     let metrics = Arc::new(Metrics::default());
+    let token_codec = Arc::new(JwtSessionTokenCodec::new(
+        config.identity.jwt_key.expose(),
+        config.identity.issuer.clone(),
+        config.identity.audience.clone(),
+    )?);
+    let service_account_tokens = Arc::new(OpaqueServiceAccountTokenCodec);
+    let entitlements = Arc::new(PostgresLicenseEntitlementService::new(pool.clone()));
+    let clock = Arc::new(SystemClock);
+    let identity_store = Arc::new(PostgresIdentityStore::new(pool.clone()));
+    let (last_used_tracker, last_used_worker) = service_account_last_used_channel(
+        identity_store.clone(),
+        config.identity.service_account_last_used_capacity,
+        Duration::from_secs(30),
+        Duration::from_secs(5 * 60),
+    );
+    let identity = Arc::new(IdentityService::new(
+        identity_store,
+        Arc::new(Argon2PasswordHasher::default()),
+        token_codec,
+        service_account_tokens.clone(),
+        entitlements.clone(),
+        clock.clone(),
+        Arc::new(last_used_tracker),
+        chrono::Duration::from_std(config.identity.access_token_lifetime)?,
+        chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
+    ));
+    let service_accounts = Arc::new(ServiceAccountService::new(
+        Arc::new(PostgresServiceAccountStore::new(pool.clone())),
+        service_account_tokens,
+        entitlements,
+        clock,
+    ));
     let agent = if let Some(agent) = &config.agent {
         let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
         Some(
@@ -176,6 +218,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     });
     let realtime_hub = realtime.as_ref().map(RealtimeService::hub);
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
+    supervisor.spawn(
+        "service-account-last-used",
+        last_used_worker.run(cancellation.child_token()),
+    );
     workers::register(
         &mut supervisor,
         &cancellation,
@@ -206,7 +252,19 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(open_metrics))
-        .with_state(state);
+        .with_state(state)
+        .merge(identity_http::router(identity_http::IdentityHttpState {
+            identity: Arc::clone(&identity),
+            readiness: Arc::clone(&readiness),
+            secure_cookies: config.transport.mode
+                != citadel_server::config::TransportMode::Disabled,
+        }))
+        .merge(service_accounts_http::router(
+            service_accounts_http::ServiceAccountHttpState {
+                identity: Arc::clone(&identity),
+                service_accounts,
+            },
+        ));
     let mut app = if let Some(realtime) = realtime {
         app.merge(realtime.router())
     } else {
@@ -218,8 +276,12 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             .route("/openapi/public/v1.json", get(openapi_public));
     }
     let app = transport::secure_router(
-        app.layer(CatchPanicLayer::custom(transport::panic_response))
-            .layer(TraceLayer::new_for_http()),
+        app.layer(middleware::from_fn_with_state(
+            identity,
+            identity_http::authentication_middleware,
+        ))
+        .layer(CatchPanicLayer::custom(transport::panic_response))
+        .layer(TraceLayer::new_for_http()),
         &config.transport,
         Arc::clone(&readiness),
     )?;

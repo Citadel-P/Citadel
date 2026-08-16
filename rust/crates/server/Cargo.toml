@@ -8,6 +8,8 @@ publish = false
 [dependencies]
 axum.workspace = true
 axum-server.workspace = true
+base64.workspace = true
+chrono.workspace = true
 citadel-adapters = { path = "../adapters" }
 citadel-application = { path = "../application" }
 citadel-contracts = { path = "../contracts" }
@@ -31,6 +33,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite.workspace = true

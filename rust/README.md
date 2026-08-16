@@ -1,9 +1,9 @@
 # Citadel Rust migration workspace
 
 This workspace contains the isolated migration work described in
-`Citadel.Internals/specs/dotnet-to-rust-migration.md`. Rust now owns its
-generated v1 database baseline and migration runner, but it does not yet own
-product routes or replace the .NET Core.
+`Citadel.Internals/specs/dotnet-to-rust-migration.md`. Rust owns its generated
+v1 database baseline and migration runner and now hosts the Phase 3A identity
+and Service Account routes. It does not yet replace the .NET Core.
 
 The prototype proves a small release server, Citadel's existing authorized
 Platform read, a generated Docker Engine read/stream subset over a Unix socket,
@@ -28,6 +28,15 @@ operation; bounded queues; setup/readiness behavior; SPA fallback; and cgroup
 diagnostics. Run `./rust/scripts/Test-Phase2Foundation.ps1` for the disposable
 PostgreSQL, startup, restart, generation, and Actor-scoped query checks. See
 `reports/phase2-foundation-report.md` for scope and evidence.
+
+Phase 3A adds first-run administrator setup, local login and persisted browser
+sessions, Actor/RBAC/resource-ACL evaluation, offline entitlement verification,
+and the Service Account credential lifecycle. Run
+`./rust/scripts/Test-Phase3Identity.ps1` for the disposable PostgreSQL,
+HTTP-session, restart, ACL, revocation, and concurrent-token checks. The full
+Phase 3 exit is intentionally still open for User/Profile, Team, Role, License,
+MFA, OIDC, and frontend cutover; see
+`reports/phase3-identity-access-report.md`.
 
 ## Repository direction
 

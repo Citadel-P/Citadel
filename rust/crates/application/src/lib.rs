@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
 mod bounded_queue;
+mod identity;
+mod service_account_last_used;
+mod service_accounts;
 mod supervisor;
 
 use std::pin::Pin;
@@ -16,6 +19,9 @@ use tokio_util::sync::CancellationToken;
 pub use bounded_queue::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,
 };
+pub use identity::*;
+pub use service_account_last_used::*;
+pub use service_accounts::*;
 pub use supervisor::{SupervisedTaskError, TaskSupervisor};
 
 #[derive(Debug, thiserror::Error)]

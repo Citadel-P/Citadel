@@ -72,6 +72,7 @@ Rejected candidate evaluations remain as reproducible negative evidence:
 All evaluations use exact disposable Docker resource names and temporary
 directories and clean them in `finally` blocks. They do not touch Citadel's
 configured PostgreSQL database.
+
 # Phase 2 foundation
 
 Run `./rust/scripts/Test-Phase2Foundation.ps1` from the repository root to
@@ -80,3 +81,11 @@ database and verify the generated database, Docker, OpenAPI, and frontend
 artifacts. The script tests concurrent startup, restart idempotence, seed data,
 and checksum refusal. It removes its uniquely named container and network when
 the run finishes.
+
+# Phase 3 identity and access
+
+Run `./rust/scripts/Test-Phase3Identity.ps1` from the repository root. It uses
+disposable PostgreSQL databases and server containers to verify the Phase 3A
+local identity, session, Actor authorization, Service Account ACL/token, license
+gate, concurrency, and restart behavior. All resources are uniquely named and
+removed in the script's `finally` block.

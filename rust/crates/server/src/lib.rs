@@ -2,8 +2,10 @@
 
 pub mod config;
 pub mod diagnostics;
+pub mod identity_http;
 pub mod metrics;
 pub mod realtime;
+pub mod service_accounts_http;
 pub mod transport;
 pub mod workers;
 
