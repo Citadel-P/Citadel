@@ -149,6 +149,102 @@ pub const ROUTES: &[RouteContract] = &[
     ),
     route!(
         "get",
+        "/api/v1/profile",
+        "getCurrentProfile",
+        "Get current profile",
+        false,
+        false,
+        Human,
+        None,
+        Some("CurrentProfileView"),
+        200
+    ),
+    route!(
+        "patch",
+        "/api/v1/profile",
+        "updateCurrentProfile",
+        "Update current profile",
+        false,
+        false,
+        Human,
+        Some("UpdateCurrentProfileRequest"),
+        Some("CurrentProfileView"),
+        200
+    ),
+    route!(
+        "get",
+        "/api/v1/profile/preferences",
+        "getProfilePreferences",
+        "Get current profile preferences",
+        false,
+        false,
+        Human,
+        None,
+        Some("UserPreferencesView"),
+        200
+    ),
+    route!(
+        "patch",
+        "/api/v1/profile/preferences",
+        "patchProfilePreferences",
+        "Update current profile preferences",
+        false,
+        false,
+        Human,
+        Some("PatchUserPreferencesRequest"),
+        Some("UserPreferencesView"),
+        200
+    ),
+    route!(
+        "post",
+        "/api/v1/profile/change-password",
+        "changeCurrentPassword",
+        "Change current profile password",
+        false,
+        false,
+        Human,
+        Some("ChangeCurrentPasswordRequest"),
+        None,
+        204
+    ),
+    route!(
+        "get",
+        "/api/v1/profile/sessions",
+        "listProfileSessions",
+        "List current profile sessions",
+        false,
+        false,
+        Human,
+        None,
+        Some("UserSessionsView"),
+        200
+    ),
+    route!(
+        "delete",
+        "/api/v1/profile/sessions/{sessionId}",
+        "revokeProfileSession",
+        "Revoke a profile session",
+        false,
+        false,
+        Human,
+        None,
+        None,
+        204
+    ),
+    route!(
+        "delete",
+        "/api/v1/profile/sessions",
+        "revokeOtherProfileSessions",
+        "Revoke other profile sessions",
+        false,
+        false,
+        Human,
+        None,
+        Some("RevokeOtherProfileSessionsView"),
+        200
+    ),
+    route!(
+        "get",
         "/api/v1/serviceAccounts",
         "listServiceAccounts",
         "List Service Accounts",
@@ -337,6 +433,7 @@ mod tests {
         assert!(ROUTES.iter().filter(|route| route.public).all(|route| {
             !route.path.starts_with("/api/v1/setup")
                 && !route.path.starts_with("/api/v1/authentication")
+                && !route.path.starts_with("/api/v1/profile")
         }));
     }
 }

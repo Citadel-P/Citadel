@@ -18,17 +18,20 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::PostgresIdentityStore;
 use citadel_adapters::license::PostgresLicenseEntitlementService;
 use citadel_adapters::postgres_runtime;
+use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
 use citadel_application::{
-    AuthorizedPlatformReader, IdentityService, PlatformRuntimePort, ServiceAccountService,
-    SystemClock, TaskSupervisor, service_account_last_used_channel,
+    AuthorizedPlatformReader, IdentityService, PlatformRuntimePort, ProfileService,
+    ServiceAccountService, SystemClock, TaskSupervisor, service_account_last_used_channel,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
-use citadel_server::{Readiness, identity_http, service_accounts_http, transport, workers};
+use citadel_server::{
+    Readiness, identity_http, profile_http, service_accounts_http, transport, workers,
+};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -191,6 +194,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(PostgresServiceAccountStore::new(pool.clone())),
         service_account_tokens,
         entitlements,
+        clock.clone(),
+    ));
+    let profiles = Arc::new(ProfileService::new(
+        Arc::new(PostgresProfileStore::new(pool.clone())),
+        Arc::clone(&identity),
         clock,
     ));
     let agent = if let Some(agent) = &config.agent {
@@ -264,7 +272,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 identity: Arc::clone(&identity),
                 service_accounts,
             },
-        ));
+        ))
+        .merge(profile_http::router(profile_http::ProfileHttpState {
+            profiles,
+        }));
     let mut app = if let Some(realtime) = realtime {
         app.merge(realtime.router())
     } else {

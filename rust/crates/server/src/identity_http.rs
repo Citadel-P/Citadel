@@ -108,7 +108,7 @@ async fn refresh(
     connect: ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
-    let Some(refresh_token) = cookie(&headers, REFRESH_COOKIE) else {
+    let Some(refresh_token) = current_refresh_token(&headers) else {
         return identity_error_response(IdentityError::InvalidCredentials, &headers);
     };
     let metadata = session_metadata(&headers, connect);
@@ -142,7 +142,7 @@ async fn logout(
     if !principal.is_human() {
         return identity_error_response(IdentityError::Forbidden, &headers);
     }
-    let refresh_token = cookie(&headers, REFRESH_COOKIE);
+    let refresh_token = current_refresh_token(&headers);
     match state.identity.logout(refresh_token).await {
         Ok(()) => with_deleted_refresh_cookie(
             StatusCode::NO_CONTENT.into_response(),
@@ -194,6 +194,10 @@ fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
+pub(crate) fn current_refresh_token(headers: &HeaderMap) -> Option<&str> {
+    cookie(headers, REFRESH_COOKIE)
+}
+
 fn session_metadata(headers: &HeaderMap, connect: ConnectInfo<SocketAddr>) -> SessionMetadata {
     SessionMetadata {
         user_agent: headers
@@ -231,7 +235,7 @@ fn with_deleted_refresh_cookie(mut response: Response, secure: bool) -> Response
     response
 }
 
-fn no_store(mut response: Response) -> Response {
+pub(crate) fn no_store(mut response: Response) -> Response {
     response
         .headers_mut()
         .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));

@@ -161,6 +161,62 @@ pub enum RoleType {
     Custom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UserDateTimeFormat {
+    System,
+    TwentyFourHour,
+    TwelveHour,
+}
+
+impl UserDateTimeFormat {
+    #[must_use]
+    pub const fn as_database_str(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::TwentyFourHour => "TwentyFourHour",
+            Self::TwelveHour => "TwelveHour",
+        }
+    }
+
+    #[must_use]
+    pub fn from_database_str(value: &str) -> Option<Self> {
+        match value {
+            "System" => Some(Self::System),
+            "TwentyFourHour" => Some(Self::TwentyFourHour),
+            "TwelveHour" => Some(Self::TwelveHour),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UserTheme {
+    System,
+    Light,
+    Dark,
+}
+
+impl UserTheme {
+    #[must_use]
+    pub const fn as_database_str(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Light => "Light",
+            Self::Dark => "Dark",
+        }
+    }
+
+    #[must_use]
+    pub fn from_database_str(value: &str) -> Option<Self> {
+        match value {
+            "System" => Some(Self::System),
+            "Light" => Some(Self::Light),
+            "Dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,5 +229,15 @@ mod tests {
             assert_eq!(ResourceType::from_i32(index as i32), Some(resource));
         }
         assert_eq!(ResourceType::from_i32(22), None);
+    }
+
+    #[test]
+    fn preference_values_match_the_existing_database_contract() {
+        assert_eq!(
+            UserDateTimeFormat::from_database_str("TwentyFourHour"),
+            Some(UserDateTimeFormat::TwentyFourHour)
+        );
+        assert_eq!(UserTheme::Dark.as_database_str(), "Dark");
+        assert_eq!(UserTheme::from_database_str("dark"), None);
     }
 }

@@ -370,12 +370,14 @@ mod tests {
             protector.unprotect(&protected).unwrap().as_slice(),
             b"sensitive"
         );
-        let mut corrupted = protected.into_bytes();
-        *corrupted.last_mut().unwrap() = b'A';
-        assert!(
-            protector
-                .unprotect(std::str::from_utf8(&corrupted).unwrap())
-                .is_err()
+        let body = protected.strip_prefix(SECRET_PREFIX).unwrap();
+        let (nonce, ciphertext) = body.split_once('.').unwrap();
+        let mut corrupted = URL_SAFE_NO_PAD.decode(ciphertext).unwrap();
+        corrupted[0] ^= 1;
+        let corrupted = format!(
+            "{SECRET_PREFIX}{nonce}.{}",
+            URL_SAFE_NO_PAD.encode(corrupted)
         );
+        assert!(protector.unprotect(&corrupted).is_err());
     }
 }

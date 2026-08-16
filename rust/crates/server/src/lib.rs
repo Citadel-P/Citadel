@@ -4,6 +4,7 @@ pub mod config;
 pub mod diagnostics;
 pub mod identity_http;
 pub mod metrics;
+pub mod profile_http;
 pub mod realtime;
 pub mod service_accounts_http;
 pub mod transport;

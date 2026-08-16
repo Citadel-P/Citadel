@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use citadel_application::{
-    EntitlementService, IdentityError, IdentityStore, NewAdministrator, NewSession,
-    ServiceAccountLastUsedStore, SessionMetadata,
+    EntitlementService, IdentityError, IdentityStore, NewSession, ServiceAccountLastUsedStore,
+    SessionMetadata, UserSessionRecord,
 };
 use citadel_domain::{
     ADMIN_ROLE_ID, ActorId, ActorPrincipal, AuthenticatedPrincipalType, AuthorizationSnapshot,
-    PermissionGrant, PermissionLevel, ResourceType, SYSTEM_ACTOR_ID, ServiceAccountCredential,
+    PermissionGrant, PermissionLevel, ResourceType, ServiceAccountCredential, User,
     UserAuthentication,
 };
 use futures_util::future::BoxFuture;
@@ -39,7 +39,7 @@ impl IdentityStore for PostgresIdentityStore {
 
     fn initialize_administrator<'a>(
         &'a self,
-        administrator: &'a NewAdministrator,
+        administrator: &'a User,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
@@ -56,8 +56,8 @@ impl IdentityStore for PostgresIdentityStore {
             let conflict = sqlx::query_scalar::<_, bool>(
                 "SELECT EXISTS(SELECT 1 FROM users WHERE lower(name) = lower($1) OR lower(email) = lower($2))",
             )
-            .bind(&administrator.name)
-            .bind(&administrator.email)
+            .bind(administrator.name())
+            .bind(administrator.email())
             .fetch_one(&mut *transaction)
             .await
             .map_err(storage)?;
@@ -68,7 +68,7 @@ impl IdentityStore for PostgresIdentityStore {
             }
 
             sqlx::query("INSERT INTO actors (id, isenabled, type) VALUES ($1, TRUE, 'User')")
-                .bind(administrator.actor_id.value())
+                .bind(administrator.actor_id().value())
                 .execute(&mut *transaction)
                 .await
                 .map_err(storage)?;
@@ -78,33 +78,22 @@ INSERT INTO users (id, actorid, createdat, createdbyactorid, email, name, passwo
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 "#,
             )
-            .bind(administrator.user_id)
-            .bind(administrator.actor_id.value())
-            .bind(administrator.created_at)
-            .bind(SYSTEM_ACTOR_ID)
-            .bind(&administrator.email)
-            .bind(&administrator.name)
-            .bind(&administrator.password_hash)
+            .bind(administrator.id())
+            .bind(administrator.actor_id().value())
+            .bind(administrator.created_at())
+            .bind(administrator.created_by_actor_id().value())
+            .bind(administrator.email())
+            .bind(administrator.name())
+            .bind(administrator.password_hash())
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
             sqlx::query("INSERT INTO actorroles (actorid, roleid) VALUES ($1, $2)")
-                .bind(administrator.actor_id.value())
+                .bind(administrator.actor_id().value())
                 .bind(ADMIN_ROLE_ID)
                 .execute(&mut *transaction)
                 .await
                 .map_err(storage)?;
-            sqlx::query(
-                r#"
-INSERT INTO userpreferences (userid, datetimeformat, theme, timezone, updatedat)
-VALUES ($1, 'system', 'system', 'UTC', $2)
-"#,
-            )
-            .bind(administrator.user_id)
-            .bind(administrator.created_at)
-            .execute(&mut *transaction)
-            .await
-            .map_err(storage)?;
             let completed = sqlx::query(
                 r#"
 UPDATE instancesetupstates
@@ -112,8 +101,8 @@ SET initialadministratoractorid = $1, initializedat = $2, updatedat = $2
 WHERE id = 1 AND initializedat IS NULL
 "#,
             )
-            .bind(administrator.actor_id.value())
-            .bind(administrator.created_at)
+            .bind(administrator.actor_id().value())
+            .bind(administrator.created_at())
             .execute(&mut *transaction)
             .await
             .map_err(storage)?
@@ -123,11 +112,11 @@ WHERE id = 1 AND initializedat IS NULL
             }
             transaction.commit().await.map_err(storage)?;
             Ok(UserAuthentication {
-                user_id: administrator.user_id,
-                actor_id: administrator.actor_id,
-                name: administrator.name.clone(),
-                email: administrator.email.clone(),
-                password_hash: Some(administrator.password_hash.clone()),
+                user_id: administrator.id(),
+                actor_id: administrator.actor_id(),
+                name: administrator.name().to_owned(),
+                email: administrator.email().to_owned(),
+                password_hash: administrator.password_hash().map(str::to_owned),
                 enabled: true,
                 roles: vec!["Admin".to_owned()],
             })
@@ -204,16 +193,28 @@ GROUP BY u.id, u.actorid, u.name, u.email, u.password, a.isenabled
     fn create_session<'a>(
         &'a self,
         session: &'a NewSession,
+        expected_password_hash: Option<&'a str>,
         maximum_sessions: i64,
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("SELECT id FROM users WHERE id = $1 FOR UPDATE")
-                .bind(session.user_id)
-                .fetch_optional(&mut *transaction)
-                .await
-                .map_err(storage)?
-                .ok_or(IdentityError::NotFound)?;
+            let persisted_password = sqlx::query_scalar::<_, Option<String>>(
+                r#"
+SELECT u.password
+FROM users u
+JOIN actors actor ON actor.id = u.actorid AND actor.type = 'User' AND actor.isenabled
+WHERE u.id = $1
+FOR UPDATE OF u
+"#,
+            )
+            .bind(session.user_id)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(storage)?
+            .ok_or(IdentityError::NotFound)?;
+            if persisted_password.as_deref() != expected_password_hash {
+                return Err(IdentityError::InvalidCredentials);
+            }
             sqlx::query(
                 r#"
 INSERT INTO refreshtokens (id, createdat, expiresat, ipaddress, lastseenat, useragent, userid)
@@ -320,6 +321,129 @@ WHERE id = $1 AND expiresat > $2
                 .await
                 .map_err(storage)?;
             Ok(())
+        })
+    }
+
+    fn active_session_id(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Option<Uuid>, IdentityError>> {
+        Box::pin(async move {
+            sqlx::query_scalar(
+                r#"
+SELECT id
+FROM refreshtokens
+WHERE id = $1 AND userid = $2 AND expiresat > $3
+"#,
+            )
+            .bind(session_id)
+            .bind(user_id)
+            .bind(now)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)
+        })
+    }
+
+    fn list_active_sessions(
+        &self,
+        user_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Vec<UserSessionRecord>, IdentityError>> {
+        Box::pin(async move {
+            sqlx::query(
+                r#"
+SELECT id, useragent, ipaddress, createdat, lastseenat, expiresat
+FROM refreshtokens
+WHERE userid = $1 AND expiresat > $2
+ORDER BY lastseenat DESC, createdat DESC, id DESC
+"#,
+            )
+            .bind(user_id)
+            .bind(now)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(map_user_session)
+            .collect()
+        })
+    }
+
+    fn delete_owned_session(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+        current_session_id: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<bool, IdentityError>> {
+        Box::pin(async move {
+            let affected = sqlx::query(
+                r#"
+DELETE FROM refreshtokens
+WHERE id = $1
+  AND userid = $2
+  AND ($3::uuid IS NULL OR id <> $3)
+"#,
+            )
+            .bind(session_id)
+            .bind(user_id)
+            .bind(current_session_id)
+            .execute(&self.pool)
+            .await
+            .map_err(storage)?
+            .rows_affected();
+            Ok(affected == 1)
+        })
+    }
+
+    fn delete_other_sessions(
+        &self,
+        user_id: Uuid,
+        current_session_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Option<i64>, IdentityError>> {
+        Box::pin(async move {
+            let mut transaction = self.pool.begin().await.map_err(storage)?;
+            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+                .bind(user_id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(storage)?
+                .is_none()
+            {
+                return Ok(None);
+            }
+            let row = sqlx::query(
+                r#"
+WITH current_session AS MATERIALIZED (
+    SELECT id
+    FROM refreshtokens
+    WHERE id = $2 AND userid = $1 AND expiresat > $3
+    FOR UPDATE
+),
+deleted AS (
+    DELETE FROM refreshtokens
+    WHERE userid = $1
+      AND id <> $2
+      AND EXISTS (SELECT 1 FROM current_session)
+    RETURNING id
+)
+SELECT EXISTS (SELECT 1 FROM current_session) AS current_exists,
+       (SELECT count(*) FROM deleted) AS deleted_count
+"#,
+            )
+            .bind(user_id)
+            .bind(current_session_id)
+            .bind(now)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(storage)?;
+            let current_exists = row.try_get::<bool, _>("current_exists").map_err(storage)?;
+            let deleted_count = row.try_get::<i64, _>("deleted_count").map_err(storage)?;
+            transaction.commit().await.map_err(storage)?;
+            Ok(current_exists.then_some(deleted_count))
         })
     }
 
@@ -599,6 +723,17 @@ fn map_user_authentication(
         password_hash: row.try_get("password").map_err(storage)?,
         enabled: row.try_get("isenabled").map_err(storage)?,
         roles: row.try_get("roles").map_err(storage)?,
+    })
+}
+
+fn map_user_session(row: sqlx::postgres::PgRow) -> Result<UserSessionRecord, IdentityError> {
+    Ok(UserSessionRecord {
+        id: row.try_get("id").map_err(storage)?,
+        user_agent: row.try_get("useragent").map_err(storage)?,
+        ip_address: row.try_get("ipaddress").map_err(storage)?,
+        created_at: row.try_get("createdat").map_err(storage)?,
+        last_seen_at: row.try_get("lastseenat").map_err(storage)?,
+        expires_at: row.try_get("expiresat").map_err(storage)?,
     })
 }
 

@@ -3,7 +3,8 @@ use std::sync::Arc;
 use chrono::{DateTime, Duration, Utc};
 use citadel_domain::{
     ActorId, ActorPrincipal, AuthenticatedPrincipalType, AuthorizationSnapshot, PermissionLevel,
-    ResourceType, ServiceAccountCredential, SpecificPermission, UserAuthentication,
+    ResourceType, SYSTEM_ACTOR_ID, ServiceAccountCredential, SpecificPermission, User,
+    UserAuthentication,
 };
 use email_address::EmailAddress;
 use futures_util::future::BoxFuture;
@@ -94,22 +95,22 @@ pub struct SessionTokens {
 }
 
 #[derive(Debug, Clone)]
-pub struct NewAdministrator {
-    pub user_id: Uuid,
-    pub actor_id: ActorId,
-    pub name: String,
-    pub email: String,
-    pub password_hash: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone)]
 pub struct NewSession {
     pub id: Uuid,
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub metadata: SessionMetadata,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserSessionRecord {
+    pub id: Uuid,
+    pub user_agent: Option<String>,
+    pub ip_address: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,7 +134,7 @@ pub trait IdentityStore: Send + Sync {
 
     fn initialize_administrator<'a>(
         &'a self,
-        administrator: &'a NewAdministrator,
+        administrator: &'a User,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>>;
 
     fn find_user_for_login<'a>(
@@ -149,6 +150,7 @@ pub trait IdentityStore: Send + Sync {
     fn create_session<'a>(
         &'a self,
         session: &'a NewSession,
+        expected_password_hash: Option<&'a str>,
         maximum_sessions: i64,
     ) -> BoxFuture<'a, Result<(), IdentityError>>;
 
@@ -166,6 +168,33 @@ pub trait IdentityStore: Send + Sync {
     ) -> BoxFuture<'a, Result<bool, IdentityError>>;
 
     fn delete_session(&self, session_id: Uuid) -> BoxFuture<'_, Result<(), IdentityError>>;
+
+    fn active_session_id(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Option<Uuid>, IdentityError>>;
+
+    fn list_active_sessions(
+        &self,
+        user_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Vec<UserSessionRecord>, IdentityError>>;
+
+    fn delete_owned_session(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+        current_session_id: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<bool, IdentityError>>;
+
+    fn delete_other_sessions(
+        &self,
+        user_id: Uuid,
+        current_session_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'_, Result<Option<i64>, IdentityError>>;
 
     fn load_principal(
         &self,
@@ -284,14 +313,14 @@ impl IdentityService {
         validate_email(&request.email)?;
         validate_password(&request.password, Some(&request.name), Some(&request.email))?;
         let now = self.clock.now();
-        let administrator = NewAdministrator {
-            user_id: Uuid::now_v7(),
-            actor_id: ActorId::new(Uuid::now_v7()),
-            name: request.name.trim().to_owned(),
-            email: request.email.trim().to_ascii_lowercase(),
-            password_hash: self.hash_password(request.password).await?,
-            created_at: now,
-        };
+        let administrator = User::new(
+            request.name.trim().to_owned(),
+            request.email.trim().to_ascii_lowercase(),
+            Some(self.hash_password(request.password).await?),
+            ActorId::new(Uuid::now_v7()),
+            ActorId::new(SYSTEM_ACTOR_ID),
+            now,
+        );
         let user = self.store.initialize_administrator(&administrator).await?;
         let session = self.issue_session(&user, metadata).await?;
         Ok((
@@ -387,6 +416,56 @@ impl IdentityService {
         Ok(())
     }
 
+    pub async fn resolve_current_session(
+        &self,
+        user_id: Uuid,
+        refresh_token: Option<&str>,
+    ) -> Result<Option<Uuid>, IdentityError> {
+        let Some(refresh_token) = refresh_token else {
+            return Ok(None);
+        };
+        let Ok(claims) = self.tokens.decode_refresh(refresh_token) else {
+            return Ok(None);
+        };
+        let now = self.clock.now();
+        if claims.expires_at <= now {
+            return Ok(None);
+        }
+        self.store
+            .active_session_id(claims.session_id, user_id, now)
+            .await
+    }
+
+    pub async fn list_active_sessions(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<UserSessionRecord>, IdentityError> {
+        self.store
+            .list_active_sessions(user_id, self.clock.now())
+            .await
+    }
+
+    pub async fn revoke_owned_session(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+        current_session_id: Option<Uuid>,
+    ) -> Result<bool, IdentityError> {
+        self.store
+            .delete_owned_session(session_id, user_id, current_session_id)
+            .await
+    }
+
+    pub async fn revoke_other_sessions(
+        &self,
+        user_id: Uuid,
+        current_session_id: Uuid,
+    ) -> Result<Option<i64>, IdentityError> {
+        self.store
+            .delete_other_sessions(user_id, current_session_id, self.clock.now())
+            .await
+    }
+
     pub async fn authenticate_bearer(&self, token: &str) -> Result<ActorPrincipal, IdentityError> {
         if token.starts_with("cit_sa_") {
             return self.authenticate_service_account(token).await;
@@ -462,6 +541,13 @@ impl IdentityService {
         }
     }
 
+    pub async fn authorization_snapshot(
+        &self,
+        principal: &ActorPrincipal,
+    ) -> Result<AuthorizationSnapshot, IdentityError> {
+        self.store.authorization_snapshot(principal.actor_id).await
+    }
+
     pub async fn global_permission(
         &self,
         principal: &ActorPrincipal,
@@ -532,6 +618,7 @@ impl IdentityService {
                     expires_at,
                     metadata,
                 },
+                user.password_hash.as_deref(),
                 MAXIMUM_SESSIONS_PER_USER,
             )
             .await?;
@@ -554,7 +641,7 @@ impl IdentityService {
         })
     }
 
-    async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
+    pub(crate) async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
         let permit = Arc::clone(&self.credential_workers)
             .acquire_owned()
             .await
@@ -568,7 +655,7 @@ impl IdentityService {
         .map_err(|_| IdentityError::Credential)?
     }
 
-    async fn verify_password(
+    pub(crate) async fn verify_password(
         &self,
         password: String,
         encoded_hash: String,

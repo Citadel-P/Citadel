@@ -8,7 +8,9 @@ use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Clock, EntitlementService, IdentityError, ServiceAccountTokenCodec, validate_name};
+use crate::{
+    Clock, EntitlementService, IdentityError, PatchField, ServiceAccountTokenCodec, validate_name,
+};
 
 pub const DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS: i64 = 90;
 pub const MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS: i64 = 365;
@@ -77,26 +79,6 @@ pub struct UpdateServiceAccountRequest {
     pub description: PatchField<String>,
     #[serde(default)]
     pub is_enabled: PatchField<bool>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum PatchField<T> {
-    #[default]
-    Missing,
-    Null,
-    Value(T),
-}
-
-impl<'de, T> Deserialize<'de> for PatchField<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Option::<T>::deserialize(deserializer).map(|value| value.map_or(Self::Null, Self::Value))
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

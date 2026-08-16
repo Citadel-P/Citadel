@@ -85,7 +85,9 @@ the run finishes.
 # Phase 3 identity and access
 
 Run `./rust/scripts/Test-Phase3Identity.ps1` from the repository root. It uses
-disposable PostgreSQL databases and server containers to verify the Phase 3A
-local identity, session, Actor authorization, Service Account ACL/token, license
-gate, concurrency, and restart behavior. All resources are uniquely named and
-removed in the script's `finally` block.
+disposable PostgreSQL databases and server containers to verify the Phase
+3A/B/C/D/E local identity, current profile, lazy and persisted profile
+preferences, active browser-session listing and revocation, password changes,
+Actor authorization, Service Account ACL/token, license gate, concurrency, and
+restart behavior. All resources are uniquely named and removed in the script's
+`finally` block.
