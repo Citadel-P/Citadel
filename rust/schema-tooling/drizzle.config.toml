@@ -1,0 +1,11 @@
+dialect = "postgresql"
+driver = "postgres-sync"
+schema = "proof-output/schema.rs"
+out = "proof-output/migrations"
+breakpoints = false
+
+[dbCredentials]
+url = { env = "PHASE1_DATABASE_URL" }
+
+[introspect]
+casing = "preserve"
