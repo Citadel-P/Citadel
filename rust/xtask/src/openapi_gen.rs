@@ -139,6 +139,111 @@ fn schemas() -> Value {
             "type": "string",
             "enum": ["Logs", "Inspect", "Apply", "Pull", "Terminal", "ResourceBindings", "Releases", "Restore", "Browse", "Download", "ManageNodeAgents", "Use", "ManageCredentials"]
         },
+        "UpdateCurrentProfileRequest": {
+            "type": "object", "required": ["displayName"], "additionalProperties": false,
+            "properties": { "displayName": string() }
+        },
+        "UserDateTimeFormat": {
+            "type": "string", "enum": ["System", "TwentyFourHour", "TwelveHour"]
+        },
+        "UserTheme": {
+            "type": "string", "enum": ["System", "Light", "Dark"]
+        },
+        "PatchUserPreferencesRequest": {
+            "type": "object", "minProperties": 1, "additionalProperties": false,
+            "properties": {
+                "timeZone": { "type": "string" },
+                "dateTimeFormat": { "$ref": "#/components/schemas/UserDateTimeFormat" },
+                "theme": { "$ref": "#/components/schemas/UserTheme" }
+            }
+        },
+        "ChangeCurrentPasswordRequest": {
+            "type": "object", "required": ["currentPassword", "newPassword"], "additionalProperties": false,
+            "properties": {
+                "currentPassword": { "type": "string", "writeOnly": true, "maxLength": 128 },
+                "newPassword": { "type": "string", "writeOnly": true, "minLength": 15, "maxLength": 128 }
+            }
+        },
+        "UserPreferencesView": {
+            "type": "object", "required": ["timeZone", "dateTimeFormat", "theme", "isPersisted"],
+            "additionalProperties": false,
+            "properties": {
+                "timeZone": nullable_string(),
+                "dateTimeFormat": { "$ref": "#/components/schemas/UserDateTimeFormat" },
+                "theme": { "$ref": "#/components/schemas/UserTheme" },
+                "isPersisted": { "type": "boolean" }
+            }
+        },
+        "UserSessionSummaryView": {
+            "type": "object",
+            "required": ["id", "displayName", "userAgent", "ipAddress", "createdAt", "lastSeenAt", "expiresAt", "isCurrent"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(),
+                "displayName": string(),
+                "userAgent": nullable_string(),
+                "ipAddress": nullable_string(),
+                "createdAt": { "type": "string", "format": "date-time" },
+                "lastSeenAt": { "type": "string", "format": "date-time" },
+                "expiresAt": { "type": "string", "format": "date-time" },
+                "isCurrent": { "type": "boolean" }
+            }
+        },
+        "UserSessionsView": {
+            "type": "object", "required": ["sessions", "canRevokeOtherSessions"],
+            "additionalProperties": false,
+            "properties": {
+                "sessions": { "type": "array", "items": { "$ref": "#/components/schemas/UserSessionSummaryView" } },
+                "canRevokeOtherSessions": { "type": "boolean" }
+            }
+        },
+        "RevokeOtherProfileSessionsView": {
+            "type": "object", "required": ["count"], "additionalProperties": false,
+            "properties": { "count": { "type": "integer", "format": "int64", "minimum": 0 } }
+        },
+        "ProfileResourceInfo": {
+            "type": "object", "required": ["id", "name"], "additionalProperties": false,
+            "properties": { "id": uuid(), "name": string() }
+        },
+        "CurrentProfileAuthenticationType": {
+            "type": "string", "enum": ["Local", "Oidc"]
+        },
+        "CurrentProfileAuthenticationView": {
+            "type": "object",
+            "required": ["type", "label", "canChangePassword", "canUseLocalPasswordMfa", "oidcProviderId", "oidcProviderName"],
+            "additionalProperties": false,
+            "properties": {
+                "type": { "$ref": "#/components/schemas/CurrentProfileAuthenticationType" },
+                "label": string(),
+                "canChangePassword": { "type": "boolean" },
+                "canUseLocalPasswordMfa": { "type": "boolean" },
+                "oidcProviderId": nullable_uuid(),
+                "oidcProviderName": nullable_string()
+            }
+        },
+        "CurrentProfileAuthorizationView": {
+            "type": "object", "required": ["isAdministrator", "alertRules", "bindings", "tags"],
+            "additionalProperties": false,
+            "properties": {
+                "isAdministrator": { "type": "boolean" },
+                "alertRules": { "$ref": "#/components/schemas/ResourceCapabilities" },
+                "bindings": { "$ref": "#/components/schemas/ResourceCapabilities" },
+                "tags": { "$ref": "#/components/schemas/ResourceCapabilities" }
+            }
+        },
+        "CurrentProfileView": {
+            "type": "object",
+            "required": ["id", "displayName", "email", "authentication", "authorization", "createdAt", "directRoles", "teams"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "displayName": string(), "email": { "type": "string", "format": "email" },
+                "authentication": { "$ref": "#/components/schemas/CurrentProfileAuthenticationView" },
+                "authorization": { "$ref": "#/components/schemas/CurrentProfileAuthorizationView" },
+                "createdAt": { "type": "string", "format": "date-time" },
+                "directRoles": { "type": "array", "items": { "$ref": "#/components/schemas/ProfileResourceInfo" } },
+                "teams": { "type": "array", "items": { "$ref": "#/components/schemas/ProfileResourceInfo" } }
+            }
+        },
         "ResourceInfo": {
             "type": "object", "required": ["id", "name", "group"], "additionalProperties": false,
             "properties": { "id": uuid(), "name": string(), "group": nullable_string() }
@@ -421,7 +526,29 @@ fn operation(route: &RouteContract) -> Value {
             }),
         );
     }
+    let path_parameters = uuid_path_parameters(route.path);
+    if !path_parameters.is_empty() {
+        operation
+            .as_object_mut()
+            .expect("operation is an object")
+            .insert("parameters".to_owned(), Value::Array(path_parameters));
+    }
     operation
+}
+
+fn uuid_path_parameters(path: &str) -> Vec<Value> {
+    path.split('{')
+        .skip(1)
+        .filter_map(|remainder| remainder.split_once('}').map(|(name, _)| name))
+        .map(|name| {
+            json!({
+                "name": name,
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string", "format": "uuid" }
+            })
+        })
+        .collect()
 }
 
 fn frontend_types() -> String {
@@ -483,6 +610,33 @@ mod tests {
                 .as_object()
                 .expect("generated schemas are an object");
             assert_schema_references_resolve(&document, schemas);
+        }
+    }
+
+    #[test]
+    fn generated_uuid_path_parameters_are_explicit() {
+        let document = document(false);
+        for route in ROUTES.iter().filter(|route| route.path.contains('{')) {
+            assert!(
+                route
+                    .path
+                    .split('{')
+                    .skip(1)
+                    .filter_map(|value| value.split_once('}').map(|(name, _)| name))
+                    .all(|name| name.to_ascii_lowercase().ends_with("id")),
+                "UUID path inference requires an ID-named parameter: {}",
+                route.path
+            );
+            let operation = &document["paths"][route.path][route.method];
+            let parameters = operation["parameters"]
+                .as_array()
+                .expect("parameterized routes declare path parameters");
+            assert_eq!(parameters.len(), route.path.matches('{').count());
+            assert!(parameters.iter().all(|parameter| {
+                parameter["in"] == "path"
+                    && parameter["required"] == true
+                    && parameter["schema"]["format"] == "uuid"
+            }));
         }
     }
 

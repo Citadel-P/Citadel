@@ -69,6 +69,27 @@
         ],
         "type": "object"
       },
+      "ChangeCurrentPasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "maxLength": 128,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "maxLength": 128,
+            "minLength": 15,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
       "CreateServiceAccountRequest": {
         "additionalProperties": false,
         "properties": {
@@ -203,6 +224,125 @@
         ],
         "type": "object"
       },
+      "CurrentProfileAuthenticationType": {
+        "enum": [
+          "Local",
+          "Oidc"
+        ],
+        "type": "string"
+      },
+      "CurrentProfileAuthenticationView": {
+        "additionalProperties": false,
+        "properties": {
+          "canChangePassword": {
+            "type": "boolean"
+          },
+          "canUseLocalPasswordMfa": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "oidcProviderId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "oidcProviderName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/CurrentProfileAuthenticationType"
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "canChangePassword",
+          "canUseLocalPasswordMfa",
+          "oidcProviderId",
+          "oidcProviderName"
+        ],
+        "type": "object"
+      },
+      "CurrentProfileAuthorizationView": {
+        "additionalProperties": false,
+        "properties": {
+          "alertRules": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "isAdministrator": {
+            "type": "boolean"
+          },
+          "tags": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        },
+        "required": [
+          "isAdministrator",
+          "alertRules",
+          "bindings",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "CurrentProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "$ref": "#/components/schemas/CurrentProfileAuthenticationView"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/CurrentProfileAuthorizationView"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "directRoles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileResourceInfo"
+            },
+            "type": "array"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileResourceInfo"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "authentication",
+          "authorization",
+          "createdAt",
+          "directRoles",
+          "teams"
+        ],
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -278,6 +418,22 @@
         ],
         "type": "object"
       },
+      "PatchUserPreferencesRequest": {
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "dateTimeFormat": {
+            "$ref": "#/components/schemas/UserDateTimeFormat"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/UserTheme"
+          },
+          "timeZone": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PermissionLevel": {
         "enum": [
           "None",
@@ -343,6 +499,23 @@
           "title",
           "status",
           "requestId"
+        ],
+        "type": "object"
+      },
+      "ProfileResourceInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -460,6 +633,20 @@
           "ServiceAccount"
         ],
         "type": "string"
+      },
+      "RevokeOtherProfileSessionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
       },
       "ServiceAccountCapabilities": {
         "additionalProperties": false,
@@ -934,6 +1121,18 @@
         ],
         "type": "object"
       },
+      "UpdateCurrentProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName"
+        ],
+        "type": "object"
+      },
       "UpdateServiceAccountRequest": {
         "additionalProperties": false,
         "properties": {
@@ -951,6 +1150,118 @@
           }
         },
         "type": "object"
+      },
+      "UserDateTimeFormat": {
+        "enum": [
+          "System",
+          "TwentyFourHour",
+          "TwelveHour"
+        ],
+        "type": "string"
+      },
+      "UserPreferencesView": {
+        "additionalProperties": false,
+        "properties": {
+          "dateTimeFormat": {
+            "$ref": "#/components/schemas/UserDateTimeFormat"
+          },
+          "isPersisted": {
+            "type": "boolean"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/UserTheme"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "timeZone",
+          "dateTimeFormat",
+          "theme",
+          "isPersisted"
+        ],
+        "type": "object"
+      },
+      "UserSessionSummaryView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ipAddress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "userAgent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "userAgent",
+          "ipAddress",
+          "createdAt",
+          "lastSeenAt",
+          "expiresAt",
+          "isCurrent"
+        ],
+        "type": "object"
+      },
+      "UserSessionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "canRevokeOtherSessions": {
+            "type": "boolean"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/UserSessionSummaryView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions",
+          "canRevokeOtherSessions"
+        ],
+        "type": "object"
+      },
+      "UserTheme": {
+        "enum": [
+          "System",
+          "Light",
+          "Dark"
+        ],
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -1061,6 +1372,299 @@
         "security": [],
         "summary": "Refresh browser access",
         "x-citadel-principal": "anonymous"
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "operationId": "getCurrentProfile",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentProfileView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get current profile",
+        "x-citadel-principal": "human"
+      },
+      "patch": {
+        "operationId": "updateCurrentProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCurrentProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentProfileView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update current profile",
+        "x-citadel-principal": "human"
+      }
+    },
+    "/api/v1/profile/change-password": {
+      "post": {
+        "operationId": "changeCurrentPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCurrentPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Change current profile password",
+        "x-citadel-principal": "human"
+      }
+    },
+    "/api/v1/profile/preferences": {
+      "get": {
+        "operationId": "getProfilePreferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get current profile preferences",
+        "x-citadel-principal": "human"
+      },
+      "patch": {
+        "operationId": "patchProfilePreferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update current profile preferences",
+        "x-citadel-principal": "human"
+      }
+    },
+    "/api/v1/profile/sessions": {
+      "delete": {
+        "operationId": "revokeOtherProfileSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOtherProfileSessionsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Revoke other profile sessions",
+        "x-citadel-principal": "human"
+      },
+      "get": {
+        "operationId": "listProfileSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSessionsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List current profile sessions",
+        "x-citadel-principal": "human"
+      }
+    },
+    "/api/v1/profile/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "revokeProfileSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Revoke a profile session",
+        "x-citadel-principal": "human"
       }
     },
     "/api/v1/roles/permissions/matrix": {
@@ -1285,6 +1889,17 @@
     "/api/v1/serviceAccounts/{id}": {
       "get": {
         "operationId": "getServiceAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1317,6 +1932,17 @@
       },
       "patch": {
         "operationId": "updateServiceAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1361,6 +1987,17 @@
     "/api/v1/serviceAccounts/{id}/resource-accesses": {
       "post": {
         "operationId": "addServiceAccountResourceAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1405,6 +2042,26 @@
     "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}": {
       "delete": {
         "operationId": "removeServiceAccountResourceAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resourceAccessId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1439,6 +2096,17 @@
     "/api/v1/serviceAccounts/{id}/roles": {
       "post": {
         "operationId": "addServiceAccountRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1483,6 +2151,26 @@
     "/api/v1/serviceAccounts/{id}/roles/{roleId}": {
       "delete": {
         "operationId": "removeServiceAccountRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "roleId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1517,6 +2205,17 @@
     "/api/v1/serviceAccounts/{id}/tokens": {
       "get": {
         "operationId": "listServiceAccountTokens",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1549,6 +2248,17 @@
       },
       "post": {
         "operationId": "createServiceAccountToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1593,6 +2303,26 @@
     "/api/v1/serviceAccounts/{id}/tokens/{tokenId}": {
       "delete": {
         "operationId": "revokeServiceAccountToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tokenId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "Success"

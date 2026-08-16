@@ -2,6 +2,8 @@
 
 mod bounded_queue;
 mod identity;
+mod patch;
+mod profile;
 mod service_account_last_used;
 mod service_accounts;
 mod supervisor;
@@ -20,6 +22,8 @@ pub use bounded_queue::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,
 };
 pub use identity::*;
+pub use patch::*;
+pub use profile::*;
 pub use service_account_last_used::*;
 pub use service_accounts::*;
 pub use supervisor::{SupervisedTaskError, TaskSupervisor};

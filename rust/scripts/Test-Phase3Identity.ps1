@@ -127,7 +127,8 @@ try {
     } | ConvertTo-Json
     $initialize = Invoke-WebRequest -UseBasicParsing -Method Post `
         -Uri "$serverOrigin/api/v1/setup/initialize" `
-        -ContentType 'application/json' -Body $initializeBody -WebSession $browser
+        -ContentType 'application/json' -Body $initializeBody -WebSession $browser `
+        -UserAgent 'Mozilla/5.0 (Windows NT 10.0) AppleWebKit Chrome/140.0 Safari/537.36'
     $initializeResult = $initialize.Content | ConvertFrom-Json
     if ($initialize.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($initializeResult.accessToken)) {
         throw 'Initial administrator setup did not issue an access token.'
@@ -142,6 +143,228 @@ try {
     }
 
     $authorization = @{ Authorization = "Bearer $($initializeResult.accessToken)" }
+    $profile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" -Headers $authorization
+    if ($profile.displayName -ne 'owner' -or $profile.email -ne 'owner@example.test') {
+        throw 'The initialized administrator profile was not returned.'
+    }
+    $profile = Invoke-RestMethod -Method Patch -Uri "$serverOrigin/api/v1/profile" `
+        -Headers $authorization -ContentType 'application/json' `
+        -Body (@{ displayName = 'owner-renamed' } | ConvertTo-Json)
+    if ($profile.displayName -ne 'owner-renamed' -or -not $profile.authorization.isAdministrator) {
+        throw 'The current profile update was not persisted or lost authorization metadata.'
+    }
+    $preferences = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/profile/preferences" -Headers $authorization
+    if ($preferences.isPersisted -or $null -ne $preferences.timeZone -or `
+        $preferences.dateTimeFormat -ne 'System' -or $preferences.theme -ne 'System') {
+        throw 'Unsaved profile preferences did not return the browser-local defaults.'
+    }
+    $preferences = Invoke-RestMethod -Method Patch `
+        -Uri "$serverOrigin/api/v1/profile/preferences" -Headers $authorization `
+        -ContentType 'application/merge-patch+json' `
+        -Body (@{
+            timeZone = 'Europe/Paris'
+            dateTimeFormat = 'TwentyFourHour'
+            theme = 'Dark'
+        } | ConvertTo-Json)
+    if (-not $preferences.isPersisted -or $preferences.timeZone -ne 'Europe/Paris' -or `
+        $preferences.dateTimeFormat -ne 'TwentyFourHour' -or $preferences.theme -ne 'Dark') {
+        throw 'Profile preferences were not validated and persisted.'
+    }
+    foreach ($invalidPreferenceBody in @(
+        (@{ timeZone = 'Not/AZone' } | ConvertTo-Json),
+        (@{ timeZone = $null } | ConvertTo-Json),
+        '{}'
+    )) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Method Patch `
+                -Uri "$serverOrigin/api/v1/profile/preferences" -Headers $authorization `
+                -ContentType 'application/merge-patch+json' -Body $invalidPreferenceBody | Out-Null
+            throw 'An invalid profile preference patch was accepted.'
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
+        }
+    }
+
+    $secondaryBrowser = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $secondaryLogin = Invoke-WebRequest -UseBasicParsing -Method Post `
+        -Uri "$serverOrigin/api/v1/authentication/login" `
+        -ContentType 'application/json' -WebSession $secondaryBrowser `
+        -UserAgent 'Firefox/140.0 (Linux)' `
+        -Body (@{
+            emailOrName = 'owner@example.test'
+            password = 'correct-horse-battery-staple'
+        } | ConvertTo-Json)
+    if ($secondaryLogin.StatusCode -ne 200 -or $secondaryBrowser.Cookies.Count -ne 1) {
+        throw 'A secondary browser session could not be created.'
+    }
+    $sessions = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile/sessions" `
+        -Headers $authorization -WebSession $browser
+    if (-not $sessions.canRevokeOtherSessions -or $sessions.sessions.Count -ne 2) {
+        throw 'Active profile sessions were not listed with current-session capabilities.'
+    }
+    $currentSession = @($sessions.sessions | Where-Object isCurrent)
+    $otherSessions = @($sessions.sessions | Where-Object { -not $_.isCurrent })
+    if ($currentSession.Count -ne 1 -or $otherSessions.Count -ne 1 -or `
+        $currentSession[0].displayName -ne 'Chrome on Windows') {
+        throw 'The current profile session was not identified or ordered correctly.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Delete `
+            -Uri "$serverOrigin/api/v1/profile/sessions/$($currentSession[0].id)" `
+            -Headers $authorization -WebSession $browser | Out-Null
+        throw 'The current profile session was revoked through the individual endpoint.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+    }
+    $individualRevoke = Invoke-WebRequest -UseBasicParsing -Method Delete `
+        -Uri "$serverOrigin/api/v1/profile/sessions/$($otherSessions[0].id)" `
+        -Headers $authorization -WebSession $browser
+    if ($individualRevoke.StatusCode -ne 204) {
+        throw 'An owned secondary profile session was not revoked.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/authentication/refresh" `
+            -WebSession $secondaryBrowser | Out-Null
+        throw 'An individually revoked secondary session could still refresh.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+
+    $otherBrowsers = @()
+    foreach ($userAgent in @('Edg/140.0 (Mac OS X)', 'curl/8.16.0')) {
+        $otherBrowser = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        $otherLogin = Invoke-WebRequest -UseBasicParsing -Method Post `
+            -Uri "$serverOrigin/api/v1/authentication/login" `
+            -ContentType 'application/json' -WebSession $otherBrowser -UserAgent $userAgent `
+            -Body (@{
+                emailOrName = 'owner@example.test'
+                password = 'correct-horse-battery-staple'
+            } | ConvertTo-Json)
+        if ($otherLogin.StatusCode -ne 200 -or $otherBrowser.Cookies.Count -ne 1) {
+            throw 'An additional browser session could not be created.'
+        }
+        $otherBrowsers += $otherBrowser
+    }
+    $revokeOthers = Invoke-RestMethod -Method Delete `
+        -Uri "$serverOrigin/api/v1/profile/sessions" `
+        -Headers $authorization -WebSession $browser
+    if ($revokeOthers.count -ne 2) {
+        throw 'The other profile sessions were not revoked atomically.'
+    }
+    $sessions = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile/sessions" `
+        -Headers $authorization -WebSession $browser
+    if ($sessions.sessions.Count -ne 1 -or -not $sessions.sessions[0].isCurrent) {
+        throw 'Revoking other sessions removed or misidentified the current session.'
+    }
+    foreach ($otherBrowser in $otherBrowsers) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Method Get `
+                -Uri "$serverOrigin/api/v1/authentication/refresh" `
+                -WebSession $otherBrowser | Out-Null
+            throw 'A revoked secondary session could still refresh.'
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+        }
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Delete `
+            -Uri "$serverOrigin/api/v1/profile/sessions" -Headers $authorization `
+            -WebSession (New-Object Microsoft.PowerShell.Commands.WebRequestSession) | Out-Null
+        throw 'Other sessions were revoked without a current refresh session.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
+    }
+
+    $passwordOtherBrowser = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $passwordOtherLogin = Invoke-WebRequest -UseBasicParsing -Method Post `
+        -Uri "$serverOrigin/api/v1/authentication/login" `
+        -ContentType 'application/json' -WebSession $passwordOtherBrowser `
+        -UserAgent 'Password change secondary session' `
+        -Body (@{
+            emailOrName = 'owner@example.test'
+            password = 'correct-horse-battery-staple'
+        } | ConvertTo-Json)
+    if ($passwordOtherLogin.StatusCode -ne 200 -or $passwordOtherBrowser.Cookies.Count -ne 1) {
+        throw 'The password-change secondary session could not be created.'
+    }
+    foreach ($invalidPasswordChange in @(
+        @{
+            currentPassword = 'wrong-current-password'
+            newPassword = 'new-correct-horse-battery-staple'
+        },
+        @{
+            currentPassword = 'correct-horse-battery-staple'
+            newPassword = 'short'
+        }
+    )) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Method Post `
+                -Uri "$serverOrigin/api/v1/profile/change-password" `
+                -Headers $authorization -WebSession $browser `
+                -ContentType 'application/json' `
+                -Body ($invalidPasswordChange | ConvertTo-Json) | Out-Null
+            throw 'An invalid password change was accepted.'
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
+        }
+    }
+    $passwordChange = Invoke-WebRequest -UseBasicParsing -Method Post `
+        -Uri "$serverOrigin/api/v1/profile/change-password" `
+        -Headers $authorization -WebSession $browser `
+        -ContentType 'application/json' `
+        -Body (@{
+            currentPassword = 'correct-horse-battery-staple'
+            newPassword = 'new-correct-horse-battery-staple'
+        } | ConvertTo-Json)
+    if ($passwordChange.StatusCode -ne 204) {
+        throw 'A valid password change did not return No Content.'
+    }
+    $currentRefresh = Invoke-WebRequest -UseBasicParsing -Method Get `
+        -Uri "$serverOrigin/api/v1/authentication/refresh" -WebSession $browser
+    if ($currentRefresh.StatusCode -ne 200) {
+        throw 'Changing the password revoked the current browser session.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/authentication/refresh" `
+            -WebSession $passwordOtherBrowser | Out-Null
+        throw 'Changing the password did not revoke another browser session.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Post `
+            -Uri "$serverOrigin/api/v1/authentication/login" `
+            -ContentType 'application/json' `
+            -Body (@{
+                emailOrName = 'owner@example.test'
+                password = 'correct-horse-battery-staple'
+            } | ConvertTo-Json) | Out-Null
+        throw 'The previous password remained valid after the password change.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    $newPasswordLogin = Invoke-WebRequest -UseBasicParsing -Method Post `
+        -Uri "$serverOrigin/api/v1/authentication/login" `
+        -ContentType 'application/json' `
+        -Body (@{
+            emailOrName = 'owner@example.test'
+            password = 'new-correct-horse-battery-staple'
+        } | ConvertTo-Json)
+    if ($newPasswordLogin.StatusCode -ne 200) {
+        throw 'The new password could not authenticate.'
+    }
+
     $accounts = Invoke-WebRequest -UseBasicParsing -Uri "$serverOrigin/api/v1/serviceAccounts" -Headers $authorization
     if ($accounts.StatusCode -ne 200 -or $accounts.Content -notmatch 'pagedResult') {
         throw 'The administrator could not list Service Accounts.'
@@ -190,9 +413,23 @@ try {
     $login = Invoke-RestMethod -Method Post `
         -Uri "$serverOrigin/api/v1/authentication/login" `
         -ContentType 'application/json' `
-        -Body (@{ emailOrName = 'owner@example.test'; password = 'correct-horse-battery-staple' } | ConvertTo-Json)
+        -Body (@{ emailOrName = 'owner@example.test'; password = 'new-correct-horse-battery-staple' } | ConvertTo-Json)
     if ([string]::IsNullOrWhiteSpace($login.accessToken)) {
         throw 'The persisted administrator could not sign in after restart.'
+    }
+    $persistedProfile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if ($persistedProfile.displayName -ne 'owner-renamed') {
+        throw 'The profile update was not preserved across restart.'
+    }
+    $persistedPreferences = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/profile/preferences" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if (-not $persistedPreferences.isPersisted -or `
+        $persistedPreferences.timeZone -ne 'Europe/Paris' -or `
+        $persistedPreferences.dateTimeFormat -ne 'TwentyFourHour' -or `
+        $persistedPreferences.theme -ne 'Dark') {
+        throw 'Profile preferences were not preserved across restart.'
     }
 
     $password = & docker exec $postgres psql --username citadel_phase3 --dbname $serverDatabase `

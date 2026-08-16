@@ -3,7 +3,9 @@
 This workspace contains the isolated migration work described in
 `Citadel.Internals/specs/dotnet-to-rust-migration.md`. Rust owns its generated
 v1 database baseline and migration runner and now hosts the Phase 3A identity
-and Service Account routes. It does not yet replace the .NET Core.
+and Service Account routes, the Phase 3B current-profile foundation, the Phase
+3C profile-preferences API, Phase 3D browser-session management, and Phase 3E
+local password changes. It does not yet replace the .NET Core.
 
 The prototype proves a small release server, Citadel's existing authorized
 Platform read, a generated Docker Engine read/stream subset over a Unix socket,
@@ -31,11 +33,19 @@ PostgreSQL, startup, restart, generation, and Actor-scoped query checks. See
 
 Phase 3A adds first-run administrator setup, local login and persisted browser
 sessions, Actor/RBAC/resource-ACL evaluation, offline entitlement verification,
-and the Service Account credential lifecycle. Run
+and the Service Account credential lifecycle. Phase 3B introduces the real
+User aggregate and authenticated current-profile read/rename operations. Phase
+3C adds lazy profile-preference defaults plus validated, transactional
+preference persistence. Phase 3D lists active browser sessions and provides
+ownership-scoped individual and atomic revoke-other operations. Phase 3E
+verifies and replaces local passwords transactionally, revokes the appropriate
+refresh sessions, and prevents a login verified with a stale password from
+creating a session after the change. Run
 `./rust/scripts/Test-Phase3Identity.ps1` for the disposable PostgreSQL,
-HTTP-session, restart, ACL, revocation, and concurrent-token checks. The full
-Phase 3 exit is intentionally still open for User/Profile, Team, Role, License,
-MFA, OIDC, and frontend cutover; see
+HTTP-session, profile/preference/password, restart, ACL, revocation, and
+concurrent-token checks.
+The full Phase 3 exit is intentionally still open for the remaining Profile and
+User operations, Team, Role, License, MFA, OIDC, and frontend cutover; see
 `reports/phase3-identity-access-report.md`.
 
 ## Repository direction
