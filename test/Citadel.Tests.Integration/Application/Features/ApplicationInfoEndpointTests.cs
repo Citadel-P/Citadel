@@ -25,5 +25,6 @@ public sealed class ApplicationInfoEndpointTests(PostgresTestFixture fixture) : 
         Assert.Equal("Citadel", json.RootElement.GetProperty("name").GetString());
         Assert.Equal(expectedDisplayVersion, json.RootElement.GetProperty("version").GetString());
         Assert.Equal(expectedInformationalVersion, json.RootElement.GetProperty("informationalVersion").GetString());
+        Assert.Equal("SignalR", json.RootElement.GetProperty("realtimeTransport").GetString());
     }
 }

@@ -4,14 +4,180 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{
-    ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType, SpecificPermission,
-    UserDateTimeFormat, UserTheme,
+use citadel_domain::{
+    ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType, RoleType,
+    SpecificPermission, UserDateTimeFormat, UserTheme,
 };
 
 pub const SYSTEM_ACTOR_ID: Uuid = Uuid::from_u128(1);
 pub const ADMIN_ROLE_ID: Uuid = Uuid::from_u128(0x30000000000000000000000000000001);
 pub const MAX_NAME_CHARS: usize = 100;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RolePermission {
+    resource_type: ResourceType,
+    permission_level: PermissionLevel,
+    specific_permissions: Vec<SpecificPermission>,
+}
+
+impl RolePermission {
+    #[must_use]
+    pub fn new(
+        resource_type: ResourceType,
+        permission_level: PermissionLevel,
+        specific_permissions: Vec<SpecificPermission>,
+    ) -> Self {
+        Self {
+            resource_type,
+            permission_level,
+            specific_permissions,
+        }
+    }
+
+    #[must_use]
+    pub const fn resource_type(&self) -> ResourceType {
+        self.resource_type
+    }
+
+    #[must_use]
+    pub const fn permission_level(&self) -> PermissionLevel {
+        self.permission_level
+    }
+
+    #[must_use]
+    pub fn specific_permissions(&self) -> &[SpecificPermission] {
+        &self.specific_permissions
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Role {
+    id: Uuid,
+    name: String,
+    role_type: RoleType,
+    permissions: Vec<RolePermission>,
+}
+
+impl Role {
+    #[must_use]
+    pub fn new_custom(name: String, permissions: Vec<RolePermission>) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            name,
+            role_type: RoleType::Custom,
+            permissions,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_persistence(
+        id: Uuid,
+        name: String,
+        role_type: RoleType,
+        permissions: Vec<RolePermission>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            role_type,
+            permissions,
+        }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> Uuid {
+        self.id
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn role_type(&self) -> RoleType {
+        self.role_type
+    }
+
+    #[must_use]
+    pub fn permissions(&self) -> &[RolePermission] {
+        &self.permissions
+    }
+
+    pub fn rename(&mut self, name: String) -> Result<(), RoleMutationError> {
+        if self.role_type == RoleType::System {
+            return Err(RoleMutationError::SystemRole);
+        }
+        self.name = name;
+        Ok(())
+    }
+
+    pub fn set_permissions(
+        &mut self,
+        permissions: Vec<RolePermission>,
+    ) -> Result<(), RoleMutationError> {
+        if self.role_type == RoleType::System {
+            return Err(RoleMutationError::SystemRole);
+        }
+        self.permissions = permissions;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoleMutationError {
+    SystemRole,
+}
+
+impl std::fmt::Display for RoleMutationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("System roles cannot be updated.")
+    }
+}
+
+impl std::error::Error for RoleMutationError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Team {
+    id: Uuid,
+    name: String,
+    actor_id: ActorId,
+}
+
+impl Team {
+    #[must_use]
+    pub fn new(name: String, actor_id: ActorId) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            name,
+            actor_id,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_persistence(id: Uuid, name: String, actor_id: ActorId) -> Self {
+        Self { id, name, actor_id }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> Uuid {
+        self.id
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn actor_id(&self) -> ActorId {
+        self.actor_id
+    }
+
+    pub fn rename(&mut self, name: String) {
+        self.name = name;
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct User {
@@ -367,6 +533,47 @@ mod tests {
         assert_eq!(user.created_at(), created_at);
         assert_eq!(user.name(), "new-owner");
         assert_eq!(user.password_hash(), Some("hash-v2"));
+    }
+
+    #[test]
+    fn team_rename_preserves_resource_and_actor_identity() {
+        let actor_id = ActorId::new(Uuid::now_v7());
+        let mut team = Team::new("operations".to_owned(), actor_id);
+        let id = team.id();
+
+        team.rename("platform operations".to_owned());
+
+        assert_eq!(team.id(), id);
+        assert_eq!(team.actor_id(), actor_id);
+        assert_eq!(team.name(), "platform operations");
+    }
+
+    #[test]
+    fn system_roles_reject_mutation_while_custom_roles_preserve_identity() {
+        let permission =
+            RolePermission::new(ResourceType::Registry, PermissionLevel::Read, Vec::new());
+        let mut custom = Role::new_custom("Operator".to_owned(), vec![permission.clone()]);
+        let custom_id = custom.id();
+        custom.rename("Custom operator".to_owned()).unwrap();
+        custom.set_permissions(Vec::new()).unwrap();
+        assert_eq!(custom.id(), custom_id);
+        assert_eq!(custom.name(), "Custom operator");
+        assert!(custom.permissions().is_empty());
+
+        let mut system = Role::from_persistence(
+            ADMIN_ROLE_ID,
+            "Admin".to_owned(),
+            RoleType::System,
+            vec![permission],
+        );
+        assert_eq!(
+            system.rename("Other".to_owned()),
+            Err(RoleMutationError::SystemRole)
+        );
+        assert_eq!(
+            system.set_permissions(Vec::new()),
+            Err(RoleMutationError::SystemRole)
+        );
     }
 
     #[test]

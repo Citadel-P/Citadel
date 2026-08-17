@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "permissionMatrix": {
+    "Platform": {
+      "maximumLevel": "Execute",
+      "specifics": {
+        "Logs": "Read",
+        "Pull": "Read",
+        "Terminal": "Read",
+        "Inspect": "Read",
+        "ManageNodeAgents": "Execute"
+      }
+    },
+    "Deployment": {
+      "maximumLevel": "Execute",
+      "specifics": {
+        "Apply": "Read",
+        "ResourceBindings": "Read",
+        "Logs": "Read",
+        "Terminal": "Read",
+        "Inspect": "Read"
+      }
+    },
+    "Stack": {
+      "maximumLevel": "Execute",
+      "specifics": {
+        "Apply": "Read",
+        "ResourceBindings": "Read",
+        "Releases": "Read",
+        "Logs": "Read",
+        "Inspect": "Read"
+      }
+    },
+    "Registry": { "maximumLevel": "Execute", "specifics": {} },
+    "GitRepository": { "maximumLevel": "Execute", "specifics": {} },
+    "GitAccount": { "maximumLevel": "Execute", "specifics": {} },
+    "Alert": { "maximumLevel": "Execute", "specifics": {} },
+    "AlertChannel": { "maximumLevel": "Execute", "specifics": {} },
+    "User": { "maximumLevel": "Execute", "specifics": {} },
+    "Team": { "maximumLevel": "Execute", "specifics": {} },
+    "Role": { "maximumLevel": "Execute", "specifics": {} },
+    "Binding": { "maximumLevel": "Execute", "specifics": {} },
+    "Tag": { "maximumLevel": "Execute", "specifics": {} },
+    "AutomationAction": { "maximumLevel": "Execute", "specifics": {} },
+    "License": { "maximumLevel": "Execute", "specifics": {} },
+    "BackupRepository": { "maximumLevel": "Execute", "specifics": {} },
+    "BackupPolicy": {
+      "maximumLevel": "Execute",
+      "specifics": { "Restore": "Read" }
+    },
+    "Volume": {
+      "maximumLevel": "Execute",
+      "specifics": { "Browse": "Read", "Download": "Read" }
+    },
+    "Build": {
+      "maximumLevel": "Execute",
+      "specifics": { "Apply": "Read" }
+    },
+    "BuildAgentPool": {
+      "maximumLevel": "Execute",
+      "specifics": { "Apply": "Read" }
+    },
+    "SwarmService": {
+      "maximumLevel": "Execute",
+      "specifics": {
+        "Apply": "Read",
+        "ResourceBindings": "Read",
+        "Logs": "Read",
+        "Inspect": "Read"
+      }
+    },
+    "ServiceAccount": {
+      "maximumLevel": "Execute",
+      "specifics": { "Use": "Read", "ManageCredentials": "Read" }
+    }
+  },
+  "cases": [
+    {
+      "name": "enabled actor without grants",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false },
+        { "scope": "Target", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false }
+      ]
+    },
+    {
+      "name": "disabled actor ignores global and resource grants",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": false,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "Deployment", "level": "Execute", "specifics": ["Terminal"] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [
+        { "resource": "Target", "resourceType": "Deployment", "level": "Execute", "specifics": ["Terminal"] }
+      ],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false },
+        { "scope": "Target", "resourceType": "Deployment", "level": "Read", "specific": "Terminal", "expected": false }
+      ]
+    },
+    {
+      "name": "direct read role applies globally",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "Deployment", "level": "Read", "specifics": [] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "Deployment", "level": "Write", "specific": null, "expected": false },
+        { "scope": "Target", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Other", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": true }
+      ]
+    },
+    {
+      "name": "write role includes read but not execute",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "Deployment", "level": "Write", "specifics": [] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "Deployment", "level": "Write", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "Deployment", "level": "Execute", "specific": null, "expected": false }
+      ]
+    },
+    {
+      "name": "enabled team execute role is inherited",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": true,
+      "directRoleGrants": [],
+      "teamRoleGrants": [
+        { "resourceType": "Stack", "level": "Execute", "specifics": ["Apply"] }
+      ],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Stack", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "Stack", "level": "Write", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "Stack", "level": "Execute", "specific": "Apply", "expected": true }
+      ]
+    },
+    {
+      "name": "disabled team grants are ignored",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": false,
+      "directRoleGrants": [],
+      "teamRoleGrants": [
+        { "resourceType": "Stack", "level": "Execute", "specifics": ["Apply"] }
+      ],
+      "directResourceGrants": [],
+      "teamResourceGrants": [
+        { "resource": "Target", "resourceType": "Stack", "level": "Execute", "specifics": ["Apply"] }
+      ],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Stack", "level": "Read", "specific": null, "expected": false },
+        { "scope": "Target", "resourceType": "Stack", "level": "Read", "specific": "Apply", "expected": false }
+      ]
+    },
+    {
+      "name": "direct resource override is target scoped",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [],
+      "teamRoleGrants": [],
+      "directResourceGrants": [
+        { "resource": "Target", "resourceType": "Deployment", "level": "Read", "specifics": [] }
+      ],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false },
+        { "scope": "Target", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Other", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false }
+      ]
+    },
+    {
+      "name": "team resource override preserves specific permission",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": true,
+      "directRoleGrants": [],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [
+        { "resource": "Target", "resourceType": "Platform", "level": "Read", "specifics": ["Terminal"] }
+      ],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": false },
+        { "scope": "Target", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": true },
+        { "scope": "Target", "resourceType": "Platform", "level": "Read", "specific": "Logs", "expected": false },
+        { "scope": "Other", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": false }
+      ]
+    },
+    {
+      "name": "direct and team roles merge levels and specifics",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": true,
+      "directRoleGrants": [
+        { "resourceType": "Platform", "level": "Read", "specifics": ["Logs"] }
+      ],
+      "teamRoleGrants": [
+        { "resourceType": "Platform", "level": "Write", "specifics": ["Inspect"] }
+      ],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Platform", "level": "Read", "specific": "Logs", "expected": true },
+        { "scope": "Global", "resourceType": "Platform", "level": "Write", "specific": "Inspect", "expected": true },
+        { "scope": "Global", "resourceType": "Platform", "level": "Write", "specific": "Logs", "expected": true },
+        { "scope": "Global", "resourceType": "Platform", "level": "Execute", "specific": null, "expected": false }
+      ]
+    },
+    {
+      "name": "global and resource grants merge only on the target",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "Platform", "level": "Read", "specifics": ["Logs"] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [
+        { "resource": "Target", "resourceType": "Platform", "level": "Read", "specifics": ["Terminal"] }
+      ],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "Platform", "level": "Read", "specific": "Logs", "expected": true },
+        { "scope": "Global", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": false },
+        { "scope": "Target", "resourceType": "Platform", "level": "Read", "specific": "Logs", "expected": true },
+        { "scope": "Target", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": true },
+        { "scope": "Other", "resourceType": "Platform", "level": "Read", "specific": "Terminal", "expected": false }
+      ]
+    },
+    {
+      "name": "resource types remain isolated",
+      "principalType": "User",
+      "roles": [],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [],
+      "teamRoleGrants": [],
+      "directResourceGrants": [
+        { "resource": "Target", "resourceType": "Stack", "level": "Read", "specifics": [] }
+      ],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Target", "resourceType": "Stack", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Target", "resourceType": "Deployment", "level": "Read", "specific": null, "expected": false }
+      ]
+    },
+    {
+      "name": "service account never crosses the human administrator boundary",
+      "principalType": "ServiceAccount",
+      "roles": ["Admin"],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "ServiceAccount", "level": "Execute", "specifics": ["Use", "ManageCredentials"] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": false,
+      "probes": [
+        { "scope": "Global", "resourceType": "ServiceAccount", "level": "Read", "specific": "Use", "expected": true },
+        { "scope": "Global", "resourceType": "ServiceAccount", "level": "Execute", "specific": "ManageCredentials", "expected": true }
+      ]
+    },
+    {
+      "name": "human admin role crosses the administrator boundary",
+      "principalType": "User",
+      "roles": ["Admin"],
+      "actorEnabled": true,
+      "teamEnabled": null,
+      "directRoleGrants": [
+        { "resourceType": "User", "level": "Execute", "specifics": [] }
+      ],
+      "teamRoleGrants": [],
+      "directResourceGrants": [],
+      "teamResourceGrants": [],
+      "expectedAdministrator": true,
+      "probes": [
+        { "scope": "Global", "resourceType": "User", "level": "Read", "specific": null, "expected": true },
+        { "scope": "Global", "resourceType": "User", "level": "Execute", "specific": null, "expected": true }
+      ]
+    }
+  ]
+}

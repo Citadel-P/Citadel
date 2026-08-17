@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
-use citadel_application::{PlatformRuntimePort, RuntimeErrorKind};
 use citadel_contracts::citadel::platforms::v1::platform_service_server::{
     PlatformService, PlatformServiceServer,
 };
@@ -13,6 +12,7 @@ use citadel_contracts::citadel::platforms::v1::{
     PruneRequest, PruneResponse,
 };
 use citadel_contracts::citadel::shared_models::v1::{PlatformInfoResponse, PlatformStatMessage};
+use citadel_platforms::{PlatformRuntimePort, RuntimeErrorKind};
 use futures_util::{Stream, StreamExt};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;

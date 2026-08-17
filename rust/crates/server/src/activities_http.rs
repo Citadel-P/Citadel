@@ -6,13 +6,10 @@ use axum::extract::rejection::QueryRejection;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
-use citadel_application::{
-    ActivityFilter, ActivityRecord, ActivityService, IdentityError, PagedActivityRecords,
-};
+use citadel_application::{ActivityFilter, ActivityRecord, ActivityService, PagedActivityRecords};
 use citadel_contracts::http::routes;
-use citadel_domain::{
-    ActivityEventType, ActivityResourceType, ActivityStatus, ActorPrincipal, ActorType,
-};
+use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
+use citadel_identity::{ActorPrincipal, IdentityError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;

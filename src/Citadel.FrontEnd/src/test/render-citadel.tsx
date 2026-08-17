@@ -50,7 +50,13 @@ export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = 
         <ApiClientContext.Provider value={{ apiClient }}>
           <SetupContext.Provider value={setupValue}>
             <AuthContext.Provider value={authValue}>
-              {signalR ? <SignalRProvider {...signalR}>{children}</SignalRProvider> : children}
+              {signalR ? (
+                <SignalRProvider realtimeTransport="SignalR" {...signalR}>
+                  {children}
+                </SignalRProvider>
+              ) : (
+                children
+              )}
             </AuthContext.Provider>
           </SetupContext.Provider>
         </ApiClientContext.Provider>

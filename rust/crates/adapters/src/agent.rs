@@ -3,9 +3,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_stream::stream;
 use base64::Engine;
-use citadel_application::{
-    PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
-};
 use citadel_contracts::citadel::containers::v1::{
     ListContainersRequest, container_service_client::ContainerServiceClient,
 };
@@ -13,7 +10,10 @@ use citadel_contracts::citadel::platforms::v1::{
     PlatformStatsRequest, platform_service_client::PlatformServiceClient,
 };
 use citadel_contracts::citadel::shared_models::v1::{ContainerMessage, PlatformInfoResponse};
-use citadel_domain::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
+use citadel_platforms::{
+    PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
+};
+use citadel_platforms::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use prost::Message;

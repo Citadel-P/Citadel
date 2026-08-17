@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use async_stream::stream;
-use citadel_application::{
+use citadel_platforms::{
     PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
 };
-use citadel_domain::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
+use citadel_platforms::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
 use futures_util::{FutureExt, future::BoxFuture};
 use reqwest::StatusCode;
 use tokio_util::sync::CancellationToken;

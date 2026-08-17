@@ -15,6 +15,9 @@
 
   <ItemGroup>
     <Content Include="..\Citadel.Tests.Common\xunit.runner.json" Link="xunit.runner.json" />
+    <Content Include="..\fixtures\identity-authorization-cases.json"
+             Link="fixtures\identity-authorization-cases.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 	<ItemGroup>

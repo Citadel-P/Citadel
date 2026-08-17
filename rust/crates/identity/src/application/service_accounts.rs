@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Utc};
-use citadel_domain::{
-    ActorId, PermissionLevel, ResourceType, SpecificPermission, permission_matrix,
-};
+use citadel_domain::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     Clock, EntitlementService, IdentityError, PagedResult, PatchField, ResourceInfo,
-    ServiceAccountTokenCodec, StoredPage, validate_name,
+    ServiceAccountTokenCodec, StoredPage, permission_matrix, validate_name,
 };
 
 pub const DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS: i64 = 90;

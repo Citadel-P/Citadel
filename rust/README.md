@@ -8,7 +8,27 @@ and Service Account routes, the Phase 3B current-profile foundation, the Phase
 local password changes. Phase 3F exposes authenticated application build
 information. Phase 3G adds the compatible Activity read API and atomic safe
 activity evidence for profile mutations. Phase 3H adds the administrator User
-list, search, and detail boundary. It does not yet replace the .NET Core.
+read boundary. Phase 3I adds atomic administrator User creation, patch, rename,
+Role/resource-access assignment, and deletion. Phase 3J adds the administrator
+Team aggregate and complete Team read/mutation boundary. Phase 3K adds Role
+administration and the compatible anonymous permission matrix. Phase 3L adds
+installed-license administration, safe entitlement projections, stable
+instance-request metadata, and atomic License Activity evidence. It does not
+yet replace the .NET Core. Phase 3M ports local TOTP MFA, and Phase 3N ports
+OIDC provider administration plus browser authorization-code/PKCE login. Phase
+3O proves the unchanged React login/session flow against Rust with real
+Keycloak and production SPA hosting. Phase 3P proves the administrator Access
+and License screens against the same Rust-hosted production bundle. Phase 3Q
+adds restart-safe time-bound License transitions and the shared frontend's
+authenticated, metadata-free License notification path.
+
+Phase 3T replaces the former horizontal Domain/Application catch-all with the
+first two bounded-context crates. `citadel-identity` owns Identity models, use
+cases, and ports; `citadel-platforms` owns authorized Platform projections and
+runtime capability contracts. The small `citadel-domain` crate is now a shared
+kernel, concrete infrastructure remains in `citadel-adapters`, and consumers
+import the owning context directly. New crates are added only for substantial
+behavior boundaries, not per resource or handler.
 
 The prototype proves a small release server, Citadel's existing authorized
 Platform read, a generated Docker Engine read/stream subset over a Unix socket,
@@ -52,13 +72,96 @@ and evidence in one transaction, and exposes the existing authorized
 the Rust server unchanged. Phase 3H exposes the existing administrator-only
 `listUsers`, `searchUsers`, and `getUser` contracts from bounded PostgreSQL
 projections, including Roles, Teams, enabled state, resource overrides, paging,
-and capabilities. User mutations remain a later atomic slice. Run
+and capabilities. Phase 3I ports the matching User mutation routes with
+transactional assignment checks, last-administrator serialization,
+refresh-session invalidation, and typed safe Activity evidence. Run
 `./rust/scripts/Test-Phase3Identity.ps1` for the disposable PostgreSQL,
 HTTP-session, application-info, profile/preference/password, restart, ACL,
 revocation, activity, and concurrent-token checks.
-The full Phase 3 exit is intentionally still open for the remaining Profile and
-User mutations, Team, Role, License, MFA, OIDC, and frontend cutover; see
+Phase 3J ports Team list/search/detail, create, merge patch, rename,
+member/Role/resource-access assignment, and deletion with the same atomic
+Activity and administrator-survival guarantees.
+Phase 3K ports Role list/detail, custom Role creation, permission replacement,
+rename, and deletion. System Roles remain immutable; custom-access licensing
+blocks authority expansion but never blocks reduction or cleanup. Role state
+and typed lifecycle Activity commit in one transaction, and the permission
+matrix retains its existing anonymous keyed-object contract.
+Phase 3L ports the five existing License routes. Every authenticated Actor can
+read the minimal entitlements view; administrator metadata, request, install,
+replacement, and removal retain their License permission boundaries. The
+persisted instance ID is immutable, raw licenses never leave storage, and
+replacement checks, singleton writes, and typed safe Activity evidence share
+one transaction. Static Ed25519 verification may be cached by fingerprint,
+while temporal status is recalculated on every effective-state read.
+Phase 3M ports the complete local TOTP MFA boundary without changing the
+existing browser contract. Setup and login branch into completed, verification,
+or required-enrollment outcomes; short-lived challenge/setup cookies are
+HttpOnly; TOTP steps and recovery codes are replay-safe; and credential
+consumption, session issuance, recovery-code rotation, session revocation, and
+typed safe Activity evidence commit atomically. The nine existing MFA routes
+are covered through a real PostgreSQL-backed Axum test, including concurrent
+challenge completion.
+Phase 3N preserves all twelve existing OIDC operation IDs. Provider secrets are
+encrypted and never projected, login state is stored only by hash and consumed
+atomically, authorization uses code flow with PKCE and nonce, and signed ID
+tokens are validated against bounded discovery/JWKS responses before Citadel
+links or provisions a User and issues its normal refresh session. A fake signed
+issuer test exercises discovery, token exchange, JWKS, issuer, audience,
+signature, and nonce validation; a real PostgreSQL-backed Axum test covers
+provider lifecycle, trusted redirects, replay/concurrency, disabled Users,
+required claims, verified-email linking, and default-Role provisioning.
+Phase 3O runs the existing Keycloak Playwright suite against the production
+React bundle served by Rust. It covers first-run setup, requested-route
+preservation, OIDC callback extension parameters, scoped refresh cookies,
+session restoration after reload, idempotent cookie-based logout, and required-
+claim rejection. Rust SPA fallback returns 200 for browser deep links while
+unknown API paths remain 404 Problem Details responses.
+Phase 3P adds production-browser coverage for User and Team creation/list/detail,
+system Roles, Community-gated Service Accounts, License rendering, and OIDC
+provider list/detail. Community license denials retain the exact frontend-facing
+Problem Details contract.
+Phase 3Q persists `notBefore`, expiry, grace-period, and invalid-state
+transitions under the singleton License lock. Only the first observer of a
+changed status writes typed System Activity; overlapping checks and restarts do
+not duplicate evidence. The worker sleeps until the next known boundary plus a
+one-second margin, never longer than one hour, and wakes immediately when a
+License is installed or removed. Rust advertises `WebSocketV1` while .NET
+advertises `SignalR`, allowing the same SPA to select the supported transport.
+The versioned Rust event has an empty payload and only invalidates authoritative
+License queries.
+
+Phase 3R closes the identity/access exit with a shared authorization fixture.
+It verifies all 22 resource capability entries plus direct/Team Roles,
+resource overrides, disabled Actors/Teams, permission aggregation, and the
+human-versus-Service-Account administrator boundary through both the .NET and
+Rust PostgreSQL implementations. See
 `reports/phase3-identity-access-report.md`.
+
+Phase 3U keeps identity HTTP routes thin without recreating .NET attributes or
+a mediator pipeline. User, Team, Role, and Service Account handlers use one
+typed `identity_result` adapter and ordinary `?` propagation; policy order is
+still visible in each handler and the success path adds no allocation or
+dynamic dispatch.
+
+Authentication cookies are scoped to `/api/v1`, which keeps them away from SPA
+assets while allowing the existing profile-session endpoints to identify and
+protect the current refresh session. Logout also expires the former
+authentication-only and root cookie paths during migration.
+
+## Slice delivery gate
+
+Every new Rust slice starts by inventorying the matching .NET unit,
+integration, acceptance, authorization, frontend, and public-contract tests.
+The slice report must map relevant .NET scenarios to Rust tests, with an
+explicit reason for anything that is not applicable. Rust tests are added
+before production behavior, then the implementation is completed until the
+focused tests and the full Rust regression suite pass.
+
+Tests preserve observable behavior rather than private .NET structure. HTTP
+routes are tested through the Axum router, persistence through real PostgreSQL,
+and Docker, Agent, Edge Agent, restart, and cross-process behavior through the
+appropriate integration or acceptance harness. A slice is not considered
+implemented merely because its production code compiles.
 
 ## Repository direction
 

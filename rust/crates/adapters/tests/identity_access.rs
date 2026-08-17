@@ -9,20 +9,20 @@ use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementS
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
-use citadel_application::{
-    ActivityFilter, ActivityService, AddServiceAccountResourceAccessRequest,
-    ArchiveServiceAccountsRequest, ChangeCurrentPasswordRequest, CreateServiceAccountRequest,
-    CreateServiceAccountTokenRequest, IdentityError, IdentityService, IdentityStore,
-    InitializeCitadelRequest, NewSession, NoopServiceAccountLastUsedTracker, PatchField,
-    PatchUserPreferencesRequest, ProfileService, ProfileStore, ServiceAccountResourceAccess,
-    ServiceAccountService, SessionMetadata, SystemClock, UpdateCurrentProfileRequest,
-    UserReadService,
-};
+use citadel_application::{ActivityFilter, ActivityService};
 use citadel_database::MigrationRunner;
 use citadel_domain::{
-    ADMIN_ROLE_ID, ActivityEventType, ActivityResourceType, ActorId, ActorPrincipal,
-    AuthenticatedPrincipalType, PermissionLevel, ResourceType, SYSTEM_ACTOR_ID, SpecificPermission,
-    UserDateTimeFormat, UserTheme,
+    ActivityEventType, ActivityResourceType, ActorId, AuthenticatedPrincipalType, PermissionLevel,
+    ResourceType, SpecificPermission, UserDateTimeFormat, UserTheme,
+};
+use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
+use citadel_identity::{
+    AddServiceAccountResourceAccessRequest, ArchiveServiceAccountsRequest,
+    ChangeCurrentPasswordRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
+    IdentityError, IdentityService, IdentityStore, InitializeCitadelRequest, NewSession,
+    NoopServiceAccountLastUsedTracker, PatchField, PatchUserPreferencesRequest, ProfileService,
+    ProfileStore, ServiceAccountResourceAccess, ServiceAccountService, SessionMetadata,
+    SystemClock, UpdateCurrentProfileRequest, UserReadService,
 };
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -210,7 +210,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     let (renamed_login, renamed_session) = identity
         .login(
-            citadel_application::LoginRequest {
+            citadel_identity::LoginRequest {
                 email_or_name: "owner-renamed".into(),
                 password: "correct-horse-battery-staple".into(),
             },
@@ -355,7 +355,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     for user_agent in ["Firefox/140.0 (Linux)", "curl/8.16.0"] {
         identity
             .login(
-                citadel_application::LoginRequest {
+                citadel_identity::LoginRequest {
                     email_or_name: "owner@example.test".into(),
                     password: "correct-horse-battery-staple".into(),
                 },
@@ -394,7 +394,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
 
     let (_, password_other_session) = identity
         .login(
-            citadel_application::LoginRequest {
+            citadel_identity::LoginRequest {
                 email_or_name: "owner@example.test".into(),
                 password: "correct-horse-battery-staple".into(),
             },
@@ -458,7 +458,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     assert!(
         identity
             .login(
-                citadel_application::LoginRequest {
+                citadel_identity::LoginRequest {
                     email_or_name: "owner@example.test".into(),
                     password: "correct-horse-battery-staple".into(),
                 },
@@ -469,7 +469,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     );
     let (_, new_password_session) = identity
         .login(
-            citadel_application::LoginRequest {
+            citadel_identity::LoginRequest {
                 email_or_name: "owner@example.test".into(),
                 password: "new-correct-horse-battery-staple".into(),
             },
@@ -520,7 +520,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     }
     identity
         .login(
-            citadel_application::LoginRequest {
+            citadel_identity::LoginRequest {
                 email_or_name: "owner@example.test".into(),
                 password: "final-correct-horse-battery-staple".into(),
             },

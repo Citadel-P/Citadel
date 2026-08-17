@@ -85,10 +85,42 @@ the run finishes.
 # Phase 3 identity and access
 
 Run `./rust/scripts/Test-Phase3Identity.ps1` from the repository root. It uses
-disposable PostgreSQL databases and server containers to verify the Phase
-3A/B/C/D/E/F/G local identity, authenticated application information, current
+disposable PostgreSQL databases and server containers to verify Phase 3A-R,
+including local identity, authenticated application information, current
 profile, lazy and persisted profile preferences, active browser-session listing
 and revocation, password changes, atomic safe Activity evidence, authorized
 Activity list/detail compatibility, Actor authorization, Service Account ACL/token,
-license gate, concurrency, and restart behavior. All resources are uniquely
-named and removed in the script's `finally` block.
+license administration, concurrency, and restart behavior. The same run executes
+the versioned authorization matrix through the .NET/Dapper and Rust/SQLx
+PostgreSQL implementations. It also runs the dedicated
+database-backed Axum User, Team, Role, License, MFA, and OIDC endpoint suites for reads and administrator mutations,
+including conflicts, assignments, password/session invalidation, safe Activity
+evidence, rollback, and concurrent last-administrator protection. The HTTP flow
+proves User and Team create/patch/rename persistence, Role permission
+reduction/rename persistence, and stable License instance identity across restart and deletion
+after restart. All resources are uniquely named and removed in the script's `finally`
+block.
+
+The OIDC portion also runs a local signed-JWT issuer fixture. It validates the
+real discovery, token, and JWKS protocol adapter without relying on a public
+identity provider or storing provider tokens.
+
+Run `./rust/scripts/Test-Phase3Frontend.ps1` to build the production React
+bundle, serve it from the Rust process, and execute browser compatibility tests
+against disposable PostgreSQL and Keycloak services. The default remains the
+existing Keycloak OIDC suite. Pass one or more repository-relative Playwright
+files through `-TestFiles` to exercise other migrated screens, for example:
+
+```powershell
+./rust/scripts/Test-Phase3Frontend.ps1 -SkipBuild -TestFiles @(
+  'tests/compatibility/oidc.spec.ts',
+  'tests/compatibility/access.spec.ts',
+  'tests/smoke/licensing.spec.ts'
+)
+```
+
+The combined Phase 3 browser run covers first-run setup, OIDC redirect and
+callback, browser-session restoration and logout, User/Team production forms,
+Roles, Community-gated Service Accounts, License rendering, and OIDC provider
+administration. Use `-SkipBuild` only after both the frontend bundle and Rust
+debug server have already been built.

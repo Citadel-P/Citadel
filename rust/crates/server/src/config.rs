@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use citadel_domain::MfaPolicy;
 use ipnet::IpNet;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -32,6 +33,10 @@ const DEFAULT_REQUESTS_PER_MINUTE: u64 = 600;
 const DEFAULT_ACCESS_TOKEN_MINUTES: u64 = 15;
 const DEFAULT_REFRESH_TOKEN_DAYS: u64 = 30;
 const DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY: usize = 10_000;
+const DEFAULT_MFA_CHALLENGE_MINUTES: u64 = 5;
+const DEFAULT_MFA_SETUP_MINUTES: u64 = 10;
+const DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS: i32 = 5;
+const DEFAULT_MFA_RECOVERY_CODE_COUNT: usize = 10;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -85,6 +90,16 @@ pub struct IdentityConfig {
     pub access_token_lifetime: Duration,
     pub refresh_token_lifetime: Duration,
     pub service_account_last_used_capacity: usize,
+    pub mfa: MfaConfig,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MfaConfig {
+    pub policy: MfaPolicy,
+    pub challenge_lifetime: Duration,
+    pub setup_lifetime: Duration,
+    pub maximum_failed_attempts: i32,
+    pub recovery_code_count: usize,
 }
 
 pub struct DatabaseConfig {
@@ -188,6 +203,11 @@ pub struct EffectiveConfig {
     pub jwt_key_configured: bool,
     pub secret_encryption_key_configured: bool,
     pub service_account_last_used_capacity: usize,
+    pub mfa_policy: MfaPolicy,
+    pub mfa_challenge_lifetime_minutes: u64,
+    pub mfa_setup_lifetime_minutes: u64,
+    pub mfa_maximum_failed_attempts: i32,
+    pub mfa_recovery_code_count: usize,
 }
 
 impl Config {
@@ -327,6 +347,11 @@ impl Config {
             jwt_key_configured: true,
             secret_encryption_key_configured: true,
             service_account_last_used_capacity: self.identity.service_account_last_used_capacity,
+            mfa_policy: self.identity.mfa.policy,
+            mfa_challenge_lifetime_minutes: self.identity.mfa.challenge_lifetime.as_secs() / 60,
+            mfa_setup_lifetime_minutes: self.identity.mfa.setup_lifetime.as_secs() / 60,
+            mfa_maximum_failed_attempts: self.identity.mfa.maximum_failed_attempts,
+            mfa_recovery_code_count: self.identity.mfa.recovery_code_count,
         })
     }
 }
@@ -593,6 +618,7 @@ fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, Config
             message: "must be greater than zero".to_owned(),
         });
     }
+    let mfa = mfa_config()?;
     Ok(IdentityConfig {
         jwt_key: SecretBytes(Zeroizing::new(jwt_key.into_bytes())),
         secret_encryption_key: SecretBytes(Zeroizing::new(secret_encryption_key)),
@@ -611,6 +637,63 @@ fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, Config
             },
         )?),
         service_account_last_used_capacity,
+        mfa,
+    })
+}
+
+fn mfa_config() -> Result<MfaConfig, ConfigError> {
+    let policy_value = env::var("Mfa__Policy").unwrap_or_else(|_| "Optional".to_owned());
+    let policy = MfaPolicy::ALL
+        .iter()
+        .copied()
+        .find(|candidate| {
+            candidate
+                .as_database_str()
+                .eq_ignore_ascii_case(policy_value.trim())
+        })
+        .ok_or_else(|| ConfigError::Invalid {
+            name: "Mfa__Policy",
+            message: "must be Optional, RequiredForAdministrators, or RequiredForAllUsers"
+                .to_owned(),
+        })?;
+    let challenge_minutes = nonzero_seconds(
+        "Mfa__ChallengeLifetimeMinutes",
+        DEFAULT_MFA_CHALLENGE_MINUTES,
+    )?;
+    let setup_minutes = nonzero_seconds("Mfa__SetupLifetimeMinutes", DEFAULT_MFA_SETUP_MINUTES)?;
+    let maximum_failed_attempts = parse_env(
+        "Mfa__MaximumFailedAttempts",
+        DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS,
+    )?;
+    if maximum_failed_attempts <= 0 {
+        return Err(ConfigError::Invalid {
+            name: "Mfa__MaximumFailedAttempts",
+            message: "must be greater than zero".to_owned(),
+        });
+    }
+    let recovery_code_count = parse_env("Mfa__RecoveryCodeCount", DEFAULT_MFA_RECOVERY_CODE_COUNT)?;
+    if recovery_code_count == 0 || recovery_code_count > 100 {
+        return Err(ConfigError::Invalid {
+            name: "Mfa__RecoveryCodeCount",
+            message: "must be between 1 and 100".to_owned(),
+        });
+    }
+    Ok(MfaConfig {
+        policy,
+        challenge_lifetime: Duration::from_secs(challenge_minutes.checked_mul(60).ok_or(
+            ConfigError::Invalid {
+                name: "Mfa__ChallengeLifetimeMinutes",
+                message: "is too large".to_owned(),
+            },
+        )?),
+        setup_lifetime: Duration::from_secs(setup_minutes.checked_mul(60).ok_or(
+            ConfigError::Invalid {
+                name: "Mfa__SetupLifetimeMinutes",
+                message: "is too large".to_owned(),
+            },
+        )?),
+        maximum_failed_attempts,
+        recovery_code_count,
     })
 }
 

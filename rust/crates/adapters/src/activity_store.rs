@@ -1,11 +1,11 @@
 use citadel_application::{
-    ActivityQueryStore, ActivityRecord, IdentityError, PagedActivityRecords,
-    ValidatedActivityFilter,
+    ActivityQueryStore, ActivityRecord, PagedActivityRecords, ValidatedActivityFilter,
 };
 use citadel_domain::{
     ActivityEvent, ActivityEventType, ActivityInvariantError, ActivityResourceType, ActivityStatus,
-    ActorPrincipal, ActorType,
+    ActorType,
 };
+use citadel_identity::{ActorPrincipal, IdentityError};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};

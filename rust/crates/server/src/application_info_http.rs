@@ -3,9 +3,9 @@ use axum::Router;
 use axum::extract::Extension;
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
-use citadel_application::IdentityError;
 use citadel_contracts::http::routes;
-use citadel_domain::ActorPrincipal;
+use citadel_identity::ActorPrincipal;
+use citadel_identity::IdentityError;
 use serde::Serialize;
 
 use crate::contract_router::ContractRouterExt;
@@ -21,6 +21,7 @@ pub struct ApplicationInfoView {
     pub name: &'static str,
     pub version: &'static str,
     pub informational_version: &'static str,
+    pub realtime_transport: &'static str,
 }
 
 pub fn router() -> Router {
@@ -43,6 +44,7 @@ pub const fn application_info() -> ApplicationInfoView {
         name: NAME,
         version: VERSION,
         informational_version: INFORMATIONAL_VERSION,
+        realtime_transport: "WebSocketV1",
     }
 }
 
@@ -56,6 +58,7 @@ mod tests {
         assert_eq!(info.name, "Citadel");
         assert!(!info.version.is_empty());
         assert!(!info.informational_version.is_empty());
+        assert_eq!(info.realtime_transport, "WebSocketV1");
         assert_eq!(
             info.version,
             info.informational_version

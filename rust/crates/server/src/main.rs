@@ -13,30 +13,44 @@ use citadel_adapters::PostgresAuthorizedPlatformReader;
 use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
 use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
+    OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::PostgresIdentityStore;
-use citadel_adapters::license::PostgresLicenseEntitlementService;
+use citadel_adapters::license::{
+    Ed25519LicenseVerifier, PostgresLicenseEntitlementService, PostgresLicenseStore,
+};
+use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpService};
+use citadel_adapters::oidc_protocol::OidcHttpProtocol;
+use citadel_adapters::oidc_store::PostgresOidcStore;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
+use citadel_adapters::role_store::PostgresRoleStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use citadel_adapters::team_store::PostgresTeamStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_application::{
-    ActivityService, AuthorizedPlatformReader, IdentityService, PlatformRuntimePort,
-    ProfileService, ServiceAccountService, SystemClock, TaskSupervisor, UserReadService,
+    ActivityService, LicenseService, LicenseTransitionMonitor, TaskSupervisor,
     service_account_last_used_channel,
 };
 use citadel_contracts::http::routes;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
+use citadel_identity::{
+    IdentityService, MfaConfiguration, MfaService, OidcService, ProfileService,
+    RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
+    TeamReadService, UserReadService,
+};
+use citadel_platforms::{AuthorizedPlatformReader, PlatformRuntimePort};
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::RealtimeService;
 use citadel_server::{
-    Readiness, activities_http, application_info_http, identity_http, profile_http,
-    service_accounts_http, transport, users_http, workers,
+    Readiness, activities_http, application_info_http, identity_http, license_http,
+    license_realtime, oidc_http, profile_http, roles_http, service_accounts_http, teams_http,
+    transport, users_http, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -176,8 +190,26 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         config.identity.audience.clone(),
     )?);
     let service_account_tokens = Arc::new(OpaqueServiceAccountTokenCodec);
-    let entitlements = Arc::new(PostgresLicenseEntitlementService::new(pool.clone()));
+    let license_store = Arc::new(PostgresLicenseStore::new(pool.clone()));
+    let license_verifier = Arc::new(Ed25519LicenseVerifier::default());
+    let entitlements = Arc::new(PostgresLicenseEntitlementService::with(
+        license_store.clone(),
+        license_verifier.clone(),
+    ));
     let clock = Arc::new(SystemClock);
+    let license_realtime_hub = license_realtime::LicenseRealtimeHub::default();
+    let licenses = Arc::new(
+        LicenseService::new(
+            license_store.clone(),
+            license_verifier.clone(),
+            clock.clone(),
+            application_info_http::application_info().version.to_owned(),
+        )
+        .with_notifier(Arc::new(license_realtime_hub.clone())),
+    );
+    let license_transition_monitor =
+        LicenseTransitionMonitor::new(license_store, license_verifier, clock.clone());
+    let password_hasher = Arc::new(Argon2PasswordHasher::default());
     let identity_store = Arc::new(PostgresIdentityStore::new(pool.clone()));
     let (last_used_tracker, last_used_worker) = service_account_last_used_channel(
         identity_store.clone(),
@@ -186,8 +218,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         Duration::from_secs(5 * 60),
     );
     let identity = Arc::new(IdentityService::new(
-        identity_store,
-        Arc::new(Argon2PasswordHasher::default()),
+        identity_store.clone(),
+        password_hasher.clone(),
         token_codec,
         service_account_tokens.clone(),
         entitlements.clone(),
@@ -196,23 +228,66 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         chrono::Duration::from_std(config.identity.access_token_lifetime)?,
         chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
     ));
+    let secret_protector = Arc::new(AesGcmSecretProtector::new(
+        config.identity.secret_encryption_key.expose(),
+    )?);
+    let mfa = Arc::new(MfaService::new(
+        Arc::new(PostgresMfaStore::new(pool.clone())),
+        Arc::clone(&identity),
+        Arc::new(Sha1TotpService),
+        secret_protector.clone(),
+        Arc::new(HmacRecoveryCodeService::new(
+            config.identity.secret_encryption_key.expose(),
+        )?),
+        clock.clone(),
+        MfaConfiguration {
+            policy: config.identity.mfa.policy,
+            challenge_lifetime: chrono::Duration::from_std(config.identity.mfa.challenge_lifetime)?,
+            setup_lifetime: chrono::Duration::from_std(config.identity.mfa.setup_lifetime)?,
+            maximum_failed_attempts: config.identity.mfa.maximum_failed_attempts,
+            recovery_code_count: config.identity.mfa.recovery_code_count,
+        },
+    ));
+    let oidc = Arc::new(OidcService::new(
+        Arc::new(PostgresOidcStore::new(pool.clone())),
+        Arc::new(OidcHttpProtocol::new(Duration::from_secs(15))?),
+        secret_protector,
+        Arc::clone(&identity),
+        clock.clone(),
+        chrono::Duration::minutes(10),
+    ));
     let service_accounts = Arc::new(ServiceAccountService::new(
         Arc::new(PostgresServiceAccountStore::new(pool.clone())),
         service_account_tokens,
-        entitlements,
+        entitlements.clone(),
         clock.clone(),
     ));
     let profiles = Arc::new(ProfileService::new(
         Arc::new(PostgresProfileStore::new(pool.clone())),
         Arc::clone(&identity),
-        clock,
+        clock.clone(),
     ));
     let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
         pool.clone(),
     ))));
-    let users = Arc::new(UserReadService::new(Arc::new(PostgresUserReadStore::new(
-        pool.clone(),
-    ))));
+    let user_store = Arc::new(PostgresUserReadStore::new(pool.clone()));
+    let users = Arc::new(UserReadService::new(user_store.clone()));
+    let user_mutations = Arc::new(citadel_identity::UserMutationService::new(
+        user_store,
+        password_hasher,
+        entitlements.clone(),
+        clock.clone(),
+    ));
+    let team_store = Arc::new(PostgresTeamStore::new(pool.clone()));
+    let teams = Arc::new(TeamReadService::new(team_store.clone()));
+    let team_mutations = Arc::new(TeamMutationService::new(
+        team_store,
+        entitlements.clone(),
+        clock.clone(),
+    ));
+    let role_store = Arc::new(PostgresRoleStore::new(pool.clone()));
+    let roles = Arc::new(RoleReadService::new(role_store.clone()));
+    let role_mutations = Arc::new(RoleMutationService::new(role_store, entitlements, clock));
     let agent = if let Some(agent) = &config.agent {
         let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
         Some(
@@ -237,10 +312,23 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         )
     });
     let realtime_hub = realtime.as_ref().map(RealtimeService::hub);
+    let license_realtime_service = license_realtime::LicenseRealtimeService::new(
+        Arc::clone(&identity),
+        license_realtime_hub.clone(),
+        cancellation.clone(),
+    );
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     supervisor.spawn(
         "service-account-last-used",
         last_used_worker.run(cancellation.child_token()),
+    );
+    supervisor.spawn(
+        "license-transition-monitor",
+        license_realtime::run_license_transition_monitor(
+            cancellation.child_token(),
+            license_transition_monitor,
+            license_realtime_hub,
+        ),
     );
     workers::register(
         &mut supervisor,
@@ -275,17 +363,40 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state)
         .merge(identity_http::router(identity_http::IdentityHttpState {
             identity: Arc::clone(&identity),
+            mfa,
             readiness: Arc::clone(&readiness),
             secure_cookies: config.transport.mode
                 != citadel_server::config::TransportMode::Disabled,
         }))
+        .merge(oidc_http::router(oidc_http::OidcHttpState {
+            oidc,
+            public_url: config.transport.public_url.clone(),
+            allowed_return_origins: config.transport.cors_origins.clone(),
+            secure_cookies: config.transport.mode
+                != citadel_server::config::TransportMode::Disabled,
+        }))
         .merge(application_info_http::router())
+        .merge(license_http::router(license_http::LicenseHttpState {
+            identity: Arc::clone(&identity),
+            licenses,
+        }))
         .merge(activities_http::router(
             activities_http::ActivitiesHttpState { activities },
         ))
         .merge(users_http::router(users_http::UsersHttpState {
             identity: Arc::clone(&identity),
             users,
+            mutations: user_mutations,
+        }))
+        .merge(teams_http::router(teams_http::TeamsHttpState {
+            identity: Arc::clone(&identity),
+            teams,
+            mutations: team_mutations,
+        }))
+        .merge(roles_http::router(roles_http::RolesHttpState {
+            identity: Arc::clone(&identity),
+            roles,
+            mutations: role_mutations,
         }))
         .merge(service_accounts_http::router(
             service_accounts_http::ServiceAccountHttpState {
@@ -293,6 +404,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 service_accounts,
             },
         ))
+        .merge(license_realtime_service.router())
         .merge(profile_http::router(profile_http::ProfileHttpState {
             profiles,
         }));

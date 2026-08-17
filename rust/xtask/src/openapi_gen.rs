@@ -1,8 +1,9 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 use citadel_contracts::http::{
-    ParameterContract, ParameterSchema, ROUTES, RouteAuthentication, RouteContract,
+    ErrorResponse, ParameterContract, ParameterSchema, ROUTES, RouteAuthentication, RouteContract,
 };
 use serde_json::{Map, Value, json};
 
@@ -26,6 +27,9 @@ pub fn generate(check: bool) -> Result<(), Box<dyn std::error::Error>> {
         frontend_types().as_bytes(),
         check,
     )?;
+    if check {
+        verify_frontend_contract(rust_root)?;
+    }
     println!(
         "{} {} full and {} public HTTP contracts",
         if check { "verified" } else { "generated" },
@@ -33,6 +37,206 @@ pub fn generate(check: bool) -> Result<(), Box<dyn std::error::Error>> {
         ROUTES.iter().filter(|route| route.public).count()
     );
     Ok(())
+}
+
+fn verify_frontend_contract(rust_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let path = rust_root
+        .parent()
+        .expect("Rust workspace must be inside the repository")
+        .join("src/Citadel.FrontEnd/src/api/schema/swagger.json");
+    let frontend: Value = serde_json::from_slice(&fs::read(&path).map_err(|error| {
+        format!(
+            "cannot read frontend API contract {}: {error}",
+            path.display()
+        )
+    })?)?;
+    let frontend_operations = operation_index(&frontend)?;
+    let rust = document(false);
+
+    for route in ROUTES
+        .iter()
+        .filter(|route| route.path.starts_with("/api/v1/"))
+    {
+        let Some(frontend_operation) = frontend_operations.get(route.operation_id) else {
+            return Err(format!(
+                "Rust operation '{}' is missing from the generated frontend API contract",
+                route.operation_id
+            )
+            .into());
+        };
+        let expected_method = route.method.as_openapi_str();
+        if frontend_operation.method != expected_method || frontend_operation.path != route.path {
+            return Err(format!(
+                "frontend route mismatch for '{}': Rust uses {} {}, frontend uses {} {}",
+                route.operation_id,
+                expected_method.to_ascii_uppercase(),
+                route.path,
+                frontend_operation.method.to_ascii_uppercase(),
+                frontend_operation.path
+            )
+            .into());
+        }
+
+        let rust_operation = &rust["paths"][route.path][expected_method];
+        compare_operation_schema(
+            route.operation_id,
+            "request",
+            request_schema(rust_operation),
+            &rust,
+            request_schema(&frontend_operation.operation),
+            &frontend,
+        )?;
+        compare_operation_schema(
+            route.operation_id,
+            "response",
+            success_schema(rust_operation),
+            &rust,
+            success_schema(&frontend_operation.operation),
+            &frontend,
+        )?;
+
+        let rust_error_statuses = error_statuses(rust_operation);
+        let frontend_error_statuses = error_statuses(&frontend_operation.operation);
+        if !frontend_error_statuses.is_subset(&rust_error_statuses) {
+            return Err(format!(
+                "frontend error response mismatch for '{}': Rust declares {rust_error_statuses:?}, frontend declares {frontend_error_statuses:?}",
+                route.operation_id
+            )
+            .into());
+        }
+
+        let rust_parameters = parameters(rust_operation);
+        let frontend_parameters = parameters(&frontend_operation.operation);
+        if rust_parameters != frontend_parameters {
+            return Err(format!(
+                "frontend parameter mismatch for '{}': Rust declares {rust_parameters:?}, frontend declares {frontend_parameters:?}",
+                route.operation_id
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn error_statuses(operation: &Value) -> BTreeSet<u16> {
+    operation["responses"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(status, _)| status.parse::<u16>().ok())
+        .filter(|status| *status >= 400)
+        .collect()
+}
+
+struct IndexedOperation {
+    method: String,
+    path: String,
+    operation: Value,
+}
+
+fn operation_index(
+    document: &Value,
+) -> Result<BTreeMap<String, IndexedOperation>, Box<dyn std::error::Error>> {
+    let paths = document["paths"]
+        .as_object()
+        .ok_or("frontend API contract has no paths object")?;
+    let mut operations = BTreeMap::new();
+    for (path, path_item) in paths {
+        let Some(methods) = path_item.as_object() else {
+            continue;
+        };
+        for (method, operation) in methods {
+            let Some(operation_id) = operation["operationId"].as_str() else {
+                continue;
+            };
+            if operations
+                .insert(
+                    operation_id.to_owned(),
+                    IndexedOperation {
+                        method: method.to_owned(),
+                        path: path.to_owned(),
+                        operation: operation.clone(),
+                    },
+                )
+                .is_some()
+            {
+                return Err(format!(
+                    "frontend API contract contains duplicate operation ID '{operation_id}'"
+                )
+                .into());
+            }
+        }
+    }
+    Ok(operations)
+}
+
+fn request_schema(operation: &Value) -> Option<&Value> {
+    operation.pointer("/requestBody/content/application~1json/schema")
+}
+
+fn success_schema(operation: &Value) -> Option<&Value> {
+    operation["responses"]
+        .as_object()?
+        .iter()
+        .filter(|(status, _)| status.starts_with('2'))
+        .min_by_key(|(status, _)| status.as_str())
+        .and_then(|(_, response)| response.pointer("/content/application~1json/schema"))
+}
+
+fn compare_operation_schema(
+    operation_id: &str,
+    kind: &str,
+    rust_schema: Option<&Value>,
+    rust_document: &Value,
+    frontend_schema: Option<&Value>,
+    frontend_document: &Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rust_reference = rust_schema.and_then(|schema| schema["$ref"].as_str());
+    let frontend_reference = frontend_schema.and_then(|schema| schema["$ref"].as_str());
+    if rust_reference.is_some() && frontend_reference.is_some() {
+        if rust_reference == frontend_reference {
+            return Ok(());
+        }
+        return Err(format!(
+            "frontend {kind} schema mismatch for '{operation_id}': Rust uses {rust_reference:?}, frontend uses {frontend_reference:?}"
+        )
+        .into());
+    }
+
+    let rust_resolved = rust_schema.and_then(|schema| resolve_root_schema(schema, rust_document));
+    let frontend_resolved =
+        frontend_schema.and_then(|schema| resolve_root_schema(schema, frontend_document));
+    if rust_resolved == frontend_resolved {
+        return Ok(());
+    }
+    Err(format!(
+        "frontend {kind} schema mismatch for '{operation_id}': Rust and frontend root shapes differ"
+    )
+    .into())
+}
+
+fn resolve_root_schema<'a>(schema: &'a Value, document: &'a Value) -> Option<&'a Value> {
+    let Some(reference) = schema["$ref"].as_str() else {
+        return Some(schema);
+    };
+    let schema_name = reference.strip_prefix("#/components/schemas/")?;
+    document.pointer(&format!("/components/schemas/{schema_name}"))
+}
+
+fn parameters(operation: &Value) -> BTreeSet<(String, String, bool)> {
+    operation["parameters"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|parameter| parameter["in"] != "cookie")
+        .filter_map(|parameter| {
+            Some((
+                parameter["in"].as_str()?.to_owned(),
+                parameter["name"].as_str()?.to_owned(),
+                parameter["required"].as_bool().unwrap_or(false),
+            ))
+        })
+        .collect()
 }
 
 fn document(public_only: bool) -> Value {
@@ -89,11 +293,11 @@ fn schemas() -> Value {
                 "requestId": { "type": "string" }
             }
         },
-        "SetupStatusResponse": {
+        "SetupStatusView": {
             "type": "object", "required": ["requiresSetup"], "additionalProperties": false,
             "properties": { "requiresSetup": { "type": "boolean" } }
         },
-        "InitializeCitadelRequest": {
+        "InitializeCitadelInput": {
             "type": "object", "required": ["name", "email", "password"], "additionalProperties": false,
             "properties": {
                 "name": string(), "email": { "type": "string", "format": "email" }, "password": string()
@@ -110,26 +314,187 @@ fn schemas() -> Value {
                 "nextStep": { "type": "string", "enum": ["Completed", "VerifyMfa", "EnrollMfa"] }
             }
         },
-        "AccessTokenResponse": {
+        "RefreshTokenResponse": {
             "type": "object", "required": ["accessToken"], "additionalProperties": false,
             "properties": { "accessToken": string() }
         },
-        "PermissionMatrixResponse": {
-            "type": "array", "items": { "$ref": "#/components/schemas/PermissionMatrixEntry" }
+        "MfaPolicy": {
+            "type": "string",
+            "enum": ["Optional", "RequiredForAdministrators", "RequiredForAllUsers"]
         },
-        "PermissionMatrixEntry": {
-            "type": "object", "required": ["resourceType", "maximumLevel", "specificPermissions"], "additionalProperties": false,
+        "MfaVerificationInput": {
+            "type": "object", "additionalProperties": false,
             "properties": {
-                "resourceType": { "$ref": "#/components/schemas/ResourceType" },
-                "maximumLevel": { "$ref": "#/components/schemas/PermissionLevel" },
-                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermissionEntry" } }
+                "code": { "type": ["string", "null"], "writeOnly": true, "pattern": "^[0-9]{6}$" },
+                "recoveryCode": { "type": ["string", "null"], "writeOnly": true, "maxLength": 64 }
             }
         },
-        "SpecificPermissionEntry": {
-            "type": "object", "required": ["permission", "minimumLevel"], "additionalProperties": false,
+        "ConfirmMandatoryMfaSetupInput": {
+            "type": "object", "required": ["code"], "additionalProperties": false,
+            "properties": { "code": { "type": "string", "writeOnly": true, "pattern": "^[0-9]{6}$" } }
+        },
+        "StartProfileMfaSetupInput": {
+            "type": "object", "required": ["password"], "additionalProperties": false,
+            "properties": { "password": { "type": "string", "writeOnly": true, "minLength": 6, "maxLength": 128 } }
+        },
+        "ConfirmProfileMfaSetupInput": {
+            "type": "object", "required": ["code"], "additionalProperties": false,
+            "properties": { "code": { "type": "string", "writeOnly": true, "pattern": "^[0-9]{6}$" } }
+        },
+        "DisableProfileMfaInput": {
+            "type": "object", "required": ["password"], "additionalProperties": false,
             "properties": {
-                "permission": { "$ref": "#/components/schemas/SpecificPermission" },
-                "minimumLevel": { "$ref": "#/components/schemas/PermissionLevel" }
+                "password": { "type": "string", "writeOnly": true, "minLength": 6, "maxLength": 128 },
+                "code": { "type": ["string", "null"], "writeOnly": true, "pattern": "^[0-9]{6}$" },
+                "recoveryCode": { "type": ["string", "null"], "writeOnly": true, "maxLength": 64 }
+            }
+        },
+        "RegenerateProfileMfaRecoveryCodesInput": {
+            "type": "object", "required": ["password", "code"], "additionalProperties": false,
+            "properties": {
+                "password": { "type": "string", "writeOnly": true, "minLength": 6, "maxLength": 128 },
+                "code": { "type": "string", "writeOnly": true, "pattern": "^[0-9]{6}$" }
+            }
+        },
+        "MandatoryMfaSetupView": {
+            "type": "object", "required": ["secret", "otpAuthUri", "expiresAt"], "additionalProperties": false,
+            "properties": {
+                "secret": { "type": "string", "writeOnly": true },
+                "otpAuthUri": { "type": "string", "writeOnly": true },
+                "expiresAt": { "type": "string", "format": "date-time" }
+            }
+        },
+        "MandatoryMfaSetupCompleteView": {
+            "type": "object", "required": ["accessToken", "recoveryCodes"], "additionalProperties": false,
+            "properties": {
+                "accessToken": string(),
+                "recoveryCodes": { "type": "array", "items": { "type": "string", "writeOnly": true } }
+            }
+        },
+        "MfaVerificationView": {
+            "type": "object", "required": ["accessToken"], "additionalProperties": false,
+            "properties": { "accessToken": string() }
+        },
+        "ProfileMfaSetupView": {
+            "type": "object", "required": ["secret", "otpAuthUri", "expiresAt"], "additionalProperties": false,
+            "properties": {
+                "secret": { "type": "string", "writeOnly": true },
+                "otpAuthUri": { "type": "string", "writeOnly": true },
+                "expiresAt": { "type": "string", "format": "date-time" }
+            }
+        },
+        "ProfileMfaStatusView": {
+            "type": "object", "required": ["enabled", "remainingRecoveryCodes", "policy", "canDisable"], "additionalProperties": false,
+            "properties": {
+                "enabled": { "type": "boolean" },
+                "remainingRecoveryCodes": { "type": "integer", "format": "int32", "minimum": 0 },
+                "policy": { "$ref": "#/components/schemas/MfaPolicy" },
+                "canDisable": { "type": "boolean" }
+            }
+        },
+        "ProfileMfaRecoveryCodesView": {
+            "type": "object", "required": ["enabled", "recoveryCodes"], "additionalProperties": false,
+            "properties": {
+                "enabled": { "type": "boolean" },
+                "recoveryCodes": { "type": "array", "items": { "type": "string", "writeOnly": true } }
+            }
+        },
+        "OidcLoginProviderView": {
+            "type": "object", "required": ["id", "displayName"], "additionalProperties": false,
+            "properties": { "id": uuid(), "displayName": string() }
+        },
+        "OidcLoginProvidersView": {
+            "type": "object", "required": ["providers"], "additionalProperties": false,
+            "properties": {
+                "providers": { "type": "array", "items": { "$ref": "#/components/schemas/OidcLoginProviderView" } }
+            }
+        },
+        "OidcProviderView": {
+            "type": "object",
+            "required": ["id", "name", "description", "displayName", "issuer", "clientId", "scopes", "enabled", "autoProvisionUsers", "allowEmailAutoLink", "requireEmailVerified", "allowedEmailDomains", "requiredClaimName", "requiredClaimValues", "defaultRoleId", "hasClientSecret", "createdByActorId", "createdAt", "updatedAt"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "name": string(), "description": nullable_string(),
+                "displayName": string(), "issuer": string(), "clientId": string(), "scopes": string(),
+                "enabled": { "type": "boolean" },
+                "autoProvisionUsers": { "type": "boolean" },
+                "allowEmailAutoLink": { "type": "boolean" },
+                "requireEmailVerified": { "type": "boolean" },
+                "allowedEmailDomains": nullable_string(),
+                "requiredClaimName": nullable_string(),
+                "requiredClaimValues": nullable_string(),
+                "defaultRoleId": nullable_uuid(),
+                "hasClientSecret": { "type": "boolean" },
+                "createdByActorId": uuid(),
+                "createdAt": { "type": "string", "format": "date-time" },
+                "updatedAt": { "type": "string", "format": "date-time" }
+            }
+        },
+        "OidcProvidersView": {
+            "type": "object", "required": ["providers"], "additionalProperties": false,
+            "properties": {
+                "providers": { "type": "array", "items": { "$ref": "#/components/schemas/OidcProviderView" } }
+            }
+        },
+        "OidcProviderInput": {
+            "type": "object",
+            "required": ["name", "description", "displayName", "issuer", "clientId", "clientSecret", "scopes", "enabled", "autoProvisionUsers", "allowEmailAutoLink", "requireEmailVerified", "allowedEmailDomains", "requiredClaimName", "requiredClaimValues", "defaultRoleId"],
+            "additionalProperties": false,
+            "properties": {
+                "name": string(), "description": nullable_string(), "displayName": string(),
+                "issuer": string(), "clientId": string(),
+                "clientSecret": { "type": ["null", "string"], "writeOnly": true },
+                "scopes": nullable_string(), "enabled": { "type": "boolean" },
+                "autoProvisionUsers": { "type": "boolean" },
+                "allowEmailAutoLink": { "type": "boolean" },
+                "requireEmailVerified": { "type": "boolean" },
+                "allowedEmailDomains": nullable_string(), "requiredClaimName": nullable_string(),
+                "requiredClaimValues": nullable_string(), "defaultRoleId": nullable_uuid()
+            }
+        },
+        "UpdateOidcProviderInput": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+                "name": nullable_string(), "description": nullable_string(),
+                "displayName": nullable_string(), "issuer": nullable_string(),
+                "clientId": nullable_string(),
+                "clientSecret": { "type": ["null", "string"], "writeOnly": true },
+                "scopes": nullable_string(), "enabled": { "type": ["null", "boolean"] },
+                "autoProvisionUsers": { "type": ["null", "boolean"] },
+                "allowEmailAutoLink": { "type": ["null", "boolean"] },
+                "requireEmailVerified": { "type": ["null", "boolean"] },
+                "allowedEmailDomains": nullable_string(), "requiredClaimName": nullable_string(),
+                "requiredClaimValues": nullable_string(), "defaultRoleId": nullable_uuid()
+            }
+        },
+        "PatchResourceMetadata": {
+            "type": "object", "required": ["description", "tags"], "additionalProperties": false,
+            "properties": {
+                "description": string(), "tags": { "type": "array", "items": string() }
+            }
+        },
+        "TestOidcProviderDiscoveryInput": {
+            "type": "object", "required": ["providerId", "issuer"], "additionalProperties": false,
+            "properties": { "providerId": nullable_uuid(), "issuer": nullable_string() }
+        },
+        "OidcDiscoveryResultView": {
+            "type": "object", "required": ["issuer", "authorizationEndpoint", "tokenEndpoint", "jwksUri"], "additionalProperties": false,
+            "properties": {
+                "issuer": string(), "authorizationEndpoint": string(),
+                "tokenEndpoint": string(), "jwksUri": string()
+            }
+        },
+        "PermissionMatrixResponse": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/components/schemas/PermissionMatrixViewItem" }
+        },
+        "PermissionMatrixViewItem": {
+            "type": "object", "required": ["maximumLevel", "specificPermissions", "label", "specificPermissionLabels"], "additionalProperties": false,
+            "properties": {
+                "maximumLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/PermissionLevel" } },
+                "label": string(),
+                "specificPermissionLabels": { "type": "object", "additionalProperties": string() }
             }
         },
         "ResourceType": {
@@ -142,14 +507,74 @@ fn schemas() -> Value {
             "enum": ["Logs", "Inspect", "Apply", "Pull", "Terminal", "ResourceBindings", "Releases", "Restore", "Browse", "Download", "ManageNodeAgents", "Use", "ManageCredentials"]
         },
         "ApplicationInfoView": {
-            "type": "object", "required": ["name", "version", "informationalVersion"], "additionalProperties": false,
+            "type": "object", "required": ["name", "version", "informationalVersion", "realtimeTransport"], "additionalProperties": false,
             "properties": {
                 "name": { "type": "string", "const": "Citadel" },
                 "version": string(),
-                "informationalVersion": string()
+                "informationalVersion": string(),
+                "realtimeTransport": { "type": "string", "enum": ["SignalR", "WebSocketV1"] }
             }
         },
-        "UpdateCurrentProfileRequest": {
+        "LicenseStatus": {
+            "type": "string",
+            "enum": ["Community", "Valid", "GracePeriod", "NotYetValid", "Expired", "Invalid", "InstanceMismatch", "UnsupportedSchema", "UnknownSigningKey"]
+        },
+        "LicenseCapability": {
+            "type": "string",
+            "enum": ["CustomAccessControl", "AutomatedOperations", "AdvancedAlerting", "OperationalGuardrails", "ElasticBuildExecution"]
+        },
+        "LicenseCapabilityView": {
+            "type": "object", "required": ["capability", "enabled"], "additionalProperties": false,
+            "properties": {
+                "capability": { "$ref": "#/components/schemas/LicenseCapability" },
+                "enabled": { "type": "boolean" }
+            }
+        },
+        "LicenseEntitlementsView": {
+            "type": "object", "required": ["status", "effectiveEdition", "capabilities"], "additionalProperties": false,
+            "properties": {
+                "status": { "$ref": "#/components/schemas/LicenseStatus" },
+                "effectiveEdition": string(),
+                "capabilities": { "type": "array", "items": { "$ref": "#/components/schemas/LicenseCapabilityView" } }
+            }
+        },
+        "LicenseView": {
+            "type": "object",
+            "required": ["status", "effectiveEdition", "licensedEdition", "instanceId", "licenseSchema", "licenseId", "replacedLicenseId", "customerId", "customerName", "fingerprint", "issuedAt", "notBefore", "expiresAt", "graceUntil", "capabilities", "warnings"],
+            "additionalProperties": false,
+            "properties": {
+                "status": { "$ref": "#/components/schemas/LicenseStatus" },
+                "effectiveEdition": string(),
+                "licensedEdition": nullable_string(),
+                "instanceId": uuid(),
+                "licenseSchema": { "type": ["integer", "null"], "format": "int32" },
+                "licenseId": nullable_string(),
+                "replacedLicenseId": nullable_string(),
+                "customerId": nullable_string(),
+                "customerName": nullable_string(),
+                "fingerprint": nullable_string(),
+                "issuedAt": nullable_date_time(),
+                "notBefore": nullable_date_time(),
+                "expiresAt": nullable_date_time(),
+                "graceUntil": nullable_date_time(),
+                "capabilities": { "type": "array", "items": { "$ref": "#/components/schemas/LicenseCapabilityView" } },
+                "warnings": { "type": "array", "items": string() }
+            }
+        },
+        "InstallLicenseInput": {
+            "type": "object", "required": ["license"], "additionalProperties": false,
+            "properties": { "license": { "type": "string", "writeOnly": true, "maxLength": 65536 } }
+        },
+        "LicenseRequestView": {
+            "type": "object", "required": ["product", "instanceId", "coreVersion", "generatedAt"], "additionalProperties": false,
+            "properties": {
+                "product": { "type": "string", "const": "citadel" },
+                "instanceId": uuid(),
+                "coreVersion": string(),
+                "generatedAt": { "type": "string", "format": "date-time" }
+            }
+        },
+        "UpdateCurrentProfileInput": {
             "type": "object", "required": ["displayName"], "additionalProperties": false,
             "properties": { "displayName": string() }
         },
@@ -159,7 +584,7 @@ fn schemas() -> Value {
         "UserTheme": {
             "type": "string", "enum": ["System", "Light", "Dark"]
         },
-        "PatchUserPreferencesRequest": {
+        "PatchUserPreferencesInput": {
             "type": "object", "minProperties": 1, "additionalProperties": false,
             "properties": {
                 "timeZone": { "type": "string" },
@@ -167,7 +592,7 @@ fn schemas() -> Value {
                 "theme": { "$ref": "#/components/schemas/UserTheme" }
             }
         },
-        "ChangeCurrentPasswordRequest": {
+        "ChangeCurrentPasswordInput": {
             "type": "object", "required": ["currentPassword", "newPassword"], "additionalProperties": false,
             "properties": {
                 "currentPassword": { "type": "string", "writeOnly": true, "maxLength": 128 },
@@ -369,6 +794,211 @@ fn schemas() -> Value {
         "UserSearchItems": {
             "type": "array", "items": { "$ref": "#/components/schemas/UserSearchItemView" }
         },
+        "UserResourceAccessInput": {
+            "type": "object",
+            "required": ["resourceType", "resourceId", "permissionLevel"],
+            "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" },
+                "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "CreateUserInput": {
+            "type": "object", "required": ["name", "email", "password"], "additionalProperties": false,
+            "properties": {
+                "name": string(), "email": { "type": "string", "format": "email" },
+                "password": { "type": "string", "writeOnly": true, "minLength": 15, "maxLength": 128 },
+                "isEnabled": { "type": "boolean", "default": true },
+                "teamIds": uuid_array(), "roleIds": uuid_array(),
+                "resourceAccesses": { "type": "array", "items": { "$ref": "#/components/schemas/UserResourceAccessInput" } }
+            }
+        },
+        "PatchUserInput": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+                "email": { "type": ["string", "null"], "format": "email" },
+                "password": { "type": ["string", "null"], "writeOnly": true, "minLength": 15, "maxLength": 128 },
+                "isEnabled": { "type": ["boolean", "null"] },
+                "teamIds": { "type": ["array", "null"], "items": uuid() },
+                "roleIds": { "type": ["array", "null"], "items": uuid() },
+                "resourceAccesses": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/UserResourceAccessInput" } }
+            }
+        },
+        "AddUserRoleInput": {
+            "type": "object", "required": ["roleId"], "additionalProperties": false,
+            "properties": { "roleId": uuid() }
+        },
+        "AddUserResourceAccessInput": {
+            "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "RemoveUserResourceAccessInput": {
+            "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "DeleteUsersInput": {
+            "type": "object", "required": ["ids"], "additionalProperties": false,
+            "properties": { "ids": uuid_array() }
+        },
+        "TeamMemberView": {
+            "type": "object", "required": ["actorId", "resourceId", "name", "principalType"], "additionalProperties": false,
+            "properties": {
+                "actorId": uuid(), "resourceId": uuid(), "name": string(),
+                "principalType": { "type": "string", "enum": ["User", "ServiceAccount"] }
+            }
+        },
+        "TeamView": {
+            "type": "object",
+            "required": ["id", "name", "actorId", "isEnabled", "totalMembers"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "name": string(), "actorId": uuid(), "isEnabled": { "type": "boolean" },
+                "totalMembers": { "type": "integer", "format": "int32", "minimum": 0 },
+                "users": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceInfo" } },
+                "roles": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceInfo" } },
+                "resourceAccesses": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/ResourceAccessView" } },
+                "members": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/TeamMemberView" } }
+            }
+        },
+        "PagedTeamView": {
+            "type": "object", "required": ["items", "totalCount", "page", "pageSize"], "additionalProperties": false,
+            "properties": {
+                "items": { "type": "array", "items": { "$ref": "#/components/schemas/TeamView" } },
+                "totalCount": { "type": "integer", "format": "int32", "minimum": 0 },
+                "page": { "type": "integer", "format": "int32", "minimum": 0 },
+                "pageSize": { "type": "integer", "format": "int32", "minimum": 0, "maximum": 500 }
+            }
+        },
+        "TeamsView": {
+            "type": "object", "required": ["pagedResult", "capabilities"], "additionalProperties": false,
+            "properties": {
+                "pagedResult": { "$ref": "#/components/schemas/PagedTeamView" },
+                "capabilities": { "$ref": "#/components/schemas/ResourceCapabilities" }
+            }
+        },
+        "TeamSearchItemView": {
+            "type": "object", "required": ["id", "name"], "additionalProperties": false,
+            "properties": { "id": uuid(), "name": string() }
+        },
+        "TeamSearchItems": {
+            "type": "array", "items": { "$ref": "#/components/schemas/TeamSearchItemView" }
+        },
+        "TeamResourceAccessInput": {
+            "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "CreateTeamInput": {
+            "type": "object", "required": ["name"], "additionalProperties": false,
+            "properties": {
+                "name": string(), "userIds": uuid_array(), "roleIds": uuid_array(),
+                "resourceAccesses": { "type": "array", "items": { "$ref": "#/components/schemas/TeamResourceAccessInput" } }
+            }
+        },
+        "PatchTeamInput": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+                "isEnabled": { "type": ["boolean", "null"] },
+                "userIds": { "type": ["array", "null"], "items": uuid() },
+                "roleIds": { "type": ["array", "null"], "items": uuid() },
+                "resourceAccesses": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/TeamResourceAccessInput" } }
+            }
+        },
+        "AddTeamRoleInput": {
+            "type": "object", "required": ["roleId"], "additionalProperties": false,
+            "properties": { "roleId": uuid() }
+        },
+        "AddTeamMemberInput": {
+            "type": "object", "required": ["memberActorId"], "additionalProperties": false,
+            "properties": { "memberActorId": uuid() }
+        },
+        "AddTeamResourceAccessInput": {
+            "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "RemoveTeamResourceAccessInput": {
+            "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "DeleteTeamsInput": {
+            "type": "object", "required": ["ids"], "additionalProperties": false,
+            "properties": { "ids": uuid_array() }
+        },
+        "RoleType": {
+            "type": "string", "enum": ["System", "Custom"]
+        },
+        "PermissionInput": {
+            "type": "object", "required": ["resourceType", "permissionLevel", "specificPermissions"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" },
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "PermissionView": {
+            "type": "object", "required": ["resourceType", "permissionLevel", "specificPermissions"], "additionalProperties": false,
+            "properties": {
+                "resourceType": { "$ref": "#/components/schemas/ResourceType" },
+                "permissionLevel": { "$ref": "#/components/schemas/PermissionLevel" },
+                "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
+            }
+        },
+        "RoleView": {
+            "type": "object", "required": ["id", "name", "roleType", "permissions"], "additionalProperties": false,
+            "properties": {
+                "id": uuid(), "name": string(), "roleType": { "$ref": "#/components/schemas/RoleType" },
+                "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/PermissionView" } }
+            }
+        },
+        "RolesView": {
+            "type": "object", "required": ["roles", "capabilities"], "additionalProperties": false,
+            "properties": {
+                "roles": { "type": "array", "items": { "$ref": "#/components/schemas/RoleView" } },
+                "capabilities": { "$ref": "#/components/schemas/ResourceCapabilities" }
+            }
+        },
+        "RoleInput": {
+            "type": "object", "required": ["name", "permissions"], "additionalProperties": false,
+            "properties": {
+                "name": string(),
+                "permissions": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/PermissionInput" } }
+            }
+        },
+        "PatchRolePermissionsInput": {
+            "type": "object", "required": ["permissions"], "additionalProperties": false,
+            "properties": {
+                "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/PermissionInput" } }
+            }
+        },
+        "RenameResource": {
+            "type": "object", "required": ["id", "name"], "additionalProperties": false,
+            "properties": { "id": uuid(), "name": string() }
+        },
+        "DeleteRolesInput": {
+            "type": "object", "required": ["ids"], "additionalProperties": false,
+            "properties": { "ids": uuid_array() }
+        },
         "ServiceAccountResourceAccess": {
             "type": "object",
             "required": ["id", "resourceType", "resourceId", "resourceName", "permissionLevel", "specificPermissions"],
@@ -382,27 +1012,23 @@ fn schemas() -> Value {
                 "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
             }
         },
-        "CreateServiceAccountRequest": {
+        "CreateServiceAccountInput": {
             "type": "object", "required": ["name"], "additionalProperties": false,
             "properties": {
                 "name": string(), "description": nullable_string(), "isEnabled": { "type": "boolean" },
                 "teamIds": uuid_array(), "roleIds": uuid_array(),
-                "resourceAccesses": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceAccountResourceAccess" } }
+                "resourceAccesses": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceAccountResourceAccessInput" } }
             }
         },
-        "UpdateServiceAccountRequest": {
+        "PatchServiceAccountInput": {
             "type": "object", "additionalProperties": false,
             "properties": { "description": nullable_string(), "isEnabled": { "type": ["boolean", "null"] } }
         },
-        "RenameServiceAccountRequest": {
-            "type": "object", "required": ["id", "name"], "additionalProperties": false,
-            "properties": { "id": uuid(), "name": string() }
-        },
-        "AddServiceAccountRoleRequest": {
+        "AddServiceAccountRoleInput": {
             "type": "object", "required": ["roleId"], "additionalProperties": false,
             "properties": { "roleId": uuid() }
         },
-        "AddServiceAccountResourceAccessRequest": {
+        "ServiceAccountResourceAccessInput": {
             "type": "object", "required": ["resourceType", "resourceId", "permissionLevel"], "additionalProperties": false,
             "properties": {
                 "resourceType": { "$ref": "#/components/schemas/ResourceType" }, "resourceId": uuid(),
@@ -410,22 +1036,21 @@ fn schemas() -> Value {
                 "specificPermissions": { "type": "array", "items": { "$ref": "#/components/schemas/SpecificPermission" } }
             }
         },
-        "ArchiveServiceAccountsRequest": {
+        "DeleteServiceAccountsInput": {
             "type": "object", "required": ["ids"], "additionalProperties": false,
             "properties": { "ids": uuid_array() }
         },
-        "ServiceAccountView": service_account_view(false),
-        "ServiceAccountDetailResponse": service_account_view(true),
+        "ServiceAccountView": service_account_view(),
         "ResourceCapabilities": capabilities(false),
         "ServiceAccountCapabilities": capabilities(true),
-        "ServiceAccountsResponse": {
+        "ServiceAccountsView": {
             "type": "object", "required": ["pagedResult", "capabilities"], "additionalProperties": false,
             "properties": {
                 "pagedResult": paged("ServiceAccountView"),
                 "capabilities": { "$ref": "#/components/schemas/ResourceCapabilities" }
             }
         },
-        "CreateServiceAccountTokenRequest": {
+        "CreateServiceAccountTokenInput": {
             "type": "object", "required": ["name"], "additionalProperties": false,
             "properties": {
                 "name": string(), "expiresAtUtc": nullable_date_time(), "neverExpires": { "type": "boolean" }
@@ -433,7 +1058,7 @@ fn schemas() -> Value {
         },
         "ServiceAccountTokenView": service_account_token_view(false),
         "CreatedServiceAccountTokenView": service_account_token_view(true),
-        "ServiceAccountTokensResponse": {
+        "ServiceAccountTokensView": {
             "type": "object", "required": ["pagedResult"], "additionalProperties": false,
             "properties": { "pagedResult": paged("ServiceAccountTokenView") }
         },
@@ -507,7 +1132,7 @@ fn capabilities(service_account: bool) -> Value {
     })
 }
 
-fn service_account_view(with_capabilities: bool) -> Value {
+fn service_account_view() -> Value {
     let mut properties = Map::from_iter([
         ("id".to_owned(), uuid()),
         ("name".to_owned(), string()),
@@ -539,7 +1164,7 @@ fn service_account_view(with_capabilities: bool) -> Value {
             json!({ "type": "array", "items": { "$ref": "#/components/schemas/ServiceAccountResourceAccess" } }),
         ),
     ]);
-    let mut required = vec![
+    let required = vec![
         "id",
         "name",
         "description",
@@ -555,13 +1180,10 @@ fn service_account_view(with_capabilities: bool) -> Value {
         "roles",
         "resourceAccesses",
     ];
-    if with_capabilities {
-        properties.insert(
-            "capabilities".to_owned(),
-            json!({ "$ref": "#/components/schemas/ServiceAccountCapabilities" }),
-        );
-        required.push("capabilities");
-    }
+    properties.insert(
+        "capabilities".to_owned(),
+        json!({ "oneOf": [{ "type": "null" }, { "$ref": "#/components/schemas/ServiceAccountCapabilities" }] }),
+    );
     json!({
         "type": "object", "required": required, "additionalProperties": false, "properties": properties
     })
@@ -616,6 +1238,9 @@ fn operation(route: &RouteContract) -> Value {
     );
     let mut responses = Map::new();
     responses.insert(route.success_status.to_string(), success);
+    for error in route.error_responses {
+        responses.insert(error.status().to_string(), error_response(*error));
+    }
     responses.insert(
         "default".to_owned(),
         json!({
@@ -657,6 +1282,17 @@ fn operation(route: &RouteContract) -> Value {
             );
     }
     operation
+}
+
+fn error_response(error: ErrorResponse) -> Value {
+    json!({
+        "description": error.description(),
+        "content": {
+            "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetails" }
+            }
+        }
+    })
 }
 
 fn parameter(parameter: &ParameterContract) -> Value {
@@ -795,6 +1431,43 @@ mod tests {
                 parameter["required"] == true && parameter["schema"]["format"] == "uuid"
             }));
         }
+    }
+
+    #[test]
+    fn generated_users_operations_declare_known_problem_responses() {
+        let document = document(false);
+        let list = &document["paths"]["/api/v1/users"]["get"]["responses"];
+        let create = &document["paths"]["/api/v1/users"]["post"]["responses"];
+
+        assert_eq!(
+            error_statuses(&json!({ "responses": list })),
+            BTreeSet::from([400, 401, 403, 429, 500])
+        );
+        assert_eq!(
+            error_statuses(&json!({ "responses": create })),
+            BTreeSet::from([400, 401, 403, 409, 429, 500])
+        );
+        for response in [list, create] {
+            for status in response
+                .as_object()
+                .expect("responses are an object")
+                .keys()
+                .filter(|status| status.parse::<u16>().is_ok_and(|status| status >= 400))
+            {
+                assert_eq!(
+                    response[status]["content"]["application/problem+json"]["schema"]["$ref"],
+                    "#/components/schemas/ProblemDetails"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rust_api_subset_matches_the_current_frontend_contract() {
+        let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask must be inside the Rust workspace");
+        verify_frontend_contract(rust_root).unwrap();
     }
 
     fn assert_schema_references_resolve(value: &Value, schemas: &Map<String, Value>) {

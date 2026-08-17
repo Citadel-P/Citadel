@@ -5,8 +5,12 @@ import { SignalRProvider } from './signalr-provider';
 import { useRead } from '../hooks';
 import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
 import { useAlertEventsGroup } from '@/features/alerters/alert-events/hooks/useAlertEventsGroup';
+import { ApplicationInfoView } from '@/api/generated/api.types';
 
-const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+const AppProviderContent: React.FC<{
+  children?: React.ReactNode;
+  applicationInfo: ApplicationInfoView | undefined;
+}> = ({ children, applicationInfo }) => {
   const { platformId, type, id } = useParams();
   const selectedPlatformId = platformId ?? (type === 'platforms' ? id : undefined);
   const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: selectedPlatformId });
@@ -27,15 +31,20 @@ const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children
       isLoading: platformIsLoading || platformsIsLoading,
       currentPlatform,
       platforms: platformsMessage,
+      applicationInfo,
       ...alertEventsGroup,
     }),
-    [platformIsLoading, platformsIsLoading, currentPlatform, platformsMessage, alertEventsGroup],
+    [platformIsLoading, platformsIsLoading, currentPlatform, platformsMessage, applicationInfo, alertEventsGroup],
   );
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };
 
-export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
-  <SignalRProvider>
-    <AppProviderContent>{children}</AppProviderContent>
-  </SignalRProvider>
-);
+export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const { data: applicationInfo } = useRead('getApplicationInfo');
+
+  return (
+    <SignalRProvider realtimeTransport={applicationInfo?.data.realtimeTransport}>
+      <AppProviderContent applicationInfo={applicationInfo?.data}>{children}</AppProviderContent>
+    </SignalRProvider>
+  );
+};

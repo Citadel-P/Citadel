@@ -12,6 +12,7 @@ describe('InitialSetup', () => {
     let requestBody: unknown;
     const completeLogin = vi.fn();
     const markSetupComplete = vi.fn();
+    sessionStorage.setItem('redirectTo', '/stacks?source=first-run');
     server.use(
       http.post(initializeUrl, async ({ request }) => {
         requestBody = await request.json();
@@ -42,6 +43,7 @@ describe('InitialSetup', () => {
       email: 'owner@example.test',
       password: 'correct-horse-battery-staple',
     });
+    expect(sessionStorage.getItem('redirectTo')).toBe('/stacks?source=first-run');
   }, 10_000);
 
   it('rejects a short password before sending a request', async () => {

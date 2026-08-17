@@ -12,7 +12,8 @@ public static class ApplicationInfo
         return TypedResults.Ok(new ApplicationInfoView(
             "Citadel",
             GetDisplayVersion(informationalVersion),
-            informationalVersion));
+            informationalVersion,
+            "SignalR"));
     }
 
     private static string GetInformationalVersion()

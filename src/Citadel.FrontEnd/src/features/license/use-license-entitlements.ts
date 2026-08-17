@@ -11,7 +11,7 @@ export function useLicenseEntitlements() {
     meta: { suppressErrorToast: true },
   });
 
-  const capabilities = query.data?.data.capabilities ?? [];
+  const capabilities = query.data?.data?.capabilities ?? [];
   const hasCapability = (capability: LicenseCapability) =>
     capabilities.some((item) => item.capability === capability && item.enabled);
 

@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 use std::fs;
 use std::io::Write;

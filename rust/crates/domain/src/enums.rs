@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 macro_rules! database_string_enum {
-    ($(#[$metadata:meta])* pub enum $name:ident { $($variant:ident),+ $(,)? }) => {
+    ($(#[$metadata:meta])* pub enum $name:ident { $($(#[$variant_metadata:meta])* $variant:ident),+ $(,)? }) => {
         $(#[$metadata])*
         pub enum $name {
-            $($variant),+
+            $($(#[$variant_metadata])* $variant),+
         }
 
         impl $name {
@@ -35,6 +35,63 @@ database_string_enum! {
         Failure,
         Warning,
         Information,
+    }
+}
+
+database_string_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    pub enum LicenseCapability {
+        CustomAccessControl,
+        AutomatedOperations,
+        AdvancedAlerting,
+        OperationalGuardrails,
+        ElasticBuildExecution,
+    }
+}
+
+impl LicenseCapability {
+    #[must_use]
+    pub const fn as_license_key(self) -> &'static str {
+        match self {
+            Self::CustomAccessControl => "custom-access-control",
+            Self::AutomatedOperations => "automated-operations",
+            Self::AdvancedAlerting => "advanced-alerting",
+            Self::OperationalGuardrails => "operational-guardrails",
+            Self::ElasticBuildExecution => "elastic-build-execution",
+        }
+    }
+
+    #[must_use]
+    pub fn from_license_key(value: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|capability| capability.as_license_key() == value)
+    }
+}
+
+database_string_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum LicenseStatus {
+        Community,
+        Valid,
+        GracePeriod,
+        NotYetValid,
+        Expired,
+        Invalid,
+        InstanceMismatch,
+        UnsupportedSchema,
+        UnknownSigningKey,
+    }
+}
+
+database_string_enum! {
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum MfaPolicy {
+        #[default]
+        Optional,
+        RequiredForAdministrators,
+        RequiredForAllUsers,
     }
 }
 
@@ -517,6 +574,25 @@ impl SpecificPermission {
 pub enum RoleType {
     System,
     Custom,
+}
+
+impl RoleType {
+    #[must_use]
+    pub const fn as_database_str(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Custom => "Custom",
+        }
+    }
+
+    #[must_use]
+    pub fn from_database_str(value: &str) -> Option<Self> {
+        match value {
+            "System" => Some(Self::System),
+            "Custom" => Some(Self::Custom),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

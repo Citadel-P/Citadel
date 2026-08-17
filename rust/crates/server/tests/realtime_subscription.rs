@@ -2,11 +2,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use citadel_application::{
+use citadel_domain::ActorId;
+use citadel_platforms::{
     AuthorizedPlatformReader, AuthorizedReadError, PlatformRuntimePort, RuntimeCapabilityError,
     RuntimeStatsStream,
 };
-use citadel_domain::{ActorId, PlatformSummary, RuntimeContainerSummary, RuntimePlatformInfo};
+use citadel_platforms::{PlatformSummary, RuntimeContainerSummary, RuntimePlatformInfo};
 use citadel_server::config::RealtimeConfig;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{RealtimeHub, RealtimeService};
