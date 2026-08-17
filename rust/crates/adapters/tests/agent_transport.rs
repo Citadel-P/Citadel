@@ -8,8 +8,8 @@ use citadel_contracts::citadel::platforms::v1::platform_service_server::{
     PlatformService, PlatformServiceServer,
 };
 use citadel_contracts::citadel::platforms::v1::{
-    CheckHealthResponse, DaemonEventResponse, PlatformStatsRequest, PlatformStatsResponse,
-    PruneRequest, PruneResponse,
+    CheckHealthResponse, DaemonEventResponse, DaemonResourceEventResponse, PlatformStatsRequest,
+    PlatformStatsResponse, PruneRequest, PruneResponse, daemon_event_response,
 };
 use citadel_contracts::citadel::shared_models::v1::{PlatformInfoResponse, PlatformStatMessage};
 use citadel_platforms::{PlatformRuntimePort, RuntimeErrorKind};
@@ -82,9 +82,23 @@ impl PlatformService for FixtureService {
 
     async fn stream_daemon_event(
         &self,
-        _: Request<()>,
+        request: Request<()>,
     ) -> Result<Response<Self::StreamDaemonEventStream>, Status> {
-        Ok(Response::new(Box::pin(futures_util::stream::empty())))
+        if request.metadata().get_bin("x-signature-bin").is_none() {
+            return Err(Status::unauthenticated("missing signature"));
+        }
+        Ok(Response::new(Box::pin(futures_util::stream::iter([Ok(
+            DaemonEventResponse {
+                kind: Some(daemon_event_response::Kind::DaemonResourceEventResponse(
+                    DaemonResourceEventResponse {
+                        r#type: 9,
+                        action: "update".to_owned(),
+                        resource_id: "service-1".to_owned(),
+                    },
+                )),
+                ..Default::default()
+            },
+        )]))))
     }
 }
 
@@ -204,5 +218,27 @@ async fn cancellation_ends_an_open_agent_stream() {
             .unwrap()
             .is_none()
     );
+    server_cancellation.cancel();
+}
+
+#[tokio::test]
+async fn signed_agent_daemon_events_are_normalized_for_reconciliation() {
+    let (address, _, _, server_cancellation) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[9; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let cancellation = CancellationToken::new();
+    let mut stream = client.stream_daemon_events(&cancellation).await.unwrap();
+
+    let event = stream.next().await.unwrap().unwrap();
+
+    assert_eq!(event.resource_type, "service");
+    assert_eq!(event.action, "update");
+    assert!(stream.next().await.is_none());
     server_cancellation.cancel();
 }

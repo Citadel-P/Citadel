@@ -431,6 +431,7 @@ dependencies = [
  "hmac 0.13.0",
  "jsonwebtoken",
  "prost",
+ "prost-types",
  "reqwest",
  "serde",
  "serde_json",
@@ -531,9 +532,11 @@ dependencies = [
 name = "citadel-platforms"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "citadel-domain",
  "futures-util",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio-util",
  "uuid",

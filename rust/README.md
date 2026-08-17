@@ -143,6 +143,17 @@ typed `identity_result` adapter and ordinary `?` propagation; policy order is
 still visible in each handler and the success path adds no allocation or
 dynamic dispatch.
 
+Phase 4 implements the five Platform/Docker read slices for Local Docker and
+the active .NET Agent protocol. Authorized Platform, Container, Image, Network,
+Volume, and Swarm inventory routes read durable PostgreSQL projections. Docker
+and Agent events trigger independent coalesced refreshes, a 30-minute sweep
+repairs missed events, container statistics are streamed and retained for seven
+days, and the versioned WebSocket uses normal Citadel bearer authentication and
+Platform ACLs. Generated Docker API 1.49 operations and the handwritten
+transport remain the runtime boundary; Bollard is not used. See
+`reports/phase4-platform-docker-reads-report.md` for the .NET-test mapping and
+the explicit Edge/cgroup exit gates.
+
 Authentication cookies are scoped to `/api/v1`, which keeps them away from SPA
 assets while allowing the existing profile-session endpoints to identify and
 protect the current refresh session. Logout also expires the former

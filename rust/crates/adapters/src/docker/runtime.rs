@@ -9,6 +9,7 @@ use futures_util::{FutureExt, future::BoxFuture};
 use reqwest::StatusCode;
 use tokio_util::sync::CancellationToken;
 
+use super::generated::ContainerSummary;
 use super::{DockerClient, DockerError};
 
 impl PlatformRuntimePort for DockerClient {
@@ -30,6 +31,7 @@ impl PlatformRuntimePort for DockerClient {
             let (version, negotiated, info) = value;
             Ok(RuntimePlatformInfo {
                 daemon_id: info.id,
+                server_version: version.version,
                 operating_system: info.operating_system,
                 os_type: info.os_type,
                 architecture: info.architecture,
@@ -59,15 +61,7 @@ impl PlatformRuntimePort for DockerClient {
             };
             let mut containers = containers
                 .into_iter()
-                .map(|container| RuntimeContainerSummary {
-                    id: container.id,
-                    name: container
-                        .names
-                        .first()
-                        .map_or_else(String::new, |name| name.trim_start_matches('/').to_owned()),
-                    image: container.image,
-                    state: container.state.to_ascii_lowercase(),
-                })
+                .map(map_container)
                 .collect::<Vec<_>>();
             containers.sort_unstable_by(|left, right| left.id.cmp(&right.id));
             Ok(containers)
@@ -127,15 +121,65 @@ impl PlatformRuntimePort for DockerClient {
     }
 }
 
+fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
+    let is_swarm_task = container.labels.contains_key("com.docker.swarm.task.id");
+    let stack = container
+        .labels
+        .get("com.docker.compose.project")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .or_else(|| {
+            is_swarm_task
+                .then(|| container.labels.get("com.docker.stack.namespace"))
+                .flatten()
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+        });
+    let is_system = container
+        .labels
+        .get("com.citadel.system")
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"));
+    let system_role = is_system
+        .then(|| container.labels.get("com.citadel.system-role"))
+        .flatten()
+        .cloned();
+    let has_citadel_ownership_labels = container.labels.keys().any(|key| {
+        key.get(..12)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("com.citadel."))
+            || key
+                .get(..10)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("x-citadel."))
+    });
+    RuntimeContainerSummary {
+        stack,
+        is_system,
+        system_role,
+        has_citadel_ownership_labels,
+        is_swarm_task,
+        id: container.id,
+        name: container
+            .names
+            .first()
+            .map_or_else(String::new, |name| name.trim_start_matches('/').to_owned()),
+        image: container.image,
+        image_id: container.image_id,
+        created: container.created,
+        state: container.state.to_ascii_lowercase(),
+        status: container.status,
+        labels: container.labels.into_iter().collect(),
+        ports: container.ports,
+    }
+}
+
 fn bounded_i64(value: u64) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-fn cancelled_error() -> RuntimeCapabilityError {
+pub(super) fn cancelled_error() -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Docker call cancelled", false)
 }
 
-fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
+pub(super) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
     let (kind, retryable) = match &error {
         DockerError::Transport(transport) if transport.is_timeout() => {
             (RuntimeErrorKind::Timeout, true)
@@ -172,6 +216,7 @@ fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn maps_docker_failures_without_retrying_client_errors() {
@@ -188,5 +233,42 @@ mod tests {
         });
         assert_eq!(unavailable.kind, RuntimeErrorKind::Unavailable);
         assert!(unavailable.retryable);
+    }
+
+    #[test]
+    fn container_mapping_matches_citadel_ownership_and_swarm_grouping_rules() {
+        let container = map_container(ContainerSummary {
+            id: "container-1".to_owned(),
+            names: vec!["/web.1.task".to_owned()],
+            state: "RUNNING".to_owned(),
+            labels: HashMap::from([
+                ("com.docker.swarm.task.id".to_owned(), "task-1".to_owned()),
+                ("com.docker.stack.namespace".to_owned(), "demo".to_owned()),
+                ("com.citadel.system".to_owned(), "TRUE".to_owned()),
+                (
+                    "com.citadel.system-role".to_owned(),
+                    "node-agent".to_owned(),
+                ),
+            ]),
+            ..Default::default()
+        });
+
+        assert_eq!(container.name, "web.1.task");
+        assert_eq!(container.state, "running");
+        assert_eq!(container.stack.as_deref(), Some("demo"));
+        assert!(container.is_swarm_task);
+        assert!(container.is_system);
+        assert_eq!(container.system_role.as_deref(), Some("node-agent"));
+        assert!(container.has_citadel_ownership_labels);
+    }
+
+    #[test]
+    fn legacy_ownership_labels_remain_visible_during_migration() {
+        let container = map_container(ContainerSummary {
+            labels: HashMap::from([("X-Citadel.Owner".to_owned(), "legacy".to_owned())]),
+            ..Default::default()
+        });
+
+        assert!(container.has_citadel_ownership_labels);
     }
 }

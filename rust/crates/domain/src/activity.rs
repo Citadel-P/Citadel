@@ -66,6 +66,36 @@ pub struct RoleActivitySnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ServiceAccountResourceAccessSnapshot {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: ResourceType,
+    #[serde(rename = "ResourceId")]
+    pub resource_id: Uuid,
+    #[serde(rename = "PermissionLevel")]
+    pub permission_level: PermissionLevel,
+    #[serde(rename = "SpecificPermissions")]
+    pub specific_permissions: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ServiceAccountActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "IsEnabled")]
+    pub is_enabled: bool,
+    #[serde(rename = "TeamIds")]
+    pub team_ids: Vec<Uuid>,
+    #[serde(rename = "RoleIds")]
+    pub role_ids: Vec<Uuid>,
+    #[serde(rename = "ResourceAccesses")]
+    pub resource_accesses: Vec<ServiceAccountResourceAccessSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LicenseActivitySnapshot {
     #[serde(rename = "Schema")]
     pub schema: Option<u8>,
@@ -313,6 +343,54 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Role")]
         role: RoleActivitySnapshot,
     },
+    ServiceAccountCreated {
+        #[serde(rename = "Account")]
+        account: ServiceAccountActivitySnapshot,
+    },
+    ServiceAccountUpdated {
+        #[serde(rename = "OldAccount")]
+        old_account: ServiceAccountActivitySnapshot,
+        #[serde(rename = "NewAccount")]
+        new_account: ServiceAccountActivitySnapshot,
+    },
+    ServiceAccountRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    ServiceAccountEnabled {
+        #[serde(rename = "AccountId")]
+        account_id: Uuid,
+    },
+    ServiceAccountDisabled {
+        #[serde(rename = "AccountId")]
+        account_id: Uuid,
+    },
+    ServiceAccountArchived {
+        #[serde(rename = "AccountId")]
+        account_id: Uuid,
+    },
+    ServiceAccountTokenCreated {
+        #[serde(rename = "AccountId")]
+        account_id: Uuid,
+        #[serde(rename = "TokenId")]
+        token_id: Uuid,
+        #[serde(rename = "TokenName")]
+        token_name: String,
+        #[serde(rename = "PublicHint")]
+        public_hint: String,
+        #[serde(rename = "ExpiresAtUtc")]
+        expires_at_utc: Option<DateTime<Utc>>,
+    },
+    ServiceAccountTokenRevoked {
+        #[serde(rename = "AccountId")]
+        account_id: Uuid,
+        #[serde(rename = "TokenId")]
+        token_id: Uuid,
+        #[serde(rename = "PublicHint")]
+        public_hint: String,
+    },
     LicenseInstalled {
         #[serde(rename = "License")]
         license: Box<LicenseActivitySnapshot>,
@@ -511,6 +589,72 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn service_account_created(account: ServiceAccountActivitySnapshot) -> Self {
+        Self::ServiceAccountCreated { account }
+    }
+
+    #[must_use]
+    pub const fn service_account_updated(
+        old_account: ServiceAccountActivitySnapshot,
+        new_account: ServiceAccountActivitySnapshot,
+    ) -> Self {
+        Self::ServiceAccountUpdated {
+            old_account,
+            new_account,
+        }
+    }
+
+    #[must_use]
+    pub fn service_account_renamed(old_name: String, new_name: String) -> Self {
+        Self::ServiceAccountRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn service_account_enabled(account_id: Uuid) -> Self {
+        Self::ServiceAccountEnabled { account_id }
+    }
+
+    #[must_use]
+    pub const fn service_account_disabled(account_id: Uuid) -> Self {
+        Self::ServiceAccountDisabled { account_id }
+    }
+
+    #[must_use]
+    pub const fn service_account_archived(account_id: Uuid) -> Self {
+        Self::ServiceAccountArchived { account_id }
+    }
+
+    #[must_use]
+    pub fn service_account_token_created(
+        account_id: Uuid,
+        token_id: Uuid,
+        token_name: String,
+        public_hint: String,
+        expires_at_utc: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self::ServiceAccountTokenCreated {
+            account_id,
+            token_id,
+            token_name,
+            public_hint,
+            expires_at_utc,
+        }
+    }
+
+    #[must_use]
+    pub fn service_account_token_revoked(
+        account_id: Uuid,
+        token_id: Uuid,
+        public_hint: String,
+    ) -> Self {
+        Self::ServiceAccountTokenRevoked {
+            account_id,
+            token_id,
+            public_hint,
+        }
+    }
+
+    #[must_use]
     pub fn license_installed(license: LicenseActivitySnapshot) -> Self {
         Self::LicenseInstalled {
             license: Box::new(license),
@@ -622,6 +766,18 @@ impl ActivityEventInfo {
             Self::RoleUpdated { .. } => ActivityEventType::RoleUpdated,
             Self::RoleRenamed { .. } => ActivityEventType::RoleRenamed,
             Self::RoleDeleted { .. } => ActivityEventType::RoleDeleted,
+            Self::ServiceAccountCreated { .. } => ActivityEventType::ServiceAccountCreated,
+            Self::ServiceAccountUpdated { .. } => ActivityEventType::ServiceAccountUpdated,
+            Self::ServiceAccountRenamed { .. } => ActivityEventType::ServiceAccountRenamed,
+            Self::ServiceAccountEnabled { .. } => ActivityEventType::ServiceAccountEnabled,
+            Self::ServiceAccountDisabled { .. } => ActivityEventType::ServiceAccountDisabled,
+            Self::ServiceAccountArchived { .. } => ActivityEventType::ServiceAccountArchived,
+            Self::ServiceAccountTokenCreated { .. } => {
+                ActivityEventType::ServiceAccountTokenCreated
+            }
+            Self::ServiceAccountTokenRevoked { .. } => {
+                ActivityEventType::ServiceAccountTokenRevoked
+            }
             Self::LicenseInstalled { .. } => ActivityEventType::LicenseInstalled,
             Self::LicenseReplaced { .. } => ActivityEventType::LicenseReplaced,
             Self::LicenseRemoved { .. } => ActivityEventType::LicenseRemoved,
@@ -696,6 +852,23 @@ impl ActivityEvent {
             resource_id,
             resource_name,
             ActivityResourceType::Role,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    pub fn new_service_account_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::ServiceAccount,
             actor_id,
             info,
             created_at,

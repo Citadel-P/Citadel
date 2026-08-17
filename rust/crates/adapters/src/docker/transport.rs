@@ -12,9 +12,12 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 use super::generated::{
-    CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS, ContainerInspect, ContainerStats,
-    ContainerSummary, DockerEvent, DockerInfo, DockerVersion, Endpoint, SWARM_INSPECT,
-    SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmInspect,
+    CONFIG_LIST, CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS, ContainerInspect,
+    ContainerStats, ContainerSummary, DockerEvent, DockerInfo, DockerNetwork, DockerVersion,
+    DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_INSPECT, NETWORK_LIST, NODE_LIST,
+    SECRET_LIST, SERVICE_LIST, SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING,
+    SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret, SwarmService, SwarmTask,
+    TASK_LIST, VOLUME_INSPECT, VOLUME_LIST, VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -205,6 +208,62 @@ impl DockerClient {
             .await
     }
 
+    pub async fn list_images(&self) -> Result<Vec<ImageSummary>, DockerError> {
+        self.get_json(&IMAGE_LIST, IMAGE_LIST.path, Some("all=true"))
+            .await
+    }
+
+    pub async fn list_volumes(&self) -> Result<Vec<DockerVolume>, DockerError> {
+        Ok(self
+            .get_json::<VolumeListResponse>(&VOLUME_LIST, VOLUME_LIST.path, None)
+            .await?
+            .volumes)
+    }
+
+    pub async fn inspect_volume(&self, name: &str) -> Result<DockerVolume, DockerError> {
+        validate_identifier(name)?;
+        let path = VOLUME_INSPECT
+            .path
+            .replace("{name}", &urlencoding::encode(name));
+        self.get_json(&VOLUME_INSPECT, &path, None).await
+    }
+
+    pub async fn list_networks(&self) -> Result<Vec<DockerNetwork>, DockerError> {
+        self.get_json(&NETWORK_LIST, NETWORK_LIST.path, None).await
+    }
+
+    pub async fn inspect_network(&self, id: &str) -> Result<DockerNetwork, DockerError> {
+        validate_identifier(id)?;
+        let path = NETWORK_INSPECT
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        self.get_json(&NETWORK_INSPECT, &path, None).await
+    }
+
+    pub async fn list_swarm_nodes(&self) -> Result<Vec<SwarmNode>, DockerError> {
+        self.get_json(&NODE_LIST, NODE_LIST.path, None).await
+    }
+
+    pub async fn list_swarm_services(&self) -> Result<Vec<SwarmService>, DockerError> {
+        self.get_json(&SERVICE_LIST, SERVICE_LIST.path, Some("status=true"))
+            .await
+    }
+
+    pub async fn list_swarm_tasks(&self) -> Result<Vec<SwarmTask>, DockerError> {
+        let filters = urlencoding::encode(r#"{"desired-state":["running"]}"#);
+        let query = format!("filters={filters}");
+        self.get_json(&TASK_LIST, TASK_LIST.path, Some(&query))
+            .await
+    }
+
+    pub async fn list_swarm_secrets(&self) -> Result<Vec<SwarmSecret>, DockerError> {
+        self.get_json(&SECRET_LIST, SECRET_LIST.path, None).await
+    }
+
+    pub async fn list_swarm_configs(&self) -> Result<Vec<SwarmConfig>, DockerError> {
+        self.get_json(&CONFIG_LIST, CONFIG_LIST.path, None).await
+    }
+
     pub async fn events(
         &self,
         since: Option<i64>,
@@ -238,6 +297,19 @@ impl DockerClient {
             .send(&CONTAINER_STATS, &path, Some("stream=true"))
             .await?;
         Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
+    }
+
+    pub async fn container_stats_once(&self, id: &str) -> Result<ContainerStats, DockerError> {
+        validate_identifier(id)?;
+        let path = CONTAINER_STATS
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        let endpoint = Endpoint {
+            streaming: false,
+            ..CONTAINER_STATS
+        };
+        self.get_json(&endpoint, &path, Some("stream=false&one-shot=true"))
+            .await
     }
 
     async fn get_json<T: DeserializeOwned>(

@@ -2,6 +2,7 @@
 // Source Docker Engine API: 1.49; SHA-256: 1d54f6c4ab950646d97d1256a0a4cdcecbb963cc6c7c3312b885540a9b49694c
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 pub const SCHEMA_API_VERSION: &str = "1.49";
@@ -72,6 +73,76 @@ pub const SWARM_INSPECT: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const IMAGE_LIST: Endpoint = Endpoint {
+    operation_id: "ImageList",
+    method: "GET",
+    path: "/images/json",
+    versioned: true,
+    streaming: false,
+};
+pub const VOLUME_LIST: Endpoint = Endpoint {
+    operation_id: "VolumeList",
+    method: "GET",
+    path: "/volumes",
+    versioned: true,
+    streaming: false,
+};
+pub const VOLUME_INSPECT: Endpoint = Endpoint {
+    operation_id: "VolumeInspect",
+    method: "GET",
+    path: "/volumes/{name}",
+    versioned: true,
+    streaming: false,
+};
+pub const NETWORK_LIST: Endpoint = Endpoint {
+    operation_id: "NetworkList",
+    method: "GET",
+    path: "/networks",
+    versioned: true,
+    streaming: false,
+};
+pub const NETWORK_INSPECT: Endpoint = Endpoint {
+    operation_id: "NetworkInspect",
+    method: "GET",
+    path: "/networks/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const NODE_LIST: Endpoint = Endpoint {
+    operation_id: "NodeList",
+    method: "GET",
+    path: "/nodes",
+    versioned: true,
+    streaming: false,
+};
+pub const SERVICE_LIST: Endpoint = Endpoint {
+    operation_id: "ServiceList",
+    method: "GET",
+    path: "/services",
+    versioned: true,
+    streaming: false,
+};
+pub const TASK_LIST: Endpoint = Endpoint {
+    operation_id: "TaskList",
+    method: "GET",
+    path: "/tasks",
+    versioned: true,
+    streaming: false,
+};
+pub const SECRET_LIST: Endpoint = Endpoint {
+    operation_id: "SecretList",
+    method: "GET",
+    path: "/secrets",
+    versioned: true,
+    streaming: false,
+};
+pub const CONFIG_LIST: Endpoint = Endpoint {
+    operation_id: "ConfigList",
+    method: "GET",
+    path: "/configs",
+    versioned: true,
+    streaming: false,
+};
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerVersion {
@@ -135,6 +206,8 @@ pub struct ContainerSummary {
     pub state: String,
     #[serde(rename = "Status", default)]
     pub status: String,
+    #[serde(rename = "Ports", default)]
+    pub ports: Value,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -313,4 +386,186 @@ pub struct JoinTokens {
     pub worker: String,
     #[serde(rename = "Manager", default)]
     pub manager: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageSummary {
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(rename = "RepoTags", default)]
+    pub repo_tags: Vec<String>,
+    #[serde(rename = "RepoDigests", default)]
+    pub repo_digests: Vec<String>,
+    #[serde(rename = "Created", default)]
+    pub created: i64,
+    #[serde(rename = "Size", default)]
+    pub size: i64,
+    #[serde(rename = "Labels", default)]
+    pub labels: HashMap<String, String>,
+    #[serde(rename = "Containers", default)]
+    pub containers: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct VolumeListResponse {
+    #[serde(rename = "Volumes", default)]
+    pub volumes: Vec<DockerVolume>,
+    #[serde(rename = "Warnings", default)]
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerVolume {
+    #[serde(rename = "Name", default)]
+    pub name: String,
+    #[serde(rename = "Driver", default)]
+    pub driver: String,
+    #[serde(rename = "Mountpoint", default)]
+    pub mountpoint: String,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "Status", default)]
+    pub status: HashMap<String, Value>,
+    #[serde(rename = "Labels", default)]
+    pub labels: HashMap<String, String>,
+    #[serde(rename = "Scope", default)]
+    pub scope: String,
+    #[serde(rename = "ClusterVolume", default)]
+    pub cluster_volume: Option<Value>,
+    #[serde(rename = "Options", default)]
+    pub options: HashMap<String, String>,
+    #[serde(rename = "UsageData", default)]
+    pub usage_data: Option<Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerNetwork {
+    #[serde(rename = "Name", default)]
+    pub name: String,
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(rename = "Created", default)]
+    pub created: String,
+    #[serde(rename = "Scope", default)]
+    pub scope: String,
+    #[serde(rename = "Driver", default)]
+    pub driver: String,
+    #[serde(rename = "EnableIPv4", default)]
+    pub enable_ipv4: bool,
+    #[serde(rename = "EnableIPv6", default)]
+    pub enable_ipv6: bool,
+    #[serde(rename = "IPAM", default)]
+    pub ipam: Option<Value>,
+    #[serde(rename = "Internal", default)]
+    pub internal: bool,
+    #[serde(rename = "Attachable", default)]
+    pub attachable: bool,
+    #[serde(rename = "Ingress", default)]
+    pub ingress: bool,
+    #[serde(rename = "ConfigFrom", default)]
+    pub config_from: Option<Value>,
+    #[serde(rename = "ConfigOnly", default)]
+    pub config_only: bool,
+    #[serde(rename = "Containers", default)]
+    pub containers: HashMap<String, Value>,
+    #[serde(rename = "Peers", default)]
+    pub peers: Vec<Value>,
+    #[serde(rename = "Options", default)]
+    pub options: HashMap<String, String>,
+    #[serde(rename = "Labels", default)]
+    pub labels: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmNode {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "Version", default)]
+    pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "Spec", default)]
+    pub spec: Value,
+    #[serde(rename = "Description", default)]
+    pub description: Value,
+    #[serde(rename = "Status", default)]
+    pub status: Value,
+    #[serde(rename = "ManagerStatus", default)]
+    pub manager_status: Value,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmService {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "Version", default)]
+    pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "Spec", default)]
+    pub spec: Value,
+    #[serde(rename = "Endpoint", default)]
+    pub endpoint: Value,
+    #[serde(rename = "UpdateStatus", default)]
+    pub update_status: Value,
+    #[serde(rename = "ServiceStatus", default)]
+    pub service_status: Value,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmTask {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "Version", default)]
+    pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "Name", default)]
+    pub name: String,
+    #[serde(rename = "Spec", default)]
+    pub spec: Value,
+    #[serde(rename = "ServiceID", default)]
+    pub service_id: String,
+    #[serde(rename = "Slot", default)]
+    pub slot: Option<i32>,
+    #[serde(rename = "NodeID", default)]
+    pub node_id: String,
+    #[serde(rename = "Status", default)]
+    pub status: Value,
+    #[serde(rename = "DesiredState", default)]
+    pub desired_state: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmSecret {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "Version", default)]
+    pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "Spec", default)]
+    pub spec: Value,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmConfig {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "Version", default)]
+    pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "Spec", default)]
+    pub spec: Value,
 }

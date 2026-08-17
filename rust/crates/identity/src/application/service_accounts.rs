@@ -189,6 +189,7 @@ pub trait ServiceAccountStore: Send + Sync {
         id: Uuid,
         description: &'a PatchField<String>,
         is_enabled: Option<bool>,
+        actor_id: ActorId,
         updated_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>>;
 
@@ -196,6 +197,7 @@ pub trait ServiceAccountStore: Send + Sync {
         &'a self,
         id: Uuid,
         name: &'a str,
+        actor_id: ActorId,
         updated_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>>;
 
@@ -210,24 +212,32 @@ pub trait ServiceAccountStore: Send + Sync {
         &self,
         account_id: Uuid,
         role_id: Uuid,
+        actor_id: ActorId,
+        changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>>;
 
     fn remove_role(
         &self,
         account_id: Uuid,
         role_id: Uuid,
+        actor_id: ActorId,
+        changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>>;
 
     fn add_resource_access<'a>(
         &'a self,
         account_id: Uuid,
         access: &'a ServiceAccountResourceAccess,
+        actor_id: ActorId,
+        changed_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>>;
 
     fn remove_resource_access(
         &self,
         account_id: Uuid,
         resource_access_id: Uuid,
+        actor_id: ActorId,
+        changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>>;
 
     fn list_tokens(
@@ -338,6 +348,7 @@ impl ServiceAccountService {
         &self,
         id: Uuid,
         request: UpdateServiceAccountRequest,
+        actor_id: ActorId,
     ) -> Result<ServiceAccountView, IdentityError> {
         if request.is_enabled == PatchField::Value(true) {
             self.require_entitlement().await?;
@@ -358,13 +369,20 @@ impl ServiceAccountService {
             }
         };
         self.store
-            .update(id, &description, is_enabled, self.clock.now())
+            .update(id, &description, is_enabled, actor_id, self.clock.now())
             .await
     }
 
-    pub async fn rename(&self, id: Uuid, name: &str) -> Result<ServiceAccountView, IdentityError> {
+    pub async fn rename(
+        &self,
+        id: Uuid,
+        name: &str,
+        actor_id: ActorId,
+    ) -> Result<ServiceAccountView, IdentityError> {
         validate_name(name)?;
-        self.store.rename(id, name.trim(), self.clock.now()).await
+        self.store
+            .rename(id, name.trim(), actor_id, self.clock.now())
+            .await
     }
 
     pub async fn archive(
@@ -386,23 +404,30 @@ impl ServiceAccountService {
         &self,
         account_id: Uuid,
         role_id: Uuid,
+        actor_id: ActorId,
     ) -> Result<ServiceAccountView, IdentityError> {
         self.require_entitlement().await?;
-        self.store.add_role(account_id, role_id).await
+        self.store
+            .add_role(account_id, role_id, actor_id, self.clock.now())
+            .await
     }
 
     pub async fn remove_role(
         &self,
         account_id: Uuid,
         role_id: Uuid,
+        actor_id: ActorId,
     ) -> Result<ServiceAccountView, IdentityError> {
-        self.store.remove_role(account_id, role_id).await
+        self.store
+            .remove_role(account_id, role_id, actor_id, self.clock.now())
+            .await
     }
 
     pub async fn add_resource_access(
         &self,
         account_id: Uuid,
         request: AddServiceAccountResourceAccessRequest,
+        actor_id: ActorId,
     ) -> Result<ServiceAccountView, IdentityError> {
         self.require_entitlement().await?;
         let access = validate_resource_accesses(vec![ServiceAccountResourceAccess {
@@ -415,16 +440,19 @@ impl ServiceAccountService {
         }])?
         .pop()
         .expect("one validated resource access remains");
-        self.store.add_resource_access(account_id, &access).await
+        self.store
+            .add_resource_access(account_id, &access, actor_id, self.clock.now())
+            .await
     }
 
     pub async fn remove_resource_access(
         &self,
         account_id: Uuid,
         resource_access_id: Uuid,
+        actor_id: ActorId,
     ) -> Result<ServiceAccountView, IdentityError> {
         self.store
-            .remove_resource_access(account_id, resource_access_id)
+            .remove_resource_access(account_id, resource_access_id, actor_id, self.clock.now())
             .await
     }
 

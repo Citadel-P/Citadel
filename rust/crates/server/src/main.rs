@@ -24,6 +24,7 @@ use citadel_adapters::license::{
 use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpService};
 use citadel_adapters::oidc_protocol::OidcHttpProtocol;
 use citadel_adapters::oidc_store::PostgresOidcStore;
+use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::role_store::PostgresRoleStore;
@@ -42,15 +43,15 @@ use citadel_identity::{
     RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
     TeamReadService, UserReadService,
 };
-use citadel_platforms::{AuthorizedPlatformReader, PlatformRuntimePort};
+use citadel_platforms::{AuthorizedPlatformReader, PlatformReadService, PlatformRuntimePort};
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
-use citadel_server::realtime::RealtimeService;
+use citadel_server::realtime::{IdentityRealtimeReader, RealtimeService};
 use citadel_server::{
     Readiness, activities_http, application_info_http, identity_http, license_http,
-    license_realtime, oidc_http, profile_http, roles_http, service_accounts_http, teams_http,
-    transport, users_http, workers,
+    license_realtime, oidc_http, platforms_http, profile_http, roles_http, service_accounts_http,
+    teams_http, transport, users_http, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -270,6 +271,9 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
         pool.clone(),
     ))));
+    let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
+        PostgresPlatformReadStore::new(pool.clone()),
+    )));
     let user_store = Arc::new(PostgresUserReadStore::new(pool.clone()));
     let users = Arc::new(UserReadService::new(user_store.clone()));
     let user_mutations = Arc::new(citadel_identity::UserMutationService::new(
@@ -305,8 +309,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let realtime = config.realtime.as_ref().map(|realtime_config| {
         RealtimeService::new(
             realtime_config,
-            Arc::new(PostgresAuthorizedPlatformReader::new(pool.clone())),
-            Arc::new(docker.clone()),
+            Arc::new(IdentityRealtimeReader::new(
+                Arc::clone(&identity),
+                Arc::clone(&platform_reads),
+            )),
             Arc::clone(&metrics),
             cancellation.clone(),
         )
@@ -334,16 +340,17 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         &mut supervisor,
         &cancellation,
         workers::WorkerDependencies {
-            docker,
+            docker: docker.clone(),
             pool: pool.clone(),
             readiness: Arc::clone(&readiness),
             metrics: Arc::clone(&metrics),
-            agent,
+            agent: agent.clone(),
             realtime: realtime_hub,
         },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
             probe_interval: config.probe_interval,
+            reconciliation_interval: config.reconciliation_interval,
             agent_reconnect_delay: config
                 .agent
                 .as_ref()
@@ -404,6 +411,13 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 service_accounts,
             },
         ))
+        .merge(platforms_http::router(platforms_http::PlatformsHttpState {
+            identity: Arc::clone(&identity),
+            platforms: platform_reads,
+            pool: pool.clone(),
+            docker,
+            agent,
+        }))
         .merge(license_realtime_service.router())
         .merge(profile_http::router(profile_http::ProfileHttpState {
             profiles,

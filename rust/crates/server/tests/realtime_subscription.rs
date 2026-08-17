@@ -2,19 +2,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use citadel_domain::ActorId;
+use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::ActorPrincipal;
 use citadel_platforms::{
-    AuthorizedPlatformReader, AuthorizedReadError, PlatformRuntimePort, RuntimeCapabilityError,
-    RuntimeStatsStream,
+    ContainerView, PlatformCapabilitiesView, PlatformView, WorkloadStatusCounts,
 };
-use citadel_platforms::{PlatformSummary, RuntimeContainerSummary, RuntimePlatformInfo};
 use citadel_server::config::RealtimeConfig;
 use citadel_server::metrics::Metrics;
-use citadel_server::realtime::{RealtimeHub, RealtimeService};
+use citadel_server::realtime::{RealtimeHub, RealtimeReadError, RealtimeReadPort, RealtimeService};
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::tungstenite::{Error as WebSocketError, Message};
@@ -26,22 +24,14 @@ const TOKEN: &str = "phase0c-test-token-with-at-least-32-characters";
 #[tokio::test]
 async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     let platform_id = Uuid::now_v7();
-    let actor_id = Uuid::now_v7();
     let allowed = Arc::new(AtomicBool::new(true));
     let reader = Arc::new(FakeReader {
         platform: platform(platform_id),
         allowed,
     });
-    let runtime = Arc::new(FakeRuntime);
     let metrics = Arc::new(Metrics::default());
     let shutdown = CancellationToken::new();
-    let service = RealtimeService::new(
-        &config(actor_id, platform_id),
-        reader,
-        runtime,
-        metrics,
-        shutdown.clone(),
-    );
+    let service = RealtimeService::new(&config(), reader, metrics, shutdown.clone());
     let hub = service.hub();
     let (address, server) = start_server(service, shutdown.clone()).await;
 
@@ -58,12 +48,13 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     assert_eq!(snapshot["payload"]["containers"][0]["name"], "fixture");
     let first_connection = snapshot["connectionId"].as_str().unwrap().to_owned();
 
-    let revision = hub.publish_runtime_change("container", "start", "container-1");
-    assert_eq!(revision, 1);
+    hub.publish_runtime_change(Uuid::now_v7(), "container", "start", "other");
+    let revision = hub.publish_runtime_change(platform_id, "container", "start", "container-1");
+    assert_eq!(revision, 2);
     let event = receive_json(&mut first).await;
     assert_eq!(event["connectionId"], first_connection);
     assert_eq!(event["sequence"], 2);
-    assert_eq!(event["resourceRevision"], 1);
+    assert_eq!(event["resourceRevision"], 2);
     assert_eq!(event["eventKind"], "runtimeChanged");
 
     first
@@ -72,7 +63,7 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
                 "protocolVersion": 1,
                 "kind": "resync",
                 "lastSequence": 2,
-                "lastResourceRevision": 1
+                "lastResourceRevision": 2
             })
             .to_string()
             .into(),
@@ -81,7 +72,7 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
         .unwrap();
     let resync = receive_json(&mut first).await;
     assert_eq!(resync["sequence"], 3);
-    assert_eq!(resync["resourceRevision"], 1);
+    assert_eq!(resync["resourceRevision"], 2);
     assert_eq!(resync["eventKind"], "snapshot");
     first.close(None).await.unwrap();
 
@@ -89,11 +80,11 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
         tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
             .await
             .unwrap();
-    subscribe(&mut second, platform_id, 1).await;
+    subscribe(&mut second, platform_id, 2).await;
     let reconnect = receive_json(&mut second).await;
     assert_ne!(reconnect["connectionId"], first_connection);
     assert_eq!(reconnect["sequence"], 1);
-    assert_eq!(reconnect["resourceRevision"], 1);
+    assert_eq!(reconnect["resourceRevision"], 2);
     assert_eq!(reconnect["eventKind"], "snapshot");
     second.close(None).await.unwrap();
 
@@ -104,16 +95,14 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
 #[tokio::test]
 async fn invalid_token_is_rejected_before_any_snapshot() {
     let platform_id = Uuid::now_v7();
-    let actor_id = Uuid::now_v7();
     let metrics = Arc::new(Metrics::default());
     let shutdown = CancellationToken::new();
     let service = RealtimeService::new(
-        &config(actor_id, platform_id),
+        &config(),
         Arc::new(FakeReader {
             platform: platform(platform_id),
             allowed: Arc::new(AtomicBool::new(true)),
         }),
-        Arc::new(FakeRuntime),
         Arc::clone(&metrics),
         shutdown.clone(),
     );
@@ -156,11 +145,12 @@ async fn invalid_token_is_rejected_before_any_snapshot() {
 #[tokio::test]
 async fn bounded_hub_reports_lag_instead_of_retaining_every_event() {
     let metrics = Arc::new(Metrics::default());
-    let hub = RealtimeHub::new(Uuid::now_v7(), 2, metrics);
+    let platform_id = Uuid::now_v7();
+    let hub = RealtimeHub::new(2, metrics);
     let mut receiver = hub.subscribe();
-    hub.publish_runtime_change("container", "one", "1");
-    hub.publish_runtime_change("container", "two", "2");
-    hub.publish_runtime_change("container", "three", "3");
+    hub.publish_runtime_change(platform_id, "container", "one", "1");
+    hub.publish_runtime_change(platform_id, "container", "two", "2");
+    hub.publish_runtime_change(platform_id, "container", "three", "3");
 
     assert!(matches!(
         receiver.recv().await,
@@ -171,8 +161,7 @@ async fn bounded_hub_reports_lag_instead_of_retaining_every_event() {
 #[tokio::test]
 async fn connection_limit_rejects_excess_clients_before_allocating_a_subscription() {
     let platform_id = Uuid::now_v7();
-    let actor_id = Uuid::now_v7();
-    let mut realtime_config = config(actor_id, platform_id);
+    let mut realtime_config = config();
     realtime_config.max_connections = 1;
     let shutdown = CancellationToken::new();
     let service = RealtimeService::new(
@@ -181,7 +170,6 @@ async fn connection_limit_rejects_excess_clients_before_allocating_a_subscriptio
             platform: platform(platform_id),
             allowed: Arc::new(AtomicBool::new(true)),
         }),
-        Arc::new(FakeRuntime),
         Arc::new(Metrics::default()),
         shutdown.clone(),
     );
@@ -208,9 +196,8 @@ async fn connection_limit_rejects_excess_clients_before_allocating_a_subscriptio
 #[tokio::test]
 async fn periodic_authorization_recheck_disconnects_a_revoked_actor() {
     let platform_id = Uuid::now_v7();
-    let actor_id = Uuid::now_v7();
     let allowed = Arc::new(AtomicBool::new(true));
-    let mut realtime_config = config(actor_id, platform_id);
+    let mut realtime_config = config();
     realtime_config.authorization_recheck_interval = Duration::from_millis(20);
     let shutdown = CancellationToken::new();
     let service = RealtimeService::new(
@@ -219,7 +206,6 @@ async fn periodic_authorization_recheck_disconnects_a_revoked_actor() {
             platform: platform(platform_id),
             allowed: Arc::clone(&allowed),
         }),
-        Arc::new(FakeRuntime),
         Arc::new(Metrics::default()),
         shutdown.clone(),
     );
@@ -296,11 +282,8 @@ async fn receive_json(
     serde_json::from_str(text.as_str()).unwrap()
 }
 
-fn config(actor_id: Uuid, platform_id: Uuid) -> RealtimeConfig {
+fn config() -> RealtimeConfig {
     RealtimeConfig {
-        actor_id,
-        platform_id,
-        token_hash: Sha256::digest(TOKEN.as_bytes()).into(),
         queue_capacity: 4,
         max_connections: 4,
         subscribe_timeout: Duration::from_secs(1),
@@ -310,65 +293,106 @@ fn config(actor_id: Uuid, platform_id: Uuid) -> RealtimeConfig {
     }
 }
 
-fn platform(id: Uuid) -> PlatformSummary {
-    PlatformSummary {
+fn platform(id: Uuid) -> PlatformView {
+    PlatformView {
         id,
         name: "fixture".to_owned(),
+        description: None,
         address: "unix:///var/run/docker.sock".to_owned(),
+        network_count: 0,
+        volume_count: 0,
+        image_count: 0,
+        cpu_count: 0,
+        mem_total: 0,
+        agent_version: None,
+        server_version: None,
+        platform_type: "Docker".to_owned(),
         status: "Healthy".to_owned(),
         connector_type: "Local".to_owned(),
+        deployment_count: 0,
+        stack_count: 0,
+        deployment_status_counts: WorkloadStatusCounts::default(),
+        stack_status_counts: WorkloadStatusCounts::default(),
+        swarm_service_status_counts: WorkloadStatusCounts::default(),
+        stats: None,
+        platform_descriptor: json!({"$type":"Docker"}),
+        cluster_id: None,
+        prune_historical_swarm_task_containers: true,
+        capabilities: Some(PlatformCapabilitiesView::default()),
     }
 }
 
 struct FakeReader {
-    platform: PlatformSummary,
+    platform: PlatformView,
     allowed: Arc<AtomicBool>,
 }
 
-impl AuthorizedPlatformReader for FakeReader {
-    fn list_authorized<'a>(
+impl RealtimeReadPort for FakeReader {
+    fn authenticate<'a>(
         &'a self,
-        _actor_id: ActorId,
-    ) -> BoxFuture<'a, Result<Vec<PlatformSummary>, AuthorizedReadError>> {
+        token: &'a str,
+    ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
         Box::pin(async move {
-            Ok(if self.allowed.load(Ordering::Acquire) {
-                vec![self.platform.clone()]
+            if token == TOKEN {
+                Ok(ActorPrincipal {
+                    subject_id: Uuid::now_v7(),
+                    actor_id: ActorId::new(Uuid::now_v7()),
+                    name: "fixture".to_owned(),
+                    principal_type: AuthenticatedPrincipalType::User,
+                    credential_id: None,
+                    roles: vec!["Admin".to_owned()],
+                })
             } else {
-                Vec::new()
-            })
+                Err(RealtimeReadError::Authentication)
+            }
         })
     }
-}
 
-struct FakeRuntime;
-
-impl PlatformRuntimePort for FakeRuntime {
-    fn get_info<'a>(
+    fn authorize_platform<'a>(
         &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
-        unreachable!()
+        _principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+        Box::pin(async move {
+            if self.allowed.load(Ordering::Acquire) && platform_id == self.platform.id {
+                Ok(self.platform.clone())
+            } else {
+                Err(RealtimeReadError::Authorization)
+            }
+        })
     }
 
-    fn list_containers<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        Box::pin(async {
-            Ok(vec![RuntimeContainerSummary {
-                id: "container-1".to_owned(),
+    fn list_containers(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+        Box::pin(async move {
+            Ok(vec![ContainerView {
+                id: Uuid::now_v7(),
+                platform_id,
+                container_id: "container-1".to_owned(),
                 name: "fixture".to_owned(),
-                image: "fixture:latest".to_owned(),
+                docker_image_id: "sha256:fixture".to_owned(),
+                created: 1,
                 state: "running".to_owned(),
+                control_state: "Idle".to_owned(),
+                updated: 1,
+                stack: None,
+                is_system: false,
+                system_role: None,
+                has_citadel_ownership_labels: false,
+                is_swarm_task: false,
+                docker_node_id: None,
+                node_hostname: None,
+                projection_observed_at: None,
+                projection_stale_since: None,
+                projection_stale_reason: None,
+                last_stats: None,
+                ports: serde_json::Value::Null,
+                deployment_id: None,
+                stack_id: None,
+                capabilities: None,
             }])
         })
-    }
-
-    fn stream_stats<'a>(
-        &'a self,
-        _fetch_interval: Duration,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>> {
-        unreachable!()
     }
 }

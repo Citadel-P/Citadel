@@ -21,4 +21,28 @@ pub mod citadel {
             tonic::include_proto!("citadel.containers.v1");
         }
     }
+
+    pub mod images {
+        pub mod v1 {
+            tonic::include_proto!("citadel.images.v1");
+        }
+    }
+
+    pub mod networks {
+        pub mod v1 {
+            tonic::include_proto!("citadel.networks.v1");
+        }
+    }
+
+    pub mod volumes {
+        pub mod v1 {
+            tonic::include_proto!("citadel.volumes.v1");
+        }
+    }
+
+    pub mod swarm {
+        pub mod v1 {
+            tonic::include_proto!("citadel.swarm.v1");
+        }
+    }
 }

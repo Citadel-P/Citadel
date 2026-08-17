@@ -405,6 +405,15 @@ pub(crate) struct IdentityHttpError {
     request_id: String,
 }
 
+impl IdentityHttpError {
+    pub(crate) fn from_parts(error: IdentityError, headers: &HeaderMap) -> Self {
+        Self {
+            error,
+            request_id: request_id(headers),
+        }
+    }
+}
+
 impl IntoResponse for IdentityHttpError {
     fn into_response(self) -> Response {
         identity_error_response_with_request_id(self.error, self.request_id)
@@ -415,10 +424,7 @@ pub(crate) fn identity_result<T>(
     result: Result<T, IdentityError>,
     headers: &HeaderMap,
 ) -> IdentityHttpResult<T> {
-    result.map_err(|error| IdentityHttpError {
-        error,
-        request_id: request_id(headers),
-    })
+    result.map_err(|error| IdentityHttpError::from_parts(error, headers))
 }
 
 fn request_id(headers: &HeaderMap) -> String {

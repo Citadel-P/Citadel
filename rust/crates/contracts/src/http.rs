@@ -103,6 +103,7 @@ impl IntegerFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParameterSchema {
     String,
+    ArrayString,
     Boolean {
         default: Option<bool>,
     },
@@ -132,6 +133,16 @@ impl ParameterContract {
             location: ParameterLocation::Path,
             required: true,
             schema: ParameterSchema::Uuid,
+        }
+    }
+
+    #[must_use]
+    pub const fn path_string(name: &'static str) -> Self {
+        Self {
+            name,
+            location: ParameterLocation::Path,
+            required: true,
+            schema: ParameterSchema::String,
         }
     }
 
@@ -187,6 +198,35 @@ const ACTIVITY_FILTER_PARAMETERS: &[ParameterContract] = &[
             default: Some(50),
         },
     ),
+];
+
+const NETWORK_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("platformId"),
+    ParameterContract::query("Dangling", ParameterSchema::Boolean { default: None }),
+    ParameterContract::query("Driver", ParameterSchema::String),
+    ParameterContract::query("Id", ParameterSchema::String),
+    ParameterContract::query("Name", ParameterSchema::String),
+];
+
+const VOLUME_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("platformId"),
+    ParameterContract::query("Dangling", ParameterSchema::Boolean { default: None }),
+    ParameterContract::query("Driver", ParameterSchema::String),
+    ParameterContract::query("Name", ParameterSchema::String),
+];
+
+const SWARM_TASK_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("platformId"),
+    ParameterContract::query(
+        "limit",
+        ParameterSchema::Integer {
+            format: IntegerFormat::Int32,
+            minimum: Some(1),
+            maximum: Some(200),
+            default: Some(50),
+        },
+    ),
+    ParameterContract::query("serviceId", ParameterSchema::String),
 ];
 
 const USER_FILTER_PARAMETERS: &[ParameterContract] = &[
@@ -414,7 +454,7 @@ route_catalog! {
         method: Get, path: "/api/v1/profile/mfa", operation_id: "getProfileMfaStatus", summary: "Get MFA status",
         public: false, setup_exempt: false, authentication: Human,
         request_schema: None, response_schema: Some("ProfileMfaStatusView"), success_status: 200,
-        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     START_PROFILE_MFA_SETUP => {
@@ -962,6 +1002,153 @@ route_catalog! {
         request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id"), ParameterContract::path_uuid("tokenId")]
+    },
+    LIST_PLATFORMS => {
+        method: Get, path: "/api/v1/platforms", operation_id: "listPlatforms", summary: "List authorized Platforms",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("PlatformsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::query("tags", ParameterSchema::ArrayString)]
+    },
+    GET_PLATFORM => {
+        method: Get, path: "/api/v1/platforms/{id}", operation_id: "getPlatfom", summary: "Get a Platform",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("PlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_PLATFORM_CONTAINERS => {
+        method: Get, path: "/api/v1/platforms/{id}/containers", operation_id: "listContainers", summary: "List Platform Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainersView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_CONTAINER => {
+        method: Get, path: "/api/v1/containers/{id}", operation_id: "getContainer", summary: "Get a Container",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_PLATFORM_IMAGES => {
+        method: Get, path: "/api/v1/images/{platformId}", operation_id: "listImages", summary: "List Platform Images",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ImagesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    LIST_PLATFORM_NETWORKS => {
+        method: Get, path: "/api/v1/networks/{platformId}", operation_id: "listNetworks", summary: "List Platform Networks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("NetworksView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
+        parameters: NETWORK_FILTER_PARAMETERS
+    },
+    GET_PLATFORM_NETWORK => {
+        method: Get, path: "/api/v1/networks/{platformId}/{networkId}", operation_id: "inspectNetwork", summary: "Inspect a Platform Network",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DockerNetworkDetailsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("networkId"), ParameterContract::query("dockerNodeId", ParameterSchema::String)]
+    },
+    LIST_PLATFORM_VOLUMES => {
+        method: Get, path: "/api/v1/volumes/{platformId}", operation_id: "listVolumes", summary: "List Platform Volumes",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("VolumesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
+        parameters: VOLUME_FILTER_PARAMETERS
+    },
+    GET_PLATFORM_VOLUME => {
+        method: Get, path: "/api/v1/volumes/{platformId}/{name}", operation_id: "inspectVolume", summary: "Inspect a Platform Volume",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DockerVolumeResultView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("name"), ParameterContract::query("dockerNodeId", ParameterSchema::String)]
+    },
+    LIST_SWARM_NODES => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/nodes", operation_id: "listSwarmNodes", summary: "List Swarm Nodes",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNodesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_NODE => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}", operation_id: "getSwarmNode", summary: "Get a Swarm Node",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNodeView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("nodeId")]
+    },
+    LIST_SWARM_SERVICES => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services", operation_id: "listSwarmServices", summary: "List Swarm Services",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServicesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_SERVICE => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}", operation_id: "getSwarmService", summary: "Get a Swarm Service",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    LIST_SWARM_TASKS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks", operation_id: "listSwarmTasks", summary: "List Swarm Tasks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmTasksView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: SWARM_TASK_FILTER_PARAMETERS
+    },
+    GET_SWARM_TASK => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}", operation_id: "getSwarmTask", summary: "Get a Swarm Task",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmTaskView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    LIST_SWARM_NETWORKS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/networks", operation_id: "listSwarmNetworks", summary: "List Swarm Networks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNetworksView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_NETWORK => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/networks/{resourceId}", operation_id: "getSwarmNetwork", summary: "Get a Swarm Network",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNetworkView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    LIST_SWARM_CONFIGS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/configs", operation_id: "listSwarmConfigs", summary: "List Swarm Configs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmConfigsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_CONFIG => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}", operation_id: "getSwarmConfig", summary: "Get a Swarm Config",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    LIST_SWARM_SECRETS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/secrets", operation_id: "listSwarmSecrets", summary: "List Swarm Secrets",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmSecretsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_SECRET => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}", operation_id: "getSwarmSecret", summary: "Get a Swarm Secret",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmSecretView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
     }
 }
 

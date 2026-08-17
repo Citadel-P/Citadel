@@ -17,10 +17,18 @@ pub enum QueueSendError<T> {
     Cancelled(T),
 }
 
-#[derive(Clone)]
 pub struct BoundedSender<T> {
     inner: mpsc::Sender<T>,
     overflow_policy: QueueOverflowPolicy,
+}
+
+impl<T> Clone for BoundedSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            overflow_policy: self.overflow_policy,
+        }
+    }
 }
 
 pub struct BoundedReceiver<T> {
@@ -83,6 +91,10 @@ impl<T> BoundedReceiver<T> {
             () = cancellation.cancelled() => None,
             value = self.inner.recv() => value,
         }
+    }
+
+    pub fn try_recv(&mut self) -> Option<T> {
+        self.inner.try_recv().ok()
     }
 }
 
