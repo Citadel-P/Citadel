@@ -9,13 +9,12 @@ use base64::engine::general_purpose::STANDARD;
 use citadel_domain::MfaPolicy;
 use ipnet::IpNet;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use url::Url;
-use uuid::Uuid;
 use zeroize::Zeroizing;
 
 const DEFAULT_API_PORT: u16 = 8000;
 const DEFAULT_MONITORING_INTERVAL_SECONDS: u64 = 10;
+const DEFAULT_RECONCILIATION_INTERVAL_SECONDS: u64 = 30 * 60;
 const DEFAULT_EVENT_QUEUE_CAPACITY: usize = 256;
 const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 5;
 const DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS: u64 = 10;
@@ -56,6 +55,7 @@ pub struct Config {
     pub docker_socket: PathBuf,
     pub docker_request_timeout: Duration,
     pub probe_interval: Duration,
+    pub reconciliation_interval: Duration,
     pub event_queue_capacity: usize,
     pub shutdown_timeout: Duration,
     pub agent: Option<AgentConfig>,
@@ -143,9 +143,6 @@ pub struct AgentConfig {
 
 #[derive(Debug, Clone)]
 pub struct RealtimeConfig {
-    pub actor_id: Uuid,
-    pub platform_id: Uuid,
-    pub token_hash: [u8; 32],
     pub queue_capacity: usize,
     pub max_connections: usize,
     pub subscribe_timeout: Duration,
@@ -166,6 +163,7 @@ pub struct EffectiveConfig {
     pub docker_socket: String,
     pub docker_request_timeout_seconds: u64,
     pub probe_interval_seconds: u64,
+    pub reconciliation_interval_seconds: u64,
     pub event_queue_capacity: usize,
     pub shutdown_timeout_seconds: u64,
     pub agent_configured: bool,
@@ -174,8 +172,6 @@ pub struct EffectiveConfig {
     pub agent_operation_timeout_seconds: Option<u64>,
     pub agent_reconnect_delay_seconds: Option<u64>,
     pub realtime_configured: bool,
-    pub realtime_actor_id: Option<Uuid>,
-    pub realtime_platform_id: Option<Uuid>,
     pub realtime_queue_capacity: Option<usize>,
     pub realtime_max_connections: Option<usize>,
     pub realtime_subscribe_timeout_seconds: Option<u64>,
@@ -244,6 +240,10 @@ impl Config {
             "JobConfiguration__MonitoringInterval",
             DEFAULT_MONITORING_INTERVAL_SECONDS,
         )?;
+        let reconciliation_interval_seconds = nonzero_seconds(
+            "JobConfiguration__SwarmReconciliationIntervalSeconds",
+            DEFAULT_RECONCILIATION_INTERVAL_SECONDS,
+        )?;
         let shutdown_timeout_seconds = nonzero_seconds(
             "CITADEL_RUST_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
@@ -261,6 +261,7 @@ impl Config {
                 .unwrap_or_else(|| PathBuf::from("/var/run/docker.sock")),
             docker_request_timeout: Duration::from_secs(docker_request_timeout_seconds),
             probe_interval: Duration::from_secs(probe_interval_seconds),
+            reconciliation_interval: Duration::from_secs(reconciliation_interval_seconds),
             event_queue_capacity,
             shutdown_timeout: Duration::from_secs(shutdown_timeout_seconds),
             agent,
@@ -286,6 +287,7 @@ impl Config {
             docker_socket: self.docker_socket.display().to_string(),
             docker_request_timeout_seconds: self.docker_request_timeout.as_secs(),
             probe_interval_seconds: self.probe_interval.as_secs(),
+            reconciliation_interval_seconds: self.reconciliation_interval.as_secs(),
             event_queue_capacity: self.event_queue_capacity,
             shutdown_timeout_seconds: self.shutdown_timeout.as_secs(),
             agent_configured: self.agent.is_some(),
@@ -300,8 +302,6 @@ impl Config {
                 .as_ref()
                 .map(|agent| agent.reconnect_delay.as_secs()),
             realtime_configured: self.realtime.is_some(),
-            realtime_actor_id: self.realtime.as_ref().map(|realtime| realtime.actor_id),
-            realtime_platform_id: self.realtime.as_ref().map(|realtime| realtime.platform_id),
             realtime_queue_capacity: self
                 .realtime
                 .as_ref()
@@ -777,69 +777,44 @@ fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
 }
 
 fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
-    let actor_id = env::var("CITADEL_RUST_REALTIME_ACTOR_ID").ok();
-    let platform_id = env::var("CITADEL_RUST_REALTIME_PLATFORM_ID").ok();
-    let token = env::var("CITADEL_RUST_REALTIME_TOKEN").ok();
-    match (actor_id, platform_id, token) {
-        (None, None, None) => Ok(None),
-        (Some(actor_id), Some(platform_id), Some(token)) => {
-            if token.len() < 32 {
-                return Err(ConfigError::Invalid {
-                    name: "CITADEL_RUST_REALTIME_TOKEN",
-                    message: "must contain at least 32 characters".to_owned(),
-                });
-            }
-            let queue_capacity = parse_env(
-                "CITADEL_RUST_REALTIME_QUEUE_CAPACITY",
-                DEFAULT_REALTIME_QUEUE_CAPACITY,
-            )?;
-            let snapshot_limit = parse_env(
-                "CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
-                DEFAULT_REALTIME_SNAPSHOT_LIMIT,
-            )?;
-            let max_connections = parse_env(
-                "CITADEL_RUST_REALTIME_MAX_CONNECTIONS",
-                DEFAULT_REALTIME_MAX_CONNECTIONS,
-            )?;
-            if queue_capacity == 0 || snapshot_limit == 0 || max_connections == 0 {
-                return Err(ConfigError::Invalid {
-                    name: "CITADEL_RUST_REALTIME_QUEUE_CAPACITY/CITADEL_RUST_REALTIME_MAX_CONNECTIONS/CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
-                    message: "values must be greater than zero".to_owned(),
-                });
-            }
-            Ok(Some(RealtimeConfig {
-                actor_id: parse_uuid("CITADEL_RUST_REALTIME_ACTOR_ID", &actor_id)?,
-                platform_id: parse_uuid("CITADEL_RUST_REALTIME_PLATFORM_ID", &platform_id)?,
-                token_hash: Sha256::digest(token.as_bytes()).into(),
-                queue_capacity,
-                max_connections,
-                subscribe_timeout: Duration::from_secs(nonzero_seconds(
-                    "CITADEL_RUST_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
-                    DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
-                )?),
-                send_timeout: Duration::from_secs(nonzero_seconds(
-                    "CITADEL_RUST_REALTIME_SEND_TIMEOUT_SECONDS",
-                    DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS,
-                )?),
-                authorization_recheck_interval: Duration::from_secs(nonzero_seconds(
-                    "CITADEL_RUST_REALTIME_AUTH_RECHECK_SECONDS",
-                    DEFAULT_REALTIME_AUTH_RECHECK_SECONDS,
-                )?),
-                snapshot_limit,
-            }))
-        }
-        _ => Err(ConfigError::Invalid {
-            name: "CITADEL_RUST_REALTIME_ACTOR_ID/CITADEL_RUST_REALTIME_PLATFORM_ID/CITADEL_RUST_REALTIME_TOKEN",
-            message: "all three values must be set together".to_owned(),
-        }),
+    if !parse_env("CITADEL_RUST_REALTIME_ENABLED", true)? {
+        return Ok(None);
     }
-}
-
-fn parse_uuid(name: &'static str, value: &str) -> Result<Uuid, ConfigError> {
-    Uuid::parse_str(value).map_err(|error| ConfigError::Invalid {
-        name,
-        message: error.to_string(),
-    })
+    let queue_capacity = parse_env(
+        "CITADEL_RUST_REALTIME_QUEUE_CAPACITY",
+        DEFAULT_REALTIME_QUEUE_CAPACITY,
+    )?;
+    let snapshot_limit = parse_env(
+        "CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+        DEFAULT_REALTIME_SNAPSHOT_LIMIT,
+    )?;
+    let max_connections = parse_env(
+        "CITADEL_RUST_REALTIME_MAX_CONNECTIONS",
+        DEFAULT_REALTIME_MAX_CONNECTIONS,
+    )?;
+    if queue_capacity == 0 || snapshot_limit == 0 || max_connections == 0 {
+        return Err(ConfigError::Invalid {
+            name: "CITADEL_RUST_REALTIME_QUEUE_CAPACITY/CITADEL_RUST_REALTIME_MAX_CONNECTIONS/CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+            message: "values must be greater than zero".to_owned(),
+        });
+    }
+    Ok(Some(RealtimeConfig {
+        queue_capacity,
+        max_connections,
+        subscribe_timeout: Duration::from_secs(nonzero_seconds(
+            "CITADEL_RUST_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
+            DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
+        )?),
+        send_timeout: Duration::from_secs(nonzero_seconds(
+            "CITADEL_RUST_REALTIME_SEND_TIMEOUT_SECONDS",
+            DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS,
+        )?),
+        authorization_recheck_interval: Duration::from_secs(nonzero_seconds(
+            "CITADEL_RUST_REALTIME_AUTH_RECHECK_SECONDS",
+            DEFAULT_REALTIME_AUTH_RECHECK_SECONDS,
+        )?),
+        snapshot_limit,
+    }))
 }
 
 fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {

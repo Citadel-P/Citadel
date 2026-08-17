@@ -12,6 +12,22 @@
     {
       "name": "container_service.proto",
       "sha256": "45d315b3a214abccbdfcde347b96cd4a81664426ac6ab0b5b6c479a8d4215a84"
+    },
+    {
+      "name": "image_service.proto",
+      "sha256": "18ddaa92969df4b908910cf1a839c944cc2b6860d4bc057e2633732113cbf7ea"
+    },
+    {
+      "name": "network_service.proto",
+      "sha256": "985de6773e990f70579c763708efc17ff51ec43ac4887334c118e22cc25df59f"
+    },
+    {
+      "name": "volume_service.proto",
+      "sha256": "35a94668ee3042379cc54b40fb92e572ff65a131eb9935e9fc4c8c5247e838a3"
+    },
+    {
+      "name": "swarm_service.proto",
+      "sha256": "994ef109395cfaf35d4491ab1fdd8931829fe3665dd4ba38670277285471dfbe"
     }
   ]
 }

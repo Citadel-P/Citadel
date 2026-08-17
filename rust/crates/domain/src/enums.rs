@@ -472,6 +472,17 @@ pub enum ResourceType {
     ServiceAccount = 21,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SwarmServiceOwnership {
+    #[default]
+    Unmanaged,
+    DockerStackExternal,
+    CitadelService,
+    CitadelStack,
+    OwnershipConflict,
+    System,
+}
+
 impl ResourceType {
     pub const ALL: [Self; 22] = [
         Self::Platform,

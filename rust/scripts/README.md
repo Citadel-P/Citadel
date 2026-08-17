@@ -124,3 +124,12 @@ callback, browser-session restoration and logout, User/Team production forms,
 Roles, Community-gated Service Accounts, License rendering, and OIDC provider
 administration. Use `-SkipBuild` only after both the frontend bundle and Rust
 debug server have already been built.
+
+# Phase 4 Platform and Docker reads
+
+Run `./rust/scripts/Test-Phase4Reads.ps1` from the repository root. It creates
+a disposable PostgreSQL database and exercises Local Docker and signed Agent
+mapping/transport, transactional inventory and statistics persistence, the
+real authorized Axum Platform/Docker/Swarm read routes, reconciliation worker
+behavior, and bounded authenticated realtime subscriptions. The script removes
+its uniquely named PostgreSQL container and network in `finally`.

@@ -1070,8 +1070,422 @@ fn schemas() -> Value {
                 "defaultTokenLifetimeDays": integer(), "maximumTokenLifetimeDays": integer(),
                 "maximumActiveTokensPerAccount": integer()
             }
+        },
+        "PlatformCapabilities": platform_capabilities(),
+        "ImageCapabilities": image_capabilities(),
+        "NetworkCapabilities": network_capabilities(),
+        "VolumeCapabilities": volume_capabilities(),
+        "PlatformView": platform_view(),
+        "PlatformsView": collection_view("platforms", "PlatformView", "ResourceCapabilities"),
+        "ContainerView": container_view(),
+        "ContainersView": collection_view("containers", "ContainerView", "PlatformCapabilities"),
+        "ImageView": image_view(),
+        "ImagesView": collection_view("images", "ImageView", "ImageCapabilities"),
+        "DockerNetworkResultView": network_view(),
+        "DockerNetworkDetailsView": network_view(),
+        "NetworksView": collection_view("networks", "DockerNetworkResultView", "ResourceCapabilities"),
+        "DockerVolumeResultView": volume_view(),
+        "VolumesView": collection_view("volumes", "DockerVolumeResultView", "ResourceCapabilities"),
+        "SwarmNodeView": swarm_node_view(),
+        "SwarmNodesView": collection_view("items", "SwarmNodeView", "PlatformCapabilities"),
+        "SwarmServiceView": swarm_service_view(),
+        "SwarmServicesView": collection_view("items", "SwarmServiceView", "PlatformCapabilities"),
+        "SwarmTaskView": swarm_task_view(),
+        "SwarmTasksView": collection_view("items", "SwarmTaskView", "PlatformCapabilities"),
+        "SwarmNetworkView": swarm_network_view(),
+        "SwarmNetworksView": collection_view("items", "SwarmNetworkView", "PlatformCapabilities"),
+        "SwarmConfigView": swarm_config_view(),
+        "SwarmConfigsView": collection_view("items", "SwarmConfigView", "PlatformCapabilities"),
+        "SwarmSecretView": swarm_secret_view(),
+        "SwarmSecretsView": collection_view("items", "SwarmSecretView", "PlatformCapabilities")
+    })
+}
+
+fn collection_view(property: &str, item_schema: &str, capabilities_schema: &str) -> Value {
+    let properties = Map::from_iter([
+        (
+            property.to_owned(),
+            json!({ "type": "array", "items": { "$ref": format!("#/components/schemas/{item_schema}") } }),
+        ),
+        (
+            "capabilities".to_owned(),
+            json!({ "$ref": format!("#/components/schemas/{capabilities_schema}") }),
+        ),
+    ]);
+    json!({
+        "type": "object", "required": [property, "capabilities"], "additionalProperties": false,
+        "properties": properties
+    })
+}
+
+fn platform_capabilities() -> Value {
+    json!({
+        "type": "object", "additionalProperties": false,
+        "required": ["canRead", "canWrite", "canExecute", "canViewLogs", "canInspect", "canOpenTerminal", "canPull", "canManageNodeAgents"],
+        "properties": {
+            "canRead": {"type":"boolean"}, "canWrite": {"type":"boolean"},
+            "canExecute": {"type":"boolean"}, "canViewLogs": {"type":"boolean"},
+            "canInspect": {"type":"boolean"}, "canOpenTerminal": {"type":"boolean"},
+            "canPull": {"type":"boolean"}, "canManageNodeAgents": {"type":"boolean"}
         }
     })
+}
+
+fn image_capabilities() -> Value {
+    json!({
+        "type":"object", "additionalProperties":false,
+        "required":["canRead","canWrite","canExecute","canInspect","canPull"],
+        "properties":{
+            "canRead":{"type":"boolean"}, "canWrite":{"type":"boolean"},
+            "canExecute":{"type":"boolean"}, "canInspect":{"type":"boolean"},
+            "canPull":{"type":"boolean"}
+        }
+    })
+}
+
+fn network_capabilities() -> Value {
+    json!({
+        "type":"object", "additionalProperties":false,
+        "required":["canRead","canWrite","canExecute","canInspect"],
+        "properties":{
+            "canRead":{"type":"boolean"}, "canWrite":{"type":"boolean"},
+            "canExecute":{"type":"boolean"}, "canInspect":{"type":"boolean"}
+        }
+    })
+}
+
+fn volume_capabilities() -> Value {
+    json!({
+        "type":"object", "additionalProperties":false,
+        "required":["canRead","canWrite","canExecute","canInspect","canBrowse","canDownload"],
+        "properties":{
+            "canRead":{"type":"boolean"}, "canWrite":{"type":"boolean"},
+            "canExecute":{"type":"boolean"}, "canInspect":{"type":"boolean"},
+            "canBrowse":{"type":"boolean"}, "canDownload":{"type":"boolean"}
+        }
+    })
+}
+
+fn nullable(schema: Value) -> Value {
+    json!({ "oneOf": [{ "type": "null" }, schema] })
+}
+
+fn string_array() -> Value {
+    json!({"type":"array", "items":{"type":"string"}})
+}
+
+fn string_map() -> Value {
+    json!({"type":"object", "additionalProperties":{"type":"string"}})
+}
+
+fn platform_view() -> Value {
+    json!({
+        "type":"object", "additionalProperties":true,
+        "required":["id","name","address","networkCount","volumeCount","imageCount","cpuCount","memTotal","type","status","connectorType","deploymentCount","stackCount","deploymentStatusCounts","stackStatusCounts","swarmServiceStatusCounts","pruneHistoricalSwarmTaskContainers"],
+        "properties":{
+            "id":uuid(), "name":string(), "description":nullable_string(), "address":string(),
+            "networkCount":integer(), "volumeCount":integer(), "imageCount":integer(),
+            "cpuCount":integer(), "memTotal":integer(), "agentVersion":nullable_string(),
+            "serverVersion":nullable_string(), "type":string(), "status":string(),
+            "connectorType":string(), "deploymentCount":integer(), "stackCount":integer(),
+            "deploymentStatusCounts":{"type":"object"}, "stackStatusCounts":{"type":"object"},
+            "swarmServiceStatusCounts":{"type":"object"}, "stats":{"type":["array","null"]},
+            "platformDescriptor":{}, "clusterId":nullable_string(),
+            "pruneHistoricalSwarmTaskContainers":{"type":"boolean"},
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"}))
+        }
+    })
+}
+
+fn container_view() -> Value {
+    json!({
+        "type":"object", "additionalProperties":true,
+        "required":["id","platformId","containerId","name","dockerImageId","created","state","controlState","updated","isSystem","hasCitadelOwnershipLabels","isSwarmTask","ports"],
+        "properties":{
+            "id":uuid(), "platformId":uuid(), "containerId":string(), "name":string(),
+            "dockerImageId":string(), "created":integer(), "state":string(), "controlState":string(),
+            "updated":integer(), "stack":nullable_string(), "isSystem":{"type":"boolean"},
+            "systemRole":nullable_string(), "hasCitadelOwnershipLabels":{"type":"boolean"},
+            "isSwarmTask":{"type":"boolean"}, "dockerNodeId":nullable_string(),
+            "nodeHostname":nullable_string(), "projectionObservedAt":{"type":["integer","null"]},
+            "projectionStaleSince":{"type":["integer","null"]}, "projectionStaleReason":nullable_string(),
+            "lastStats":nullable(json!({"type":"object"})), "ports":{},
+            "deploymentId":nullable_uuid(), "stackId":nullable_uuid(),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"}))
+        }
+    })
+}
+
+fn image_view() -> Value {
+    json!({
+        "type":"object", "additionalProperties":true,
+        "required":["id","tags","name","dockerImageId","size","isInUse","platformId","createdAt","controlState"],
+        "properties":{
+            "id":uuid(), "tags":string_array(), "name":string(), "dockerImageId":string(),
+            "size":{"type":"number","format":"double"}, "isInUse":{"type":"boolean"},
+            "platformId":uuid(), "createdAt":{"type":"string","format":"date-time"},
+            "controlState":string(), "updatedAt":nullable_date_time(), "registryId":nullable_uuid(),
+            "repoDigests":{"type":["array","null"],"items":{"type":"string"}},
+            "contentIdentity":nullable_string(), "dockerNodeId":nullable_string(),
+            "nodeHostname":nullable_string(), "isStale":{"type":"boolean"},
+            "staleReason":nullable_string(),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/ImageCapabilities"}))
+        }
+    })
+}
+
+fn network_view() -> Value {
+    json!({
+        "type":"object", "additionalProperties":true,
+        "required":["name","id","created","driver","scope","enableIPv4","enableIPv6","internal","attachable","ingress","configOnly","options","labels","containers","peers","isSystem"],
+        "properties":{
+            "name":string(), "id":string(), "created":string(), "driver":string(), "scope":string(),
+            "enableIPv4":{"type":"boolean"}, "enableIPv6":{"type":"boolean"},
+            "internal":{"type":"boolean"}, "attachable":{"type":"boolean"},
+            "ingress":{"type":"boolean"}, "configOnly":{"type":"boolean"},
+            "inUse":{"type":"boolean"}, "configFrom":nullable_string(), "ipam":{},
+            "options":string_map(), "labels":string_map(), "isSystem":{"type":"boolean"},
+            "containers":{"type":"object","additionalProperties":{}}, "peers":{"type":"array","items":{}},
+            "dockerNodeId":nullable_string(), "nodeHostname":nullable_string(),
+            "isStale":{"type":"boolean"}, "staleReason":nullable_string(),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/NetworkCapabilities"}))
+        }
+    })
+}
+
+fn volume_view() -> Value {
+    json!({
+        "type":"object", "additionalProperties":true,
+        "required":["id","name","inUse","scope","driver","mountpoint","createdAt","containers","status","labels","options"],
+        "properties":{
+            "id":string(), "name":string(), "inUse":{"type":"boolean"}, "scope":string(),
+            "driver":string(), "mountpoint":string(), "createdAt":string(), "clusterVolume":{},
+            "usageData":{}, "containers":{"type":"array"}, "status":string_map(),
+            "labels":string_map(), "options":string_map(), "dockerNodeId":nullable_string(),
+            "nodeHostname":nullable_string(), "isStale":{"type":"boolean"},
+            "staleReason":nullable_string(),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/VolumeCapabilities"}))
+        }
+    })
+}
+
+fn swarm_base(properties: Map<String, Value>, required: Vec<&str>) -> Value {
+    json!({"type":"object", "additionalProperties":false, "required":required, "properties":properties})
+}
+
+fn swarm_common() -> Map<String, Value> {
+    Map::from_iter([
+        ("id".into(), string()),
+        ("createdAt".into(), nullable_date_time()),
+        (
+            "observedAt".into(),
+            json!({"type":"string","format":"date-time"}),
+        ),
+        ("isStale".into(), json!({"type":"boolean"})),
+        (
+            "capabilities".into(),
+            nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"})),
+        ),
+    ])
+}
+
+fn swarm_node_view() -> Value {
+    let mut p = swarm_common();
+    p.extend(Map::from_iter([
+        ("versionIndex".into(), integer()),
+        ("hostname".into(), string()),
+        ("role".into(), string()),
+        ("isLeader".into(), json!({"type":"boolean"})),
+        ("reachability".into(), string()),
+        ("status".into(), string()),
+        ("statusMessage".into(), nullable_string()),
+        ("availability".into(), string()),
+        ("engineVersion".into(), string()),
+        ("operatingSystem".into(), string()),
+        ("architecture".into(), string()),
+        ("address".into(), string()),
+        ("labels".into(), string_map()),
+        ("runningTaskCount".into(), integer()),
+        ("desiredTaskCount".into(), integer()),
+        ("updatedAt".into(), nullable_date_time()),
+    ]));
+    swarm_base(
+        p,
+        vec![
+            "id",
+            "versionIndex",
+            "hostname",
+            "role",
+            "isLeader",
+            "reachability",
+            "status",
+            "availability",
+            "engineVersion",
+            "operatingSystem",
+            "architecture",
+            "address",
+            "labels",
+            "runningTaskCount",
+            "desiredTaskCount",
+            "observedAt",
+            "isStale",
+        ],
+    )
+}
+
+fn swarm_service_view() -> Value {
+    let mut p = swarm_common();
+    p.extend(Map::from_iter([
+        ("versionIndex".into(), integer()),
+        ("name".into(), string()),
+        ("mode".into(), string()),
+        ("image".into(), string()),
+        ("runningTaskCount".into(), integer()),
+        ("desiredTaskCount".into(), integer()),
+        ("updateState".into(), string()),
+        ("updateMessage".into(), nullable_string()),
+        ("ports".into(), string_array()),
+        ("networkIds".into(), string_array()),
+        ("secretIds".into(), string_array()),
+        ("configIds".into(), string_array()),
+        ("labels".into(), string_map()),
+        ("ownership".into(), string()),
+        ("dockerStackNamespace".into(), nullable_string()),
+        ("ownershipDiagnostic".into(), nullable_string()),
+        ("stackId".into(), nullable_uuid()),
+        ("swarmServiceId".into(), nullable_uuid()),
+        ("updatedAt".into(), nullable_date_time()),
+    ]));
+    swarm_base(
+        p,
+        vec![
+            "id",
+            "versionIndex",
+            "name",
+            "mode",
+            "image",
+            "runningTaskCount",
+            "desiredTaskCount",
+            "updateState",
+            "ports",
+            "networkIds",
+            "secretIds",
+            "configIds",
+            "labels",
+            "ownership",
+            "observedAt",
+            "isStale",
+        ],
+    )
+}
+
+fn swarm_task_view() -> Value {
+    let mut p = swarm_common();
+    p.extend(Map::from_iter([
+        ("versionIndex".into(), integer()),
+        ("name".into(), string()),
+        ("serviceId".into(), string()),
+        ("serviceName".into(), string()),
+        ("slot".into(), json!({"type":["integer","null"]})),
+        ("nodeId".into(), string()),
+        ("nodeHostname".into(), string()),
+        ("desiredState".into(), string()),
+        ("state".into(), string()),
+        ("statusMessage".into(), nullable_string()),
+        ("error".into(), nullable_string()),
+        ("image".into(), string()),
+        ("ports".into(), string_array()),
+        ("statusTimestamp".into(), nullable_date_time()),
+        ("updatedAt".into(), nullable_date_time()),
+    ]));
+    swarm_base(
+        p,
+        vec![
+            "id",
+            "versionIndex",
+            "name",
+            "serviceId",
+            "serviceName",
+            "nodeId",
+            "nodeHostname",
+            "desiredState",
+            "state",
+            "image",
+            "ports",
+            "observedAt",
+            "isStale",
+        ],
+    )
+}
+
+fn swarm_network_view() -> Value {
+    let mut p = swarm_common();
+    p.extend(Map::from_iter([
+        ("name".into(), string()),
+        ("scope".into(), string()),
+        ("driver".into(), string()),
+        ("isAttachable".into(), json!({"type":"boolean"})),
+        ("isInternal".into(), json!({"type":"boolean"})),
+        ("isIngress".into(), json!({"type":"boolean"})),
+        ("isEncrypted".into(), json!({"type":"boolean"})),
+        ("enableIPv6".into(), json!({"type":"boolean"})),
+        ("subnets".into(), string_array()),
+        ("serviceNames".into(), string_array()),
+        ("labels".into(), string_map()),
+    ]));
+    swarm_base(
+        p,
+        vec![
+            "id",
+            "name",
+            "scope",
+            "driver",
+            "isAttachable",
+            "isInternal",
+            "isIngress",
+            "isEncrypted",
+            "enableIPv6",
+            "subnets",
+            "serviceNames",
+            "labels",
+            "observedAt",
+            "isStale",
+        ],
+    )
+}
+
+fn swarm_config_view() -> Value {
+    swarm_named_resource_view("templatingDriver")
+}
+
+fn swarm_secret_view() -> Value {
+    swarm_named_resource_view("driver")
+}
+
+fn swarm_named_resource_view(optional_property: &str) -> Value {
+    let mut p = swarm_common();
+    p.extend(Map::from_iter([
+        ("versionIndex".into(), integer()),
+        ("name".into(), string()),
+        (optional_property.into(), nullable_string()),
+        ("serviceNames".into(), string_array()),
+        ("labels".into(), string_map()),
+        ("updatedAt".into(), nullable_date_time()),
+        ("inUse".into(), json!({"type":"boolean"})),
+    ]));
+    swarm_base(
+        p,
+        vec![
+            "id",
+            "versionIndex",
+            "name",
+            "serviceNames",
+            "labels",
+            "observedAt",
+            "isStale",
+            "inUse",
+        ],
+    )
 }
 
 fn string() -> Value {
@@ -1307,6 +1721,9 @@ fn parameter(parameter: &ParameterContract) -> Value {
 fn parameter_schema(schema: ParameterSchema) -> Value {
     match schema {
         ParameterSchema::String => string(),
+        ParameterSchema::ArrayString => {
+            json!({ "type": "array", "items": { "type": "string" } })
+        }
         ParameterSchema::Boolean { default } => {
             let mut schema = Map::from_iter([("type".to_owned(), json!("boolean"))]);
             if let Some(default) = default {
@@ -1405,19 +1822,9 @@ mod tests {
     }
 
     #[test]
-    fn generated_uuid_path_parameters_are_explicit() {
+    fn generated_path_parameters_match_their_contracts() {
         let document = document(false);
         for route in ROUTES.iter().filter(|route| route.path.contains('{')) {
-            assert!(
-                route
-                    .path
-                    .split('{')
-                    .skip(1)
-                    .filter_map(|value| value.split_once('}').map(|(name, _)| name))
-                    .all(|name| name.to_ascii_lowercase().ends_with("id")),
-                "UUID path inference requires an ID-named parameter: {}",
-                route.path
-            );
             let operation = &document["paths"][route.path][route.method.as_openapi_str()];
             let parameters = operation["parameters"]
                 .as_array()
@@ -1427,9 +1834,20 @@ mod tests {
                 .filter(|parameter| parameter["in"] == "path")
                 .collect::<Vec<_>>();
             assert_eq!(path_parameters.len(), route.path.matches('{').count());
-            assert!(path_parameters.iter().all(|parameter| {
-                parameter["required"] == true && parameter["schema"]["format"] == "uuid"
-            }));
+            for parameter in path_parameters {
+                let name = parameter["name"]
+                    .as_str()
+                    .expect("path parameter has a name");
+                let contract = route
+                    .parameters
+                    .iter()
+                    .find(|candidate| {
+                        candidate.location.as_openapi_str() == "path" && candidate.name == name
+                    })
+                    .expect("generated path parameter has contract metadata");
+                assert_eq!(parameter["required"], true);
+                assert_eq!(parameter["schema"], parameter_schema(contract.schema));
+            }
         }
     }
 

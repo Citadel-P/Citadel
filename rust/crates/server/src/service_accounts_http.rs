@@ -173,7 +173,13 @@ async fn update(
             .await,
         &headers,
     )?;
-    let account = identity_result(state.service_accounts.update(id, request).await, &headers)?;
+    let account = identity_result(
+        state
+            .service_accounts
+            .update(id, request, principal.actor_id)
+            .await,
+        &headers,
+    )?;
     Ok(Json(account).into_response())
 }
 
@@ -200,7 +206,7 @@ async fn rename(
     let account = identity_result(
         state
             .service_accounts
-            .rename(request.id, &request.name)
+            .rename(request.id, &request.name, principal.actor_id)
             .await,
         &headers,
     )?;
@@ -258,7 +264,10 @@ async fn add_role(
         &headers,
     )?;
     let account = identity_result(
-        state.service_accounts.add_role(id, request.role_id).await,
+        state
+            .service_accounts
+            .add_role(id, request.role_id, principal.actor_id)
+            .await,
         &headers,
     )?;
     Ok(Json(account).into_response())
@@ -285,7 +294,10 @@ async fn remove_role(
         &headers,
     )?;
     let account = identity_result(
-        state.service_accounts.remove_role(id, role_id).await,
+        state
+            .service_accounts
+            .remove_role(id, role_id, principal.actor_id)
+            .await,
         &headers,
     )?;
     Ok(Json(account).into_response())
@@ -315,7 +327,7 @@ async fn add_resource_access(
     let account = identity_result(
         state
             .service_accounts
-            .add_resource_access(id, request)
+            .add_resource_access(id, request, principal.actor_id)
             .await,
         &headers,
     )?;
@@ -345,7 +357,7 @@ async fn remove_resource_access(
     let account = identity_result(
         state
             .service_accounts
-            .remove_resource_access(id, resource_access_id)
+            .remove_resource_access(id, resource_access_id, principal.actor_id)
             .await,
         &headers,
     )?;

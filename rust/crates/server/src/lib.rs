@@ -12,6 +12,7 @@ pub mod license_realtime;
 pub mod metrics;
 pub mod mfa_http;
 pub mod oidc_http;
+pub mod platforms_http;
 pub mod profile_http;
 pub mod realtime;
 pub mod roles_http;

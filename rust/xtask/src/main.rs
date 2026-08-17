@@ -120,6 +120,76 @@ const OPERATIONS: &[OperationSpec] = &[
         versioned: true,
         streaming: false,
     },
+    OperationSpec {
+        operation_id: "ImageList",
+        method: "get",
+        path: "/images/json",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "VolumeList",
+        method: "get",
+        path: "/volumes",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "VolumeInspect",
+        method: "get",
+        path: "/volumes/{name}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NetworkList",
+        method: "get",
+        path: "/networks",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NetworkInspect",
+        method: "get",
+        path: "/networks/{id}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NodeList",
+        method: "get",
+        path: "/nodes",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ServiceList",
+        method: "get",
+        path: "/services",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "TaskList",
+        method: "get",
+        path: "/tasks",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "SecretList",
+        method: "get",
+        path: "/secrets",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ConfigList",
+        method: "get",
+        path: "/configs",
+        versioned: true,
+        streaming: false,
+    },
 ];
 
 const MODEL_FIELDS: &[(&str, &[&str])] = &[
@@ -154,7 +224,7 @@ const MODEL_FIELDS: &[(&str, &[&str])] = &[
     (
         "ContainerSummary",
         &[
-            "Id", "Names", "Image", "ImageID", "Created", "Labels", "State", "Status",
+            "Id", "Names", "Image", "ImageID", "Created", "Labels", "State", "Status", "Ports",
         ],
     ),
     (
@@ -229,6 +299,102 @@ const MODEL_FIELDS: &[(&str, &[&str])] = &[
     ),
     ("ObjectVersion", &["Index"]),
     ("JoinTokens", &["Worker", "Manager"]),
+    (
+        "ImageSummary",
+        &[
+            "Id",
+            "RepoTags",
+            "RepoDigests",
+            "Created",
+            "Size",
+            "Labels",
+            "Containers",
+        ],
+    ),
+    ("VolumeListResponse", &["Volumes", "Warnings"]),
+    (
+        "Volume",
+        &[
+            "Name",
+            "Driver",
+            "Mountpoint",
+            "CreatedAt",
+            "Status",
+            "Labels",
+            "Scope",
+            "Options",
+        ],
+    ),
+    (
+        "Network",
+        &[
+            "Name",
+            "Id",
+            "Created",
+            "Scope",
+            "Driver",
+            "EnableIPv4",
+            "EnableIPv6",
+            "Internal",
+            "Attachable",
+            "Ingress",
+            "ConfigOnly",
+            "Options",
+            "Labels",
+            "Containers",
+            "Peers",
+        ],
+    ),
+    (
+        "Node",
+        &[
+            "ID",
+            "Version",
+            "CreatedAt",
+            "UpdatedAt",
+            "Spec",
+            "Description",
+            "Status",
+            "ManagerStatus",
+        ],
+    ),
+    (
+        "Service",
+        &[
+            "ID",
+            "Version",
+            "CreatedAt",
+            "UpdatedAt",
+            "Spec",
+            "Endpoint",
+            "UpdateStatus",
+            "ServiceStatus",
+        ],
+    ),
+    (
+        "Task",
+        &[
+            "ID",
+            "Version",
+            "CreatedAt",
+            "UpdatedAt",
+            "Name",
+            "Spec",
+            "ServiceID",
+            "Slot",
+            "NodeID",
+            "Status",
+            "DesiredState",
+        ],
+    ),
+    (
+        "Secret",
+        &["ID", "Version", "CreatedAt", "UpdatedAt", "Spec"],
+    ),
+    (
+        "Config",
+        &["ID", "Version", "CreatedAt", "UpdatedAt", "Spec"],
+    ),
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -303,7 +469,8 @@ fn validate_operations(schema: &str) -> Result<(), Box<dyn std::error::Error>> {
 fn validate_models(schema: &str) -> Result<(), Box<dyn std::error::Error>> {
     for (model, fields) in MODEL_FIELDS {
         let model_block = indented_block(schema, &format!("  {model}:"), 2)?;
-        let properties = indented_block(model_block, "    properties:", 4)?;
+        let properties = indented_block(model_block, "    properties:", 4)
+            .map_err(|error| format!("Docker definition {model}: {error}"))?;
         for property in *fields {
             let expected = format!("      {property}:");
             if !properties.lines().any(|line| line.trim_end() == expected) {
@@ -323,7 +490,9 @@ fn indented_block<'a>(
     indentation: usize,
 ) -> Result<&'a str, Box<dyn std::error::Error>> {
     let start = source
-        .find(marker)
+        .match_indices(marker)
+        .map(|(offset, _)| offset)
+        .find(|offset| *offset == 0 || source.as_bytes().get(offset - 1) == Some(&b'\n'))
         .ok_or_else(|| format!("Docker schema is missing {marker}"))?;
     let body_start = source[start..]
         .find('\n')
@@ -396,6 +565,7 @@ fn render(api_version: &str, checksum: &str) -> String {
 
 use std::collections::HashMap;
 use serde::{{Deserialize, Serialize}};
+use serde_json::Value;
 
 pub const SCHEMA_API_VERSION: &str = "{api_version}";
 pub const SCHEMA_SHA256: &str = "{checksum}";
@@ -447,6 +617,7 @@ pub struct ContainerSummary {{
     #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
     #[serde(rename = "State", default)] pub state: String,
     #[serde(rename = "Status", default)] pub status: String,
+    #[serde(rename = "Ports", default)] pub ports: Value,
 }}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -562,6 +733,115 @@ pub struct ObjectVersion {{
 pub struct JoinTokens {{
     #[serde(rename = "Worker", default)] pub worker: String,
     #[serde(rename = "Manager", default)] pub manager: String,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageSummary {{
+    #[serde(rename = "Id", default)] pub id: String,
+    #[serde(rename = "RepoTags", default)] pub repo_tags: Vec<String>,
+    #[serde(rename = "RepoDigests", default)] pub repo_digests: Vec<String>,
+    #[serde(rename = "Created", default)] pub created: i64,
+    #[serde(rename = "Size", default)] pub size: i64,
+    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Containers", default)] pub containers: i64,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct VolumeListResponse {{
+    #[serde(rename = "Volumes", default)] pub volumes: Vec<DockerVolume>,
+    #[serde(rename = "Warnings", default)] pub warnings: Vec<String>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerVolume {{
+    #[serde(rename = "Name", default)] pub name: String,
+    #[serde(rename = "Driver", default)] pub driver: String,
+    #[serde(rename = "Mountpoint", default)] pub mountpoint: String,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "Status", default)] pub status: HashMap<String, Value>,
+    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Scope", default)] pub scope: String,
+    #[serde(rename = "ClusterVolume", default)] pub cluster_volume: Option<Value>,
+    #[serde(rename = "Options", default)] pub options: HashMap<String, String>,
+    #[serde(rename = "UsageData", default)] pub usage_data: Option<Value>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerNetwork {{
+    #[serde(rename = "Name", default)] pub name: String,
+    #[serde(rename = "Id", default)] pub id: String,
+    #[serde(rename = "Created", default)] pub created: String,
+    #[serde(rename = "Scope", default)] pub scope: String,
+    #[serde(rename = "Driver", default)] pub driver: String,
+    #[serde(rename = "EnableIPv4", default)] pub enable_ipv4: bool,
+    #[serde(rename = "EnableIPv6", default)] pub enable_ipv6: bool,
+    #[serde(rename = "IPAM", default)] pub ipam: Option<Value>,
+    #[serde(rename = "Internal", default)] pub internal: bool,
+    #[serde(rename = "Attachable", default)] pub attachable: bool,
+    #[serde(rename = "Ingress", default)] pub ingress: bool,
+    #[serde(rename = "ConfigFrom", default)] pub config_from: Option<Value>,
+    #[serde(rename = "ConfigOnly", default)] pub config_only: bool,
+    #[serde(rename = "Containers", default)] pub containers: HashMap<String, Value>,
+    #[serde(rename = "Peers", default)] pub peers: Vec<Value>,
+    #[serde(rename = "Options", default)] pub options: HashMap<String, String>,
+    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmNode {{
+    #[serde(rename = "ID", default)] pub id: String,
+    #[serde(rename = "Version", default)] pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)] pub updated_at: String,
+    #[serde(rename = "Spec", default)] pub spec: Value,
+    #[serde(rename = "Description", default)] pub description: Value,
+    #[serde(rename = "Status", default)] pub status: Value,
+    #[serde(rename = "ManagerStatus", default)] pub manager_status: Value,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmService {{
+    #[serde(rename = "ID", default)] pub id: String,
+    #[serde(rename = "Version", default)] pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)] pub updated_at: String,
+    #[serde(rename = "Spec", default)] pub spec: Value,
+    #[serde(rename = "Endpoint", default)] pub endpoint: Value,
+    #[serde(rename = "UpdateStatus", default)] pub update_status: Value,
+    #[serde(rename = "ServiceStatus", default)] pub service_status: Value,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmTask {{
+    #[serde(rename = "ID", default)] pub id: String,
+    #[serde(rename = "Version", default)] pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)] pub updated_at: String,
+    #[serde(rename = "Name", default)] pub name: String,
+    #[serde(rename = "Spec", default)] pub spec: Value,
+    #[serde(rename = "ServiceID", default)] pub service_id: String,
+    #[serde(rename = "Slot", default)] pub slot: Option<i32>,
+    #[serde(rename = "NodeID", default)] pub node_id: String,
+    #[serde(rename = "Status", default)] pub status: Value,
+    #[serde(rename = "DesiredState", default)] pub desired_state: String,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmSecret {{
+    #[serde(rename = "ID", default)] pub id: String,
+    #[serde(rename = "Version", default)] pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)] pub updated_at: String,
+    #[serde(rename = "Spec", default)] pub spec: Value,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SwarmConfig {{
+    #[serde(rename = "ID", default)] pub id: String,
+    #[serde(rename = "Version", default)] pub version: ObjectVersion,
+    #[serde(rename = "CreatedAt", default)] pub created_at: String,
+    #[serde(rename = "UpdatedAt", default)] pub updated_at: String,
+    #[serde(rename = "Spec", default)] pub spec: Value,
 }}
 "#
     )

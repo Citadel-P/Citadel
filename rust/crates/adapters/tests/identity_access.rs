@@ -604,10 +604,13 @@ VALUES
         )
         .await
         .unwrap();
-    account = accounts.add_role(account.id, ADMIN_ROLE_ID).await.unwrap();
+    account = accounts
+        .add_role(account.id, ADMIN_ROLE_ID, owner.actor_id)
+        .await
+        .unwrap();
     assert!(account.roles.iter().any(|role| role.id == ADMIN_ROLE_ID));
     account = accounts
-        .remove_role(account.id, ADMIN_ROLE_ID)
+        .remove_role(account.id, ADMIN_ROLE_ID, owner.actor_id)
         .await
         .unwrap();
     assert!(account.roles.iter().all(|role| role.id != ADMIN_ROLE_ID));
@@ -622,6 +625,7 @@ VALUES
                 permission_level: PermissionLevel::Read,
                 specific_permissions: vec![],
             },
+            owner.actor_id,
         )
         .await
         .unwrap();
@@ -632,7 +636,7 @@ VALUES
         .and_then(|access| access.id)
         .unwrap();
     account = accounts
-        .remove_resource_access(account.id, access_id)
+        .remove_resource_access(account.id, access_id, owner.actor_id)
         .await
         .unwrap();
     assert!(

@@ -8,21 +8,116 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use citadel_domain::ActorId;
-use citadel_platforms::{AuthorizedPlatformReader, PlatformRuntimePort};
-use citadel_platforms::{PlatformSummary, RuntimeContainerSummary};
+use citadel_domain::{PermissionLevel, ResourceType};
+use citadel_identity::{ActorPrincipal, IdentityService};
+use citadel_platforms::{ContainerView, PlatformReadService, PlatformView};
 use futures_util::StreamExt;
+use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
-use subtle::ConstantTimeEq;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, broadcast};
 use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::config::RealtimeConfig;
 use crate::metrics::Metrics;
+
+pub trait RealtimeReadPort: Send + Sync {
+    fn authenticate<'a>(
+        &'a self,
+        token: &'a str,
+    ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>>;
+
+    fn authorize_platform<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>>;
+
+    fn list_containers(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>>;
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RealtimeReadError {
+    #[error("authentication failed")]
+    Authentication,
+    #[error("authorization failed")]
+    Authorization,
+    #[error("realtime read failed: {0}")]
+    Storage(String),
+}
+
+pub struct IdentityRealtimeReader {
+    identity: Arc<IdentityService>,
+    platforms: Arc<PlatformReadService>,
+}
+
+impl IdentityRealtimeReader {
+    #[must_use]
+    pub fn new(identity: Arc<IdentityService>, platforms: Arc<PlatformReadService>) -> Self {
+        Self {
+            identity,
+            platforms,
+        }
+    }
+}
+
+impl RealtimeReadPort for IdentityRealtimeReader {
+    fn authenticate<'a>(
+        &'a self,
+        token: &'a str,
+    ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+        Box::pin(async move {
+            self.identity
+                .authenticate_bearer(token)
+                .await
+                .map_err(|_| RealtimeReadError::Authentication)
+        })
+    }
+
+    fn authorize_platform<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+        Box::pin(async move {
+            if !principal.is_administrator() {
+                let permission = self
+                    .identity
+                    .permission_for_resource(principal, ResourceType::Platform, platform_id)
+                    .await
+                    .map_err(|error| RealtimeReadError::Storage(error.to_string()))?;
+                if !permission
+                    .is_some_and(|permission| permission.level.grants(PermissionLevel::Read))
+                {
+                    return Err(RealtimeReadError::Authorization);
+                }
+            }
+            self.platforms
+                .get_platform(platform_id)
+                .await
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
+                .ok_or(RealtimeReadError::Authorization)
+        })
+    }
+
+    fn list_containers(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+        Box::pin(async move {
+            self.platforms
+                .list_containers(platform_id)
+                .await
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))
+        })
+    }
+}
 
 pub const REALTIME_PROTOCOL_VERSION: u16 = 1;
 const PAYLOAD_SCHEMA_VERSION: u16 = 1;
@@ -33,6 +128,7 @@ const MAX_WRITE_BUFFER_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct PublishedRuntimeEvent {
+    platform_id: Uuid,
     resource_revision: u64,
     payload: Value,
 }
@@ -43,7 +139,6 @@ pub struct RealtimeHub {
 }
 
 struct RealtimeHubInner {
-    platform_id: Uuid,
     revision: AtomicU64,
     sender: broadcast::Sender<Arc<PublishedRuntimeEvent>>,
     metrics: Arc<Metrics>,
@@ -51,22 +146,16 @@ struct RealtimeHubInner {
 
 impl RealtimeHub {
     #[must_use]
-    pub fn new(platform_id: Uuid, capacity: usize, metrics: Arc<Metrics>) -> Self {
+    pub fn new(capacity: usize, metrics: Arc<Metrics>) -> Self {
         let (sender, receiver) = broadcast::channel(capacity);
         drop(receiver);
         Self {
             inner: Arc::new(RealtimeHubInner {
-                platform_id,
                 revision: AtomicU64::new(0),
                 sender,
                 metrics,
             }),
         }
-    }
-
-    #[must_use]
-    pub fn platform_id(&self) -> Uuid {
-        self.inner.platform_id
     }
 
     #[must_use]
@@ -81,18 +170,49 @@ impl RealtimeHub {
 
     pub fn publish_runtime_change(
         &self,
+        platform_id: Uuid,
         docker_resource_type: impl Into<String>,
         action: impl Into<String>,
         runtime_resource_id: impl Into<String>,
     ) -> u64 {
-        let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
-        let event = Arc::new(PublishedRuntimeEvent {
-            resource_revision: revision,
-            payload: json!({
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(
+            platform_id,
+            json!({
                 "dockerResourceType": docker_resource_type.into(),
                 "action": action.into(),
                 "runtimeResourceId": runtime_resource_id.into(),
             }),
+        )
+    }
+
+    pub fn publish_container_stats(
+        &self,
+        platform_id: Uuid,
+        stats: &[citadel_platforms::RuntimeContainerStat],
+    ) -> u64 {
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(
+            platform_id,
+            json!({
+                "dockerResourceType": "containerStats",
+                "action": "sample",
+                "runtimeResourceId": platform_id,
+                "stats": stats,
+            }),
+        )
+    }
+
+    fn publish(&self, platform_id: Uuid, payload: Value) -> u64 {
+        let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
+        let event = Arc::new(PublishedRuntimeEvent {
+            platform_id,
+            resource_revision: revision,
+            payload,
         });
         let _ = self.inner.sender.send(event);
         self.inner.metrics.realtime_event_published();
@@ -106,16 +226,12 @@ pub struct RealtimeService {
 }
 
 struct RealtimeServiceInner {
-    actor_id: ActorId,
-    platform_id: Uuid,
-    token_hash: [u8; 32],
     subscribe_timeout: Duration,
     send_timeout: Duration,
     authorization_recheck_interval: Duration,
     snapshot_limit: usize,
     connection_slots: Arc<Semaphore>,
-    reader: Arc<dyn AuthorizedPlatformReader>,
-    runtime: Arc<dyn PlatformRuntimePort>,
+    reader: Arc<dyn RealtimeReadPort>,
     hub: RealtimeHub,
     metrics: Arc<Metrics>,
     shutdown: CancellationToken,
@@ -125,28 +241,19 @@ impl RealtimeService {
     #[must_use]
     pub fn new(
         config: &RealtimeConfig,
-        reader: Arc<dyn AuthorizedPlatformReader>,
-        runtime: Arc<dyn PlatformRuntimePort>,
+        reader: Arc<dyn RealtimeReadPort>,
         metrics: Arc<Metrics>,
         shutdown: CancellationToken,
     ) -> Self {
-        let hub = RealtimeHub::new(
-            config.platform_id,
-            config.queue_capacity,
-            Arc::clone(&metrics),
-        );
+        let hub = RealtimeHub::new(config.queue_capacity, Arc::clone(&metrics));
         Self {
             inner: Arc::new(RealtimeServiceInner {
-                actor_id: ActorId::new(config.actor_id),
-                platform_id: config.platform_id,
-                token_hash: config.token_hash,
                 subscribe_timeout: config.subscribe_timeout,
                 send_timeout: config.send_timeout,
                 authorization_recheck_interval: config.authorization_recheck_interval,
                 snapshot_limit: config.snapshot_limit,
                 connection_slots: Arc::new(Semaphore::new(config.max_connections)),
                 reader,
-                runtime,
                 hub,
                 metrics,
                 shutdown,
@@ -161,6 +268,7 @@ impl RealtimeService {
 
     pub fn router(self) -> Router {
         Router::new()
+            .route("/api/v1/realtime", get(upgrade))
             .route("/phase0/realtime", get(upgrade))
             .with_state(self)
     }
@@ -212,20 +320,22 @@ struct RealtimeEnvelope<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PlatformSnapshot {
-    platform: PlatformSummary,
-    containers: Vec<RuntimeContainerSummary>,
+    platform: PlatformView,
+    containers: Vec<ContainerView>,
 }
 
 struct ConnectionState {
     id: Uuid,
+    platform_id: Uuid,
     next_sequence: u64,
     last_resource_revision: u64,
 }
 
 impl ConnectionState {
-    fn new() -> Self {
+    fn new(platform_id: Uuid) -> Self {
         Self {
             id: Uuid::now_v7(),
+            platform_id,
             next_sequence: 1,
             last_resource_revision: 0,
         }
@@ -291,11 +401,11 @@ async fn run_connection(
     cancellation: &CancellationToken,
 ) -> Result<(), RealtimeError> {
     let subscribe = receive_initial_subscription(socket, service.inner.subscribe_timeout).await?;
-    validate_subscription(service, subscribe)?;
+    let mut subscription = validate_subscription(service, subscribe).await?;
 
-    let mut connection = ConnectionState::new();
+    let mut connection = ConnectionState::new(subscription.platform_id);
     let mut receiver = service.inner.hub.subscribe();
-    send_snapshot(socket, service, cancellation, &mut connection).await?;
+    send_snapshot(socket, service, &subscription.principal, &mut connection).await?;
 
     let mut authorization_recheck = tokio::time::interval_at(
         Instant::now() + service.inner.authorization_recheck_interval,
@@ -323,7 +433,7 @@ async fn run_connection(
                             return Err(RealtimeError::InvalidMessage("resync cursor is ahead of the server".to_owned()));
                         }
                         receiver = service.inner.hub.subscribe();
-                        send_snapshot(socket, service, cancellation, &mut connection).await?;
+                        send_snapshot(socket, service, &subscription.principal, &mut connection).await?;
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(()),
                     Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {}
@@ -332,11 +442,15 @@ async fn run_connection(
                 }
             }
             _ = authorization_recheck.tick() => {
-                authorize_platform(service).await?;
+                let principal = service.inner.reader.authenticate(&subscription.access_token).await
+                    .map_err(map_realtime_read_error)?;
+                authorize_platform(service, &principal, subscription.platform_id).await?;
+                subscription.principal = principal;
             }
             event = receiver.recv() => {
                 match event {
-                    Ok(event) if event.resource_revision > connection.last_resource_revision => {
+                    Ok(event) if event.platform_id == connection.platform_id
+                        && event.resource_revision > connection.last_resource_revision => {
                         send_envelope(
                             socket,
                             service,
@@ -359,7 +473,7 @@ async fn run_connection(
                             &payload,
                         ).await?;
                         receiver = service.inner.hub.subscribe();
-                        send_snapshot(socket, service, cancellation, &mut connection).await?;
+                        send_snapshot(socket, service, &subscription.principal, &mut connection).await?;
                     }
                     Err(broadcast::error::RecvError::Closed) => return Ok(()),
                 }
@@ -390,10 +504,16 @@ fn parse_client_message(text: &str) -> Result<ClientMessage, RealtimeError> {
     serde_json::from_str(text).map_err(|error| RealtimeError::InvalidMessage(error.to_string()))
 }
 
-fn validate_subscription(
+struct Subscription {
+    principal: ActorPrincipal,
+    platform_id: Uuid,
+    access_token: Zeroizing<String>,
+}
+
+async fn validate_subscription(
     service: &RealtimeService,
     subscribe: ClientMessage,
-) -> Result<(), RealtimeError> {
+) -> Result<Subscription, RealtimeError> {
     if subscribe.protocol_version != REALTIME_PROTOCOL_VERSION {
         return Err(RealtimeError::UnsupportedProtocol(
             subscribe.protocol_version,
@@ -401,52 +521,70 @@ fn validate_subscription(
     }
     if subscribe.kind != "subscribe"
         || subscribe.resource_type.as_deref() != Some(PLATFORM_RESOURCE_TYPE)
-        || subscribe.resource_id != Some(service.inner.platform_id)
+        || subscribe.resource_id.is_none()
     {
         return Err(RealtimeError::InvalidMessage(
-            "only the configured Platform subscription is supported".to_owned(),
+            "a Platform resource subscription is required".to_owned(),
         ));
     }
-    let Some(token) = subscribe.access_token.as_deref() else {
+    let Some(access_token) = subscribe.access_token.map(Zeroizing::new) else {
         service.inner.metrics.realtime_authorization_failed();
         return Err(RealtimeError::Authentication);
     };
-    let actual_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-    if !bool::from(service.inner.token_hash.ct_eq(&actual_hash)) {
-        service.inner.metrics.realtime_authorization_failed();
-        return Err(RealtimeError::Authentication);
-    }
-    Ok(())
-}
-
-async fn authorize_platform(service: &RealtimeService) -> Result<PlatformSummary, RealtimeError> {
-    let platforms = service
+    let principal = service
         .inner
         .reader
-        .list_authorized(service.inner.actor_id)
+        .authenticate(access_token.as_str())
         .await
-        .map_err(|error| RealtimeError::AuthorizationStorage(error.to_string()))?;
-    platforms
-        .into_iter()
-        .find(|platform| platform.id == service.inner.platform_id)
-        .ok_or_else(|| {
-            service.inner.metrics.realtime_authorization_failed();
-            RealtimeError::Authorization
-        })
+        .map_err(map_realtime_read_error)?;
+    let platform_id = subscribe.resource_id.ok_or_else(|| {
+        RealtimeError::InvalidMessage("a Platform resource subscription is required".to_owned())
+    })?;
+    authorize_platform(service, &principal, platform_id).await?;
+    Ok(Subscription {
+        principal,
+        platform_id,
+        access_token,
+    })
+}
+
+async fn authorize_platform(
+    service: &RealtimeService,
+    principal: &ActorPrincipal,
+    platform_id: Uuid,
+) -> Result<PlatformView, RealtimeError> {
+    let result = service
+        .inner
+        .reader
+        .authorize_platform(principal, platform_id)
+        .await
+        .map_err(map_realtime_read_error);
+    if result.is_err() {
+        service.inner.metrics.realtime_authorization_failed();
+    }
+    result
+}
+
+fn map_realtime_read_error(error: RealtimeReadError) -> RealtimeError {
+    match error {
+        RealtimeReadError::Authentication => RealtimeError::Authentication,
+        RealtimeReadError::Authorization => RealtimeError::Authorization,
+        RealtimeReadError::Storage(message) => RealtimeError::AuthorizationStorage(message),
+    }
 }
 
 async fn send_snapshot(
     socket: &mut WebSocket,
     service: &RealtimeService,
-    cancellation: &CancellationToken,
+    principal: &ActorPrincipal,
     connection: &mut ConnectionState,
 ) -> Result<(), RealtimeError> {
     let snapshot_revision = service.inner.hub.current_revision();
-    let platform = authorize_platform(service).await?;
+    let platform = authorize_platform(service, principal, connection.platform_id).await?;
     let containers = service
         .inner
-        .runtime
-        .list_containers(cancellation)
+        .reader
+        .list_containers(connection.platform_id)
         .await
         .map_err(|error| RealtimeError::Snapshot(error.to_string()))?;
     if containers.len() > service.inner.snapshot_limit {
@@ -486,7 +624,7 @@ async fn send_envelope(
         connection_id: connection.id,
         sequence: connection.take_sequence(),
         resource_type: PLATFORM_RESOURCE_TYPE,
-        resource_id: service.inner.platform_id,
+        resource_id: connection.platform_id,
         resource_revision,
         event_kind,
         payload_schema_version: PAYLOAD_SCHEMA_VERSION,

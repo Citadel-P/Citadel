@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -9,6 +10,12 @@ use futures_util::stream::Stream;
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+mod inventory;
+mod read;
+
+pub use inventory::*;
+pub use read::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +31,7 @@ pub struct PlatformSummary {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimePlatformInfo {
     pub daemon_id: String,
+    pub server_version: String,
     pub operating_system: String,
     pub os_type: String,
     pub architecture: String,
@@ -44,7 +52,17 @@ pub struct RuntimeContainerSummary {
     pub id: String,
     pub name: String,
     pub image: String,
+    pub image_id: String,
+    pub created: i64,
     pub state: String,
+    pub status: String,
+    pub labels: BTreeMap<String, String>,
+    pub ports: serde_json::Value,
+    pub stack: Option<String>,
+    pub is_system: bool,
+    pub system_role: Option<String>,
+    pub has_citadel_ownership_labels: bool,
+    pub is_swarm_task: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
