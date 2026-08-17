@@ -5,8 +5,127 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    ActivityEventType, ActivityResourceType, ActivityStatus, ActorId, UserDateTimeFormat, UserTheme,
+    ActivityEventType, ActivityResourceType, ActivityStatus, ActorId, LicenseCapability,
+    LicenseStatus, PermissionLevel, ResourceType, RoleType, UserDateTimeFormat, UserTheme,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct IdentityResourceAccessSnapshot {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: ResourceType,
+    #[serde(rename = "ResourceId")]
+    pub resource_id: Uuid,
+    #[serde(rename = "PermissionLevel")]
+    pub permission_level: PermissionLevel,
+    #[serde(rename = "SpecificPermissions")]
+    pub specific_permissions: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UserActivitySnapshot {
+    #[serde(rename = "Email")]
+    pub email: String,
+    #[serde(rename = "IsEnabled")]
+    pub is_enabled: bool,
+    #[serde(rename = "TeamIds")]
+    pub team_ids: Vec<Uuid>,
+    #[serde(rename = "RoleIds")]
+    pub role_ids: Vec<Uuid>,
+    #[serde(rename = "ResourceAccesses")]
+    pub resource_accesses: Vec<IdentityResourceAccessSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TeamActivitySnapshot {
+    #[serde(rename = "IsEnabled")]
+    pub is_enabled: bool,
+    #[serde(rename = "MemberActorIds")]
+    pub member_actor_ids: Vec<Uuid>,
+    #[serde(rename = "RoleIds")]
+    pub role_ids: Vec<Uuid>,
+    #[serde(rename = "ResourceAccesses")]
+    pub resource_accesses: Vec<IdentityResourceAccessSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RolePermissionActivitySnapshot {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: ResourceType,
+    #[serde(rename = "PermissionLevel")]
+    pub permission_level: PermissionLevel,
+    #[serde(rename = "SpecificPermissions")]
+    pub specific_permissions: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoleActivitySnapshot {
+    #[serde(rename = "RoleType")]
+    pub role_type: RoleType,
+    #[serde(rename = "Permissions")]
+    pub permissions: Vec<RolePermissionActivitySnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LicenseActivitySnapshot {
+    #[serde(rename = "Schema")]
+    pub schema: Option<u8>,
+    #[serde(rename = "LicenseId")]
+    pub license_id: Option<String>,
+    #[serde(rename = "ReplacedLicenseId")]
+    pub replaced_license_id: Option<String>,
+    #[serde(rename = "LicensedEdition")]
+    pub licensed_edition: Option<String>,
+    #[serde(rename = "EffectiveEdition")]
+    pub effective_edition: String,
+    #[serde(rename = "EffectiveCapabilities")]
+    pub effective_capabilities: Vec<LicenseCapability>,
+    #[serde(rename = "CustomerId")]
+    pub customer_id: Option<String>,
+    #[serde(rename = "CustomerName")]
+    pub customer_name: Option<String>,
+    #[serde(rename = "Fingerprint")]
+    pub fingerprint: Option<String>,
+    #[serde(rename = "Status")]
+    pub status: LicenseStatus,
+    #[serde(rename = "ExpiresAt")]
+    pub expires_at: Option<DateTime<Utc>>,
+    #[serde(rename = "GraceUntil")]
+    pub grace_until: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OidcProviderActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "DisplayName")]
+    pub display_name: String,
+    #[serde(rename = "Issuer")]
+    pub issuer: String,
+    #[serde(rename = "ClientId")]
+    pub client_id: String,
+    #[serde(rename = "Scopes")]
+    pub scopes: String,
+    #[serde(rename = "Enabled")]
+    pub enabled: bool,
+    #[serde(rename = "AutoProvisionUsers")]
+    pub auto_provision_users: bool,
+    #[serde(rename = "AllowEmailAutoLink")]
+    pub allow_email_auto_link: bool,
+    #[serde(rename = "RequireEmailVerified")]
+    pub require_email_verified: bool,
+    #[serde(rename = "AllowedEmailDomains")]
+    pub allowed_email_domains: Option<String>,
+    #[serde(rename = "RequiredClaimName")]
+    pub required_claim_name: Option<String>,
+    #[serde(rename = "RequiredClaimValues")]
+    pub required_claim_values: Option<String>,
+    #[serde(rename = "DefaultRoleId")]
+    pub default_role_id: Option<Uuid>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityChangedFieldName {
@@ -123,6 +242,127 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Count")]
         count: i32,
     },
+    UserMfaEnabled,
+    UserMfaDisabled,
+    UserMfaVerificationFailed,
+    UserMfaRecoveryCodeUsed,
+    UserMfaRecoveryCodesRegenerated,
+    UserMfaResetByAdministrator {
+        #[serde(rename = "TargetUserId")]
+        target_user_id: Uuid,
+    },
+    UserCreated {
+        #[serde(rename = "User")]
+        user: UserActivitySnapshot,
+    },
+    UserUpdated {
+        #[serde(rename = "OldUser")]
+        old_user: UserActivitySnapshot,
+        #[serde(rename = "NewUser")]
+        new_user: UserActivitySnapshot,
+        #[serde(rename = "PasswordChanged")]
+        password_changed: bool,
+    },
+    UserRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    UserDeleted {
+        #[serde(rename = "User")]
+        user: UserActivitySnapshot,
+    },
+    TeamCreated {
+        #[serde(rename = "Team")]
+        team: TeamActivitySnapshot,
+    },
+    TeamUpdated {
+        #[serde(rename = "OldTeam")]
+        old_team: TeamActivitySnapshot,
+        #[serde(rename = "NewTeam")]
+        new_team: TeamActivitySnapshot,
+    },
+    TeamRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    TeamDeleted {
+        #[serde(rename = "Team")]
+        team: TeamActivitySnapshot,
+    },
+    RoleCreated {
+        #[serde(rename = "Role")]
+        role: RoleActivitySnapshot,
+    },
+    RoleUpdated {
+        #[serde(rename = "OldRole")]
+        old_role: RoleActivitySnapshot,
+        #[serde(rename = "NewRole")]
+        new_role: RoleActivitySnapshot,
+    },
+    RoleRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    RoleDeleted {
+        #[serde(rename = "Role")]
+        role: RoleActivitySnapshot,
+    },
+    LicenseInstalled {
+        #[serde(rename = "License")]
+        license: Box<LicenseActivitySnapshot>,
+    },
+    LicenseReplaced {
+        #[serde(rename = "OldLicense")]
+        old_license: Box<LicenseActivitySnapshot>,
+        #[serde(rename = "NewLicense")]
+        new_license: Box<LicenseActivitySnapshot>,
+    },
+    LicenseRemoved {
+        #[serde(rename = "License")]
+        license: Box<LicenseActivitySnapshot>,
+    },
+    LicenseEnteredGracePeriod {
+        #[serde(rename = "License")]
+        license: Box<LicenseActivitySnapshot>,
+    },
+    LicenseExpired {
+        #[serde(rename = "License")]
+        license: Box<LicenseActivitySnapshot>,
+    },
+    LicenseValidationFailed {
+        #[serde(rename = "Fingerprint")]
+        fingerprint: Option<String>,
+        #[serde(rename = "Status")]
+        status: LicenseStatus,
+        #[serde(rename = "ErrorCode")]
+        error_code: Option<String>,
+    },
+    OidcProviderCreated {
+        #[serde(rename = "Provider")]
+        provider: Box<OidcProviderActivitySnapshot>,
+    },
+    OidcProviderUpdated {
+        #[serde(rename = "OldProvider")]
+        old_provider: Box<OidcProviderActivitySnapshot>,
+        #[serde(rename = "NewProvider")]
+        new_provider: Box<OidcProviderActivitySnapshot>,
+    },
+    OidcProviderRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    OidcProviderDeleted {
+        #[serde(rename = "Provider")]
+        provider: Box<OidcProviderActivitySnapshot>,
+    },
 }
 
 impl ActivityEventInfo {
@@ -167,6 +407,192 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn user_mfa_enabled() -> Self {
+        Self::UserMfaEnabled
+    }
+
+    #[must_use]
+    pub const fn user_mfa_disabled() -> Self {
+        Self::UserMfaDisabled
+    }
+
+    #[must_use]
+    pub const fn user_mfa_verification_failed() -> Self {
+        Self::UserMfaVerificationFailed
+    }
+
+    #[must_use]
+    pub const fn user_mfa_recovery_code_used() -> Self {
+        Self::UserMfaRecoveryCodeUsed
+    }
+
+    #[must_use]
+    pub const fn user_mfa_recovery_codes_regenerated() -> Self {
+        Self::UserMfaRecoveryCodesRegenerated
+    }
+
+    #[must_use]
+    pub const fn user_mfa_reset_by_administrator(target_user_id: Uuid) -> Self {
+        Self::UserMfaResetByAdministrator { target_user_id }
+    }
+
+    #[must_use]
+    pub const fn user_created(user: UserActivitySnapshot) -> Self {
+        Self::UserCreated { user }
+    }
+
+    #[must_use]
+    pub const fn user_updated(
+        old_user: UserActivitySnapshot,
+        new_user: UserActivitySnapshot,
+        password_changed: bool,
+    ) -> Self {
+        Self::UserUpdated {
+            old_user,
+            new_user,
+            password_changed,
+        }
+    }
+
+    #[must_use]
+    pub fn user_renamed(old_name: String, new_name: String) -> Self {
+        Self::UserRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn user_deleted(user: UserActivitySnapshot) -> Self {
+        Self::UserDeleted { user }
+    }
+
+    #[must_use]
+    pub const fn team_created(team: TeamActivitySnapshot) -> Self {
+        Self::TeamCreated { team }
+    }
+
+    #[must_use]
+    pub const fn team_updated(
+        old_team: TeamActivitySnapshot,
+        new_team: TeamActivitySnapshot,
+    ) -> Self {
+        Self::TeamUpdated { old_team, new_team }
+    }
+
+    #[must_use]
+    pub fn team_renamed(old_name: String, new_name: String) -> Self {
+        Self::TeamRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn team_deleted(team: TeamActivitySnapshot) -> Self {
+        Self::TeamDeleted { team }
+    }
+
+    #[must_use]
+    pub const fn role_created(role: RoleActivitySnapshot) -> Self {
+        Self::RoleCreated { role }
+    }
+
+    #[must_use]
+    pub const fn role_updated(
+        old_role: RoleActivitySnapshot,
+        new_role: RoleActivitySnapshot,
+    ) -> Self {
+        Self::RoleUpdated { old_role, new_role }
+    }
+
+    #[must_use]
+    pub fn role_renamed(old_name: String, new_name: String) -> Self {
+        Self::RoleRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn role_deleted(role: RoleActivitySnapshot) -> Self {
+        Self::RoleDeleted { role }
+    }
+
+    #[must_use]
+    pub fn license_installed(license: LicenseActivitySnapshot) -> Self {
+        Self::LicenseInstalled {
+            license: Box::new(license),
+        }
+    }
+
+    #[must_use]
+    pub fn license_replaced(
+        old_license: LicenseActivitySnapshot,
+        new_license: LicenseActivitySnapshot,
+    ) -> Self {
+        Self::LicenseReplaced {
+            old_license: Box::new(old_license),
+            new_license: Box::new(new_license),
+        }
+    }
+
+    #[must_use]
+    pub fn license_removed(license: LicenseActivitySnapshot) -> Self {
+        Self::LicenseRemoved {
+            license: Box::new(license),
+        }
+    }
+
+    #[must_use]
+    pub fn license_entered_grace_period(license: LicenseActivitySnapshot) -> Self {
+        Self::LicenseEnteredGracePeriod {
+            license: Box::new(license),
+        }
+    }
+
+    #[must_use]
+    pub fn license_expired(license: LicenseActivitySnapshot) -> Self {
+        Self::LicenseExpired {
+            license: Box::new(license),
+        }
+    }
+
+    #[must_use]
+    pub fn license_validation_failed(
+        fingerprint: Option<String>,
+        status: LicenseStatus,
+        error_code: Option<String>,
+    ) -> Self {
+        Self::LicenseValidationFailed {
+            fingerprint,
+            status,
+            error_code,
+        }
+    }
+
+    #[must_use]
+    pub fn oidc_provider_created(provider: OidcProviderActivitySnapshot) -> Self {
+        Self::OidcProviderCreated {
+            provider: Box::new(provider),
+        }
+    }
+
+    #[must_use]
+    pub fn oidc_provider_updated(
+        old_provider: OidcProviderActivitySnapshot,
+        new_provider: OidcProviderActivitySnapshot,
+    ) -> Self {
+        Self::OidcProviderUpdated {
+            old_provider: Box::new(old_provider),
+            new_provider: Box::new(new_provider),
+        }
+    }
+
+    #[must_use]
+    pub fn oidc_provider_renamed(old_name: String, new_name: String) -> Self {
+        Self::OidcProviderRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub fn oidc_provider_deleted(provider: OidcProviderActivitySnapshot) -> Self {
+        Self::OidcProviderDeleted {
+            provider: Box::new(provider),
+        }
+    }
+
+    #[must_use]
     pub const fn event_type(&self) -> ActivityEventType {
         match self {
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
@@ -174,6 +600,38 @@ impl ActivityEventInfo {
             Self::UserPasswordChanged => ActivityEventType::UserPasswordChanged,
             Self::UserSessionRevoked { .. } => ActivityEventType::UserSessionRevoked,
             Self::UserOtherSessionsRevoked { .. } => ActivityEventType::UserOtherSessionsRevoked,
+            Self::UserMfaEnabled => ActivityEventType::UserMfaEnabled,
+            Self::UserMfaDisabled => ActivityEventType::UserMfaDisabled,
+            Self::UserMfaVerificationFailed => ActivityEventType::UserMfaVerificationFailed,
+            Self::UserMfaRecoveryCodeUsed => ActivityEventType::UserMfaRecoveryCodeUsed,
+            Self::UserMfaRecoveryCodesRegenerated => {
+                ActivityEventType::UserMfaRecoveryCodesRegenerated
+            }
+            Self::UserMfaResetByAdministrator { .. } => {
+                ActivityEventType::UserMfaResetByAdministrator
+            }
+            Self::UserCreated { .. } => ActivityEventType::UserCreated,
+            Self::UserUpdated { .. } => ActivityEventType::UserUpdated,
+            Self::UserRenamed { .. } => ActivityEventType::UserRenamed,
+            Self::UserDeleted { .. } => ActivityEventType::UserDeleted,
+            Self::TeamCreated { .. } => ActivityEventType::TeamCreated,
+            Self::TeamUpdated { .. } => ActivityEventType::TeamUpdated,
+            Self::TeamRenamed { .. } => ActivityEventType::TeamRenamed,
+            Self::TeamDeleted { .. } => ActivityEventType::TeamDeleted,
+            Self::RoleCreated { .. } => ActivityEventType::RoleCreated,
+            Self::RoleUpdated { .. } => ActivityEventType::RoleUpdated,
+            Self::RoleRenamed { .. } => ActivityEventType::RoleRenamed,
+            Self::RoleDeleted { .. } => ActivityEventType::RoleDeleted,
+            Self::LicenseInstalled { .. } => ActivityEventType::LicenseInstalled,
+            Self::LicenseReplaced { .. } => ActivityEventType::LicenseReplaced,
+            Self::LicenseRemoved { .. } => ActivityEventType::LicenseRemoved,
+            Self::LicenseEnteredGracePeriod { .. } => ActivityEventType::LicenseEnteredGracePeriod,
+            Self::LicenseExpired { .. } => ActivityEventType::LicenseExpired,
+            Self::LicenseValidationFailed { .. } => ActivityEventType::LicenseValidationFailed,
+            Self::OidcProviderCreated { .. } => ActivityEventType::OidcProviderCreated,
+            Self::OidcProviderUpdated { .. } => ActivityEventType::OidcProviderUpdated,
+            Self::OidcProviderRenamed { .. } => ActivityEventType::OidcProviderRenamed,
+            Self::OidcProviderDeleted { .. } => ActivityEventType::OidcProviderDeleted,
         }
     }
 }
@@ -200,6 +658,91 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::User,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    pub fn new_team_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Team,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    pub fn new_role_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Role,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    pub fn new_license_event(
+        instance_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            instance_id,
+            "License".to_owned(),
+            ActivityResourceType::License,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    pub fn new_oidc_provider_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_identity_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::OidcProvider,
+            actor_id,
+            info,
+            created_at,
+        )
+    }
+
+    fn new_identity_event(
+        resource_id: Uuid,
+        resource_name: String,
+        expected_resource_type: ActivityResourceType,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
         if resource_id.is_nil() {
             return Err(ActivityInvariantError::MissingResourceId);
         }
@@ -212,7 +755,7 @@ impl ActivityEvent {
         }
         let event_type = info.event_type();
         let resource_type = event_type.resource_type();
-        if resource_type != ActivityResourceType::User {
+        if resource_type != expected_resource_type {
             return Err(ActivityInvariantError::MismatchedResourceType);
         }
         Ok(Self {
@@ -342,5 +885,128 @@ mod tests {
             ActivityEventInfo::user_other_sessions_revoked(0),
             Err(ActivityInvariantError::InvalidCount)
         );
+    }
+
+    #[test]
+    fn user_lifecycle_activity_uses_the_compatible_safe_payload_shape() {
+        let snapshot = UserActivitySnapshot {
+            email: "owner@example.test".to_owned(),
+            is_enabled: true,
+            team_ids: Vec::new(),
+            role_ids: vec![Uuid::now_v7()],
+            resource_accesses: Vec::new(),
+        };
+        let info = ActivityEventInfo::user_updated(snapshot.clone(), snapshot, true);
+        let json = serde_json::to_value(&info).unwrap();
+        assert_eq!(json["$type"], "UserUpdated");
+        assert_eq!(json["PasswordChanged"], true);
+        assert!(json.get("Password").is_none());
+        assert!(json.get("PasswordHash").is_none());
+        assert_eq!(info.event_type(), ActivityEventType::UserUpdated);
+    }
+
+    #[test]
+    fn mfa_activity_payloads_cannot_contain_credentials() {
+        let target = Uuid::now_v7();
+        let info = ActivityEventInfo::user_mfa_reset_by_administrator(target);
+        let json = serde_json::to_value(&info).unwrap();
+
+        assert_eq!(json["$type"], "UserMfaResetByAdministrator");
+        assert_eq!(json["TargetUserId"], target.to_string());
+        assert!(json.get("Code").is_none());
+        assert!(json.get("Secret").is_none());
+        assert!(json.get("RecoveryCode").is_none());
+    }
+
+    #[test]
+    fn team_lifecycle_activity_uses_the_compatible_safe_payload_shape() {
+        let snapshot = TeamActivitySnapshot {
+            is_enabled: true,
+            member_actor_ids: vec![Uuid::now_v7()],
+            role_ids: vec![Uuid::now_v7()],
+            resource_accesses: Vec::new(),
+        };
+        let info = ActivityEventInfo::team_updated(snapshot.clone(), snapshot);
+        let event = ActivityEvent::new_team_event(
+            Uuid::now_v7(),
+            "Operations".to_owned(),
+            ActorId::new(Uuid::now_v7()),
+            info,
+            Utc::now(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.event_type(), ActivityEventType::TeamUpdated);
+        assert_eq!(event.resource_type(), ActivityResourceType::Team);
+        assert_eq!(json["$type"], "TeamUpdated");
+        assert!(json.get("Password").is_none());
+        assert!(json.get("Token").is_none());
+    }
+
+    #[test]
+    fn role_lifecycle_activity_uses_the_compatible_safe_payload_shape() {
+        let snapshot = RoleActivitySnapshot {
+            role_type: RoleType::Custom,
+            permissions: vec![RolePermissionActivitySnapshot {
+                resource_type: ResourceType::Registry,
+                permission_level: PermissionLevel::Read,
+                specific_permissions: 0,
+            }],
+        };
+        let info = ActivityEventInfo::role_updated(snapshot.clone(), snapshot);
+        let event = ActivityEvent::new_role_event(
+            Uuid::now_v7(),
+            "Registry reader".to_owned(),
+            ActorId::new(Uuid::now_v7()),
+            info,
+            Utc::now(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.event_type(), ActivityEventType::RoleUpdated);
+        assert_eq!(event.resource_type(), ActivityResourceType::Role);
+        assert_eq!(json["$type"], "RoleUpdated");
+        assert_eq!(json["NewRole"]["RoleType"], "Custom");
+        assert!(json.get("Password").is_none());
+        assert!(json.get("Token").is_none());
+    }
+
+    #[test]
+    fn oidc_provider_activity_never_contains_client_credentials() {
+        let snapshot = OidcProviderActivitySnapshot {
+            id: Uuid::now_v7(),
+            name: "corporate".to_owned(),
+            description: None,
+            display_name: "Corporate login".to_owned(),
+            issuer: "https://issuer.example.test".to_owned(),
+            client_id: "citadel-client".to_owned(),
+            scopes: "openid profile email".to_owned(),
+            enabled: true,
+            auto_provision_users: false,
+            allow_email_auto_link: true,
+            require_email_verified: true,
+            allowed_email_domains: Some("example.test".to_owned()),
+            required_claim_name: None,
+            required_claim_values: None,
+            default_role_id: None,
+        };
+        let info = ActivityEventInfo::oidc_provider_created(snapshot);
+        let event = ActivityEvent::new_oidc_provider_event(
+            Uuid::now_v7(),
+            "corporate".to_owned(),
+            ActorId::new(Uuid::now_v7()),
+            info,
+            Utc::now(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.event_type(), ActivityEventType::OidcProviderCreated);
+        assert_eq!(event.resource_type(), ActivityResourceType::OidcProvider);
+        assert_eq!(json["$type"], "OidcProviderCreated");
+        assert!(json["Provider"].get("ClientSecret").is_none());
+        assert!(json["Provider"].get("ClientSecretCiphertext").is_none());
     }
 }

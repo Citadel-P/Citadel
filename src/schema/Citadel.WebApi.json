@@ -44629,7 +44629,8 @@
         "required": [
           "name",
           "version",
-          "informationalVersion"
+          "informationalVersion",
+          "realtimeTransport"
         ],
         "type": "object",
         "properties": {
@@ -44640,6 +44641,9 @@
             "type": "string"
           },
           "informationalVersion": {
+            "type": "string"
+          },
+          "realtimeTransport": {
             "type": "string"
           }
         }

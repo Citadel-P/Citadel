@@ -5,12 +5,12 @@ use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use citadel_application::{
+use citadel_contracts::http::routes;
+use citadel_identity::ActorPrincipal;
+use citadel_identity::{
     ChangeCurrentPasswordRequest, IdentityError, PatchUserPreferencesRequest, ProfileService,
     UpdateCurrentProfileRequest,
 };
-use citadel_contracts::http::routes;
-use citadel_domain::ActorPrincipal;
 
 use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{current_refresh_token, identity_error_response, no_store};

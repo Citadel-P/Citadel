@@ -1,10 +1,9 @@
-use citadel_application::{
-    CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileResourceInfo, ProfileStore,
-    UserPreferencesUpdate,
-};
 use citadel_domain::{
-    ActivityChangedField, ActivityEvent, ActivityEventInfo, ActorId, User, UserDateTimeFormat,
-    UserPreferences, UserTheme,
+    ActivityChangedField, ActivityEvent, ActivityEventInfo, ActorId, UserDateTimeFormat, UserTheme,
+};
+use citadel_identity::{
+    CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileResourceInfo, ProfileStore,
+    User, UserPreferences, UserPreferencesUpdate,
 };
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};

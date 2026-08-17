@@ -105,7 +105,6 @@ export default function InitialSetup() {
     if (response.data.nextStep === LoginNextStep.Completed && response.data.accessToken) {
       completeLogin(response.data.accessToken);
       const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
-      sessionStorage.removeItem(REDIRECT_TO_KEY);
       navigate(redirectTo, { replace: true });
       return;
     }

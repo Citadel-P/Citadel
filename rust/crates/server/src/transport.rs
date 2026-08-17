@@ -11,9 +11,10 @@ use axum::http::header::{
     ACCEPT, AUTHORIZATION, CONTENT_TYPE, HOST, HeaderName, HeaderValue, STRICT_TRANSPORT_SECURITY,
 };
 use axum::http::uri::Authority;
-use axum::http::{Method, Request, StatusCode};
+use axum::http::{HeaderMap, Method, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
+use axum::routing::any;
 use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
 use citadel_contracts::http::ROUTES;
@@ -57,12 +58,14 @@ pub fn secure_router(
     transport: &TransportConfig,
     readiness: Arc<Readiness>,
 ) -> Result<Router, Box<dyn std::error::Error>> {
+    router = router.route("/api/{*path}", any(api_not_found));
+
     if let Some(root) = &transport.static_root {
         if !root.is_dir() {
             return Err(format!("SPA root {} is not a directory", root.display()).into());
         }
         router = router.fallback_service(
-            ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
+            ServeDir::new(root).fallback(ServeFile::new(root.join("index.html"))),
         );
     }
 
@@ -113,6 +116,20 @@ pub fn secure_router(
         ));
     }
     Ok(router)
+}
+
+async fn api_not_found(headers: HeaderMap) -> Response {
+    let request_id = headers
+        .get(&REQUEST_ID)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown")
+        .to_owned();
+    problem(
+        StatusCode::NOT_FOUND,
+        "API endpoint not found",
+        "The requested Citadel API endpoint does not exist.",
+        request_id,
+    )
 }
 
 pub fn panic_response(_error: Box<dyn std::any::Any + Send + 'static>) -> Response {
@@ -482,6 +499,68 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(health.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn spa_deep_links_return_the_index_document_with_success() {
+        let root = std::env::temp_dir().join(format!("citadel-spa-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("index.html"), "<html>citadel</html>").unwrap();
+
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let mut transport = fixture_transport();
+        transport.static_root = Some(root.clone());
+        let app = secure_router(Router::new(), &transport, readiness).unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/profile")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "<html>citadel</html>");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn unknown_api_routes_return_problem_details_instead_of_the_spa() {
+        let root = std::env::temp_dir().join(format!("citadel-spa-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("index.html"), "<html>citadel</html>").unwrap();
+
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let mut transport = fixture_transport();
+        transport.static_root = Some(root.clone());
+        let app = secure_router(Router::new(), &transport, readiness).unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/not-implemented")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get(axum::http::header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("application/problem+json"))
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

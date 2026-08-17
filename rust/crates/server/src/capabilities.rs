@@ -1,4 +1,5 @@
-use citadel_domain::{PermissionGrant, PermissionLevel};
+use citadel_domain::PermissionLevel;
+use citadel_identity::PermissionGrant;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]

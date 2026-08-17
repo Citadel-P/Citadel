@@ -28,7 +28,8 @@ export function RequireSetup() {
   if (requiresSetup) return <Outlet />;
   if (!isAuthReady) return <Loader />;
 
-  return <Navigate to={isAuthenticated ? '/' : '/login'} replace />;
+  const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+  return <Navigate to={isAuthenticated ? redirectTo : '/login'} replace />;
 }
 
 export function RequireSetupComplete() {

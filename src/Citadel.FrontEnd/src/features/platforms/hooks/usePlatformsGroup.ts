@@ -36,10 +36,10 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
   const { data, isLoading } = useRead('listPlatforms', readArgs);
   const [platforms, setPlatforms] = useState<PlatformView[] | undefined>();
   const lastFetchedRef = useRef<PlatformView[]>([]);
-  const capabilities = data?.data.capabilities;
+  const capabilities = data?.data?.capabilities;
 
   useEffect(() => {
-    if (!data) return;
+    if (!data?.data) return;
     const newBase = data.data.platforms;
     if (newBase !== lastFetchedRef.current) {
       lastFetchedRef.current = newBase;

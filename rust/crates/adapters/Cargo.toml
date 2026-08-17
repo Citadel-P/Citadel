@@ -15,16 +15,21 @@ chrono.workspace = true
 citadel-application = { path = "../application" }
 citadel-contracts = { path = "../contracts" }
 citadel-domain = { path = "../domain" }
+citadel-identity = { path = "../identity" }
+citadel-platforms = { path = "../platforms" }
 ed25519-dalek.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
+hmac.workspace = true
 jsonwebtoken.workspace = true
 prost.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+sha1.workspace = true
 sqlx.workspace = true
+subtle.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -36,5 +41,6 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
 citadel-database = { path = "../database" }
 tonic = { workspace = true, features = ["router"] }

@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
-use citadel_application::{
+use citadel_domain::{ActorId, PermissionLevel, ResourceType};
+use citadel_identity::{
     IdentityError, NewServiceAccount, NewServiceAccountToken, PatchField, ResourceInfo,
     ServiceAccountResourceAccess, ServiceAccountStore, ServiceAccountTokenView, ServiceAccountView,
     StoredPage,
 };
-use citadel_domain::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;

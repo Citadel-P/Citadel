@@ -4,6 +4,7 @@ import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './sidebar-menu';
 import { Link, useNavigate } from 'react-router';
 import { useRead } from '@/lib/hooks';
+import { useAppContext } from '@/lib/context/app-context';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import {
   Sidebar as SidebarRoot,
@@ -16,12 +17,12 @@ import {
 export const Sidebar = () => {
   const navigate = useNavigate();
   const { sidebarMinimized } = useLayoutContext();
-  const { data: applicationInfo } = useRead('getApplicationInfo');
+  const { applicationInfo } = useAppContext();
   const { data: profileResponse } = useRead('getCurrentProfile');
   const { entitlements } = useLicenseEntitlements();
-  const version = applicationInfo?.data?.version ?? '-';
+  const version = applicationInfo?.version ?? '-';
   const licenseType = entitlements?.effectiveEdition ?? '-';
-  const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;
+  const isAdministrator = profileResponse?.data?.authorization.isAdministrator === true;
 
   return (
     <SidebarRoot collapsible="icon">

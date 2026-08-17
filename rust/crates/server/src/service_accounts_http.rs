@@ -4,8 +4,11 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::{IntoResponse, Response};
-use citadel_application::{
+use axum::response::IntoResponse;
+use citadel_contracts::http::routes;
+use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+use citadel_identity::{ActorPrincipal, PermissionGrant};
+use citadel_identity::{
     AddServiceAccountResourceAccessRequest, AddServiceAccountRoleRequest,
     ArchiveServiceAccountsRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
     DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS, IdentityError, IdentityService,
@@ -13,16 +16,14 @@ use citadel_application::{
     PagedResult, RenameServiceAccountRequest, ServiceAccountLimitsView, ServiceAccountService,
     ServiceAccountTokenView, ServiceAccountView, UpdateServiceAccountRequest,
 };
-use citadel_contracts::http::routes;
-use citadel_domain::{
-    ActorPrincipal, PermissionGrant, PermissionLevel, ResourceType, SpecificPermission,
-};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
 use crate::contract_router::ContractRouterExt;
-use crate::identity_http::{identity_error_response, require_human, require_human_administrator};
+use crate::identity_http::{
+    IdentityHttpResult, identity_result, require_human, require_human_administrator,
+};
 
 #[derive(Clone)]
 pub struct ServiceAccountHttpState {
@@ -76,38 +77,31 @@ async fn list(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     Query(filter): Query<ListFilter>,
-) -> Response {
-    let Some(Extension(principal)) = principal else {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
-    };
-    let permission = match state
-        .identity
-        .global_permission(&principal, ResourceType::ServiceAccount)
-        .await
-    {
-        Ok(Some(permission)) if permission.level.grants(PermissionLevel::Read) => permission,
-        Ok(_) => return identity_error_response(IdentityError::Forbidden, &headers),
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    match state
-        .service_accounts
-        .list(
-            principal.actor_id,
-            principal.is_administrator(),
-            filter.include_archived,
-            filter.name.as_deref(),
-            filter.page,
-            filter.page_size,
-        )
-        .await
-    {
-        Ok(paged_result) => Json(ServiceAccountsResponse {
-            paged_result,
-            capabilities: ResourceCapabilities::from(permission),
-        })
-        .into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(authenticated_principal(principal), &headers)?;
+    let permission = identity_result(
+        service_account_list_permission(&state.identity, &principal).await,
+        &headers,
+    )?;
+    let paged_result = identity_result(
+        state
+            .service_accounts
+            .list(
+                principal.actor_id,
+                principal.is_administrator(),
+                filter.include_archived,
+                filter.name.as_deref(),
+                filter.page,
+                filter.page_size,
+            )
+            .await,
+        &headers,
+    )?;
+    Ok(Json(ServiceAccountsResponse {
+        paged_result,
+        capabilities: ResourceCapabilities::from(permission),
+    })
+    .into_response())
 }
 
 async fn get_one(
@@ -115,27 +109,18 @@ async fn get_one(
     principal: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     headers: HeaderMap,
-) -> Response {
-    let Some(Extension(principal)) = principal else {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
-    };
-    let permission = match state
-        .identity
-        .permission_for_resource(&principal, ResourceType::ServiceAccount, id)
-        .await
-    {
-        Ok(Some(permission)) if permission.level.grants(PermissionLevel::Read) => permission,
-        Ok(_) => return identity_error_response(IdentityError::NotFound, &headers),
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    match state.service_accounts.get(id).await {
-        Ok(account) => Json(ServiceAccountDetailResponse {
-            account,
-            capabilities: ServiceAccountCapabilities::from(permission),
-        })
-        .into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(authenticated_principal(principal), &headers)?;
+    let permission = identity_result(
+        service_account_read_permission(&state.identity, &principal, id).await,
+        &headers,
+    )?;
+    let account = identity_result(state.service_accounts.get(id).await, &headers)?;
+    Ok(Json(ServiceAccountDetailResponse {
+        account,
+        capabilities: ServiceAccountCapabilities::from(permission),
+    })
+    .into_response())
 }
 
 async fn create(
@@ -143,31 +128,28 @@ async fn create(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     Json(request): Json<CreateServiceAccountRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize(
-            &principal,
-            ResourceType::ServiceAccount,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .create(request, principal.actor_id)
-        .await
-    {
-        Ok(account) => (StatusCode::OK, Json(account)).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize(
+                &principal,
+                ResourceType::ServiceAccount,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state
+            .service_accounts
+            .create(request, principal.actor_id)
+            .await,
+        &headers,
+    )?;
+    Ok((StatusCode::OK, Json(account)).into_response())
 }
 
 async fn update(
@@ -176,28 +158,23 @@ async fn update(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<UpdateServiceAccountRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state.service_accounts.update(id, request).await {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(state.service_accounts.update(id, request).await, &headers)?;
+    Ok(Json(account).into_response())
 }
 
 async fn rename(
@@ -205,32 +182,29 @@ async fn rename(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     Json(request): Json<RenameServiceAccountRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            request.id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .rename(request.id, &request.name)
-        .await
-    {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                request.id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state
+            .service_accounts
+            .rename(request.id, &request.name)
+            .await,
+        &headers,
+    )?;
+    Ok(Json(account).into_response())
 }
 
 async fn archive(
@@ -238,31 +212,28 @@ async fn archive(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     Json(request): Json<ArchiveServiceAccountsRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize(
-            &principal,
-            ResourceType::ServiceAccount,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .archive(request.ids, principal.actor_id)
-        .await
-    {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize(
+                &principal,
+                ResourceType::ServiceAccount,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    identity_result(
+        state
+            .service_accounts
+            .archive(request.ids, principal.actor_id)
+            .await,
+        &headers,
+    )?;
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 async fn add_role(
@@ -271,28 +242,26 @@ async fn add_role(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<AddServiceAccountRoleRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state.service_accounts.add_role(id, request.role_id).await {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state.service_accounts.add_role(id, request.role_id).await,
+        &headers,
+    )?;
+    Ok(Json(account).into_response())
 }
 
 async fn remove_role(
@@ -300,28 +269,26 @@ async fn remove_role(
     principal: Option<Extension<ActorPrincipal>>,
     Path((id, role_id)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state.service_accounts.remove_role(id, role_id).await {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state.service_accounts.remove_role(id, role_id).await,
+        &headers,
+    )?;
+    Ok(Json(account).into_response())
 }
 
 async fn add_resource_access(
@@ -330,32 +297,29 @@ async fn add_resource_access(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<AddServiceAccountResourceAccessRequest>,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .add_resource_access(id, request)
-        .await
-    {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state
+            .service_accounts
+            .add_resource_access(id, request)
+            .await,
+        &headers,
+    )?;
+    Ok(Json(account).into_response())
 }
 
 async fn remove_resource_access(
@@ -363,44 +327,42 @@ async fn remove_resource_access(
     principal: Option<Extension<ActorPrincipal>>,
     Path((id, resource_access_id)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-) -> Response {
-    let principal = match require_human_administrator(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Write,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .remove_resource_access(id, resource_access_id)
-        .await
-    {
-        Ok(account) => Json(account).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let account = identity_result(
+        state
+            .service_accounts
+            .remove_resource_access(id, resource_access_id)
+            .await,
+        &headers,
+    )?;
+    Ok(Json(account).into_response())
 }
 
-async fn limits(principal: Option<Extension<ActorPrincipal>>, headers: HeaderMap) -> Response {
-    if principal.is_none() {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
-    }
-    Json(ServiceAccountLimitsView {
+async fn limits(
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    identity_result(authenticated_principal(principal), &headers)?;
+    Ok(Json(ServiceAccountLimitsView {
         default_token_lifetime_days: DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
         maximum_token_lifetime_days: MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
         maximum_active_tokens_per_account: MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS,
     })
-    .into_response()
+    .into_response())
 }
 
 async fn list_tokens(
@@ -409,31 +371,29 @@ async fn list_tokens(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
     Query(filter): Query<TokenFilter>,
-) -> Response {
-    let Some(Extension(principal)) = principal else {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Read,
-            None,
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .list_tokens(id, filter.page, filter.page_size)
-        .await
-    {
-        Ok(paged_result) => Json(ServiceAccountTokensResponse { paged_result }).into_response(),
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(authenticated_principal(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let paged_result = identity_result(
+        state
+            .service_accounts
+            .list_tokens(id, filter.page, filter.page_size)
+            .await,
+        &headers,
+    )?;
+    Ok(Json(ServiceAccountTokensResponse { paged_result }).into_response())
 }
 
 async fn create_token(
@@ -442,41 +402,36 @@ async fn create_token(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<CreateServiceAccountTokenRequest>,
-) -> Response {
-    let principal = match require_human(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Read,
-            Some(SpecificPermission::ManageCredentials),
-        )
-        .await
-    {
-        return identity_error_response(error, &headers);
-    }
-    match state
-        .service_accounts
-        .create_token(id, request, principal.actor_id)
-        .await
-    {
-        Ok(created) => {
-            let mut response = (StatusCode::CREATED, Json(created)).into_response();
-            response
-                .headers_mut()
-                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-            response
-                .headers_mut()
-                .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-            response
-        }
-        Err(error) => identity_error_response(error, &headers),
-    }
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Read,
+                Some(SpecificPermission::ManageCredentials),
+            )
+            .await,
+        &headers,
+    )?;
+    let created = identity_result(
+        state
+            .service_accounts
+            .create_token(id, request, principal.actor_id)
+            .await,
+        &headers,
+    )?;
+    let mut response = (StatusCode::CREATED, Json(created)).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    Ok(response)
 }
 
 async fn revoke_token(
@@ -484,31 +439,63 @@ async fn revoke_token(
     principal: Option<Extension<ActorPrincipal>>,
     Path((id, token_id)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
-) -> Response {
-    let principal = match require_human(principal) {
-        Ok(principal) => principal,
-        Err(error) => return identity_error_response(error, &headers),
-    };
-    if let Err(error) = state
-        .identity
-        .authorize_resource(
-            &principal,
-            ResourceType::ServiceAccount,
-            id,
-            PermissionLevel::Read,
-            Some(SpecificPermission::ManageCredentials),
-        )
-        .await
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Read,
+                Some(SpecificPermission::ManageCredentials),
+            )
+            .await,
+        &headers,
+    )?;
+    identity_result(
+        state
+            .service_accounts
+            .revoke_token(id, token_id, principal.actor_id)
+            .await,
+        &headers,
+    )?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+fn authenticated_principal(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, IdentityError> {
+    principal
+        .map(|Extension(principal)| principal)
+        .ok_or(IdentityError::Unauthenticated)
+}
+
+async fn service_account_list_permission(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+) -> Result<PermissionGrant, IdentityError> {
+    match identity
+        .global_permission(principal, ResourceType::ServiceAccount)
+        .await?
     {
-        return identity_error_response(error, &headers);
+        Some(permission) if permission.level.grants(PermissionLevel::Read) => Ok(permission),
+        _ => Err(IdentityError::Forbidden),
     }
-    match state
-        .service_accounts
-        .revoke_token(id, token_id, principal.actor_id)
-        .await
+}
+
+async fn service_account_read_permission(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    id: Uuid,
+) -> Result<PermissionGrant, IdentityError> {
+    match identity
+        .permission_for_resource(principal, ResourceType::ServiceAccount, id)
+        .await?
     {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(error) => identity_error_response(error, &headers),
+        Some(permission) if permission.level.grants(PermissionLevel::Read) => Ok(permission),
+        _ => Err(IdentityError::NotFound),
     }
 }
 

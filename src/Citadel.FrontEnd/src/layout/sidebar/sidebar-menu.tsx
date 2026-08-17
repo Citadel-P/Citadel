@@ -25,7 +25,7 @@ export const SidebarMenu = () => {
   const { currentPlatform, platforms, unresolvedAlertCount } = useAppContext();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
   const { data: profileResponse } = useRead('getCurrentProfile');
-  const authorization = profileResponse?.data.authorization;
+  const authorization = profileResponse?.data?.authorization;
 
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
   const addedPlatformIdsRef = useRef<Set<string>>(new Set());

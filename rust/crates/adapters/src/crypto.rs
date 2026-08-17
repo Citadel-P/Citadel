@@ -5,11 +5,11 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
-use citadel_application::{
+use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::{
     AccessTokenClaims, IdentityError, PasswordHasher, RefreshTokenClaims, ServiceAccountTokenCodec,
     SessionTokenCodec, token_digest,
 };
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use getrandom::fill;
 use jsonwebtoken::{Algorithm as JwtAlgorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -302,6 +302,16 @@ impl AesGcmSecretProtector {
             .decrypt(&nonce, ciphertext.as_ref())
             .map_err(|_| IdentityError::Credential)?;
         Ok(Zeroizing::new(plaintext))
+    }
+}
+
+impl citadel_identity::SecretProtector for AesGcmSecretProtector {
+    fn protect(&self, plaintext: &[u8]) -> Result<String, IdentityError> {
+        Self::protect(self, plaintext)
+    }
+
+    fn unprotect(&self, envelope: &str) -> Result<Zeroizing<Vec<u8>>, IdentityError> {
+        Self::unprotect(self, envelope)
     }
 }
 

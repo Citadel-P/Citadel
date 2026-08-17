@@ -3,29 +3,17 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Utc};
-use futures_util::future::BoxFuture;
+use citadel_identity::{ServiceAccountLastUsedStore, ServiceAccountLastUsedTracker};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{BoundedReceiver, BoundedSender, IdentityError, QueueOverflowPolicy, bounded_channel};
+use crate::{BoundedReceiver, BoundedSender, QueueOverflowPolicy, bounded_channel};
 
 #[derive(Debug, Clone, Copy)]
 struct UsageCandidate {
     credential_id: Uuid,
     used_at: DateTime<Utc>,
-}
-
-pub trait ServiceAccountLastUsedTracker: Send + Sync {
-    fn track(&self, credential_id: Uuid, used_at: DateTime<Utc>);
-}
-
-pub trait ServiceAccountLastUsedStore: Send + Sync {
-    fn update_service_account_last_used(
-        &self,
-        credential_id: Uuid,
-        used_at: DateTime<Utc>,
-    ) -> BoxFuture<'_, Result<(), IdentityError>>;
 }
 
 #[derive(Clone)]
@@ -86,13 +74,6 @@ impl ServiceAccountLastUsedTracker for BoundedServiceAccountLastUsedTracker {
             used_at,
         });
     }
-}
-
-#[derive(Debug, Default)]
-pub struct NoopServiceAccountLastUsedTracker;
-
-impl ServiceAccountLastUsedTracker for NoopServiceAccountLastUsedTracker {
-    fn track(&self, _credential_id: Uuid, _used_at: DateTime<Utc>) {}
 }
 
 impl ServiceAccountLastUsedWorker {
@@ -172,6 +153,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use citadel_identity::IdentityError;
+    use futures_util::future::BoxFuture;
 
     #[derive(Default)]
     struct RecordingStore {

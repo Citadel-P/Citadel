@@ -75,11 +75,15 @@ function SignalRTestRoot({
   queryClient,
   connectionFactory,
   startConnection,
+  realtimeTransport,
+  webSocketFactory,
 }: PropsWithChildren<{
   fake: FakeHubConnection;
   queryClient?: QueryClient;
   connectionFactory?: ComponentProps<typeof SignalRProvider>['connectionFactory'];
   startConnection?: ComponentProps<typeof SignalRProvider>['startConnection'];
+  realtimeTransport?: ComponentProps<typeof SignalRProvider>['realtimeTransport'];
+  webSocketFactory?: ComponentProps<typeof SignalRProvider>['webSocketFactory'];
 }>) {
   const [defaultQueryClient] = useState(
     () =>
@@ -96,7 +100,9 @@ function SignalRTestRoot({
       <AuthContext.Provider value={authValue}>
         <SignalRProvider
           connectionFactory={connectionFactory ?? (() => fake.asHubConnection())}
-          startConnection={startConnection ?? ((connection) => connection.start())}>
+          startConnection={startConnection ?? ((connection) => connection.start())}
+          realtimeTransport={realtimeTransport ?? 'SignalR'}
+          webSocketFactory={webSocketFactory}>
           {children}
         </SignalRProvider>
       </AuthContext.Provider>
@@ -133,6 +139,26 @@ function ConnectionStatusProbe({ onContext }: { onContext?: (context: SignalRCon
       <span data-testid="interrupted-at">{context.interruptedAt ?? 'none'}</span>
     </>
   );
+}
+
+class FakeWebSocket {
+  private readonly listeners = new Map<string, Set<EventListener>>();
+
+  readonly send = vi.fn();
+  readonly close = vi.fn();
+  readonly addEventListener = vi.fn((type: string, listener: EventListener) => {
+    const listeners = this.listeners.get(type) ?? new Set<EventListener>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  });
+
+  emit(type: string, event: Event) {
+    this.listeners.get(type)?.forEach((listener) => listener.call(this, event));
+  }
+
+  asWebSocket(): WebSocket {
+    return this as unknown as WebSocket;
+  }
 }
 
 describe('SignalRProvider', () => {
@@ -288,7 +314,10 @@ describe('SignalRProvider', () => {
       return (
         <QueryClientProvider client={new QueryClient()}>
           <AuthContext.Provider value={{ ...authValue, accessToken: token }}>
-            <SignalRProvider connectionFactory={factory} startConnection={(candidate) => candidate.start()}>
+            <SignalRProvider
+              connectionFactory={factory}
+              startConnection={(candidate) => candidate.start()}
+              realtimeTransport="SignalR">
               <ConnectionStatusProbe onContext={(value) => observedStates.push(value.liveConnectionState)} />
               <button onClick={() => setToken('token-2')}>rotate token</button>
             </SignalRProvider>
@@ -527,6 +556,61 @@ describe('SignalRProvider', () => {
     });
 
     expect(await screen.findByText('streamed')).toBeInTheDocument();
+  });
+
+  it('uses the Rust WebSocket notification to refresh license state without reading its payload', async () => {
+    const fake = new FakeHubConnection();
+    fake.start.mockResolvedValue();
+    const socket = new FakeWebSocket();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const rendered = render(
+      <SignalRTestRoot
+        fake={fake}
+        queryClient={queryClient}
+        realtimeTransport="WebSocketV1"
+        webSocketFactory={() => socket.asWebSocket()}>
+        <span>ready</span>
+      </SignalRTestRoot>,
+    );
+
+    act(() => socket.emit('open', new Event('open')));
+    expect(fake.start).not.toHaveBeenCalled();
+    expect(socket.send).toHaveBeenCalledWith(
+      JSON.stringify({ protocolVersion: 1, kind: 'subscribe', accessToken: 'access-token' }),
+    );
+    act(() =>
+      socket.emit(
+        'message',
+        new MessageEvent('message', {
+          data: JSON.stringify({ protocolVersion: 1, kind: 'subscribed' }),
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] }),
+    );
+    invalidate.mockClear();
+
+    act(() =>
+      socket.emit(
+        'message',
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            protocolVersion: 1,
+            eventKind: 'licenseStateChanged',
+            payload: { ignored: 'must-not-be-used' },
+          }),
+        }),
+      ),
+    );
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicense'] });
+    });
+
+    rendered.unmount();
+    expect(socket.close).toHaveBeenCalled();
   });
 
   it('uses one listener while joining and leaving multiple groups', async () => {

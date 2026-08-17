@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
 import { REDIRECT_TO_KEY, RequireAuth, RequireNoAuth } from './features/auth/auth-route-guards';
-import { RequireSetupComplete } from './features/setup/setup-route-guards';
+import { RequireSetup, RequireSetupComplete } from './features/setup/setup-route-guards';
 
 function LocationProbe() {
   const location = useLocation();
@@ -10,6 +10,26 @@ function LocationProbe() {
 }
 
 describe('authentication route guards', () => {
+  it('preserves the requested route while setup completes and authentication becomes ready', async () => {
+    sessionStorage.setItem(REDIRECT_TO_KEY, '/stacks?source=first-run');
+
+    renderCitadel(
+      <>
+        <LocationProbe />
+        <Routes>
+          <Route element={<RequireSetup />}>
+            <Route path="/setup" element={<span>setup page</span>} />
+          </Route>
+          <Route path="/stacks" element={<span>requested page</span>} />
+        </Routes>
+      </>,
+      { route: '/setup' },
+    );
+
+    expect(await screen.findByText('requested page')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/stacks?source=first-run');
+  });
+
   it('preserves the requested route and redirects an uninitialized instance to setup', async () => {
     renderCitadel(
       <>
@@ -111,6 +131,8 @@ describe('authentication route guards', () => {
   });
 
   it('renders protected routes for an authenticated user', () => {
+    sessionStorage.setItem(REDIRECT_TO_KEY, '/builds/42');
+
     renderCitadel(
       <Routes>
         <Route element={<RequireAuth />}>
@@ -121,6 +143,7 @@ describe('authentication route guards', () => {
     );
 
     expect(screen.getByText('protected content')).toBeInTheDocument();
+    expect(sessionStorage.getItem(REDIRECT_TO_KEY)).toBeNull();
   });
 
   it('returns an authenticated user from login to the requested URL', async () => {

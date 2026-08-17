@@ -1,4 +1,5 @@
 import Loader from '@/components/ui/loader';
+import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthContext } from './auth-context';
 
@@ -7,6 +8,12 @@ export const REDIRECT_TO_KEY = 'redirectTo';
 export const RequireAuth = () => {
   const { isAuthenticated, isAuthReady, accessToken } = useAuthContext();
   const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated && accessToken) {
+      sessionStorage.removeItem(REDIRECT_TO_KEY);
+    }
+  }, [accessToken, isAuthenticated]);
 
   if (!isAuthReady) {
     return <Loader />;

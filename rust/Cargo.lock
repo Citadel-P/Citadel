@@ -415,6 +415,7 @@ dependencies = [
  "aes-gcm",
  "argon2",
  "async-stream",
+ "axum",
  "base64 0.23.1",
  "bytes",
  "chrono",
@@ -422,16 +423,21 @@ dependencies = [
  "citadel-contracts",
  "citadel-database",
  "citadel-domain",
+ "citadel-identity",
+ "citadel-platforms",
  "ed25519-dalek 3.0.0",
  "futures-util",
  "getrandom 0.4.3",
+ "hmac 0.13.0",
  "jsonwebtoken",
  "prost",
  "reqwest",
  "serde",
  "serde_json",
+ "sha1 0.11.0",
  "sha2 0.11.0",
  "sqlx",
+ "subtle",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -448,13 +454,10 @@ name = "citadel-application"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "chrono-tz",
  "citadel-domain",
- "email_address",
+ "citadel-identity",
  "futures-util",
  "serde",
- "sha2 0.11.0",
- "subtle",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -496,6 +499,43 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "citadel-identity"
+version = "0.0.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "chrono-tz",
+ "citadel-domain",
+ "email_address",
+ "futures-util",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "citadel-platforms"
+version = "0.0.0"
+dependencies = [
+ "citadel-domain",
+ "futures-util",
+ "serde",
+ "thiserror",
+ "tokio-util",
  "uuid",
 ]
 
@@ -512,6 +552,8 @@ dependencies = [
  "citadel-contracts",
  "citadel-database",
  "citadel-domain",
+ "citadel-identity",
+ "citadel-platforms",
  "clap",
  "futures-util",
  "ipnet",

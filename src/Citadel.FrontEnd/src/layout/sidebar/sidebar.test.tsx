@@ -9,6 +9,10 @@ vi.mock('@/lib/context/layout-context', () => ({
   useLayoutContext: () => ({ sidebarMinimized: false }),
 }));
 
+vi.mock('@/lib/context/app-context', () => ({
+  useAppContext: () => ({ applicationInfo: { version: '1.0.0' } }),
+}));
+
 vi.mock('@/lib/hooks', () => ({
   useRead: (resource: string) => ({
     data:

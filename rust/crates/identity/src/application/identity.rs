@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Utc};
 use citadel_domain::{
-    ActorId, ActorPrincipal, AuthenticatedPrincipalType, AuthorizationSnapshot, PermissionLevel,
-    ResourceType, SYSTEM_ACTOR_ID, ServiceAccountCredential, SpecificPermission, User,
-    UserAuthentication,
+    ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType, SpecificPermission,
 };
 use email_address::EmailAddress;
 use futures_util::future::BoxFuture;
@@ -14,7 +12,10 @@ use subtle::ConstantTimeEq;
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
-use crate::ServiceAccountLastUsedTracker;
+use crate::{
+    ActorPrincipal, AuthorizationSnapshot, MAX_NAME_CHARS, PermissionGrant, SYSTEM_ACTOR_ID,
+    ServiceAccountCredential, ServiceAccountLastUsedTracker, User, UserAuthentication,
+};
 
 pub const MINIMUM_PASSWORD_CHARACTERS: usize = 15;
 pub const MAXIMUM_PASSWORD_CHARACTERS: usize = 128;
@@ -36,6 +37,11 @@ pub enum IdentityError {
     Validation(String),
     #[error("resource conflict: {0}")]
     Conflict(String),
+    #[error("resource conflict: {message}")]
+    TypedConflict {
+        problem_type: &'static str,
+        message: String,
+    },
     #[error("resource was not found")]
     NotFound,
     #[error("license capability '{0}' is unavailable")]
@@ -92,6 +98,13 @@ pub struct SessionTokens {
     pub access_token: String,
     pub refresh_token: String,
     pub refresh_expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedSession {
+    pub session: NewSession,
+    pub tokens: SessionTokens,
+    pub expected_password_hash: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -222,7 +235,7 @@ pub trait IdentityStore: Send + Sync {
         actor_id: ActorId,
         resource_type: ResourceType,
         resource_id: Uuid,
-    ) -> BoxFuture<'a, Result<Option<citadel_domain::PermissionGrant>, IdentityError>>;
+    ) -> BoxFuture<'a, Result<Option<PermissionGrant>, IdentityError>>;
 }
 
 pub trait PasswordHasher: Send + Sync {
@@ -312,6 +325,21 @@ impl IdentityService {
         request: InitializeCitadelRequest,
         metadata: SessionMetadata,
     ) -> Result<(LoginResponse, SessionTokens), IdentityError> {
+        let user = self.initialize_user(request).await?;
+        let session = self.issue_session(&user, metadata).await?;
+        Ok((
+            LoginResponse {
+                access_token: Some(session.access_token.clone()),
+                next_step: LoginNextStep::Completed,
+            },
+            session,
+        ))
+    }
+
+    pub async fn initialize_user(
+        &self,
+        request: InitializeCitadelRequest,
+    ) -> Result<UserAuthentication, IdentityError> {
         validate_name(&request.name)?;
         validate_email(&request.email)?;
         validate_password(&request.password, Some(&request.name), Some(&request.email))?;
@@ -324,7 +352,15 @@ impl IdentityService {
             ActorId::new(SYSTEM_ACTOR_ID),
             now,
         );
-        let user = self.store.initialize_administrator(&administrator).await?;
+        self.store.initialize_administrator(&administrator).await
+    }
+
+    pub async fn login(
+        &self,
+        request: LoginRequest,
+        metadata: SessionMetadata,
+    ) -> Result<(LoginResponse, SessionTokens), IdentityError> {
+        let user = self.authenticate_local(request).await?;
         let session = self.issue_session(&user, metadata).await?;
         Ok((
             LoginResponse {
@@ -335,11 +371,10 @@ impl IdentityService {
         ))
     }
 
-    pub async fn login(
+    pub async fn authenticate_local(
         &self,
         request: LoginRequest,
-        metadata: SessionMetadata,
-    ) -> Result<(LoginResponse, SessionTokens), IdentityError> {
+    ) -> Result<UserAuthentication, IdentityError> {
         if request.email_or_name.trim().is_empty()
             || request.password.chars().count() > MAXIMUM_PASSWORD_CHARACTERS
         {
@@ -360,14 +395,56 @@ impl IdentityService {
         if !password_valid {
             return Err(IdentityError::InvalidCredentials);
         }
-        let session = self.issue_session(&user, metadata).await?;
-        Ok((
-            LoginResponse {
-                access_token: Some(session.access_token.clone()),
-                next_step: LoginNextStep::Completed,
-            },
-            session,
-        ))
+        Ok(user)
+    }
+
+    pub async fn current_local_user(
+        &self,
+        user_id: Uuid,
+        password: &str,
+    ) -> Result<UserAuthentication, IdentityError> {
+        let user = self
+            .store
+            .load_user_by_id(user_id)
+            .await?
+            .filter(|user| user.enabled)
+            .ok_or(IdentityError::NotFound)?;
+        let Some(password_hash) = user.password_hash.clone() else {
+            return Err(IdentityError::Validation(
+                "This account does not have a local password credential.".to_owned(),
+            ));
+        };
+        if password.chars().count() > MAXIMUM_PASSWORD_CHARACTERS
+            || !self
+                .verify_password(password.to_owned(), password_hash)
+                .await?
+        {
+            return Err(IdentityError::Validation(
+                "Current password is incorrect.".to_owned(),
+            ));
+        }
+        Ok(user)
+    }
+
+    pub async fn load_user_for_authentication(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserAuthentication, IdentityError> {
+        self.store
+            .load_user_by_id(user_id)
+            .await?
+            .filter(|user| user.enabled)
+            .ok_or(IdentityError::InvalidCredentials)
+    }
+
+    pub async fn load_user_by_id(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserAuthentication, IdentityError> {
+        self.store
+            .load_user_by_id(user_id)
+            .await?
+            .ok_or(IdentityError::NotFound)
     }
 
     pub async fn refresh(
@@ -564,7 +641,7 @@ impl IdentityService {
         &self,
         principal: &ActorPrincipal,
         resource_type: ResourceType,
-    ) -> Result<Option<citadel_domain::PermissionGrant>, IdentityError> {
+    ) -> Result<Option<PermissionGrant>, IdentityError> {
         let snapshot = self
             .store
             .authorization_snapshot(principal.actor_id)
@@ -585,7 +662,7 @@ impl IdentityService {
         principal: &ActorPrincipal,
         resource_type: ResourceType,
         resource_id: Uuid,
-    ) -> Result<Option<citadel_domain::PermissionGrant>, IdentityError> {
+    ) -> Result<Option<PermissionGrant>, IdentityError> {
         self.store
             .resource_permission(principal.actor_id, resource_type, resource_id)
             .await
@@ -613,27 +690,24 @@ impl IdentityService {
         }
     }
 
-    async fn issue_session(
+    pub async fn issue_session(
         &self,
         user: &UserAuthentication,
         metadata: SessionMetadata,
     ) -> Result<SessionTokens, IdentityError> {
+        let prepared = self.prepare_session(user, metadata)?;
+        self.persist_prepared_session(&prepared).await?;
+        Ok(prepared.tokens)
+    }
+
+    pub fn prepare_session(
+        &self,
+        user: &UserAuthentication,
+        metadata: SessionMetadata,
+    ) -> Result<PreparedSession, IdentityError> {
         let now = self.clock.now();
         let expires_at = now + self.refresh_token_lifetime;
         let session_id = Uuid::now_v7();
-        self.store
-            .create_session(
-                &NewSession {
-                    id: session_id,
-                    user_id: user.user_id,
-                    created_at: now,
-                    expires_at,
-                    metadata,
-                },
-                user.password_hash.as_deref(),
-                MAXIMUM_SESSIONS_PER_USER,
-            )
-            .await?;
         let access_token = self.tokens.encode_access(&AccessTokenClaims {
             subject_id: user.user_id,
             actor_id: user.actor_id,
@@ -646,11 +720,34 @@ impl IdentityService {
             issued_at: now,
             expires_at,
         })?;
-        Ok(SessionTokens {
-            access_token,
-            refresh_token,
-            refresh_expires_at: expires_at,
+        Ok(PreparedSession {
+            session: NewSession {
+                id: session_id,
+                user_id: user.user_id,
+                created_at: now,
+                expires_at,
+                metadata,
+            },
+            tokens: SessionTokens {
+                access_token,
+                refresh_token,
+                refresh_expires_at: expires_at,
+            },
+            expected_password_hash: user.password_hash.clone(),
         })
+    }
+
+    pub async fn persist_prepared_session(
+        &self,
+        prepared: &PreparedSession,
+    ) -> Result<(), IdentityError> {
+        self.store
+            .create_session(
+                &prepared.session,
+                prepared.expected_password_hash.as_deref(),
+                MAXIMUM_SESSIONS_PER_USER,
+            )
+            .await
     }
 
     pub(crate) async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
@@ -701,7 +798,7 @@ fn service_account_credential_is_usable(
 pub fn validate_name(name: &str) -> Result<(), IdentityError> {
     let name = name.trim();
     if name.is_empty()
-        || name.chars().count() > citadel_domain::MAX_NAME_CHARS
+        || name.chars().count() > MAX_NAME_CHARS
         || !name
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))

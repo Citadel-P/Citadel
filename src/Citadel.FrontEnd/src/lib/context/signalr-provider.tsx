@@ -12,6 +12,8 @@ type SignalRProviderProps = {
   children?: React.ReactNode;
   connectionFactory?: SignalRConnectionFactory;
   startConnection?: StartConnection;
+  realtimeTransport?: string;
+  webSocketFactory?: (url: string) => WebSocket;
 };
 
 type GroupState = {
@@ -59,20 +61,26 @@ const liveBackedQueryKeys = new Set([
 ]);
 
 const isBrowserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+const createWebSocket = (url: string) => new WebSocket(url);
 
 export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   children,
   connectionFactory = createSignalRConnection,
   startConnection = startConnectionWithRetry,
+  realtimeTransport,
+  webSocketFactory = createWebSocket,
 }) => {
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
-  const [liveConnectionState, setLiveConnectionState] = useState<LiveConnectionState>('connecting');
+  const [liveConnectionState, setLiveConnectionState] = useState<LiveConnectionState>(
+    realtimeTransport === 'SignalR' ? 'connecting' : 'disconnected',
+  );
   const [interruptedAt, setInterruptedAt] = useState<number>();
   const [lastConnectedAt, setLastConnectedAt] = useState<number>();
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const { accessToken } = useAuthContext();
   const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  const signalREnabled = realtimeTransport === 'SignalR';
 
   const tokenRef = useRef<string | undefined>(accessToken);
   const prevTokenRef = useRef<string | undefined>(accessToken);
@@ -84,6 +92,62 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   const startInProgressRef = useRef(false);
   const rebuildGenerationRef = useRef(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
+
+  useEffect(() => {
+    if (realtimeTransport !== 'WebSocketV1' || !accessToken) return;
+
+    let disposed = false;
+    let socket: WebSocket | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryIndex = 0;
+    const retryDelays = [0, 2_000, 5_000, 10_000, 30_000];
+    const invalidateLicense = () => {
+      void queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] });
+      void queryClient.invalidateQueries({ queryKey: ['getLicense'] });
+    };
+    const connect = () => {
+      if (disposed) return;
+      const url = new URL('/api/v1/realtime', baseUrl || window.location.origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = webSocketFactory(url.toString());
+      socket.addEventListener('open', () => {
+        socket?.send(
+          JSON.stringify({ protocolVersion: 1, kind: 'subscribe', accessToken }),
+        );
+      });
+      socket.addEventListener('message', (event) => {
+        try {
+          const envelope = JSON.parse(String(event.data)) as {
+            protocolVersion?: number;
+            eventKind?: string;
+            kind?: string;
+          };
+          if (
+            envelope.protocolVersion === 1 &&
+            (envelope.kind === 'subscribed' || envelope.eventKind === 'licenseStateChanged')
+          ) {
+            if (envelope.kind === 'subscribed') retryIndex = 0;
+            invalidateLicense();
+          }
+        } catch {
+          // A malformed notification is ignored; authoritative API reads remain unchanged.
+        }
+      });
+      socket.addEventListener('close', () => {
+        if (disposed) return;
+        const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)];
+        retryIndex += 1;
+        retryTimer = setTimeout(connect, delay);
+      });
+    };
+
+    connect();
+    return () => {
+      disposed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [accessToken, baseUrl, queryClient, realtimeTransport, webSocketFactory]);
 
   const markConnected = useCallback(() => {
     setConnectionState(HubConnectionState.Connected);
@@ -111,6 +175,10 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
 
   const buildConnection = useCallback(
     (reconcileAfterConnect = false) => {
+      if (!signalREnabled) {
+        return Promise.reject(new Error('SignalR transport is not enabled'));
+      }
+
       if (activeCancelRef.current) {
         activeCancelRef.current.current = true;
       }
@@ -265,7 +333,16 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       void readyPromise.catch(() => {});
       return readyPromise;
     },
-    [baseUrl, connectionFactory, markConnected, markInterrupted, queryClient, reconcileLiveQueries, startConnection],
+    [
+      baseUrl,
+      connectionFactory,
+      markConnected,
+      markInterrupted,
+      queryClient,
+      reconcileLiveQueries,
+      signalREnabled,
+      startConnection,
+    ],
   );
 
   const rebuildConnection = useCallback(
@@ -319,6 +396,10 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   );
 
   const retryConnection = useCallback(() => {
+    if (!signalREnabled) {
+      return Promise.reject(new Error('SignalR transport is not enabled'));
+    }
+
     if (retryPromiseRef.current) {
       return retryPromiseRef.current;
     }
@@ -348,7 +429,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     };
     void retryPromise.then(clearRetry, clearRetry);
     return retryPromise;
-  }, [markConnected, markInterrupted, rebuildConnection]);
+  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled]);
 
   useEffect(() => {
     tokenRef.current = accessToken;
@@ -360,10 +441,20 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     }
 
     prevTokenRef.current = accessToken;
+    if (!signalREnabled) {
+      return;
+    }
+
+    // Replacing the authenticated external connection is this effect's synchronization responsibility.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void rebuildConnection(interruptedAt !== undefined).catch(() => {});
-  }, [accessToken, interruptedAt, rebuildConnection]);
+  }, [accessToken, interruptedAt, rebuildConnection, signalREnabled]);
 
   useEffect(() => {
+    if (!signalREnabled) {
+      return;
+    }
+
     // Establishing the external HubConnection is this effect's synchronization responsibility.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void buildConnection().catch(() => {});
@@ -382,11 +473,16 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       startInProgressRef.current = false;
       activeConnection?.stop().catch(console.error);
     };
-    // The connection is rebuilt explicitly when the access token changes.
+    // Connection inputs other than the negotiated transport are handled by the explicit
+    // token-rebuild path or are fixed for the lifetime of the provider.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [signalREnabled]);
 
   useEffect(() => {
+    if (!signalREnabled) {
+      return;
+    }
+
     const handleOffline = () => {
       markInterrupted('offline');
     };
@@ -416,7 +512,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [markConnected, markInterrupted, retryConnection]);
+  }, [markConnected, markInterrupted, retryConnection, signalREnabled]);
 
   const ensureConnectionReady = useCallback(async () => {
     const activeConnection = activeConnectionRef.current;

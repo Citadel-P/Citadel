@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEventType, ActivityResourceType, ActivityStatus, ActorPrincipal, ActorType,
-};
+use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
+use citadel_identity::{ActorPrincipal, IdentityError};
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
-
-use crate::IdentityError;
 
 pub const DEFAULT_ACTIVITY_PAGE_SIZE: i32 = 50;
 pub const MAXIMUM_ACTIVITY_PAGE_SIZE: i32 = 500;

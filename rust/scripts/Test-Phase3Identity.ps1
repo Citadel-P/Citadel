@@ -89,6 +89,16 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Could not create Phase 3 database '$database'." }
     }
 
+    Push-Location $repoRoot
+    try {
+        & dotnet run --project 'test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj' `
+            -- -class 'Tests.Integration.Application.Features.Permissions.AuthorizationDifferentialTests'
+        if ($LASTEXITCODE -ne 0) { throw 'The .NET authorization differential oracle failed.' }
+    }
+    finally {
+        Pop-Location
+    }
+
     & docker run --rm --network $network `
         --volume "${repoRoot}:/source" `
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
@@ -101,6 +111,109 @@ try {
         $rustImage `
         cargo test --locked -p citadel-adapters --test identity_access -- --ignored --nocapture
     if ($LASTEXITCODE -ne 0) { throw 'The persisted Phase 3 identity/ACL integration test failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-adapters --test identity_authorization_differential -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Rust authorization differential matrix failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test users_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 User HTTP integration tests failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test teams_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 Team HTTP integration tests failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test roles_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 Role HTTP integration tests failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test licenses_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 License HTTP integration tests failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test mfa_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 MFA HTTP integration tests failed.' }
+
+    & docker run --rm --network $network `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-server --test oidc_http -- --ignored --nocapture
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 OIDC HTTP integration tests failed.' }
+
+    & docker run --rm `
+        --volume "${repoRoot}:/source" `
+        --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
+        --volume 'citadel-rust-git:/usr/local/cargo/git' `
+        --volume 'citadel-rustup:/usr/local/rustup' `
+        --volume 'citadel-rust-target:/source/rust/target' `
+        --workdir /source/rust `
+        --env 'SQLX_OFFLINE=true' `
+        $rustImage `
+        cargo test --locked -p citadel-adapters --test oidc_protocol
+    if ($LASTEXITCODE -ne 0) { throw 'The Phase 3 OIDC protocol compatibility test failed.' }
 
     & docker run --rm `
         --volume "${repoRoot}:/source" `
@@ -145,8 +258,11 @@ try {
         throw 'Disabled HTTP transport did not retain the refresh cookie for local development.'
     }
 
-    $matrix = Invoke-WebRequest -UseBasicParsing -Uri "$serverOrigin/api/v1/roles/permissions/matrix"
-    if ($matrix.StatusCode -ne 200 -or $matrix.Content -notmatch 'ServiceAccount') {
+    $matrixResponse = Invoke-WebRequest -UseBasicParsing -Uri "$serverOrigin/api/v1/roles/permissions/matrix"
+    $matrix = $matrixResponse.Content | ConvertFrom-Json
+    if ($matrixResponse.StatusCode -ne 200 -or $null -eq $matrix.ServiceAccount -or `
+        $matrix.Deployment.maximumLevel -ne 'Execute' -or `
+        $matrix.Deployment.specificPermissions.Apply -ne 'Read') {
         throw 'The anonymous permission matrix is unavailable or incomplete.'
     }
 
@@ -164,8 +280,22 @@ try {
     $expectedDisplayVersion = ($applicationInfoBeforeRestart.informationalVersion -split '\+', 2)[0]
     if ($applicationInfoBeforeRestart.name -ne 'Citadel' -or `
         [string]::IsNullOrWhiteSpace($applicationInfoBeforeRestart.informationalVersion) -or `
-        $applicationInfoBeforeRestart.version -ne $expectedDisplayVersion) {
+        $applicationInfoBeforeRestart.version -ne $expectedDisplayVersion -or `
+        $applicationInfoBeforeRestart.realtimeTransport -ne 'WebSocketV1') {
         throw 'Application information did not use the embedded build metadata.'
+    }
+    $licenseEntitlements = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/license/entitlements" -Headers $authorization
+    if ($licenseEntitlements.status -ne 'Community' -or `
+        @($licenseEntitlements.capabilities).Count -ne 5) {
+        throw 'The authenticated Community entitlement projection is incomplete.'
+    }
+    $licenseRequestBeforeRestart = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/license/request" -Headers $authorization
+    if ($licenseRequestBeforeRestart.product -ne 'citadel' -or `
+        [string]::IsNullOrWhiteSpace($licenseRequestBeforeRestart.instanceId) -or `
+        $licenseRequestBeforeRestart.coreVersion -ne $applicationInfoBeforeRestart.version) {
+        throw 'License request metadata did not use stable instance and Core version values.'
     }
     $profile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" -Headers $authorization
     if ($profile.displayName -ne 'owner' -or $profile.email -ne 'owner@example.test') {
@@ -471,6 +601,134 @@ try {
         if ($_.Exception.Response.StatusCode.value__ -ne 400) { throw }
     }
 
+    $managedUserName = "phase3-user-$suffix"
+    $managedUser = Invoke-RestMethod -Method Post `
+        -Uri "$serverOrigin/api/v1/users" -Headers $authorization `
+        -ContentType 'application/json' `
+        -Body (@{
+            name = $managedUserName
+            email = "$managedUserName@example.test"
+            password = 'managed-user-correct-horse-battery-staple'
+            isEnabled = $true
+        } | ConvertTo-Json)
+    if ($managedUser.name -ne $managedUserName -or -not $managedUser.isEnabled) {
+        throw 'The administrator User create mutation did not return the persisted User.'
+    }
+    $managedUser = Invoke-RestMethod -Method Patch `
+        -Uri "$serverOrigin/api/v1/users/$($managedUser.id)" -Headers $authorization `
+        -ContentType 'application/merge-patch+json' `
+        -Body (@{ email = "updated-$managedUserName@example.test" } | ConvertTo-Json)
+    if ($managedUser.email -ne "updated-$managedUserName@example.test") {
+        throw 'The administrator User patch mutation was not persisted.'
+    }
+    $renamedManagedUser = "$managedUserName-renamed"
+    $managedUser = Invoke-RestMethod -Method Post `
+        -Uri "$serverOrigin/api/v1/users/rename" -Headers $authorization `
+        -ContentType 'application/json' `
+        -Body (@{ id = $managedUser.id; name = $renamedManagedUser } | ConvertTo-Json)
+    if ($managedUser.name -ne $renamedManagedUser) {
+        throw 'The administrator User rename mutation was not persisted.'
+    }
+    $managedUserActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($managedUser.id)&resourceType=User&pageSize=100" `
+        -Headers $authorization
+    foreach ($eventType in @('UserCreated', 'UserUpdated', 'UserRenamed')) {
+        if (@($managedUserActivities.pagedResult.items).eventType -notcontains $eventType) {
+            throw "Administrator User activity history is missing '$eventType'."
+        }
+    }
+
+    $managedTeamName = "phase3-team-$suffix"
+    $managedTeam = Invoke-RestMethod -Method Post `
+        -Uri "$serverOrigin/api/v1/teams" -Headers $authorization `
+        -ContentType 'application/json' `
+        -Body (@{ name = $managedTeamName; userIds = @($managedUser.id) } | ConvertTo-Json)
+    if ($managedTeam.name -ne $managedTeamName -or $managedTeam.totalMembers -ne 1) {
+        throw 'The administrator Team create mutation did not persist its member.'
+    }
+    $managedTeam = Invoke-RestMethod -Method Patch `
+        -Uri "$serverOrigin/api/v1/teams/$($managedTeam.id)" -Headers $authorization `
+        -ContentType 'application/merge-patch+json' `
+        -Body (@{ isEnabled = $false } | ConvertTo-Json)
+    if ($managedTeam.isEnabled) {
+        throw 'The administrator Team patch mutation was not persisted.'
+    }
+    $renamedManagedTeam = "$managedTeamName-renamed"
+    $managedTeam = Invoke-RestMethod -Method Post `
+        -Uri "$serverOrigin/api/v1/teams/rename" -Headers $authorization `
+        -ContentType 'application/json' `
+        -Body (@{ id = $managedTeam.id; name = $renamedManagedTeam } | ConvertTo-Json)
+    if ($managedTeam.name -ne $renamedManagedTeam) {
+        throw 'The administrator Team rename mutation was not persisted.'
+    }
+    $managedTeamActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($managedTeam.id)&resourceType=Team&pageSize=100" `
+        -Headers $authorization
+    foreach ($eventType in @('TeamCreated', 'TeamUpdated', 'TeamRenamed')) {
+        if (@($managedTeamActivities.pagedResult.items).eventType -notcontains $eventType) {
+            throw "Administrator Team activity history is missing '$eventType'."
+        }
+    }
+
+    $managedRoleId = [Guid]::NewGuid()
+    $managedRolePermissionId = [Guid]::NewGuid()
+    $managedRoleName = "phase3-role-$suffix"
+    $seedRoleSql = "INSERT INTO roles (id, name, roletype) VALUES ('$managedRoleId', '$managedRoleName', 'Custom'); INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions) VALUES ('$managedRolePermissionId', 4, 3, '$managedRoleId', 0);"
+    & docker exec $postgres psql --username citadel_phase3 --dbname $serverDatabase `
+        --set ON_ERROR_STOP=1 --command $seedRoleSql | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not seed the unlicensed Role reduction fixture.' }
+    $managedRole = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/roles/$managedRoleId" -Headers $authorization
+    if ($managedRole.name -ne $managedRoleName -or `
+        $managedRole.permissions[0].permissionLevel -ne 'Execute') {
+        throw 'The administrator Role detail projection was not returned.'
+    }
+    $managedRole = Invoke-RestMethod -Method Patch `
+        -Uri "$serverOrigin/api/v1/roles/$managedRoleId/permissions" -Headers $authorization `
+        -ContentType 'application/merge-patch+json' `
+        -Body (@{ permissions = @(@{
+            resourceType = 'Registry'
+            permissionLevel = 'Read'
+            specificPermissions = @()
+        }) } | ConvertTo-Json -Depth 5)
+    if ($managedRole.permissions.Count -ne 1 -or `
+        $managedRole.permissions[0].permissionLevel -ne 'Read') {
+        throw 'A safe Role permission reduction was blocked after license downgrade.'
+    }
+    $renamedManagedRole = "$managedRoleName-renamed"
+    $managedRole = Invoke-RestMethod -Method Post `
+        -Uri "$serverOrigin/api/v1/roles/rename" -Headers $authorization `
+        -ContentType 'application/json' `
+        -Body (@{ id = $managedRoleId; name = $renamedManagedRole } | ConvertTo-Json)
+    if ($managedRole.name -ne $renamedManagedRole) {
+        throw 'The administrator Role rename mutation was not persisted.'
+    }
+    $managedRoleActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$managedRoleId&resourceType=Role&pageSize=100" `
+        -Headers $authorization
+    foreach ($eventType in @('RoleUpdated', 'RoleRenamed')) {
+        if (@($managedRoleActivities.pagedResult.items).eventType -notcontains $eventType) {
+            throw "Administrator Role activity history is missing '$eventType'."
+        }
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Post `
+            -Uri "$serverOrigin/api/v1/roles" -Headers $authorization `
+            -ContentType 'application/json' `
+            -Body (@{
+                name = "unlicensed-role-$suffix"
+                permissions = @(@{
+                    resourceType = 'Registry'
+                    permissionLevel = 'Read'
+                    specificPermissions = @()
+                })
+            } | ConvertTo-Json -Depth 5) | Out-Null
+        throw 'Role creation bypassed the Custom Access Control license gate.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 403) { throw }
+    }
+
     $accounts = Invoke-WebRequest -UseBasicParsing -Uri "$serverOrigin/api/v1/serviceAccounts" -Headers $authorization
     if ($accounts.StatusCode -ne 200 -or $accounts.Content -notmatch 'pagedResult') {
         throw 'The administrator could not list Service Accounts.'
@@ -528,8 +786,15 @@ try {
         -Headers @{ Authorization = "Bearer $($login.accessToken)" }
     if ($applicationInfoAfterRestart.name -ne $applicationInfoBeforeRestart.name -or `
         $applicationInfoAfterRestart.version -ne $applicationInfoBeforeRestart.version -or `
-        $applicationInfoAfterRestart.informationalVersion -ne $applicationInfoBeforeRestart.informationalVersion) {
+        $applicationInfoAfterRestart.informationalVersion -ne $applicationInfoBeforeRestart.informationalVersion -or `
+        $applicationInfoAfterRestart.realtimeTransport -ne $applicationInfoBeforeRestart.realtimeTransport) {
         throw 'Application build information changed after restart.'
+    }
+    $licenseRequestAfterRestart = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/license/request" `
+        -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+    if ($licenseRequestAfterRestart.instanceId -ne $licenseRequestBeforeRestart.instanceId) {
+        throw 'The Citadel license instance identity changed after restart.'
     }
     $persistedProfile = Invoke-RestMethod -Method Get -Uri "$serverOrigin/api/v1/profile" `
         -Headers @{ Authorization = "Bearer $($login.accessToken)" }
@@ -557,6 +822,74 @@ try {
     if ($persistedUsers.pagedResult.totalCount -ne 1 -or `
         @($persistedUsers.pagedResult.items)[0].name -ne 'owner-renamed') {
         throw 'The administrator User projection was not preserved across restart.'
+    }
+    $restartAuthorization = @{ Authorization = "Bearer $($login.accessToken)" }
+    $persistedManagedUser = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/users/$($managedUser.id)" -Headers $restartAuthorization
+    if ($persistedManagedUser.name -ne $renamedManagedUser -or `
+        $persistedManagedUser.email -ne "updated-$managedUserName@example.test") {
+        throw 'Administrator User mutations were not preserved across restart.'
+    }
+    $persistedManagedTeam = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/teams/$($managedTeam.id)" -Headers $restartAuthorization
+    if ($persistedManagedTeam.name -ne $renamedManagedTeam -or `
+        $persistedManagedTeam.isEnabled -or $persistedManagedTeam.totalMembers -ne 1) {
+        throw 'Administrator Team mutations were not preserved across restart.'
+    }
+    $persistedManagedRole = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/roles/$managedRoleId" -Headers $restartAuthorization
+    if ($persistedManagedRole.name -ne $renamedManagedRole -or `
+        $persistedManagedRole.permissions.Count -ne 1 -or `
+        $persistedManagedRole.permissions[0].permissionLevel -ne 'Read') {
+        throw 'Administrator Role mutations were not preserved across restart.'
+    }
+    $deleteManagedRole = Invoke-WebRequest -UseBasicParsing -Method Delete `
+        -Uri "$serverOrigin/api/v1/roles" -Headers $restartAuthorization `
+        -ContentType 'application/json' `
+        -Body (@{ ids = @($managedRoleId) } | ConvertTo-Json)
+    if ($deleteManagedRole.StatusCode -ne 204) {
+        throw 'The administrator Role delete mutation did not return No Content.'
+    }
+    $deletedRoleActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$managedRoleId&resourceType=Role&pageSize=100" `
+        -Headers $restartAuthorization
+    if (@($deletedRoleActivities.pagedResult.items).eventType -notcontains 'RoleDeleted') {
+        throw 'The deleted Role did not retain its safe lifecycle Activity.'
+    }
+    $deleteManagedTeam = Invoke-WebRequest -UseBasicParsing -Method Delete `
+        -Uri "$serverOrigin/api/v1/teams" -Headers $restartAuthorization `
+        -ContentType 'application/json' `
+        -Body (@{ ids = @($managedTeam.id) } | ConvertTo-Json)
+    if ($deleteManagedTeam.StatusCode -ne 204) {
+        throw 'The administrator Team delete mutation did not return No Content.'
+    }
+    $deletedTeamActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($managedTeam.id)&resourceType=Team&pageSize=100" `
+        -Headers $restartAuthorization
+    if (@($deletedTeamActivities.pagedResult.items).eventType -notcontains 'TeamDeleted') {
+        throw 'The deleted Team did not retain its safe lifecycle Activity.'
+    }
+    $deleteManagedUser = Invoke-WebRequest -UseBasicParsing -Method Delete `
+        -Uri "$serverOrigin/api/v1/users" -Headers $restartAuthorization `
+        -ContentType 'application/json' `
+        -Body (@{ ids = @($managedUser.id) } | ConvertTo-Json)
+    if ($deleteManagedUser.StatusCode -ne 204) {
+        throw 'The administrator User delete mutation did not return No Content.'
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Method Get `
+            -Uri "$serverOrigin/api/v1/users/$($managedUser.id)" `
+            -Headers $restartAuthorization | Out-Null
+        throw 'The deleted User remained readable.'
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+    }
+    $deletedUserActivities = Invoke-RestMethod -Method Get `
+        -Uri "$serverOrigin/api/v1/activities?resourceId=$($managedUser.id)&resourceType=User&pageSize=100" `
+        -Headers $restartAuthorization
+    if (@($deletedUserActivities.pagedResult.items).eventType -notcontains 'UserDeleted') {
+        throw 'The deleted User did not retain its safe lifecycle Activity.'
     }
 
     $password = & docker exec $postgres psql --username citadel_phase3 --dbname $serverDatabase `

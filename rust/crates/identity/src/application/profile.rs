@@ -1,17 +1,15 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActorPrincipal, AuthorizationSnapshot, PermissionLevel, ResourceType, User, UserDateTimeFormat,
-    UserPreferences, UserTheme,
-};
+use citadel_domain::{PermissionLevel, ResourceType, UserDateTimeFormat, UserTheme};
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::UserSessionRecord;
 use crate::{
-    Clock, IdentityError, IdentityService, MAXIMUM_PASSWORD_CHARACTERS, PatchField, validate_name,
+    ActorPrincipal, AuthorizationSnapshot, Clock, IdentityError, IdentityService,
+    MAXIMUM_PASSWORD_CHARACTERS, PatchField, User, UserPreferences, validate_name,
     validate_password,
 };
 
@@ -649,7 +647,9 @@ fn combined_capabilities(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_domain::{ActorId, PermissionGrant, SpecificPermission};
+    use citadel_domain::{ActorId, SpecificPermission};
+
+    use crate::PermissionGrant;
 
     #[test]
     fn profile_capabilities_combine_alert_resources() {

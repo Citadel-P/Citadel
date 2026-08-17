@@ -1,18 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AccessTokenResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "accessToken": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "accessToken"
-        ],
-        "type": "object"
-      },
       "ActivitiesView": {
         "additionalProperties": false,
         "properties": {
@@ -292,7 +280,33 @@
         ],
         "type": "object"
       },
-      "AddServiceAccountResourceAccessRequest": {
+      "AddServiceAccountRoleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "roleId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "roleId"
+        ],
+        "type": "object"
+      },
+      "AddTeamMemberInput": {
+        "additionalProperties": false,
+        "properties": {
+          "memberActorId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberActorId"
+        ],
+        "type": "object"
+      },
+      "AddTeamResourceAccessInput": {
         "additionalProperties": false,
         "properties": {
           "permissionLevel": {
@@ -319,7 +333,47 @@
         ],
         "type": "object"
       },
-      "AddServiceAccountRoleRequest": {
+      "AddTeamRoleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "roleId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "roleId"
+        ],
+        "type": "object"
+      },
+      "AddUserResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
+        ],
+        "type": "object"
+      },
+      "AddUserRoleInput": {
         "additionalProperties": false,
         "properties": {
           "roleId": {
@@ -342,6 +396,13 @@
             "const": "Citadel",
             "type": "string"
           },
+          "realtimeTransport": {
+            "enum": [
+              "SignalR",
+              "WebSocketV1"
+            ],
+            "type": "string"
+          },
           "version": {
             "type": "string"
           }
@@ -349,27 +410,12 @@
         "required": [
           "name",
           "version",
-          "informationalVersion"
+          "informationalVersion",
+          "realtimeTransport"
         ],
         "type": "object"
       },
-      "ArchiveServiceAccountsRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "ids": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "ids"
-        ],
-        "type": "object"
-      },
-      "ChangeCurrentPasswordRequest": {
+      "ChangeCurrentPasswordInput": {
         "additionalProperties": false,
         "properties": {
           "currentPassword": {
@@ -390,7 +436,35 @@
         ],
         "type": "object"
       },
-      "CreateServiceAccountRequest": {
+      "ConfirmMandatoryMfaSetupInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "ConfirmProfileMfaSetupInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "CreateServiceAccountInput": {
         "additionalProperties": false,
         "properties": {
           "description": {
@@ -407,7 +481,7 @@
           },
           "resourceAccesses": {
             "items": {
-              "$ref": "#/components/schemas/ServiceAccountResourceAccess"
+              "$ref": "#/components/schemas/ServiceAccountResourceAccessInput"
             },
             "type": "array"
           },
@@ -431,7 +505,7 @@
         ],
         "type": "object"
       },
-      "CreateServiceAccountTokenRequest": {
+      "CreateServiceAccountTokenInput": {
         "additionalProperties": false,
         "properties": {
           "expiresAtUtc": {
@@ -450,6 +524,86 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "CreateTeamInput": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/TeamResourceAccessInput"
+            },
+            "type": "array"
+          },
+          "roleIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "userIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateUserInput": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "isEnabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 15,
+            "type": "string",
+            "writeOnly": true
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/UserResourceAccessInput"
+            },
+            "type": "array"
+          },
+          "roleIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "teamIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
         ],
         "type": "object"
       },
@@ -643,6 +797,101 @@
         ],
         "type": "object"
       },
+      "DeleteRolesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "DeleteServiceAccountsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "DeleteTeamsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "DeleteUsersInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "DisableProfileMfaInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 6,
+            "type": "string",
+            "writeOnly": true
+          },
+          "recoveryCode": {
+            "maxLength": 64,
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -657,7 +906,7 @@
         ],
         "type": "object"
       },
-      "InitializeCitadelRequest": {
+      "InitializeCitadelInput": {
         "additionalProperties": false,
         "properties": {
           "email": {
@@ -675,6 +924,227 @@
           "name",
           "email",
           "password"
+        ],
+        "type": "object"
+      },
+      "InstallLicenseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "license": {
+            "maxLength": 65536,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "license"
+        ],
+        "type": "object"
+      },
+      "LicenseCapability": {
+        "enum": [
+          "CustomAccessControl",
+          "AutomatedOperations",
+          "AdvancedAlerting",
+          "OperationalGuardrails",
+          "ElasticBuildExecution"
+        ],
+        "type": "string"
+      },
+      "LicenseCapabilityView": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/LicenseCapability"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "LicenseEntitlementsView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseCapabilityView"
+            },
+            "type": "array"
+          },
+          "effectiveEdition": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          }
+        },
+        "required": [
+          "status",
+          "effectiveEdition",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "LicenseRequestView": {
+        "additionalProperties": false,
+        "properties": {
+          "coreVersion": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "instanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "product": {
+            "const": "citadel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "instanceId",
+          "coreVersion",
+          "generatedAt"
+        ],
+        "type": "object"
+      },
+      "LicenseStatus": {
+        "enum": [
+          "Community",
+          "Valid",
+          "GracePeriod",
+          "NotYetValid",
+          "Expired",
+          "Invalid",
+          "InstanceMismatch",
+          "UnsupportedSchema",
+          "UnknownSigningKey"
+        ],
+        "type": "string"
+      },
+      "LicenseView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseCapabilityView"
+            },
+            "type": "array"
+          },
+          "customerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effectiveEdition": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "graceUntil": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "instanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issuedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "licenseId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "licenseSchema": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "licensedEdition": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notBefore": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replacedLicenseId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "effectiveEdition",
+          "licensedEdition",
+          "instanceId",
+          "licenseSchema",
+          "licenseId",
+          "replacedLicenseId",
+          "customerId",
+          "customerName",
+          "fingerprint",
+          "issuedAt",
+          "notBefore",
+          "expiresAt",
+          "graceUntil",
+          "capabilities",
+          "warnings"
         ],
         "type": "object"
       },
@@ -718,6 +1188,357 @@
         ],
         "type": "object"
       },
+      "MandatoryMfaSetupCompleteView": {
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "recoveryCodes": {
+            "items": {
+              "type": "string",
+              "writeOnly": true
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "accessToken",
+          "recoveryCodes"
+        ],
+        "type": "object"
+      },
+      "MandatoryMfaSetupView": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "otpAuthUri": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "secret": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "secret",
+          "otpAuthUri",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "MfaPolicy": {
+        "enum": [
+          "Optional",
+          "RequiredForAdministrators",
+          "RequiredForAllUsers"
+        ],
+        "type": "string"
+      },
+      "MfaVerificationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "recoveryCode": {
+            "maxLength": 64,
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          }
+        },
+        "type": "object"
+      },
+      "MfaVerificationView": {
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ],
+        "type": "object"
+      },
+      "OidcDiscoveryResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizationEndpoint": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "jwksUri": {
+            "type": "string"
+          },
+          "tokenEndpoint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer",
+          "authorizationEndpoint",
+          "tokenEndpoint",
+          "jwksUri"
+        ],
+        "type": "object"
+      },
+      "OidcLoginProviderView": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object"
+      },
+      "OidcLoginProvidersView": {
+        "additionalProperties": false,
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/OidcLoginProviderView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "type": "object"
+      },
+      "OidcProviderInput": {
+        "additionalProperties": false,
+        "properties": {
+          "allowEmailAutoLink": {
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoProvisionUsers": {
+            "type": "boolean"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "writeOnly": true
+          },
+          "defaultRoleId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requireEmailVerified": {
+            "type": "boolean"
+          },
+          "requiredClaimName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "displayName",
+          "issuer",
+          "clientId",
+          "clientSecret",
+          "scopes",
+          "enabled",
+          "autoProvisionUsers",
+          "allowEmailAutoLink",
+          "requireEmailVerified",
+          "allowedEmailDomains",
+          "requiredClaimName",
+          "requiredClaimValues",
+          "defaultRoleId"
+        ],
+        "type": "object"
+      },
+      "OidcProviderView": {
+        "additionalProperties": false,
+        "properties": {
+          "allowEmailAutoLink": {
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoProvisionUsers": {
+            "type": "boolean"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "defaultRoleId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "hasClientSecret": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requireEmailVerified": {
+            "type": "boolean"
+          },
+          "requiredClaimName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "displayName",
+          "issuer",
+          "clientId",
+          "scopes",
+          "enabled",
+          "autoProvisionUsers",
+          "allowEmailAutoLink",
+          "requireEmailVerified",
+          "allowedEmailDomains",
+          "requiredClaimName",
+          "requiredClaimValues",
+          "defaultRoleId",
+          "hasClientSecret",
+          "createdByActorId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "OidcProvidersView": {
+        "additionalProperties": false,
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/OidcProviderView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "type": "object"
+      },
       "PagedActivityView": {
         "additionalProperties": false,
         "properties": {
@@ -740,6 +1561,40 @@
           },
           "totalCount": {
             "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "PagedTeamView": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TeamView"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "maximum": 500,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
             "minimum": 0,
             "type": "integer"
           }
@@ -786,7 +1641,157 @@
         ],
         "type": "object"
       },
-      "PatchUserPreferencesRequest": {
+      "PatchResourceMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "description",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "PatchRolePermissionsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionInput"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "PatchServiceAccountInput": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PatchTeamInput": {
+        "additionalProperties": false,
+        "properties": {
+          "isEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/TeamResourceAccessInput"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "roleIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "userIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PatchUserInput": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 15,
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/UserResourceAccessInput"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "roleIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teamIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PatchUserPreferencesInput": {
         "additionalProperties": false,
         "minProperties": 1,
         "properties": {
@@ -802,6 +1807,32 @@
         },
         "type": "object"
       },
+      "PermissionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "resourceType",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object"
+      },
       "PermissionLevel": {
         "enum": [
           "None",
@@ -811,10 +1842,46 @@
         ],
         "type": "string"
       },
-      "PermissionMatrixEntry": {
+      "PermissionMatrixResponse": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/PermissionMatrixViewItem"
+        },
+        "type": "object"
+      },
+      "PermissionMatrixViewItem": {
         "additionalProperties": false,
         "properties": {
+          "label": {
+            "type": "string"
+          },
           "maximumLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissionLabels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "specificPermissions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PermissionLevel"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "maximumLevel",
+          "specificPermissions",
+          "label",
+          "specificPermissionLabels"
+        ],
+        "type": "object"
+      },
+      "PermissionView": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
             "$ref": "#/components/schemas/PermissionLevel"
           },
           "resourceType": {
@@ -822,23 +1889,17 @@
           },
           "specificPermissions": {
             "items": {
-              "$ref": "#/components/schemas/SpecificPermissionEntry"
+              "$ref": "#/components/schemas/SpecificPermission"
             },
             "type": "array"
           }
         },
         "required": [
           "resourceType",
-          "maximumLevel",
+          "permissionLevel",
           "specificPermissions"
         ],
         "type": "object"
-      },
-      "PermissionMatrixResponse": {
-        "items": {
-          "$ref": "#/components/schemas/PermissionMatrixEntry"
-        },
-        "type": "array"
       },
       "ProblemDetails": {
         "properties": {
@@ -867,6 +1928,75 @@
           "title",
           "status",
           "requestId"
+        ],
+        "type": "object"
+      },
+      "ProfileMfaRecoveryCodesView": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "items": {
+              "type": "string",
+              "writeOnly": true
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "recoveryCodes"
+        ],
+        "type": "object"
+      },
+      "ProfileMfaSetupView": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "otpAuthUri": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "secret": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "secret",
+          "otpAuthUri",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "ProfileMfaStatusView": {
+        "additionalProperties": false,
+        "properties": {
+          "canDisable": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "remainingRecoveryCodes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "remainingRecoveryCodes",
+          "policy",
+          "canDisable"
         ],
         "type": "object"
       },
@@ -914,7 +2044,94 @@
         ],
         "type": "object"
       },
-      "RenameServiceAccountRequest": {
+      "RefreshTokenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ],
+        "type": "object"
+      },
+      "RegenerateProfileMfaRecoveryCodesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{6}$",
+            "type": "string",
+            "writeOnly": true
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 6,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password",
+          "code"
+        ],
+        "type": "object"
+      },
+      "RemoveTeamResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
+        ],
+        "type": "object"
+      },
+      "RemoveUserResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
+        ],
+        "type": "object"
+      },
+      "RenameResource": {
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -1061,6 +2278,82 @@
         ],
         "type": "object"
       },
+      "RoleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionInput"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "RoleType": {
+        "enum": [
+          "System",
+          "Custom"
+        ],
+        "type": "string"
+      },
+      "RoleView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionView"
+            },
+            "type": "array"
+          },
+          "roleType": {
+            "$ref": "#/components/schemas/RoleType"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "roleType",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "RolesView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles",
+          "capabilities"
+        ],
+        "type": "object"
+      },
       "ServiceAccountCapabilities": {
         "additionalProperties": false,
         "properties": {
@@ -1086,100 +2379,6 @@
           "canExecute",
           "canUse",
           "canManageCredentials"
-        ],
-        "type": "object"
-      },
-      "ServiceAccountDetailResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "activeTokenCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "actorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "archivedAtUtc": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "capabilities": {
-            "$ref": "#/components/schemas/ServiceAccountCapabilities"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "createdByActorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "isEnabled": {
-            "type": "boolean"
-          },
-          "lastUsedAtUtc": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "resourceAccesses": {
-            "items": {
-              "$ref": "#/components/schemas/ServiceAccountResourceAccess"
-            },
-            "type": "array"
-          },
-          "roles": {
-            "items": {
-              "$ref": "#/components/schemas/ResourceInfo"
-            },
-            "type": "array"
-          },
-          "teams": {
-            "items": {
-              "$ref": "#/components/schemas/ResourceInfo"
-            },
-            "type": "array"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "actorId",
-          "isEnabled",
-          "createdAt",
-          "createdByActorId",
-          "updatedAt",
-          "archivedAtUtc",
-          "activeTokenCount",
-          "lastUsedAtUtc",
-          "teams",
-          "roles",
-          "resourceAccesses",
-          "capabilities"
         ],
         "type": "object"
       },
@@ -1246,6 +2445,33 @@
           "resourceName",
           "permissionLevel",
           "specificPermissions"
+        ],
+        "type": "object"
+      },
+      "ServiceAccountResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
         ],
         "type": "object"
       },
@@ -1316,7 +2542,7 @@
         ],
         "type": "object"
       },
-      "ServiceAccountTokensResponse": {
+      "ServiceAccountTokensView": {
         "additionalProperties": false,
         "properties": {
           "pagedResult": {
@@ -1371,6 +2597,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceAccountCapabilities"
+              }
             ]
           },
           "createdAt": {
@@ -1445,7 +2681,7 @@
         ],
         "type": "object"
       },
-      "ServiceAccountsResponse": {
+      "ServiceAccountsView": {
         "additionalProperties": false,
         "properties": {
           "capabilities": {
@@ -1488,7 +2724,7 @@
         ],
         "type": "object"
       },
-      "SetupStatusResponse": {
+      "SetupStatusView": {
         "additionalProperties": false,
         "properties": {
           "requiresSetup": {
@@ -1518,23 +2754,209 @@
         ],
         "type": "string"
       },
-      "SpecificPermissionEntry": {
+      "StartProfileMfaSetupInput": {
         "additionalProperties": false,
         "properties": {
-          "minimumLevel": {
-            "$ref": "#/components/schemas/PermissionLevel"
-          },
-          "permission": {
-            "$ref": "#/components/schemas/SpecificPermission"
+          "password": {
+            "maxLength": 128,
+            "minLength": 6,
+            "type": "string",
+            "writeOnly": true
           }
         },
         "required": [
-          "permission",
-          "minimumLevel"
+          "password"
         ],
         "type": "object"
       },
-      "UpdateCurrentProfileRequest": {
+      "TeamMemberView": {
+        "additionalProperties": false,
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "principalType": {
+            "enum": [
+              "User",
+              "ServiceAccount"
+            ],
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actorId",
+          "resourceId",
+          "name",
+          "principalType"
+        ],
+        "type": "object"
+      },
+      "TeamResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
+        ],
+        "type": "object"
+      },
+      "TeamSearchItemView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TeamSearchItems": {
+        "items": {
+          "$ref": "#/components/schemas/TeamSearchItemView"
+        },
+        "type": "array"
+      },
+      "TeamView": {
+        "additionalProperties": false,
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberView"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "resourceAccesses": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceAccessView"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "totalMembers": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "actorId",
+          "isEnabled",
+          "totalMembers"
+        ],
+        "type": "object"
+      },
+      "TeamsView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedTeamView"
+          }
+        },
+        "required": [
+          "pagedResult",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "TestOidcProviderDiscoveryInput": {
+        "additionalProperties": false,
+        "properties": {
+          "issuer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "providerId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "providerId",
+          "issuer"
+        ],
+        "type": "object"
+      },
+      "UpdateCurrentProfileInput": {
         "additionalProperties": false,
         "properties": {
           "displayName": {
@@ -1546,18 +2968,98 @@
         ],
         "type": "object"
       },
-      "UpdateServiceAccountRequest": {
+      "UpdateOidcProviderInput": {
         "additionalProperties": false,
         "properties": {
+          "allowEmailAutoLink": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoProvisionUsers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientSecret": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "writeOnly": true
+          },
+          "defaultRoleId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "description": {
             "type": [
               "string",
               "null"
             ]
           },
-          "isEnabled": {
+          "displayName": {
             "type": [
-              "boolean",
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "issuer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requireEmailVerified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "requiredClaimName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "type": [
+              "string",
               "null"
             ]
           }
@@ -1596,6 +3098,33 @@
           "dateTimeFormat",
           "theme",
           "isPersisted"
+        ],
+        "type": "object"
+      },
+      "UserResourceAccessInput": {
+        "additionalProperties": false,
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "specificPermissions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel"
         ],
         "type": "object"
       },
@@ -1854,6 +3383,56 @@
             },
             "description": "Success"
           },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -1899,6 +3478,56 @@
             },
             "description": "Success"
           },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -1919,6 +3548,1661 @@
         "x-citadel-principal": "actor"
       }
     },
+    "/api/v1/license": {
+      "delete": {
+        "operationId": "removeLicense",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Remove the installed license",
+        "x-citadel-principal": "administrator"
+      },
+      "get": {
+        "operationId": "getLicense",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get installed license state",
+        "x-citadel-principal": "administrator"
+      },
+      "post": {
+        "operationId": "installLicense",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallLicenseInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Install or replace a license",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/license/entitlements": {
+      "get": {
+        "operationId": "getLicenseEntitlements",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseEntitlementsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get effective license entitlements",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/license/request": {
+      "get": {
+        "operationId": "getLicenseRequest",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseRequestView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get license request metadata",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders": {
+      "get": {
+        "operationId": "listOidcProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProvidersView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List OIDC providers",
+        "x-citadel-principal": "administrator"
+      },
+      "post": {
+        "operationId": "createOidcProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create OIDC provider",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders/rename": {
+      "post": {
+        "operationId": "renameOidcProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rename OIDC provider",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders/testDiscovery": {
+      "post": {
+        "operationId": "testOidcDiscovery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestOidcProviderDiscoveryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcDiscoveryResultView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Test OIDC discovery",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders/{id}": {
+      "delete": {
+        "operationId": "deleteOidcProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Delete OIDC provider",
+        "x-citadel-principal": "administrator"
+      },
+      "get": {
+        "operationId": "getOidcProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get OIDC provider",
+        "x-citadel-principal": "administrator"
+      },
+      "patch": {
+        "operationId": "updateOidcProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update OIDC provider",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders/{id}/_metadata": {
+      "patch": {
+        "operationId": "updateOidcProviderMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update OIDC provider metadata",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/oidcProviders/{id}/testDiscovery": {
+      "post": {
+        "operationId": "testOidcProviderDiscovery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcDiscoveryResultView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Test OIDC provider discovery",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/roles": {
+      "delete": {
+        "operationId": "deleteRoles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRolesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Delete Roles",
+        "x-citadel-principal": "administrator"
+      },
+      "get": {
+        "operationId": "listRoles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolesView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get all Roles",
+        "x-citadel-principal": "administrator"
+      },
+      "post": {
+        "operationId": "createRole",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create a Role",
+        "x-citadel-principal": "administrator"
+      }
+    },
     "/api/v1/roles/permissions/matrix": {
       "get": {
         "operationId": "getPermissionMatrix",
@@ -1932,6 +5216,36 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -1949,6 +5263,340 @@
         "x-citadel-principal": "anonymous"
       }
     },
+    "/api/v1/roles/rename": {
+      "post": {
+        "operationId": "renameRole",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rename a Role",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/roles/{id}": {
+      "get": {
+        "operationId": "getRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a Role by ID",
+        "x-citadel-principal": "administrator"
+      }
+    },
+    "/api/v1/roles/{id}/permissions": {
+      "patch": {
+        "operationId": "updateRolePermissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchRolePermissionsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update Role permissions",
+        "x-citadel-principal": "administrator"
+      }
+    },
     "/api/v1/serviceAccounts": {
       "delete": {
         "operationId": "archiveServiceAccounts",
@@ -1956,7 +5604,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ArchiveServiceAccountsRequest"
+                "$ref": "#/components/schemas/DeleteServiceAccountsInput"
               }
             }
           },
@@ -1965,6 +5613,56 @@
         "responses": {
           "204": {
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2033,11 +5731,61 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceAccountsResponse"
+                  "$ref": "#/components/schemas/ServiceAccountsView"
                 }
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2064,7 +5812,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateServiceAccountRequest"
+                "$ref": "#/components/schemas/CreateServiceAccountInput"
               }
             }
           },
@@ -2080,6 +5828,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2115,6 +5913,56 @@
             },
             "description": "Success"
           },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -2142,7 +5990,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RenameServiceAccountRequest"
+                "$ref": "#/components/schemas/RenameResource"
               }
             }
           },
@@ -2158,6 +6006,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2198,11 +6096,61 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceAccountDetailResponse"
+                  "$ref": "#/components/schemas/ServiceAccountView"
                 }
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2240,7 +6188,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateServiceAccountRequest"
+                "$ref": "#/components/schemas/PatchServiceAccountInput"
               }
             }
           },
@@ -2256,6 +6204,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2295,7 +6293,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddServiceAccountResourceAccessRequest"
+                "$ref": "#/components/schemas/ServiceAccountResourceAccessInput"
               }
             }
           },
@@ -2311,6 +6309,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2366,6 +6414,56 @@
             },
             "description": "Success"
           },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -2404,7 +6502,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddServiceAccountRoleRequest"
+                "$ref": "#/components/schemas/AddServiceAccountRoleInput"
               }
             }
           },
@@ -2420,6 +6518,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2474,6 +6622,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2536,11 +6734,61 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServiceAccountTokensResponse"
+                  "$ref": "#/components/schemas/ServiceAccountTokensView"
                 }
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2578,7 +6826,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateServiceAccountTokenRequest"
+                "$ref": "#/components/schemas/CreateServiceAccountTokenInput"
               }
             }
           },
@@ -2594,6 +6842,56 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {
@@ -2642,6 +6940,56 @@
           "204": {
             "description": "Success"
           },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
           "default": {
             "content": {
               "application/problem+json": {
@@ -2675,6 +7023,36 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           },
           "default": {
             "content": {

@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
-use citadel_application::{
-    EntitlementService, IdentityError, IdentityStore, NewSession, ServiceAccountLastUsedStore,
-    SessionMetadata, UserSessionRecord,
-};
 use citadel_domain::{
-    ADMIN_ROLE_ID, ActivityEvent, ActivityEventInfo, ActorId, ActorPrincipal,
-    AuthenticatedPrincipalType, AuthorizationSnapshot, PermissionGrant, PermissionLevel,
-    ResourceType, ServiceAccountCredential, User, UserAuthentication,
+    ActivityEvent, ActivityEventInfo, ActorId, AuthenticatedPrincipalType, PermissionLevel,
+    ResourceType,
+};
+use citadel_identity::{
+    ADMIN_ROLE_ID, ActorPrincipal, AuthorizationSnapshot, EntitlementService, IdentityError,
+    IdentityStore, NewSession, PermissionGrant, ServiceAccountCredential,
+    ServiceAccountLastUsedStore, SessionMetadata, User, UserAuthentication, UserSessionRecord,
 };
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -200,54 +200,13 @@ GROUP BY u.id, u.actorid, u.name, u.email, u.password, a.isenabled
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let persisted_password = sqlx::query_scalar::<_, Option<String>>(
-                r#"
-SELECT u.password
-FROM users u
-JOIN actors actor ON actor.id = u.actorid AND actor.type = 'User' AND actor.isenabled
-WHERE u.id = $1
-FOR UPDATE OF u
-"#,
+            insert_session(
+                &mut transaction,
+                session,
+                expected_password_hash,
+                maximum_sessions,
             )
-            .bind(session.user_id)
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(storage)?
-            .ok_or(IdentityError::NotFound)?;
-            if persisted_password.as_deref() != expected_password_hash {
-                return Err(IdentityError::InvalidCredentials);
-            }
-            sqlx::query(
-                r#"
-INSERT INTO refreshtokens (id, createdat, expiresat, ipaddress, lastseenat, useragent, userid)
-VALUES ($1, $2, $3, $4, $2, $5, $6)
-"#,
-            )
-            .bind(session.id)
-            .bind(session.created_at)
-            .bind(session.expires_at)
-            .bind(&session.metadata.ip_address)
-            .bind(&session.metadata.user_agent)
-            .bind(session.user_id)
-            .execute(&mut *transaction)
-            .await
-            .map_err(storage)?;
-            sqlx::query(
-                r#"
-DELETE FROM refreshtokens
-WHERE id IN (
-    SELECT id FROM refreshtokens
-    WHERE userid = $1
-    ORDER BY createdat DESC, id DESC
-    OFFSET $2
-)
-"#,
-            )
-            .bind(session.user_id)
-            .bind(maximum_sessions)
-            .execute(&mut *transaction)
-            .await
-            .map_err(storage)?;
+            .await?;
             transaction.commit().await.map_err(storage)?;
             Ok(())
         })
@@ -663,10 +622,13 @@ ORDER BY p.resourcetype
             let row = sqlx::query(
                 r#"
 WITH actor_scope AS (
-    SELECT $1::uuid AS actorid
+    SELECT actor.id AS actorid
+    FROM actors actor
+    WHERE actor.id = $1 AND actor.isenabled
     UNION
     SELECT t.actorid
     FROM actorteammemberships membership
+    JOIN actors member_actor ON member_actor.id = membership.memberactorid AND member_actor.isenabled
     JOIN teams t ON t.id = membership.teamid
     JOIN actors team_actor ON team_actor.id = t.actorid AND team_actor.isenabled
     WHERE membership.memberactorid = $1
@@ -716,6 +678,63 @@ FROM candidates
             }))
         })
     }
+}
+
+pub(crate) async fn insert_session(
+    transaction: &mut Transaction<'_, Postgres>,
+    session: &NewSession,
+    expected_password_hash: Option<&str>,
+    maximum_sessions: i64,
+) -> Result<(), IdentityError> {
+    let persisted_password = sqlx::query_scalar::<_, Option<String>>(
+        r#"
+SELECT u.password
+FROM users u
+JOIN actors actor ON actor.id = u.actorid AND actor.type = 'User' AND actor.isenabled
+WHERE u.id = $1
+FOR UPDATE OF u
+"#,
+    )
+    .bind(session.user_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(storage)?
+    .ok_or(IdentityError::NotFound)?;
+    if persisted_password.as_deref() != expected_password_hash {
+        return Err(IdentityError::InvalidCredentials);
+    }
+    sqlx::query(
+        r#"
+INSERT INTO refreshtokens (id, createdat, expiresat, ipaddress, lastseenat, useragent, userid)
+VALUES ($1, $2, $3, $4, $2, $5, $6)
+"#,
+    )
+    .bind(session.id)
+    .bind(session.created_at)
+    .bind(session.expires_at)
+    .bind(&session.metadata.ip_address)
+    .bind(&session.metadata.user_agent)
+    .bind(session.user_id)
+    .execute(&mut **transaction)
+    .await
+    .map_err(storage)?;
+    sqlx::query(
+        r#"
+DELETE FROM refreshtokens
+WHERE id IN (
+    SELECT id FROM refreshtokens
+    WHERE userid = $1
+    ORDER BY createdat DESC, id DESC
+    OFFSET $2
+)
+"#,
+    )
+    .bind(session.user_id)
+    .bind(maximum_sessions)
+    .execute(&mut **transaction)
+    .await
+    .map_err(storage)?;
+    Ok(())
 }
 
 impl ServiceAccountLastUsedStore for PostgresIdentityStore {

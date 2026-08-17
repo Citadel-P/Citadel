@@ -3425,6 +3425,7 @@ export interface ApplicationInfoView {
   name: string;
   version: string;
   informationalVersion: string;
+  realtimeTransport: string;
 }
 
 export interface ApplyDeploymentInput {
@@ -12657,7 +12658,7 @@ export class Api<
      * @request PATCH:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12671,7 +12672,10 @@ export class Api<
       data: UpdateSwarmNodeInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/nodes/${nodeId}`,
         method: "PATCH",
         body: data,
@@ -12689,7 +12693,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect
      * @secure
      * @response `200` `SwarmNodeInspectView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12702,7 +12706,10 @@ export class Api<
       nodeId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmNodeInspectView, ProblemDetails>({
+      this.request<
+        SwarmNodeInspectView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/nodes/${nodeId}/inspect`,
         method: "GET",
         secure: true,
@@ -12719,7 +12726,7 @@ export class Api<
      * @request PATCH:/api/v1/platforms/{platformId}/swarm/nodes/availability
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12732,7 +12739,10 @@ export class Api<
       data: UpdateSwarmNodesAvailabilityInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/nodes/availability`,
         method: "PATCH",
         body: data,
@@ -12775,7 +12785,7 @@ export class Api<
      * @request DELETE:/api/v1/platforms/{platformId}/swarm/services
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12788,7 +12798,10 @@ export class Api<
       data: DeleteSwarmResourcesInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services`,
         method: "DELETE",
         body: data,
@@ -12835,7 +12848,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect
      * @secure
      * @response `200` `SwarmServiceInspectView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12848,7 +12861,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceInspectView, ProblemDetails>({
+      this.request<
+        SwarmServiceInspectView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/inspect`,
         method: "GET",
         secure: true,
@@ -12865,7 +12881,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adoption-draft
      * @secure
      * @response `200` `SwarmServiceAdoptionDraftView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12878,7 +12894,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceAdoptionDraftView, ProblemDetails>({
+      this.request<
+        SwarmServiceAdoptionDraftView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/adoption-draft`,
         method: "GET",
         secure: true,
@@ -12895,7 +12914,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adopt
      * @secure
      * @response `200` `ManagedSwarmServiceView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12909,7 +12928,10 @@ export class Api<
       data: AdoptSwarmServiceInput,
       params: RequestParams = {},
     ) =>
-      this.request<ManagedSwarmServiceView, ProblemDetails>({
+      this.request<
+        ManagedSwarmServiceView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/adopt`,
         method: "POST",
         body: data,
@@ -12928,7 +12950,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs
      * @secure
      * @response `200` `SwarmLogsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12949,7 +12971,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmLogsView, ProblemDetails>({
+      this.request<
+        SwarmLogsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/logs`,
         method: "GET",
         query: query,
@@ -12967,7 +12992,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats
      * @secure
      * @response `200` `SwarmServiceStatsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -12988,7 +13013,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceStatsView, ProblemDetails>({
+      this.request<
+        SwarmServiceStatsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/stats`,
         method: "GET",
         query: query,
@@ -13006,7 +13034,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13019,7 +13047,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/restart`,
         method: "POST",
         secure: true,
@@ -13035,7 +13066,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks
      * @secure
      * @response `200` `SwarmTasksView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13055,7 +13086,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTasksView, ProblemDetails>({
+      this.request<
+        SwarmTasksView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/tasks`,
         method: "GET",
         query: query,
@@ -13102,7 +13136,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect
      * @secure
      * @response `200` `ContainerInspectView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13115,7 +13149,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<ContainerInspectView, ProblemDetails>({
+      this.request<
+        ContainerInspectView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/inspect`,
         method: "GET",
         secure: true,
@@ -13132,7 +13169,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats
      * @secure
      * @response `200` `SwarmTaskStatsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13153,7 +13190,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTaskStatsView, ProblemDetails>({
+      this.request<
+        SwarmTaskStatsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/stats`,
         method: "GET",
         query: query,
@@ -13171,7 +13211,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal
      * @secure
      * @response `200` `SwarmTaskTerminalView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13184,7 +13224,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTaskTerminalView, ProblemDetails>({
+      this.request<
+        SwarmTaskTerminalView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/terminal`,
         method: "GET",
         secure: true,
@@ -13201,7 +13244,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs
      * @secure
      * @response `200` `SwarmLogsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13222,7 +13265,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmLogsView, ProblemDetails>({
+      this.request<
+        SwarmLogsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/logs`,
         method: "GET",
         query: query,
@@ -13319,7 +13365,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{platformId}/swarm/secrets
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13332,7 +13378,10 @@ export class Api<
       data: CreateSwarmSecretInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/secrets`,
         method: "POST",
         body: data,
@@ -13350,7 +13399,7 @@ export class Api<
      * @request DELETE:/api/v1/platforms/{platformId}/swarm/secrets
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13363,7 +13412,10 @@ export class Api<
       data: DeleteSwarmResourcesInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/secrets`,
         method: "DELETE",
         body: data,
@@ -13410,7 +13462,7 @@ export class Api<
      * @request PATCH:/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}/labels
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13424,7 +13476,10 @@ export class Api<
       data: UpdateSwarmResourceLabelsInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/secrets/${resourceId}/labels`,
         method: "PATCH",
         body: data,
@@ -13467,7 +13522,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{platformId}/swarm/configs
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13480,7 +13535,10 @@ export class Api<
       data: CreateSwarmConfigInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/configs`,
         method: "POST",
         body: data,
@@ -13498,7 +13556,7 @@ export class Api<
      * @request DELETE:/api/v1/platforms/{platformId}/swarm/configs
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13511,7 +13569,10 @@ export class Api<
       data: DeleteSwarmResourcesInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/configs`,
         method: "DELETE",
         body: data,
@@ -13558,7 +13619,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content
      * @secure
      * @response `200` `SwarmConfigDataView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13571,7 +13632,10 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmConfigDataView, ProblemDetails>({
+      this.request<
+        SwarmConfigDataView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}/content`,
         method: "GET",
         secure: true,
@@ -13588,7 +13652,7 @@ export class Api<
      * @request PATCH:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/labels
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13602,7 +13666,10 @@ export class Api<
       data: UpdateSwarmResourceLabelsInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}/labels`,
         method: "PATCH",
         body: data,
@@ -13958,7 +14025,7 @@ export class Api<
      * @request PUT:/api/v1/platforms/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -13970,7 +14037,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/tags`,
         method: "PUT",
         body: data,
@@ -14017,7 +14087,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/volumes/{name}/files
      * @secure
      * @response `200` `VolumeDirectoryView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14033,7 +14103,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<VolumeDirectoryView, ProblemDetails>({
+      this.request<
+        VolumeDirectoryView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/volumes/${name}/files`,
         method: "GET",
         query: query,
@@ -14051,7 +14124,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{platformId}/volumes/{name}/files/download
      * @secure
      * @response `200` `void` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14067,7 +14140,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${platformId}/volumes/${name}/files/download`,
         method: "GET",
         query: query,
@@ -14125,7 +14201,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{id}/prune
      * @secure
      * @response `200` `PrunePlatformView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14137,7 +14213,10 @@ export class Api<
       data: PrunePlatformInput,
       params: RequestParams = {},
     ) =>
-      this.request<PrunePlatformView, ProblemDetails>({
+      this.request<
+        PrunePlatformView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/prune`,
         method: "POST",
         body: data,
@@ -14156,7 +14235,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{id}/edge/enrollments
      * @secure
      * @response `200` `EdgeAgentEnrollmentView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14165,7 +14244,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createEdgeAgentEnrollment: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+      this.request<
+        EdgeAgentEnrollmentView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/edge/enrollments`,
         method: "POST",
         secure: true,
@@ -14182,7 +14264,7 @@ export class Api<
      * @request GET:/api/v1/platforms/{id}/edge/status
      * @secure
      * @response `200` `EdgeAgentStatusView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14190,7 +14272,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getEdgeAgentStatus: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentStatusView, ProblemDetails>({
+      this.request<
+        EdgeAgentStatusView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/edge/status`,
         method: "GET",
         secure: true,
@@ -14207,7 +14292,7 @@ export class Api<
      * @request POST:/api/v1/platforms/{id}/edge/revoke
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14215,7 +14300,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     revokeEdgeAgent: (id: string, params: RequestParams = {}) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/edge/revoke`,
         method: "POST",
         secure: true,
@@ -14965,7 +15053,7 @@ export class Api<
      * @request PUT:/api/v1/gitRepositories/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -14977,7 +15065,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/tags`,
         method: "PUT",
         body: data,
@@ -15052,7 +15143,7 @@ export class Api<
      * @request GET:/api/v1/gitRepositories/{id}/files
      * @secure
      * @response `200` `GitRepositoryDirectoryListingView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -15069,7 +15160,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryDirectoryListingView, ProblemDetails>({
+      this.request<
+        GitRepositoryDirectoryListingView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/files`,
         method: "GET",
         query: query,
@@ -15087,7 +15181,7 @@ export class Api<
      * @request GET:/api/v1/gitRepositories/{id}/files/content
      * @secure
      * @response `200` `GitRepositoryFileContentView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -15104,7 +15198,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryFileContentView, ProblemDetails>({
+      this.request<
+        GitRepositoryFileContentView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/files/content`,
         method: "GET",
         query: query,
@@ -15122,7 +15219,7 @@ export class Api<
      * @request GET:/api/v1/gitRepositories/{id}/compare
      * @secure
      * @response `200` `GitCommitComparisonView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -15139,7 +15236,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitCommitComparisonView, ProblemDetails>({
+      this.request<
+        GitCommitComparisonView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/compare`,
         method: "GET",
         query: query,
@@ -15971,7 +16071,7 @@ export class Api<
      * @request POST:/api/v1/deployments/{deploymentId}/check-updates
      * @secure
      * @response `200` `DeploymentView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -15984,7 +16084,10 @@ export class Api<
       deploymentId: string,
       params: RequestParams = {},
     ) =>
-      this.request<DeploymentView, ProblemDetails>({
+      this.request<
+        DeploymentView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}/check-updates`,
         method: "POST",
         secure: true,
@@ -16029,7 +16132,7 @@ export class Api<
      * @request PUT:/api/v1/deployments/{deploymentId}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -16041,7 +16144,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}/tags`,
         method: "PUT",
         body: data,
@@ -17034,7 +17140,7 @@ export class Api<
      * @request POST:/api/v1/stacks/{stackId}/check-updates
      * @secure
      * @response `200` `StackView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -17044,7 +17150,10 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      */
     checkStackUpdates: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackView, ProblemDetails>({
+      this.request<
+        StackView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/check-updates`,
         method: "POST",
         secure: true,
@@ -17089,7 +17198,7 @@ export class Api<
      * @request PUT:/api/v1/stacks/{stackId}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -17101,7 +17210,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/tags`,
         method: "PUT",
         body: data,
@@ -17235,7 +17347,7 @@ export class Api<
      * @request POST:/api/v1/stacks/preflight/swarm
      * @secure
      * @response `200` `SwarmStackCompatibilityReport` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -17246,7 +17358,10 @@ export class Api<
       data: SwarmStackPreflightInput,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmStackCompatibilityReport, ProblemDetails>({
+      this.request<
+        SwarmStackCompatibilityReport,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/stacks/preflight/swarm`,
         method: "POST",
         body: data,
@@ -17642,7 +17757,7 @@ export class Api<
      * @request PUT:/api/v1/stacks/{stackId}/drift-policy
      * @secure
      * @response `200` `StackView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -17654,7 +17769,10 @@ export class Api<
       data: StackDriftPolicyInput,
       params: RequestParams = {},
     ) =>
-      this.request<StackView, ProblemDetails>({
+      this.request<
+        StackView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/drift-policy`,
         method: "PUT",
         body: data,
@@ -17673,7 +17791,7 @@ export class Api<
      * @request POST:/api/v1/stacks/{stackId}/reconcile
      * @secure
      * @response `200` `StackReconciliationResult` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -17681,7 +17799,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     reconcileStack: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackReconciliationResult, ProblemDetails>({
+      this.request<
+        StackReconciliationResult,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/reconcile`,
         method: "POST",
         secure: true,
@@ -18639,7 +18760,7 @@ export class Api<
      * @request PUT:/api/v1/automation/actions/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -18651,7 +18772,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/tags`,
         method: "PUT",
         body: data,
@@ -19404,7 +19528,7 @@ export class Api<
      * @request PUT:/api/v1/backupPolicies/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -19416,7 +19540,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/backupPolicies/${id}/tags`,
         method: "PUT",
         body: data,
@@ -19735,7 +19862,7 @@ export class Api<
      * @summary Run backup volume restore
      * @request POST:/api/v1/backupRuns/{id}/restoreVolume/run
      * @secure
-     * @response `200` `(BackupRestoreRunStreamItem)[]` OK
+     * @response `200` `((BackupRestoreRunStreamItem)[])` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -20074,7 +20201,7 @@ export class Api<
      * @request PUT:/api/v1/buildProjects/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20086,7 +20213,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/buildProjects/${id}/tags`,
         method: "PUT",
         body: data,
@@ -20379,7 +20509,7 @@ export class Api<
      * @request PUT:/api/v1/buildAgentPools/{id}/tags
      * @secure
      * @response `200` `ResourceTagsView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20391,7 +20521,10 @@ export class Api<
       data: ReplaceResourceTagsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceTagsView, ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/buildAgentPools/${id}/tags`,
         method: "PUT",
         body: data,
@@ -20505,7 +20638,7 @@ export class Api<
      * @request POST:/api/v1/buildAgentPools/{id}/edge/enrollments
      * @secure
      * @response `200` `EdgeAgentEnrollmentView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20517,7 +20650,10 @@ export class Api<
       id: string,
       params: RequestParams = {},
     ) =>
-      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+      this.request<
+        EdgeAgentEnrollmentView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/buildAgentPools/${id}/edge/enrollments`,
         method: "POST",
         secure: true,
@@ -20534,7 +20670,7 @@ export class Api<
      * @request GET:/api/v1/buildAgentPools/{id}/edge/status
      * @secure
      * @response `200` `EdgeAgentStatusView` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20542,7 +20678,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getBuildAgentPoolEdgeStatus: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentStatusView, ProblemDetails>({
+      this.request<
+        EdgeAgentStatusView,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/buildAgentPools/${id}/edge/status`,
         method: "GET",
         secure: true,
@@ -20559,7 +20698,7 @@ export class Api<
      * @request POST:/api/v1/buildAgentPools/{id}/edge/revoke
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20567,7 +20706,10 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     revokeBuildAgentPoolEdgeAgent: (id: string, params: RequestParams = {}) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/buildAgentPools/${id}/edge/revoke`,
         method: "POST",
         secure: true,
@@ -20961,7 +21103,7 @@ export class Api<
      * @request POST:/api/v1/alertEvents/acknowledge
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -20972,7 +21114,10 @@ export class Api<
       data: AcknowledgeAlertEventsInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/alertEvents/acknowledge`,
         method: "POST",
         body: data,
@@ -20990,7 +21135,7 @@ export class Api<
      * @request POST:/api/v1/alertEvents/resolve
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -21001,7 +21146,10 @@ export class Api<
       data: ResolveAlertEventsInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/alertEvents/resolve`,
         method: "POST",
         body: data,
@@ -21403,7 +21551,7 @@ export class Api<
      * @request POST:/api/v1/alertRules/channels/verify
      * @secure
      * @response `204` `void` No Content
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `429` `ProblemDetails` Too Many Requests
@@ -21413,7 +21561,10 @@ export class Api<
       data: VerifyAlertChannelInput,
       params: RequestParams = {},
     ) =>
-      this.request<void, ProblemDetails>({
+      this.request<
+        void,
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/alertRules/channels/verify`,
         method: "POST",
         body: data,
@@ -21431,7 +21582,7 @@ export class Api<
      * @request GET:/api/v1/lookup
      * @secure
      * @response `200` `(ResourceInfo)[]` OK
-     * @response `400` `ProblemDetails` Bad Request
+     * @response `400` `(HttpValidationProblemDetails | ProblemDetails)` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
@@ -21449,7 +21600,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<ResourceInfo[], ProblemDetails>({
+      this.request<
+        ResourceInfo[],
+        (HttpValidationProblemDetails | ProblemDetails) | ProblemDetails
+      >({
         path: `/api/v1/lookup`,
         method: "GET",
         query: query,
