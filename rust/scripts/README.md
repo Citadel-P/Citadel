@@ -133,3 +133,14 @@ mapping/transport, transactional inventory and statistics persistence, the
 real authorized Axum Platform/Docker/Swarm read routes, reconciliation worker
 behavior, and bounded authenticated realtime subscriptions. The script removes
 its uniquely named PostgreSQL container and network in `finally`.
+
+# Phase 5 simple mutations and metadata
+
+Run `./rust/scripts/Test-Phase5Metadata.ps1` from the repository root. It
+creates one disposable PostgreSQL database and verifies Tag, Registry, Git
+repository, resource-binding, internal/external Secret, and Secret-provider
+lifecycles through the real store and Axum routes. It also covers Local and
+Agent Network/Volume mutation parity, mutation retry safety, authorization,
+activities, realtime invalidations, and deterministic OpenAPI/Docker contract
+generation. The script removes its uniquely named PostgreSQL container and
+network in `finally`.

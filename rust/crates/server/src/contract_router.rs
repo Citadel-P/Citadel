@@ -22,6 +22,7 @@ where
         let filter = match contract.method {
             HttpMethod::Get => MethodFilter::GET,
             HttpMethod::Post => MethodFilter::POST,
+            HttpMethod::Put => MethodFilter::PUT,
             HttpMethod::Patch => MethodFilter::PATCH,
             HttpMethod::Delete => MethodFilter::DELETE,
         };

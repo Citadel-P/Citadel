@@ -154,6 +154,45 @@ transport remain the runtime boundary; Bollard is not used. See
 `reports/phase4-platform-docker-reads-report.md` for the .NET-test mapping and
 the explicit Edge/cgroup exit gates.
 
+Phase 5 adds the `citadel-resources` bounded context and ports the simple
+mutation/metadata boundary: Tags, Platform metadata, Registries, Git repository
+definitions, resource bindings, internal/external Secret definitions,
+Vault-compatible Secret-provider definitions, and selected Docker Network and
+Volume mutations. State, tag links, and safe Activity evidence are
+transactional; authorization is resource-scoped; Local and Agent mutations are
+transport-equivalent and do not retry ambiguous failures; and the frontend
+receives metadata-free realtime invalidations. Platform background behavior is
+now organized under `citadel-platforms::jobs`, while
+`citadel-server::workers` contains only runtime scheduling and supervision. See
+`reports/phase5-simple-mutations-metadata-report.md` and run
+`./rust/scripts/Test-Phase5Metadata.ps1` for the disposable acceptance gate.
+
+## Interactive development
+
+The repository includes a VS Code Dev Container for running the Rust Core and
+the existing React frontend together on Windows, macOS, or Linux. It starts a
+persistent PostgreSQL development database, mounts the Docker socket, keeps
+Linux Cargo/npm build artifacts in named volumes, and labels its containers as
+Citadel system infrastructure.
+
+1. Install Docker and the VS Code Dev Containers extension.
+2. Open the repository and run **Dev Containers: Reopen in Container**.
+3. Wait for the one-time Cargo fetch and frontend `npm ci` to finish.
+4. For normal interactive use, run the **Citadel: Run application (API + UI)**
+   task. It is also the default build task (`Ctrl+Shift+B`).
+5. For Rust breakpoints, select **Citadel: Debug application** from Run and
+   Debug and press F5. This starts both the UI and the API debugger.
+6. Open `http://localhost:5173` and complete first-run setup.
+
+The API listens on `http://localhost:8000`. Vite uses hot module replacement;
+the CodeLLDB profile builds an unoptimized Rust binary with debug information.
+PostgreSQL data survives a container rebuild in its Compose volume. Run **Dev
+Containers: Rebuild Container** after changing files under `.devcontainer/`.
+
+This environment exercises only the Rust functionality migrated so far. A UI
+request owned by a later migration phase can still return a missing or
+unsupported-operation response.
+
 Authentication cookies are scoped to `/api/v1`, which keeps them away from SPA
 assets while allowing the existing profile-session endpoints to identify and
 protect the current refresh session. Logout also expires the former

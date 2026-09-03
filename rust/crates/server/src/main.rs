@@ -27,6 +27,7 @@ use citadel_adapters::oidc_store::PostgresOidcStore;
 use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
+use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_adapters::role_store::PostgresRoleStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
 use citadel_adapters::team_store::PostgresTeamStore;
@@ -44,14 +45,15 @@ use citadel_identity::{
     TeamReadService, UserReadService,
 };
 use citadel_platforms::{AuthorizedPlatformReader, PlatformReadService, PlatformRuntimePort};
+use citadel_resources::ResourceMetadataService;
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
-use citadel_server::realtime::{IdentityRealtimeReader, RealtimeService};
+use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
 use citadel_server::{
     Readiness, activities_http, application_info_http, identity_http, license_http,
-    license_realtime, oidc_http, platforms_http, profile_http, roles_http, service_accounts_http,
-    teams_http, transport, users_http, workers,
+    license_realtime, oidc_http, platforms_http, profile_http, resources_http, roles_http,
+    service_accounts_http, teams_http, transport, users_http, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -185,6 +187,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let cancellation = CancellationToken::new();
     let readiness = Arc::new(Readiness::default());
     let metrics = Arc::new(Metrics::default());
+    let realtime_hub = config
+        .realtime
+        .as_ref()
+        .map(|settings| RealtimeHub::new(settings.queue_capacity, Arc::clone(&metrics)));
     let token_codec = Arc::new(JwtSessionTokenCodec::new(
         config.identity.jwt_key.expose(),
         config.identity.issuer.clone(),
@@ -198,7 +204,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         license_verifier.clone(),
     ));
     let clock = Arc::new(SystemClock);
-    let license_realtime_hub = license_realtime::LicenseRealtimeHub::default();
+    let license_realtime_hub =
+        license_realtime::LicenseRealtimeHub::default().with_realtime(realtime_hub.clone());
     let licenses = Arc::new(
         LicenseService::new(
             license_store.clone(),
@@ -252,7 +259,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let oidc = Arc::new(OidcService::new(
         Arc::new(PostgresOidcStore::new(pool.clone())),
         Arc::new(OidcHttpProtocol::new(Duration::from_secs(15))?),
-        secret_protector,
+        secret_protector.clone(),
         Arc::clone(&identity),
         clock.clone(),
         chrono::Duration::minutes(10),
@@ -271,6 +278,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
         pool.clone(),
     ))));
+    let resource_metadata = Arc::new(PostgresResourceMetadataStore::new(pool.clone()));
+    let resources = Arc::new(ResourceMetadataService::new(
+        resource_metadata.clone(),
+        secret_protector,
+    ));
     let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReadStore::new(pool.clone()),
     )));
@@ -307,7 +319,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     let realtime = config.realtime.as_ref().map(|realtime_config| {
-        RealtimeService::new(
+        RealtimeService::with_hub(
             realtime_config,
             Arc::new(IdentityRealtimeReader::new(
                 Arc::clone(&identity),
@@ -315,14 +327,18 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             )),
             Arc::clone(&metrics),
             cancellation.clone(),
+            realtime_hub
+                .clone()
+                .expect("configured realtime has a bounded hub"),
         )
     });
-    let realtime_hub = realtime.as_ref().map(RealtimeService::hub);
-    let license_realtime_service = license_realtime::LicenseRealtimeService::new(
-        Arc::clone(&identity),
-        license_realtime_hub.clone(),
-        cancellation.clone(),
-    );
+    let license_realtime_service = realtime.is_none().then(|| {
+        license_realtime::LicenseRealtimeService::new(
+            Arc::clone(&identity),
+            license_realtime_hub.clone(),
+            cancellation.clone(),
+        )
+    });
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     supervisor.spawn(
         "service-account-last-used",
@@ -345,7 +361,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             readiness: Arc::clone(&readiness),
             metrics: Arc::clone(&metrics),
             agent: agent.clone(),
-            realtime: realtime_hub,
+            realtime: realtime_hub.clone(),
         },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
@@ -411,19 +427,27 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 service_accounts,
             },
         ))
+        .merge(resources_http::router(resources_http::ResourcesHttpState {
+            identity: Arc::clone(&identity),
+            resources,
+            realtime: realtime_hub.clone(),
+        }))
         .merge(platforms_http::router(platforms_http::PlatformsHttpState {
             identity: Arc::clone(&identity),
             platforms: platform_reads,
             pool: pool.clone(),
+            resource_metadata,
             docker,
             agent,
+            realtime: realtime_hub.clone(),
         }))
-        .merge(license_realtime_service.router())
         .merge(profile_http::router(profile_http::ProfileHttpState {
             profiles,
         }));
     let mut app = if let Some(realtime) = realtime {
         app.merge(realtime.router())
+    } else if let Some(license_realtime) = license_realtime_service {
+        app.merge(license_realtime.router())
     } else {
         app
     };

@@ -17,6 +17,7 @@ citadel-database = { path = "../database" }
 citadel-domain = { path = "../domain" }
 citadel-identity = { path = "../identity" }
 citadel-platforms = { path = "../platforms" }
+citadel-resources = { path = "../resources" }
 clap.workspace = true
 futures-util.workspace = true
 ipnet.workspace = true

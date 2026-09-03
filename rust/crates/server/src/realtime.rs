@@ -128,7 +128,10 @@ const MAX_WRITE_BUFFER_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct PublishedRuntimeEvent {
-    platform_id: Uuid,
+    platform_id: Option<Uuid>,
+    resource_type: &'static str,
+    resource_id: Uuid,
+    event_kind: &'static str,
     resource_revision: u64,
     payload: Value,
 }
@@ -179,7 +182,10 @@ impl RealtimeHub {
             return self.current_revision();
         }
         self.publish(
+            Some(platform_id),
+            PLATFORM_RESOURCE_TYPE,
             platform_id,
+            "runtimeChanged",
             json!({
                 "dockerResourceType": docker_resource_type.into(),
                 "action": action.into(),
@@ -197,7 +203,10 @@ impl RealtimeHub {
             return self.current_revision();
         }
         self.publish(
+            Some(platform_id),
+            PLATFORM_RESOURCE_TYPE,
             platform_id,
+            "runtimeChanged",
             json!({
                 "dockerResourceType": "containerStats",
                 "action": "sample",
@@ -207,10 +216,32 @@ impl RealtimeHub {
         )
     }
 
-    fn publish(&self, platform_id: Uuid, payload: Value) -> u64 {
+    pub fn publish_resource_change(
+        &self,
+        resource_type: &'static str,
+        resource_id: Uuid,
+        event_kind: &'static str,
+    ) -> u64 {
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(None, resource_type, resource_id, event_kind, json!({}))
+    }
+
+    fn publish(
+        &self,
+        platform_id: Option<Uuid>,
+        resource_type: &'static str,
+        resource_id: Uuid,
+        event_kind: &'static str,
+        payload: Value,
+    ) -> u64 {
         let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
         let event = Arc::new(PublishedRuntimeEvent {
             platform_id,
+            resource_type,
+            resource_id,
+            event_kind,
             resource_revision: revision,
             payload,
         });
@@ -246,6 +277,17 @@ impl RealtimeService {
         shutdown: CancellationToken,
     ) -> Self {
         let hub = RealtimeHub::new(config.queue_capacity, Arc::clone(&metrics));
+        Self::with_hub(config, reader, metrics, shutdown, hub)
+    }
+
+    #[must_use]
+    pub fn with_hub(
+        config: &RealtimeConfig,
+        reader: Arc<dyn RealtimeReadPort>,
+        metrics: Arc<Metrics>,
+        shutdown: CancellationToken,
+        hub: RealtimeHub,
+    ) -> Self {
         Self {
             inner: Arc::new(RealtimeServiceInner {
                 subscribe_timeout: config.subscribe_timeout,
@@ -309,11 +351,19 @@ struct RealtimeEnvelope<'a> {
     protocol_version: u16,
     connection_id: Uuid,
     sequence: u64,
-    resource_type: &'static str,
+    resource_type: &'a str,
     resource_id: Uuid,
     resource_revision: u64,
-    event_kind: &'static str,
+    event_kind: &'a str,
     payload_schema_version: u16,
+    payload: &'a Value,
+}
+
+struct RealtimeEventRef<'a> {
+    resource_revision: u64,
+    resource_type: &'a str,
+    resource_id: Uuid,
+    event_kind: &'a str,
     payload: &'a Value,
 }
 
@@ -326,13 +376,13 @@ struct PlatformSnapshot {
 
 struct ConnectionState {
     id: Uuid,
-    platform_id: Uuid,
+    platform_id: Option<Uuid>,
     next_sequence: u64,
     last_resource_revision: u64,
 }
 
 impl ConnectionState {
-    fn new(platform_id: Uuid) -> Self {
+    fn new(platform_id: Option<Uuid>) -> Self {
         Self {
             id: Uuid::now_v7(),
             platform_id,
@@ -444,33 +494,45 @@ async fn run_connection(
             _ = authorization_recheck.tick() => {
                 let principal = service.inner.reader.authenticate(&subscription.access_token).await
                     .map_err(map_realtime_read_error)?;
-                authorize_platform(service, &principal, subscription.platform_id).await?;
+                if let Some(platform_id) = subscription.platform_id {
+                    authorize_platform(service, &principal, platform_id).await?;
+                }
                 subscription.principal = principal;
             }
             event = receiver.recv() => {
                 match event {
-                    Ok(event) if event.platform_id == connection.platform_id
+                    Ok(event) if event_matches(&event, &connection)
                         && event.resource_revision > connection.last_resource_revision => {
                         send_envelope(
                             socket,
                             service,
                             &mut connection,
-                            event.resource_revision,
-                            "runtimeChanged",
-                            &event.payload,
+                            RealtimeEventRef {
+                                resource_revision: event.resource_revision,
+                                resource_type: event.resource_type,
+                                resource_id: event.resource_id,
+                                event_kind: event.event_kind,
+                                payload: &event.payload,
+                            },
                         ).await?;
                     }
                     Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(missed)) => {
                         service.inner.metrics.realtime_overflowed();
                         let payload = json!({ "reason": "queueOverflow", "missedEvents": missed });
+                        let resource_type = connection_resource_type(&connection);
+                        let resource_id = connection.platform_id.unwrap_or(Uuid::nil());
                         send_envelope(
                             socket,
                             service,
                             &mut connection,
-                            service.inner.hub.current_revision(),
-                            "resyncRequired",
-                            &payload,
+                            RealtimeEventRef {
+                                resource_revision: service.inner.hub.current_revision(),
+                                resource_type,
+                                resource_id,
+                                event_kind: "resyncRequired",
+                                payload: &payload,
+                            },
                         ).await?;
                         receiver = service.inner.hub.subscribe();
                         send_snapshot(socket, service, &subscription.principal, &mut connection).await?;
@@ -506,7 +568,7 @@ fn parse_client_message(text: &str) -> Result<ClientMessage, RealtimeError> {
 
 struct Subscription {
     principal: ActorPrincipal,
-    platform_id: Uuid,
+    platform_id: Option<Uuid>,
     access_token: Zeroizing<String>,
 }
 
@@ -519,12 +581,9 @@ async fn validate_subscription(
             subscribe.protocol_version,
         ));
     }
-    if subscribe.kind != "subscribe"
-        || subscribe.resource_type.as_deref() != Some(PLATFORM_RESOURCE_TYPE)
-        || subscribe.resource_id.is_none()
-    {
+    if subscribe.kind != "subscribe" {
         return Err(RealtimeError::InvalidMessage(
-            "a Platform resource subscription is required".to_owned(),
+            "a realtime subscription is required".to_owned(),
         ));
     }
     let Some(access_token) = subscribe.access_token.map(Zeroizing::new) else {
@@ -537,10 +596,19 @@ async fn validate_subscription(
         .authenticate(access_token.as_str())
         .await
         .map_err(map_realtime_read_error)?;
-    let platform_id = subscribe.resource_id.ok_or_else(|| {
-        RealtimeError::InvalidMessage("a Platform resource subscription is required".to_owned())
-    })?;
-    authorize_platform(service, &principal, platform_id).await?;
+    let platform_id = match (subscribe.resource_type.as_deref(), subscribe.resource_id) {
+        (None, None) => None,
+        (Some(PLATFORM_RESOURCE_TYPE), Some(platform_id)) => {
+            authorize_platform(service, &principal, platform_id).await?;
+            Some(platform_id)
+        }
+        _ => {
+            return Err(RealtimeError::InvalidMessage(
+                "resourceType and resourceId must identify a Platform, or both be omitted"
+                    .to_owned(),
+            ));
+        }
+    };
     Ok(Subscription {
         principal,
         platform_id,
@@ -579,12 +647,19 @@ async fn send_snapshot(
     principal: &ActorPrincipal,
     connection: &mut ConnectionState,
 ) -> Result<(), RealtimeError> {
+    let Some(platform_id) = connection.platform_id else {
+        let message = json!({
+            "protocolVersion": REALTIME_PROTOCOL_VERSION,
+            "kind": "subscribed"
+        });
+        return send_text(socket, service, message.to_string()).await;
+    };
     let snapshot_revision = service.inner.hub.current_revision();
-    let platform = authorize_platform(service, principal, connection.platform_id).await?;
+    let platform = authorize_platform(service, principal, platform_id).await?;
     let containers = service
         .inner
         .reader
-        .list_containers(connection.platform_id)
+        .list_containers(platform_id)
         .await
         .map_err(|error| RealtimeError::Snapshot(error.to_string()))?;
     if containers.len() > service.inner.snapshot_limit {
@@ -602,9 +677,13 @@ async fn send_snapshot(
         socket,
         service,
         connection,
-        snapshot_revision,
-        "snapshot",
-        &payload,
+        RealtimeEventRef {
+            resource_revision: snapshot_revision,
+            resource_type: PLATFORM_RESOURCE_TYPE,
+            resource_id: platform_id,
+            event_kind: "snapshot",
+            payload: &payload,
+        },
     )
     .await?;
     service.inner.metrics.realtime_snapshot_resynced();
@@ -615,23 +694,31 @@ async fn send_envelope(
     socket: &mut WebSocket,
     service: &RealtimeService,
     connection: &mut ConnectionState,
-    resource_revision: u64,
-    event_kind: &'static str,
-    payload: &Value,
+    event: RealtimeEventRef<'_>,
 ) -> Result<(), RealtimeError> {
     let envelope = RealtimeEnvelope {
         protocol_version: REALTIME_PROTOCOL_VERSION,
         connection_id: connection.id,
         sequence: connection.take_sequence(),
-        resource_type: PLATFORM_RESOURCE_TYPE,
-        resource_id: connection.platform_id,
-        resource_revision,
-        event_kind,
+        resource_type: event.resource_type,
+        resource_id: event.resource_id,
+        resource_revision: event.resource_revision,
+        event_kind: event.event_kind,
         payload_schema_version: PAYLOAD_SCHEMA_VERSION,
-        payload,
+        payload: event.payload,
     };
     let text = serde_json::to_string(&envelope)
         .map_err(|error| RealtimeError::Serialization(error.to_string()))?;
+    send_text(socket, service, text).await?;
+    connection.last_resource_revision = event.resource_revision;
+    Ok(())
+}
+
+async fn send_text(
+    socket: &mut WebSocket,
+    service: &RealtimeService,
+    text: String,
+) -> Result<(), RealtimeError> {
     match tokio::time::timeout(
         service.inner.send_timeout,
         socket.send(Message::Text(text.into())),
@@ -639,7 +726,6 @@ async fn send_envelope(
     .await
     {
         Ok(Ok(())) => {
-            connection.last_resource_revision = resource_revision;
             service.inner.metrics.realtime_message_sent();
             Ok(())
         }
@@ -648,5 +734,20 @@ async fn send_envelope(
             service.inner.metrics.realtime_send_timed_out();
             Err(RealtimeError::SendTimeout)
         }
+    }
+}
+
+fn event_matches(event: &PublishedRuntimeEvent, connection: &ConnectionState) -> bool {
+    match connection.platform_id {
+        Some(platform_id) => event.platform_id == Some(platform_id),
+        None => event.platform_id.is_none(),
+    }
+}
+
+fn connection_resource_type(connection: &ConnectionState) -> &'static str {
+    if connection.platform_id.is_some() {
+        PLATFORM_RESOURCE_TYPE
+    } else {
+        "Global"
     }
 }

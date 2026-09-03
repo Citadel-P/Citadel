@@ -11,25 +11,29 @@ use citadel_contracts::citadel::images::v1::{
     ListImagesRequest, image_service_client::ImageServiceClient,
 };
 use citadel_contracts::citadel::networks::v1::{
-    InspectNetworkRequest, InspectNetworkResponse, ListNetworksRequest,
-    network_service_client::NetworkServiceClient,
+    ConfigFromMessage, CreateNetworkRequest, DeleteNetworkRequest, InspectNetworkRequest,
+    InspectNetworkResponse, ListNetworksRequest, network_service_client::NetworkServiceClient,
 };
 use citadel_contracts::citadel::platforms::v1::{
     PlatformStatsRequest, daemon_event_response, platform_service_client::PlatformServiceClient,
 };
-use citadel_contracts::citadel::shared_models::v1::{ContainerMessage, PlatformInfoResponse};
+use citadel_contracts::citadel::shared_models::v1::{
+    ContainerMessage, IpamConfigMessage, IpamMessage, PlatformInfoResponse,
+};
 use citadel_contracts::citadel::swarm::v1::{
     ListSwarmConfigsRequest, ListSwarmNodesRequest, ListSwarmSecretsRequest,
     ListSwarmServicesRequest, ListSwarmTasksRequest, swarm_service_client::SwarmServiceClient,
 };
 use citadel_contracts::citadel::volumes::v1::{
-    InspectVolumeRequest, ListVolumesRequest, volume_service_client::VolumeServiceClient,
+    CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
+    volume_service_client::VolumeServiceClient,
 };
 use citadel_platforms::{
-    PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError, RuntimeContainerStat,
-    RuntimeContainerStatsStream, RuntimeErrorKind, RuntimeImageSummary, RuntimeNetworkSummary,
-    RuntimeStatsStream, RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret,
-    RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
+    CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, PlatformInventoryPort,
+    PlatformResourceMutationPort, PlatformRuntimePort, RuntimeCapabilityError,
+    RuntimeContainerStat, RuntimeContainerStatsStream, RuntimeErrorKind, RuntimeImageSummary,
+    RuntimeNetworkSummary, RuntimeStatsStream, RuntimeSwarmConfig, RuntimeSwarmNode,
+    RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
 use citadel_platforms::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
 use ed25519_dalek::{Signer, SigningKey};
@@ -52,8 +56,12 @@ const STREAM_CONTAINERS_STATS_METHOD: &str =
 const LIST_IMAGES_METHOD: &str = "/citadel.images.v1.ImageService/List";
 const LIST_NETWORKS_METHOD: &str = "/citadel.networks.v1.NetworkService/List";
 const INSPECT_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Inspect";
+const CREATE_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Create";
+const DELETE_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Delete";
 const LIST_VOLUMES_METHOD: &str = "/citadel.volumes.v1.VolumeService/List";
 const INSPECT_VOLUME_METHOD: &str = "/citadel.volumes.v1.VolumeService/Inspect";
+const CREATE_VOLUME_METHOD: &str = "/citadel.volumes.v1.VolumeService/Create";
+const DELETE_VOLUME_METHOD: &str = "/citadel.volumes.v1.VolumeService/Remove";
 const LIST_SWARM_NODES_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListNodes";
 const LIST_SWARM_SERVICES_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListServices";
 const LIST_SWARM_TASKS_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListTasks";
@@ -470,6 +478,149 @@ const fn daemon_resource_type(value: i32) -> &'static str {
         9 => "service",
         10 => "volume",
         _ => "unknown",
+    }
+}
+
+impl PlatformResourceMutationPort for AgentClient {
+    fn create_network<'a>(
+        &'a self,
+        input: &'a CreateRuntimeNetwork,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<CreatedRuntimeNetwork, RuntimeCapabilityError>> {
+        async move {
+            let request = self.signer.sign(
+                CreateNetworkRequest {
+                    name: input.name.clone(),
+                    driver: Some(input.driver.clone()),
+                    scope: Some(input.scope.clone()),
+                    internal: input.internal,
+                    attachable: input.attachable,
+                    ingress: input.ingress,
+                    config_only: input.config_only,
+                    config_from: input.config_from.as_ref().map(|value| ConfigFromMessage {
+                        network: value.network.clone(),
+                    }),
+                    ipam: input.ipam.as_ref().map(|value| IpamMessage {
+                        driver: Some(value.driver.clone()),
+                        config: value
+                            .config
+                            .iter()
+                            .map(|item| IpamConfigMessage {
+                                subnet: Some(item.subnet.clone()),
+                                ip_range: Some(item.ip_range.clone()),
+                                gateway: Some(item.gateway.clone()),
+                            })
+                            .collect(),
+                        options: value.options.clone().into_iter().collect(),
+                    }),
+                    enable_i_pv6: input.enable_ipv6,
+                    enable_i_pv4: input.enable_ipv4,
+                    options: input.options.clone().into_iter().collect(),
+                    labels: input.labels.clone().into_iter().collect(),
+                },
+                CREATE_NETWORK_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.network_client();
+            let response = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.create(request)) => {
+                    result.map_err(|_| timeout_error("creating a Network through the Agent"))?
+                        .map_err(normalize_status)?
+                }
+            };
+            Ok(CreatedRuntimeNetwork {
+                id: response.into_inner().id,
+            })
+        }
+        .boxed()
+    }
+
+    fn delete_network<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        async move {
+            let request = self.signer.sign(
+                DeleteNetworkRequest {
+                    ids: vec![id.to_owned()],
+                },
+                DELETE_NETWORK_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.network_client();
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.delete(request)) => {
+                    result.map_err(|_| timeout_error("deleting a Network through the Agent"))?
+                        .map_err(normalize_status)?;
+                }
+            }
+            Ok(())
+        }
+        .boxed()
+    }
+
+    fn create_volume<'a>(
+        &'a self,
+        input: &'a CreateRuntimeVolume,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
+        async move {
+            let request = self.signer.sign(
+                CreateVolumeRequest {
+                    name: input.name.clone(),
+                    driver: input.driver.clone(),
+                    labels: input.labels.clone().into_iter().collect(),
+                    options: input.options.clone().into_iter().collect(),
+                },
+                CREATE_VOLUME_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.volume_client();
+            let response = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.create(request)) => {
+                    result.map_err(|_| timeout_error("creating a Volume through the Agent"))?
+                        .map_err(normalize_status)?
+                }
+            };
+            Ok(map_volume(response.into_inner()))
+        }
+        .boxed()
+    }
+
+    fn delete_volume<'a>(
+        &'a self,
+        name: &'a str,
+        force: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        async move {
+            let request = self.signer.sign(
+                RemoveVolumeRequest {
+                    names: vec![name.to_owned()],
+                    force,
+                },
+                DELETE_VOLUME_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.volume_client();
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.remove(request)) => {
+                    result.map_err(|_| timeout_error("deleting a Volume through the Agent"))?
+                        .map_err(normalize_status)?;
+                }
+            }
+            Ok(())
+        }
+        .boxed()
     }
 }
 

@@ -17,6 +17,7 @@ citadel-contracts = { path = "../contracts" }
 citadel-domain = { path = "../domain" }
 citadel-identity = { path = "../identity" }
 citadel-platforms = { path = "../platforms" }
+citadel-resources = { path = "../resources" }
 ed25519-dalek.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true

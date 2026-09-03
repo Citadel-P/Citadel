@@ -266,7 +266,7 @@ fn document(public_only: bool) -> Value {
 }
 
 fn schemas() -> Value {
-    json!({
+    let mut schemas = json!({
         "HealthResponse": {
             "type": "object",
             "required": ["status"],
@@ -681,6 +681,19 @@ fn schemas() -> Value {
                 "createdAt": { "type": "string", "format": "date-time" },
                 "info": { "$ref": "#/components/schemas/ActivityEventInfo" },
                 "actorId": uuid(), "actorName": string(), "actorType": { "type": "string", "enum": ["User", "System", "Agent", "ServiceAccount", "Team"] }
+            }
+        },
+        "LatestActivityView": {
+            "type": "object",
+            "required": ["id", "resourceType", "eventType", "status", "info", "createdAt"],
+            "additionalProperties": false,
+            "properties": {
+                "id": uuid(),
+                "resourceType": { "$ref": "#/components/schemas/ActivityResourceType" },
+                "eventType": { "$ref": "#/components/schemas/ActivityEventType" },
+                "status": { "$ref": "#/components/schemas/ActivityStatus" },
+                "info": { "$ref": "#/components/schemas/ActivityEventInfo" },
+                "createdAt": { "type": "string", "format": "date-time" }
             }
         },
         "PagedActivityView": {
@@ -1098,7 +1111,228 @@ fn schemas() -> Value {
         "SwarmConfigsView": collection_view("items", "SwarmConfigView", "PlatformCapabilities"),
         "SwarmSecretView": swarm_secret_view(),
         "SwarmSecretsView": collection_view("items", "SwarmSecretView", "PlatformCapabilities")
-    })
+    });
+    schemas
+        .as_object_mut()
+        .expect("schema catalog is an object")
+        .extend(phase5_schemas());
+    schemas
+}
+
+fn phase5_schemas() -> Map<String, Value> {
+    let mut schemas = Map::new();
+    schemas.insert(
+        "ResourceBindingScope".into(),
+        json!({"type":"string","enum":["Global","Stack","Deployment","SwarmService"]}),
+    );
+    schemas.insert(
+        "TagView".into(),
+        json!({"type":"object","required":["id","name","normalizedName","color","createdByActorId","createdAt","updatedAt","usageCount"],"properties":{"id":uuid(),"name":string(),"normalizedName":string(),"color":string(),"createdByActorId":uuid(),"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},"usageCount":{"type":"integer","format":"int32","minimum":0},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}),
+    );
+    schemas.insert(
+        "TagsView".into(),
+        collection_view("tags", "TagView", "ResourceCapabilities"),
+    );
+    schemas.insert(
+        "TagSummaryView".into(),
+        json!({"type":"object","required":["id","name","color"],"properties":{"id":uuid(),"name":string(),"color":string()}}),
+    );
+    schemas.insert(
+        "CreateTagInput".into(),
+        json!({"type":"object","required":["name","color"],"properties":{"name":string(),"color":string()}}),
+    );
+    schemas.insert(
+        "PatchTagInput".into(),
+        json!({"type":"object","properties":{"name":string(),"color":string()}}),
+    );
+    schemas.insert(
+        "ResourceTagsView".into(),
+        json!({"type":"object","required":["tags"],"properties":{"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}}}}),
+    );
+    schemas.insert(
+        "ReplaceResourceTagsInput".into(),
+        json!({"type":"object","required":["tagIds"],"properties":{"tagIds":uuid_array()}}),
+    );
+
+    let registry = json!({"type":"object","required":["id","name","registryHost","status","type","createdAt","createdByActorId","tags"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"registryHost":string(),"status":{"type":"string","enum":["Active","Disabled","Deprecated"]},"type":string(),"createdAt":{"type":"string","format":"date-time"},"createdByActorId":uuid(),"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"},"isDefault":{"type":"boolean"}}});
+    schemas.insert("RegistryView".into(), registry);
+    schemas.insert(
+        "RegistriesView".into(),
+        collection_view("registries", "RegistryView", "ResourceCapabilities"),
+    );
+    schemas.insert(
+        "RegistryConfigView".into(),
+        json!({"type":"object","properties":{"id":uuid(),"name":string(),"description":nullable_string(),"registryHost":string(),"status":string(),"configuration":{"type":"object"},"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}}}}),
+    );
+    schemas.insert("CreateRegistryInput".into(), catalog_input_schema(true));
+    schemas.insert("PatchRegistryInput".into(), catalog_patch_schema(true));
+    schemas.insert("DeleteRegistriesInput".into(), ids_input_schema());
+
+    schemas.insert(
+        "GitRepositorySyncMode".into(),
+        json!({"type":"string","enum":["Manual","PullInterval"]}),
+    );
+    schemas.insert(
+        "RepoCommand".into(),
+        json!({"type":"object","required":["commands","path"],"properties":{"commands":string_array(),"path":string()}}),
+    );
+    schemas.insert(
+        "RepoWebhookConfig".into(),
+        json!({"type":"object","properties":{"enabled":{"type":"boolean"},"provider":{"type":"string","enum":["GitHub","GitLab","Generic"]},"authScheme":{"type":"string","enum":["GitHubHmacSha256","GitLabSignedToken","GitLabLegacyToken","BearerToken"]},"secret":nullable_string(),"branchFilter":nullable_string()}}),
+    );
+    let git = json!({"type":"object","required":["id","name","url","defaultBranch","syncMode","status","createdAt","createdByActorId","controlState","tags"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"url":string(),"defaultBranch":string(),"gitAccountId":nullable_uuid(),"syncMode":{"$ref":"#/components/schemas/GitRepositorySyncMode"},"syncIntervalMinutes":{"type":["integer","null"],"format":"int32"},"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"onClone":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"onPull":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"status":string(),"createdAt":{"type":"string","format":"date-time"},"createdByActorId":uuid(),"controlState":string(),"latestActivityView":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/LatestActivityView"}]},"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}});
+    schemas.insert("GitRepositoryView".into(), git);
+    schemas.insert(
+        "GitRepositoriesView".into(),
+        collection_view(
+            "gitRepositories",
+            "GitRepositoryView",
+            "ResourceCapabilities",
+        ),
+    );
+    schemas.insert(
+        "GitRepositoryConfigView".into(),
+        json!({"type":"object","properties":{"id":uuid(),"name":string(),"description":nullable_string(),"url":string(),"defaultBranch":string(),"gitAccountId":nullable_uuid(),"syncMode":{"$ref":"#/components/schemas/GitRepositorySyncMode"},"syncIntervalMinutes":{"type":["integer","null"],"format":"int32"},"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"onClone":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"onPull":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}}}}),
+    );
+    schemas.insert(
+        "CreateGitRepositoryInput".into(),
+        catalog_input_schema(false),
+    );
+    schemas.insert(
+        "PatchGitRepositoryInput".into(),
+        catalog_patch_schema(false),
+    );
+    schemas.insert("DeleteGitRepositoriesInput".into(), ids_input_schema());
+    schemas.insert(
+        "PatchResourceMetadata".into(),
+        json!({"type":"object","properties":{"description":nullable_string(),"tags":string_array()}}),
+    );
+
+    schemas.insert(
+        "CreateNetworkInput".into(),
+        json!({"type":"object","required":["platformId","name","driver","scope"],"properties":{"platformId":uuid(),"name":string(),"driver":string(),"scope":string(),"internal":{"type":["boolean","null"]},"attachable":{"type":["boolean","null"]},"ingress":{"type":["boolean","null"]},"enableIPv6":{"type":["boolean","null"]},"enableIPv4":{"type":["boolean","null"]},"configOnly":{"type":["boolean","null"]},"ipam":{"type":["object","null"]},"configFrom":{"type":["object","null"]},"labels":string_map(),"options":string_map()}}),
+    );
+    schemas.insert(
+        "CreateNetworkView".into(),
+        json!({"type":"object","required":["id"],"properties":{"id":string()}}),
+    );
+    schemas.insert(
+        "DeleteNetworksInput".into(),
+        platform_ids_input_schema("ids"),
+    );
+    schemas.insert(
+        "CreateVolumeInput".into(),
+        json!({"type":"object","required":["platformId","name","driver"],"properties":{"platformId":uuid(),"name":string(),"driver":string(),"labels":string_map(),"options":string_map()}}),
+    );
+    schemas.insert(
+        "DeleteVolumesInput".into(),
+        json!({"type":"object","required":["platformId","names"],"properties":{"platformId":uuid(),"names":string_array(),"force":{"type":["boolean","null"]}}}),
+    );
+
+    schemas.extend(binding_schemas());
+    schemas
+}
+
+fn catalog_input_schema(registry: bool) -> Value {
+    if registry {
+        json!({"type":"object","required":["name","registryHost","status","configuration"],"properties":{"name":string(),"description":nullable_string(),"registryHost":string(),"status":string(),"configuration":{"type":"object"},"tagIds":uuid_array()}})
+    } else {
+        json!({"type":"object","required":["name","url","defaultBranch"],"properties":{"name":string(),"description":nullable_string(),"url":string(),"defaultBranch":string(),"gitAccountId":nullable_uuid(),"syncMode":{"$ref":"#/components/schemas/GitRepositorySyncMode"},"syncIntervalMinutes":{"type":["integer","null"],"format":"int32"},"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"onClone":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"onPull":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"tagIds":uuid_array()}})
+    }
+}
+
+fn catalog_patch_schema(registry: bool) -> Value {
+    if registry {
+        json!({"type":"object","properties":{"registryHost":string(),"status":string(),"configuration":{"type":"object"}}})
+    } else {
+        json!({"type":"object","properties":{"url":string(),"defaultBranch":string(),"gitAccountId":nullable_uuid(),"syncMode":{"$ref":"#/components/schemas/GitRepositorySyncMode"},"syncIntervalMinutes":{"type":["integer","null"],"format":"int32"},"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"onClone":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]},"onPull":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoCommand"}]}}})
+    }
+}
+
+fn ids_input_schema() -> Value {
+    json!({"type":"object","required":["ids"],"properties":{"ids":uuid_array()}})
+}
+
+fn platform_ids_input_schema(property: &str) -> Value {
+    json!({"type":"object","required":["platformId",property],"properties":{"platformId":uuid(),property:string_array()}})
+}
+
+fn binding_schemas() -> Map<String, Value> {
+    let mut schemas = Map::new();
+    let binding = json!({"type":"object","required":["id","name","kind","scope","isInherited"],"properties":{"id":uuid(),"name":string(),"kind":{"type":"string","enum":["Variable","Secret"]},"scope":{"$ref":"#/components/schemas/ResourceBindingScope"},"resourceId":nullable_uuid(),"value":nullable_string(),"secretId":nullable_uuid(),"secretDeliveryMode":{"type":["string","null"]},"targetPath":nullable_string(),"isInherited":{"type":"boolean"}}});
+    schemas.insert("ResourceBindingView".into(), binding);
+    schemas.insert(
+        "ResourceBindingsView".into(),
+        json!({"type":"object","required":["entries","effectiveEntries"],"properties":{"entries":{"type":"array","items":{"$ref":"#/components/schemas/ResourceBindingView"}},"effectiveEntries":{"type":"array","items":{"$ref":"#/components/schemas/ResourceBindingView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}),
+    );
+    schemas.insert("ResourceBindingInput".into(), binding_input_schema(false));
+    schemas.insert(
+        "UpdateResourceBindingInput".into(),
+        binding_input_schema(true),
+    );
+    schemas.insert(
+        "SecretDefinitionView".into(),
+        json!({"type":"object","required":["id","name","providerType","createdAt"],"properties":{"id":uuid(),"name":string(),"providerType":string(),"providerId":nullable_uuid(),"externalPath":nullable_string(),"externalKey":nullable_string(),"externalVersion":{"type":["integer","null"]},"createdAt":{"type":"string","format":"date-time"}}}),
+    );
+    schemas.insert(
+        "SecretDefinitionsView".into(),
+        collection_view("secrets", "SecretDefinitionView", "ResourceCapabilities"),
+    );
+    schemas.insert(
+        "CreateInternalSecretInput".into(),
+        json!({"type":"object","required":["name","value"],"properties":{"name":string(),"value":{"type":"string","writeOnly":true}}}),
+    );
+    schemas.insert(
+        "CreateExternalSecretInput".into(),
+        external_secret_schema(false),
+    );
+    schemas.insert(
+        "UpdateExternalSecretInput".into(),
+        external_secret_schema(true),
+    );
+    schemas.insert(
+        "SecretProviderView".into(),
+        json!({"type":"object","required":["id","name","providerType","address","mountPath","createdAt"],"properties":{"id":uuid(),"name":string(),"providerType":string(),"address":string(),"mountPath":string(),"createdAt":{"type":"string","format":"date-time"}}}),
+    );
+    schemas.insert(
+        "SecretProvidersView".into(),
+        json!({"type":"object","required":["providers"],"properties":{"providers":{"type":"array","items":{"$ref":"#/components/schemas/SecretProviderView"}}}}),
+    );
+    schemas.insert(
+        "CreateVaultKvV2SecretProviderInput".into(),
+        provider_schema(false),
+    );
+    schemas.insert(
+        "UpdateVaultKvV2SecretProviderInput".into(),
+        provider_schema(true),
+    );
+    schemas
+}
+
+fn binding_input_schema(update: bool) -> Value {
+    let mut required = vec!["name", "kind"];
+    if update {
+        required.insert(0, "id");
+    }
+    json!({"type":"object","required":required,"properties":{"id":uuid(),"name":string(),"kind":string(),"value":nullable_string(),"secretId":nullable_uuid(),"secretDeliveryMode":{"type":["string","null"]},"targetPath":nullable_string()}})
+}
+
+fn external_secret_schema(update: bool) -> Value {
+    let required = if update {
+        Vec::<&str>::new()
+    } else {
+        vec!["name", "providerId", "externalPath", "externalKey"]
+    };
+    json!({"type":"object","required":required,"properties":{"name":string(),"providerId":uuid(),"externalPath":string(),"externalKey":string(),"externalVersion":{"type":["integer","null"]}}})
+}
+
+fn provider_schema(update: bool) -> Value {
+    let required = if update {
+        Vec::<&str>::new()
+    } else {
+        vec!["name", "address", "mountPath", "token"]
+    };
+    json!({"type":"object","required":required,"properties":{"name":string(),"address":string(),"mountPath":string(),"token":{"type":"string","writeOnly":true}}})
 }
 
 fn collection_view(property: &str, item_schema: &str, capabilities_schema: &str) -> Value {

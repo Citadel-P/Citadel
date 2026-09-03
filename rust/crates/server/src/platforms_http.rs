@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::rejection::{PathRejection, QueryRejection};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -11,13 +11,15 @@ use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_platforms::{
-    AuthorizedReadError, ContainerView, EffectivePlatformPermission, ImageCapabilitiesView,
-    ImageView, NetworkCapabilitiesView, NetworkView, PlatformCapabilitiesView,
-    PlatformInventoryPort, PlatformReadService, PlatformView, ResourceCapabilitiesView,
-    RuntimeCapabilityError, RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary,
-    SwarmConfigView, SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView,
-    VolumeCapabilitiesView, VolumeView,
+    AuthorizedReadError, ContainerView, CreateRuntimeNetwork, CreateRuntimeVolume,
+    EffectivePlatformPermission, ImageCapabilitiesView, ImageView, NetworkCapabilitiesView,
+    NetworkView, PlatformCapabilitiesView, PlatformInventoryPort, PlatformReadService,
+    PlatformResourceMutationPort, PlatformView, ResourceCapabilitiesView, RuntimeCapabilityError,
+    RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary, SwarmConfigView,
+    SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView, VolumeCapabilitiesView,
+    VolumeView,
 };
+use citadel_resources::{MetadataPatch, ResourceMetadataStore};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
@@ -25,6 +27,7 @@ use uuid::Uuid;
 
 use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::realtime::RealtimeHub;
 
 const ALL_LEVELS: i32 =
     PermissionLevel::Read as i32 | PermissionLevel::Write as i32 | PermissionLevel::Execute as i32;
@@ -40,21 +43,28 @@ pub struct PlatformsHttpState {
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
     pub pool: PgPool,
+    pub resource_metadata: Arc<dyn ResourceMetadataStore>,
     pub docker: DockerClient,
     pub agent: Option<AgentClient>,
+    pub realtime: Option<RealtimeHub>,
 }
 
 pub fn router(state: PlatformsHttpState) -> Router {
     Router::new()
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
         .contract_route(routes::GET_PLATFORM, get_platform)
+        .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
         .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)
         .contract_route(routes::GET_CONTAINER, get_container)
         .contract_route(routes::LIST_PLATFORM_IMAGES, list_images)
         .contract_route(routes::LIST_PLATFORM_NETWORKS, list_networks)
         .contract_route(routes::GET_PLATFORM_NETWORK, get_network)
+        .contract_route(routes::CREATE_NETWORK, create_network)
+        .contract_route(routes::DELETE_NETWORKS, delete_networks)
         .contract_route(routes::LIST_PLATFORM_VOLUMES, list_volumes)
         .contract_route(routes::GET_PLATFORM_VOLUME, get_volume)
+        .contract_route(routes::CREATE_VOLUME, create_volume)
+        .contract_route(routes::DELETE_VOLUMES, delete_volumes)
         .contract_route(routes::LIST_SWARM_NODES, list_swarm_nodes)
         .contract_route(routes::GET_SWARM_NODE, get_swarm_node)
         .contract_route(routes::LIST_SWARM_SERVICES, list_swarm_services)
@@ -75,6 +85,15 @@ pub fn router(state: PlatformsHttpState) -> Router {
 struct PlatformsResponse {
     platforms: Vec<PlatformView>,
     capabilities: ResourceCapabilitiesView,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PatchPlatformMetadataInput {
+    #[serde(default)]
+    description: MetadataPatch<String>,
+    #[serde(default, rename = "tags")]
+    _tags: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -125,6 +144,37 @@ struct VolumeFilters {
     driver: Option<String>,
     #[serde(rename = "Name", alias = "name")]
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateNetworkInput {
+    platform_id: Uuid,
+    #[serde(flatten)]
+    network: CreateRuntimeNetwork,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteNetworksInput {
+    platform_id: Uuid,
+    ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateVolumeInput {
+    platform_id: Uuid,
+    #[serde(flatten)]
+    volume: CreateRuntimeVolume,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteVolumesInput {
+    platform_id: Uuid,
+    names: Vec<String>,
+    force: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,6 +275,57 @@ async fn get_platform(
         &headers,
     )?;
     platform.capabilities = Some(capabilities);
+    Ok(no_store(Json(platform).into_response()))
+}
+
+async fn update_platform_metadata(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+    input: Result<Json<PatchPlatformMetadataInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
+
+    let description = match input.description {
+        MetadataPatch::Missing => None,
+        MetadataPatch::Null => Some(None),
+        MetadataPatch::Value(value) => {
+            if value.chars().count() > 600 {
+                return identity_result(
+                    Err(IdentityError::Validation(
+                        "Description cannot exceed 600 characters.".to_owned(),
+                    )),
+                    &headers,
+                );
+            }
+            Some(Some(value))
+        }
+    };
+    if let Some(description) = description {
+        identity_result(
+            state
+                .resource_metadata
+                .update_platform_description(id, description.as_deref())
+                .await
+                .map_err(resource_metadata_error),
+            &headers,
+        )?;
+    }
+    let capabilities = authorize_platform(&state, &principal, id, &headers).await?;
+    let mut platform = required(
+        state
+            .platforms
+            .get_platform(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    platform.capabilities = Some(capabilities);
+    publish_runtime_change(&state, id, "platform", "update", &id.to_string());
     Ok(no_store(Json(platform).into_response()))
 }
 
@@ -406,6 +507,172 @@ async fn get_network(
     Ok(no_store(Json(network).into_response()))
 }
 
+async fn create_network(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<CreateNetworkInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    identity_result(validate_network_input(&input.network), &headers)?;
+    authorize_platform_level(
+        &state,
+        &principal,
+        input.platform_id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    if input.network.scope.eq_ignore_ascii_case("swarm")
+        && !identity_result(platform_is_swarm(&state, input.platform_id).await, &headers)?
+    {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Swarm-scoped overlay networks require a Docker Swarm platform.".to_owned(),
+            )),
+            &headers,
+        );
+    }
+    let cancellation = CancellationToken::new();
+    let result = match runtime_for(&state, input.platform_id).await {
+        Ok(RuntimeRef::Local(runtime)) => {
+            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
+                .await
+        }
+        Ok(RuntimeRef::Agent(runtime)) => {
+            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
+                .await
+        }
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+    let created = match result {
+        Ok(created) => created,
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+    publish_runtime_change(&state, input.platform_id, "network", "create", &created.id);
+    Ok(no_store(Json(created).into_response()))
+}
+
+async fn delete_networks(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<DeleteNetworksInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(mut input) = identity_result(input.map_err(invalid_json), &headers)?;
+    identity_result(
+        validate_resource_ids(&mut input.ids, 100, "Network"),
+        &headers,
+    )?;
+    authorize_platform_level(
+        &state,
+        &principal,
+        input.platform_id,
+        PermissionLevel::Execute,
+        &headers,
+    )
+    .await?;
+    let is_swarm = identity_result(platform_is_swarm(&state, input.platform_id).await, &headers)?;
+    let cancellation = CancellationToken::new();
+    let runtime = match runtime_for(&state, input.platform_id).await {
+        Ok(runtime) => runtime,
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+
+    // Inspect every target before the first irreversible operation. This avoids
+    // predictable partial batches while retaining an explicit partial result if
+    // Docker changes between preflight and deletion.
+    for id in &input.ids {
+        let inspected = match runtime {
+            RuntimeRef::Local(runtime) => {
+                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+            }
+            RuntimeRef::Agent(runtime) => {
+                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+            }
+        };
+        let network = match inspected {
+            Ok(network) => network,
+            Err(error) => return Ok(runtime_error_response(error, &headers)),
+        };
+        if network
+            .labels
+            .get("com.citadel.system")
+            .is_some_and(|value| value == "true")
+        {
+            return Ok(conflict_response(
+                format!("System network '{}' cannot be deleted.", network.name),
+                &headers,
+            ));
+        }
+        if network.container_count != 0 {
+            return Ok(conflict_response(
+                format!(
+                    "Network '{}' is in use and cannot be deleted.",
+                    network.name
+                ),
+                &headers,
+            ));
+        }
+        if network.labels.contains_key("com.docker.stack.namespace")
+            || network.labels.contains_key("com.citadel.stack-id")
+        {
+            return Ok(conflict_response(
+                format!(
+                    "Stack-owned network '{}' cannot be deleted independently.",
+                    network.name
+                ),
+                &headers,
+            ));
+        }
+        if is_swarm && !network.scope.eq_ignore_ascii_case("swarm") {
+            return Ok(conflict_response(
+                "Node-local Network deletion requires an explicit Node target and is not available."
+                    .to_owned(),
+                &headers,
+            ));
+        }
+        if is_swarm && network.scope.eq_ignore_ascii_case("swarm") {
+            identity_result(
+                validate_swarm_network_projection(&state, input.platform_id, id, &network.name)
+                    .await,
+                &headers,
+            )?;
+        }
+    }
+
+    let mut deleted = 0_usize;
+    for id in &input.ids {
+        let result = match runtime {
+            RuntimeRef::Local(runtime) => {
+                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+            }
+            RuntimeRef::Agent(runtime) => {
+                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+            }
+        };
+        match result {
+            Ok(()) => deleted += 1,
+            Err(error) if error.kind == RuntimeErrorKind::NotFound => deleted += 1,
+            Err(error) if deleted == 0 => return Ok(runtime_error_response(error, &headers)),
+            Err(error) => {
+                return Ok(conflict_response(
+                    format!(
+                        "Deleted {deleted} of {} Networks before Docker rejected the operation: {}",
+                        input.ids.len(),
+                        error.message
+                    ),
+                    &headers,
+                ));
+            }
+        }
+        publish_runtime_change(&state, input.platform_id, "network", "remove", id);
+    }
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
+}
+
 async fn list_volumes(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -511,6 +778,125 @@ async fn get_volume(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     Ok(no_store(Json(volume).into_response()))
+}
+
+async fn create_volume(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<CreateVolumeInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    identity_result(validate_volume_input(&input.volume), &headers)?;
+    let platform_capabilities = authorize_platform_level(
+        &state,
+        &principal,
+        input.platform_id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    let capabilities = volume_capabilities(
+        &state,
+        &principal,
+        input.platform_id,
+        platform_capabilities,
+        &headers,
+    )
+    .await?;
+    let cancellation = CancellationToken::new();
+    let result = match runtime_for(&state, input.platform_id).await {
+        Ok(RuntimeRef::Local(runtime)) => {
+            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+        }
+        Ok(RuntimeRef::Agent(runtime)) => {
+            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+        }
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+    let volume = match result {
+        Ok(volume) => volume,
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+    publish_runtime_change(&state, input.platform_id, "volume", "create", &volume.name);
+    Ok(no_store(
+        Json(map_volume(volume, capabilities)).into_response(),
+    ))
+}
+
+async fn delete_volumes(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<DeleteVolumesInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(mut input) = identity_result(input.map_err(invalid_json), &headers)?;
+    identity_result(
+        validate_resource_ids(&mut input.names, 100, "Volume"),
+        &headers,
+    )?;
+    authorize_platform_level(
+        &state,
+        &principal,
+        input.platform_id,
+        PermissionLevel::Execute,
+        &headers,
+    )
+    .await?;
+    if identity_result(platform_is_swarm(&state, input.platform_id).await, &headers)? {
+        return Ok(conflict_response(
+            "Node-local Volume deletion requires an explicit Node target and is not available."
+                .to_owned(),
+            &headers,
+        ));
+    }
+    let cancellation = CancellationToken::new();
+    let runtime = match runtime_for(&state, input.platform_id).await {
+        Ok(runtime) => runtime,
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
+    let mut deleted = 0_usize;
+    for name in &input.names {
+        let result = match runtime {
+            RuntimeRef::Local(runtime) => {
+                PlatformResourceMutationPort::delete_volume(
+                    runtime,
+                    name,
+                    input.force.unwrap_or(false),
+                    &cancellation,
+                )
+                .await
+            }
+            RuntimeRef::Agent(runtime) => {
+                PlatformResourceMutationPort::delete_volume(
+                    runtime,
+                    name,
+                    input.force.unwrap_or(false),
+                    &cancellation,
+                )
+                .await
+            }
+        };
+        match result {
+            Ok(()) => deleted += 1,
+            Err(error) if error.kind == RuntimeErrorKind::NotFound => deleted += 1,
+            Err(error) if deleted == 0 => return Ok(runtime_error_response(error, &headers)),
+            Err(error) => {
+                return Ok(conflict_response(
+                    format!(
+                        "Deleted {deleted} of {} Volumes before Docker rejected the operation: {}",
+                        input.names.len(),
+                        error.message
+                    ),
+                    &headers,
+                ));
+            }
+        }
+        publish_runtime_change(&state, input.platform_id, "volume", "remove", name);
+    }
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
 fn node_routing_unavailable(node_id: &str) -> RuntimeCapabilityError {
@@ -673,6 +1059,21 @@ async fn authorize_platform(
     Ok(platform_capabilities(permission))
 }
 
+async fn authorize_platform_level(
+    state: &PlatformsHttpState,
+    principal: &ActorPrincipal,
+    id: Uuid,
+    required: PermissionLevel,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<PlatformCapabilitiesView> {
+    let permissions = effective_permissions(state, principal, &[id], headers).await?;
+    let permission = permission_for(&permissions, id, principal.is_administrator());
+    if !resource_capabilities(permission).grants(required) {
+        return identity_result(Err(IdentityError::Forbidden), headers);
+    }
+    Ok(platform_capabilities(permission))
+}
+
 fn permission_for(
     permissions: &std::collections::BTreeMap<Uuid, EffectivePlatformPermission>,
     id: Uuid,
@@ -697,6 +1098,21 @@ fn resource_capabilities(permission: EffectivePlatformPermission) -> ResourceCap
         can_read: can_write || permission.level_mask & PermissionLevel::Read as i32 != 0,
         can_write,
         can_execute,
+    }
+}
+
+trait ResourceCapabilitiesExt {
+    fn grants(self, required: PermissionLevel) -> bool;
+}
+
+impl ResourceCapabilitiesExt for ResourceCapabilitiesView {
+    fn grants(self, required: PermissionLevel) -> bool {
+        match required {
+            PermissionLevel::Read => self.can_read,
+            PermissionLevel::Write => self.can_write,
+            PermissionLevel::Execute => self.can_execute,
+            _ => false,
+        }
     }
 }
 
@@ -977,6 +1393,194 @@ fn validate_swarm_task_filters(filters: &SwarmTaskFilters) -> Result<(), Identit
     Ok(())
 }
 
+fn validate_network_input(input: &CreateRuntimeNetwork) -> Result<(), IdentityError> {
+    validate_name_identifier(&input.name, "Network")?;
+    if !matches!(
+        input.driver.as_str(),
+        "bridge" | "macvlan" | "ipvlan" | "overlay"
+    ) {
+        return Err(IdentityError::Validation(
+            "Network driver must be bridge, macvlan, ipvlan, or overlay.".to_owned(),
+        ));
+    }
+    if !matches!(input.scope.as_str(), "local" | "swarm") {
+        return Err(IdentityError::Validation(
+            "Network scope must be local or swarm.".to_owned(),
+        ));
+    }
+    if (input.scope == "swarm") != (input.driver == "overlay") {
+        return Err(IdentityError::Validation(
+            "Overlay networks must use Swarm scope, and Swarm-scoped networks must use the overlay driver."
+                .to_owned(),
+        ));
+    }
+    if input.attachable == Some(true) && input.driver != "overlay" {
+        return Err(IdentityError::Validation(
+            "Attachable is available only for overlay networks.".to_owned(),
+        ));
+    }
+    if input.internal.is_some() && !matches!(input.driver.as_str(), "bridge" | "overlay") {
+        return Err(IdentityError::Validation(
+            "Internal is available only for bridge and overlay networks.".to_owned(),
+        ));
+    }
+    if input.enable_ipv4 == Some(false) && input.enable_ipv6 == Some(false) {
+        return Err(IdentityError::Validation(
+            "At least one of EnableIPv4 or EnableIPv6 must be enabled.".to_owned(),
+        ));
+    }
+    validate_map(&input.labels, "Network label")?;
+    validate_map(&input.options, "Network option")?;
+    if let Some(ipam) = &input.ipam {
+        if ipam.driver.trim().len() < 3 || ipam.config.len() != 2 {
+            return Err(IdentityError::Validation(
+                "IPAM requires a driver and exactly two configuration entries (IPv4 then IPv6)."
+                    .to_owned(),
+            ));
+        }
+        validate_map(&ipam.options, "IPAM option")?;
+    }
+    Ok(())
+}
+
+fn validate_volume_input(input: &CreateRuntimeVolume) -> Result<(), IdentityError> {
+    validate_name_identifier(&input.name, "Volume")?;
+    if input.driver.trim().is_empty()
+        || input.driver.len() > 255
+        || input.driver.chars().any(char::is_whitespace)
+    {
+        return Err(IdentityError::Validation(
+            "Volume driver is required, cannot exceed 255 characters, and cannot contain whitespace."
+                .to_owned(),
+        ));
+    }
+    validate_map(&input.labels, "Volume label")?;
+    validate_map(&input.options, "Volume option")
+}
+
+fn validate_name_identifier(value: &str, resource: &str) -> Result<(), IdentityError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > MAX_DOCKER_RESOURCE_ID_BYTES
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+    {
+        return Err(IdentityError::Validation(format!(
+            "{resource} name contains unsupported characters."
+        )));
+    }
+    Ok(())
+}
+
+fn validate_map(
+    values: &std::collections::BTreeMap<String, String>,
+    resource: &str,
+) -> Result<(), IdentityError> {
+    if values.len() > 256
+        || values
+            .iter()
+            .any(|(key, value)| key.trim().is_empty() || key.len() > 256 || value.len() > 4096)
+    {
+        return Err(IdentityError::Validation(format!(
+            "{resource} keys and values exceed the supported limits."
+        )));
+    }
+    Ok(())
+}
+
+fn validate_resource_ids(
+    values: &mut Vec<String>,
+    maximum: usize,
+    resource: &str,
+) -> Result<(), IdentityError> {
+    if values.is_empty() || values.len() > maximum {
+        return Err(IdentityError::Validation(format!(
+            "Between 1 and {maximum} {resource} identifiers are required."
+        )));
+    }
+    for value in values.iter_mut() {
+        *value = value.trim().to_owned();
+        validate_docker_resource_id(value)?;
+    }
+    values.sort_unstable();
+    values.dedup();
+    Ok(())
+}
+
+async fn platform_is_swarm(
+    state: &PlatformsHttpState,
+    platform_id: Uuid,
+) -> Result<bool, IdentityError> {
+    let descriptor = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT platformdescriptor FROM platforms WHERE id=$1",
+    )
+    .bind(platform_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| IdentityError::Storage(error.to_string()))?
+    .ok_or(IdentityError::NotFound)?;
+    Ok(descriptor
+        .get("$type")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("DockerSwarm")))
+}
+
+async fn validate_swarm_network_projection(
+    state: &PlatformsHttpState,
+    platform_id: Uuid,
+    network_id: &str,
+    network_name: &str,
+) -> Result<(), IdentityError> {
+    let projection = sqlx::query_as::<_, (bool, serde_json::Value)>(
+        "SELECT isstale, servicenames FROM swarmnetworkprojections WHERE platformid=$1 AND dockernetworkid=$2",
+    )
+    .bind(platform_id)
+    .bind(network_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|error| IdentityError::Storage(error.to_string()))?;
+
+    let Some((is_stale, service_names)) = projection else {
+        return Err(IdentityError::Conflict(format!(
+            "Swarm network '{network_name}' has no current inventory observation and cannot be deleted."
+        )));
+    };
+    if is_stale {
+        return Err(IdentityError::Conflict(format!(
+            "Swarm network '{network_name}' has no current inventory observation and cannot be deleted."
+        )));
+    }
+    if service_names
+        .as_array()
+        .is_some_and(|services| !services.is_empty())
+    {
+        return Err(IdentityError::Conflict(format!(
+            "Network '{network_name}' is used by one or more Services and cannot be deleted."
+        )));
+    }
+    Ok(())
+}
+
+fn publish_runtime_change(
+    state: &PlatformsHttpState,
+    platform_id: Uuid,
+    resource_type: &str,
+    action: &str,
+    resource_id: &str,
+) {
+    if let Some(realtime) = &state.realtime {
+        realtime.publish_runtime_change(platform_id, resource_type, action, resource_id);
+    }
+}
+
+fn conflict_response(detail: String, headers: &HeaderMap) -> axum::response::Response {
+    runtime_error_response(
+        RuntimeCapabilityError::new(RuntimeErrorKind::Conflict, detail, false),
+        headers,
+    )
+}
+
 fn runtime_error_response(
     error: RuntimeCapabilityError,
     headers: &HeaderMap,
@@ -1065,6 +1669,10 @@ fn invalid_query(_: QueryRejection) -> IdentityError {
     IdentityError::Validation("The resource query is invalid.".to_owned())
 }
 
+fn invalid_json(_: JsonRejection) -> IdentityError {
+    IdentityError::Validation("The request body is invalid.".to_owned())
+}
+
 fn parse_tag_filters(query: Option<&str>) -> Result<Vec<Uuid>, IdentityError> {
     let mut tags = Vec::new();
     for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
@@ -1096,6 +1704,22 @@ fn validate_docker_resource_id(value: &str) -> Result<(), IdentityError> {
 
 fn platform_error(error: AuthorizedReadError) -> IdentityError {
     IdentityError::Storage(error.to_string())
+}
+
+fn resource_metadata_error(error: citadel_resources::ResourceMetadataError) -> IdentityError {
+    match error {
+        citadel_resources::ResourceMetadataError::Validation(message) => {
+            IdentityError::Validation(message)
+        }
+        citadel_resources::ResourceMetadataError::NotFound => IdentityError::NotFound,
+        citadel_resources::ResourceMetadataError::Conflict(message) => {
+            IdentityError::Conflict(message)
+        }
+        citadel_resources::ResourceMetadataError::Credential => IdentityError::Credential,
+        citadel_resources::ResourceMetadataError::Storage(message) => {
+            IdentityError::Storage(message)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1196,5 +1820,47 @@ mod tests {
             &HeaderMap::new(),
         );
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn network_mutation_validation_preserves_swarm_scope_rules() {
+        let valid = CreateRuntimeNetwork {
+            name: "frontend".into(),
+            driver: "overlay".into(),
+            scope: "swarm".into(),
+            internal: None,
+            attachable: Some(true),
+            ingress: None,
+            enable_ipv6: Some(false),
+            enable_ipv4: Some(true),
+            config_only: None,
+            ipam: None,
+            config_from: None,
+            labels: Default::default(),
+            options: Default::default(),
+        };
+        assert!(validate_network_input(&valid).is_ok());
+        assert!(
+            validate_network_input(&CreateRuntimeNetwork {
+                driver: "bridge".into(),
+                ..valid.clone()
+            })
+            .is_err()
+        );
+        assert!(
+            validate_network_input(&CreateRuntimeNetwork {
+                enable_ipv4: Some(false),
+                ..valid
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn batch_mutation_ids_are_bounded_trimmed_and_deduplicated() {
+        let mut ids = vec![" network-1 ".into(), "network-1".into(), "network-2".into()];
+        validate_resource_ids(&mut ids, 100, "Network").unwrap();
+        assert_eq!(ids, ["network-1", "network-2"]);
+        assert!(validate_resource_ids(&mut Vec::new(), 100, "Network").is_err());
     }
 }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use chrono::Utc;
 use citadel_adapters::agent::AgentClient;
 use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
 use citadel_adapters::docker::{DockerClient, DockerError};
@@ -9,11 +8,14 @@ use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionSto
 use citadel_application::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
-use citadel_platforms::{
-    ContainerStatsStore, InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort,
-    RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimeSwarmInventory,
+use citadel_platforms::jobs::{
+    InventoryCollectionTarget, collect_inventory, collect_running_container_stats,
+    persist_container_stats, triggers_inventory_reconciliation,
 };
-use futures_util::{StreamExt, stream};
+use citadel_platforms::{
+    InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
+};
+use futures_util::StreamExt;
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
 
@@ -286,7 +288,16 @@ async fn reconcile_inventory(
                 continue;
             };
 
-        match collect_inventory(runtime, &target, cancellation).await {
+        match collect_inventory(
+            runtime,
+            &InventoryCollectionTarget {
+                platform_id: target.id,
+                platform_type: target.platform_type.clone(),
+            },
+            cancellation,
+        )
+        .await
+        {
             Ok(snapshot) => {
                 let change = store.persist(&snapshot).await?;
                 if let Some(realtime) = realtime {
@@ -341,48 +352,6 @@ ORDER BY id
         .collect()
 }
 
-async fn collect_inventory(
-    runtime: &dyn PlatformInventoryPort,
-    target: &ReconciliationTarget,
-    cancellation: &CancellationToken,
-) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
-    let (info, containers, images, networks, volumes) = tokio::try_join!(
-        runtime.get_info(cancellation),
-        runtime.list_containers(cancellation),
-        runtime.list_images(cancellation),
-        runtime.list_networks(cancellation),
-        runtime.list_volumes(cancellation),
-    )?;
-    let swarm = if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
-        let (nodes, services, tasks, configs, secrets) = tokio::try_join!(
-            runtime.list_swarm_nodes(cancellation),
-            runtime.list_swarm_services(cancellation),
-            runtime.list_swarm_tasks(cancellation),
-            runtime.list_swarm_configs(cancellation),
-            runtime.list_swarm_secrets(cancellation),
-        )?;
-        Some(RuntimeSwarmInventory {
-            nodes,
-            services,
-            tasks,
-            configs,
-            secrets,
-        })
-    } else {
-        None
-    };
-    Ok(RuntimeInventorySnapshot {
-        platform_id: target.id,
-        info,
-        containers,
-        images,
-        networks,
-        volumes,
-        swarm,
-        observed_at: Utc::now(),
-    })
-}
-
 fn worker_storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(
         citadel_platforms::RuntimeErrorKind::Remote,
@@ -417,47 +386,26 @@ async fn local_container_stats(
                 continue;
             }
         };
-        let containers = match PlatformRuntimePort::list_containers(&docker, &cancellation).await {
-            Ok(containers) => containers,
+        let batch = match collect_running_container_stats(&docker, &cancellation).await {
+            Ok(batch) => batch,
             Err(error) => {
                 if cancellation.is_cancelled() {
                     return Ok(());
                 }
-                tracing::warn!(%error, "local container inventory for statistics failed");
+                tracing::warn!(%error, "local container statistics collection failed");
                 continue;
             }
         };
-        let stats = stream::iter(
-            containers
-                .into_iter()
-                .filter(|container| container.state == "running")
-                .take(1_024)
-                .map(|container| {
-                    let docker = docker.clone();
-                    let cancellation = cancellation.clone();
-                    async move {
-                        docker
-                            .sample_container_stats(&container.id, &cancellation)
-                            .await
-                    }
-                }),
-        )
-        .buffer_unordered(8)
-        .filter_map(|result| async move {
-            match result {
-                Ok(stat) => Some(stat),
-                Err(error) => {
-                    tracing::debug!(%error, "local container statistics sample failed");
-                    None
-                }
-            }
-        })
-        .collect::<Vec<_>>()
-        .await;
-        if stats.is_empty() {
-            continue;
+        if batch.failed_samples != 0 {
+            tracing::warn!(
+                failed_samples = batch.failed_samples,
+                %platform_id,
+                "some local container statistics samples failed"
+            );
         }
-        match store.persist(platform_id, &stats).await {
+        let stats = batch.stats;
+        match persist_container_stats(&store, platform_id, &stats).await {
+            Ok(0) => continue,
             Ok(_) => {
                 metrics.local_stats_sampled();
                 if let Some(realtime) = realtime.as_ref() {
@@ -535,7 +483,8 @@ async fn agent_container_stats(
                     if stats.is_empty() {
                         continue;
                     }
-                    match store.persist(platform_id, &stats).await {
+                    match persist_container_stats(&store, platform_id, &stats).await {
+                        Ok(0) => continue,
                         Ok(_) => {
                             metrics.agent_stats_sampled();
                             if let Some(realtime) = realtime.as_ref() {
@@ -803,22 +752,6 @@ fn queue_inventory_reconciliation(
     let _ = sender.try_send(());
 }
 
-fn triggers_inventory_reconciliation(resource_type: &str, action: &str) -> bool {
-    matches!(
-        resource_type.to_ascii_lowercase().as_str(),
-        "container"
-            | "image"
-            | "network"
-            | "volume"
-            | "node"
-            | "service"
-            | "task"
-            | "secret"
-            | "config"
-            | "builder"
-    ) && !action.is_empty()
-}
-
 async fn readiness_probe(
     cancellation: CancellationToken,
     docker: DockerClient,
@@ -864,33 +797,6 @@ async fn readiness_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_platforms::{
-        RuntimeContainerSummary, RuntimeImageSummary, RuntimeNetworkSummary, RuntimePlatformInfo,
-        RuntimeStatsStream, RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret,
-        RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
-    };
-    use futures_util::future::BoxFuture;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    #[test]
-    fn only_inventory_events_trigger_reconciliation() {
-        for resource_type in [
-            "container",
-            "image",
-            "network",
-            "volume",
-            "node",
-            "service",
-            "task",
-            "secret",
-            "config",
-            "builder",
-        ] {
-            assert!(triggers_inventory_reconciliation(resource_type, "update"));
-        }
-        assert!(!triggers_inventory_reconciliation("plugin", "enable"));
-        assert!(!triggers_inventory_reconciliation("service", ""));
-    }
 
     #[test]
     fn local_event_bursts_cannot_hide_an_agent_reconciliation_trigger() {
@@ -916,127 +822,5 @@ mod tests {
         assert_eq!(local_receiver.try_recv(), Some(()));
         assert_eq!(local_receiver.try_recv(), None);
         assert_eq!(agent_receiver.try_recv(), Some(()));
-    }
-
-    #[tokio::test]
-    async fn standalone_inventory_does_not_request_swarm_resources() {
-        let runtime = CountingRuntime::default();
-        let snapshot = collect_inventory(&runtime, &target("Docker"), &CancellationToken::new())
-            .await
-            .unwrap();
-
-        assert!(snapshot.swarm.is_none());
-        assert_eq!(runtime.common.load(Ordering::Relaxed), 5);
-        assert_eq!(runtime.swarm.load(Ordering::Relaxed), 0);
-    }
-
-    #[tokio::test]
-    async fn swarm_inventory_collects_each_bounded_resource_set_once() {
-        let runtime = CountingRuntime::default();
-        let snapshot =
-            collect_inventory(&runtime, &target("DockerSwarm"), &CancellationToken::new())
-                .await
-                .unwrap();
-
-        assert!(snapshot.swarm.is_some());
-        assert_eq!(runtime.common.load(Ordering::Relaxed), 5);
-        assert_eq!(runtime.swarm.load(Ordering::Relaxed), 5);
-    }
-
-    fn target(platform_type: &str) -> ReconciliationTarget {
-        ReconciliationTarget {
-            id: uuid::Uuid::now_v7(),
-            address: "fixture".into(),
-            connector_type: "Local".into(),
-            platform_type: platform_type.into(),
-        }
-    }
-
-    #[derive(Default)]
-    struct CountingRuntime {
-        common: AtomicUsize,
-        swarm: AtomicUsize,
-    }
-
-    impl PlatformRuntimePort for CountingRuntime {
-        fn get_info<'a>(
-            &'a self,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
-            self.common.fetch_add(1, Ordering::Relaxed);
-            Box::pin(async {
-                Ok(RuntimePlatformInfo {
-                    daemon_id: "fixture".into(),
-                    server_version: "fixture".into(),
-                    operating_system: "linux".into(),
-                    os_type: "linux".into(),
-                    architecture: "x86_64".into(),
-                    cpu_count: 1,
-                    memory_total: 1,
-                    container_count: 0,
-                    containers_running: 0,
-                    containers_paused: 0,
-                    containers_stopped: 0,
-                    api_version: "1.49".into(),
-                    minimum_api_version: "1.41".into(),
-                    agent_version: None,
-                })
-            })
-        }
-
-        fn list_containers<'a>(
-            &'a self,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-            self.common.fetch_add(1, Ordering::Relaxed);
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn stream_stats<'a>(
-            &'a self,
-            _fetch_interval: Duration,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>> {
-            unreachable!()
-        }
-    }
-
-    macro_rules! counted_list {
-        ($name:ident, $type:ty, $counter:ident) => {
-            fn $name<'a>(
-                &'a self,
-                _cancellation: &'a CancellationToken,
-            ) -> BoxFuture<'a, Result<Vec<$type>, RuntimeCapabilityError>> {
-                self.$counter.fetch_add(1, Ordering::Relaxed);
-                Box::pin(async { Ok(Vec::new()) })
-            }
-        };
-    }
-
-    impl PlatformInventoryPort for CountingRuntime {
-        counted_list!(list_images, RuntimeImageSummary, common);
-        counted_list!(list_networks, RuntimeNetworkSummary, common);
-        counted_list!(list_volumes, RuntimeVolumeSummary, common);
-        counted_list!(list_swarm_nodes, RuntimeSwarmNode, swarm);
-        counted_list!(list_swarm_services, RuntimeSwarmService, swarm);
-        counted_list!(list_swarm_tasks, RuntimeSwarmTask, swarm);
-        counted_list!(list_swarm_configs, RuntimeSwarmConfig, swarm);
-        counted_list!(list_swarm_secrets, RuntimeSwarmSecret, swarm);
-
-        fn inspect_network<'a>(
-            &'a self,
-            _id: &'a str,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimeNetworkSummary, RuntimeCapabilityError>> {
-            unreachable!()
-        }
-
-        fn inspect_volume<'a>(
-            &'a self,
-            _name: &'a str,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
-            unreachable!()
-        }
     }
 }

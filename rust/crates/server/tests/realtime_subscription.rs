@@ -93,6 +93,52 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
 }
 
 #[tokio::test]
+async fn global_subscription_receives_metadata_free_resource_invalidations() {
+    let platform_id = Uuid::now_v7();
+    let metrics = Arc::new(Metrics::default());
+    let shutdown = CancellationToken::new();
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(FakeReader {
+            platform: platform(platform_id),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        metrics,
+        shutdown.clone(),
+    );
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+            .await
+            .unwrap();
+    socket
+        .send(Message::Text(
+            json!({
+                "protocolVersion": 1,
+                "kind": "subscribe",
+                "accessToken": TOKEN
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+
+    hub.publish_resource_change("Registry", Uuid::nil(), "registryChanged");
+    let event = receive_json(&mut socket).await;
+    assert_eq!(event["resourceType"], "Registry");
+    assert_eq!(event["resourceId"], Uuid::nil().to_string());
+    assert_eq!(event["eventKind"], "registryChanged");
+    assert_eq!(event["payload"], json!({}));
+
+    socket.close(None).await.unwrap();
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn invalid_token_is_rejected_before_any_snapshot() {
     let platform_id = Uuid::now_v7();
     let metrics = Arc::new(Metrics::default());

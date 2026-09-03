@@ -2,6 +2,7 @@
 pub enum HttpMethod {
     Get,
     Post,
+    Put,
     Patch,
     Delete,
 }
@@ -12,6 +13,7 @@ impl HttpMethod {
         match self {
             Self::Get => "get",
             Self::Post => "post",
+            Self::Put => "put",
             Self::Patch => "patch",
             Self::Delete => "delete",
         }
@@ -227,6 +229,31 @@ const SWARM_TASK_FILTER_PARAMETERS: &[ParameterContract] = &[
         },
     ),
     ParameterContract::query("serviceId", ParameterSchema::String),
+];
+
+const REGISTRY_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::query(
+        "includeDisabled",
+        ParameterSchema::Boolean {
+            default: Some(false),
+        },
+    ),
+    ParameterContract::query("tags", ParameterSchema::ArrayString),
+];
+
+const GIT_REPOSITORY_FILTER_PARAMETERS: &[ParameterContract] = &[ParameterContract::query(
+    "tags",
+    ParameterSchema::ArrayString,
+)];
+
+const SECRET_DEFINITION_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::query("scope", ParameterSchema::Reference("ResourceBindingScope")),
+    ParameterContract::query("resourceId", ParameterSchema::Uuid),
+    ParameterContract::query(
+        "targetResourceType",
+        ParameterSchema::Reference("ResourceType"),
+    ),
+    ParameterContract::query("targetResourceId", ParameterSchema::Uuid),
 ];
 
 const USER_FILTER_PARAMETERS: &[ParameterContract] = &[
@@ -1017,6 +1044,13 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
+    UPDATE_PLATFORM_METADATA => {
+        method: Patch, path: "/api/v1/platforms/{id}/_metadata", operation_id: "updatePlatformMetadata", summary: "Update Platform metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("PlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
     LIST_PLATFORM_CONTAINERS => {
         method: Get, path: "/api/v1/platforms/{id}/containers", operation_id: "listContainers", summary: "List Platform Containers",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1149,6 +1183,288 @@ route_catalog! {
         request_schema: None, response_schema: Some("SwarmSecretView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    LIST_TAGS => {
+        method: Get, path: "/api/v1/tags", operation_id: "listTags", summary: "List resource tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("TagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    CREATE_TAG => {
+        method: Post, path: "/api/v1/tags", operation_id: "createTag", summary: "Create a resource tag",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateTagInput"), response_schema: Some("TagView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    PATCH_TAG => {
+        method: Patch, path: "/api/v1/tags/{id}", operation_id: "patchTag", summary: "Update a resource tag",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchTagInput"), response_schema: Some("TagView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DELETE_TAG => {
+        method: Delete, path: "/api/v1/tags/{id}", operation_id: "deleteTag", summary: "Delete a resource tag",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_PLATFORM_TAGS => {
+        method: Get, path: "/api/v1/platforms/{id}/tags", operation_id: "getPlatformTags", summary: "Get Platform tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_PLATFORM_TAGS => {
+        method: Put, path: "/api/v1/platforms/{id}/tags", operation_id: "replacePlatformTags", summary: "Replace Platform tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_REGISTRIES => {
+        method: Get, path: "/api/v1/registries", operation_id: "listRegistries", summary: "List Registries",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("RegistriesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: REGISTRY_FILTER_PARAMETERS
+    },
+    CREATE_REGISTRY => {
+        method: Post, path: "/api/v1/registries", operation_id: "createRegistry", summary: "Create a Registry",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateRegistryInput"), response_schema: Some("RegistryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_REGISTRIES => {
+        method: Delete, path: "/api/v1/registries", operation_id: "deleteRegistries", summary: "Delete Registries",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteRegistriesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_REGISTRY => {
+        method: Get, path: "/api/v1/registries/{id}", operation_id: "getRegistry", summary: "Get a Registry",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("RegistryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_REGISTRY_CONFIG => {
+        method: Get, path: "/api/v1/registries/{id}/_cfg", operation_id: "getRegistryConfig", summary: "Get Registry configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("RegistryConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_REGISTRY => {
+        method: Patch, path: "/api/v1/registries/{id}", operation_id: "updateRegistry", summary: "Update a Registry",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchRegistryInput"), response_schema: Some("RegistryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_REGISTRY_METADATA => {
+        method: Patch, path: "/api/v1/registries/{id}/_metadata", operation_id: "updateRegistryMetadata", summary: "Update Registry metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("RegistryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_REGISTRY => {
+        method: Post, path: "/api/v1/registries/rename", operation_id: "renameRegistry", summary: "Rename a Registry",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("RegistryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_REGISTRY_TAGS => {
+        method: Get, path: "/api/v1/registries/{id}/tags", operation_id: "getRegistryTags", summary: "Get Registry tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_REGISTRY_TAGS => {
+        method: Put, path: "/api/v1/registries/{id}/tags", operation_id: "replaceRegistryTags", summary: "Replace Registry tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_GIT_REPOSITORIES => {
+        method: Get, path: "/api/v1/gitRepositories", operation_id: "listGitRepositories", summary: "List Git repositories",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoriesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: GIT_REPOSITORY_FILTER_PARAMETERS
+    },
+    CREATE_GIT_REPOSITORY => {
+        method: Post, path: "/api/v1/gitRepositories", operation_id: "createGitRepository", summary: "Create a Git repository",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateGitRepositoryInput"), response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_GIT_REPOSITORIES => {
+        method: Delete, path: "/api/v1/gitRepositories", operation_id: "deleteGitRepositories", summary: "Delete Git repositories",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteGitRepositoriesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_GIT_REPOSITORY => {
+        method: Get, path: "/api/v1/gitRepositories/{id}", operation_id: "getGitRepository", summary: "Get a Git repository",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_GIT_REPOSITORY_CONFIG => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/_cfg", operation_id: "getGitRepositoryConfig", summary: "Get Git repository configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_GIT_REPOSITORY => {
+        method: Patch, path: "/api/v1/gitRepositories/{id}", operation_id: "updateGitRepository", summary: "Update a Git repository",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchGitRepositoryInput"), response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_GIT_REPOSITORY_METADATA => {
+        method: Patch, path: "/api/v1/gitRepositories/{id}/_metadata", operation_id: "updateGitRepositoryMetadata", summary: "Update Git repository metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_GIT_REPOSITORY => {
+        method: Post, path: "/api/v1/gitRepositories/rename", operation_id: "renameGitRepository", summary: "Rename a Git repository",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_GIT_REPOSITORY_TAGS => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/tags", operation_id: "getGitRepositoryTags", summary: "Get Git repository tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_GIT_REPOSITORY_TAGS => {
+        method: Put, path: "/api/v1/gitRepositories/{id}/tags", operation_id: "replaceGitRepositoryTags", summary: "Replace Git repository tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    CREATE_NETWORK => {
+        method: Post, path: "/api/v1/networks", operation_id: "createNetwork", summary: "Create a Network",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateNetworkInput"), response_schema: Some("CreateNetworkView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_NETWORKS => {
+        method: Delete, path: "/api/v1/networks", operation_id: "deleteNetworks", summary: "Delete Networks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteNetworksInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    CREATE_VOLUME => {
+        method: Post, path: "/api/v1/volumes", operation_id: "createVolume", summary: "Create a Volume",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateVolumeInput"), response_schema: Some("DockerVolumeResultView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_VOLUMES => {
+        method: Delete, path: "/api/v1/volumes", operation_id: "deleteVolumes", summary: "Delete Volumes",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteVolumesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_GLOBAL_RESOURCE_BINDINGS => {
+        method: Get, path: "/api/v1/resourceBindings/global", operation_id: "getGlobalResourceBindings", summary: "Get global resource bindings",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    CREATE_GLOBAL_RESOURCE_BINDING => {
+        method: Post, path: "/api/v1/resourceBindings/global", operation_id: "createGlobalResourceBinding", summary: "Create a global resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ResourceBindingInput"), response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_GLOBAL_RESOURCE_BINDING => {
+        method: Patch, path: "/api/v1/resourceBindings/global", operation_id: "updateGlobalResourceBinding", summary: "Update a global resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateResourceBindingInput"), response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_GLOBAL_RESOURCE_BINDING => {
+        method: Delete, path: "/api/v1/resourceBindings/global/{id}", operation_id: "deleteGlobalResourceBinding", summary: "Delete a global resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_RESOURCE_BINDINGS => {
+        method: Get, path: "/api/v1/resourceBindings/{scope}/{resourceId}", operation_id: "getResourceBindings", summary: "Get resource bindings",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("scope"), ParameterContract::path_uuid("resourceId")]
+    },
+    CREATE_RESOURCE_BINDING => {
+        method: Post, path: "/api/v1/resourceBindings/{scope}/{resourceId}", operation_id: "createResourceBinding", summary: "Create a resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ResourceBindingInput"), response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("scope"), ParameterContract::path_uuid("resourceId")]
+    },
+    UPDATE_RESOURCE_BINDING => {
+        method: Patch, path: "/api/v1/resourceBindings/{scope}/{resourceId}", operation_id: "updateResourceBinding", summary: "Update a resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateResourceBindingInput"), response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("scope"), ParameterContract::path_uuid("resourceId")]
+    },
+    DELETE_RESOURCE_BINDING => {
+        method: Delete, path: "/api/v1/resourceBindings/{scope}/{resourceId}/{id}", operation_id: "deleteResourceBinding", summary: "Delete a resource binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceBindingsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("scope"), ParameterContract::path_uuid("resourceId"), ParameterContract::path_uuid("id")]
+    },
+    LIST_SECRET_DEFINITIONS => {
+        method: Get, path: "/api/v1/resourceBindings/secrets", operation_id: "listSecretDefinitions", summary: "List Secret definitions",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SecretDefinitionsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: SECRET_DEFINITION_FILTER_PARAMETERS
+    },
+    CREATE_INTERNAL_SECRET => {
+        method: Post, path: "/api/v1/resourceBindings/secrets", operation_id: "createInternalSecret", summary: "Create an internal encrypted Secret",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateInternalSecretInput"), response_schema: Some("SecretDefinitionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::query("scope", ParameterSchema::String), ParameterContract::query("resourceId", ParameterSchema::Uuid)]
+    },
+    CREATE_EXTERNAL_SECRET => {
+        method: Post, path: "/api/v1/resourceBindings/secrets/external", operation_id: "createExternalSecret", summary: "Create an external Secret definition",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateExternalSecretInput"), response_schema: Some("SecretDefinitionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_EXTERNAL_SECRET => {
+        method: Patch, path: "/api/v1/resourceBindings/secrets/external/{id}", operation_id: "updateExternalSecret", summary: "Update an external Secret definition",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateExternalSecretInput"), response_schema: Some("SecretDefinitionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DELETE_SECRET_DEFINITION => {
+        method: Delete, path: "/api/v1/resourceBindings/secrets/{id}", operation_id: "deleteSecretDefinition", summary: "Delete an unused Secret definition",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_SECRET_PROVIDERS => {
+        method: Get, path: "/api/v1/resourceBindings/secret-providers", operation_id: "listSecretProviders", summary: "List Secret providers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SecretProvidersView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    CREATE_VAULT_KV2_SECRET_PROVIDER => {
+        method: Post, path: "/api/v1/resourceBindings/secret-providers/vault-kv2", operation_id: "createVaultKvV2SecretProvider", summary: "Create a Vault-compatible KV v2 Secret provider",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateVaultKvV2SecretProviderInput"), response_schema: Some("SecretProviderView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_VAULT_KV2_SECRET_PROVIDER => {
+        method: Patch, path: "/api/v1/resourceBindings/secret-providers/vault-kv2/{id}", operation_id: "updateVaultKvV2SecretProvider", summary: "Update a Vault-compatible KV v2 Secret provider",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateVaultKvV2SecretProviderInput"), response_schema: Some("SecretProviderView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DELETE_SECRET_PROVIDER => {
+        method: Delete, path: "/api/v1/resourceBindings/secret-providers/{id}", operation_id: "deleteSecretProvider", summary: "Delete a Secret provider",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     }
 }
 
@@ -1703,6 +2019,47 @@ mod tests {
             assert_eq!(route.operation_id, operation_id);
             assert_eq!(route.authentication, RouteAuthentication::Administrator);
             assert!(route.public);
+        }
+    }
+
+    #[test]
+    fn phase_five_routes_preserve_mutation_methods_and_actor_authentication() {
+        let expected = [
+            (routes::CREATE_TAG, HttpMethod::Post, "/api/v1/tags"),
+            (
+                routes::REPLACE_PLATFORM_TAGS,
+                HttpMethod::Put,
+                "/api/v1/platforms/{id}/tags",
+            ),
+            (
+                routes::UPDATE_REGISTRY,
+                HttpMethod::Patch,
+                "/api/v1/registries/{id}",
+            ),
+            (
+                routes::UPDATE_GIT_REPOSITORY,
+                HttpMethod::Patch,
+                "/api/v1/gitRepositories/{id}",
+            ),
+            (
+                routes::CREATE_RESOURCE_BINDING,
+                HttpMethod::Post,
+                "/api/v1/resourceBindings/{scope}/{resourceId}",
+            ),
+            (routes::CREATE_NETWORK, HttpMethod::Post, "/api/v1/networks"),
+            (
+                routes::DELETE_VOLUMES,
+                HttpMethod::Delete,
+                "/api/v1/volumes",
+            ),
+        ];
+        for (route, method, path) in expected {
+            assert_eq!(route.method, method);
+            assert_eq!(route.path, path);
+            assert_eq!(route.authentication, RouteAuthentication::Actor);
+            assert!(route.public);
+            assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
+            assert!(route.error_responses.contains(&ErrorResponse::Forbidden));
         }
     }
 }

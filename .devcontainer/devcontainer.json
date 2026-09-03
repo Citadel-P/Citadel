@@ -1,0 +1,39 @@
+{
+  "name": "Citadel Rust",
+  "dockerComposeFile": "compose.yaml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+  "runServices": ["postgres"],
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "forwardPorts": [8000, 5173],
+  "portsAttributes": {
+    "8000": {
+      "label": "Citadel Rust API",
+      "requireLocalPort": true
+    },
+    "5173": {
+      "label": "Citadel UI",
+      "onAutoForward": "notify",
+      "requireLocalPort": true
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh"
+}

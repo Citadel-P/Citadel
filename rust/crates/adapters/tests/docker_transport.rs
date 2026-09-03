@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use citadel_adapters::docker::DockerClient;
+use citadel_platforms::{CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort};
 use futures_util::StreamExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
@@ -15,7 +16,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..19 {
+        for _ in 0..23 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -39,6 +40,12 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
                 .unwrap()
                 .to_owned();
             let path = first_line.split_whitespace().nth(1).unwrap().to_owned();
+            if path.ends_with("/networks/create") || path.ends_with("/volumes/create") {
+                assert!(first_line.starts_with("POST "));
+            }
+            if path.contains("/networks/network-created") || path.contains("/volumes/created") {
+                assert!(first_line.starts_with("DELETE "));
+            }
             let body = response_for(&path);
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -98,6 +105,54 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     assert_eq!(client.list_swarm_tasks().await.unwrap()[0].id, "task-1");
     assert_eq!(client.list_swarm_secrets().await.unwrap()[0].id, "secret-1");
     assert_eq!(client.list_swarm_configs().await.unwrap()[0].id, "config-1");
+    let cancellation = tokio_util::sync::CancellationToken::new();
+    assert_eq!(
+        PlatformResourceMutationPort::create_network(
+            &client,
+            &CreateRuntimeNetwork {
+                name: "created".into(),
+                driver: "bridge".into(),
+                scope: "local".into(),
+                internal: None,
+                attachable: None,
+                ingress: None,
+                enable_ipv6: None,
+                enable_ipv4: Some(true),
+                config_only: None,
+                ipam: None,
+                config_from: None,
+                labels: Default::default(),
+                options: Default::default(),
+            },
+            &cancellation,
+        )
+        .await
+        .unwrap()
+        .id,
+        "network-created"
+    );
+    PlatformResourceMutationPort::delete_network(&client, "network-created", &cancellation)
+        .await
+        .unwrap();
+    assert_eq!(
+        PlatformResourceMutationPort::create_volume(
+            &client,
+            &CreateRuntimeVolume {
+                name: "created".into(),
+                driver: "local".into(),
+                labels: Default::default(),
+                options: Default::default(),
+            },
+            &cancellation,
+        )
+        .await
+        .unwrap()
+        .name,
+        "created"
+    );
+    PlatformResourceMutationPort::delete_volume(&client, "created", false, &cancellation)
+        .await
+        .unwrap();
     let mut events = client.events(None, None).await.unwrap();
     assert_eq!(events.next().await.unwrap().unwrap().action, "start");
     drop(events);
@@ -137,6 +192,10 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/tasks?filters=%7B%22desired-state%22%3A%5B%22running%22%5D%7D",
             "/v1.49/secrets",
             "/v1.49/configs",
+            "/v1.49/networks/create",
+            "/v1.49/networks/network-created",
+            "/v1.49/volumes/create",
+            "/v1.49/volumes/created?force=false",
             "/v1.49/events",
             "/v1.49/containers/container-fixture/stats?stream=true",
             "/v1.49/containers/container-fixture/stats?stream=false&one-shot=true",
@@ -193,6 +252,12 @@ fn response_for(path: &str) -> Vec<u8> {
         "/v1.49/configs" => {
             r#"[{"ID":"config-1","Version":{"Index":1},"Spec":{"Name":"app-config","Labels":{}}}]"#
         }
+        "/v1.49/networks/create" => r#"{"Id":"network-created","Warning":""}"#,
+        "/v1.49/networks/network-created" => "",
+        "/v1.49/volumes/create" => {
+            r#"{"Name":"created","Driver":"local","Mountpoint":"/var/lib/docker/volumes/created/_data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{}}"#
+        }
+        "/v1.49/volumes/created?force=false" => "",
         "/v1.49/events" => {
             "{\"Type\":\"container\",\"Action\":\"start\",\"Actor\":{\"ID\":\"container-fixture\",\"Attributes\":{}},\"scope\":\"local\",\"time\":1,\"timeNano\":1000000000}\n"
         }

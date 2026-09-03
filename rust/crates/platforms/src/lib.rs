@@ -12,9 +12,12 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 mod inventory;
+pub mod jobs;
+mod mutations;
 mod read;
 
 pub use inventory::*;
+pub use mutations::*;
 pub use read::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

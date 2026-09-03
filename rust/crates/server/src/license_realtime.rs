@@ -21,6 +21,8 @@ use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::realtime::RealtimeHub;
+
 const PROTOCOL_VERSION: u16 = 1;
 const PAYLOAD_SCHEMA_VERSION: u16 = 1;
 const EVENT_CAPACITY: usize = 16;
@@ -41,6 +43,7 @@ struct LicenseStateChanged {
 pub struct LicenseRealtimeHub {
     revision: Arc<AtomicU64>,
     sender: broadcast::Sender<LicenseStateChanged>,
+    realtime: Option<RealtimeHub>,
 }
 
 impl Default for LicenseRealtimeHub {
@@ -50,17 +53,27 @@ impl Default for LicenseRealtimeHub {
         Self {
             revision: Arc::new(AtomicU64::new(0)),
             sender,
+            realtime: None,
         }
     }
 }
 
 impl LicenseRealtimeHub {
+    #[must_use]
+    pub fn with_realtime(mut self, realtime: Option<RealtimeHub>) -> Self {
+        self.realtime = realtime;
+        self
+    }
+
     pub fn publish(&self, instance_id: Uuid) -> u64 {
         let revision = self.revision.fetch_add(1, Ordering::AcqRel) + 1;
         let _ = self.sender.send(LicenseStateChanged {
             instance_id,
             revision,
         });
+        if let Some(realtime) = &self.realtime {
+            realtime.publish_resource_change("License", instance_id, "licenseStateChanged");
+        }
         revision
     }
 

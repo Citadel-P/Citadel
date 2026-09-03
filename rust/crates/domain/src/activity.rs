@@ -2,6 +2,7 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -157,6 +158,50 @@ pub struct OidcProviderActivitySnapshot {
     pub default_role_id: Option<Uuid>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RegistryActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: String,
+    #[serde(rename = "RegistryHost")]
+    pub registry_host: String,
+    #[serde(rename = "Status")]
+    pub status: String,
+    #[serde(rename = "Configuration")]
+    pub configuration: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GitRepositoryActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "Url")]
+    pub url: String,
+    #[serde(rename = "DefaultBranch")]
+    pub default_branch: String,
+    #[serde(rename = "GitAccountId")]
+    pub git_account_id: Option<Uuid>,
+    #[serde(rename = "SyncMode")]
+    pub sync_mode: String,
+    #[serde(rename = "SyncIntervalMinutes")]
+    pub sync_interval_minutes: Option<i32>,
+    #[serde(rename = "Webhook")]
+    pub webhook: Option<Value>,
+    #[serde(rename = "OnClone")]
+    pub on_clone: Option<Value>,
+    #[serde(rename = "OnPull")]
+    pub on_pull: Option<Value>,
+    #[serde(rename = "ResolvedCommitSha")]
+    pub resolved_commit_sha: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityChangedFieldName {
     DisplayName,
@@ -254,6 +299,10 @@ impl ActivityChangedField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "$type")]
+// This closed compatibility enum is serialized immediately at mutation
+// boundaries. Boxing its larger snapshots would add heap allocations to every
+// Activity construction solely to reduce the enum's stack size.
+#[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
     UserProfileUpdated {
         #[serde(rename = "Changes")]
@@ -440,6 +489,46 @@ pub enum ActivityEventInfo {
     OidcProviderDeleted {
         #[serde(rename = "Provider")]
         provider: Box<OidcProviderActivitySnapshot>,
+    },
+    RegistryCreated {
+        #[serde(rename = "Registry")]
+        registry: RegistryActivitySnapshot,
+    },
+    RegistryUpdated {
+        #[serde(rename = "OldRegistry")]
+        old_registry: RegistryActivitySnapshot,
+        #[serde(rename = "NewRegistry")]
+        new_registry: RegistryActivitySnapshot,
+    },
+    RegistryRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    RegistryDeleted {
+        #[serde(rename = "Registry")]
+        registry: RegistryActivitySnapshot,
+    },
+    GitRepoCreated {
+        #[serde(rename = "GitRepo")]
+        git_repo: GitRepositoryActivitySnapshot,
+    },
+    GitRepoUpdated {
+        #[serde(rename = "OldGitRepo")]
+        old_git_repo: GitRepositoryActivitySnapshot,
+        #[serde(rename = "NewGitRepo")]
+        new_git_repo: GitRepositoryActivitySnapshot,
+    },
+    GitRepoRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    GitRepoDeleted {
+        #[serde(rename = "GitRepo")]
+        git_repo: GitRepositoryActivitySnapshot,
     },
 }
 
@@ -737,6 +826,58 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn registry_created(registry: RegistryActivitySnapshot) -> Self {
+        Self::RegistryCreated { registry }
+    }
+
+    #[must_use]
+    pub const fn registry_updated(
+        old_registry: RegistryActivitySnapshot,
+        new_registry: RegistryActivitySnapshot,
+    ) -> Self {
+        Self::RegistryUpdated {
+            old_registry,
+            new_registry,
+        }
+    }
+
+    #[must_use]
+    pub fn registry_renamed(old_name: String, new_name: String) -> Self {
+        Self::RegistryRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn registry_deleted(registry: RegistryActivitySnapshot) -> Self {
+        Self::RegistryDeleted { registry }
+    }
+
+    #[must_use]
+    pub const fn git_repo_created(git_repo: GitRepositoryActivitySnapshot) -> Self {
+        Self::GitRepoCreated { git_repo }
+    }
+
+    #[must_use]
+    pub const fn git_repo_updated(
+        old_git_repo: GitRepositoryActivitySnapshot,
+        new_git_repo: GitRepositoryActivitySnapshot,
+    ) -> Self {
+        Self::GitRepoUpdated {
+            old_git_repo,
+            new_git_repo,
+        }
+    }
+
+    #[must_use]
+    pub fn git_repo_renamed(old_name: String, new_name: String) -> Self {
+        Self::GitRepoRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn git_repo_deleted(git_repo: GitRepositoryActivitySnapshot) -> Self {
+        Self::GitRepoDeleted { git_repo }
+    }
+
+    #[must_use]
     pub const fn event_type(&self) -> ActivityEventType {
         match self {
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
@@ -788,6 +929,14 @@ impl ActivityEventInfo {
             Self::OidcProviderUpdated { .. } => ActivityEventType::OidcProviderUpdated,
             Self::OidcProviderRenamed { .. } => ActivityEventType::OidcProviderRenamed,
             Self::OidcProviderDeleted { .. } => ActivityEventType::OidcProviderDeleted,
+            Self::RegistryCreated { .. } => ActivityEventType::RegistryCreated,
+            Self::RegistryUpdated { .. } => ActivityEventType::RegistryUpdated,
+            Self::RegistryRenamed { .. } => ActivityEventType::RegistryRenamed,
+            Self::RegistryDeleted { .. } => ActivityEventType::RegistryDeleted,
+            Self::GitRepoCreated { .. } => ActivityEventType::GitRepoCreated,
+            Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
+            Self::GitRepoRenamed { .. } => ActivityEventType::GitRepoRenamed,
+            Self::GitRepoDeleted { .. } => ActivityEventType::GitRepoDeleted,
         }
     }
 }
@@ -814,12 +963,13 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::User,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
@@ -831,12 +981,13 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::Team,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
@@ -848,12 +999,13 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::Role,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
@@ -865,12 +1017,13 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::ServiceAccount,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
@@ -881,12 +1034,13 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             instance_id,
             "License".to_owned(),
             ActivityResourceType::License,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
@@ -898,22 +1052,65 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        Self::new_identity_event(
+        Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::OidcProvider,
             actor_id,
             info,
+            ActivityStatus::Success,
             created_at,
         )
     }
 
-    fn new_identity_event(
+    pub fn new_registry_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Registry,
+            actor_id,
+            info,
+            ActivityStatus::Success,
+            created_at,
+        )
+    }
+
+    pub fn new_git_repository_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let status = if matches!(&info, ActivityEventInfo::GitRepoCreated { .. }) {
+            ActivityStatus::Information
+        } else {
+            ActivityStatus::Success
+        };
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::GitRepository,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )
+    }
+
+    fn new_resource_event(
         resource_id: Uuid,
         resource_name: String,
         expected_resource_type: ActivityResourceType,
         actor_id: ActorId,
         info: ActivityEventInfo,
+        status: ActivityStatus,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
         if resource_id.is_nil() {
@@ -937,7 +1134,7 @@ impl ActivityEvent {
             resource_id,
             resource_name: resource_name.to_owned(),
             resource_type,
-            status: ActivityStatus::Success,
+            status,
             event_type,
             info,
             created_by_actor_id: actor_id,
@@ -1181,5 +1378,37 @@ mod tests {
         assert_eq!(json["$type"], "OidcProviderCreated");
         assert!(json["Provider"].get("ClientSecret").is_none());
         assert!(json["Provider"].get("ClientSecretCiphertext").is_none());
+    }
+
+    #[test]
+    fn catalog_activity_uses_compatible_fields_and_git_creation_status() {
+        let snapshot = GitRepositoryActivitySnapshot {
+            id: Uuid::now_v7(),
+            name: "repository".to_owned(),
+            description: None,
+            url: "https://git.example.test/team/repository".to_owned(),
+            default_branch: "main".to_owned(),
+            git_account_id: None,
+            sync_mode: "Manual".to_owned(),
+            sync_interval_minutes: None,
+            webhook: None,
+            on_clone: None,
+            on_pull: None,
+            resolved_commit_sha: None,
+        };
+        let event = ActivityEvent::new_git_repository_event(
+            snapshot.id,
+            snapshot.name.clone(),
+            ActorId::new(Uuid::now_v7()),
+            ActivityEventInfo::git_repo_created(snapshot),
+            Utc::now(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.status(), ActivityStatus::Information);
+        assert_eq!(json["$type"], "GitRepoCreated");
+        assert!(json.get("GitRepo").is_some());
+        assert!(json.get("Repository").is_none());
     }
 }
