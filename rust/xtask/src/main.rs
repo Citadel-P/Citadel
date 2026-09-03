@@ -100,6 +100,13 @@ const OPERATIONS: &[OperationSpec] = &[
         streaming: false,
     },
     OperationSpec {
+        operation_id: "ContainerDelete",
+        method: "delete",
+        path: "/containers/{id}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
         operation_id: "SystemEvents",
         method: "get",
         path: "/events",

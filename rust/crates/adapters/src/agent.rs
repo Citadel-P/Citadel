@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_stream::stream;
 use base64::Engine;
 use citadel_contracts::citadel::containers::v1::{
-    ListContainersRequest, StreamContainersStatsRequest,
+    DeleteContainerRequest, ListContainersRequest, StreamContainersStatsRequest,
     container_service_client::ContainerServiceClient,
 };
 use citadel_contracts::citadel::images::v1::{
@@ -51,6 +51,7 @@ const MAX_UNARY_ATTEMPTS: usize = 3;
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(200);
 const PLATFORM_INFO_METHOD: &str = "/citadel.platforms.v1.PlatformService/GetPlatformInfo";
 const LIST_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/List";
+const DELETE_CONTAINER_METHOD: &str = "/citadel.containers.v1.ContainerService/Delete";
 const STREAM_CONTAINERS_STATS_METHOD: &str =
     "/citadel.containers.v1.ContainerService/StreamContainersStats";
 const LIST_IMAGES_METHOD: &str = "/citadel.images.v1.ImageService/List";
@@ -302,6 +303,40 @@ impl AgentClient {
         ContainerServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
             .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    pub async fn delete_container(
+        &self,
+        id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        if id.trim().is_empty() || id.len() > 256 {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::InvalidRequest,
+                "the Container identifier is invalid",
+                false,
+            ));
+        }
+        let request = self.signer.sign(
+            DeleteContainerRequest {
+                ids: vec![id.to_owned()],
+                v: Some(true),
+                force: Some(true),
+                link: Some(false),
+            },
+            DELETE_CONTAINER_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.container_client();
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.delete(request)) => {
+                result.map_err(|_| timeout_error("deleting a Container through the Agent"))?
+                    .map_err(normalize_status)?;
+            }
+        }
+        Ok(())
     }
 
     fn image_client(&self) -> ImageServiceClient<Channel> {

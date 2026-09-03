@@ -52,6 +52,13 @@ pub const CONTAINER_INSPECT: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const CONTAINER_DELETE: Endpoint = Endpoint {
+    operation_id: "ContainerDelete",
+    method: "DELETE",
+    path: "/containers/{id}",
+    versioned: true,
+    streaming: false,
+};
 pub const SYSTEM_EVENTS: Endpoint = Endpoint {
     operation_id: "SystemEvents",
     method: "GET",

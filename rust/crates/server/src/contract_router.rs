@@ -26,8 +26,30 @@ where
             HttpMethod::Patch => MethodFilter::PATCH,
             HttpMethod::Delete => MethodFilter::DELETE,
         };
-        self.route(contract.path, on(filter, handler))
+        self.route(&runtime_path(contract.path), on(filter, handler))
     }
+}
+
+fn runtime_path(contract_path: &str) -> String {
+    let mut position = 0_usize;
+    contract_path
+        .split('/')
+        .map(|segment| {
+            if segment.starts_with('{') && segment.ends_with('}') {
+                let catch_all = segment.starts_with("{*");
+                let name = if catch_all {
+                    format!("{{*parameter{position}}}")
+                } else {
+                    format!("{{parameter{position}}}")
+                };
+                position += 1;
+                name
+            } else {
+                segment.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 #[cfg(test)]
@@ -54,5 +76,38 @@ mod tests {
 
         assert_eq!(get.status(), StatusCode::OK);
         assert_eq!(post.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[tokio::test]
+    async fn equivalent_contract_paths_can_use_different_openapi_parameter_names() {
+        let app = Router::new()
+            .contract_route(routes::GET_DEPLOYMENT, || async { StatusCode::OK })
+            .contract_route(routes::UPDATE_DEPLOYMENT, || async {
+                StatusCode::NO_CONTENT
+            });
+
+        assert_eq!(
+            app.clone()
+                .oneshot(
+                    Request::get("/api/v1/deployments/00000000-0000-0000-0000-000000000001")
+                        .body(Body::empty())
+                        .unwrap()
+                )
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            app.oneshot(
+                Request::patch("/api/v1/deployments/00000000-0000-0000-0000-000000000001",)
+                    .body(Body::empty())
+                    .unwrap()
+            )
+            .await
+            .unwrap()
+            .status(),
+            StatusCode::NO_CONTENT
+        );
     }
 }

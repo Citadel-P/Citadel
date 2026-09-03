@@ -422,6 +422,7 @@ dependencies = [
  "citadel-application",
  "citadel-contracts",
  "citadel-database",
+ "citadel-deployments",
  "citadel-domain",
  "citadel-identity",
  "citadel-platforms",
@@ -493,6 +494,21 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "citadel-deployments"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-domain",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]
@@ -570,6 +586,7 @@ dependencies = [
  "citadel-application",
  "citadel-contracts",
  "citadel-database",
+ "citadel-deployments",
  "citadel-domain",
  "citadel-identity",
  "citadel-platforms",

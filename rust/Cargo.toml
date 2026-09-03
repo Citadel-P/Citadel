@@ -4,6 +4,7 @@ members = [
     "crates/domain",
     "crates/identity",
     "crates/platforms",
+    "crates/deployments",
     "crates/resources",
     "crates/contracts",
     "crates/database",

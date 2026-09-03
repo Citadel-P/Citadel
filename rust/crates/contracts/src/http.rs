@@ -357,6 +357,11 @@ const OIDC_CALLBACK_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::query("error_description", ParameterSchema::String),
 ];
 
+const DEPLOYMENT_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::query("tags", ParameterSchema::ArrayString),
+    ParameterContract::query("platformId", ParameterSchema::Uuid),
+];
+
 macro_rules! route_catalog {
     ($(
         $name:ident => {
@@ -1029,6 +1034,69 @@ route_catalog! {
         request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id"), ParameterContract::path_uuid("tokenId")]
+    },
+    LIST_DEPLOYMENTS => {
+        method: Get, path: "/api/v1/deployments", operation_id: "listDeployments", summary: "List authorized Deployments",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DeploymentsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: DEPLOYMENT_FILTER_PARAMETERS
+    },
+    CREATE_DEPLOYMENT => {
+        method: Post, path: "/api/v1/deployments", operation_id: "createDeployment", summary: "Create a Deployment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateDeploymentInput"), response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[]
+    },
+    DELETE_DEPLOYMENTS => {
+        method: Delete, path: "/api/v1/deployments", operation_id: "deleteDeployments", summary: "Delete Deployments",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable],
+        parameters: &[]
+    },
+    RENAME_DEPLOYMENT => {
+        method: Post, path: "/api/v1/deployments/rename", operation_id: "renameDeployment", summary: "Rename a Deployment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[]
+    },
+    GET_DEPLOYMENT => {
+        method: Get, path: "/api/v1/deployments/{deploymentId}", operation_id: "getDeployment", summary: "Get a Deployment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    GET_DEPLOYMENT_CONFIG => {
+        method: Get, path: "/api/v1/deployments/{deploymentId}/_cfg", operation_id: "getDeploymentConfig", summary: "Get Deployment configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DeploymentConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    GET_DEPLOYMENT_DUPLICATE_DRAFT => {
+        method: Get, path: "/api/v1/deployments/{deploymentId}/duplicate-draft", operation_id: "getDeploymentDuplicateDraft", summary: "Build a Deployment duplicate draft",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DeploymentDuplicateDraftView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    UPDATE_DEPLOYMENT => {
+        method: Patch, path: "/api/v1/deployments/{id}", operation_id: "updateDeployment", summary: "Update Deployment configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchDeploymentInput"), response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_DEPLOYMENT_METADATA => {
+        method: Patch, path: "/api/v1/deployments/{id}/_metadata", operation_id: "updateDeploymentMetadata", summary: "Update Deployment metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
     },
     LIST_PLATFORMS => {
         method: Get, path: "/api/v1/platforms", operation_id: "listPlatforms", summary: "List authorized Platforms",
@@ -2060,6 +2128,75 @@ mod tests {
             assert!(route.public);
             assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
             assert!(route.error_responses.contains(&ErrorResponse::Forbidden));
+        }
+    }
+
+    #[test]
+    fn deployment_crud_routes_preserve_the_dotnet_http_contract() {
+        let expected = [
+            (
+                routes::LIST_DEPLOYMENTS,
+                HttpMethod::Get,
+                "/api/v1/deployments",
+                "listDeployments",
+            ),
+            (
+                routes::CREATE_DEPLOYMENT,
+                HttpMethod::Post,
+                "/api/v1/deployments",
+                "createDeployment",
+            ),
+            (
+                routes::DELETE_DEPLOYMENTS,
+                HttpMethod::Delete,
+                "/api/v1/deployments",
+                "deleteDeployments",
+            ),
+            (
+                routes::RENAME_DEPLOYMENT,
+                HttpMethod::Post,
+                "/api/v1/deployments/rename",
+                "renameDeployment",
+            ),
+            (
+                routes::GET_DEPLOYMENT,
+                HttpMethod::Get,
+                "/api/v1/deployments/{deploymentId}",
+                "getDeployment",
+            ),
+            (
+                routes::GET_DEPLOYMENT_CONFIG,
+                HttpMethod::Get,
+                "/api/v1/deployments/{deploymentId}/_cfg",
+                "getDeploymentConfig",
+            ),
+            (
+                routes::GET_DEPLOYMENT_DUPLICATE_DRAFT,
+                HttpMethod::Get,
+                "/api/v1/deployments/{deploymentId}/duplicate-draft",
+                "getDeploymentDuplicateDraft",
+            ),
+            (
+                routes::UPDATE_DEPLOYMENT,
+                HttpMethod::Patch,
+                "/api/v1/deployments/{id}",
+                "updateDeployment",
+            ),
+            (
+                routes::UPDATE_DEPLOYMENT_METADATA,
+                HttpMethod::Patch,
+                "/api/v1/deployments/{id}/_metadata",
+                "updateDeploymentMetadata",
+            ),
+        ];
+
+        for (route, method, path, operation_id) in expected {
+            assert_eq!(route.method, method);
+            assert_eq!(route.path, path);
+            assert_eq!(route.operation_id, operation_id);
+            assert_eq!(route.authentication, RouteAuthentication::Actor);
+            assert!(route.public);
+            assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
         }
     }
 }

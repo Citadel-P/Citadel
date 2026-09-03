@@ -415,6 +415,51 @@
         ],
         "type": "object"
       },
+      "AutoUpdateState": {
+        "additionalProperties": false,
+        "properties": {
+          "currentDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastCheckedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AutoUpdateStatus"
+          }
+        },
+        "required": [
+          "lastCheckedAt",
+          "status"
+        ],
+        "type": "object"
+      },
+      "AutoUpdateStatus": {
+        "enum": [
+          "Unknown",
+          "UpToDate",
+          "UpdateAvailable",
+          "Updating",
+          "Failed"
+        ],
+        "type": "string"
+      },
       "ChangeCurrentPasswordInput": {
         "additionalProperties": false,
         "properties": {
@@ -463,6 +508,15 @@
           "code"
         ],
         "type": "object"
+      },
+      "ContainerRestartPolicy": {
+        "enum": [
+          "No",
+          "Always",
+          "OnFailure",
+          "UnlessStopped"
+        ],
+        "type": "string"
       },
       "ContainerView": {
         "additionalProperties": true,
@@ -618,6 +672,54 @@
         "required": [
           "containers",
           "capabilities"
+        ],
+        "type": "object"
+      },
+      "CreateDeploymentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duplicateSource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DuplicateSourceInput"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "tagIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "spec"
         ],
         "type": "object"
       },
@@ -1419,6 +1521,497 @@
         ],
         "type": "object"
       },
+      "DeploymentCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "canApply": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          },
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canOpenTerminal": {
+            "type": "boolean"
+          },
+          "canPull": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "canViewResourceBindings": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canViewLogs",
+          "canInspect",
+          "canOpenTerminal",
+          "canPull",
+          "canApply",
+          "canViewResourceBindings",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object"
+      },
+      "DeploymentConfigView": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "platformId",
+          "description",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "DeploymentDuplicateDraftView": {
+        "additionalProperties": false,
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/CreateDeploymentInput"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDraftWarningView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "DeploymentIds": {
+        "items": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "DeploymentImageInfo": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoLocalImage"
+          },
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoExternalImage"
+          },
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoBuildImage"
+          }
+        ],
+        "discriminator": {
+          "mapping": {
+            "Build": "#/components/schemas/DeploymentImageInfoBuildImage",
+            "External": "#/components/schemas/DeploymentImageInfoExternalImage",
+            "Local": "#/components/schemas/DeploymentImageInfoLocalImage"
+          },
+          "propertyName": "$type"
+        },
+        "required": [
+          "$type"
+        ],
+        "type": "object"
+      },
+      "DeploymentImageInfoBuildImage": {
+        "additionalProperties": false,
+        "properties": {
+          "$type": {
+            "const": "Build",
+            "type": "string"
+          },
+          "appliedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appliedBuildRunId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appliedDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appliedImageReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "buildProjectId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "redeployOnBuild": {
+            "default": false,
+            "type": "boolean"
+          },
+          "resolvedBuildRunId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedImageReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "$type",
+          "buildProjectId"
+        ],
+        "type": "object"
+      },
+      "DeploymentImageInfoExternalImage": {
+        "additionalProperties": false,
+        "properties": {
+          "$type": {
+            "const": "External",
+            "type": "string"
+          },
+          "imageTag": {
+            "type": "string"
+          },
+          "registryId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resolvedDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "$type",
+          "registryId",
+          "imageTag"
+        ],
+        "type": "object"
+      },
+      "DeploymentImageInfoLocalImage": {
+        "additionalProperties": false,
+        "properties": {
+          "$type": {
+            "const": "Local",
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "$type",
+          "imageId"
+        ],
+        "type": "object"
+      },
+      "DeploymentSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "environmentVariables": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "image": {
+            "$ref": "#/components/schemas/DeploymentImageInfo"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "lifeCycleSpec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LifeCycleSpec"
+              }
+            ]
+          },
+          "networks": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "ports": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "resourceSpec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceSpec"
+              }
+            ]
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
+          },
+          "volumes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "image",
+          "updateBehavior"
+        ],
+        "type": "object"
+      },
+      "DeploymentStatus": {
+        "enum": [
+          "Unknown",
+          "Created",
+          "Pending",
+          "Applying",
+          "Healthy",
+          "Degraded",
+          "Failed",
+          "Stopped"
+        ],
+        "type": "string"
+      },
+      "DeploymentView": {
+        "properties": {
+          "autoUpdateState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutoUpdateState"
+              }
+            ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentCapabilities"
+              }
+            ]
+          },
+          "containerId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerContainerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerImageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "imageId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestActivityView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LatestActivityView"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "platformName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagSummaryView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "platformId",
+          "createdAt",
+          "createdByActorId",
+          "status",
+          "controlState",
+          "autoUpdateState",
+          "spec",
+          "platformStatus"
+        ],
+        "type": "object"
+      },
+      "DeploymentsView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          },
+          "deployments": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deployments",
+          "capabilities"
+        ],
+        "type": "object"
+      },
       "DisableProfileMfaInput": {
         "additionalProperties": false,
         "properties": {
@@ -1783,6 +2376,49 @@
           "status",
           "labels",
           "options"
+        ],
+        "type": "object"
+      },
+      "DuplicateDraftWarningView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "DuplicateSourceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId",
+          "resourceName"
         ],
         "type": "object"
       },
@@ -2453,6 +3089,30 @@
         ],
         "type": "object"
       },
+      "LifeCycleSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "restartPolicy": {
+            "$ref": "#/components/schemas/ContainerRestartPolicy"
+          },
+          "stopSignal": {
+            "$ref": "#/components/schemas/StopSignal"
+          },
+          "stopTimeout": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "stopTimeout",
+          "stopSignal",
+          "restartPolicy"
+        ],
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2989,6 +3649,23 @@
         ],
         "type": "object"
       },
+      "PatchDeploymentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        },
+        "required": [
+          "platformId",
+          "spec"
+        ],
+        "type": "object"
+      },
       "PatchGitRepositoryInput": {
         "properties": {
           "defaultBranch": {
@@ -3369,6 +4046,13 @@
           "canManageNodeAgents"
         ],
         "type": "object"
+      },
+      "PlatformStatus": {
+        "enum": [
+          "Offline",
+          "Online"
+        ],
+        "type": "string"
       },
       "PlatformView": {
         "additionalProperties": true,
@@ -4151,6 +4835,13 @@
         ],
         "type": "object"
       },
+      "ResourceControlState": {
+        "enum": [
+          "Idle",
+          "Processing"
+        ],
+        "type": "string"
+      },
       "ResourceInfo": {
         "additionalProperties": false,
         "properties": {
@@ -4172,6 +4863,30 @@
           "id",
           "name",
           "group"
+        ],
+        "type": "object"
+      },
+      "ResourceSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "memoryLimit": {
+            "format": "float",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "nanoCpus": {
+            "format": "float",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "nanoCpus",
+          "memoryLimit"
         ],
         "type": "object"
       },
@@ -4836,6 +5551,19 @@
           "password"
         ],
         "type": "object"
+      },
+      "StopSignal": {
+        "enum": [
+          "SIGTERM",
+          "SIGKILL",
+          "SIGINT",
+          "SIGQUIT",
+          null
+        ],
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "SwarmConfigView": {
         "additionalProperties": false,
@@ -5845,6 +6573,14 @@
           "issuer"
         ],
         "type": "object"
+      },
+      "UpdateBehavior": {
+        "enum": [
+          "Disabled",
+          "Notify",
+          "AutoDeploy"
+        ],
+        "type": "string"
       },
       "UpdateCurrentProfileInput": {
         "additionalProperties": false,
@@ -7495,6 +8231,1028 @@
           }
         ],
         "summary": "Get a Container",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments": {
+      "delete": {
+        "operationId": "deleteDeployments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentIds"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Delete Deployments",
+        "x-citadel-principal": "actor"
+      },
+      "get": {
+        "operationId": "listDeployments",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "platformId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List authorized Deployments",
+        "x-citadel-principal": "actor"
+      },
+      "post": {
+        "operationId": "createDeployment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeploymentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create a Deployment",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/rename": {
+      "post": {
+        "operationId": "renameDeployment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rename a Deployment",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/{deploymentId}": {
+      "get": {
+        "operationId": "getDeployment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deploymentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a Deployment",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/{deploymentId}/_cfg": {
+      "get": {
+        "operationId": "getDeploymentConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deploymentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentConfigView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Deployment configuration",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/{deploymentId}/duplicate-draft": {
+      "get": {
+        "operationId": "getDeploymentDuplicateDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deploymentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentDuplicateDraftView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Build a Deployment duplicate draft",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/{id}": {
+      "patch": {
+        "operationId": "updateDeployment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchDeploymentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update Deployment configuration",
+        "x-citadel-principal": "actor"
+      }
+    },
+    "/api/v1/deployments/{id}/_metadata": {
+      "patch": {
+        "operationId": "updateDeploymentMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update Deployment metadata",
         "x-citadel-principal": "actor"
       }
     },

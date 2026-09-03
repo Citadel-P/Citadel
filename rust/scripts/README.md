@@ -144,3 +144,20 @@ Agent Network/Volume mutation parity, mutation retry safety, authorization,
 activities, realtime invalidations, and deterministic OpenAPI/Docker contract
 generation. The script removes its uniquely named PostgreSQL container and
 network in `finally`.
+
+# Phase 6A Deployment CRUD
+
+Run `./rust/scripts/Test-Phase6ADeployments.ps1` from the repository root. It
+creates a disposable PostgreSQL database and verifies the Deployment domain,
+.NET-compatible persisted JSON, authorized SQLx CRUD/duplicate/delete
+transactions, typed Activity evidence, the real Axum endpoints, deletion claim
+rollback and timeout behavior, Local Unix-socket and signed Agent container
+delete transport equivalence, and deterministic OpenAPI/Docker generation. It
+also exercises the complete applicable .NET CRUD/config characterization set:
+merge-patch validation, duplicate conflicts/failures, Local-image projection,
+direct and Team ACL filtering, Platform authorization, concurrency exclusion,
+and recovery after request cancellation. The .NET acceptance project contains
+no standalone Deployment CRUD scenario to port. It
+does not deploy a container: Deployment Apply, progress, and reconciliation
+belong to Phase 6B. The script removes its uniquely named PostgreSQL container
+and network in `finally`.

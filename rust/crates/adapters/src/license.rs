@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use citadel_application::{
     LicenseSource, LicenseStore, LicenseValidationPersistence, LicenseVerifier, build_state,
 };
+use citadel_deployments::{DeploymentEntitlementPort, DeploymentError};
 use citadel_domain::{
     ActivityEvent, ActivityEventInfo, ActorId, CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity,
     InstalledLicense, LEGACY_BUSINESS_EDITION, LEGACY_LICENSE_SCHEMA, LICENSE_AUDIENCE,
@@ -316,6 +317,19 @@ impl PostgresLicenseEntitlementService {
 impl EntitlementService for PostgresLicenseEntitlementService {
     fn custom_access_control_enabled(&self) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move { self.enabled(LicenseCapability::CustomAccessControl).await })
+    }
+}
+
+impl DeploymentEntitlementPort for PostgresLicenseEntitlementService {
+    fn enabled(
+        &self,
+        capability: LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, DeploymentError>> {
+        Box::pin(async move {
+            self.enabled(capability)
+                .await
+                .map_err(|error| DeploymentError::Storage(error.to_string()))
+        })
     }
 }
 

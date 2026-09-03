@@ -16,6 +16,8 @@ use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
+use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
+use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::PostgresIdentityStore;
 use citadel_adapters::license::{
@@ -38,6 +40,7 @@ use citadel_application::{
 };
 use citadel_contracts::http::routes;
 use citadel_database::MigrationRunner;
+use citadel_deployments::DeploymentService;
 use citadel_domain::ActorId;
 use citadel_identity::{
     IdentityService, MfaConfiguration, MfaService, OidcService, ProfileService,
@@ -51,9 +54,9 @@ use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
 use citadel_server::{
-    Readiness, activities_http, application_info_http, identity_http, license_http,
-    license_realtime, oidc_http, platforms_http, profile_http, resources_http, roles_http,
-    service_accounts_http, teams_http, transport, users_http, workers,
+    Readiness, activities_http, application_info_http, deployments_http, identity_http,
+    license_http, license_realtime, oidc_http, platforms_http, profile_http, resources_http,
+    roles_http, service_accounts_http, teams_http, transport, users_http, workers,
 };
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -303,7 +306,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     ));
     let role_store = Arc::new(PostgresRoleStore::new(pool.clone()));
     let roles = Arc::new(RoleReadService::new(role_store.clone()));
-    let role_mutations = Arc::new(RoleMutationService::new(role_store, entitlements, clock));
+    let role_mutations = Arc::new(RoleMutationService::new(
+        role_store,
+        entitlements.clone(),
+        clock,
+    ));
     let agent = if let Some(agent) = &config.agent {
         let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
         Some(
@@ -318,6 +325,21 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+    let deployments = Arc::new(
+        DeploymentService::new(
+            Arc::new(PostgresDeploymentStore::new(pool.clone())),
+            Arc::new(DeploymentRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                agent.clone(),
+            )),
+            entitlements.clone(),
+            cancellation.clone(),
+        )
+        .with_notifier(Arc::new(
+            deployments_http::DeploymentsRealtimeNotifier::new(realtime_hub.clone()),
+        )),
+    );
     let realtime = config.realtime.as_ref().map(|realtime_config| {
         RealtimeService::with_hub(
             realtime_config,
@@ -425,6 +447,12 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             service_accounts_http::ServiceAccountHttpState {
                 identity: Arc::clone(&identity),
                 service_accounts,
+            },
+        ))
+        .merge(deployments_http::router(
+            deployments_http::DeploymentsHttpState {
+                identity: Arc::clone(&identity),
+                deployments,
             },
         ))
         .merge(resources_http::router(resources_http::ResourcesHttpState {
