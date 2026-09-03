@@ -16,7 +16,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..23 {
+        for _ in 0..24 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -43,7 +43,10 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             if path.ends_with("/networks/create") || path.ends_with("/volumes/create") {
                 assert!(first_line.starts_with("POST "));
             }
-            if path.contains("/networks/network-created") || path.contains("/volumes/created") {
+            if path.contains("/networks/network-created")
+                || path.contains("/volumes/created")
+                || path.contains("/containers/container-delete")
+            {
                 assert!(first_line.starts_with("DELETE "));
             }
             let body = response_for(&path);
@@ -81,6 +84,10 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             .name,
         "/fixture"
     );
+    client
+        .delete_container("container-delete", true, true)
+        .await
+        .unwrap();
     let swarm = client.inspect_swarm().await.unwrap();
     assert_eq!(swarm.id, "swarm-fixture");
     assert_eq!(swarm.version.index, 7);
@@ -181,6 +188,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/info",
             "/v1.49/containers/json?all=true",
             "/v1.49/containers/container-fixture/json",
+            "/v1.49/containers/container-delete?v=true&force=true&link=false",
             "/v1.49/swarm",
             "/v1.49/images/json?all=true",
             "/v1.49/volumes",
@@ -219,6 +227,7 @@ fn response_for(path: &str) -> Vec<u8> {
         "/v1.49/containers/container-fixture/json" => {
             r#"{"Id":"container-fixture","Created":"2026-01-01T00:00:00Z","Path":"nginx","Args":[],"State":{"Status":"running","Running":true},"Image":"sha256:fixture","Name":"/fixture","Config":{"Image":"nginx:alpine","Labels":{}}}"#
         }
+        "/v1.49/containers/container-delete?v=true&force=true&link=false" => "",
         "/v1.49/swarm" => {
             r#"{"ID":"swarm-fixture","Version":{"Index":7},"CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-02T00:00:00Z","JoinTokens":{"Worker":"worker-secret","Manager":"manager-secret"}}"#
         }

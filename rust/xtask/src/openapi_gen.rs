@@ -1117,6 +1117,169 @@ fn schemas() -> Value {
         .expect("schema catalog is an object")
         .extend(phase5_schemas());
     schemas
+        .as_object_mut()
+        .expect("schema catalog is an object")
+        .extend(phase6_deployment_schemas());
+    schemas
+}
+
+fn phase6_deployment_schemas() -> Map<String, Value> {
+    let mut schemas = Map::new();
+    schemas.insert(
+        "DeploymentIds".into(),
+        json!({"type":"array","items":uuid()}),
+    );
+    schemas.insert(
+        "UpdateBehavior".into(),
+        json!({"type":"string","enum":["Disabled","Notify","AutoDeploy"]}),
+    );
+    schemas.insert("DeploymentStatus".into(), json!({"type":"string","enum":["Unknown","Created","Pending","Applying","Healthy","Degraded","Failed","Stopped"]}));
+    schemas.insert(
+        "ResourceControlState".into(),
+        json!({"type":"string","enum":["Idle","Processing"]}),
+    );
+    schemas.insert(
+        "PlatformStatus".into(),
+        json!({"type":"string","enum":["Offline","Online"]}),
+    );
+    schemas.insert("AutoUpdateStatus".into(), json!({"type":"string","enum":["Unknown","UpToDate","UpdateAvailable","Updating","Failed"]}));
+    schemas.insert(
+        "StopSignal".into(),
+        json!({"type":["string","null"],"enum":["SIGTERM","SIGKILL","SIGINT","SIGQUIT",null]}),
+    );
+    schemas.insert(
+        "ContainerRestartPolicy".into(),
+        json!({"type":"string","enum":["No","Always","OnFailure","UnlessStopped"]}),
+    );
+    schemas.insert(
+        "DeploymentImageInfo".into(),
+        json!({
+            "type":"object","required":["$type"],
+            "anyOf":[
+                {"$ref":"#/components/schemas/DeploymentImageInfoLocalImage"},
+                {"$ref":"#/components/schemas/DeploymentImageInfoExternalImage"},
+                {"$ref":"#/components/schemas/DeploymentImageInfoBuildImage"}
+            ],
+            "discriminator":{"propertyName":"$type","mapping":{
+                "Local":"#/components/schemas/DeploymentImageInfoLocalImage",
+                "External":"#/components/schemas/DeploymentImageInfoExternalImage",
+                "Build":"#/components/schemas/DeploymentImageInfoBuildImage"
+            }}
+        }),
+    );
+    schemas.insert(
+        "DeploymentImageInfoLocalImage".into(),
+        json!({
+            "type":"object","required":["$type","imageId"],"additionalProperties":false,
+            "properties":{"$type":{"type":"string","const":"Local"},"imageId":string()}
+        }),
+    );
+    schemas.insert("DeploymentImageInfoExternalImage".into(), json!({
+        "type":"object","required":["$type","registryId","imageTag"],"additionalProperties":false,
+        "properties":{"$type":{"type":"string","const":"External"},"registryId":uuid(),"imageTag":string(),"resolvedDigest":nullable_string()}
+    }));
+    schemas.insert(
+        "DeploymentImageInfoBuildImage".into(),
+        json!({
+            "type":"object","required":["$type","buildProjectId"],"additionalProperties":false,
+            "properties":{
+                "$type":{"type":"string","const":"Build"},"buildProjectId":uuid(),
+                "redeployOnBuild":{"type":"boolean","default":false},
+                "resolvedImageReference":nullable_string(),"resolvedDigest":nullable_string(),
+                "resolvedBuildRunId":nullable_uuid(),"appliedImageReference":nullable_string(),
+                "appliedDigest":nullable_string(),"appliedBuildRunId":nullable_uuid(),
+                "appliedAt":nullable_date_time()
+            }
+        }),
+    );
+    schemas.insert("ResourceSpec".into(), json!({
+        "type":"object","required":["nanoCpus","memoryLimit"],"additionalProperties":false,
+        "properties":{"nanoCpus":{"type":["number","null"],"format":"float"},"memoryLimit":{"type":["number","null"],"format":"float"}}
+    }));
+    schemas.insert("LifeCycleSpec".into(), json!({
+        "type":"object","required":["stopTimeout","stopSignal","restartPolicy"],"additionalProperties":false,
+        "properties":{"stopTimeout":{"type":["integer","null"],"format":"int32"},"stopSignal":{"$ref":"#/components/schemas/StopSignal"},"restartPolicy":{"$ref":"#/components/schemas/ContainerRestartPolicy"}}
+    }));
+    schemas.insert(
+        "DeploymentSpec".into(),
+        json!({
+            "type":"object","required":["image","updateBehavior"],"additionalProperties":false,
+            "properties":{
+                "image":{"$ref":"#/components/schemas/DeploymentImageInfo"},
+                "updateBehavior":{"$ref":"#/components/schemas/UpdateBehavior"},
+                "lifeCycleSpec":nullable(json!({"$ref":"#/components/schemas/LifeCycleSpec"})),
+                "resourceSpec":nullable(json!({"$ref":"#/components/schemas/ResourceSpec"})),
+                "labels":{"type":["object","null"],"additionalProperties":string()},
+                "ports":{"type":["array","null"],"items":string()},
+                "volumes":{"type":["array","null"],"items":string()},
+                "networks":{"type":["array","null"],"items":string()},
+                "command":{"type":["array","null"],"items":string()},
+                "environmentVariables":{"type":["array","null"],"items":string()}
+            }
+        }),
+    );
+    schemas.insert("AutoUpdateState".into(), json!({
+        "type":"object","required":["lastCheckedAt","status"],"additionalProperties":false,
+        "properties":{"lastCheckedAt":{"type":"string","format":"date-time"},"status":{"$ref":"#/components/schemas/AutoUpdateStatus"},"currentDigest":nullable_string(),"remoteDigest":nullable_string(),"lastError":nullable_string()}
+    }));
+    schemas.insert("DeploymentCapabilities".into(), json!({
+        "type":"object","required":["canViewLogs","canInspect","canOpenTerminal","canPull","canApply","canViewResourceBindings","canRead","canWrite","canExecute"],"additionalProperties":false,
+        "properties":{
+            "canViewLogs":{"type":"boolean"},"canInspect":{"type":"boolean"},"canOpenTerminal":{"type":"boolean"},
+            "canPull":{"type":"boolean"},"canApply":{"type":"boolean"},"canViewResourceBindings":{"type":"boolean"},
+            "canRead":{"type":"boolean"},"canWrite":{"type":"boolean"},"canExecute":{"type":"boolean"}
+        }
+    }));
+    schemas.insert("DeploymentView".into(), json!({
+        "type":"object","required":["id","name","description","platformId","createdAt","createdByActorId","status","controlState","autoUpdateState","spec","platformStatus"],
+        "properties":{
+            "id":uuid(),"name":string(),"description":nullable_string(),"platformId":uuid(),
+            "createdAt":{"type":"string","format":"date-time"},"createdByActorId":uuid(),
+            "status":{"$ref":"#/components/schemas/DeploymentStatus"},"controlState":{"$ref":"#/components/schemas/ResourceControlState"},
+            "autoUpdateState":nullable(json!({"$ref":"#/components/schemas/AutoUpdateState"})),
+            "spec":{"$ref":"#/components/schemas/DeploymentSpec"},"platformStatus":{"$ref":"#/components/schemas/PlatformStatus"},
+            "platformName":nullable_string(),"imageName":nullable_string(),"imageId":nullable_uuid(),
+            "containerId":nullable_uuid(),"dockerContainerId":nullable_string(),"dockerImageId":nullable_string(),
+            "tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}},
+            "latestActivityView":nullable(json!({"$ref":"#/components/schemas/LatestActivityView"})),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/DeploymentCapabilities"}))
+        }
+    }));
+    schemas.insert(
+        "DeploymentsView".into(),
+        collection_view("deployments", "DeploymentView", "ResourceCapabilities"),
+    );
+    schemas.insert("DeploymentConfigView".into(), json!({
+        "type":"object","required":["id","name","platformId","description","spec"],"additionalProperties":false,
+        "properties":{"id":uuid(),"name":string(),"platformId":uuid(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"}}
+    }));
+    schemas.insert("DuplicateSourceInput".into(), json!({
+        "type":"object","required":["resourceType","resourceId","resourceName"],"additionalProperties":false,
+        "properties":{"resourceType":{"$ref":"#/components/schemas/ActivityResourceType"},"resourceId":uuid(),"resourceName":string()}
+    }));
+    schemas.insert("CreateDeploymentInput".into(), json!({
+        "type":"object","required":["name","platformId","description","spec"],"additionalProperties":false,
+        "properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"},"tagIds":{"type":["array","null"],"items":uuid()},"duplicateSource":nullable(json!({"$ref":"#/components/schemas/DuplicateSourceInput"}))}
+    }));
+    schemas.insert(
+        "PatchDeploymentInput".into(),
+        json!({
+            "type":"object","required":["platformId","spec"],"additionalProperties":false,
+            "properties":{"platformId":uuid(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"}}
+        }),
+    );
+    schemas.insert(
+        "DuplicateDraftWarningView".into(),
+        json!({
+            "type":"object","required":["code","message"],"additionalProperties":false,
+            "properties":{"code":string(),"message":string(),"fieldPath":nullable_string()}
+        }),
+    );
+    schemas.insert("DeploymentDuplicateDraftView".into(), json!({
+        "type":"object","required":["draft","warnings"],"additionalProperties":false,
+        "properties":{"draft":{"$ref":"#/components/schemas/CreateDeploymentInput"},"warnings":{"type":"array","items":{"$ref":"#/components/schemas/DuplicateDraftWarningView"}}}
+    }));
+    schemas
 }
 
 fn phase5_schemas() -> Map<String, Value> {

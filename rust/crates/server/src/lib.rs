@@ -5,6 +5,7 @@ pub mod application_info_http;
 mod capabilities;
 pub mod config;
 pub mod contract_router;
+pub mod deployments_http;
 pub mod diagnostics;
 pub mod identity_http;
 pub mod license_http;

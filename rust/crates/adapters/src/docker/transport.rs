@@ -13,14 +13,14 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 use super::generated::{
-    CONFIG_LIST, CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS, ContainerInspect,
-    ContainerStats, ContainerSummary, DockerEvent, DockerInfo, DockerNetwork, DockerVersion,
-    DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_CREATE, NETWORK_DELETE,
-    NETWORK_INSPECT, NETWORK_LIST, NODE_LIST, NetworkCreateRequest, NetworkCreateResponse,
-    SECRET_LIST, SERVICE_LIST, SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING,
-    SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret, SwarmService, SwarmTask,
-    TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST, VolumeCreateOptions,
-    VolumeListResponse,
+    CONFIG_LIST, CONTAINER_DELETE, CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS,
+    ContainerInspect, ContainerStats, ContainerSummary, DockerEvent, DockerInfo, DockerNetwork,
+    DockerVersion, DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_CREATE,
+    NETWORK_DELETE, NETWORK_INSPECT, NETWORK_LIST, NODE_LIST, NetworkCreateRequest,
+    NetworkCreateResponse, SECRET_LIST, SERVICE_LIST, SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO,
+    SYSTEM_PING, SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret, SwarmService,
+    SwarmTask, TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST,
+    VolumeCreateOptions, VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -206,6 +206,22 @@ impl DockerClient {
             .path
             .replace("{id}", &urlencoding::encode(id));
         self.get_json(&CONTAINER_INSPECT, &path, None).await
+    }
+
+    pub async fn delete_container(
+        &self,
+        id: &str,
+        remove_volumes: bool,
+        force: bool,
+    ) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        let path = CONTAINER_DELETE
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        let query = format!("v={remove_volumes}&force={force}&link=false");
+        self.send_request::<()>(&CONTAINER_DELETE, &path, Some(&query), None)
+            .await?;
+        Ok(())
     }
 
     pub async fn inspect_swarm(&self) -> Result<SwarmInspect, DockerError> {

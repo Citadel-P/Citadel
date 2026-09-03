@@ -202,6 +202,30 @@ pub struct GitRepositoryActivitySnapshot {
     pub resolved_commit_sha: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeploymentActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "PlatformId")]
+    pub platform_id: Uuid,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "Spec")]
+    pub spec: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ActivitySourceResource {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: ActivityResourceType,
+    #[serde(rename = "ResourceId")]
+    pub resource_id: Uuid,
+    #[serde(rename = "ResourceName")]
+    pub resource_name: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityChangedFieldName {
     DisplayName,
@@ -509,6 +533,32 @@ pub enum ActivityEventInfo {
     RegistryDeleted {
         #[serde(rename = "Registry")]
         registry: RegistryActivitySnapshot,
+    },
+    DeploymentCreated {
+        #[serde(rename = "Deployment")]
+        deployment: DeploymentActivitySnapshot,
+    },
+    DeploymentDuplicated {
+        #[serde(rename = "Deployment")]
+        deployment: DeploymentActivitySnapshot,
+        #[serde(rename = "Source")]
+        source: ActivitySourceResource,
+    },
+    DeploymentUpdated {
+        #[serde(rename = "OldDeployment")]
+        old_deployment: DeploymentActivitySnapshot,
+        #[serde(rename = "NewDeployment")]
+        new_deployment: DeploymentActivitySnapshot,
+    },
+    DeploymentRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    DeploymentDeleted {
+        #[serde(rename = "Deployment")]
+        deployment: DeploymentActivitySnapshot,
     },
     GitRepoCreated {
         #[serde(rename = "GitRepo")]
@@ -852,6 +902,40 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn deployment_created(deployment: DeploymentActivitySnapshot) -> Self {
+        Self::DeploymentCreated { deployment }
+    }
+
+    #[must_use]
+    pub const fn deployment_duplicated(
+        deployment: DeploymentActivitySnapshot,
+        source: ActivitySourceResource,
+    ) -> Self {
+        Self::DeploymentDuplicated { deployment, source }
+    }
+
+    #[must_use]
+    pub const fn deployment_updated(
+        old_deployment: DeploymentActivitySnapshot,
+        new_deployment: DeploymentActivitySnapshot,
+    ) -> Self {
+        Self::DeploymentUpdated {
+            old_deployment,
+            new_deployment,
+        }
+    }
+
+    #[must_use]
+    pub fn deployment_renamed(old_name: String, new_name: String) -> Self {
+        Self::DeploymentRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn deployment_deleted(deployment: DeploymentActivitySnapshot) -> Self {
+        Self::DeploymentDeleted { deployment }
+    }
+
+    #[must_use]
     pub const fn git_repo_created(git_repo: GitRepositoryActivitySnapshot) -> Self {
         Self::GitRepoCreated { git_repo }
     }
@@ -933,6 +1017,11 @@ impl ActivityEventInfo {
             Self::RegistryUpdated { .. } => ActivityEventType::RegistryUpdated,
             Self::RegistryRenamed { .. } => ActivityEventType::RegistryRenamed,
             Self::RegistryDeleted { .. } => ActivityEventType::RegistryDeleted,
+            Self::DeploymentCreated { .. } => ActivityEventType::DeploymentCreated,
+            Self::DeploymentDuplicated { .. } => ActivityEventType::DeploymentDuplicated,
+            Self::DeploymentUpdated { .. } => ActivityEventType::DeploymentUpdated,
+            Self::DeploymentRenamed { .. } => ActivityEventType::DeploymentRenamed,
+            Self::DeploymentDeleted { .. } => ActivityEventType::DeploymentDeleted,
             Self::GitRepoCreated { .. } => ActivityEventType::GitRepoCreated,
             Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
             Self::GitRepoRenamed { .. } => ActivityEventType::GitRepoRenamed,
@@ -1102,6 +1191,39 @@ impl ActivityEvent {
             status,
             created_at,
         )
+    }
+
+    pub fn new_deployment_event(
+        resource_id: Uuid,
+        resource_name: String,
+        platform_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        if platform_id.is_nil() {
+            return Err(ActivityInvariantError::MissingResourceId);
+        }
+        let status = if matches!(
+            &info,
+            ActivityEventInfo::DeploymentCreated { .. }
+                | ActivityEventInfo::DeploymentDuplicated { .. }
+        ) {
+            ActivityStatus::Information
+        } else {
+            ActivityStatus::Success
+        };
+        let mut event = Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Deployment,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )?;
+        event.platform_id = Some(platform_id);
+        Ok(event)
     }
 
     fn new_resource_event(
@@ -1312,6 +1434,36 @@ mod tests {
         assert_eq!(json["$type"], "TeamUpdated");
         assert!(json.get("Password").is_none());
         assert!(json.get("Token").is_none());
+    }
+
+    #[test]
+    fn deployment_activity_uses_the_existing_dotnet_payload_shape() {
+        let deployment_id = Uuid::now_v7();
+        let platform_id = Uuid::now_v7();
+        let event = ActivityEvent::new_deployment_event(
+            deployment_id,
+            "web".to_owned(),
+            platform_id,
+            ActorId::new(Uuid::now_v7()),
+            ActivityEventInfo::deployment_created(DeploymentActivitySnapshot {
+                id: deployment_id,
+                name: "web".to_owned(),
+                platform_id,
+                description: None,
+                spec: serde_json::json!({"Image":{"$type":"Local","ImageId":"image"}}),
+            }),
+            Utc::now(),
+        )
+        .unwrap();
+        let info = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.platform_id(), Some(platform_id));
+        assert_eq!(event.resource_type(), ActivityResourceType::Deployment);
+        assert_eq!(event.event_type(), ActivityEventType::DeploymentCreated);
+        assert_eq!(event.status(), ActivityStatus::Information);
+        assert_eq!(info["$type"], "DeploymentCreated");
+        assert_eq!(info["Deployment"]["Id"], deployment_id.to_string());
+        assert_eq!(info["Deployment"]["PlatformId"], platform_id.to_string());
     }
 
     #[test]

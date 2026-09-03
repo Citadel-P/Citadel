@@ -834,6 +834,15 @@ impl EntitlementService for StaticEntitlementService {
     }
 }
 
+impl citadel_deployments::DeploymentEntitlementPort for StaticEntitlementService {
+    fn enabled(
+        &self,
+        _capability: citadel_domain::LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, citadel_deployments::DeploymentError>> {
+        Box::pin(async move { Ok(self.custom_access_control) })
+    }
+}
+
 pub async fn lock_actor(
     transaction: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,

@@ -1,8 +1,18 @@
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_contracts::citadel::containers::v1::container_service_server::{
+    ContainerService, ContainerServiceServer,
+};
+use citadel_contracts::citadel::containers::v1::{
+    ContainerIds, ContainerLogRequest, ContainerLogResponse, ContainersStatsResponse,
+    CreateContainerRequest, CreateContainerResponse, DeleteContainerRequest, ExecBinaryRequest,
+    ExecClientMessage, ExecServerMessage, InspectContainerRequest, ListContainersRequest,
+    ListContainersResponse, StreamContainerStatsRequest, StreamContainersStatsRequest,
+};
 use citadel_contracts::citadel::networks::v1::network_service_server::{
     NetworkService, NetworkServiceServer,
 };
@@ -11,6 +21,7 @@ use citadel_contracts::citadel::networks::v1::{
     InspectNetworkRequest, InspectNetworkResponse, ListNetworksRequest, ListNetworksResponse,
 };
 use citadel_contracts::citadel::shared_models::v1::VolumeResponse;
+use citadel_contracts::citadel::shared_models::v1::{ContainerMessage, InspectContainerResponse};
 use citadel_contracts::citadel::volumes::v1::volume_service_server::{
     VolumeService, VolumeServiceServer,
 };
@@ -21,6 +32,7 @@ use citadel_contracts::citadel::volumes::v1::{
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
 };
+use futures_util::Stream;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
@@ -28,6 +40,112 @@ use tonic::{Request, Response, Status};
 struct MutationFixture {
     fail_network_create: bool,
     network_create_calls: Arc<AtomicUsize>,
+    container_delete_calls: Arc<AtomicUsize>,
+}
+
+type TestStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
+
+#[tonic::async_trait]
+impl ContainerService for MutationFixture {
+    async fn list(
+        &self,
+        _: Request<ListContainersRequest>,
+    ) -> Result<Response<ListContainersResponse>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn start(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn stop(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn pause(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn unpause(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn restart(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn delete(
+        &self,
+        request: Request<DeleteContainerRequest>,
+    ) -> Result<Response<()>, Status> {
+        require_signature(&request)?;
+        let request = request.get_ref();
+        assert_eq!(request.ids, ["container-1"]);
+        assert_eq!(request.v, Some(true));
+        assert_eq!(request.force, Some(true));
+        assert_eq!(request.link, Some(false));
+        self.container_delete_calls.fetch_add(1, Ordering::Relaxed);
+        Ok(Response::new(()))
+    }
+
+    async fn inspect(
+        &self,
+        _: Request<InspectContainerRequest>,
+    ) -> Result<Response<InspectContainerResponse>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    async fn create(
+        &self,
+        _: Request<CreateContainerRequest>,
+    ) -> Result<Response<CreateContainerResponse>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    type ExecStream = TestStream<ExecServerMessage>;
+
+    async fn exec(
+        &self,
+        _: Request<tonic::Streaming<ExecClientMessage>>,
+    ) -> Result<Response<Self::ExecStream>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    type ExecBinaryStream = TestStream<ExecServerMessage>;
+
+    async fn exec_binary(
+        &self,
+        _: Request<ExecBinaryRequest>,
+    ) -> Result<Response<Self::ExecBinaryStream>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    type StreamContainerLogsStream = TestStream<ContainerLogResponse>;
+
+    async fn stream_container_logs(
+        &self,
+        _: Request<ContainerLogRequest>,
+    ) -> Result<Response<Self::StreamContainerLogsStream>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    type StreamContainersStatsStream = TestStream<ContainersStatsResponse>;
+
+    async fn stream_containers_stats(
+        &self,
+        _: Request<StreamContainersStatsRequest>,
+    ) -> Result<Response<Self::StreamContainersStatsStream>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+
+    type StreamContainerStatsStream = TestStream<ContainerMessage>;
+
+    async fn stream_container_stats(
+        &self,
+        _: Request<StreamContainerStatsRequest>,
+    ) -> Result<Response<Self::StreamContainerStatsStream>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
 }
 
 #[tonic::async_trait]
@@ -116,9 +234,11 @@ impl VolumeService for MutationFixture {
 #[tokio::test]
 async fn agent_network_and_volume_mutations_are_signed_and_transport_equivalent() {
     let calls = Arc::new(AtomicUsize::new(0));
+    let container_calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
         fail_network_create: false,
         network_create_calls: calls.clone(),
+        container_delete_calls: container_calls.clone(),
     })
     .await;
     let client = connect(&address).await;
@@ -152,7 +272,12 @@ async fn agent_network_and_volume_mutations_are_signed_and_transport_equivalent(
     PlatformResourceMutationPort::delete_volume(&client, "data", true, &cancellation)
         .await
         .unwrap();
+    client
+        .delete_container("container-1", &cancellation)
+        .await
+        .unwrap();
     assert_eq!(calls.load(Ordering::Relaxed), 1);
+    assert_eq!(container_calls.load(Ordering::Relaxed), 1);
     shutdown.cancel();
 }
 
@@ -162,6 +287,7 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
     let (address, shutdown) = start_fixture(MutationFixture {
         fail_network_create: true,
         network_create_calls: calls.clone(),
+        container_delete_calls: Arc::new(AtomicUsize::new(0)),
     })
     .await;
     let error = PlatformResourceMutationPort::create_network(
@@ -222,6 +348,7 @@ async fn start_fixture(fixture: MutationFixture) -> (String, CancellationToken) 
     let shutdown = cancellation.clone();
     tokio::spawn(async move {
         tonic::transport::Server::builder()
+            .add_service(ContainerServiceServer::new(fixture.clone()))
             .add_service(NetworkServiceServer::new(fixture.clone()))
             .add_service(VolumeServiceServer::new(fixture))
             .serve_with_shutdown(address, shutdown.cancelled_owned())

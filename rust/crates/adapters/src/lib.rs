@@ -4,6 +4,8 @@ pub mod activity_store;
 pub mod agent;
 pub mod container_stats_store;
 pub mod crypto;
+pub mod deployment_runtime;
+pub mod deployment_store;
 pub mod docker;
 pub mod identity_store;
 pub mod inventory_projection_store;

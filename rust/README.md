@@ -167,31 +167,32 @@ now organized under `citadel-platforms::jobs`, while
 `reports/phase5-simple-mutations-metadata-report.md` and run
 `./rust/scripts/Test-Phase5Metadata.ps1` for the disposable acceptance gate.
 
+Phase 6A adds the `citadel-deployments` bounded context and ports the existing
+Deployment list/detail/config/create/update/metadata/rename/duplicate/delete
+contracts. PostgreSQL remains compatible with the .NET discriminator and
+PascalCase spec representation, while browser JSON remains camelCase. ACL
+filtering and capabilities are computed in the collection query; state, Tags,
+copied bindings, and typed Activity evidence commit transactionally. Deletion
+claims the complete batch before Docker mutation, survives request loss, has a
+bounded timeout, removes every linked container through Local or signed Agent
+transport, and restores the claim if runtime or completion fails. Apply,
+progress, reconciliation, and runtime success remain Phase 6B. See
+`reports/phase6a-deployment-crud-report.md` and run
+`./rust/scripts/Test-Phase6ADeployments.ps1` for the disposable gate.
+
+The Phase 6A gate maps every Deployment CRUD/config test in the .NET
+integration and unit suites that applies to this slice. It includes full and
+partial merge patching, direct/Team ACLs, exact filters, duplicate failures,
+Local-image projections, concurrent mutation/delete exclusion, and caller-loss
+recovery. The .NET acceptance project has no isolated Deployment CRUD scenario;
+runtime Apply acceptance remains a Phase 6B obligation.
+
 ## Interactive development
 
-The repository includes a VS Code Dev Container for running the Rust Core and
-the existing React frontend together on Windows, macOS, or Linux. It starts a
-persistent PostgreSQL development database, mounts the Docker socket, keeps
-Linux Cargo/npm build artifacts in named volumes, and labels its containers as
-Citadel system infrastructure.
-
-1. Install Docker and the VS Code Dev Containers extension.
-2. Open the repository and run **Dev Containers: Reopen in Container**.
-3. Wait for the one-time Cargo fetch and frontend `npm ci` to finish.
-4. For normal interactive use, run the **Citadel: Run application (API + UI)**
-   task. It is also the default build task (`Ctrl+Shift+B`).
-5. For Rust breakpoints, select **Citadel: Debug application** from Run and
-   Debug and press F5. This starts both the UI and the API debugger.
-6. Open `http://localhost:5173` and complete first-run setup.
-
-The API listens on `http://localhost:8000`. Vite uses hot module replacement;
-the CodeLLDB profile builds an unoptimized Rust binary with debug information.
-PostgreSQL data survives a container rebuild in its Compose volume. Run **Dev
-Containers: Rebuild Container** after changing files under `.devcontainer/`.
-
-This environment exercises only the Rust functionality migrated so far. A UI
-request owned by a later migration phase can still return a missing or
-unsupported-operation response.
+Use the committed VS Code Dev Container to run the Rust API, PostgreSQL, Docker
+integration, and the existing React frontend together. The complete setup,
+run, debugging, test, shutdown, and troubleshooting commands are documented in
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 Authentication cookies are scoped to `/api/v1`, which keeps them away from SPA
 assets while allowing the existing profile-session endpoints to identify and
