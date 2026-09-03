@@ -15,6 +15,7 @@ pub mod oidc_http;
 pub mod platforms_http;
 pub mod profile_http;
 pub mod realtime;
+pub mod resources_http;
 pub mod roles_http;
 pub mod service_accounts_http;
 pub mod teams_http;

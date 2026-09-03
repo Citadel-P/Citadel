@@ -1,0 +1,91 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Citadel: Run application (API + UI)",
+      "detail": "Starts both the Rust API and Vite UI for normal browser testing.",
+      "dependsOn": ["Citadel: Run Rust API", "Citadel: Run UI only"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Citadel: Initialize development dependencies",
+      "type": "shell",
+      "command": "cargo fetch --locked --manifest-path rust/Cargo.toml && npm --prefix src/Citadel.FrontEnd ci",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Citadel: Run Rust API",
+      "type": "process",
+      "command": "cargo",
+      "args": ["run", "--locked", "-p", "citadel-server", "--", "serve"],
+      "options": {
+        "cwd": "${workspaceFolder}/rust"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "rust",
+        "pattern": {
+          "regexp": "^(?!)$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*starting Rust foundation server.*",
+          "endsPattern": ".*Rust foundation server listening.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "citadel-api"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Citadel: Run UI only",
+      "detail": "Starts Vite without the API; use the Debug application launch configuration instead for breakpoints.",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "citadel-ui"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Citadel: Check Rust workspace",
+      "type": "shell",
+      "command": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast",
+      "options": {
+        "cwd": "${workspaceFolder}/rust"
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Citadel: Check frontend",
+      "type": "shell",
+      "command": "npm run lint && npm run test:run",
+      "options": {
+        "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

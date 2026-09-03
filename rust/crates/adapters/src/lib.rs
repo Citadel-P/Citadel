@@ -15,6 +15,7 @@ pub mod platform_read_store;
 mod postgres;
 pub mod postgres_runtime;
 pub mod profile_store;
+pub mod resource_metadata_store;
 pub mod role_store;
 pub mod service_account_store;
 pub mod team_store;

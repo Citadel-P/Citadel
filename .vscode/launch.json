@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Citadel: Debug Rust API",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--locked", "-p", "citadel-server"],
+        "filter": {
+          "name": "citadel-server",
+          "kind": "bin"
+        }
+      },
+      "args": ["serve"],
+      "cwd": "${workspaceFolder}/rust",
+      "sourceLanguages": ["rust"]
+    },
+    {
+      "name": "Citadel: Run UI for debugging",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort",
+      "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Citadel: Debug application",
+      "configurations": ["Citadel: Debug Rust API", "Citadel: Run UI for debugging"],
+      "stopAll": true
+    }
+  ]
+}

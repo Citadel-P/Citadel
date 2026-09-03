@@ -8,16 +8,19 @@ use async_stream::try_stream;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 use reqwest::{Client, Response, StatusCode};
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 use super::generated::{
     CONFIG_LIST, CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS, ContainerInspect,
     ContainerStats, ContainerSummary, DockerEvent, DockerInfo, DockerNetwork, DockerVersion,
-    DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_INSPECT, NETWORK_LIST, NODE_LIST,
+    DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_CREATE, NETWORK_DELETE,
+    NETWORK_INSPECT, NETWORK_LIST, NODE_LIST, NetworkCreateRequest, NetworkCreateResponse,
     SECRET_LIST, SERVICE_LIST, SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING,
     SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret, SwarmService, SwarmTask,
-    TASK_LIST, VOLUME_INSPECT, VOLUME_LIST, VolumeListResponse,
+    TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST, VolumeCreateOptions,
+    VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -80,6 +83,8 @@ pub enum DockerError {
     InvalidJson(#[from] serde_json::Error),
     #[error("invalid Docker API version '{0}'")]
     InvalidVersion(String),
+    #[error("unsupported generated Docker HTTP method '{0}'")]
+    InvalidMethod(String),
     #[error("Docker resource identifier must not be empty")]
     InvalidIdentifier,
     #[error(
@@ -228,6 +233,29 @@ impl DockerClient {
         self.get_json(&VOLUME_INSPECT, &path, None).await
     }
 
+    pub async fn create_volume(
+        &self,
+        request: &VolumeCreateOptions,
+    ) -> Result<DockerVolume, DockerError> {
+        self.request_json(&VOLUME_CREATE, VOLUME_CREATE.path, None, Some(request))
+            .await
+    }
+
+    pub async fn delete_volume(&self, name: &str, force: bool) -> Result<(), DockerError> {
+        validate_identifier(name)?;
+        let path = VOLUME_DELETE
+            .path
+            .replace("{name}", &urlencoding::encode(name));
+        self.send_request::<()>(
+            &VOLUME_DELETE,
+            &path,
+            Some(if force { "force=true" } else { "force=false" }),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn list_networks(&self) -> Result<Vec<DockerNetwork>, DockerError> {
         self.get_json(&NETWORK_LIST, NETWORK_LIST.path, None).await
     }
@@ -238,6 +266,24 @@ impl DockerClient {
             .path
             .replace("{id}", &urlencoding::encode(id));
         self.get_json(&NETWORK_INSPECT, &path, None).await
+    }
+
+    pub async fn create_network(
+        &self,
+        request: &NetworkCreateRequest,
+    ) -> Result<NetworkCreateResponse, DockerError> {
+        self.request_json(&NETWORK_CREATE, NETWORK_CREATE.path, None, Some(request))
+            .await
+    }
+
+    pub async fn delete_network(&self, id: &str) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        let path = NETWORK_DELETE
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        self.send_request::<()>(&NETWORK_DELETE, &path, None, None)
+            .await?;
+        Ok(())
     }
 
     pub async fn list_swarm_nodes(&self) -> Result<Vec<SwarmNode>, DockerError> {
@@ -323,14 +369,39 @@ impl DockerClient {
         Ok(serde_json::from_slice(&body)?)
     }
 
+    async fn request_json<TRequest, TResponse>(
+        &self,
+        endpoint: &Endpoint,
+        path: &str,
+        query: Option<&str>,
+        body: Option<&TRequest>,
+    ) -> Result<TResponse, DockerError>
+    where
+        TRequest: Serialize + ?Sized,
+        TResponse: DeserializeOwned,
+    {
+        let response = self.send_request(endpoint, path, query, body).await?;
+        let body = bounded_body(response, MAX_JSON_BODY_BYTES).await?;
+        Ok(serde_json::from_slice(&body)?)
+    }
+
     async fn send(
         &self,
         endpoint: &Endpoint,
         path: &str,
         query: Option<&str>,
     ) -> Result<Response, DockerError> {
+        self.send_request::<()>(endpoint, path, query, None).await
+    }
+
+    async fn send_request<T: Serialize + ?Sized>(
+        &self,
+        endpoint: &Endpoint,
+        path: &str,
+        query: Option<&str>,
+        body: Option<&T>,
+    ) -> Result<Response, DockerError> {
         self.ensure_supported()?;
-        debug_assert_eq!(endpoint.method, "GET");
         let version_prefix = if endpoint.versioned {
             format!("/v{}", self.negotiated_version().await?)
         } else {
@@ -338,7 +409,17 @@ impl DockerClient {
         };
         let query = query.map(|value| format!("?{value}")).unwrap_or_default();
         let url = format!("http://localhost{version_prefix}{path}{query}");
-        let request = self.client.get(url);
+        let request = match endpoint.method {
+            "GET" => self.client.get(url),
+            "POST" => self.client.post(url),
+            "DELETE" => self.client.delete(url),
+            method => return Err(DockerError::InvalidMethod(method.to_owned())),
+        };
+        let request = if let Some(body) = body {
+            request.json(body)
+        } else {
+            request
+        };
         let request = if endpoint.streaming {
             request
         } else {

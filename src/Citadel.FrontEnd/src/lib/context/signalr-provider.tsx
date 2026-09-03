@@ -105,6 +105,45 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       void queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] });
       void queryClient.invalidateQueries({ queryKey: ['getLicense'] });
     };
+    const invalidateResourceQueries = (resourceType?: string, eventKind?: string) => {
+      if (resourceType === 'License' || eventKind === 'licenseStateChanged') {
+        invalidateLicense();
+        return;
+      }
+      const prefixes =
+        eventKind === 'resourceTagsChanged'
+          ? [
+              'listTags',
+              'listPlatforms',
+              'listRegistries',
+              'listGitRepositories',
+              'getPlatfom',
+              'getPlatformTags',
+              'getRegistry',
+              'getRegistryTags',
+              'getGitRepository',
+              'getGitRepositoryTags',
+            ]
+          : resourceType === 'Tag'
+            ? ['listTags']
+            : resourceType === 'Registry'
+              ? ['listRegistries', 'getRegistry', 'getRegistryConfig', 'getRegistryTags', 'listActivities']
+              : resourceType === 'GitRepository'
+                ? [
+                    'listGitRepositories',
+                    'getGitRepository',
+                    'getGitRepositoryConfig',
+                    'getGitRepositoryTags',
+                    'listActivities',
+                  ]
+                : resourceType === 'Binding'
+                  ? ['getGlobalResourceBindings', 'getResourceBindings', 'listSecretDefinitions', 'listSecretProviders']
+                  : [];
+      if (prefixes.length === 0) return;
+      void queryClient.invalidateQueries({
+        predicate: (query) => prefixes.includes(String(query.queryKey[0])),
+      });
+    };
     const connect = () => {
       if (disposed) return;
       const url = new URL('/api/v1/realtime', baseUrl || window.location.origin);
@@ -121,13 +160,15 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
             protocolVersion?: number;
             eventKind?: string;
             kind?: string;
+            resourceType?: string;
           };
-          if (
-            envelope.protocolVersion === 1 &&
-            (envelope.kind === 'subscribed' || envelope.eventKind === 'licenseStateChanged')
-          ) {
-            if (envelope.kind === 'subscribed') retryIndex = 0;
-            invalidateLicense();
+          if (envelope.protocolVersion === 1) {
+            if (envelope.kind === 'subscribed') {
+              retryIndex = 0;
+              invalidateLicense();
+            } else {
+              invalidateResourceQueries(envelope.resourceType, envelope.eventKind);
+            }
           }
         } catch {
           // A malformed notification is ignored; authoritative API reads remain unchanged.

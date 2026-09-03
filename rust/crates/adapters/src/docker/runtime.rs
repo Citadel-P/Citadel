@@ -203,7 +203,8 @@ pub(super) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityErr
         | DockerError::InvalidVersion(_)
         | DockerError::IncompatibleVersion { .. }
         | DockerError::InvalidPing(_)
-        | DockerError::InvalidIdentifier => (RuntimeErrorKind::InvalidRequest, false),
+        | DockerError::InvalidIdentifier
+        | DockerError::InvalidMethod(_) => (RuntimeErrorKind::InvalidRequest, false),
         DockerError::Transport(_)
         | DockerError::ResponseTooLarge { .. }
         | DockerError::StreamItemTooLarge { .. }

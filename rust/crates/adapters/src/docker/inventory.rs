@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use citadel_platforms::jobs::ContainerStatsSampler;
 use citadel_platforms::{
     PlatformInventoryPort, RuntimeCapabilityError, RuntimeContainerStat, RuntimeImageSummary,
     RuntimeNetworkSummary, RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret,
@@ -186,6 +187,16 @@ impl DockerClient {
     }
 }
 
+impl ContainerStatsSampler for DockerClient {
+    fn sample_container_stats<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeContainerStat, RuntimeCapabilityError>> {
+        async move { DockerClient::sample_container_stats(self, id, cancellation).await }.boxed()
+    }
+}
+
 fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
     let usage = value.memory_stats.usage;
     let inactive = value
@@ -277,7 +288,7 @@ fn map_network(value: DockerNetwork) -> RuntimeNetworkSummary {
     }
 }
 
-fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
+pub(super) fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
     RuntimeVolumeSummary {
         name: value.name,
         in_use: value

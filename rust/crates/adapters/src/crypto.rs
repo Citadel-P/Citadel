@@ -315,6 +315,24 @@ impl citadel_identity::SecretProtector for AesGcmSecretProtector {
     }
 }
 
+impl citadel_resources::ResourceSecretProtector for AesGcmSecretProtector {
+    fn protect(
+        &self,
+        plaintext: &[u8],
+    ) -> Result<String, citadel_resources::ResourceMetadataError> {
+        Self::protect(self, plaintext)
+            .map_err(|_| citadel_resources::ResourceMetadataError::Credential)
+    }
+
+    fn unprotect(
+        &self,
+        envelope: &str,
+    ) -> Result<Zeroizing<Vec<u8>>, citadel_resources::ResourceMetadataError> {
+        Self::unprotect(self, envelope)
+            .map_err(|_| citadel_resources::ResourceMetadataError::Credential)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,10 +16,12 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
 use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
-    ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
+    SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformReadService, RuntimeContainerSummary, RuntimeImageSummary,
@@ -307,6 +309,61 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
         StatusCode::NOT_FOUND
     );
 
+    let updated_platform = json_body(
+        send_json(
+            &fixture,
+            Method::PATCH,
+            &format!("/api/v1/platforms/{}/_metadata", fixture.platform_id),
+            fixture.administrator.clone(),
+            json!({"description":"Swarm manager"}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(updated_platform["description"], "Swarm manager");
+    let persisted_description: Option<String> =
+        sqlx::query_scalar("SELECT description FROM platforms WHERE id=$1")
+            .bind(fixture.platform_id)
+            .fetch_one(&fixture.pool)
+            .await
+            .unwrap();
+    assert_eq!(persisted_description.as_deref(), Some("Swarm manager"));
+
+    let created_network = json_body(
+        send_json(
+            &fixture,
+            Method::POST,
+            "/api/v1/networks",
+            fixture.administrator.clone(),
+            json!({
+                "platformId":fixture.platform_id,
+                "name":"backend",
+                "driver":"overlay",
+                "scope":"swarm",
+                "attachable":true
+            }),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(created_network["id"], "network-created");
+    let created_volume = json_body(
+        send_json(
+            &fixture,
+            Method::POST,
+            "/api/v1/volumes",
+            fixture.administrator.clone(),
+            json!({
+                "platformId":fixture.platform_id,
+                "name":"cache",
+                "driver":"local"
+            }),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(created_volume["name"], "cache");
+
     fixture.pool.close().await;
     fixture.docker_server.await.unwrap();
     std::fs::remove_file(&fixture.docker_socket).unwrap();
@@ -355,10 +412,36 @@ async fn fixture() -> Fixture {
         Duration::minutes(15),
         Duration::days(30),
     ));
+    let administrator_actor_id = Uuid::now_v7();
+    let administrator_user_id = Uuid::now_v7();
+    let administrator_name = format!("phase4-admin-{}", administrator_user_id.simple());
+    let mut transaction = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO actors (id, isenabled, type) VALUES ($1, TRUE, 'User')")
+        .bind(administrator_actor_id)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO users (id, actorid, createdat, createdbyactorid, email, name) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(administrator_user_id)
+        .bind(administrator_actor_id)
+        .bind(Utc::now())
+        .bind(SYSTEM_ACTOR_ID)
+        .bind(format!("{administrator_name}@example.test"))
+        .bind(&administrator_name)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO actorroles (actorid, roleid) VALUES ($1, $2)")
+        .bind(administrator_actor_id)
+        .bind(ADMIN_ROLE_ID)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    transaction.commit().await.unwrap();
     let administrator = ActorPrincipal {
-        subject_id: Uuid::now_v7(),
-        actor_id: ActorId::new(Uuid::now_v7()),
-        name: "administrator".into(),
+        subject_id: administrator_user_id,
+        actor_id: ActorId::new(administrator_actor_id),
+        name: administrator_name,
         principal_type: AuthenticatedPrincipalType::User,
         credential_id: None,
         roles: vec!["Admin".to_owned()],
@@ -372,8 +455,10 @@ async fn fixture() -> Fixture {
         identity,
         platforms,
         pool: pool.clone(),
+        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
         docker,
         agent: None,
+        realtime: None,
     });
     Fixture {
         app,
@@ -393,7 +478,7 @@ async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf
     let socket = std::env::temp_dir().join(format!("citadel-phase4-http-{}.sock", Uuid::now_v7()));
     let listener = UnixListener::bind(&socket).unwrap();
     let server = tokio::spawn(async move {
-        for _ in 0..5 {
+        for _ in 0..7 {
             let (mut connection, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -407,27 +492,35 @@ async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf
                     break;
                 }
             }
-            let path = String::from_utf8_lossy(&request)
+            let request_line = String::from_utf8_lossy(&request)
                 .lines()
                 .next()
-                .and_then(|line| line.split_whitespace().nth(1))
                 .unwrap()
                 .to_owned();
-            let body = match path.as_str() {
-                "/version" => r#"{"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
-                "/v1.49/networks" => {
+            let mut parts = request_line.split_whitespace();
+            let method = parts.next().unwrap();
+            let path = parts.next().unwrap();
+            let body = match (method, path) {
+                ("GET", "/version") => {
+                    r#"{"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+                }
+                ("GET", "/v1.49/networks") => {
                     r#"[{"Name":"frontend","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"swarm","Driver":"overlay","EnableIPv4":true,"Containers":{"container-1":{}},"Labels":{},"Options":{}}]"#
                 }
-                "/v1.49/networks/network-1" => {
+                ("GET", "/v1.49/networks/network-1") => {
                     r#"{"Name":"frontend","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"swarm","Driver":"overlay","EnableIPv4":true,"Containers":{"container-1":{"Name":"web"}},"Peers":[{"Name":"worker-1","IP":"10.0.0.2"}],"Labels":{},"Options":{}}"#
                 }
-                "/v1.49/volumes" => {
+                ("GET", "/v1.49/volumes") => {
                     r#"{"Volumes":[{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{},"UsageData":{"RefCount":1,"Size":1024}}],"Warnings":[]}"#
                 }
-                "/v1.49/volumes/data" => {
+                ("GET", "/v1.49/volumes/data") => {
                     r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{},"UsageData":{"RefCount":1,"Size":1024}}"#
                 }
-                unexpected => panic!("unexpected Docker fixture request {unexpected}"),
+                ("POST", "/v1.49/networks/create") => r#"{"Id":"network-created","Warning":""}"#,
+                ("POST", "/v1.49/volumes/create") => {
+                    r#"{"Name":"cache","Driver":"local","Mountpoint":"/cache","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{},"UsageData":{"RefCount":0,"Size":0}}"#
+                }
+                unexpected => panic!("unexpected Docker fixture request {unexpected:?}"),
             };
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -606,6 +699,23 @@ async fn send(
         .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap()
+}
+
+async fn send_json(
+    fixture: &Fixture,
+    method: Method,
+    uri: &str,
+    principal: ActorPrincipal,
+    body: Value,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap();
+    request.extensions_mut().insert(principal);
+    fixture.app.clone().oneshot(request).await.unwrap()
 }
 
 async fn json_body(response: axum::response::Response) -> Value {

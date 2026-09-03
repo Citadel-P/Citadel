@@ -608,6 +608,28 @@ describe('SignalRProvider', () => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicense'] });
     });
+    invalidate.mockClear();
+
+    act(() =>
+      socket.emit(
+        'message',
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            protocolVersion: 1,
+            resourceType: 'Registry',
+            eventKind: 'registryChanged',
+          }),
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ predicate: expect.any(Function) }),
+    );
+    const predicate = invalidate.mock.calls[0]?.[0]?.predicate;
+    if (!predicate) throw new Error('Registry invalidation predicate was not registered.');
+    type InvalidatedQuery = Parameters<typeof predicate>[0];
+    expect(predicate({ queryKey: ['listRegistries'] } as InvalidatedQuery)).toBe(true);
+    expect(predicate({ queryKey: ['listPlatforms'] } as InvalidatedQuery)).toBe(false);
 
     rendered.unmount();
     expect(socket.close).toHaveBeenCalled();

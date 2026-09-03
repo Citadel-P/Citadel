@@ -94,6 +94,20 @@ pub const VOLUME_INSPECT: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const VOLUME_CREATE: Endpoint = Endpoint {
+    operation_id: "VolumeCreate",
+    method: "POST",
+    path: "/volumes/create",
+    versioned: true,
+    streaming: false,
+};
+pub const VOLUME_DELETE: Endpoint = Endpoint {
+    operation_id: "VolumeDelete",
+    method: "DELETE",
+    path: "/volumes/{name}",
+    versioned: true,
+    streaming: false,
+};
 pub const NETWORK_LIST: Endpoint = Endpoint {
     operation_id: "NetworkList",
     method: "GET",
@@ -104,6 +118,20 @@ pub const NETWORK_LIST: Endpoint = Endpoint {
 pub const NETWORK_INSPECT: Endpoint = Endpoint {
     operation_id: "NetworkInspect",
     method: "GET",
+    path: "/networks/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const NETWORK_CREATE: Endpoint = Endpoint {
+    operation_id: "NetworkCreate",
+    method: "POST",
+    path: "/networks/create",
+    versioned: true,
+    streaming: false,
+};
+pub const NETWORK_DELETE: Endpoint = Endpoint {
+    operation_id: "NetworkDelete",
+    method: "DELETE",
     path: "/networks/{id}",
     versioned: true,
     streaming: false,
@@ -439,6 +467,18 @@ pub struct DockerVolume {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct VolumeCreateOptions {
+    #[serde(rename = "Name", default)]
+    pub name: String,
+    #[serde(rename = "Driver", default)]
+    pub driver: String,
+    #[serde(rename = "DriverOpts", default)]
+    pub driver_options: HashMap<String, String>,
+    #[serde(rename = "Labels", default)]
+    pub labels: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerNetwork {
     #[serde(rename = "Name", default)]
     pub name: String,
@@ -474,6 +514,44 @@ pub struct DockerNetwork {
     pub options: HashMap<String, String>,
     #[serde(rename = "Labels", default)]
     pub labels: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct NetworkCreateRequest {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Driver", skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
+    #[serde(rename = "Scope", skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(rename = "Internal", skip_serializing_if = "Option::is_none")]
+    pub internal: Option<bool>,
+    #[serde(rename = "Attachable", skip_serializing_if = "Option::is_none")]
+    pub attachable: Option<bool>,
+    #[serde(rename = "Ingress", skip_serializing_if = "Option::is_none")]
+    pub ingress: Option<bool>,
+    #[serde(rename = "EnableIPv6", skip_serializing_if = "Option::is_none")]
+    pub enable_ipv6: Option<bool>,
+    #[serde(rename = "EnableIPv4", skip_serializing_if = "Option::is_none")]
+    pub enable_ipv4: Option<bool>,
+    #[serde(rename = "ConfigOnly", skip_serializing_if = "Option::is_none")]
+    pub config_only: Option<bool>,
+    #[serde(rename = "IPAM", skip_serializing_if = "Option::is_none")]
+    pub ipam: Option<Value>,
+    #[serde(rename = "ConfigFrom", skip_serializing_if = "Option::is_none")]
+    pub config_from: Option<Value>,
+    #[serde(rename = "Labels", default)]
+    pub labels: HashMap<String, String>,
+    #[serde(rename = "Options", default)]
+    pub options: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct NetworkCreateResponse {
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(rename = "Warning", default)]
+    pub warning: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

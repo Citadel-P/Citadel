@@ -425,6 +425,7 @@ dependencies = [
  "citadel-domain",
  "citadel-identity",
  "citadel-platforms",
+ "citadel-resources",
  "ed25519-dalek 3.0.0",
  "futures-util",
  "getrandom 0.4.3",
@@ -538,8 +539,23 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "tokio-util",
  "uuid",
+]
+
+[[package]]
+name = "citadel-resources"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-domain",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -557,6 +573,7 @@ dependencies = [
  "citadel-domain",
  "citadel-identity",
  "citadel-platforms",
+ "citadel-resources",
  "clap",
  "futures-util",
  "ipnet",
