@@ -227,6 +227,50 @@ pub struct DeploymentResultActivitySnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SwarmServiceActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "PlatformId")]
+    pub platform_id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "DockerName")]
+    pub docker_name: String,
+    #[serde(rename = "DockerServiceId")]
+    pub docker_service_id: Option<String>,
+    #[serde(rename = "Spec")]
+    pub spec: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StackActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "StackSource")]
+    pub stack_source: String,
+    #[serde(rename = "DriftPolicy")]
+    pub drift_policy: Value,
+    #[serde(rename = "StackRelease")]
+    pub stack_release: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StackResultActivitySnapshot {
+    #[serde(rename = "ContainerIds")]
+    pub container_ids: Option<Vec<String>>,
+    #[serde(rename = "Message")]
+    pub message: Option<String>,
+    #[serde(rename = "ResourceBindings")]
+    pub resource_bindings: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformActivitySnapshot {
     #[serde(rename = "Id")]
     pub id: Uuid,
@@ -607,6 +651,112 @@ pub enum ActivityEventInfo {
         deployment: Option<DeploymentActivitySnapshot>,
         #[serde(rename = "Result")]
         result: DeploymentResultActivitySnapshot,
+    },
+    StackCreated {
+        #[serde(rename = "Stack")]
+        stack: StackActivitySnapshot,
+    },
+    StackDuplicated {
+        #[serde(rename = "Stack")]
+        stack: StackActivitySnapshot,
+        #[serde(rename = "Source")]
+        source: ActivitySourceResource,
+    },
+    StackUpdated {
+        #[serde(rename = "OldStack")]
+        old_stack: StackActivitySnapshot,
+        #[serde(rename = "NewStack")]
+        new_stack: StackActivitySnapshot,
+    },
+    StackRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    StackDeleted {
+        #[serde(rename = "Stack")]
+        stack: StackActivitySnapshot,
+    },
+    StackStarted {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    StackStopped {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    StackPaused {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    StackApplied {
+        #[serde(rename = "Stack")]
+        stack: Option<StackActivitySnapshot>,
+        #[serde(rename = "Result")]
+        result: StackResultActivitySnapshot,
+    },
+    StackRollback {
+        #[serde(rename = "OldStack")]
+        old_stack: Option<StackActivitySnapshot>,
+        #[serde(rename = "NewStack")]
+        new_stack: Option<StackActivitySnapshot>,
+        #[serde(rename = "Result")]
+        result: StackResultActivitySnapshot,
+    },
+    StackImported {
+        #[serde(rename = "Stack")]
+        stack: StackActivitySnapshot,
+        #[serde(rename = "ProjectName")]
+        project_name: String,
+    },
+    SwarmServiceCreated {
+        #[serde(rename = "Service")]
+        service: SwarmServiceActivitySnapshot,
+    },
+    SwarmServiceUpdated {
+        #[serde(rename = "OldService")]
+        old_service: SwarmServiceActivitySnapshot,
+        #[serde(rename = "NewService")]
+        new_service: SwarmServiceActivitySnapshot,
+    },
+    SwarmServiceRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    SwarmServiceDeleted {
+        #[serde(rename = "Service")]
+        service: SwarmServiceActivitySnapshot,
+    },
+    SwarmServiceApplied {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Warnings")]
+        warnings: Vec<String>,
+    },
+    SwarmServiceScaled {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Replicas")]
+        replicas: i32,
+        #[serde(rename = "Warnings")]
+        warnings: Vec<String>,
+    },
+    SwarmServiceForceUpdated {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Warnings")]
+        warnings: Vec<String>,
+    },
+    SwarmServiceOperationFailed {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Kind")]
+        kind: String,
+        #[serde(rename = "Reason")]
+        reason: String,
     },
     PlatformCreated {
         #[serde(rename = "Platform")]
@@ -996,6 +1146,69 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn swarm_service_created(service: SwarmServiceActivitySnapshot) -> Self {
+        Self::SwarmServiceCreated { service }
+    }
+
+    #[must_use]
+    pub const fn swarm_service_updated(
+        old_service: SwarmServiceActivitySnapshot,
+        new_service: SwarmServiceActivitySnapshot,
+    ) -> Self {
+        Self::SwarmServiceUpdated {
+            old_service,
+            new_service,
+        }
+    }
+
+    #[must_use]
+    pub fn swarm_service_renamed(old_name: String, new_name: String) -> Self {
+        Self::SwarmServiceRenamed { old_name, new_name }
+    }
+
+    #[must_use]
+    pub const fn swarm_service_deleted(service: SwarmServiceActivitySnapshot) -> Self {
+        Self::SwarmServiceDeleted { service }
+    }
+
+    #[must_use]
+    pub fn swarm_service_completed(
+        kind: &str,
+        operation_id: Uuid,
+        replicas: Option<i32>,
+        warnings: Vec<String>,
+    ) -> Self {
+        match kind {
+            "Scale" => Self::SwarmServiceScaled {
+                operation_id,
+                replicas: replicas.unwrap_or_default(),
+                warnings,
+            },
+            "ForceUpdate" => Self::SwarmServiceForceUpdated {
+                operation_id,
+                warnings,
+            },
+            _ => Self::SwarmServiceApplied {
+                operation_id,
+                warnings,
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn swarm_service_operation_failed(
+        operation_id: Uuid,
+        kind: String,
+        reason: String,
+    ) -> Self {
+        Self::SwarmServiceOperationFailed {
+            operation_id,
+            kind,
+            reason,
+        }
+    }
+
+    #[must_use]
     pub const fn platform_created(platform: PlatformActivitySnapshot) -> Self {
         Self::PlatformCreated { platform }
     }
@@ -1088,6 +1301,27 @@ impl ActivityEventInfo {
             Self::DeploymentRenamed { .. } => ActivityEventType::DeploymentRenamed,
             Self::DeploymentDeleted { .. } => ActivityEventType::DeploymentDeleted,
             Self::DeploymentApplied { .. } => ActivityEventType::DeploymentApplied,
+            Self::StackCreated { .. } => ActivityEventType::StackCreated,
+            Self::StackDuplicated { .. } => ActivityEventType::StackDuplicated,
+            Self::StackUpdated { .. } => ActivityEventType::StackUpdated,
+            Self::StackRenamed { .. } => ActivityEventType::StackRenamed,
+            Self::StackDeleted { .. } => ActivityEventType::StackDeleted,
+            Self::StackStarted { .. } => ActivityEventType::StackStarted,
+            Self::StackStopped { .. } => ActivityEventType::StackStopped,
+            Self::StackPaused { .. } => ActivityEventType::StackPaused,
+            Self::StackApplied { .. } => ActivityEventType::StackApplied,
+            Self::StackRollback { .. } => ActivityEventType::StackRollback,
+            Self::StackImported { .. } => ActivityEventType::StackImported,
+            Self::SwarmServiceCreated { .. } => ActivityEventType::SwarmServiceCreated,
+            Self::SwarmServiceUpdated { .. } => ActivityEventType::SwarmServiceUpdated,
+            Self::SwarmServiceRenamed { .. } => ActivityEventType::SwarmServiceRenamed,
+            Self::SwarmServiceDeleted { .. } => ActivityEventType::SwarmServiceDeleted,
+            Self::SwarmServiceApplied { .. } => ActivityEventType::SwarmServiceApplied,
+            Self::SwarmServiceScaled { .. } => ActivityEventType::SwarmServiceScaled,
+            Self::SwarmServiceForceUpdated { .. } => ActivityEventType::SwarmServiceForceUpdated,
+            Self::SwarmServiceOperationFailed { .. } => {
+                ActivityEventType::SwarmServiceOperationFailed
+            }
             Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
             Self::GitRepoCreated { .. } => ActivityEventType::GitRepoCreated,
             Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
@@ -1310,6 +1544,56 @@ impl ActivityEvent {
             created_at,
         )?;
         event.platform_id = Some(resource_id);
+        Ok(event)
+    }
+
+    pub fn new_swarm_service_event(
+        resource_id: Uuid,
+        resource_name: String,
+        platform_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        status: ActivityStatus,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        if platform_id.is_nil() {
+            return Err(ActivityInvariantError::MissingResourceId);
+        }
+        let mut event = Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::SwarmService,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )?;
+        event.platform_id = Some(platform_id);
+        Ok(event)
+    }
+
+    pub fn new_stack_event(
+        resource_id: Uuid,
+        resource_name: String,
+        platform_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        status: ActivityStatus,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        if platform_id.is_nil() {
+            return Err(ActivityInvariantError::MissingResourceId);
+        }
+        let mut event = Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Stack,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )?;
+        event.platform_id = Some(platform_id);
         Ok(event)
     }
 
@@ -1576,6 +1860,37 @@ mod tests {
         assert_eq!(info["$type"], "DeploymentCreated");
         assert_eq!(info["Deployment"]["Id"], deployment_id.to_string());
         assert_eq!(info["Deployment"]["PlatformId"], platform_id.to_string());
+    }
+
+    #[test]
+    fn swarm_service_activity_uses_the_existing_dotnet_payload_shape() {
+        let service_id = Uuid::now_v7();
+        let platform_id = Uuid::now_v7();
+        let operation_id = Uuid::now_v7();
+        let event = ActivityEvent::new_swarm_service_event(
+            service_id,
+            "redis".to_owned(),
+            platform_id,
+            ActorId::new(Uuid::now_v7()),
+            ActivityEventInfo::swarm_service_completed(
+                "Scale",
+                operation_id,
+                Some(3),
+                vec!["warning".to_owned()],
+            ),
+            ActivityStatus::Success,
+            Utc::now(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(event.info()).unwrap();
+
+        assert_eq!(event.resource_type(), ActivityResourceType::SwarmService);
+        assert_eq!(event.event_type(), ActivityEventType::SwarmServiceScaled);
+        assert_eq!(event.platform_id(), Some(platform_id));
+        assert_eq!(json["$type"], "SwarmServiceScaled");
+        assert_eq!(json["OperationId"], operation_id.to_string());
+        assert_eq!(json["Replicas"], 3);
+        assert_eq!(json["Warnings"], serde_json::json!(["warning"]));
     }
 
     #[test]

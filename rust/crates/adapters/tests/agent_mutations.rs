@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::agent::{AgentClient, AgentContainerAction, AgentRequestSigner};
 use citadel_contracts::citadel::containers::v1::container_service_server::{
     ContainerService, ContainerServiceServer,
 };
@@ -28,6 +28,12 @@ use citadel_contracts::citadel::networks::v1::{
 };
 use citadel_contracts::citadel::shared_models::v1::VolumeResponse;
 use citadel_contracts::citadel::shared_models::v1::{ContainerMessage, InspectContainerResponse};
+use citadel_contracts::citadel::stacks::v1::stack_service_server::{
+    StackService as AgentStackService, StackServiceServer,
+};
+use citadel_contracts::citadel::stacks::v1::{
+    StackApplyEventType, StackApplyRequest, StackApplyResponse, StackOrchestrationMode,
+};
 use citadel_contracts::citadel::volumes::v1::volume_service_server::{
     VolumeService, VolumeServiceServer,
 };
@@ -42,6 +48,7 @@ use citadel_deployments::{
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
 };
+use citadel_stacks::{StackOperationClaim, StackSpec, StackSpecCommon, StackUpdateBehavior};
 use futures_util::Stream;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
@@ -52,6 +59,8 @@ struct MutationFixture {
     network_create_calls: Arc<AtomicUsize>,
     container_delete_calls: Arc<AtomicUsize>,
     deployment_apply_calls: Arc<AtomicUsize>,
+    container_action_calls: Arc<AtomicUsize>,
+    stack_apply_calls: Arc<AtomicUsize>,
 }
 
 #[tonic::async_trait]
@@ -89,8 +98,11 @@ impl ContainerService for MutationFixture {
         Err(Status::unimplemented("not used"))
     }
 
-    async fn start(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
-        Err(Status::unimplemented("not used"))
+    async fn start(&self, request: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        require_signature(&request)?;
+        assert_eq!(request.get_ref().ids, ["container-1", "container-2"]);
+        self.container_action_calls.fetch_add(1, Ordering::Relaxed);
+        Ok(Response::new(()))
     }
 
     async fn stop(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
@@ -184,6 +196,38 @@ impl ContainerService for MutationFixture {
 }
 
 #[tonic::async_trait]
+impl AgentStackService for MutationFixture {
+    type ApplyStream = TestStream<StackApplyResponse>;
+
+    async fn apply(
+        &self,
+        request: Request<StackApplyRequest>,
+    ) -> Result<Response<Self::ApplyStream>, Status> {
+        require_signature(&request)?;
+        let request = request.get_ref();
+        assert_eq!(request.project_name.as_deref(), Some("agent-stack"));
+        assert_eq!(
+            request.compose_file_content.as_deref(),
+            Some("services:\n  web:\n    image: nginx\n")
+        );
+        assert_eq!(request.environment_variables, ["TOKEN=resolved"]);
+        assert_eq!(
+            request.orchestration_mode,
+            StackOrchestrationMode::DockerCompose as i32
+        );
+        self.stack_apply_calls.fetch_add(1, Ordering::Relaxed);
+        Ok(Response::new(Box::pin(futures_util::stream::iter([Ok(
+            StackApplyResponse {
+                r#type: StackApplyEventType::CommandCompleted as i32,
+                message: Some("done".to_owned()),
+                exit_code: Some(0),
+                stack_status: Some("Healthy".to_owned()),
+            },
+        )]))))
+    }
+}
+
+#[tonic::async_trait]
 impl NetworkService for MutationFixture {
     async fn list(
         &self,
@@ -271,11 +315,15 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
     let calls = Arc::new(AtomicUsize::new(0));
     let container_calls = Arc::new(AtomicUsize::new(0));
     let deployment_calls = Arc::new(AtomicUsize::new(0));
+    let action_calls = Arc::new(AtomicUsize::new(0));
+    let stack_calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
         fail_network_create: false,
         network_create_calls: calls.clone(),
         container_delete_calls: container_calls.clone(),
         deployment_apply_calls: deployment_calls.clone(),
+        container_action_calls: action_calls.clone(),
+        stack_apply_calls: stack_calls.clone(),
     })
     .await;
     let client = connect(&address).await;
@@ -313,15 +361,35 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
         .delete_container("container-1", &cancellation)
         .await
         .unwrap();
+    client
+        .change_containers_state(
+            &["container-1".to_owned(), "container-2".to_owned()],
+            AgentContainerAction::Start,
+            &cancellation,
+        )
+        .await
+        .unwrap();
     let applied = client
         .apply_deployment(&deployment_command(), &cancellation)
         .await
         .unwrap();
     assert_eq!(applied.docker_container_id, "container-applied");
     assert_eq!(applied.state, RuntimeContainerState::Running);
+    let stack = client
+        .apply_stack(
+            &stack_claim(),
+            "services:\n  web:\n    image: nginx\n",
+            &["TOKEN=resolved".to_owned()],
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stack.status, citadel_stacks::StackReleaseStatus::Healthy);
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(container_calls.load(Ordering::Relaxed), 1);
     assert_eq!(deployment_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(action_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(stack_calls.load(Ordering::Relaxed), 1);
     shutdown.cancel();
 }
 
@@ -333,6 +401,8 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
         network_create_calls: calls.clone(),
         container_delete_calls: Arc::new(AtomicUsize::new(0)),
         deployment_apply_calls: Arc::new(AtomicUsize::new(0)),
+        container_action_calls: Arc::new(AtomicUsize::new(0)),
+        stack_apply_calls: Arc::new(AtomicUsize::new(0)),
     })
     .await;
     let error = PlatformResourceMutationPort::create_network(
@@ -400,6 +470,29 @@ fn deployment_command() -> RuntimeDeploymentCommand {
     }
 }
 
+fn stack_claim() -> StackOperationClaim {
+    let stack_id = uuid::Uuid::now_v7();
+    StackOperationClaim {
+        stack_id,
+        release_id: uuid::Uuid::now_v7(),
+        platform_id: uuid::Uuid::now_v7(),
+        name: "Agent Stack".to_owned(),
+        project_name: "agent-stack".to_owned(),
+        platform_type: "Docker".to_owned(),
+        spec: StackSpec::WebEditor {
+            compose_file: "services:\n  web:\n    image: nginx\n".to_owned(),
+            update_behavior: StackUpdateBehavior::Disabled,
+            common: StackSpecCommon {
+                destroy_before_deploy: false,
+                ..Default::default()
+            },
+        },
+        row_version: 1,
+        actor_id: uuid::Uuid::now_v7(),
+        operation: "Apply".to_owned(),
+    }
+}
+
 async fn connect(address: &str) -> AgentClient {
     AgentClient::connect(
         address,
@@ -421,6 +514,7 @@ async fn start_fixture(fixture: MutationFixture) -> (String, CancellationToken) 
         tonic::transport::Server::builder()
             .add_service(ContainerServiceServer::new(fixture.clone()))
             .add_service(DeploymentServiceServer::new(fixture.clone()))
+            .add_service(StackServiceServer::new(fixture.clone()))
             .add_service(NetworkServiceServer::new(fixture.clone()))
             .add_service(VolumeServiceServer::new(fixture))
             .serve_with_shutdown(address, shutdown.cancelled_owned())

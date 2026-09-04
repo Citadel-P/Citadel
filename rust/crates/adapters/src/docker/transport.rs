@@ -17,10 +17,11 @@ use super::generated::{
     CONTAINER_START, CONTAINER_STATS, ContainerInspect, ContainerStats, ContainerSummary,
     DockerEvent, DockerInfo, DockerNetwork, DockerVersion, DockerVolume, Endpoint, IMAGE_CREATE,
     IMAGE_LIST, ImageSummary, NETWORK_CREATE, NETWORK_DELETE, NETWORK_INSPECT, NETWORK_LIST,
-    NODE_LIST, NetworkCreateRequest, NetworkCreateResponse, SECRET_LIST, SERVICE_LIST,
-    SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmConfig,
-    SwarmInspect, SwarmNode, SwarmSecret, SwarmService, SwarmTask, TASK_LIST, VOLUME_CREATE,
-    VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST, VolumeCreateOptions, VolumeListResponse,
+    NODE_LIST, NetworkCreateRequest, NetworkCreateResponse, SECRET_LIST, SERVICE_CREATE,
+    SERVICE_DELETE, SERVICE_INSPECT, SERVICE_LIST, SERVICE_UPDATE, SWARM_INSPECT, SYSTEM_EVENTS,
+    SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret,
+    SwarmService, SwarmTask, TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST,
+    VolumeCreateOptions, VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -400,6 +401,51 @@ impl DockerClient {
     pub async fn list_swarm_services(&self) -> Result<Vec<SwarmService>, DockerError> {
         self.get_json(&SERVICE_LIST, SERVICE_LIST.path, Some("status=true"))
             .await
+    }
+
+    pub async fn inspect_swarm_service(&self, id: &str) -> Result<SwarmService, DockerError> {
+        validate_identifier(id)?;
+        let path = SERVICE_INSPECT
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        self.get_json(&SERVICE_INSPECT, &path, None).await
+    }
+
+    pub async fn create_swarm_service(
+        &self,
+        spec: &serde_json::Value,
+    ) -> Result<serde_json::Value, DockerError> {
+        self.request_json(&SERVICE_CREATE, SERVICE_CREATE.path, None, Some(spec))
+            .await
+    }
+
+    pub async fn update_swarm_service(
+        &self,
+        id: &str,
+        version: i64,
+        spec: &serde_json::Value,
+    ) -> Result<serde_json::Value, DockerError> {
+        validate_identifier(id)?;
+        let path = SERVICE_UPDATE
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        self.request_json(
+            &SERVICE_UPDATE,
+            &path,
+            Some(&format!("version={version}")),
+            Some(spec),
+        )
+        .await
+    }
+
+    pub async fn delete_swarm_service(&self, id: &str) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        let path = SERVICE_DELETE
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        self.send_request::<()>(&SERVICE_DELETE, &path, None, None)
+            .await?;
+        Ok(())
     }
 
     pub async fn list_swarm_tasks(&self) -> Result<Vec<SwarmTask>, DockerError> {

@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_stream::stream;
 use base64::Engine;
 use citadel_contracts::citadel::containers::v1::{
-    DeleteContainerRequest, ListContainersRequest, StreamContainersStatsRequest,
+    ContainerIds, DeleteContainerRequest, ListContainersRequest, StreamContainersStatsRequest,
     container_service_client::ContainerServiceClient,
 };
 use citadel_contracts::citadel::deployments::v1::{
@@ -26,9 +26,17 @@ use citadel_contracts::citadel::platforms::v1::{
 use citadel_contracts::citadel::shared_models::v1::{
     ContainerMessage, IpamConfigMessage, IpamMessage, PlatformInfoResponse,
 };
+use citadel_contracts::citadel::stacks::v1::{
+    StackApplyEventType as ProtoStackApplyEventType, StackApplyRequest,
+    StackOrchestrationMode as ProtoStackOrchestrationMode,
+    stack_service_client::StackServiceClient,
+};
 use citadel_contracts::citadel::swarm::v1::{
+    CreateManagedSwarmServiceRequest, DeleteManagedSwarmServiceRequest, InspectSwarmServiceRequest,
     ListSwarmConfigsRequest, ListSwarmNodesRequest, ListSwarmSecretsRequest,
-    ListSwarmServicesRequest, ListSwarmTasksRequest, swarm_service_client::SwarmServiceClient,
+    ListSwarmServicesRequest, ListSwarmTasksRequest, SwarmServiceMessage,
+    SwarmServiceMutationResponse, UpdateManagedSwarmServiceRequest,
+    swarm_service_client::SwarmServiceClient,
 };
 use citadel_contracts::citadel::volumes::v1::{
     CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
@@ -65,7 +73,13 @@ const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(200);
 const PLATFORM_INFO_METHOD: &str = "/citadel.platforms.v1.PlatformService/GetPlatformInfo";
 const LIST_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/List";
 const DELETE_CONTAINER_METHOD: &str = "/citadel.containers.v1.ContainerService/Delete";
+const START_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Start";
+const STOP_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Stop";
+const PAUSE_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Pause";
+const UNPAUSE_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Unpause";
+const RESTART_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Restart";
 const APPLY_DEPLOYMENT_METHOD: &str = "/citadel.deployments.v1.DeploymentService/Apply";
+const APPLY_STACK_METHOD: &str = "/citadel.stacks.v1.StackService/Apply";
 const STREAM_CONTAINERS_STATS_METHOD: &str =
     "/citadel.containers.v1.ContainerService/StreamContainersStats";
 const LIST_IMAGES_METHOD: &str = "/citadel.images.v1.ImageService/List";
@@ -83,6 +97,10 @@ const LIST_SWARM_SERVICES_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListSer
 const LIST_SWARM_TASKS_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListTasks";
 const LIST_SWARM_CONFIGS_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListConfigs";
 const LIST_SWARM_SECRETS_METHOD: &str = "/citadel.swarm.v1.SwarmService/ListSecrets";
+const INSPECT_SWARM_SERVICE_METHOD: &str = "/citadel.swarm.v1.SwarmService/InspectService";
+const CREATE_SWARM_SERVICE_METHOD: &str = "/citadel.swarm.v1.SwarmService/CreateService";
+const UPDATE_SWARM_SERVICE_METHOD: &str = "/citadel.swarm.v1.SwarmService/UpdateService";
+const DELETE_SWARM_SERVICE_METHOD: &str = "/citadel.swarm.v1.SwarmService/DeleteService";
 const STREAM_PLATFORM_STATS_METHOD: &str =
     "/citadel.platforms.v1.PlatformService/StreamPlatformStats";
 const STREAM_DAEMON_EVENTS_METHOD: &str = "/citadel.platforms.v1.PlatformService/StreamDaemonEvent";
@@ -96,6 +114,15 @@ pub struct AgentDaemonEvent {
 pub type AgentDaemonEventStream = std::pin::Pin<
     Box<dyn futures_util::Stream<Item = Result<AgentDaemonEvent, RuntimeCapabilityError>> + Send>,
 >;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentContainerAction {
+    Start,
+    Stop,
+    Pause,
+    Unpause,
+    Restart,
+}
 
 #[derive(Clone)]
 pub struct AgentRequestSigner {
@@ -354,6 +381,54 @@ impl AgentClient {
         Ok(())
     }
 
+    pub async fn change_containers_state(
+        &self,
+        ids: &[String],
+        action: AgentContainerAction,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        if ids.is_empty()
+            || ids.len() > 1_000
+            || ids.iter().any(|id| id.trim().is_empty() || id.len() > 256)
+        {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::InvalidRequest,
+                "the Container identifiers are invalid",
+                false,
+            ));
+        }
+        let method = match action {
+            AgentContainerAction::Start => START_CONTAINERS_METHOD,
+            AgentContainerAction::Stop => STOP_CONTAINERS_METHOD,
+            AgentContainerAction::Pause => PAUSE_CONTAINERS_METHOD,
+            AgentContainerAction::Unpause => UNPAUSE_CONTAINERS_METHOD,
+            AgentContainerAction::Restart => RESTART_CONTAINERS_METHOD,
+        };
+        let request = self.signer.sign(
+            ContainerIds { ids: ids.to_vec() },
+            method,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.container_client();
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, async {
+                match action {
+                    AgentContainerAction::Start => client.start(request).await,
+                    AgentContainerAction::Stop => client.stop(request).await,
+                    AgentContainerAction::Pause => client.pause(request).await,
+                    AgentContainerAction::Unpause => client.unpause(request).await,
+                    AgentContainerAction::Restart => client.restart(request).await,
+                }
+            }) => {
+                result.map_err(|_| timeout_error("changing Container state through the Agent"))?
+                    .map_err(normalize_status)?;
+            }
+        }
+        Ok(())
+    }
+
     fn image_client(&self) -> ImageServiceClient<Channel> {
         ImageServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
@@ -364,6 +439,104 @@ impl AgentClient {
         DeploymentServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
             .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    fn stack_client(&self) -> StackServiceClient<Channel> {
+        StackServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+            .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    /// Stack Apply is a mutation and is deliberately dispatched at most once.
+    pub async fn apply_stack(
+        &self,
+        claim: &citadel_stacks::StackOperationClaim,
+        compose: &str,
+        environment: &[String],
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            StackApplyRequest {
+                stack_name: claim.name.clone(),
+                compose_file_content: Some(compose.to_owned()),
+                project_name: Some(claim.project_name.clone()),
+                environment_file_path: claim.spec.common().env_file_path.clone(),
+                registry_auth: None,
+                registry_name: None,
+                registry_host: None,
+                destroy_before_deploy: claim.spec.common().destroy_before_deploy,
+                environment_variables: environment.to_vec(),
+                pre_deploy: None,
+                post_deploy: None,
+                service_names: Vec::new(),
+                pull_images: true,
+                source_working_directory: None,
+                source_compose_file_paths: Vec::new(),
+                source_env_file_paths: Vec::new(),
+                labels_override_file_path: None,
+                generated_files_directory: None,
+                secret_files: Vec::new(),
+                secret_target_service_names: Vec::new(),
+                orchestration_mode: if claim.platform_type == "DockerSwarm" {
+                    ProtoStackOrchestrationMode::DockerSwarm as i32
+                } else {
+                    ProtoStackOrchestrationMode::DockerCompose as i32
+                },
+                source_files: Vec::new(),
+                retained_swarm_secrets: Vec::new(),
+                retained_swarm_configs: Vec::new(),
+                convert_compose_project_to_swarm: false,
+            },
+            APPLY_STACK_METHOD,
+            None,
+        )?;
+        let mut client = self.stack_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.apply(request)) => {
+                result.map_err(|_| timeout_error("opening the Agent Stack Apply stream"))?
+                    .map_err(normalize_status)?
+            }
+        };
+        let mut stream = response.into_inner();
+        let mut status = citadel_stacks::StackReleaseStatus::Failed;
+        let mut messages = Vec::new();
+        loop {
+            let next = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                item = stream.next() => item,
+            };
+            let Some(item) = next else { break };
+            let item = item.map_err(normalize_status)?;
+            if let Some(value) = item.stack_status.as_deref() {
+                status = citadel_stacks::StackReleaseStatus::parse(value).map_err(|error| {
+                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+                })?;
+            } else if item.exit_code == Some(0) {
+                status = citadel_stacks::StackReleaseStatus::Healthy;
+            }
+            let event_type = match ProtoStackApplyEventType::try_from(item.r#type) {
+                Ok(ProtoStackApplyEventType::StdOut) => citadel_stacks::StackApplyEventType::StdOut,
+                Ok(ProtoStackApplyEventType::StdErr) => citadel_stacks::StackApplyEventType::StdErr,
+                Ok(ProtoStackApplyEventType::SystemMessage) => {
+                    citadel_stacks::StackApplyEventType::SystemMessage
+                }
+                Ok(ProtoStackApplyEventType::CommandCompleted) => {
+                    citadel_stacks::StackApplyEventType::CommandCompleted
+                }
+                _ => citadel_stacks::StackApplyEventType::Unknown,
+            };
+            messages.push(citadel_stacks::StackStreamItem {
+                event_type,
+                message: item.message,
+                exit_code: item.exit_code,
+                stack_status: Some(status),
+                severity: None,
+            });
+        }
+        Ok(citadel_stacks::StackRuntimeResult { status, messages })
     }
 
     /// Pull is deliberately not retried: once an Agent accepts this mutation,
@@ -518,6 +691,99 @@ impl AgentClient {
         SwarmServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
             .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    pub async fn inspect_managed_swarm_service(
+        &self,
+        service_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<SwarmServiceMessage, RuntimeCapabilityError> {
+        let service_id = service_id.to_owned();
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                InspectSwarmServiceRequest {
+                    service_id: service_id.clone(),
+                },
+                INSPECT_SWARM_SERVICE_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            self.swarm_client()
+                .inspect_service(request)
+                .await
+                .map(|value| value.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
+    }
+
+    /// Mutations are deliberately dispatched once. A lost response is ambiguous and
+    /// the durable Citadel operation is reconciled by its operation label.
+    pub async fn create_managed_swarm_service(
+        &self,
+        request: CreateManagedSwarmServiceRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<SwarmServiceMutationResponse, RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            request,
+            CREATE_SWARM_SERVICE_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.swarm_client();
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.create_service(request)) => {
+                result.map_err(|_| timeout_error("creating a Swarm Service through the Agent"))?
+                    .map(|value| value.into_inner())
+                    .map_err(normalize_status)
+            }
+        }
+    }
+
+    pub async fn update_managed_swarm_service(
+        &self,
+        request: UpdateManagedSwarmServiceRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<SwarmServiceMutationResponse, RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            request,
+            UPDATE_SWARM_SERVICE_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.swarm_client();
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.update_service(request)) => {
+                result.map_err(|_| timeout_error("updating a Swarm Service through the Agent"))?
+                    .map(|value| value.into_inner())
+                    .map_err(normalize_status)
+            }
+        }
+    }
+
+    pub async fn delete_managed_swarm_service(
+        &self,
+        request: DeleteManagedSwarmServiceRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            request,
+            DELETE_SWARM_SERVICE_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.swarm_client();
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.delete_service(request)) => {
+                match result.map_err(|_| timeout_error("deleting a Swarm Service through the Agent"))? {
+                    Ok(_) => Ok(()),
+                    Err(status) if status.code() == Code::NotFound => Ok(()),
+                    Err(status) => Err(normalize_status(status)),
+                }
+            }
+        }
     }
 
     pub async fn stream_container_stats(

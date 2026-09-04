@@ -74,13 +74,28 @@ LEFT JOIN LATERAL (
 ) stack_counts ON TRUE
 LEFT JOIN LATERAL (
     SELECT COUNT(*) AS total,
-           COUNT(*) FILTER (WHERE health = 'Healthy') AS healthy,
-           COUNT(*) FILTER (WHERE health = 'Degraded') AS degraded,
-           COUNT(*) FILTER (WHERE health = 'Failed') AS failed,
-           COUNT(*) FILTER (WHERE health = 'Stopped') AS stopped,
-           COUNT(*) FILTER (WHERE health IN ('Created', 'Progressing')) AS in_progress,
-           COUNT(*) FILTER (WHERE health = 'Unknown') AS unknown
-    FROM swarmservices WHERE platformid = p.id
+           COUNT(*) FILTER (WHERE effective_health = 'Healthy') AS healthy,
+           COUNT(*) FILTER (WHERE effective_health = 'Degraded') AS degraded,
+           COUNT(*) FILTER (WHERE effective_health = 'Failed') AS failed,
+           COUNT(*) FILTER (WHERE effective_health = 'Stopped') AS stopped,
+           COUNT(*) FILTER (WHERE effective_health IN ('Created', 'Progressing')) AS in_progress,
+           COUNT(*) FILTER (WHERE effective_health = 'Unknown') AS unknown
+    FROM (
+        SELECT CASE
+          WHEN service.dockerserviceid IS NULL THEN service.health
+          WHEN projection.dockerserviceid IS NULL OR projection.isstale THEN 'Unknown'
+          WHEN lower(COALESCE(projection.updatestate,'')) IN ('paused','rollback_paused','rollback_completed') THEN 'Failed'
+          WHEN projection.desiredtaskcount=0 THEN 'Stopped'
+          WHEN projection.runningtaskcount>=projection.desiredtaskcount THEN 'Healthy'
+          WHEN projection.runningtaskcount>0 THEN 'Degraded'
+          ELSE 'Progressing'
+        END effective_health
+        FROM swarmservices service
+        LEFT JOIN swarmserviceprojections projection
+          ON projection.platformid=service.platformid
+         AND projection.dockerserviceid=service.dockerserviceid
+        WHERE service.platformid=p.id
+    ) states
 ) service_counts ON TRUE
 LEFT JOIN LATERAL (
     SELECT * FROM platformstats WHERE platformid = p.id ORDER BY created DESC LIMIT 1

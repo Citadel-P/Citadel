@@ -19,6 +19,8 @@ pub mod realtime;
 pub mod resources_http;
 pub mod roles_http;
 pub mod service_accounts_http;
+pub mod stacks_http;
+pub mod swarm_services_http;
 pub mod teams_http;
 pub mod transport;
 pub mod users_http;

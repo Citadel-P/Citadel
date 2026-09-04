@@ -16,6 +16,8 @@ use citadel_platforms::jobs::{
 use citadel_platforms::{
     InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
 };
+use citadel_stacks::StackService;
+use citadel_swarm_services::ManagedSwarmServiceService;
 use futures_util::StreamExt;
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
@@ -39,6 +41,8 @@ pub struct WorkerDependencies {
     pub agent: Option<AgentClient>,
     pub realtime: Option<RealtimeHub>,
     pub deployments: Arc<DeploymentService>,
+    pub swarm_services: Arc<ManagedSwarmServiceService>,
+    pub stacks: Arc<StackService>,
 }
 
 pub fn register(
@@ -55,6 +59,8 @@ pub fn register(
         agent,
         realtime,
         deployments,
+        swarm_services,
+        stacks,
     } = dependencies;
     supervisor.spawn(
         "deployment-apply-reconciliation",
@@ -62,6 +68,17 @@ pub fn register(
             cancellation.child_token(),
             deployments,
         ),
+    );
+    supervisor.spawn(
+        "swarm-service-operation-reconciliation",
+        super::swarm_services::swarm_service_operation_reconciliation(
+            cancellation.child_token(),
+            swarm_services,
+        ),
+    );
+    supervisor.spawn(
+        "stack-operation-reconciliation",
+        super::stacks::stack_operation_reconciliation(cancellation.child_token(), stacks),
     );
     let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
     let (local_reconcile_sender, local_reconcile_receiver) =

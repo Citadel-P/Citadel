@@ -189,6 +189,34 @@ pub const SERVICE_LIST: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const SERVICE_CREATE: Endpoint = Endpoint {
+    operation_id: "ServiceCreate",
+    method: "POST",
+    path: "/services/create",
+    versioned: true,
+    streaming: false,
+};
+pub const SERVICE_INSPECT: Endpoint = Endpoint {
+    operation_id: "ServiceInspect",
+    method: "GET",
+    path: "/services/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const SERVICE_UPDATE: Endpoint = Endpoint {
+    operation_id: "ServiceUpdate",
+    method: "POST",
+    path: "/services/{id}/update",
+    versioned: true,
+    streaming: false,
+};
+pub const SERVICE_DELETE: Endpoint = Endpoint {
+    operation_id: "ServiceDelete",
+    method: "DELETE",
+    path: "/services/{id}",
+    versioned: true,
+    streaming: false,
+};
 pub const TASK_LIST: Endpoint = Endpoint {
     operation_id: "TaskList",
     method: "GET",

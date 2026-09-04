@@ -211,6 +211,41 @@ Build-backed images and external Secret-provider execution remain explicit
 Phase 7 boundaries. Edge Agent Apply remains unavailable until its inbound
 mutation transport is migrated; it is not silently routed through a manager.
 
+Phase 6C ports the core managed Docker Swarm Service lifecycle. Rust now owns
+typed CRUD, Apply, scale, force update, delete, bounded progress, transactional
+Activities, Local/signed-Agent mutation dispatch, current task projections,
+variable/internal-Secret injection, and bounded rollout reconciliation. Docker
+acceptance remains distinct from rollout success, and current health/counts
+come from the latest Swarm inventory rather than a stale persisted label. Run
+`./rust/scripts/Test-Phase6CManagedSwarmServices.ps1`; see
+`reports/phase6c-managed-swarm-services-report.md`.
+
+Adoption, duplicate drafts, webhooks, update checks, logs, terminal,
+statistics, build-backed images, external Secret providers, and Edge Agent
+mutation remain later migration boundaries.
+
+Phase 6D–6F ports Web Editor Stacks across Docker Standalone and Docker Swarm:
+CRUD, duplicate drafts, bounded Apply progress, transactional releases,
+rollback, deletion, Standalone state actions, fail-closed Swarm Compose
+preflight, non-mutating Compose/Swarm import, drift inspection and safe repair,
+and manual-image update evaluation. Stack ownership labels match the existing
+container and Swarm projection contracts. Import claims the complete runtime
+namespace atomically, while ambiguous Apply outcomes remain durable for bounded
+reconciliation instead of being retried.
+
+Standalone state actions also claim their full batch before Docker I/O,
+persist the stable release state and typed Activity on success, restore
+definite failures, and leave ambiguous timeouts for stable-only reconciliation.
+
+Run `./rust/scripts/Test-Phase6Stacks.ps1`; see
+`reports/phase6d-f-stacks-report.md`. Add `-RunSwarmLifecycle` only when the
+test Docker daemon is already an active Swarm manager. The gate never changes
+Swarm membership. Git materialization/webhooks, registry digest I/O,
+build-backed images, external Secret-provider execution, retained Swarm
+Secret/Config reconstruction and Edge Agent mutation remain Phase 7/10
+boundaries; the Phase 6 update evaluator does not pretend those transports are
+available.
+
 ## Interactive development
 
 Use the committed VS Code Dev Container to run the Rust API, PostgreSQL, Docker

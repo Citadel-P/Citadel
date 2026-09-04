@@ -18,6 +18,10 @@
       "sha256": "e3d9866c5f5ef811b5138c2a8c72d71fd2fcc6852ddf7d879ce4c9392f1153aa"
     },
     {
+      "name": "stack_service.proto",
+      "sha256": "4deb6439dccc4d2e659af7be12f81c90969fa165bbc9cf7f35a5b66dca89f9de"
+    },
+    {
       "name": "image_service.proto",
       "sha256": "18ddaa92969df4b908910cf1a839c944cc2b6860d4bc057e2633732113cbf7ea"
     },

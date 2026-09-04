@@ -22,6 +22,12 @@ pub mod profile_store;
 pub mod resource_metadata_store;
 pub mod role_store;
 pub mod service_account_store;
+pub mod stack_bindings;
+pub mod stack_runtime;
+pub mod stack_store;
+pub mod swarm_service_bindings;
+pub mod swarm_service_runtime;
+pub mod swarm_service_store;
 pub mod team_store;
 pub mod user_store;
 
