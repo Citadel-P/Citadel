@@ -104,7 +104,7 @@ No external call is hidden inside these metadata transactions.
 | `ResourceBindingsTests` | Binding unit tests and both PostgreSQL-backed suites cover global/scoped permission rules, variables, encrypted internal Secrets, external Secret version merge semantics, provider field preservation, orphan cleanup, and non-disclosure. External provider I/O is Phase 7. |
 | `NetworkEndpointTests`, `CreateNetworkTests`, and Swarm Network lifecycle tests | `platforms_http.rs`, Docker transport tests, and `agent_mutations.rs` cover validation, preflight, generated Docker requests, Local/Agent parity, signing, and no retry after ambiguous mutation failure. |
 | `VolumeEndpointTests` | The same Platform/transport suites cover create/delete payloads, custom drivers, bounds, authorization, and transport parity. Volume browsing/backup belongs to later phases. |
-| SignalR cache synchronization | `realtime_subscription.rs` and `signalr-provider.test.tsx` cover bounded delivery, ACL recheck, metadata-free global invalidation, and frontend query refresh behavior. |
+| Realtime cache synchronization | `realtime_subscription.rs` and `realtime-provider.test.tsx` cover bounded delivery, ACL recheck, metadata-free global invalidation, and frontend query refresh behavior. |
 
 ## Verification
 

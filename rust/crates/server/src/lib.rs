@@ -2,11 +2,14 @@
 
 pub mod activities_http;
 pub mod application_info_http;
+pub mod automation_http;
 mod capabilities;
 pub mod config;
 pub mod contract_router;
 pub mod deployments_http;
 pub mod diagnostics;
+pub mod git_accounts_http;
+pub mod git_repositories_http;
 pub mod identity_http;
 pub mod license_http;
 pub mod license_realtime;
@@ -24,6 +27,7 @@ pub mod swarm_services_http;
 pub mod teams_http;
 pub mod transport;
 pub mod users_http;
+pub mod webhooks_http;
 pub mod workers;
 
 use std::sync::atomic::{AtomicBool, Ordering};

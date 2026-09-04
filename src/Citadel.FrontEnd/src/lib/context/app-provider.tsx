@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router';
 import { AppContext } from './app-context';
-import { SignalRProvider } from './signalr-provider';
+import { RealtimeProvider } from './realtime-provider';
 import { useRead } from '../hooks';
 import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
 import { useAlertEventsGroup } from '@/features/alerters/alert-events/hooks/useAlertEventsGroup';
@@ -43,8 +43,8 @@ export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   const { data: applicationInfo } = useRead('getApplicationInfo');
 
   return (
-    <SignalRProvider realtimeTransport={applicationInfo?.data.realtimeTransport}>
+    <RealtimeProvider realtimeTransport={applicationInfo?.data.realtimeTransport}>
       <AppProviderContent applicationInfo={applicationInfo?.data}>{children}</AppProviderContent>
-    </SignalRProvider>
+    </RealtimeProvider>
   );
 };

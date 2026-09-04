@@ -3,7 +3,7 @@ import { CloudOff, LoaderCircle, RefreshCw, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useSignalRContext } from '@/lib/context/signalr-context';
+import { useRealtimeContext } from '@/lib/context/realtime-context';
 import { cn } from '@/lib/utils';
 
 const RECONNECTING_GRACE_PERIOD_MS = 1_500;
@@ -26,7 +26,7 @@ const statusContent: Record<VisibleConnectionState, { label: string; description
 };
 
 export function LiveConnectionIndicator() {
-  const { liveConnectionState, interruptedAt, retryConnection } = useSignalRContext();
+  const { liveConnectionState, interruptedAt, retryConnection } = useRealtimeContext();
   const [visibleInterruptionAt, setVisibleInterruptionAt] = useState<number>();
   const [retryPending, setRetryPending] = useState(false);
   const recoveryToastForRef = useRef<number>();

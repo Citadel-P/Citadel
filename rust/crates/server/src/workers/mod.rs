@@ -1,4 +1,6 @@
+mod automation;
 mod deployments;
+mod git;
 mod platforms;
 mod stacks;
 mod swarm_services;

@@ -4,9 +4,9 @@ import { ComponentProps, PropsWithChildren, StrictMode, useCallback, useEffect, 
 import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
-import { SignalRProvider } from './signalr-provider';
+import { RealtimeProvider } from './realtime-provider';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { SignalRContextType, useSignalRContext } from './signalr-context';
+import { RealtimeContextType, useRealtimeContext } from './realtime-context';
 
 const authValue: AuthContextValue = {
   accessToken: 'access-token',
@@ -80,10 +80,10 @@ function SignalRTestRoot({
 }: PropsWithChildren<{
   fake: FakeHubConnection;
   queryClient?: QueryClient;
-  connectionFactory?: ComponentProps<typeof SignalRProvider>['connectionFactory'];
-  startConnection?: ComponentProps<typeof SignalRProvider>['startConnection'];
-  realtimeTransport?: ComponentProps<typeof SignalRProvider>['realtimeTransport'];
-  webSocketFactory?: ComponentProps<typeof SignalRProvider>['webSocketFactory'];
+  connectionFactory?: ComponentProps<typeof RealtimeProvider>['connectionFactory'];
+  startConnection?: ComponentProps<typeof RealtimeProvider>['startConnection'];
+  realtimeTransport?: ComponentProps<typeof RealtimeProvider>['realtimeTransport'];
+  webSocketFactory?: ComponentProps<typeof RealtimeProvider>['webSocketFactory'];
 }>) {
   const [defaultQueryClient] = useState(
     () =>
@@ -98,13 +98,13 @@ function SignalRTestRoot({
   return (
     <QueryClientProvider client={queryClient ?? defaultQueryClient}>
       <AuthContext.Provider value={authValue}>
-        <SignalRProvider
+        <RealtimeProvider
           connectionFactory={connectionFactory ?? (() => fake.asHubConnection())}
           startConnection={startConnection ?? ((connection) => connection.start())}
           realtimeTransport={realtimeTransport ?? 'SignalR'}
           webSocketFactory={webSocketFactory}>
           {children}
-        </SignalRProvider>
+        </RealtimeProvider>
       </AuthContext.Provider>
     </QueryClientProvider>
   );
@@ -126,8 +126,8 @@ function LiveQuerySubscriber({
   return <span>{data ?? 'loading'}</span>;
 }
 
-function ConnectionStatusProbe({ onContext }: { onContext?: (context: SignalRContextType) => void }) {
-  const context = useSignalRContext();
+function ConnectionStatusProbe({ onContext }: { onContext?: (context: RealtimeContextType) => void }) {
+  const context = useRealtimeContext();
 
   useEffect(() => {
     onContext?.(context);
@@ -161,7 +161,7 @@ class FakeWebSocket {
   }
 }
 
-describe('SignalRProvider', () => {
+describe('RealtimeProvider', () => {
   beforeEach(() => {
     Object.defineProperty(window.navigator, 'onLine', {
       configurable: true,
@@ -244,7 +244,7 @@ describe('SignalRProvider', () => {
     });
 
     const factory = vi.fn().mockReturnValueOnce(first.asHubConnection()).mockReturnValueOnce(second.asHubConnection());
-    let context: SignalRContextType | undefined;
+    let context: RealtimeContextType | undefined;
 
     render(
       <SignalRTestRoot fake={first} connectionFactory={factory} queryClient={new QueryClient()}>
@@ -282,7 +282,7 @@ describe('SignalRProvider', () => {
     second.start.mockRejectedValue(new Error('Core unavailable'));
 
     const factory = vi.fn().mockReturnValueOnce(first.asHubConnection()).mockReturnValueOnce(second.asHubConnection());
-    let context: SignalRContextType | undefined;
+    let context: RealtimeContextType | undefined;
 
     render(
       <SignalRTestRoot fake={first} connectionFactory={factory}>
@@ -314,13 +314,13 @@ describe('SignalRProvider', () => {
       return (
         <QueryClientProvider client={new QueryClient()}>
           <AuthContext.Provider value={{ ...authValue, accessToken: token }}>
-            <SignalRProvider
+            <RealtimeProvider
               connectionFactory={factory}
               startConnection={(candidate) => candidate.start()}
               realtimeTransport="SignalR">
               <ConnectionStatusProbe onContext={(value) => observedStates.push(value.liveConnectionState)} />
               <button onClick={() => setToken('token-2')}>rotate token</button>
-            </SignalRProvider>
+            </RealtimeProvider>
           </AuthContext.Provider>
         </QueryClientProvider>
       );
@@ -558,7 +558,7 @@ describe('SignalRProvider', () => {
     expect(await screen.findByText('streamed')).toBeInTheDocument();
   });
 
-  it('uses the Rust WebSocket notification to refresh license state without reading its payload', async () => {
+  it('reports the Rust WebSocket lifecycle and refreshes license state without reading event payloads', async () => {
     const fake = new FakeHubConnection();
     fake.start.mockResolvedValue();
     const socket = new FakeWebSocket();
@@ -570,10 +570,11 @@ describe('SignalRProvider', () => {
         queryClient={queryClient}
         realtimeTransport="WebSocketV1"
         webSocketFactory={() => socket.asWebSocket()}>
-        <span>ready</span>
+        <ConnectionStatusProbe />
       </SignalRTestRoot>,
     );
 
+    expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
     act(() => socket.emit('open', new Event('open')));
     expect(fake.start).not.toHaveBeenCalled();
     expect(socket.send).toHaveBeenCalledWith(
@@ -587,6 +588,7 @@ describe('SignalRProvider', () => {
         }),
       ),
     );
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] }),
     );

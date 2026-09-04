@@ -161,3 +161,12 @@ no standalone Deployment CRUD scenario to port. It
 does not deploy a container: Deployment Apply, progress, and reconciliation
 belong to Phase 6B. The script removes its uniquely named PostgreSQL container
 and network in `finally`.
+
+# Phase 7A external execution and Git accounts
+
+Run `./rust/scripts/Test-Phase7AExternalExecution.ps1` from the repository
+root. It verifies the bounded child-process primitive, Git argument and cache
+safety, encrypted Git-account persistence, authorized HTTP lifecycle, and
+generated OpenAPI parity against a disposable PostgreSQL database. This is the
+Phase 7 foundation and Git-account slice; Git synchronization/webhooks and the
+other external-execution contexts remain subsequent slices.

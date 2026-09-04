@@ -7,7 +7,7 @@ import { render, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PropsWithChildren, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
-import { SignalRProvider } from '@/lib/context/signalr-provider';
+import { RealtimeProvider } from '@/lib/context/realtime-provider';
 import { ComponentProps } from 'react';
 import { SetupContext, SetupContextValue } from '@/features/setup/setup-context';
 
@@ -35,7 +35,7 @@ type RenderCitadelOptions = Omit<RenderOptions, 'wrapper'> & {
   auth?: Partial<AuthContextValue>;
   setup?: Partial<SetupContextValue>;
   queryClient?: QueryClient;
-  signalR?: Omit<ComponentProps<typeof SignalRProvider>, 'children'>;
+  signalR?: Omit<ComponentProps<typeof RealtimeProvider>, 'children'>;
 };
 
 export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = {}) {
@@ -51,9 +51,9 @@ export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = 
           <SetupContext.Provider value={setupValue}>
             <AuthContext.Provider value={authValue}>
               {signalR ? (
-                <SignalRProvider realtimeTransport="SignalR" {...signalR}>
+                <RealtimeProvider realtimeTransport="SignalR" {...signalR}>
                   {children}
-                </SignalRProvider>
+                </RealtimeProvider>
               ) : (
                 children
               )}

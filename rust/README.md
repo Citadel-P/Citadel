@@ -246,6 +246,16 @@ Secret/Config reconstruction and Edge Agent mutation remain Phase 7/10
 boundaries; the Phase 6 update evaluator does not pretend those transports are
 available.
 
+Phase 7A introduces the reusable bounded external-process boundary and ports
+the Git-account lifecycle. Child stdout/stderr, duration, cancellation, and
+cleanup are bounded; Git first-clone publication is atomic; account credentials
+are authenticated-encrypted before persistence; and the existing authorized
+HTTP/OpenAPI contract is retained. Repository synchronization, credential
+injection, content browsing, polling, and webhooks are the next Git slice, not
+silent success paths. See
+`reports/phase7a-external-execution-git-accounts-report.md` and run
+`./rust/scripts/Test-Phase7AExternalExecution.ps1`.
+
 ## Interactive development
 
 Use the committed VS Code Dev Container to run the Rust API, PostgreSQL, Docker

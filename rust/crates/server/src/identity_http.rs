@@ -371,6 +371,12 @@ fn identity_error_response_with_request_id(error: IdentityError, request_id: Str
             "Internal server error",
             "An unexpected error occurred.".to_owned(),
         ),
+        IdentityError::External(message) => (
+            StatusCode::BAD_GATEWAY,
+            "bad_gateway",
+            "Bad gateway",
+            message,
+        ),
     };
     let mut response = (
         status,

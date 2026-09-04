@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { HubConnection, HubConnectionState } from '@microsoft/signalr';
-import { useSignalRContext } from '@/lib/context/signalr-context';
+import { useRealtimeContext } from '@/lib/context/realtime-context';
 
 type UseSignalRGroupOpts = {
   groupName?: string | readonly string[];
@@ -19,7 +19,11 @@ export const useSignalRGroup = ({
   skip,
   enabled = true,
 }: UseSignalRGroupOpts) => {
-  const { joinGroup, leaveGroup, connection, connectionState } = useSignalRContext();
+  const { signalR } = useRealtimeContext();
+  const connection = signalR?.connection;
+  const connectionState = signalR?.connectionState ?? HubConnectionState.Disconnected;
+  const joinGroup = signalR?.joinGroup;
+  const leaveGroup = signalR?.leaveGroup;
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -48,7 +52,15 @@ export const useSignalRGroup = ({
     };
 
     const groupNames = typeof groupName === 'string' ? [groupName] : groupName ?? [];
-    if (skip || !enabled || !groupNames.length || !connection || state !== HubConnectionState.Connected) {
+    if (
+      skip ||
+      !enabled ||
+      !groupNames.length ||
+      !connection ||
+      !joinGroup ||
+      !leaveGroup ||
+      state !== HubConnectionState.Connected
+    ) {
       setLoading(false);
       setConnected(false);
       return;
