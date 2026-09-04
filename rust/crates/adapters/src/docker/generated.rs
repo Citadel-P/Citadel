@@ -8,6 +8,17 @@ use std::collections::HashMap;
 pub const SCHEMA_API_VERSION: &str = "1.49";
 pub const SCHEMA_SHA256: &str = "1d54f6c4ab950646d97d1256a0a4cdcecbb963cc6c7c3312b885540a9b49694c";
 
+// Docker emits null for some optional collection fields even when its OpenAPI
+// schema declares an array or object. Treating null as empty preserves the
+// generated collection type while accepting the daemon's wire representation.
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Endpoint {
     pub operation_id: &'static str,
@@ -52,6 +63,20 @@ pub const CONTAINER_INSPECT: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const CONTAINER_CREATE: Endpoint = Endpoint {
+    operation_id: "ContainerCreate",
+    method: "POST",
+    path: "/containers/create",
+    versioned: true,
+    streaming: false,
+};
+pub const CONTAINER_START: Endpoint = Endpoint {
+    operation_id: "ContainerStart",
+    method: "POST",
+    path: "/containers/{id}/start",
+    versioned: true,
+    streaming: false,
+};
 pub const CONTAINER_DELETE: Endpoint = Endpoint {
     operation_id: "ContainerDelete",
     method: "DELETE",
@@ -86,6 +111,13 @@ pub const IMAGE_LIST: Endpoint = Endpoint {
     path: "/images/json",
     versioned: true,
     streaming: false,
+};
+pub const IMAGE_CREATE: Endpoint = Endpoint {
+    operation_id: "ImageCreate",
+    method: "POST",
+    path: "/images/create",
+    versioned: true,
+    streaming: true,
 };
 pub const VOLUME_LIST: Endpoint = Endpoint {
     operation_id: "VolumeList",
@@ -221,6 +253,50 @@ pub struct DockerInfo {
     pub os_type: String,
     #[serde(rename = "Architecture", default)]
     pub architecture: String,
+    #[serde(rename = "Swarm", default)]
+    pub swarm: Option<DockerSwarmInfo>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerSwarmInfo {
+    #[serde(rename = "NodeID", default)]
+    pub node_id: String,
+    #[serde(rename = "NodeAddr", default)]
+    pub node_addr: String,
+    #[serde(rename = "LocalNodeState", default)]
+    pub local_node_state: String,
+    #[serde(rename = "ControlAvailable", default)]
+    pub control_available: bool,
+    #[serde(rename = "Error", default)]
+    pub error: String,
+    #[serde(
+        rename = "RemoteManagers",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub remote_managers: Vec<DockerPeerNode>,
+    #[serde(rename = "Nodes", default)]
+    pub nodes: i64,
+    #[serde(rename = "Managers", default)]
+    pub managers: i64,
+    #[serde(rename = "Cluster", default)]
+    pub cluster: Option<DockerClusterInfo>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerPeerNode {
+    #[serde(rename = "NodeID", default)]
+    pub node_id: String,
+    #[serde(rename = "Addr", default)]
+    pub address: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DockerClusterInfo {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -289,6 +365,14 @@ pub struct ContainerState {
     pub started_at: String,
     #[serde(rename = "FinishedAt", default)]
     pub finished_at: String,
+    #[serde(rename = "Health", default)]
+    pub health: Option<ContainerHealth>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ContainerHealth {
+    #[serde(rename = "Status", default)]
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -443,9 +527,17 @@ pub struct ImageSummary {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VolumeListResponse {
-    #[serde(rename = "Volumes", default)]
+    #[serde(
+        rename = "Volumes",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub volumes: Vec<DockerVolume>,
-    #[serde(rename = "Warnings", default)]
+    #[serde(
+        rename = "Warnings",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub warnings: Vec<String>,
 }
 
@@ -459,15 +551,27 @@ pub struct DockerVolume {
     pub mountpoint: String,
     #[serde(rename = "CreatedAt", default)]
     pub created_at: String,
-    #[serde(rename = "Status", default)]
+    #[serde(
+        rename = "Status",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub status: HashMap<String, Value>,
-    #[serde(rename = "Labels", default)]
+    #[serde(
+        rename = "Labels",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub labels: HashMap<String, String>,
     #[serde(rename = "Scope", default)]
     pub scope: String,
     #[serde(rename = "ClusterVolume", default)]
     pub cluster_volume: Option<Value>,
-    #[serde(rename = "Options", default)]
+    #[serde(
+        rename = "Options",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub options: HashMap<String, String>,
     #[serde(rename = "UsageData", default)]
     pub usage_data: Option<Value>,
@@ -513,9 +617,17 @@ pub struct DockerNetwork {
     pub config_from: Option<Value>,
     #[serde(rename = "ConfigOnly", default)]
     pub config_only: bool,
-    #[serde(rename = "Containers", default)]
+    #[serde(
+        rename = "Containers",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub containers: HashMap<String, Value>,
-    #[serde(rename = "Peers", default)]
+    #[serde(
+        rename = "Peers",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     pub peers: Vec<Value>,
     #[serde(rename = "Options", default)]
     pub options: HashMap<String, String>,

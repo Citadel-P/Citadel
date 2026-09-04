@@ -116,7 +116,10 @@ setting to the VS Code **User** settings JSON and rebuild the container:
 ### Docker is unavailable inside the container
 
 Confirm Docker Desktop is running, then rebuild the development container. From
-its terminal, `docker version` must report both a client and a server.
+its terminal, `docker version` must report both a client and a server when run
+as the normal `vscode` user. A `permission denied` error means the Dev Container
+socket proxy was not initialized; use **Dev Containers: Rebuild Container** so
+the Docker-outside-of-Docker feature can recreate its non-root socket.
 
 ## Current migration boundary
 

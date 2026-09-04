@@ -3,7 +3,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    PlatformInventoryPort, RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimeSwarmInventory,
+    PlatformInventoryPort, RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimePlatformInfo,
+    RuntimeSwarmInventory,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,24 +25,7 @@ pub async fn collect_inventory(
         runtime.list_networks(cancellation),
         runtime.list_volumes(cancellation),
     )?;
-    let swarm = if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
-        let (nodes, services, tasks, configs, secrets) = tokio::try_join!(
-            runtime.list_swarm_nodes(cancellation),
-            runtime.list_swarm_services(cancellation),
-            runtime.list_swarm_tasks(cancellation),
-            runtime.list_swarm_configs(cancellation),
-            runtime.list_swarm_secrets(cancellation),
-        )?;
-        Some(RuntimeSwarmInventory {
-            nodes,
-            services,
-            tasks,
-            configs,
-            secrets,
-        })
-    } else {
-        None
-    };
+    let swarm = collect_swarm_inventory(runtime, target, cancellation).await?;
     Ok(RuntimeInventorySnapshot {
         platform_id: target.platform_id,
         info,
@@ -52,6 +36,56 @@ pub async fn collect_inventory(
         swarm,
         observed_at: Utc::now(),
     })
+}
+
+pub async fn collect_inventory_from_info(
+    runtime: &dyn PlatformInventoryPort,
+    target: &InventoryCollectionTarget,
+    info: RuntimePlatformInfo,
+    cancellation: &CancellationToken,
+) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
+    let (containers, images, networks, volumes) = tokio::try_join!(
+        runtime.list_containers(cancellation),
+        runtime.list_images(cancellation),
+        runtime.list_networks(cancellation),
+        runtime.list_volumes(cancellation),
+    )?;
+    let swarm = collect_swarm_inventory(runtime, target, cancellation).await?;
+    Ok(RuntimeInventorySnapshot {
+        platform_id: target.platform_id,
+        info,
+        containers,
+        images,
+        networks,
+        volumes,
+        swarm,
+        observed_at: Utc::now(),
+    })
+}
+
+async fn collect_swarm_inventory(
+    runtime: &dyn PlatformInventoryPort,
+    target: &InventoryCollectionTarget,
+    cancellation: &CancellationToken,
+) -> Result<Option<RuntimeSwarmInventory>, RuntimeCapabilityError> {
+    if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
+        let (nodes, services, tasks, configs, secrets) = tokio::try_join!(
+            runtime.list_swarm_nodes(cancellation),
+            runtime.list_swarm_services(cancellation),
+            runtime.list_swarm_tasks(cancellation),
+            runtime.list_swarm_configs(cancellation),
+            runtime.list_swarm_secrets(cancellation),
+        )?;
+        Ok(Some(RuntimeSwarmInventory {
+            nodes,
+            services,
+            tasks,
+            configs,
+            secrets,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +162,7 @@ mod tests {
                     api_version: "1.49".into(),
                     minimum_api_version: "1.41".into(),
                     agent_version: None,
+                    swarm: None,
                 })
             })
         }

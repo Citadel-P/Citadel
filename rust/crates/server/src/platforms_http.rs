@@ -11,9 +11,10 @@ use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_platforms::{
-    AuthorizedReadError, ContainerView, CreateRuntimeNetwork, CreateRuntimeVolume,
-    EffectivePlatformPermission, ImageCapabilitiesView, ImageView, NetworkCapabilitiesView,
-    NetworkView, PlatformCapabilitiesView, PlatformInventoryPort, PlatformReadService,
+    AuthorizedReadError, ContainerView, CreatePlatformInput, CreateRuntimeNetwork,
+    CreateRuntimeVolume, EffectivePlatformPermission, ImageCapabilitiesView, ImageView,
+    NetworkCapabilitiesView, NetworkView, PlatformCapabilitiesView, PlatformInventoryPort,
+    PlatformReadService, PlatformRegistrationError, PlatformRegistrationService,
     PlatformResourceMutationPort, PlatformView, ResourceCapabilitiesView, RuntimeCapabilityError,
     RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary, SwarmConfigView,
     SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView, VolumeCapabilitiesView,
@@ -42,6 +43,7 @@ const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 pub struct PlatformsHttpState {
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
+    pub registrations: Arc<PlatformRegistrationService>,
     pub pool: PgPool,
     pub resource_metadata: Arc<dyn ResourceMetadataStore>,
     pub docker: DockerClient,
@@ -52,6 +54,7 @@ pub struct PlatformsHttpState {
 pub fn router(state: PlatformsHttpState) -> Router {
     Router::new()
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
+        .contract_route(routes::CREATE_PLATFORM, create_platform)
         .contract_route(routes::GET_PLATFORM, get_platform)
         .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
         .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)
@@ -255,6 +258,42 @@ async fn list_platforms(
         })
         .into_response(),
     ))
+}
+
+async fn create_platform(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<CreatePlatformInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    authorize_platform_creation(&state, &principal, &headers).await?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let id = match state
+        .registrations
+        .create(principal.actor_id, input, &CancellationToken::new())
+        .await
+    {
+        Ok(id) => id,
+        Err(PlatformRegistrationError::Runtime(error)) => {
+            return Ok(runtime_error_response(error, &headers));
+        }
+        Err(error) => {
+            return identity_result(Err(platform_registration_error(error)), &headers);
+        }
+    };
+    let capabilities = authorize_platform(&state, &principal, id, &headers).await?;
+    let mut platform = required(
+        state
+            .platforms
+            .get_platform(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    platform.capabilities = Some(capabilities);
+    publish_runtime_change(&state, id, "platform", "create", &id.to_string());
+    Ok(no_store(Json(platform).into_response()))
 }
 
 async fn get_platform(
@@ -1059,6 +1098,26 @@ async fn authorize_platform(
     Ok(platform_capabilities(permission))
 }
 
+async fn authorize_platform_creation(
+    state: &PlatformsHttpState,
+    principal: &ActorPrincipal,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<()> {
+    if principal.is_administrator() {
+        return Ok(());
+    }
+    let permission = state
+        .identity
+        .global_permission(principal, ResourceType::Platform)
+        .await
+        .map_err(|error| crate::identity_http::IdentityHttpError::from_parts(error, headers))?;
+    if permission.is_some_and(|value| value.level.grants(PermissionLevel::Write)) {
+        Ok(())
+    } else {
+        identity_result(Err(IdentityError::Forbidden), headers)
+    }
+}
+
 async fn authorize_platform_level(
     state: &PlatformsHttpState,
     principal: &ActorPrincipal,
@@ -1704,6 +1763,17 @@ fn validate_docker_resource_id(value: &str) -> Result<(), IdentityError> {
 
 fn platform_error(error: AuthorizedReadError) -> IdentityError {
     IdentityError::Storage(error.to_string())
+}
+
+fn platform_registration_error(error: PlatformRegistrationError) -> IdentityError {
+    match error {
+        PlatformRegistrationError::Validation(message) => IdentityError::Validation(message),
+        PlatformRegistrationError::Conflict(message) => IdentityError::Conflict(message),
+        PlatformRegistrationError::Storage(message) => IdentityError::Storage(message),
+        PlatformRegistrationError::Runtime(_) => {
+            IdentityError::Storage("Platform runtime failure was not handled.".to_owned())
+        }
+    }
 }
 
 fn resource_metadata_error(error: citadel_resources::ResourceMetadataError) -> IdentityError {

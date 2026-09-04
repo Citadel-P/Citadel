@@ -154,6 +154,14 @@ transport remain the runtime boundary; Bollard is not used. See
 `reports/phase4-platform-docker-reads-report.md` for the .NET-test mapping and
 the explicit Edge/cgroup exit gates.
 
+The Platform registration prerequisite is also available through the existing
+React form and the compatible Rust `createPlatform` endpoint. Local Docker and
+the configured signed Agent discover their initial inventory before one
+transaction commits the Platform, projections, tags, and typed Activity;
+duplicate daemon and Swarm cluster identities are serialized and rejected.
+See `reports/platform-registration-prerequisite-report.md`. Edge enrollment
+and arbitrary per-Platform Agent dialing remain explicit migration boundaries.
+
 Phase 5 adds the `citadel-resources` bounded context and ports the simple
 mutation/metadata boundary: Tags, Platform metadata, Registries, Git repository
 definitions, resource bindings, internal/external Secret definitions,
@@ -175,8 +183,7 @@ filtering and capabilities are computed in the collection query; state, Tags,
 copied bindings, and typed Activity evidence commit transactionally. Deletion
 claims the complete batch before Docker mutation, survives request loss, has a
 bounded timeout, removes every linked container through Local or signed Agent
-transport, and restores the claim if runtime or completion fails. Apply,
-progress, reconciliation, and runtime success remain Phase 6B. See
+transport, and restores the claim if runtime or completion fails. See
 `reports/phase6a-deployment-crud-report.md` and run
 `./rust/scripts/Test-Phase6ADeployments.ps1` for the disposable gate.
 
@@ -185,7 +192,24 @@ integration and unit suites that applies to this slice. It includes full and
 partial merge patching, direct/Team ACLs, exact filters, duplicate failures,
 Local-image projections, concurrent mutation/delete exclusion, and caller-loss
 recovery. The .NET acceptance project has no isolated Deployment CRUD scenario;
-runtime Apply acceptance remains a Phase 6B obligation.
+runtime Apply acceptance is covered by the next gate.
+
+Phase 6B ports Standalone Deployment Apply through Local and signed Agent
+transports. Apply is permission-checked and transactionally claimed before
+runtime work; at most four Apply operations execute concurrently. The bounded
+JSON progress stream is independent of the browser connection, referenced
+variables and internal Secrets are resolved with Deployment-over-Global
+precedence, persisted evidence masks Secret values, and runtime failures are
+redacted. Docker health checks decide readiness when present. Success or
+failure atomically records the Container link, Deployment state, and typed
+Activity. Interrupted or timed-out outcomes remain claimed until the bounded
+reconciliation worker observes the ownership label and finalizes them. Run
+`./rust/scripts/Test-Phase6BDeploymentApply.ps1`; see
+`reports/phase6b-deployment-apply-report.md`.
+
+Build-backed images and external Secret-provider execution remain explicit
+Phase 7 boundaries. Edge Agent Apply remains unavailable until its inbound
+mutation transport is migrated; it is not silently routed through a manager.
 
 ## Interactive development
 

@@ -16,6 +16,7 @@ use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
+use citadel_adapters::deployment_bindings::PostgresDeploymentBindingResolver;
 use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
 use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::docker::DockerClient;
@@ -27,6 +28,9 @@ use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpS
 use citadel_adapters::oidc_protocol::OidcHttpProtocol;
 use citadel_adapters::oidc_store::PostgresOidcStore;
 use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_adapters::platform_registration::{
+    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
+};
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
@@ -47,7 +51,9 @@ use citadel_identity::{
     RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
     TeamReadService, UserReadService,
 };
-use citadel_platforms::{AuthorizedPlatformReader, PlatformReadService, PlatformRuntimePort};
+use citadel_platforms::{
+    AuthorizedPlatformReader, PlatformReadService, PlatformRegistrationService, PlatformRuntimePort,
+};
 use citadel_resources::ResourceMetadataService;
 use citadel_server::config::{Config, DatabaseConfig};
 use citadel_server::contract_router::ContractRouterExt;
@@ -284,7 +290,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let resource_metadata = Arc::new(PostgresResourceMetadataStore::new(pool.clone()));
     let resources = Arc::new(ResourceMetadataService::new(
         resource_metadata.clone(),
-        secret_protector,
+        secret_protector.clone(),
     ));
     let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReadStore::new(pool.clone()),
@@ -325,6 +331,13 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+    let platform_registrations = Arc::new(PlatformRegistrationService::new(
+        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PlatformRegistrationRuntimeRouter::new(
+            docker.clone(),
+            agent.clone(),
+        )),
+    ));
     let deployments = Arc::new(
         DeploymentService::new(
             Arc::new(PostgresDeploymentStore::new(pool.clone())),
@@ -338,7 +351,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         )
         .with_notifier(Arc::new(
             deployments_http::DeploymentsRealtimeNotifier::new(realtime_hub.clone()),
-        )),
+        ))
+        .with_binding_resolver(Arc::new(PostgresDeploymentBindingResolver::new(
+            pool.clone(),
+            secret_protector,
+        ))),
     );
     let realtime = config.realtime.as_ref().map(|realtime_config| {
         RealtimeService::with_hub(
@@ -384,6 +401,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             metrics: Arc::clone(&metrics),
             agent: agent.clone(),
             realtime: realtime_hub.clone(),
+            deployments: Arc::clone(&deployments),
         },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
@@ -452,7 +470,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .merge(deployments_http::router(
             deployments_http::DeploymentsHttpState {
                 identity: Arc::clone(&identity),
-                deployments,
+                deployments: Arc::clone(&deployments),
             },
         ))
         .merge(resources_http::router(resources_http::ResourcesHttpState {
@@ -463,6 +481,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .merge(platforms_http::router(platforms_http::PlatformsHttpState {
             identity: Arc::clone(&identity),
             platforms: platform_reads,
+            registrations: platform_registrations,
             pool: pool.clone(),
             resource_metadata,
             docker,

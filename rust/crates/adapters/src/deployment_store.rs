@@ -1,14 +1,15 @@
 use chrono::{DateTime, Utc};
 use citadel_deployments::{
-    AutoUpdateState, CreateDeploymentInput, CreateDeploymentInputView, DeletionClaim,
-    DeploymentCapabilities, DeploymentDuplicateDraftView, DeploymentError, DeploymentFilter,
-    DeploymentImageInfo, DeploymentSpec, DeploymentStore, DeploymentView, DuplicateSourceInput,
-    DuplicateWarning, EffectiveDeploymentPermission, FieldPatch, PatchDeploymentMetadataInput,
+    ApplyClaim, AutoUpdateState, CreateDeploymentInput, CreateDeploymentInputView, DeletionClaim,
+    DeploymentBindingSnapshot, DeploymentCapabilities, DeploymentDuplicateDraftView,
+    DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentSpec, DeploymentStore,
+    DeploymentView, DuplicateSourceInput, DuplicateWarning, EffectiveDeploymentPermission,
+    FieldPatch, PatchDeploymentMetadataInput, RuntimeContainerState, RuntimeDeploymentResult,
     TagSummary,
 };
 use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActorId,
-    DeploymentActivitySnapshot,
+    ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActivityStatus,
+    ActorId, DeploymentActivitySnapshot, DeploymentResultActivitySnapshot,
 };
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -24,6 +25,7 @@ const READ_LEVEL: i32 = 1;
 const WRITE_LEVEL: i32 = 2;
 const EXECUTE_LEVEL: i32 = 4;
 const RESOURCE_BINDINGS_PERMISSION: i32 = 1 << 5;
+const APPLY_PERMISSION: i32 = 1 << 2;
 
 const AUTHORIZED_CTES: &str = r#"
 WITH actor_scope AS (
@@ -630,6 +632,259 @@ ORDER BY d.createdat DESC, d.name, d.id"#
             Ok(())
         })
     }
+
+    fn claim_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<ApplyClaim, DeploymentError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            ensure_specific_access(
+                &mut tx,
+                actor_id,
+                administrator,
+                id,
+                EXECUTE_LEVEL,
+                APPLY_PERMISSION,
+            )
+            .await?;
+            let row = sqlx::query(
+                r#"SELECT d.id,d.platformid,d.name,d.description,d.spec,d.controlstate,d.rowversion,
+                          p.address,p.platformdescriptor,
+                          c.id AS containerid,c.dockercontainerid,c.platformid AS containerplatformid
+                   FROM deployments d
+                   JOIN platforms p ON p.id=d.platformid
+                   LEFT JOIN LATERAL (
+                       SELECT id,dockercontainerid,platformid FROM containers
+                       WHERE deploymentid=d.id ORDER BY updated DESC,id DESC LIMIT 1
+                   ) c ON TRUE
+                   WHERE d.id=$1 FOR UPDATE OF d"#,
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(DeploymentError::NotFound)?;
+            ensure_idle(&row)?;
+            let platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
+            let descriptor: Value = row.try_get("platformdescriptor").map_err(storage)?;
+            if platform_kind(&descriptor) != "Docker" {
+                return Err(DeploymentError::Validation(
+                    "Applying Docker Swarm services is not available through Deployments."
+                        .to_owned(),
+                ));
+            }
+            let container_platform_id: Option<Uuid> =
+                row.try_get("containerplatformid").map_err(storage)?;
+            if container_platform_id.is_some_and(|value| value != platform_id) {
+                return Err(DeploymentError::Conflict(
+                    "This deployment references a different platform than its existing container. Duplicate it on the target platform or restore the original platform before applying."
+                        .to_owned(),
+                ));
+            }
+            let row_version = row.try_get::<i64, _>("rowversion").map_err(storage)? + 1;
+            let affected = sqlx::query(
+                "UPDATE deployments SET status='Applying',controlstate='Processing',controltriggeredby=$2,controlstartedat=$3,rowversion=rowversion+1 WHERE id=$1 AND controlstate='Idle'",
+            )
+            .bind(id)
+            .bind(actor_id.value())
+            .bind(Utc::now().timestamp())
+            .execute(&mut *tx)
+            .await
+            .map_err(database_error)?
+            .rows_affected();
+            if affected != 1 {
+                return Err(DeploymentError::Conflict(
+                    "The Deployment already has an operation in progress.".to_owned(),
+                ));
+            }
+            let spec = DeploymentSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
+            let claim = ApplyClaim {
+                id,
+                platform_id,
+                platform_address: row.try_get("address").map_err(storage)?,
+                name: row.try_get("name").map_err(storage)?,
+                row_version,
+                description: row.try_get("description").map_err(storage)?,
+                spec,
+                existing_container_id: row.try_get("containerid").map_err(storage)?,
+                existing_docker_container_id: row.try_get("dockercontainerid").map_err(storage)?,
+            };
+            tx.commit().await.map_err(storage)?;
+            Ok(claim)
+        })
+    }
+
+    fn complete_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        claim: &'a ApplyClaim,
+        result: &'a RuntimeDeploymentResult,
+        digest: Option<&'a str>,
+        bindings: &'a [DeploymentBindingSnapshot],
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            lock_apply_claim(&mut tx, actor_id, claim).await?;
+            let container_id = upsert_apply_container(&mut tx, claim, result).await?;
+            let mut spec = claim.spec.clone();
+            if let DeploymentImageInfo::External {
+                registry_id,
+                image_tag,
+                resolved_digest,
+            } = &spec.image
+            {
+                spec.image = DeploymentImageInfo::External {
+                    registry_id: *registry_id,
+                    image_tag: image_tag.clone(),
+                    resolved_digest: digest
+                        .map(str::to_owned)
+                        .or_else(|| resolved_digest.clone()),
+                };
+            }
+            let spec_value = spec.to_storage_value()?;
+            let affected = sqlx::query(
+                "UPDATE deployments SET status='Healthy',spec=$4,controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
+            )
+            .bind(claim.id)
+            .bind(claim.row_version)
+            .bind(actor_id.value())
+            .bind(&spec_value)
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?
+            .rows_affected();
+            if affected != 1 {
+                return Err(DeploymentError::Conflict(
+                    "The Deployment changed while Apply was completing.".to_owned(),
+                ));
+            }
+            insert_apply_activity(
+                &mut tx,
+                actor_id,
+                claim,
+                ActivityStatus::Success,
+                apply_result(
+                    Some(vec![result.docker_container_id.clone()]),
+                    None,
+                    bindings,
+                )?,
+                Some(&spec),
+            )
+            .await?;
+            // Keep the explicit link visible before the inventory event replaces the projection.
+            sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
+                .bind(container_id)
+                .bind(claim.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(())
+        })
+    }
+
+    fn fail_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        claim: &'a ApplyClaim,
+        message: &'a str,
+        result: Option<&'a RuntimeDeploymentResult>,
+        bindings: &'a [DeploymentBindingSnapshot],
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            lock_apply_claim(&mut tx, actor_id, claim).await?;
+            if let Some(result) = result {
+                upsert_apply_container(&mut tx, claim, result).await?;
+            }
+            let affected = sqlx::query(
+                "UPDATE deployments SET status='Failed',controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
+            )
+            .bind(claim.id)
+            .bind(claim.row_version)
+            .bind(actor_id.value())
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?
+            .rows_affected();
+            if affected != 1 {
+                return Err(DeploymentError::Conflict(
+                    "The Deployment changed while Apply failure was being recorded.".to_owned(),
+                ));
+            }
+            insert_apply_activity(
+                &mut tx,
+                actor_id,
+                claim,
+                ActivityStatus::Failure,
+                apply_result(
+                    result.map(|value| vec![value.docker_container_id.clone()]),
+                    Some(message.to_owned()),
+                    bindings,
+                )?,
+                None,
+            )
+            .await?;
+            tx.commit().await.map_err(storage)?;
+            Ok(())
+        })
+    }
+
+    fn stale_apply_claims<'a>(
+        &'a self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<(ActorId, ApplyClaim)>, DeploymentError>> {
+        Box::pin(async move {
+            let rows = sqlx::query(
+                r#"SELECT d.id,d.platformid,d.name,d.description,d.spec,d.rowversion,
+                          d.controltriggeredby,p.address,
+                          c.id AS containerid,c.dockercontainerid
+                   FROM deployments d
+                   JOIN platforms p ON p.id=d.platformid
+                   LEFT JOIN LATERAL (
+                       SELECT id,dockercontainerid FROM containers
+                       WHERE deploymentid=d.id ORDER BY updated DESC,id DESC LIMIT 1
+                   ) c ON TRUE
+                   WHERE d.controlstate='Processing' AND d.status='Applying'
+                     AND d.controlstartedat IS NOT NULL AND d.controlstartedat < $1
+                     AND d.controltriggeredby IS NOT NULL
+                   ORDER BY d.controlstartedat,d.id LIMIT $2"#,
+            )
+            .bind(started_before)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?;
+            rows.into_iter()
+                .map(|row| {
+                    let actor_id =
+                        ActorId::new(row.try_get("controltriggeredby").map_err(storage)?);
+                    let spec =
+                        DeploymentSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
+                    Ok((
+                        actor_id,
+                        ApplyClaim {
+                            id: row.try_get("id").map_err(storage)?,
+                            platform_id: row.try_get("platformid").map_err(storage)?,
+                            platform_address: row.try_get("address").map_err(storage)?,
+                            name: row.try_get("name").map_err(storage)?,
+                            row_version: row.try_get("rowversion").map_err(storage)?,
+                            description: row.try_get("description").map_err(storage)?,
+                            spec,
+                            existing_container_id: row.try_get("containerid").map_err(storage)?,
+                            existing_docker_container_id: row
+                                .try_get("dockercontainerid")
+                                .map_err(storage)?,
+                        },
+                    ))
+                })
+                .collect()
+        })
+    }
 }
 
 async fn get_authorized(
@@ -798,6 +1053,26 @@ async fn ensure_access(
     }
 }
 
+async fn ensure_specific_access(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_id: ActorId,
+    administrator: bool,
+    resource_id: Uuid,
+    required_level: i32,
+    required_specific: i32,
+) -> Result<(), DeploymentError> {
+    if administrator {
+        return Ok(());
+    }
+    let (level, specific) =
+        effective_permission(tx, actor_id, DEPLOYMENT_RESOURCE_TYPE, Some(resource_id)).await?;
+    if level >= required_level && specific & required_specific == required_specific {
+        Ok(())
+    } else {
+        Err(DeploymentError::Forbidden)
+    }
+}
+
 async fn require_duplicate_binding_access(
     tx: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
@@ -917,6 +1192,166 @@ async fn insert_deployment_activity(
     insert_activity(tx, &activity)
         .await
         .map_err(|error| DeploymentError::Storage(error.to_string()))
+}
+
+async fn lock_apply_claim(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_id: ActorId,
+    claim: &ApplyClaim,
+) -> Result<(), DeploymentError> {
+    let found = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM deployments WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR UPDATE",
+    )
+    .bind(claim.id)
+    .bind(claim.row_version)
+    .bind(actor_id.value())
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage)?;
+    if found.is_some() {
+        Ok(())
+    } else {
+        Err(DeploymentError::Conflict(
+            "The Deployment Apply claim is no longer current.".to_owned(),
+        ))
+    }
+}
+
+async fn upsert_apply_container(
+    tx: &mut Transaction<'_, Postgres>,
+    claim: &ApplyClaim,
+    result: &RuntimeDeploymentResult,
+) -> Result<Uuid, DeploymentError> {
+    let now = Utc::now().timestamp();
+    let state = match result.state {
+        RuntimeContainerState::Running => "Running",
+        RuntimeContainerState::Exited => "Exited",
+        RuntimeContainerState::Timeout => "Unknown",
+    };
+    if let Some(id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM containers WHERE dockercontainerid=$1 AND platformid=$2 AND dockernodeid IS NULL FOR UPDATE",
+    )
+    .bind(&result.docker_container_id)
+    .bind(claim.platform_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage)?
+    {
+        sqlx::query(
+            "UPDATE containers SET deploymentid=$2,dockerimageid=$3,hascitadelownershiplabels=TRUE,name=$4,state=$5,updated=$6,rowversion=rowversion+1 WHERE id=$1",
+        )
+        .bind(id)
+        .bind(claim.id)
+        .bind(&result.docker_image_id)
+        .bind(&claim.name)
+        .bind(state)
+        .bind(now)
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
+        return Ok(id);
+    }
+    if let Some(id) = claim.existing_container_id {
+        let affected = sqlx::query(
+            r#"UPDATE containers SET dockercontainerid=$2,dockerimageid=$3,
+                      hascitadelownershiplabels=TRUE,name=$4,state=$5,updated=$6,
+                      deploymentid=$7,rowversion=rowversion+1
+               WHERE id=$1"#,
+        )
+        .bind(id)
+        .bind(&result.docker_container_id)
+        .bind(&result.docker_image_id)
+        .bind(&claim.name)
+        .bind(state)
+        .bind(now)
+        .bind(claim.id)
+        .execute(&mut **tx)
+        .await
+        .map_err(database_error)?
+        .rows_affected();
+        if affected == 1 {
+            return Ok(id);
+        }
+    }
+    let id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO containers(
+               id,created,deploymentid,dockercontainerid,dockerimageid,hascitadelownershiplabels,
+               isswarmtask,issystem,name,platformid,ports,rowversion,state,updated)
+           VALUES($1,$2,$3,$4,$5,TRUE,FALSE,FALSE,$6,$7,'{}'::json,0,$8,$2)
+           ON CONFLICT (dockercontainerid,platformid) WHERE dockernodeid IS NULL
+           DO UPDATE SET deploymentid=EXCLUDED.deploymentid,dockerimageid=EXCLUDED.dockerimageid,
+                         hascitadelownershiplabels=TRUE,name=EXCLUDED.name,state=EXCLUDED.state,
+                         updated=EXCLUDED.updated,rowversion=containers.rowversion+1"#,
+    )
+    .bind(id)
+    .bind(now)
+    .bind(claim.id)
+    .bind(&result.docker_container_id)
+    .bind(&result.docker_image_id)
+    .bind(&claim.name)
+    .bind(claim.platform_id)
+    .bind(state)
+    .execute(&mut **tx)
+    .await
+    .map_err(database_error)?;
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM containers WHERE dockercontainerid=$1 AND platformid=$2 AND dockernodeid IS NULL",
+    )
+    .bind(&result.docker_container_id)
+    .bind(claim.platform_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(storage)
+}
+
+async fn insert_apply_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_id: ActorId,
+    claim: &ApplyClaim,
+    status: ActivityStatus,
+    result: DeploymentResultActivitySnapshot,
+    applied_spec: Option<&DeploymentSpec>,
+) -> Result<(), DeploymentError> {
+    let info = ActivityEventInfo::deployment_applied(
+        Some(snapshot(
+            claim.id,
+            &claim.name,
+            claim.platform_id,
+            claim.description.clone(),
+            applied_spec.unwrap_or(&claim.spec).to_storage_value()?,
+        )),
+        result,
+    );
+    let activity = ActivityEvent::new_deployment_result_event(
+        claim.id,
+        claim.name.clone(),
+        claim.platform_id,
+        actor_id,
+        info,
+        status,
+        Utc::now(),
+    )
+    .map_err(|error| DeploymentError::Storage(format!("invalid Deployment activity: {error}")))?;
+    insert_activity(tx, &activity)
+        .await
+        .map_err(|error| DeploymentError::Storage(error.to_string()))
+}
+
+fn apply_result(
+    container_ids: Option<Vec<String>>,
+    message: Option<String>,
+    bindings: &[DeploymentBindingSnapshot],
+) -> Result<DeploymentResultActivitySnapshot, DeploymentError> {
+    Ok(DeploymentResultActivitySnapshot {
+        container_ids,
+        message,
+        resource_bindings: if bindings.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_value(bindings).map_err(storage)?)
+        },
+    })
 }
 
 fn snapshot(

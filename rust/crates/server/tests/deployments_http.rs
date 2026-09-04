@@ -11,7 +11,11 @@ use citadel_adapters::crypto::{
 use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_database::MigrationRunner;
-use citadel_deployments::{DeploymentError, DeploymentRuntimePort, DeploymentService};
+use citadel_deployments::{
+    DeploymentError, DeploymentImageInfo, DeploymentRuntimePort, DeploymentService,
+    PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
+    RuntimeDeploymentResult,
+};
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
@@ -28,6 +32,7 @@ use uuid::Uuid;
 struct RecordingRuntime {
     deleted: Arc<Mutex<Vec<String>>>,
     fail: Arc<AtomicBool>,
+    applied: Arc<AtomicBool>,
 }
 
 impl DeploymentRuntimePort for RecordingRuntime {
@@ -48,6 +53,44 @@ impl DeploymentRuntimePort for RecordingRuntime {
                 .unwrap()
                 .push(docker_container_id.to_owned());
             Ok(())
+        }
+        .boxed()
+    }
+
+    fn prepare_image<'a>(
+        &'a self,
+        _platform_id: Uuid,
+        _image: &'a DeploymentImageInfo,
+        _cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
+        async {
+            Ok(PreparedDeploymentImage {
+                docker_image_id: "sha256:applied".to_owned(),
+                digest: None,
+            })
+        }
+        .boxed()
+    }
+
+    fn apply_container<'a>(
+        &'a self,
+        _platform_id: Uuid,
+        command: &'a RuntimeDeploymentCommand,
+        _cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
+        self.applied.store(true, Ordering::Release);
+        let image = command.image_id.clone();
+        async move {
+            if self.fail.load(Ordering::Acquire) {
+                return Err(DeploymentError::Runtime(
+                    "Docker rejected Deployment Apply".to_owned(),
+                ));
+            }
+            Ok(RuntimeDeploymentResult {
+                docker_container_id: "docker-applied".to_owned(),
+                docker_image_id: image,
+                state: RuntimeContainerState::Running,
+            })
         }
         .boxed()
     }
@@ -79,11 +122,13 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     ));
     let deleted = Arc::new(Mutex::new(Vec::new()));
     let fail_runtime = Arc::new(AtomicBool::new(false));
+    let applied = Arc::new(AtomicBool::new(false));
     let service = Arc::new(DeploymentService::new(
         Arc::new(PostgresDeploymentStore::new(pool.clone())),
         Arc::new(RecordingRuntime {
             deleted: Arc::clone(&deleted),
             fail: Arc::clone(&fail_runtime),
+            applied: Arc::clone(&applied),
         }),
         Arc::new(StaticEntitlementService::new(true)),
         CancellationToken::new(),
@@ -160,6 +205,94 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     assert_eq!(created["status"], "Created");
     assert!(created["spec"].get("lifeCycleSpec").is_none());
     assert!(created.get("containerId").is_none());
+
+    let apply_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/deployments/apply",
+        Some(admin.clone()),
+        Some(json!({"id":deployment_id,"recreate":false})),
+    )
+    .await;
+    let apply_status = apply_response.status();
+    let progress = response_json(apply_response).await;
+    assert_eq!(apply_status, StatusCode::OK, "{progress}");
+    assert!(applied.load(Ordering::Acquire));
+    assert_eq!(
+        progress.as_array().unwrap().last().unwrap()["progressMessage"],
+        "Deployment is now running."
+    );
+    assert_eq!(
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT status,controlstate FROM deployments WHERE id=$1"
+        )
+        .bind(deployment_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        ("Healthy".to_owned(), "Idle".to_owned())
+    );
+    // Keep the CRUD deletion assertion below scoped to its explicit fixtures.
+    sqlx::query("UPDATE containers SET deploymentid=NULL WHERE dockercontainerid='docker-applied'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    fail_runtime.store(true, Ordering::Release);
+    let failed_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/deployments",
+        Some(admin.clone()),
+        Some(json!({
+            "name": format!("failed-{suffix}"),
+            "platformId": platform_id,
+            "spec": {
+                "image": {"$type":"Local", "imageId":"sha256:test"},
+                "updateBehavior":"Disabled"
+            }
+        })),
+    )
+    .await;
+    assert_eq!(failed_response.status(), StatusCode::OK);
+    let failed_id =
+        Uuid::parse_str(response_json(failed_response).await["id"].as_str().unwrap()).unwrap();
+    let failed_apply = request(
+        &app,
+        Method::POST,
+        "/api/v1/deployments/apply",
+        Some(admin.clone()),
+        Some(json!({"id":failed_id})),
+    )
+    .await;
+    assert_eq!(failed_apply.status(), StatusCode::OK);
+    let failed_progress = response_json(failed_apply).await;
+    assert!(
+        failed_progress.as_array().unwrap().last().unwrap()["errorMessage"]
+            .as_str()
+            .is_some_and(|message| message.contains("Docker rejected"))
+    );
+    assert_eq!(
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT status,controlstate FROM deployments WHERE id=$1"
+        )
+        .bind(failed_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        ("Failed".to_owned(), "Idle".to_owned())
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT status FROM activityevents WHERE resourceid=$1 AND eventtype='DeploymentApplied' ORDER BY createdat DESC,id DESC LIMIT 1"
+        )
+        .bind(failed_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "Failure"
+    );
+    fail_runtime.store(false, Ordering::Release);
 
     assert_eq!(
         request(
@@ -513,6 +646,18 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .await
         .status(),
         StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/deployments/apply",
+            Some(reader.clone()),
+            Some(json!({"id":deployment_id})),
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
     );
     sqlx::query("UPDATE resourceaccesses SET permissionlevel=2 WHERE actorid=$1 AND resourceid=$2")
         .bind(reader_actor_id)

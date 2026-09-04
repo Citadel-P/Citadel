@@ -23,7 +23,6 @@ services:
       VITE_API_BASE_URL: http://localhost:8000
     volumes:
       - ..:/workspace:cached
-      - /var/run/docker.sock:/var/run/docker.sock
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
       - rust-target:/home/vscode/.cache/citadel-target

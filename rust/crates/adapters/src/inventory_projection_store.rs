@@ -28,12 +28,7 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
     ) -> BoxFuture<'a, Result<InventoryProjectionChange, RuntimeCapabilityError>> {
         async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            persist_platform(&mut transaction, snapshot).await?;
-            persist_images(&mut transaction, snapshot).await?;
-            persist_containers(&mut transaction, snapshot).await?;
-            if let Some(swarm) = &snapshot.swarm {
-                persist_swarm(&mut transaction, snapshot, swarm).await?;
-            }
+            persist_snapshot(&mut transaction, snapshot).await?;
             transaction.commit().await.map_err(storage)?;
             Ok(InventoryProjectionChange {
                 platform_id: snapshot.platform_id,
@@ -42,6 +37,19 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
         }
         .boxed()
     }
+}
+
+pub(crate) async fn persist_snapshot(
+    transaction: &mut Transaction<'_, Postgres>,
+    snapshot: &RuntimeInventorySnapshot,
+) -> Result<(), RuntimeCapabilityError> {
+    persist_platform(transaction, snapshot).await?;
+    persist_images(transaction, snapshot).await?;
+    persist_containers(transaction, snapshot).await?;
+    if let Some(swarm) = &snapshot.swarm {
+        persist_swarm(transaction, snapshot, swarm).await?;
+    }
+    Ok(())
 }
 
 async fn persist_platform(

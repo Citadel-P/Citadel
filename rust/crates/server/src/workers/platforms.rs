@@ -8,6 +8,7 @@ use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionSto
 use citadel_application::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
+use citadel_deployments::DeploymentService;
 use citadel_platforms::jobs::{
     InventoryCollectionTarget, collect_inventory, collect_running_container_stats,
     persist_container_stats, triggers_inventory_reconciliation,
@@ -37,6 +38,7 @@ pub struct WorkerDependencies {
     pub metrics: Arc<Metrics>,
     pub agent: Option<AgentClient>,
     pub realtime: Option<RealtimeHub>,
+    pub deployments: Arc<DeploymentService>,
 }
 
 pub fn register(
@@ -52,7 +54,15 @@ pub fn register(
         metrics,
         agent,
         realtime,
+        deployments,
     } = dependencies;
+    supervisor.spawn(
+        "deployment-apply-reconciliation",
+        super::deployments::deployment_apply_reconciliation(
+            cancellation.child_token(),
+            deployments,
+        ),
+    );
     let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
     let (local_reconcile_sender, local_reconcile_receiver) =
         bounded_channel(1, QueueOverflowPolicy::Reject);

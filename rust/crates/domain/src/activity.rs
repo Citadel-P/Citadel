@@ -217,6 +217,48 @@ pub struct DeploymentActivitySnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeploymentResultActivitySnapshot {
+    #[serde(rename = "ContainerIds")]
+    pub container_ids: Option<Vec<String>>,
+    #[serde(rename = "Message")]
+    pub message: Option<String>,
+    #[serde(rename = "ResourceBindings")]
+    pub resource_bindings: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PlatformActivitySnapshot {
+    #[serde(rename = "Id")]
+    pub id: Uuid,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Address")]
+    pub address: String,
+    #[serde(rename = "Description")]
+    pub description: Option<String>,
+    #[serde(rename = "Status")]
+    pub status: String,
+    #[serde(rename = "ConnectorType")]
+    pub connector_type: String,
+    #[serde(rename = "NetworkCount")]
+    pub network_count: i32,
+    #[serde(rename = "VolumeCount")]
+    pub volume_count: i32,
+    #[serde(rename = "ImageCount")]
+    pub image_count: i64,
+    #[serde(rename = "CpuCount")]
+    pub cpu_count: i64,
+    #[serde(rename = "MemTotal")]
+    pub mem_total: i64,
+    #[serde(rename = "ServerVersion")]
+    pub server_version: Option<String>,
+    #[serde(rename = "AgentVersion")]
+    pub agent_version: Option<String>,
+    #[serde(rename = "PlatformDescriptor")]
+    pub platform_descriptor: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ActivitySourceResource {
     #[serde(rename = "ResourceType")]
     pub resource_type: ActivityResourceType,
@@ -559,6 +601,16 @@ pub enum ActivityEventInfo {
     DeploymentDeleted {
         #[serde(rename = "Deployment")]
         deployment: DeploymentActivitySnapshot,
+    },
+    DeploymentApplied {
+        #[serde(rename = "Deployment")]
+        deployment: Option<DeploymentActivitySnapshot>,
+        #[serde(rename = "Result")]
+        result: DeploymentResultActivitySnapshot,
+    },
+    PlatformCreated {
+        #[serde(rename = "Platform")]
+        platform: PlatformActivitySnapshot,
     },
     GitRepoCreated {
         #[serde(rename = "GitRepo")]
@@ -936,6 +988,19 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn deployment_applied(
+        deployment: Option<DeploymentActivitySnapshot>,
+        result: DeploymentResultActivitySnapshot,
+    ) -> Self {
+        Self::DeploymentApplied { deployment, result }
+    }
+
+    #[must_use]
+    pub const fn platform_created(platform: PlatformActivitySnapshot) -> Self {
+        Self::PlatformCreated { platform }
+    }
+
+    #[must_use]
     pub const fn git_repo_created(git_repo: GitRepositoryActivitySnapshot) -> Self {
         Self::GitRepoCreated { git_repo }
     }
@@ -1022,6 +1087,8 @@ impl ActivityEventInfo {
             Self::DeploymentUpdated { .. } => ActivityEventType::DeploymentUpdated,
             Self::DeploymentRenamed { .. } => ActivityEventType::DeploymentRenamed,
             Self::DeploymentDeleted { .. } => ActivityEventType::DeploymentDeleted,
+            Self::DeploymentApplied { .. } => ActivityEventType::DeploymentApplied,
+            Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
             Self::GitRepoCreated { .. } => ActivityEventType::GitRepoCreated,
             Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
             Self::GitRepoRenamed { .. } => ActivityEventType::GitRepoRenamed,
@@ -1213,6 +1280,51 @@ impl ActivityEvent {
         } else {
             ActivityStatus::Success
         };
+        let mut event = Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Deployment,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )?;
+        event.platform_id = Some(platform_id);
+        Ok(event)
+    }
+
+    pub fn new_platform_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let mut event = Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Platform,
+            actor_id,
+            info,
+            ActivityStatus::Success,
+            created_at,
+        )?;
+        event.platform_id = Some(resource_id);
+        Ok(event)
+    }
+
+    pub fn new_deployment_result_event(
+        resource_id: Uuid,
+        resource_name: String,
+        platform_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        status: ActivityStatus,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        if platform_id.is_nil() {
+            return Err(ActivityInvariantError::MissingResourceId);
+        }
         let mut event = Self::new_resource_event(
             resource_id,
             resource_name,

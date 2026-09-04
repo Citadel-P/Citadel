@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::extract::{Extension, Path, RawQuery, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
 use citadel_contracts::http::routes;
 use citadel_deployments::{
-    CreateDeploymentInput, DeploymentChangeNotifier, DeploymentError, DeploymentFilter,
-    DeploymentService, PatchDeploymentInput, PatchDeploymentMetadataInput, RenameDeploymentInput,
-    ResourceCapabilities,
+    ApplyDeploymentInput, CreateDeploymentInput, DeploymentChangeNotifier, DeploymentError,
+    DeploymentFilter, DeploymentService, PatchDeploymentInput, PatchDeploymentMetadataInput,
+    RenameDeploymentInput, ResourceCapabilities,
 };
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
@@ -48,6 +50,7 @@ pub fn router(state: DeploymentsHttpState) -> Router {
     Router::new()
         .contract_route(routes::LIST_DEPLOYMENTS, list_deployments)
         .contract_route(routes::CREATE_DEPLOYMENT, create_deployment)
+        .contract_route(routes::APPLY_DEPLOYMENT, apply_deployment)
         .contract_route(routes::DELETE_DEPLOYMENTS, delete_deployments)
         .contract_route(routes::RENAME_DEPLOYMENT, rename_deployment)
         .contract_route(routes::GET_DEPLOYMENT, get_deployment)
@@ -62,6 +65,65 @@ pub fn router(state: DeploymentsHttpState) -> Router {
             update_deployment_metadata,
         )
         .with_state(state)
+}
+
+async fn apply_deployment(
+    State(state): State<DeploymentsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<ApplyDeploymentInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_resource(
+        &state,
+        &principal,
+        input.id,
+        PermissionLevel::Execute,
+        Some(SpecificPermission::Apply),
+        &headers,
+    )
+    .await?;
+    let mut receiver = identity_result(
+        state
+            .deployments
+            .apply(
+                principal.actor_id,
+                principal.is_administrator(),
+                input.id,
+                input.recreate.unwrap_or(false),
+            )
+            .await
+            .map_err(deployment_error),
+        &headers,
+    )?;
+    let stream = async_stream::stream! {
+        yield Ok::<_, std::convert::Infallible>(bytes::Bytes::from_static(b"["));
+        let mut first = true;
+        while let Some(item) = receiver.recv().await {
+            if !first {
+                yield Ok(bytes::Bytes::from_static(b","));
+            }
+            first = false;
+            match serde_json::to_vec(&item) {
+                Ok(value) => yield Ok(bytes::Bytes::from(value)),
+                Err(error) => {
+                    tracing::error!(%error, "failed to serialize Deployment Apply progress");
+                    break;
+                }
+            }
+        }
+        yield Ok(bytes::Bytes::from_static(b"]"));
+    };
+    let mut response = Body::from_stream(stream).into_response();
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
 }
 
 async fn list_deployments(

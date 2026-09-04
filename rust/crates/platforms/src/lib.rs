@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use citadel_domain::ActorId;
 use futures_util::future::BoxFuture;
 use futures_util::stream::Stream;
@@ -15,10 +16,12 @@ mod inventory;
 pub mod jobs;
 mod mutations;
 mod read;
+mod registration;
 
 pub use inventory::*;
 pub use mutations::*;
 pub use read::*;
+pub use registration::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +33,7 @@ pub struct PlatformSummary {
     pub connector_type: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimePlatformInfo {
     pub daemon_id: String,
@@ -47,6 +50,29 @@ pub struct RuntimePlatformInfo {
     pub api_version: String,
     pub minimum_api_version: String,
     pub agent_version: Option<String>,
+    pub swarm: Option<RuntimeSwarmInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSwarmInfo {
+    pub node_id: String,
+    pub node_addr: String,
+    pub local_node_state: String,
+    pub control_available: bool,
+    pub error: Option<String>,
+    pub remote_managers: Vec<RuntimeSwarmPeer>,
+    pub nodes: i64,
+    pub managers: i64,
+    pub cluster_id: Option<String>,
+    pub cluster_created_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSwarmPeer {
+    pub node_id: String,
+    pub address: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

@@ -1089,6 +1089,22 @@ fn schemas() -> Value {
         "NetworkCapabilities": network_capabilities(),
         "VolumeCapabilities": volume_capabilities(),
         "PlatformView": platform_view(),
+        "PlatformType": { "type": "string", "enum": ["Docker", "DockerSwarm", "Kubernetes"] },
+        "PlatformConnectorType": { "type": "string", "enum": ["Unknown", "Local", "Agent", "EdgeAgent"] },
+        "CreatePlatformInput": {
+            "type": "object",
+            "required": ["name", "address"],
+            "additionalProperties": false,
+            "properties": {
+                "name": string(),
+                "address": nullable_string(),
+                "description": nullable_string(),
+                "type": { "$ref": "#/components/schemas/PlatformType" },
+                "connectorType": { "$ref": "#/components/schemas/PlatformConnectorType" },
+                "pruneHistoricalSwarmTaskContainers": { "type": "boolean", "default": true },
+                "tagIds": { "type": "array", "items": uuid() }
+            }
+        },
         "PlatformsView": collection_view("platforms", "PlatformView", "ResourceCapabilities"),
         "ContainerView": container_view(),
         "ContainersView": collection_view("containers", "ContainerView", "PlatformCapabilities"),
@@ -1261,6 +1277,42 @@ fn phase6_deployment_schemas() -> Map<String, Value> {
         "type":"object","required":["name","platformId","description","spec"],"additionalProperties":false,
         "properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"},"tagIds":{"type":["array","null"],"items":uuid()},"duplicateSource":nullable(json!({"$ref":"#/components/schemas/DuplicateSourceInput"}))}
     }));
+    schemas.insert(
+        "ApplyDeploymentInput".into(),
+        json!({
+            "type":"object","required":["id"],"additionalProperties":false,
+            "properties":{"id":uuid(),"recreate":{"type":["boolean","null"],"default":false}}
+        }),
+    );
+    schemas.insert(
+        "DeploymentApplyError".into(),
+        json!({
+            "type":"object","required":["code","message"],"additionalProperties":false,
+            "properties":{"code":{"type":"integer","format":"int64"},"message":string()}
+        }),
+    );
+    schemas.insert("ImagePullProgress".into(), json!({
+        "type":"object","additionalProperties":false,
+        "properties":{"current":{"type":["integer","null"],"format":"int64"},"total":{"type":["integer","null"],"format":"int64"},"start":{"type":["integer","null"],"format":"int64"},"units":nullable_string()}
+    }));
+    schemas.insert(
+        "DeploymentStreamItem".into(),
+        json!({
+            "type":"object","additionalProperties":false,
+            "properties":{
+                "id":nullable_string(),"status":nullable_string(),"stream":nullable_string(),
+                "progressMessage":nullable_string(),"errorMessage":nullable_string(),
+                "progress":nullable(json!({"$ref":"#/components/schemas/ImagePullProgress"})),
+                "error":nullable(json!({"$ref":"#/components/schemas/DeploymentApplyError"}))
+            }
+        }),
+    );
+    schemas.insert(
+        "DeploymentStreamItems".into(),
+        json!({
+            "type":"array","items":{"$ref":"#/components/schemas/DeploymentStreamItem"}
+        }),
+    );
     schemas.insert(
         "PatchDeploymentInput".into(),
         json!({
