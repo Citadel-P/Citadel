@@ -529,14 +529,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             let now = Utc::now();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             validate_tag_ids(&mut transaction, &repository.tag_ids).await?;
-            validate_git_account(&mut transaction, repository.git_account_id).await?;
+            validate_git_account(&mut transaction, repository.git_account_id, &repository.url)
+                .await?;
             sqlx::query(
                 r#"
 INSERT INTO gitrepositories (
     id, name, description, url, defaultbranch, gitaccountid, status,
-    createdat, createdbyactorid, rowversion, controlstate, syncmode, syncintervalminutes,
-    webhook, onclone, onpull)
-VALUES ($1,$2,$3,$4,$5,$6,'Created',$7,$8,0,'Idle',$9,$10,$11,$12,$13)
+    createdat, createdbyactorid, rowversion, controlstate, controltriggeredby,
+    syncmode, syncintervalminutes, webhook, onclone, onpull)
+VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
 "#,
             )
             .bind(id)
@@ -555,6 +556,16 @@ VALUES ($1,$2,$3,$4,$5,$6,'Created',$7,$8,0,'Idle',$9,$10,$11,$12,$13)
             .execute(&mut *transaction)
             .await
             .map_err(database_error)?;
+            sqlx::query(
+                "INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat) VALUES($1,$2,$3,NULL,'Pending',NULL,$4)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(id)
+            .bind(&repository.default_branch)
+            .bind(now)
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
             insert_resource_tags(
                 &mut transaction,
                 actor_id,
@@ -620,18 +631,34 @@ VALUES ($1,$2,$3,$4,$5,$6,'Created',$7,$8,0,'Idle',$9,$10,$11,$12,$13)
                     updated.name = updated.name.trim().to_owned();
                 }
             }
-            validate_git_account(&mut transaction, updated.git_account_id).await?;
+            validate_git_account(&mut transaction, updated.git_account_id, &updated.url).await?;
             if patch.tag_ids.is_some() {
                 validate_tag_ids(&mut transaction, &updated.tag_ids).await?;
             }
+            let source_changed = old.url != updated.url
+                || old.default_branch != updated.default_branch
+                || old.git_account_id != updated.git_account_id;
             let affected = sqlx::query(
-                "UPDATE gitrepositories SET name=$2, description=$3, url=$4, defaultbranch=$5, gitaccountid=$6, syncmode=$7, syncintervalminutes=$8, webhook=$9, onclone=$10, onpull=$11, rowversion=rowversion+1 WHERE id=$1",
+                "UPDATE gitrepositories SET name=$2, description=$3, url=$4, defaultbranch=$5, gitaccountid=$6, syncmode=$7, syncintervalminutes=$8, webhook=$9, onclone=$10, onpull=$11, status=CASE WHEN $12 THEN 'Pending' ELSE status END, controlstate=CASE WHEN $12 AND controlstate<>'Processing' THEN 'Queued' ELSE controlstate END, controltriggeredby=CASE WHEN $12 THEN $13 ELSE controltriggeredby END, controlstartedat=CASE WHEN $12 AND controlstate<>'Processing' THEN NULL ELSE controlstartedat END, rowversion=rowversion+1 WHERE id=$1",
             )
             .bind(id).bind(&updated.name).bind(updated.description.as_deref()).bind(&updated.url).bind(&updated.default_branch).bind(updated.git_account_id)
             .bind(updated.sync_mode.as_database_str()).bind(updated.sync_interval_minutes)
-            .bind(updated.webhook.as_ref()).bind(serialize_optional(&updated.on_clone)?).bind(serialize_optional(&updated.on_pull)?)
+            .bind(updated.webhook.as_ref()).bind(serialize_optional(&updated.on_clone)?).bind(serialize_optional(&updated.on_pull)?).bind(source_changed).bind(actor_id.value())
             .execute(&mut *transaction).await.map_err(database_error)?.rows_affected();
             exactly_one(affected)?;
+            if source_changed {
+                sqlx::query(
+                    r#"INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat)
+VALUES($1,$2,$3,NULL,'Pending',NULL,CURRENT_TIMESTAMP)
+ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NULL"#,
+                )
+                .bind(Uuid::now_v7())
+                .bind(id)
+                .bind(&updated.default_branch)
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage)?;
+            }
             if patch.tag_ids.is_some() {
                 replace_resource_tags_tx(
                     &mut transaction,
@@ -1444,20 +1471,84 @@ async fn validate_tag_ids(
 async fn validate_git_account(
     transaction: &mut Transaction<'_, Postgres>,
     id: Option<Uuid>,
+    repository_url: &str,
 ) -> Result<(), ResourceMetadataError> {
     let Some(id) = id else {
-        return Ok(());
+        return validate_direct_git_url(repository_url);
     };
-    let exists =
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM gitaccounts WHERE id=$1)")
-            .bind(id)
-            .fetch_one(&mut **transaction)
-            .await
-            .map_err(storage)?;
-    if exists {
+    let domain = sqlx::query_scalar::<_, String>("SELECT domain FROM gitaccounts WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&mut **transaction)
+        .await
+        .map_err(storage)?
+        .ok_or(ResourceMetadataError::NotFound)?;
+    if is_account_relative_git_path(repository_url) {
+        return Ok(());
+    }
+    let repository_domain = extract_git_domain(repository_url)?;
+    if repository_domain.eq_ignore_ascii_case(domain.trim().trim_end_matches('/')) {
         Ok(())
     } else {
-        Err(ResourceMetadataError::NotFound)
+        Err(ResourceMetadataError::Validation(format!(
+            "Repository URL domain '{repository_domain}' does not match linked GitAccount domain '{}'.",
+            domain.trim().trim_end_matches('/')
+        )))
+    }
+}
+
+fn is_account_relative_git_path(repository_url: &str) -> bool {
+    let value = repository_url.trim();
+    !value.is_empty()
+        && !value.starts_with('-')
+        && !value.contains(['\r', '\n', '\0'])
+        && !value.starts_with('/')
+        && !value.contains("..")
+        && !value.contains("://")
+        && !value.starts_with("git@")
+}
+
+fn validate_direct_git_url(repository_url: &str) -> Result<(), ResourceMetadataError> {
+    let value = repository_url.trim();
+    let valid = url::Url::parse(value).is_ok_and(|url| {
+        matches!(url.scheme(), "http" | "https" | "file")
+            && (url.scheme() == "file" || url.host_str().is_some())
+    }) || value.strip_prefix("git@").is_some_and(|value| {
+        value
+            .split_once(':')
+            .is_some_and(|(host, path)| !host.is_empty() && !path.is_empty())
+    });
+    if valid {
+        Ok(())
+    } else {
+        Err(ResourceMetadataError::Validation(
+            "Enter a complete repository URL when no Git account is selected.".to_owned(),
+        ))
+    }
+}
+
+fn extract_git_domain(repository_url: &str) -> Result<String, ResourceMetadataError> {
+    let value = repository_url.trim();
+    if let Ok(url) = url::Url::parse(value)
+        && let Some(host) = url.host_str()
+    {
+        return Ok(host.to_owned());
+    }
+    if let Some(value) = value.strip_prefix("git@")
+        && let Some((host, _)) = value.split_once(':')
+    {
+        return Ok(host.to_owned());
+    }
+    let authority = value.split_once('/').map_or(value, |(host, _)| host);
+    let host = authority
+        .split_once(':')
+        .map_or(authority, |(host, _)| host)
+        .trim();
+    if host.is_empty() {
+        Err(ResourceMetadataError::Validation(
+            "Repository URL must include a host.".to_owned(),
+        ))
+    } else {
+        Ok(host.to_owned())
     }
 }
 async fn insert_resource_tags(

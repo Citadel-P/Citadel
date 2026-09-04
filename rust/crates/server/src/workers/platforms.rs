@@ -8,7 +8,9 @@ use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionSto
 use citadel_application::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
+use citadel_automation::AutomationService;
 use citadel_deployments::DeploymentService;
+use citadel_git::GitRepositoryExecutionService;
 use citadel_platforms::jobs::{
     InventoryCollectionTarget, collect_inventory, collect_running_container_stats,
     persist_container_stats, triggers_inventory_reconciliation,
@@ -43,6 +45,8 @@ pub struct WorkerDependencies {
     pub deployments: Arc<DeploymentService>,
     pub swarm_services: Arc<ManagedSwarmServiceService>,
     pub stacks: Arc<StackService>,
+    pub git: Arc<GitRepositoryExecutionService>,
+    pub automation: Arc<AutomationService>,
 }
 
 pub fn register(
@@ -61,7 +65,17 @@ pub fn register(
         deployments,
         swarm_services,
         stacks,
+        git,
+        automation,
     } = dependencies;
+    supervisor.spawn(
+        "git-repository-sync",
+        super::git::git_repository_sync(cancellation.child_token(), git, realtime.clone()),
+    );
+    supervisor.spawn(
+        "automation-runs",
+        super::automation::automation_runs(cancellation.child_token(), automation),
+    );
     supervisor.spawn(
         "deployment-apply-reconciliation",
         super::deployments::deployment_apply_reconciliation(

@@ -12,6 +12,7 @@ use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
 use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::automation_store::PostgresAutomationStore;
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
@@ -20,6 +21,8 @@ use citadel_adapters::deployment_bindings::PostgresDeploymentBindingResolver;
 use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
 use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::docker::DockerClient;
+use citadel_adapters::git_account_store::PostgresGitAccountStore;
+use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::PostgresIdentityStore;
 use citadel_adapters::license::{
     Ed25519LicenseVerifier, PostgresLicenseEntitlementService, PostgresLicenseStore,
@@ -48,10 +51,12 @@ use citadel_application::{
     ActivityService, LicenseService, LicenseTransitionMonitor, TaskSupervisor,
     service_account_last_used_channel,
 };
+use citadel_automation::AutomationService;
 use citadel_contracts::http::routes;
 use citadel_database::MigrationRunner;
 use citadel_deployments::DeploymentService;
 use citadel_domain::ActorId;
+use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::{
     IdentityService, MfaConfiguration, MfaService, OidcService, ProfileService,
     RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
@@ -66,10 +71,10 @@ use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
 use citadel_server::{
-    Readiness, activities_http, application_info_http, deployments_http, identity_http,
-    license_http, license_realtime, oidc_http, platforms_http, profile_http, resources_http,
-    roles_http, service_accounts_http, stacks_http, swarm_services_http, teams_http, transport,
-    users_http, workers,
+    Readiness, activities_http, application_info_http, automation_http, deployments_http,
+    git_accounts_http, git_repositories_http, identity_http, license_http, license_realtime,
+    oidc_http, platforms_http, profile_http, resources_http, roles_http, service_accounts_http,
+    stacks_http, swarm_services_http, teams_http, transport, users_http, webhooks_http, workers,
 };
 use citadel_stacks::StackService;
 use citadel_swarm_services::ManagedSwarmServiceService;
@@ -301,6 +306,29 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         resource_metadata.clone(),
         secret_protector.clone(),
     ));
+    let git_accounts = Arc::new(GitAccountService::new(
+        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        secret_protector.clone(),
+    ));
+    let data_root = std::env::var_os("CITADEL_DATA_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/app/data"));
+    let git_execution = Arc::new(GitRepositoryExecutionService::new(
+        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::clone(&git_accounts),
+        Arc::new(GitCli::new(Duration::from_secs(120))),
+        data_root.join("git-repositories"),
+        Duration::from_secs(10 * 60),
+    ));
+    let automation = Arc::new(AutomationService::new(
+        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        std::env::var_os("CITADEL_DENO_PATH").unwrap_or_else(|| "deno".into()),
+        data_root.join("automations/runs"),
+        std::env::var("CITADEL_INTERNAL_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8000".to_owned()),
+        1024 * 1024,
+        Duration::from_secs(10 * 60),
+    ));
     let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReadStore::new(pool.clone()),
     )));
@@ -447,6 +475,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             deployments: Arc::clone(&deployments),
             swarm_services: Arc::clone(&swarm_services),
             stacks: Arc::clone(&stacks),
+            git: Arc::clone(&git_execution),
+            automation: Arc::clone(&automation),
         },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
@@ -510,6 +540,31 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             service_accounts_http::ServiceAccountHttpState {
                 identity: Arc::clone(&identity),
                 service_accounts,
+            },
+        ))
+        .merge(git_accounts_http::router(
+            git_accounts_http::GitAccountsHttpState {
+                identity: Arc::clone(&identity),
+                accounts: git_accounts,
+                realtime: realtime_hub.clone(),
+            },
+        ))
+        .merge(git_repositories_http::router(
+            git_repositories_http::GitRepositoriesHttpState {
+                identity: Arc::clone(&identity),
+                resources: Arc::clone(&resources),
+                execution: Arc::clone(&git_execution),
+                realtime: realtime_hub.clone(),
+                cancellation: cancellation.clone(),
+            },
+        ))
+        .merge(webhooks_http::router(webhooks_http::WebhooksHttpState {
+            git: Arc::clone(&git_execution),
+        }))
+        .merge(automation_http::router(
+            automation_http::AutomationHttpState {
+                identity: Arc::clone(&identity),
+                automation,
             },
         ))
         .merge(deployments_http::router(

@@ -50,6 +50,8 @@ pub enum IdentityError {
     Storage(String),
     #[error("identity credential processing failed")]
     Credential,
+    #[error("external operation failed: {0}")]
+    External(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

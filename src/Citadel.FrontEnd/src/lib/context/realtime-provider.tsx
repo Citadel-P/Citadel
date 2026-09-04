@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/auth-context';
 import { createSignalRConnection, SignalRConnectionFactory } from '../createSignalRConnection';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
-import { LiveConnectionState, SignalRContext } from './signalr-context';
+import { LiveConnectionState, RealtimeContext } from './realtime-context';
 
 type StartConnection = typeof startConnectionWithRetry;
 
-type SignalRProviderProps = {
+type RealtimeProviderProps = {
   children?: React.ReactNode;
   connectionFactory?: SignalRConnectionFactory;
   startConnection?: StartConnection;
@@ -63,7 +63,7 @@ const liveBackedQueryKeys = new Set([
 const isBrowserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 const createWebSocket = (url: string) => new WebSocket(url);
 
-export const SignalRProvider: React.FC<SignalRProviderProps> = ({
+export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   children,
   connectionFactory = createSignalRConnection,
   startConnection = startConnectionWithRetry,
@@ -72,7 +72,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
 }) => {
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
   const [liveConnectionState, setLiveConnectionState] = useState<LiveConnectionState>(
-    realtimeTransport === 'SignalR' ? 'connecting' : 'disconnected',
+    realtimeTransport === 'SignalR' || realtimeTransport === 'WebSocketV1' ? 'connecting' : 'disconnected',
   );
   const [interruptedAt, setInterruptedAt] = useState<number>();
   const [lastConnectedAt, setLastConnectedAt] = useState<number>();
@@ -81,6 +81,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const signalREnabled = realtimeTransport === 'SignalR';
+  const webSocketEnabled = realtimeTransport === 'WebSocketV1';
 
   const tokenRef = useRef<string | undefined>(accessToken);
   const prevTokenRef = useRef<string | undefined>(accessToken);
@@ -91,6 +92,8 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   const retryPromiseRef = useRef<Promise<void> | null>(null);
   const startInProgressRef = useRef(false);
   const rebuildGenerationRef = useRef(0);
+  const webSocketRef = useRef<WebSocket>();
+  const [webSocketGeneration, setWebSocketGeneration] = useState(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
 
   useEffect(() => {
@@ -149,6 +152,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       const url = new URL('/api/v1/realtime', baseUrl || window.location.origin);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       socket = webSocketFactory(url.toString());
+      webSocketRef.current = socket;
       socket.addEventListener('open', () => {
         socket?.send(
           JSON.stringify({ protocolVersion: 1, kind: 'subscribe', accessToken }),
@@ -165,6 +169,10 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
           if (envelope.protocolVersion === 1) {
             if (envelope.kind === 'subscribed') {
               retryIndex = 0;
+              setConnectionState(HubConnectionState.Connected);
+              setLiveConnectionState('connected');
+              setInterruptedAt(undefined);
+              setLastConnectedAt(Date.now());
               invalidateLicense();
             } else {
               invalidateResourceQueries(envelope.resourceType, envelope.eventKind);
@@ -176,6 +184,9 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       });
       socket.addEventListener('close', () => {
         if (disposed) return;
+        setConnectionState(HubConnectionState.Disconnected);
+        setLiveConnectionState(isBrowserOffline() ? 'offline' : 'reconnecting');
+        setInterruptedAt((current) => current ?? Date.now());
         const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)];
         retryIndex += 1;
         retryTimer = setTimeout(connect, delay);
@@ -186,9 +197,10 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     return () => {
       disposed = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (webSocketRef.current === socket) webSocketRef.current = undefined;
       socket?.close();
     };
-  }, [accessToken, baseUrl, queryClient, realtimeTransport, webSocketFactory]);
+  }, [accessToken, baseUrl, queryClient, realtimeTransport, webSocketFactory, webSocketGeneration]);
 
   const markConnected = useCallback(() => {
     setConnectionState(HubConnectionState.Connected);
@@ -437,8 +449,20 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   );
 
   const retryConnection = useCallback(() => {
+    if (webSocketEnabled) {
+      if (isBrowserOffline()) {
+        markInterrupted('offline');
+        return Promise.reject(new Error('Cannot reconnect while the browser is offline'));
+      }
+
+      setConnectionState(HubConnectionState.Connecting);
+      setLiveConnectionState('connecting');
+      setWebSocketGeneration((current) => current + 1);
+      return Promise.resolve();
+    }
+
     if (!signalREnabled) {
-      return Promise.reject(new Error('SignalR transport is not enabled'));
+      return Promise.reject(new Error('Realtime transport is not enabled'));
     }
 
     if (retryPromiseRef.current) {
@@ -470,7 +494,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     };
     void retryPromise.then(clearRetry, clearRetry);
     return retryPromise;
-  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled]);
+  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled, webSocketEnabled]);
 
   useEffect(() => {
     tokenRef.current = accessToken;
@@ -520,7 +544,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   }, [signalREnabled]);
 
   useEffect(() => {
-    if (!signalREnabled) {
+    if (!signalREnabled && !webSocketEnabled) {
       return;
     }
 
@@ -529,6 +553,13 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     };
 
     const handleOnline = () => {
+      if (webSocketEnabled) {
+        setConnectionState(HubConnectionState.Connecting);
+        setLiveConnectionState('connecting');
+        setWebSocketGeneration((current) => current + 1);
+        return;
+      }
+
       const activeConnection = activeConnectionRef.current;
       if (activeConnection?.state === HubConnectionState.Connected) {
         markConnected();
@@ -553,7 +584,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [markConnected, markInterrupted, retryConnection, signalREnabled]);
+  }, [markConnected, markInterrupted, retryConnection, signalREnabled, webSocketEnabled]);
 
   const ensureConnectionReady = useCallback(async () => {
     const activeConnection = activeConnectionRef.current;
@@ -650,18 +681,15 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   );
 
   return (
-    <SignalRContext.Provider
+    <RealtimeContext.Provider
       value={{
-        connection,
-        connectionState,
+        signalR: signalREnabled ? { connection, connectionState, joinGroup, leaveGroup } : undefined,
         liveConnectionState,
         interruptedAt,
         lastConnectedAt,
         retryConnection,
-        joinGroup,
-        leaveGroup,
       }}>
       {children}
-    </SignalRContext.Provider>
+    </RealtimeContext.Provider>
   );
 };

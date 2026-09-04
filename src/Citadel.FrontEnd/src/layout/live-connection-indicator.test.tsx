@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { HubConnectionState } from '@microsoft/signalr';
-import { SignalRContext, SignalRContextType } from '@/lib/context/signalr-context';
+import { RealtimeContext, RealtimeContextType } from '@/lib/context/realtime-context';
 import { LiveConnectionIndicator } from './live-connection-indicator';
 
 const { toastSuccess } = vi.hoisted(() => ({
@@ -13,19 +12,15 @@ vi.mock('sonner', () => ({
   },
 }));
 
-const baseContext: SignalRContextType = {
-  connection: null,
-  connectionState: HubConnectionState.Disconnected,
+const baseContext: RealtimeContextType = {
   liveConnectionState: 'connected',
   retryConnection: vi.fn(async () => {}),
-  joinGroup: vi.fn(async () => {}),
-  leaveGroup: vi.fn(async () => {}),
 };
 
-const indicator = (overrides: Partial<SignalRContextType> = {}) => (
-  <SignalRContext.Provider value={{ ...baseContext, ...overrides }}>
+const indicator = (overrides: Partial<RealtimeContextType> = {}) => (
+  <RealtimeContext.Provider value={{ ...baseContext, ...overrides }}>
     <LiveConnectionIndicator />
-  </SignalRContext.Provider>
+  </RealtimeContext.Provider>
 );
 
 describe('LiveConnectionIndicator', () => {

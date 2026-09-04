@@ -80,8 +80,8 @@
       "sections": "Connection State; Retry Implementation; Group and Data Recovery; Feature-Specific Streams",
       "classification": "implemented-and-accepted",
       "requirement": "Realtime disconnects are visible, subscriptions reauthorize, overflow triggers resync, and no polling substitute is introduced.",
-      "dotnetOwner": "src/Citadel.WebApi/Hubs; src/Citadel.FrontEnd/src/lib/context/signalr-provider.tsx",
-      "testEvidence": "src/Citadel.FrontEnd/src/lib/context/signalr-provider.test.tsx; test/Citadel.Tests.Integration",
+      "dotnetOwner": "src/Citadel.WebApi/Hubs; src/Citadel.FrontEnd/src/lib/context/realtime-provider.tsx",
+      "testEvidence": "src/Citadel.FrontEnd/src/lib/context/realtime-provider.test.tsx; test/Citadel.Tests.Integration",
       "rustOwner": "server realtime adapter; unchanged frontend provider",
       "rustPhase": "2-4",
       "disposition": "characterize-and-preserve-via-versioned-adapter"

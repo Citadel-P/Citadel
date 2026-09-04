@@ -203,6 +203,14 @@ pub struct GitRepositoryActivitySnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GitRepositorySyncActivitySnapshot {
+    #[serde(rename = "CommitSha")]
+    pub commit_sha: Option<String>,
+    #[serde(rename = "Message")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DeploymentActivitySnapshot {
     #[serde(rename = "Id")]
     pub id: Uuid,
@@ -782,6 +790,18 @@ pub enum ActivityEventInfo {
         #[serde(rename = "GitRepo")]
         git_repo: GitRepositoryActivitySnapshot,
     },
+    GitRepoPulled {
+        #[serde(rename = "GitRepo")]
+        git_repo: GitRepositoryActivitySnapshot,
+        #[serde(rename = "Result")]
+        result: GitRepositorySyncActivitySnapshot,
+    },
+    GitRepoCloned {
+        #[serde(rename = "GitRepo")]
+        git_repo: GitRepositoryActivitySnapshot,
+        #[serde(rename = "Result")]
+        result: GitRepositorySyncActivitySnapshot,
+    },
 }
 
 impl ActivityEventInfo {
@@ -1240,6 +1260,19 @@ impl ActivityEventInfo {
     }
 
     #[must_use]
+    pub const fn git_repo_synchronized(
+        git_repo: GitRepositoryActivitySnapshot,
+        result: GitRepositorySyncActivitySnapshot,
+        cloned: bool,
+    ) -> Self {
+        if cloned {
+            Self::GitRepoCloned { git_repo, result }
+        } else {
+            Self::GitRepoPulled { git_repo, result }
+        }
+    }
+
+    #[must_use]
     pub const fn event_type(&self) -> ActivityEventType {
         match self {
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
@@ -1327,6 +1360,8 @@ impl ActivityEventInfo {
             Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
             Self::GitRepoRenamed { .. } => ActivityEventType::GitRepoRenamed,
             Self::GitRepoDeleted { .. } => ActivityEventType::GitRepoDeleted,
+            Self::GitRepoPulled { .. } => ActivityEventType::GitRepoPulled,
+            Self::GitRepoCloned { .. } => ActivityEventType::GitRepoCloned,
         }
     }
 }
@@ -1490,6 +1525,29 @@ impl ActivityEvent {
             actor_id,
             info,
             status,
+            created_at,
+        )
+    }
+
+    pub fn new_git_repository_sync_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        success: bool,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::GitRepository,
+            actor_id,
+            info,
+            if success {
+                ActivityStatus::Success
+            } else {
+                ActivityStatus::Failure
+            },
             created_at,
         )
     }

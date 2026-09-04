@@ -35,6 +35,7 @@ pub enum ErrorResponse {
     Forbidden,
     NotFound,
     Conflict,
+    BadGateway,
     TooManyRequests,
     InternalServerError,
     ServiceUnavailable,
@@ -49,6 +50,7 @@ impl ErrorResponse {
             Self::Forbidden => 403,
             Self::NotFound => 404,
             Self::Conflict => 409,
+            Self::BadGateway => 502,
             Self::TooManyRequests => 429,
             Self::InternalServerError => 500,
             Self::ServiceUnavailable => 503,
@@ -63,6 +65,7 @@ impl ErrorResponse {
             Self::Forbidden => "Forbidden",
             Self::NotFound => "Not Found",
             Self::Conflict => "Conflict",
+            Self::BadGateway => "Bad Gateway",
             Self::TooManyRequests => "Too Many Requests",
             Self::InternalServerError => "Internal Server Error",
             Self::ServiceUnavailable => "Service Unavailable",
@@ -154,6 +157,16 @@ impl ParameterContract {
             name,
             location: ParameterLocation::Query,
             required: false,
+            schema,
+        }
+    }
+
+    #[must_use]
+    pub const fn required_query(name: &'static str, schema: ParameterSchema) -> Self {
+        Self {
+            name,
+            location: ParameterLocation::Query,
+            required: true,
             schema,
         }
     }
@@ -250,6 +263,29 @@ const GIT_REPOSITORY_FILTER_PARAMETERS: &[ParameterContract] = &[ParameterContra
     "tags",
     ParameterSchema::ArrayString,
 )];
+
+const GIT_REPOSITORY_FILES_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("id"),
+    ParameterContract::query("commitSha", ParameterSchema::String),
+    ParameterContract::query("path", ParameterSchema::String),
+];
+
+const GIT_REPOSITORY_FILE_CONTENT_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("id"),
+    ParameterContract::query("commitSha", ParameterSchema::String),
+    ParameterContract::required_query("path", ParameterSchema::String),
+];
+
+const GIT_REPOSITORY_COMPARE_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("id"),
+    ParameterContract::required_query("baseCommitSha", ParameterSchema::String),
+    ParameterContract::required_query("headCommitSha", ParameterSchema::String),
+];
+
+const GIT_REPOSITORY_BRANCH_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("id"),
+    ParameterContract::query("branch", ParameterSchema::String),
+];
 
 const SECRET_DEFINITION_FILTER_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::query("scope", ParameterSchema::Reference("ResourceBindingScope")),
@@ -1511,6 +1547,42 @@ route_catalog! {
         request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    LIST_GIT_ACCOUNTS => {
+        method: Get, path: "/api/v1/gitAccounts", operation_id: "listGitAccounts", summary: "List Git accounts",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitAccountsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    CREATE_GIT_ACCOUNT => {
+        method: Post, path: "/api/v1/gitAccounts", operation_id: "createGitAccount", summary: "Create a Git account",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("GitAccountInput"), response_schema: Some("GitAccountView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_GIT_ACCOUNTS => {
+        method: Delete, path: "/api/v1/gitAccounts", operation_id: "deleteGitAccounts", summary: "Delete Git accounts",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteGitAccountsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_GIT_ACCOUNT => {
+        method: Get, path: "/api/v1/gitAccounts/{id}", operation_id: "getGitAccount", summary: "Get a Git account",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitAccountView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_GIT_ACCOUNT_CONFIG => {
+        method: Get, path: "/api/v1/gitAccounts/{id}/_cfg", operation_id: "getGitAccountConfig", summary: "Get Git account configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitAccountConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_GIT_ACCOUNT => {
+        method: Patch, path: "/api/v1/gitAccounts/{id}", operation_id: "updateGitAccount", summary: "Update a Git account",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("GitAccountInput"), response_schema: Some("GitAccountView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     LIST_GIT_REPOSITORIES => {
         method: Get, path: "/api/v1/gitRepositories", operation_id: "listGitRepositories", summary: "List Git repositories",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1541,6 +1613,48 @@ route_catalog! {
         request_schema: None, response_schema: Some("GitRepositoryConfigView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    GET_GIT_REPOSITORY_REFS => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/refs", operation_id: "getGitRepositoryRefs", summary: "Get synchronized Git repository references",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryRefsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_GIT_REPOSITORY_FILES => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/files", operation_id: "listGitRepositoryDirectory", summary: "List files in an immutable Git tree",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryDirectoryListingView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError], parameters: GIT_REPOSITORY_FILES_PARAMETERS
+    },
+    GET_GIT_REPOSITORY_FILE_CONTENT => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/files/content", operation_id: "getGitRepositoryFileContent", summary: "Read a bounded immutable Git file",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryFileContentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError], parameters: GIT_REPOSITORY_FILE_CONTENT_PARAMETERS
+    },
+    COMPARE_GIT_REPOSITORY_COMMITS => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/compare", operation_id: "compareGitRepositoryCommits", summary: "Compare immutable Git commits",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitCommitComparisonView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError], parameters: GIT_REPOSITORY_COMPARE_PARAMETERS
+    },
+    DISCOVER_GIT_REPOSITORY_BRANCHES => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/branches", operation_id: "discoverGitRepositoryBranches", summary: "Discover remote Git branches",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryBranchesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DISCOVER_GIT_REPOSITORY_COMPOSE_PROJECTS => {
+        method: Get, path: "/api/v1/gitRepositories/{id}/compose-projects", operation_id: "discoverGitRepositoryComposeProjects", summary: "Discover Compose projects in a Git repository",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryComposeDiscovery"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: GIT_REPOSITORY_BRANCH_PARAMETERS
+    },
+    SYNC_GIT_REPOSITORY => {
+        method: Post, path: "/api/v1/gitRepositories/{id}/sync", operation_id: "syncGitRepository", summary: "Queue Git repository synchronization",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("GitRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: GIT_REPOSITORY_BRANCH_PARAMETERS
+    },
     UPDATE_GIT_REPOSITORY => {
         method: Patch, path: "/api/v1/gitRepositories/{id}", operation_id: "updateGitRepository", summary: "Update a Git repository",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1570,6 +1684,66 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_AUTOMATION_ACTIONS => {
+        method: Get, path: "/api/v1/automation/actions", operation_id: "listAutomationActions", summary: "List Automation Actions",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AutomationActionsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[ParameterContract::query("tags", ParameterSchema::ArrayString)]
+    },
+    CREATE_AUTOMATION_ACTION => {
+        method: Post, path: "/api/v1/automation/actions", operation_id: "createAutomationAction", summary: "Create an Automation Action",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("AutomationActionInput"), response_schema: Some("AutomationActionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_AUTOMATION_ACTION => {
+        method: Get, path: "/api/v1/automation/actions/{id}", operation_id: "getAutomationAction", summary: "Get an Automation Action",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AutomationActionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DELETE_AUTOMATION_ACTION => {
+        method: Delete, path: "/api/v1/automation/actions/{id}", operation_id: "deleteAutomationAction", summary: "Delete an Automation Action",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RUN_AUTOMATION_ACTION => {
+        method: Post, path: "/api/v1/automation/actions/{id}/run", operation_id: "runAutomationAction", summary: "Queue an Automation Action run",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RunAutomationActionInput"), response_schema: Some("AutomationActionRunStreamItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    TEST_AUTOMATION_ACTION => {
+        method: Post, path: "/api/v1/automation/actions/{id}/test", operation_id: "testAutomationAction", summary: "Queue a test Automation Action run",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("TestAutomationActionInput"), response_schema: Some("AutomationActionRunStreamItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_AUTOMATION_RUNS => {
+        method: Get, path: "/api/v1/automation/actions/{id}/runs", operation_id: "listAutomationActionRuns", summary: "List Automation Action runs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AutomationActionRunsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_AUTOMATION_RUN => {
+        method: Get, path: "/api/v1/automation/actions/{id}/runs/{run_id}", operation_id: "getAutomationActionRun", summary: "Get an Automation Action run",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AutomationActionRunView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id"),ParameterContract::path_uuid("run_id")]
+    },
+    GET_AUTOMATION_RUN_LOGS => {
+        method: Get, path: "/api/v1/automation/actions/{id}/runs/{run_id}/logs", operation_id: "getAutomationActionRunLogs", summary: "Get Automation Action run logs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AutomationActionRunLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id"),ParameterContract::path_uuid("run_id")]
+    },
+    CANCEL_AUTOMATION_RUN => {
+        method: Post, path: "/api/v1/automation/actions/{id}/runs/{run_id}/cancel", operation_id: "cancelAutomationActionRun", summary: "Cancel an Automation Action run",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id"),ParameterContract::path_uuid("run_id")]
     },
     CREATE_NETWORK => {
         method: Post, path: "/api/v1/networks", operation_id: "createNetwork", summary: "Create a Network",
@@ -2287,6 +2461,57 @@ mod tests {
         for (route, method, path) in expected {
             assert_eq!(route.method, method);
             assert_eq!(route.path, path);
+            assert_eq!(route.authentication, RouteAuthentication::Actor);
+            assert!(route.public);
+            assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
+            assert!(route.error_responses.contains(&ErrorResponse::Forbidden));
+        }
+    }
+
+    #[test]
+    fn git_account_routes_preserve_the_dotnet_http_contract() {
+        let expected = [
+            (
+                routes::LIST_GIT_ACCOUNTS,
+                HttpMethod::Get,
+                "/api/v1/gitAccounts",
+                "listGitAccounts",
+            ),
+            (
+                routes::CREATE_GIT_ACCOUNT,
+                HttpMethod::Post,
+                "/api/v1/gitAccounts",
+                "createGitAccount",
+            ),
+            (
+                routes::DELETE_GIT_ACCOUNTS,
+                HttpMethod::Delete,
+                "/api/v1/gitAccounts",
+                "deleteGitAccounts",
+            ),
+            (
+                routes::GET_GIT_ACCOUNT,
+                HttpMethod::Get,
+                "/api/v1/gitAccounts/{id}",
+                "getGitAccount",
+            ),
+            (
+                routes::GET_GIT_ACCOUNT_CONFIG,
+                HttpMethod::Get,
+                "/api/v1/gitAccounts/{id}/_cfg",
+                "getGitAccountConfig",
+            ),
+            (
+                routes::UPDATE_GIT_ACCOUNT,
+                HttpMethod::Patch,
+                "/api/v1/gitAccounts/{id}",
+                "updateGitAccount",
+            ),
+        ];
+        for (route, method, path, operation_id) in expected {
+            assert_eq!(route.method, method);
+            assert_eq!(route.path, path);
+            assert_eq!(route.operation_id, operation_id);
             assert_eq!(route.authentication, RouteAuthentication::Actor);
             assert!(route.public);
             assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));

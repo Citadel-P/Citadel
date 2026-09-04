@@ -18,7 +18,7 @@ vi.mock('@/features/platforms/hooks/usePlatformsGroup', () => ({
 vi.mock('@/features/alerters/alert-events/hooks/useAlertEventsGroup', () => ({
   useAlertEventsGroup: mocks.useAlertEventsGroup,
 }));
-vi.mock('./signalr-provider', () => ({ SignalRProvider: ({ children }: { children: ReactNode }) => children }));
+vi.mock('./realtime-provider', () => ({ RealtimeProvider: ({ children }: { children: ReactNode }) => children }));
 
 describe('AppProvider', () => {
   beforeEach(() => {

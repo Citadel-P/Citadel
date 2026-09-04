@@ -1458,6 +1458,28 @@ fn phase5_schemas() -> Map<String, Value> {
     schemas.insert("DeleteRegistriesInput".into(), ids_input_schema());
 
     schemas.insert(
+        "GitTransport".into(),
+        json!({"type":"string","enum":["Http","Https","Ssh"]}),
+    );
+    schemas.insert(
+        "GitAuthType".into(),
+        json!({"type":"string","enum":["Basic","Token","SshKey"]}),
+    );
+    schemas.insert("GitAuthConfigurationBasicAuth".into(), json!({"type":"object","required":["$type","username","password"],"additionalProperties":false,"properties":{"$type":{"type":"string","const":"Basic"},"username":string(),"password":{"type":"string","writeOnly":true}}}));
+    schemas.insert("GitAuthConfigurationTokenAuth".into(), json!({"type":"object","required":["$type","token"],"additionalProperties":false,"properties":{"$type":{"type":"string","const":"Token"},"token":{"type":"string","writeOnly":true}}}));
+    schemas.insert("GitAuthConfigurationSshKeyAuth".into(), json!({"type":"object","required":["$type","username","privateKey","passphrase"],"additionalProperties":false,"properties":{"$type":{"type":"string","const":"SshKey"},"username":string(),"privateKey":{"type":"string","writeOnly":true},"passphrase":{"type":["string","null"],"writeOnly":true}}}));
+    schemas.insert("GitAuthConfiguration".into(), json!({"oneOf":[{"$ref":"#/components/schemas/GitAuthConfigurationBasicAuth"},{"$ref":"#/components/schemas/GitAuthConfigurationTokenAuth"},{"$ref":"#/components/schemas/GitAuthConfigurationSshKeyAuth"}],"discriminator":{"propertyName":"$type","mapping":{"Basic":"#/components/schemas/GitAuthConfigurationBasicAuth","Token":"#/components/schemas/GitAuthConfigurationTokenAuth","SshKey":"#/components/schemas/GitAuthConfigurationSshKeyAuth"}}}));
+    schemas.insert("GitAccountInput".into(), json!({"type":"object","required":["name","domain","transport","authType","configuration"],"additionalProperties":false,"properties":{"name":string(),"domain":string(),"transport":{"$ref":"#/components/schemas/GitTransport"},"authType":{"$ref":"#/components/schemas/GitAuthType"},"configuration":{"$ref":"#/components/schemas/GitAuthConfiguration"}}}));
+    schemas.insert("GitAccountPatch".into(), json!({"type":"object","additionalProperties":false,"properties":{"name":string(),"domain":string(),"transport":{"$ref":"#/components/schemas/GitTransport"},"authType":{"$ref":"#/components/schemas/GitAuthType"},"configuration":{"$ref":"#/components/schemas/GitAuthConfiguration"}}}));
+    schemas.insert("GitAccountView".into(), json!({"type":"object","required":["id","createdByActorId","name","domain","transport","authType","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"name":string(),"domain":string(),"transport":{"$ref":"#/components/schemas/GitTransport"},"authType":{"$ref":"#/components/schemas/GitAuthType"},"createdAt":{"type":"string","format":"date-time"},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}));
+    schemas.insert(
+        "GitAccountsView".into(),
+        collection_view("gitAccounts", "GitAccountView", "ResourceCapabilities"),
+    );
+    schemas.insert("GitAccountConfigView".into(), json!({"type":"object","required":["id","name","domain","transport","authType","configuration"],"additionalProperties":false,"properties":{"id":uuid(),"name":string(),"domain":string(),"transport":{"$ref":"#/components/schemas/GitTransport"},"authType":{"$ref":"#/components/schemas/GitAuthType"},"configuration":{"$ref":"#/components/schemas/GitAuthConfiguration"}}}));
+    schemas.insert("DeleteGitAccountsInput".into(), ids_input_schema());
+
+    schemas.insert(
         "GitRepositorySyncMode".into(),
         json!({"type":"string","enum":["Manual","PullInterval"]}),
     );
@@ -1493,9 +1515,78 @@ fn phase5_schemas() -> Map<String, Value> {
     );
     schemas.insert("DeleteGitRepositoriesInput".into(), ids_input_schema());
     schemas.insert(
+        "GitRepositoryRefView".into(),
+        json!({"type":"object","required":["id","gitRepositoryId","branch","status","lastSyncedAt"],"properties":{"id":uuid(),"gitRepositoryId":uuid(),"branch":string(),"resolvedCommitSha":nullable_string(),"status":string(),"lastError":nullable_string(),"lastSyncedAt":{"type":"string","format":"date-time"}}}),
+    );
+    schemas.insert(
+        "GitRepositoryRefsView".into(),
+        json!({"type":"object","required":["refs"],"properties":{"refs":{"type":"array","items":{"$ref":"#/components/schemas/GitRepositoryRefView"}}}}),
+    );
+    schemas.insert(
+        "GitRepositoryEntryType".into(),
+        json!({"type":"string","enum":["Directory","File","Symlink","Submodule"]}),
+    );
+    schemas.insert(
+        "GitRepositoryEntryView".into(),
+        json!({"type":"object","required":["name","path","type","mode"],"properties":{"name":string(),"path":string(),"type":{"$ref":"#/components/schemas/GitRepositoryEntryType"},"size":{"type":["integer","null"],"format":"int64"},"mode":string(),"targetCommitSha":nullable_string()}}),
+    );
+    schemas.insert(
+        "GitRepositoryDirectoryListingView".into(),
+        json!({"type":"object","required":["repositoryId","commitSha","path","entries","isTruncated"],"properties":{"repositoryId":uuid(),"commitSha":string(),"path":string(),"entries":{"type":"array","items":{"$ref":"#/components/schemas/GitRepositoryEntryView"}},"isTruncated":{"type":"boolean"},"providerRepositoryUrl":nullable_string()}}),
+    );
+    schemas.insert(
+        "GitRepositoryFileContentView".into(),
+        json!({"type":"object","required":["repositoryId","commitSha","path","type","size","isBinary","isTruncated"],"properties":{"repositoryId":uuid(),"commitSha":string(),"path":string(),"type":{"$ref":"#/components/schemas/GitRepositoryEntryType"},"size":{"type":"integer","format":"int64"},"isBinary":{"type":"boolean"},"isTruncated":{"type":"boolean"},"content":nullable_string(),"previewUnavailableReason":nullable_string(),"providerUrl":nullable_string()}}),
+    );
+    schemas.insert(
+        "GitChangedPathStatus".into(),
+        json!({"type":"string","enum":["Added","Modified","Deleted","Renamed","Copied","TypeChanged"]}),
+    );
+    schemas.insert(
+        "GitChangedPathView".into(),
+        json!({"type":"object","required":["status","path"],"properties":{"status":{"$ref":"#/components/schemas/GitChangedPathStatus"},"path":string(),"previousPath":nullable_string()}}),
+    );
+    schemas.insert(
+        "GitCommitComparisonView".into(),
+        json!({"type":"object","required":["repositoryId","baseCommitSha","headCommitSha","files","isTruncated"],"properties":{"repositoryId":uuid(),"baseCommitSha":string(),"headCommitSha":string(),"files":{"type":"array","items":{"$ref":"#/components/schemas/GitChangedPathView"}},"isTruncated":{"type":"boolean"}}}),
+    );
+    schemas.insert(
+        "GitRepositoryBranchView".into(),
+        json!({"type":"object","required":["branch","commitSha"],"properties":{"branch":string(),"commitSha":string()}}),
+    );
+    schemas.insert(
+        "GitRepositoryBranchesView".into(),
+        json!({"type":"object","required":["branches"],"properties":{"branches":{"type":"array","items":{"$ref":"#/components/schemas/GitRepositoryBranchView"}}}}),
+    );
+    schemas.insert(
+        "GitComposeProjectCandidate".into(),
+        json!({"type":"object","required":["workingDirectory","composePaths","envFilePaths","suggestedWatchPaths"],"properties":{"workingDirectory":string(),"composePaths":string_array(),"envFilePaths":string_array(),"suggestedWatchPaths":string_array()}}),
+    );
+    schemas.insert(
+        "GitRepositoryComposeDiscovery".into(),
+        json!({"type":"object","required":["repositoryId","branch","resolvedCommitSha","projects"],"properties":{"repositoryId":uuid(),"branch":string(),"resolvedCommitSha":string(),"projects":{"type":"array","items":{"$ref":"#/components/schemas/GitComposeProjectCandidate"}}}}),
+    );
+    schemas.insert(
         "PatchResourceMetadata".into(),
         json!({"type":"object","properties":{"description":nullable_string(),"tags":string_array()}}),
     );
+
+    let automation_action = json!({"type":"object","required":["id","name","code","defaultArgsJson","enabled","scheduleEnabled","scheduleTimeZone","timeoutSeconds","alertOnFailure","runAsActorId","controlState","rowVersion","createdByActorId","createdAt","updatedAt"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":"integer","format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":uuid(),"controlState":string(),"currentRunId":nullable_uuid(),"rowVersion":{"type":"integer","format":"int64"},"createdByActorId":uuid(),"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}}});
+    schemas.insert("AutomationActionView".into(), automation_action);
+    schemas.insert("AutomationActionsView".into(), json!({"type":"object","required":["actions"],"properties":{"actions":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionView"}}}}));
+    schemas.insert("AutomationActionInput".into(), json!({"type":"object","required":["name","code","enabled","scheduleEnabled","alertOnFailure"],"properties":{"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":nullable_string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":nullable_string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":nullable_uuid(),"tagIds":uuid_array()}}));
+    schemas.insert(
+        "RunAutomationActionInput".into(),
+        json!({"type":"object","properties":{"argsJson":{"type":"object"},"timeoutSeconds":{"type":["integer","null"],"format":"int32"}}}),
+    );
+    schemas.insert(
+        "TestAutomationActionInput".into(),
+        json!({"type":"object","properties":{"argsJson":{"type":"object"}}}),
+    );
+    schemas.insert("AutomationActionRunView".into(), json!({"type":"object","required":["id","actionId","actionName","trigger","status","runAsActorId","argsJson","codeSnapshot","codeHash","timeoutSeconds","queuedAt"],"properties":{"id":uuid(),"actionId":uuid(),"actionName":string(),"trigger":string(),"status":string(),"runAsActorId":uuid(),"triggeredByActorId":nullable_uuid(),"argsJson":{"type":"object"},"codeSnapshot":string(),"codeHash":string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"finishedAt":{"type":["string","null"],"format":"date-time"},"durationMs":{"type":["integer","null"],"format":"int64"},"exitCode":{"type":["integer","null"],"format":"int32"},"logs":nullable_string(),"errorMessage":nullable_string()}}));
+    schemas.insert("AutomationActionRunStreamItems".into(), json!({"type":"array","items":{"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string()}}}));
+    schemas.insert("AutomationActionRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionRunView"}}}}));
+    schemas.insert("AutomationActionRunLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":string()}}));
 
     schemas.insert(
         "CreateNetworkInput".into(),
@@ -2167,9 +2258,14 @@ fn operation(route: &RouteContract) -> Value {
     let success = route.response_schema.map_or_else(
         || json!({ "description": "Success" }),
         |schema| {
+            let response_schema = if schema == "AutomationActionRunStreamItems" {
+                json!({"type":"array","items":{"$ref":"#/components/schemas/AutomationActionRunStreamItem"}})
+            } else {
+                json!({"$ref": format!("#/components/schemas/{schema}")})
+            };
             json!({
                 "description": "Success",
-                "content": { "application/json": { "schema": { "$ref": format!("#/components/schemas/{schema}") } } }
+                "content": { "application/json": { "schema": response_schema } }
             })
         },
     );

@@ -333,6 +333,19 @@ impl citadel_resources::ResourceSecretProtector for AesGcmSecretProtector {
     }
 }
 
+impl citadel_git::GitCredentialProtector for AesGcmSecretProtector {
+    fn protect(&self, plaintext: &[u8]) -> Result<String, citadel_git::GitAccountError> {
+        Self::protect(self, plaintext).map_err(|_| citadel_git::GitAccountError::Credential)
+    }
+
+    fn unprotect(
+        &self,
+        envelope: &str,
+    ) -> Result<Zeroizing<Vec<u8>>, citadel_git::GitAccountError> {
+        Self::unprotect(self, envelope).map_err(|_| citadel_git::GitAccountError::Credential)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

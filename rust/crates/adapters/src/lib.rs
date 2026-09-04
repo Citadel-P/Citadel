@@ -2,12 +2,15 @@
 
 pub mod activity_store;
 pub mod agent;
+pub mod automation_store;
 pub mod container_stats_store;
 pub mod crypto;
 pub mod deployment_bindings;
 pub mod deployment_runtime;
 pub mod deployment_store;
 pub mod docker;
+pub mod git_account_store;
+pub mod git_repository_execution_store;
 pub mod identity_store;
 pub mod inventory_projection_store;
 pub mod license;

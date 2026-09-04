@@ -4,18 +4,22 @@ import { useRequiredContext } from '../../hooks/useRequiredContext';
 
 export type LiveConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'offline';
 
-export type SignalRContextType = {
+type SignalRGroupTransport = {
   connection: HubConnection | null;
   connectionState: HubConnectionState;
-  liveConnectionState: LiveConnectionState;
-  interruptedAt?: number;
-  lastConnectedAt?: number;
-  retryConnection: () => Promise<void>;
   joinGroup: (groupName: string, setup?: (hub: HubConnection) => void) => Promise<void>;
   leaveGroup: (groupName: string, remove?: (hub: HubConnection) => void) => Promise<void>;
 };
 
-export const SignalRContext = createContext<SignalRContextType | undefined>(undefined);
-SignalRContext.displayName = 'SignalRContext';
+export type RealtimeContextType = {
+  signalR?: SignalRGroupTransport;
+  liveConnectionState: LiveConnectionState;
+  interruptedAt?: number;
+  lastConnectedAt?: number;
+  retryConnection: () => Promise<void>;
+};
 
-export const useSignalRContext = () => useRequiredContext(SignalRContext);
+export const RealtimeContext = createContext<RealtimeContextType | undefined>(undefined);
+RealtimeContext.displayName = 'RealtimeContext';
+
+export const useRealtimeContext = () => useRequiredContext(RealtimeContext);

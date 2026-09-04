@@ -420,10 +420,12 @@ dependencies = [
  "bytes",
  "chrono",
  "citadel-application",
+ "citadel-automation",
  "citadel-contracts",
  "citadel-database",
  "citadel-deployments",
  "citadel-domain",
+ "citadel-git",
  "citadel-identity",
  "citadel-platforms",
  "citadel-resources",
@@ -467,6 +469,23 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "citadel-automation"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-domain",
+ "citadel-execution",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -524,6 +543,37 @@ dependencies = [
  "thiserror",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "citadel-execution"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "citadel-git"
+version = "0.0.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "citadel-domain",
+ "citadel-execution",
+ "futures-util",
+ "hmac 0.13.0",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -589,10 +639,12 @@ dependencies = [
  "chrono",
  "citadel-adapters",
  "citadel-application",
+ "citadel-automation",
  "citadel-contracts",
  "citadel-database",
  "citadel-deployments",
  "citadel-domain",
+ "citadel-git",
  "citadel-identity",
  "citadel-platforms",
  "citadel-resources",

@@ -8,16 +8,22 @@ use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
+use citadel_adapters::git_account_store::PostgresGitAccountStore;
+use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
+use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_resources::ResourceMetadataService;
+use citadel_server::git_accounts_http::{self, GitAccountsHttpState};
+use citadel_server::git_repositories_http::{self, GitRepositoriesHttpState};
 use citadel_server::resources_http::{self, ResourcesHttpState};
+use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
@@ -47,14 +53,44 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Duration::minutes(15),
         Duration::days(30),
     ));
+    let secret_protector = Arc::new(AesGcmSecretProtector::new(&[29_u8; 32]).unwrap());
+    let resources = Arc::new(ResourceMetadataService::new(
+        Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        secret_protector.clone(),
+    ));
+    let git_accounts = Arc::new(GitAccountService::new(
+        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        secret_protector,
+    ));
+    let git_cache = std::env::temp_dir().join(format!("citadel-phase7-{}", Uuid::now_v7()));
+    let git_execution = Arc::new(GitRepositoryExecutionService::new(
+        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::clone(&git_accounts),
+        Arc::new(GitCli::new(std::time::Duration::from_secs(5))),
+        git_cache.clone(),
+        std::time::Duration::from_secs(60),
+    ));
+    let cancellation = tokio_util::sync::CancellationToken::new();
     let app = resources_http::router(ResourcesHttpState {
-        identity,
-        resources: Arc::new(ResourceMetadataService::new(
-            Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
-            Arc::new(AesGcmSecretProtector::new(&[29_u8; 32]).unwrap()),
-        )),
+        identity: Arc::clone(&identity),
+        resources: Arc::clone(&resources),
         realtime: None,
-    });
+    })
+    .merge(git_accounts_http::router(GitAccountsHttpState {
+        identity: Arc::clone(&identity),
+        accounts: git_accounts,
+        realtime: None,
+    }))
+    .merge(git_repositories_http::router(GitRepositoriesHttpState {
+        identity,
+        resources,
+        execution: Arc::clone(&git_execution),
+        realtime: None,
+        cancellation,
+    }))
+    .merge(webhooks_http::router(WebhooksHttpState {
+        git: Arc::clone(&git_execution),
+    }));
     assert_eq!(
         request(&app, Method::GET, "/api/v1/tags", None, None)
             .await
@@ -114,6 +150,306 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Some("application/problem+json")
     );
 
+    let git_account_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/gitAccounts",
+        Some(administrator.clone()),
+        Some(json!({
+            "name":format!("account-{suffix}"),
+            "domain":"git.example.test",
+            "transport":"Https",
+            "authType":"Token",
+            "configuration":{"$type":"Token","token":"phase7-secret-token"}
+        })),
+    )
+    .await;
+    assert_eq!(git_account_response.status(), StatusCode::OK);
+    let git_account = response_json(git_account_response).await;
+    let git_account_id = git_account["id"].as_str().unwrap();
+    assert!(git_account.get("configuration").is_none());
+    let basic_git_account = response_json(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/gitAccounts",
+            Some(administrator.clone()),
+            Some(json!({
+                "name":format!("basic-{suffix}"),
+                "domain":"github.com",
+                "transport":"Https",
+                "authType":"Basic",
+                "configuration":{
+                    "$type":"Basic",
+                    "username":"phase7-user",
+                    "password":"phase7-password"
+                }
+            })),
+        )
+        .await,
+    )
+    .await;
+    let basic_git_account_id = basic_git_account["id"].as_str().unwrap();
+    assert_eq!(basic_git_account["authType"], "Basic");
+    let ssh_git_account = response_json(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/gitAccounts",
+            Some(administrator.clone()),
+            Some(json!({
+                "name":format!("ssh-{suffix}"),
+                "domain":"github.com",
+                "transport":"Ssh",
+                "authType":"SshKey",
+                "configuration":{
+                    "$type":"SshKey",
+                    "username":"git",
+                    "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----phase7"
+                }
+            })),
+        )
+        .await,
+    )
+    .await;
+    let ssh_git_account_id = ssh_git_account["id"].as_str().unwrap();
+    assert_eq!(ssh_git_account["transport"], "Ssh");
+    for invalid in [
+        json!({
+            "name":"",
+            "domain":"github.com",
+            "transport":"Https",
+            "authType":"Token",
+            "configuration":{"$type":"Token","token":"phase7-token"}
+        }),
+        json!({
+            "name":format!("empty-token-{suffix}"),
+            "domain":"github.com",
+            "transport":"Https",
+            "authType":"Token",
+            "configuration":{"$type":"Token","token":""}
+        }),
+        json!({
+            "name":format!("mismatch-{suffix}"),
+            "domain":"github.com",
+            "transport":"Https",
+            "authType":"Basic",
+            "configuration":{
+                "$type":"SshKey",
+                "username":"git",
+                "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----phase7"
+            }
+        }),
+    ] {
+        assert_eq!(
+            request(
+                &app,
+                Method::POST,
+                "/api/v1/gitAccounts",
+                Some(administrator.clone()),
+                Some(invalid),
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let persisted_configuration: Value =
+        sqlx::query_scalar("SELECT configuration FROM gitaccounts WHERE id=$1")
+            .bind(Uuid::parse_str(git_account_id).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(persisted_configuration.get("$protected").is_some());
+    assert!(
+        !persisted_configuration
+            .to_string()
+            .contains("phase7-secret-token")
+    );
+    let git_account_config = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/gitAccounts/{git_account_id}/_cfg"),
+            Some(administrator.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        git_account_config["configuration"]["token"],
+        "phase7-secret-token"
+    );
+    let ssh_patch = response_json(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({
+                "domain":"gitlab.com",
+                "transport":"Ssh",
+                "authType":"SshKey",
+                "configuration":{
+                    "$type":"SshKey",
+                    "username":"git",
+                    "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----patched"
+                }
+            })),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(ssh_patch["domain"], "gitlab.com");
+    assert_eq!(ssh_patch["transport"], "Ssh");
+    assert_eq!(ssh_patch["authType"], "SshKey");
+    assert_eq!(
+        response_json(
+            request(
+                &app,
+                Method::GET,
+                &format!("/api/v1/gitAccounts/{git_account_id}/_cfg"),
+                Some(administrator.clone()),
+                None,
+            )
+            .await,
+        )
+        .await["configuration"]["privateKey"],
+        "-----BEGIN OPENSSH PRIVATE KEY-----patched"
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({"name":""})),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({
+                "transport":"Https",
+                "authType":"Basic",
+                "configuration":{
+                    "$type":"SshKey",
+                    "username":"git",
+                    "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----invalid"
+                }
+            })),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({
+                "domain":"git.example.test",
+                "transport":"Https",
+                "authType":"Token",
+                "configuration":{"$type":"Token","token":"phase7-secret-token"}
+            })),
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let renamed_git_account = response_json(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({"name":format!("renamed-{suffix}")})),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(renamed_git_account["name"], format!("renamed-{suffix}"));
+    let preserved_git_account_config = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/gitAccounts/{git_account_id}/_cfg"),
+            Some(administrator.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        preserved_git_account_config["configuration"]["token"],
+        "phase7-secret-token"
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({"name":format!("basic-{suffix}")})),
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    let missing_git_account_id = Uuid::now_v7();
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/gitAccounts/{missing_git_account_id}"),
+            Some(administrator.clone()),
+            Some(json!({"name":format!("missing-{suffix}")})),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::DELETE,
+            "/api/v1/gitAccounts",
+            Some(administrator.clone()),
+            Some(json!({"ids":[missing_git_account_id]})),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/gitAccounts",
+            Some(administrator.clone()),
+            Some(json!({
+                "name":format!("renamed-{suffix}"),
+                "domain":"git.example.test",
+                "transport":"Https",
+                "authType":"Token",
+                "configuration":{"$type":"Token","token":"another-token"}
+            })),
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+
     let tag_response = request(
         &app,
         Method::POST,
@@ -154,7 +490,15 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "name":format!("repository-{suffix}"),
             "url":"https://git.example.test/team/repository.git",
             "defaultBranch":"main",
+            "gitAccountId":git_account_id,
             "syncMode":"Manual",
+            "webhook":{
+                "enabled":true,
+                "provider":"Generic",
+                "authScheme":"BearerToken",
+                "secret":"phase7-shared-secret",
+                "branchFilter":"main"
+            },
             "tagIds":[tag_id]
         })),
     )
@@ -162,6 +506,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(repository_response.status(), StatusCode::OK);
     let repository = response_json(repository_response).await;
     let repository_id = repository["id"].as_str().unwrap();
+    let refs = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/gitRepositories/{repository_id}/refs"),
+            Some(administrator.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(refs["refs"][0]["branch"], "main");
+    assert_eq!(refs["refs"][0]["status"], "Pending");
 
     let actor_id = Uuid::now_v7();
     sqlx::query("INSERT INTO actors (id, isenabled, type) VALUES ($1, TRUE, 'User')")
@@ -185,6 +542,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             Uuid::parse_str(repository_id).unwrap(),
             PermissionLevel::Execute,
         ),
+        (
+            ResourceType::GitAccount,
+            Uuid::parse_str(git_account_id).unwrap(),
+            PermissionLevel::Read,
+        ),
     ] {
         sqlx::query(
             "INSERT INTO resourceaccesses (id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)",
@@ -206,6 +568,46 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         credential_id: None,
         roles: Vec::new(),
     };
+
+    let sync_response = request(
+        &app,
+        Method::POST,
+        &format!("/api/v1/gitRepositories/{repository_id}/sync?branch=main"),
+        Some(resource_actor.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(sync_response.status(), StatusCode::OK);
+    let queued: (String, String) =
+        sqlx::query_as("SELECT status,controlstate FROM gitrepositories WHERE id=$1")
+            .bind(Uuid::parse_str(repository_id).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(queued, ("Pending".to_owned(), "Queued".to_owned()));
+
+    let webhook_response = request_with_header(
+        &app,
+        Method::POST,
+        &format!("/listener/generic/repo/{repository_id}/pull"),
+        "authorization",
+        "Bearer phase7-shared-secret",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(webhook_response.status(), StatusCode::ACCEPTED);
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!("/listener/generic/repo/{repository_id}/pull"),
+            None,
+            Some(json!({})),
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
 
     let listed_tags = response_json(
         request(
@@ -235,6 +637,21 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         listed_registries["registries"][0]["capabilities"]["canExecute"],
         true
     );
+    let listed_git_accounts = response_json(
+        request(
+            &app,
+            Method::GET,
+            "/api/v1/gitAccounts",
+            Some(resource_actor.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    let visible_git_accounts = listed_git_accounts["gitAccounts"].as_array().unwrap();
+    assert_eq!(visible_git_accounts.len(), 1);
+    assert_eq!(visible_git_accounts[0]["id"], git_account_id);
+    assert_eq!(visible_git_accounts[0]["capabilities"]["canRead"], true);
     assert_eq!(
         request(
             &app,
@@ -433,6 +850,18 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         request(
             &app,
             Method::DELETE,
+            "/api/v1/gitAccounts",
+            Some(administrator.clone()),
+            Some(json!({"ids":[git_account_id,basic_git_account_id,ssh_git_account_id]})),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::DELETE,
             &format!("/api/v1/resourceBindings/secret-providers/{provider_id}"),
             Some(administrator.clone()),
             None,
@@ -478,6 +907,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .status(),
         StatusCode::NO_CONTENT
     );
+    let _ = tokio::fs::remove_dir_all(git_cache).await;
 }
 
 async fn request_raw(
@@ -518,6 +948,30 @@ async fn request(
         request.extensions_mut().insert(principal);
     }
     app.clone().oneshot(request).await.unwrap()
+}
+
+async fn request_with_header(
+    app: &Router,
+    method: Method,
+    uri: &str,
+    header: &str,
+    value: &str,
+    body: Option<Value>,
+) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header(header, value)
+                .body(Body::from(body.map_or_else(Vec::new, |value| {
+                    serde_json::to_vec(&value).unwrap()
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
 }
 
 async fn response_json(response: axum::response::Response) -> Value {
