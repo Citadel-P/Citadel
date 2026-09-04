@@ -1314,6 +1314,33 @@ fn phase6_deployment_schemas() -> Map<String, Value> {
         }),
     );
     schemas.insert(
+        "SwarmServiceImageInfo".into(),
+        json!({"type":"object","required":["$type"],"properties":{"$type":string()}}),
+    );
+    schemas.insert("SwarmServiceSpec".into(), json!({"type":"object","required":["image"],"properties":{"image":{"$ref":"#/components/schemas/SwarmServiceImageInfo"}}}));
+    schemas.insert("SwarmServiceCapabilities".into(), json!({"type":"object","required":["canViewLogs","canInspect","canApply","canViewResourceBindings","canRead","canWrite","canExecute"],"properties":{"canViewLogs":{"type":"boolean"},"canInspect":{"type":"boolean"},"canApply":{"type":"boolean"},"canViewResourceBindings":{"type":"boolean"},"canRead":{"type":"boolean"},"canWrite":{"type":"boolean"},"canExecute":{"type":"boolean"}}}));
+    schemas.insert("ManagedSwarmServiceView".into(), json!({"type":"object","required":["id","platformId","name","description","dockerName","dockerServiceId","spec","health","synchronizationState","controlState","autoUpdateState","appliedImageDigest","hasPendingDesiredChanges","hasRuntimeDrift","rowVersion","createdAt","updatedAt","platformName","platformStatus","runningTaskCount","desiredTaskCount","updateState","updateMessage","currentOperation","tags"],"properties":{"id":uuid(),"platformId":uuid(),"name":string(),"description":nullable_string(),"dockerName":string(),"dockerServiceId":nullable_string(),"spec":{"$ref":"#/components/schemas/SwarmServiceSpec"},"health":string(),"synchronizationState":string(),"controlState":string(),"autoUpdateState":{"$ref":"#/components/schemas/AutoUpdateState"},"appliedImageDigest":nullable_string(),"hasPendingDesiredChanges":{"type":"boolean"},"hasRuntimeDrift":{"type":"boolean"},"rowVersion":{"type":"integer","format":"int64"},"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},"platformName":nullable_string(),"platformStatus":{"$ref":"#/components/schemas/PlatformStatus"},"runningTaskCount":{"type":["integer","null"],"format":"int32"},"desiredTaskCount":{"type":["integer","null"],"format":"int32"},"updateState":nullable_string(),"updateMessage":nullable_string(),"currentOperation":{"type":["object","null"]},"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}},"tasks":{"type":["array","null"],"items":{"type":"object"}},"capabilities":{"$ref":"#/components/schemas/SwarmServiceCapabilities"}}}));
+    schemas.insert(
+        "ManagedSwarmServicesView".into(),
+        collection_view(
+            "swarmServices",
+            "ManagedSwarmServiceView",
+            "ResourceCapabilities",
+        ),
+    );
+    schemas.insert("CreateSwarmServiceInput".into(), json!({"type":"object","required":["name","platformId","description","spec"],"properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/SwarmServiceSpec"},"tagIds":{"type":["array","null"],"items":uuid()},"duplicateSource":{"type":["object","null"]}}}));
+    schemas.insert("UpdateSwarmServiceInput".into(), json!({"type":"object","required":["spec","rowVersion"],"properties":{"spec":{"$ref":"#/components/schemas/SwarmServiceSpec"},"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert("ScaleSwarmServiceInput".into(), json!({"type":"object","required":["replicas"],"properties":{"replicas":{"type":"integer","format":"int32"}}}));
+    schemas.insert(
+        "SwarmServiceIds".into(),
+        json!({"type":"array","items":uuid()}),
+    );
+    schemas.insert("SwarmServiceProgressItem".into(), json!({"type":"object","required":["serviceId","operationId","stage","message"],"properties":{"serviceId":uuid(),"operationId":nullable_uuid(),"stage":string(),"message":string(),"isCompleted":{"type":"boolean","default":false},"isWarning":{"type":"boolean","default":false},"errorMessage":nullable_string()}}));
+    schemas.insert(
+        "SwarmServiceProgressItems".into(),
+        json!({"type":"array","items":{"$ref":"#/components/schemas/SwarmServiceProgressItem"}}),
+    );
+    schemas.insert(
         "PatchDeploymentInput".into(),
         json!({
             "type":"object","required":["platformId","spec"],"additionalProperties":false,
@@ -1331,6 +1358,53 @@ fn phase6_deployment_schemas() -> Map<String, Value> {
         "type":"object","required":["draft","warnings"],"additionalProperties":false,
         "properties":{"draft":{"$ref":"#/components/schemas/CreateDeploymentInput"},"warnings":{"type":"array","items":{"$ref":"#/components/schemas/DuplicateDraftWarningView"}}}
     }));
+    schemas.insert(
+        "StackSource".into(),
+        json!({"type":"string","enum":["WebEditor","Git"]}),
+    );
+    schemas.insert("StackReleaseStatus".into(),json!({"type":"string","enum":["Unknown","Created","Applying","Healthy","Pending","Paused","Degraded","Failed","Stopped","TimedOut"]}));
+    schemas.insert("StackSpec".into(),json!({"type":"object","required":["$type"],"properties":{"$type":{"type":"string","enum":["WebEditor","Git"]},"composeFile":string(),"gitRepoId":nullable_uuid(),"branch":nullable_string(),"commitSha":nullable_string(),"updateBehavior":string(),"projectName":nullable_string(),"destroyBeforeDeploy":{"type":"boolean"},"buildImageBindings":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert("StackDriftPolicy".into(),json!({"type":"object","properties":{"mode":{"type":"string","enum":["Disabled","DetectOnly","AutoFix"]},"alertOnDrift":{"type":"boolean"},"markDegraded":{"type":"boolean"},"autoStartStoppedContainers":{"type":"boolean"},"autoResumePausedContainers":{"type":"boolean"},"removeExtraContainers":{"type":"boolean"}}}));
+    schemas.insert("StackView".into(),json!({"type":"object","required":["id","name","stackSource","status","rowVersion"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"status":{"$ref":"#/components/schemas/StackReleaseStatus"},"platformId":nullable_uuid(),"platformType":string(),"platformStatus":string(),"platformName":nullable_string(),"spec":{"$ref":"#/components/schemas/StackSpec"},"driftPolicy":{"$ref":"#/components/schemas/StackDriftPolicy"},"tags":{"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}},"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert(
+        "StacksView".into(),
+        collection_view("stacks", "StackView", "ResourceCapabilities"),
+    );
+    schemas.insert("StackConfigView".into(),json!({"type":"object","properties":{"id":uuid(),"name":string(),"platformId":uuid(),"platformType":string(),"description":nullable_string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"spec":{"$ref":"#/components/schemas/StackSpec"},"driftPolicy":{"$ref":"#/components/schemas/StackDriftPolicy"},"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert("CreateStackInput".into(),json!({"type":"object","required":["name","platformId","stackSource","spec"],"properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"spec":{"$ref":"#/components/schemas/StackSpec"},"driftPolicy":{"$ref":"#/components/schemas/StackDriftPolicy"},"tagIds":uuid_array(),"duplicateSource":{"type":["object","null"]}}}));
+    schemas.insert("PatchStackInput".into(),json!({"type":"object","properties":{"name":nullable_string(),"platformId":nullable_uuid(),"description":nullable_string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"spec":{"type":"object"},"driftPolicy":{"$ref":"#/components/schemas/StackDriftPolicy"},"rowVersion":{"type":["integer","null"],"format":"int64"}}}));
+    schemas.insert("ApplyStackInput".into(),json!({"type":"object","required":["id"],"properties":{"id":uuid(),"recreate":{"type":["boolean","null"]}}}));
+    schemas.insert("RollbackStackInput".into(),json!({"type":"object","required":["stackId","releaseId"],"properties":{"stackId":uuid(),"releaseId":uuid()}}));
+    schemas.insert("StackIds".into(), json!({"type":"array","items":uuid()}));
+    schemas.insert("StackStreamItem".into(),json!({"type":"object","properties":{"type":string(),"message":nullable_string(),"exitCode":{"type":["integer","null"],"format":"int32"},"stackStatus":{"$ref":"#/components/schemas/StackReleaseStatus"},"severity":nullable_string()}}));
+    schemas.insert(
+        "StackStreamItems".into(),
+        json!({"type":"array","items":{"$ref":"#/components/schemas/StackStreamItem"}}),
+    );
+    schemas.insert("StackDuplicateDraftView".into(),json!({"type":"object","properties":{"draft":{"$ref":"#/components/schemas/CreateStackInput"},"warnings":{"type":"array","items":{"$ref":"#/components/schemas/DuplicateDraftWarningView"}}}}));
+    schemas.insert(
+        "StackImportKind".into(),
+        json!({"type":"string","enum":["ComposeProject","SwarmStack"]}),
+    );
+    schemas.insert(
+        "StackReleasesView".into(),
+        json!({"type":"object","required":["releases"],"properties":{"releases":{"type":"array","items":{"type":"object"}}}}),
+    );
+    schemas.insert("SwarmStackPreflightInput".into(),json!({"type":"object","required":["composeFiles"],"properties":{"composeFiles":{"type":"array","items":string()},"buildImageBindings":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert("SwarmStackCompatibilityReport".into(),json!({"type":"object","required":["isCompatible","issues"],"properties":{"isCompatible":{"type":"boolean"},"issues":{"type":"array","items":{"$ref":"#/components/schemas/SwarmStackCompatibilityIssue"}}}}));
+    schemas.insert("SwarmStackCompatibilityIssue".into(),json!({"type":"object","required":["severity","code","message"],"properties":{"severity":{"type":"string","enum":["Warning","Error"]},"code":{"type":"string"},"message":{"type":"string"},"fieldPath":nullable_string()}}));
+    schemas.insert("StackDriftReport".into(),json!({"type":"object","required":["stackId","platformId","hasDrift","hasAutoFixableDrift","hasStructuralDrift","drifts"],"properties":{"stackId":uuid(),"platformId":uuid(),"hasDrift":{"type":"boolean"},"hasAutoFixableDrift":{"type":"boolean"},"hasStructuralDrift":{"type":"boolean"},"drifts":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert("StackDriftPolicyInput".into(),json!({"type":"object","properties":{"mode":{"type":["string","null"],"enum":["Disabled","DetectOnly","AutoFix",null]},"alertOnDrift":{"type":["boolean","null"]},"markDegraded":{"type":["boolean","null"]},"autoStartStoppedContainers":{"type":["boolean","null"]},"autoResumePausedContainers":{"type":["boolean","null"]},"removeExtraContainers":{"type":["boolean","null"]}}}));
+    schemas.insert("StackReconciliationResult".into(),json!({"type":"object","required":["stackId","status","beforeReport","actions"],"properties":{"stackId":uuid(),"status":{"type":"string","enum":["NoDrift","Reconciled","Partial","RequiresReapply","Disabled","Failed"]},"beforeReport":{"$ref":"#/components/schemas/StackDriftReport"},"afterReport":{"oneOf":[{"$ref":"#/components/schemas/StackDriftReport"},{"type":"null"}]},"actions":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert("StackAdoptionIssue".into(),json!({"type":"object","required":["code","message","severity"],"properties":{"code":string(),"message":string(),"severity":string(),"fieldPath":nullable_string()}}));
+    schemas.insert("ComposeProjectRuntimeService".into(),json!({"type":"object","required":["name","containerCount","states"],"properties":{"name":string(),"image":nullable_string(),"containerCount":{"type":"integer","minimum":0},"states":string_array()}}));
+    schemas.insert("ComposeProjectImportSourceView".into(),json!({"type":"object","required":["platformId","platformName","projectName","containerIds","containerNames","services"],"properties":{"platformId":uuid(),"platformName":string(),"projectName":string(),"containerIds":string_array(),"containerNames":string_array(),"services":{"type":"array","items":{"$ref":"#/components/schemas/ComposeProjectRuntimeService"}}}}));
+    schemas.insert("ComposeProjectStackDraftView".into(),json!({"type":"object","required":["name","platformId","driftPolicy","tagIds"],"properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"driftPolicy":{"$ref":"#/components/schemas/StackDriftPolicy"},"tagIds":uuid_array()}}));
+    schemas.insert("ComposeProjectImportDraftView".into(),json!({"type":"object","required":["importKind","source","draft","issues","runtimeFingerprint"],"properties":{"importKind":string(),"source":{"$ref":"#/components/schemas/ComposeProjectImportSourceView"},"draft":{"$ref":"#/components/schemas/ComposeProjectStackDraftView"},"issues":{"type":"array","items":{"$ref":"#/components/schemas/StackAdoptionIssue"}},"runtimeFingerprint":string()}}));
+    schemas.insert("ValidateComposeProjectImportInput".into(),json!({"type":"object","required":["name","stackSource","spec"],"properties":{"name":string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"spec":{"$ref":"#/components/schemas/StackSpec"},"importKind":{"type":["string","null"]}}}));
+    schemas.insert("ComposeProjectServiceComparison".into(),json!({"type":"object","required":["name","runtimeContainerCount","definedInSource"],"properties":{"name":string(),"runtimeContainerCount":{"type":"integer","minimum":0},"runtimeImage":nullable_string(),"definedInSource":{"type":"boolean"},"sourceImage":nullable_string()}}));
+    schemas.insert("ComposeProjectImportValidation".into(),json!({"type":"object","required":["services","issues","previewFingerprint","importableSensitiveEnvironmentNames","canImportSensitiveEnvironmentValues"],"properties":{"services":{"type":"array","items":{"$ref":"#/components/schemas/ComposeProjectServiceComparison"}},"issues":{"type":"array","items":{"$ref":"#/components/schemas/StackAdoptionIssue"}},"previewFingerprint":string(),"importableSensitiveEnvironmentNames":string_array(),"canImportSensitiveEnvironmentValues":{"type":"boolean"}}}));
+    schemas.insert("ImportComposeProjectInput".into(),json!({"type":"object","required":["name","description","stackSource","spec","previewFingerprint"],"properties":{"name":string(),"description":nullable_string(),"stackSource":{"$ref":"#/components/schemas/StackSource"},"spec":{"$ref":"#/components/schemas/StackSpec"},"previewFingerprint":string(),"tagIds":uuid_array(),"importKind":string(),"importSensitiveEnvironmentAsSecrets":{"type":"boolean"}}}));
     schemas
 }
 

@@ -16,6 +16,8 @@ citadel-application = { path = "../application" }
 citadel-contracts = { path = "../contracts" }
 citadel-domain = { path = "../domain" }
 citadel-deployments = { path = "../deployments" }
+citadel-swarm-services = { path = "../swarm-services" }
+citadel-stacks = { path = "../stacks" }
 citadel-identity = { path = "../identity" }
 citadel-platforms = { path = "../platforms" }
 citadel-resources = { path = "../resources" }

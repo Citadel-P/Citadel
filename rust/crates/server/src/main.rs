@@ -36,6 +36,12 @@ use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_adapters::role_store::PostgresRoleStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use citadel_adapters::stack_bindings::PostgresStackBindingResolver;
+use citadel_adapters::stack_runtime::StackRuntimeRouter;
+use citadel_adapters::stack_store::PostgresStackStore;
+use citadel_adapters::swarm_service_bindings::PostgresSwarmServiceBindingResolver;
+use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
+use citadel_adapters::swarm_service_store::PostgresSwarmServiceStore;
 use citadel_adapters::team_store::PostgresTeamStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_application::{
@@ -62,8 +68,11 @@ use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeServ
 use citadel_server::{
     Readiness, activities_http, application_info_http, deployments_http, identity_http,
     license_http, license_realtime, oidc_http, platforms_http, profile_http, resources_http,
-    roles_http, service_accounts_http, teams_http, transport, users_http, workers,
+    roles_http, service_accounts_http, stacks_http, swarm_services_http, teams_http, transport,
+    users_http, workers,
 };
+use citadel_stacks::StackService;
+use citadel_swarm_services::ManagedSwarmServiceService;
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -354,9 +363,43 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         ))
         .with_binding_resolver(Arc::new(PostgresDeploymentBindingResolver::new(
             pool.clone(),
-            secret_protector,
+            secret_protector.clone(),
         ))),
     );
+    let swarm_services = Arc::new(
+        ManagedSwarmServiceService::new(
+            Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+            Arc::new(SwarmServiceRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                agent.clone(),
+            )),
+            cancellation.clone(),
+        )
+        .with_notifier(Arc::new(
+            swarm_services_http::SwarmServicesRealtimeNotifier::new(realtime_hub.clone()),
+        ))
+        .with_binding_resolver(Arc::new(PostgresSwarmServiceBindingResolver::new(
+            pool.clone(),
+            secret_protector.clone(),
+        ))),
+    );
+    let stacks = Arc::new(StackService::new(
+        Arc::new(PostgresStackStore::new(pool.clone())),
+        Arc::new(StackRuntimeRouter::new(
+            pool.clone(),
+            docker.clone(),
+            agent.clone(),
+        )),
+        Arc::new(PostgresStackBindingResolver::new(
+            pool.clone(),
+            secret_protector.clone(),
+        )),
+        Arc::new(stacks_http::StacksRealtimeNotifier::new(
+            realtime_hub.clone(),
+        )),
+        cancellation.clone(),
+    ));
     let realtime = config.realtime.as_ref().map(|realtime_config| {
         RealtimeService::with_hub(
             realtime_config,
@@ -402,6 +445,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             agent: agent.clone(),
             realtime: realtime_hub.clone(),
             deployments: Arc::clone(&deployments),
+            swarm_services: Arc::clone(&swarm_services),
+            stacks: Arc::clone(&stacks),
         },
         workers::WorkerSettings {
             queue_capacity: config.event_queue_capacity,
@@ -473,6 +518,16 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 deployments: Arc::clone(&deployments),
             },
         ))
+        .merge(swarm_services_http::router(
+            swarm_services_http::SwarmServicesHttpState {
+                identity: Arc::clone(&identity),
+                services: Arc::clone(&swarm_services),
+            },
+        ))
+        .merge(stacks_http::router(stacks_http::StacksHttpState {
+            identity: Arc::clone(&identity),
+            stacks,
+        }))
         .merge(resources_http::router(resources_http::ResourcesHttpState {
             identity: Arc::clone(&identity),
             resources,

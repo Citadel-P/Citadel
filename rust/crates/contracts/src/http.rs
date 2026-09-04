@@ -217,6 +217,11 @@ const VOLUME_FILTER_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::query("Name", ParameterSchema::String),
 ];
 
+const STACK_FILTER_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::query("tags", ParameterSchema::ArrayString),
+    ParameterContract::query("platformId", ParameterSchema::Uuid),
+];
+
 const SWARM_TASK_FILTER_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::path_uuid("platformId"),
     ParameterContract::query(
@@ -1104,6 +1109,150 @@ route_catalog! {
         request_schema: Some("PatchResourceMetadata"), response_schema: Some("DeploymentView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_STACKS => {
+        method: Get, path: "/api/v1/stacks", operation_id: "listStacks", summary: "List authorized Stacks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StacksView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: STACK_FILTER_PARAMETERS
+    },
+    CREATE_STACK => {
+        method: Post, path: "/api/v1/stacks", operation_id: "createStack", summary: "Create a Stack",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateStackInput"), response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_STACKS => {
+        method: Delete, path: "/api/v1/stacks", operation_id: "deleteStacks", summary: "Delete Stacks",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("StackIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    GET_STACK => {
+        method: Get, path: "/api/v1/stacks/{stackId}", operation_id: "getStack", summary: "Get a Stack",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    GET_STACK_CONFIG => {
+        method: Get, path: "/api/v1/stacks/{stackId}/_cfg", operation_id: "getStackConfig", summary: "Get Stack configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    GET_STACK_DUPLICATE_DRAFT => {
+        method: Get, path: "/api/v1/stacks/{stackId}/duplicate-draft", operation_id: "getStackDuplicateDraft", summary: "Build a Stack duplicate draft",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackDuplicateDraftView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    LIST_STACK_RELEASES => {
+        method: Get, path: "/api/v1/stacks/{stackId}/releases", operation_id: "listStackReleases", summary: "List previous healthy Stack releases",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackReleasesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    UPDATE_STACK => {
+        method: Patch, path: "/api/v1/stacks/{id}", operation_id: "updateStack", summary: "Update Stack configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchStackInput"), response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_STACK_METADATA => {
+        method: Patch, path: "/api/v1/stacks/{id}/_metadata", operation_id: "updateStackMetadata", summary: "Update Stack metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_STACK => {
+        method: Post, path: "/api/v1/stacks/rename", operation_id: "renameStack", summary: "Rename a Stack",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    APPLY_STACK => {
+        method: Post, path: "/api/v1/stacks/apply", operation_id: "applyStack", summary: "Apply a Stack and stream progress",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ApplyStackInput"), response_schema: Some("StackStreamItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    ROLLBACK_STACK => {
+        method: Post, path: "/api/v1/stacks/rollback", operation_id: "rollbackStack", summary: "Roll back a Stack and stream progress",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RollbackStackInput"), response_schema: Some("StackStreamItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    PREFLIGHT_SWARM_STACK => {
+        method: Post, path: "/api/v1/stacks/preflight/swarm", operation_id: "preflightSwarmStack", summary: "Validate Docker Swarm Stack compatibility",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("SwarmStackPreflightInput"), response_schema: Some("SwarmStackCompatibilityReport"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    START_STACKS => { method: Post, path: "/api/v1/stacks/start", operation_id: "startStacks", summary: "Start Stacks", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackIds"), response_schema: None, success_status: 204, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[] },
+    STOP_STACKS => { method: Post, path: "/api/v1/stacks/stop", operation_id: "stopStacks", summary: "Stop Stacks", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackIds"), response_schema: None, success_status: 204, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[] },
+    PAUSE_STACKS => { method: Post, path: "/api/v1/stacks/pause", operation_id: "pauseStacks", summary: "Pause Stacks", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackIds"), response_schema: None, success_status: 204, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[] },
+    RESUME_STACKS => { method: Post, path: "/api/v1/stacks/resume", operation_id: "resumeStacks", summary: "Resume Stacks", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackIds"), response_schema: None, success_status: 204, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[] },
+    RESTART_STACKS => { method: Post, path: "/api/v1/stacks/restart", operation_id: "restartStacks", summary: "Restart Stacks", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackIds"), response_schema: None, success_status: 204, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[] },
+    GET_STACK_DRIFT => { method: Get, path: "/api/v1/stacks/{stackId}/drift", operation_id: "getStackDrift", summary: "Get Stack drift", public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("StackDriftReport"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")] },
+    UPDATE_STACK_DRIFT_POLICY => { method: Put, path: "/api/v1/stacks/{stackId}/drift-policy", operation_id: "updateStackDriftPolicy", summary: "Update Stack drift policy", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("StackDriftPolicyInput"), response_schema: Some("StackView"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")] },
+    RECONCILE_STACK => { method: Post, path: "/api/v1/stacks/{stackId}/reconcile", operation_id: "reconcileStack", summary: "Reconcile safe Stack drift", public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("StackReconciliationResult"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")] },
+    GET_COMPOSE_IMPORT_DRAFT => { method: Get, path: "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}", operation_id: "getComposeProjectImportDraft", summary: "Get a Compose or Swarm Stack import draft", public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("ComposeProjectImportDraftView"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("projectName"), ParameterContract::query("importKind", ParameterSchema::Reference("StackImportKind"))] },
+    VALIDATE_COMPOSE_IMPORT_DRAFT => { method: Post, path: "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft", operation_id: "validateComposeProjectImportDraft", summary: "Validate a source for an unmanaged Compose project", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("ValidateComposeProjectImportInput"), response_schema: Some("ComposeProjectImportValidation"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("projectName")] },
+    IMPORT_COMPOSE_PROJECT => { method: Post, path: "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import", operation_id: "importComposeProject", summary: "Import a Compose project or Swarm Stack", public: true, setup_exempt: false, authentication: Actor, request_schema: Some("ImportComposeProjectInput"), response_schema: Some("StackView"), success_status: 200, error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("projectName")] },
+    LIST_MANAGED_SWARM_SERVICES => {
+        method: Get, path: "/api/v1/swarmServices", operation_id: "listManagedSwarmServices", summary: "List managed Docker Swarm Services",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ManagedSwarmServicesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: DEPLOYMENT_FILTER_PARAMETERS
+    },
+    CREATE_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/swarmServices", operation_id: "createSwarmService", summary: "Create a managed Docker Swarm Service",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateSwarmServiceInput"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    DELETE_SWARM_SERVICES => {
+        method: Delete, path: "/api/v1/swarmServices", operation_id: "deleteSwarmServices", summary: "Delete managed Docker Swarm Services",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("SwarmServiceIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    GET_MANAGED_SWARM_SERVICE => {
+        method: Get, path: "/api/v1/swarmServices/{id}", operation_id: "getManagedSwarmService", summary: "Get a managed Docker Swarm Service",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_SWARM_SERVICE => {
+        method: Patch, path: "/api/v1/swarmServices/{id}", operation_id: "updateSwarmService", summary: "Update managed Docker Swarm Service configuration",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateSwarmServiceInput"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/swarmServices/rename", operation_id: "renameSwarmService", summary: "Rename a managed Docker Swarm Service",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    APPLY_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/swarmServices/{id}/apply", operation_id: "applySwarmService", summary: "Apply a managed Docker Swarm Service and stream progress",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceProgressItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    SCALE_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/swarmServices/{id}/scale", operation_id: "scaleSwarmService", summary: "Scale a managed Docker Swarm Service and stream progress",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ScaleSwarmServiceInput"), response_schema: Some("SwarmServiceProgressItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    FORCE_UPDATE_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/swarmServices/{id}/force-update", operation_id: "forceUpdateSwarmService", summary: "Force a managed Docker Swarm Service task update and stream progress",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceProgressItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[ParameterContract::path_uuid("id")]
     },
     LIST_PLATFORMS => {
         method: Get, path: "/api/v1/platforms", operation_id: "listPlatforms", summary: "List authorized Platforms",
@@ -2217,6 +2366,106 @@ mod tests {
             assert_eq!(route.authentication, RouteAuthentication::Actor);
             assert!(route.public);
             assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
+        }
+    }
+
+    #[test]
+    fn stack_routes_preserve_the_dotnet_http_contract() {
+        let expected = [
+            (
+                routes::LIST_STACKS,
+                HttpMethod::Get,
+                "/api/v1/stacks",
+                "listStacks",
+            ),
+            (
+                routes::CREATE_STACK,
+                HttpMethod::Post,
+                "/api/v1/stacks",
+                "createStack",
+            ),
+            (
+                routes::APPLY_STACK,
+                HttpMethod::Post,
+                "/api/v1/stacks/apply",
+                "applyStack",
+            ),
+            (
+                routes::ROLLBACK_STACK,
+                HttpMethod::Post,
+                "/api/v1/stacks/rollback",
+                "rollbackStack",
+            ),
+            (
+                routes::DELETE_STACKS,
+                HttpMethod::Delete,
+                "/api/v1/stacks",
+                "deleteStacks",
+            ),
+            (
+                routes::GET_STACK,
+                HttpMethod::Get,
+                "/api/v1/stacks/{stackId}",
+                "getStack",
+            ),
+            (
+                routes::GET_STACK_CONFIG,
+                HttpMethod::Get,
+                "/api/v1/stacks/{stackId}/_cfg",
+                "getStackConfig",
+            ),
+            (
+                routes::LIST_STACK_RELEASES,
+                HttpMethod::Get,
+                "/api/v1/stacks/{stackId}/releases",
+                "listStackReleases",
+            ),
+            (
+                routes::GET_STACK_DRIFT,
+                HttpMethod::Get,
+                "/api/v1/stacks/{stackId}/drift",
+                "getStackDrift",
+            ),
+            (
+                routes::UPDATE_STACK_DRIFT_POLICY,
+                HttpMethod::Put,
+                "/api/v1/stacks/{stackId}/drift-policy",
+                "updateStackDriftPolicy",
+            ),
+            (
+                routes::RECONCILE_STACK,
+                HttpMethod::Post,
+                "/api/v1/stacks/{stackId}/reconcile",
+                "reconcileStack",
+            ),
+            (
+                routes::GET_COMPOSE_IMPORT_DRAFT,
+                HttpMethod::Get,
+                "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}",
+                "getComposeProjectImportDraft",
+            ),
+            (
+                routes::VALIDATE_COMPOSE_IMPORT_DRAFT,
+                HttpMethod::Post,
+                "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft",
+                "validateComposeProjectImportDraft",
+            ),
+            (
+                routes::IMPORT_COMPOSE_PROJECT,
+                HttpMethod::Post,
+                "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import",
+                "importComposeProject",
+            ),
+        ];
+
+        for (route, method, path, operation_id) in expected {
+            assert_eq!(route.method, method);
+            assert_eq!(route.path, path);
+            assert_eq!(route.operation_id, operation_id);
+            assert_eq!(route.authentication, RouteAuthentication::Actor);
+            assert!(route.public);
+            assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
+            assert!(route.error_responses.contains(&ErrorResponse::Forbidden));
         }
     }
 
