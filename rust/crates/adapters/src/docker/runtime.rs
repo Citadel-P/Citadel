@@ -4,7 +4,10 @@ use async_stream::stream;
 use citadel_platforms::{
     PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
 };
-use citadel_platforms::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
+use citadel_platforms::{
+    RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats, RuntimeSwarmInfo,
+    RuntimeSwarmPeer,
+};
 use futures_util::{FutureExt, future::BoxFuture};
 use reqwest::StatusCode;
 use tokio_util::sync::CancellationToken;
@@ -29,6 +32,33 @@ impl PlatformRuntimePort for DockerClient {
                 } => value.map_err(normalize_docker_error)?,
             };
             let (version, negotiated, info) = value;
+            let swarm = info.swarm.map(|swarm| RuntimeSwarmInfo {
+                node_id: swarm.node_id,
+                node_addr: swarm.node_addr,
+                local_node_state: swarm.local_node_state,
+                control_available: swarm.control_available,
+                error: (!swarm.error.trim().is_empty()).then_some(swarm.error),
+                remote_managers: swarm
+                    .remote_managers
+                    .into_iter()
+                    .map(|manager| RuntimeSwarmPeer {
+                        node_id: manager.node_id,
+                        address: manager.address,
+                    })
+                    .collect(),
+                nodes: swarm.nodes,
+                managers: swarm.managers,
+                cluster_id: swarm
+                    .cluster
+                    .as_ref()
+                    .map(|cluster| cluster.id.trim().to_owned())
+                    .filter(|value| !value.is_empty()),
+                cluster_created_at: swarm.cluster.and_then(|cluster| {
+                    chrono::DateTime::parse_from_rfc3339(&cluster.created_at)
+                        .ok()
+                        .map(|value| value.with_timezone(&chrono::Utc))
+                }),
+            });
             Ok(RuntimePlatformInfo {
                 daemon_id: info.id,
                 server_version: version.version,
@@ -44,6 +74,7 @@ impl PlatformRuntimePort for DockerClient {
                 api_version: negotiated.to_string(),
                 minimum_api_version: version.min_api_version,
                 agent_version: None,
+                swarm,
             })
         }
         .boxed()

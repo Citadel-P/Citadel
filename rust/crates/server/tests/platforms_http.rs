@@ -16,6 +16,9 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
 use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_adapters::platform_registration::{
+    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
+};
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
@@ -24,10 +27,10 @@ use citadel_identity::{
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_platforms::{
-    InventoryProjectionStore, PlatformReadService, RuntimeContainerSummary, RuntimeImageSummary,
-    RuntimeInventorySnapshot, RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeSwarmConfig,
-    RuntimeSwarmInventory, RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService,
-    RuntimeSwarmTask, RuntimeVolumeSummary,
+    InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
+    RuntimeContainerSummary, RuntimeImageSummary, RuntimeInventorySnapshot, RuntimeNetworkSummary,
+    RuntimePlatformInfo, RuntimeSwarmConfig, RuntimeSwarmInventory, RuntimeSwarmNode,
+    RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
 use citadel_server::platforms_http::{self, PlatformsHttpState};
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
@@ -451,9 +454,14 @@ async fn fixture() -> Fixture {
         PostgresPlatformReadStore::new(pool.clone()),
     )));
     let realtime = IdentityRealtimeReader::new(identity.clone(), platforms.clone());
+    let registrations = Arc::new(PlatformRegistrationService::new(
+        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
+    ));
     let app = platforms_http::router(PlatformsHttpState {
         identity,
         platforms,
+        registrations,
         pool: pool.clone(),
         resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
         docker,
@@ -584,6 +592,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             api_version: "1.49".into(),
             minimum_api_version: "1.24".into(),
             agent_version: None,
+            swarm: None,
         },
         containers: vec![RuntimeContainerSummary {
             id: "container-1".into(),

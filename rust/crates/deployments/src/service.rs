@@ -5,13 +5,16 @@ use std::time::Duration;
 use citadel_domain::{ActorId, LicenseCapability};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    CreateDeploymentInput, DeletionClaim, DeploymentConfigView, DeploymentDuplicateDraftView,
-    DeploymentError, DeploymentFilter, DeploymentSpec, DeploymentView, DeploymentsView, FieldPatch,
-    PatchDeploymentMetadataInput, ResourceCapabilities,
+    ApplyClaim, CreateDeploymentInput, DeletionClaim, DeploymentBindingSnapshot,
+    DeploymentConfigView, DeploymentDuplicateDraftView, DeploymentError, DeploymentFilter,
+    DeploymentImageInfo, DeploymentSpec, DeploymentStreamItem, DeploymentView, DeploymentsView,
+    FieldPatch, PatchDeploymentMetadataInput, PreparedDeploymentImage, ResolvedDeploymentBindings,
+    ResourceCapabilities, RuntimeContainerState, RuntimeDeploymentCommand, RuntimeDeploymentResult,
 };
 
 pub trait DeploymentStore: Send + Sync {
@@ -85,6 +88,61 @@ pub trait DeploymentStore: Send + Sync {
         &'a self,
         claims: &'a [DeletionClaim],
     ) -> BoxFuture<'a, Result<(), DeploymentError>>;
+
+    fn claim_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<ApplyClaim, DeploymentError>> {
+        let _ = (actor_id, administrator, id);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Deployment Apply persistence is unavailable.".to_owned(),
+            ))
+        })
+    }
+
+    fn complete_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        claim: &'a ApplyClaim,
+        result: &'a RuntimeDeploymentResult,
+        digest: Option<&'a str>,
+        bindings: &'a [DeploymentBindingSnapshot],
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        let _ = (actor_id, claim, result, digest, bindings);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Deployment Apply persistence is unavailable.".to_owned(),
+            ))
+        })
+    }
+
+    fn fail_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        claim: &'a ApplyClaim,
+        message: &'a str,
+        result: Option<&'a RuntimeDeploymentResult>,
+        bindings: &'a [DeploymentBindingSnapshot],
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        let _ = (actor_id, claim, message, result, bindings);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Deployment Apply persistence is unavailable.".to_owned(),
+            ))
+        })
+    }
+
+    fn stale_apply_claims<'a>(
+        &'a self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<(ActorId, ApplyClaim)>, DeploymentError>> {
+        let _ = (started_before, limit);
+        Box::pin(async { Ok(Vec::new()) })
+    }
 }
 
 pub trait DeploymentRuntimePort: Send + Sync {
@@ -94,6 +152,65 @@ pub trait DeploymentRuntimePort: Send + Sync {
         docker_container_id: &'a str,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), DeploymentError>>;
+
+    fn prepare_image<'a>(
+        &'a self,
+        platform_id: Uuid,
+        image: &'a DeploymentImageInfo,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
+        let _ = (platform_id, image, cancellation);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Deployment image preparation is unavailable.".to_owned(),
+            ))
+        })
+    }
+
+    fn apply_container<'a>(
+        &'a self,
+        platform_id: Uuid,
+        command: &'a RuntimeDeploymentCommand,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
+        let _ = (platform_id, command, cancellation);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Deployment runtime Apply is unavailable.".to_owned(),
+            ))
+        })
+    }
+
+    fn observe_deployment<'a>(
+        &'a self,
+        platform_id: Uuid,
+        deployment_id: Uuid,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<RuntimeDeploymentResult>, DeploymentError>> {
+        let _ = (platform_id, deployment_id, cancellation);
+        Box::pin(async { Ok(None) })
+    }
+}
+
+pub trait DeploymentBindingResolverPort: Send + Sync {
+    fn resolve<'a>(
+        &'a self,
+        deployment_id: Uuid,
+        referenced_names: &'a [String],
+    ) -> BoxFuture<'a, Result<ResolvedDeploymentBindings, DeploymentError>>;
+}
+
+#[derive(Default)]
+pub struct EmptyDeploymentBindingResolver;
+
+impl DeploymentBindingResolverPort for EmptyDeploymentBindingResolver {
+    fn resolve<'a>(
+        &'a self,
+        _deployment_id: Uuid,
+        _referenced_names: &'a [String],
+    ) -> BoxFuture<'a, Result<ResolvedDeploymentBindings, DeploymentError>> {
+        Box::pin(async { Ok(ResolvedDeploymentBindings::default()) })
+    }
 }
 
 pub trait DeploymentEntitlementPort: Send + Sync {
@@ -120,8 +237,11 @@ pub struct DeploymentService {
     runtime: Arc<dyn DeploymentRuntimePort>,
     entitlements: Arc<dyn DeploymentEntitlementPort>,
     notifier: Arc<dyn DeploymentChangeNotifier>,
+    bindings: Arc<dyn DeploymentBindingResolverPort>,
     shutdown: CancellationToken,
     delete_timeout: Duration,
+    apply_timeout: Duration,
+    apply_slots: Arc<Semaphore>,
 }
 
 impl DeploymentService {
@@ -137,8 +257,11 @@ impl DeploymentService {
             runtime,
             entitlements,
             notifier: Arc::new(NoopDeploymentChangeNotifier),
+            bindings: Arc::new(EmptyDeploymentBindingResolver),
             shutdown,
             delete_timeout: Duration::from_secs(30),
+            apply_timeout: Duration::from_secs(10 * 60),
+            apply_slots: Arc::new(Semaphore::new(4)),
         }
     }
 
@@ -149,8 +272,23 @@ impl DeploymentService {
     }
 
     #[must_use]
+    pub fn with_binding_resolver(
+        mut self,
+        bindings: Arc<dyn DeploymentBindingResolverPort>,
+    ) -> Self {
+        self.bindings = bindings;
+        self
+    }
+
+    #[must_use]
     pub fn with_delete_timeout(mut self, timeout: Duration) -> Self {
         self.delete_timeout = timeout;
+        self
+    }
+
+    #[must_use]
+    pub fn with_apply_timeout(mut self, timeout: Duration) -> Self {
+        self.apply_timeout = timeout;
         self
     }
 
@@ -362,6 +500,93 @@ impl DeploymentService {
         })?
     }
 
+    pub async fn apply(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+        recreate: bool,
+    ) -> Result<mpsc::Receiver<DeploymentStreamItem>, DeploymentError> {
+        if id.is_nil() {
+            return Err(DeploymentError::Validation(
+                "A Deployment must be selected.".to_owned(),
+            ));
+        }
+        let permit = tokio::time::timeout(
+            Duration::from_secs(30),
+            Arc::clone(&self.apply_slots).acquire_owned(),
+        )
+        .await
+        .map_err(|_| {
+            DeploymentError::Conflict(
+                "Deployment Apply capacity is busy. Try again shortly.".to_owned(),
+            )
+        })?
+        .map_err(|_| DeploymentError::Runtime("Deployment Apply is shutting down.".to_owned()))?;
+        let claim = self.store.claim_apply(actor_id, administrator, id).await?;
+        self.notifier.changed(id, "updated");
+        let (sender, receiver) = mpsc::channel(32);
+        let operation = ApplyOperation {
+            actor_id,
+            recreate,
+            claim,
+            store: Arc::clone(&self.store),
+            runtime: Arc::clone(&self.runtime),
+            bindings: Arc::clone(&self.bindings),
+            notifier: Arc::clone(&self.notifier),
+            sender,
+            _permit: permit,
+        };
+        let shutdown = self.shutdown.clone();
+        let timeout = self.apply_timeout;
+        tokio::spawn(async move {
+            let _ = operation.run(&shutdown, timeout).await;
+        });
+        Ok(receiver)
+    }
+
+    pub async fn reconcile_stale_applies(
+        &self,
+        started_before: i64,
+        limit: i64,
+    ) -> Result<usize, DeploymentError> {
+        let claims = self
+            .store
+            .stale_apply_claims(started_before, limit.clamp(1, 100))
+            .await?;
+        let mut reconciled = 0;
+        for (actor_id, claim) in claims {
+            let cancellation = self.shutdown.child_token();
+            let observed = self
+                .runtime
+                .observe_deployment(claim.platform_id, claim.id, &cancellation)
+                .await;
+            cancellation.cancel();
+            match observed {
+                Ok(Some(result)) if result.state == RuntimeContainerState::Running => {
+                    self.store
+                        .complete_apply(actor_id, &claim, &result, None, &[])
+                        .await?;
+                }
+                Ok(Some(result)) => {
+                    let message = "Deployment Apply was interrupted and the recovered container is not running.";
+                    self.store
+                        .fail_apply(actor_id, &claim, message, Some(&result), &[])
+                        .await?;
+                }
+                Ok(None) | Err(_) => {
+                    let message = "Deployment Apply was interrupted and its runtime outcome could not be confirmed.";
+                    self.store
+                        .fail_apply(actor_id, &claim, message, None, &[])
+                        .await?;
+                }
+            }
+            self.notifier.changed(claim.id, "updated");
+            reconciled += 1;
+        }
+        Ok(reconciled)
+    }
+
     async fn ensure_expansion_entitlements(
         &self,
         current: Option<&DeploymentSpec>,
@@ -395,6 +620,341 @@ impl DeploymentService {
             Err(DeploymentError::LicenseRequired(name))
         }
     }
+}
+
+struct ApplyOperation {
+    actor_id: ActorId,
+    recreate: bool,
+    claim: ApplyClaim,
+    store: Arc<dyn DeploymentStore>,
+    runtime: Arc<dyn DeploymentRuntimePort>,
+    bindings: Arc<dyn DeploymentBindingResolverPort>,
+    notifier: Arc<dyn DeploymentChangeNotifier>,
+    sender: mpsc::Sender<DeploymentStreamItem>,
+    _permit: OwnedSemaphorePermit,
+}
+
+impl ApplyOperation {
+    async fn run(
+        self,
+        shutdown: &CancellationToken,
+        timeout: Duration,
+    ) -> Result<(), DeploymentError> {
+        let cancellation = shutdown.child_token();
+        let result = tokio::select! {
+            biased;
+            () = shutdown.cancelled() => Err(DeploymentError::Cancelled),
+            result = tokio::time::timeout(timeout, self.execute_inner(&cancellation)) => {
+                result.unwrap_or_else(|_| Err(DeploymentError::Runtime(
+                    "Deployment Apply timed out.".to_owned(),
+                )))
+            }
+        };
+        cancellation.cancel();
+        if let Err(error) = result {
+            if matches!(error, DeploymentError::Cancelled)
+                || matches!(&error, DeploymentError::Runtime(message) if message == "Deployment Apply timed out.")
+            {
+                self.send(DeploymentStreamItem::failure(
+                    deployment_error_code(&error),
+                    error.to_string(),
+                ));
+                self.notifier.changed(self.claim.id, "updated");
+                return Err(error);
+            }
+            let message = error.to_string();
+            let persisted = self
+                .store
+                .fail_apply(self.actor_id, &self.claim, &message, None, &[])
+                .await;
+            let final_error = persisted.err().unwrap_or(error);
+            self.send(DeploymentStreamItem::failure(
+                deployment_error_code(&final_error),
+                final_error.to_string(),
+            ));
+            self.notifier.changed(self.claim.id, "updated");
+            return Err(final_error);
+        }
+        Ok(())
+    }
+
+    async fn execute_inner(&self, cancellation: &CancellationToken) -> Result<(), DeploymentError> {
+        if matches!(self.claim.spec.image, DeploymentImageInfo::Build { .. }) {
+            return Err(DeploymentError::Validation(
+                "Build-backed Deployment Apply is not available until Build execution migrates to Rust."
+                    .to_owned(),
+            ));
+        }
+
+        match &self.claim.spec.image {
+            DeploymentImageInfo::External { image_tag, .. } => {
+                self.send(DeploymentStreamItem::info(format!(
+                    "Pulling image {image_tag}"
+                )));
+            }
+            DeploymentImageInfo::Local { .. } | DeploymentImageInfo::Build { .. } => {}
+        }
+        let image = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+            image = self.runtime.prepare_image(
+                self.claim.platform_id,
+                &self.claim.spec.image,
+                cancellation,
+            ) => image?,
+        };
+
+        if self.recreate
+            && let Some(container_id) = self.claim.existing_docker_container_id.as_deref()
+        {
+            self.runtime
+                .delete_container(self.claim.platform_id, container_id, cancellation)
+                .await?;
+            self.send(DeploymentStreamItem::info(format!(
+                "Container deleted: {container_id}"
+            )));
+        }
+
+        self.send(DeploymentStreamItem::info(
+            "Resolving deployment variables and secrets...",
+        ));
+        let configured_environment = self
+            .claim
+            .spec
+            .environment_variables
+            .as_deref()
+            .unwrap_or_default();
+        let referenced = referenced_binding_names(configured_environment)?;
+        let resolved = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+            resolved = self.bindings.resolve(self.claim.id, &referenced) => resolved?,
+        };
+        let environment = build_environment(configured_environment, &referenced, &resolved)?;
+        self.send(DeploymentStreamItem::info(binding_message(&resolved)));
+        self.send(DeploymentStreamItem::info(format!(
+            "Applying deployment to {}...",
+            self.claim.platform_address
+        )));
+
+        let command = RuntimeDeploymentCommand {
+            deployment_id: self.claim.id,
+            name: self.claim.name.clone(),
+            image_id: image.docker_image_id.clone(),
+            spec: self.claim.spec.clone(),
+            environment_variables: environment.values,
+        };
+        let runtime_result = self
+            .runtime
+            .apply_container(self.claim.platform_id, &command, cancellation)
+            .await
+            .map_err(|error| redact_error(error, &environment.redaction_values))?;
+        self.send(DeploymentStreamItem::info(format!(
+            "Container created: {}",
+            runtime_result.docker_container_id
+        )));
+        if runtime_result.state != RuntimeContainerState::Running {
+            let message = format!(
+                "Deployment failed: container did not start successfully - Container state: {:?}",
+                runtime_result.state
+            );
+            self.store
+                .fail_apply(
+                    self.actor_id,
+                    &self.claim,
+                    &message,
+                    Some(&runtime_result),
+                    &environment.snapshots,
+                )
+                .await?;
+            self.send(DeploymentStreamItem::failure(422, message));
+            self.notifier.changed(self.claim.id, "updated");
+            return Ok(());
+        }
+        if let Err(error) = self
+            .store
+            .complete_apply(
+                self.actor_id,
+                &self.claim,
+                &runtime_result,
+                image.digest.as_deref(),
+                &environment.snapshots,
+            )
+            .await
+        {
+            let message = error.to_string();
+            self.store
+                .fail_apply(
+                    self.actor_id,
+                    &self.claim,
+                    &message,
+                    Some(&runtime_result),
+                    &environment.snapshots,
+                )
+                .await?;
+            self.send(DeploymentStreamItem::failure(
+                deployment_error_code(&error),
+                message,
+            ));
+            self.notifier.changed(self.claim.id, "updated");
+            return Ok(());
+        }
+        self.notifier.changed(self.claim.id, "updated");
+        self.send(DeploymentStreamItem::info("Deployment is now running."));
+        Ok(())
+    }
+
+    fn send(&self, item: DeploymentStreamItem) {
+        let _ = self.sender.try_send(item);
+    }
+}
+
+fn deployment_error_code(error: &DeploymentError) -> i64 {
+    match error {
+        DeploymentError::Validation(_) => 400,
+        DeploymentError::NotFound => 404,
+        DeploymentError::Forbidden => 403,
+        DeploymentError::Conflict(_) => 409,
+        DeploymentError::LicenseRequired(_) => 403,
+        DeploymentError::Runtime(_) | DeploymentError::Storage(_) | DeploymentError::Cancelled => {
+            500
+        }
+    }
+}
+
+fn referenced_binding_names(environment: &[String]) -> Result<Vec<String>, DeploymentError> {
+    let mut names = Vec::new();
+    for entry in environment {
+        if let Some((name, _)) = entry.split_once('=') {
+            if name.trim().is_empty() {
+                return Err(DeploymentError::Validation(
+                    "Deployment environment variable names must not be empty.".to_owned(),
+                ));
+            }
+        } else if valid_binding_name(entry) {
+            push_unique_name(&mut names, entry);
+        }
+        let bytes = entry.as_bytes();
+        let mut offset = 0;
+        while let Some(start) = entry[offset..].find("${") {
+            let name_start = offset + start + 2;
+            let Some(end) = entry[name_start..].find('}') else {
+                return Err(DeploymentError::Validation(format!(
+                    "Deployment environment entry '{entry}' has an incomplete variable reference."
+                )));
+            };
+            let name = &entry[name_start..name_start + end];
+            if !valid_binding_name(name) {
+                return Err(DeploymentError::Validation(format!(
+                    "Deployment environment entry '{entry}' contains an invalid variable reference."
+                )));
+            }
+            push_unique_name(&mut names, name);
+            offset = name_start + end + 1;
+            if offset >= bytes.len() {
+                break;
+            }
+        }
+    }
+    Ok(names)
+}
+
+fn valid_binding_name(value: &str) -> bool {
+    let mut characters = value.chars();
+    characters
+        .next()
+        .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn push_unique_name(names: &mut Vec<String>, value: &str) {
+    if !names.iter().any(|name| name.eq_ignore_ascii_case(value)) {
+        names.push(value.to_owned());
+    }
+}
+
+struct ResolvedDeploymentEnvironment {
+    values: Vec<String>,
+    snapshots: Vec<DeploymentBindingSnapshot>,
+    redaction_values: Vec<String>,
+}
+
+fn build_environment(
+    configured: &[String],
+    referenced: &[String],
+    resolved: &ResolvedDeploymentBindings,
+) -> Result<ResolvedDeploymentEnvironment, DeploymentError> {
+    let selected = resolved
+        .entries
+        .iter()
+        .filter(|entry| {
+            referenced
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&entry.name))
+        })
+        .collect::<Vec<_>>();
+    for name in referenced {
+        if !selected
+            .iter()
+            .any(|entry| entry.name.eq_ignore_ascii_case(name))
+        {
+            return Err(DeploymentError::Validation(format!(
+                "Deployment references undefined Citadel variable or secret '{name}'."
+            )));
+        }
+    }
+    let mut output = Vec::with_capacity(configured.len());
+    for configured_entry in configured {
+        if !configured_entry.contains('=') && valid_binding_name(configured_entry) {
+            let binding = selected
+                .iter()
+                .find(|entry| entry.name.eq_ignore_ascii_case(configured_entry))
+                .expect("referenced binding was validated");
+            output.push(format!("{configured_entry}={}", binding.value.as_str()));
+            continue;
+        }
+        let mut value = configured_entry.clone();
+        for binding in &selected {
+            value = value.replace(&format!("${{{}}}", binding.name), binding.value.as_str());
+        }
+        output.push(value);
+    }
+    let snapshots = selected
+        .iter()
+        .map(|entry| entry.snapshot.clone())
+        .collect();
+    let redaction_values = selected
+        .iter()
+        .filter(|entry| entry.secret)
+        .map(|entry| entry.value.to_string())
+        .collect();
+    Ok(ResolvedDeploymentEnvironment {
+        values: output,
+        snapshots,
+        redaction_values,
+    })
+}
+
+fn binding_message(resolved: &ResolvedDeploymentBindings) -> String {
+    let variables = resolved
+        .entries
+        .iter()
+        .filter(|entry| !entry.secret)
+        .count();
+    let secrets = resolved.entries.iter().filter(|entry| entry.secret).count();
+    if variables == 0 && secrets == 0 {
+        "No Citadel variables or secrets were referenced by this Deployment.".to_owned()
+    } else {
+        format!("Injected {variables} Citadel variable(s) and {secrets} secret(s).")
+    }
+}
+
+fn redact_error(error: DeploymentError, values: &[String]) -> DeploymentError {
+    let mut message = error.to_string();
+    for value in values.iter().filter(|value| !value.is_empty()) {
+        message = message.replace(value, "********");
+    }
+    DeploymentError::Runtime(message)
 }
 
 fn expands_automated_operations(
@@ -527,6 +1087,7 @@ fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use futures_util::FutureExt;
@@ -694,9 +1255,82 @@ mod tests {
         assert!(!expands_operational_guardrails(Some(&automatic), &disabled));
     }
 
+    #[test]
+    fn deployment_environment_injects_only_referenced_bindings_and_masks_secrets() {
+        let configured = vec![
+            "LOG_LEVEL=${LOG_LEVEL}".to_owned(),
+            "API_TOKEN".to_owned(),
+            "UNCHANGED=value".to_owned(),
+        ];
+        let referenced = referenced_binding_names(&configured).unwrap();
+        let resolved = ResolvedDeploymentBindings {
+            entries: vec![
+                resolved_binding("LOG_LEVEL", "debug", false),
+                resolved_binding("API_TOKEN", "very-secret", true),
+                resolved_binding("UNUSED", "must-not-be-injected", true),
+            ],
+        };
+
+        let environment = build_environment(&configured, &referenced, &resolved).unwrap();
+
+        assert_eq!(
+            environment.values,
+            [
+                "LOG_LEVEL=debug",
+                "API_TOKEN=very-secret",
+                "UNCHANGED=value"
+            ]
+        );
+        assert_eq!(environment.snapshots.len(), 2);
+        assert_eq!(environment.snapshots[1].value, "********");
+        assert_eq!(environment.redaction_values, ["very-secret"]);
+        assert!(!format!("{:?}", environment.snapshots).contains("very-secret"));
+        assert!(
+            !environment
+                .values
+                .iter()
+                .any(|entry| entry.contains("UNUSED"))
+        );
+    }
+
+    #[test]
+    fn deployment_environment_rejects_undefined_and_malformed_references() {
+        let missing = vec!["TOKEN=${MISSING}".to_owned()];
+        let referenced = referenced_binding_names(&missing).unwrap();
+        assert!(
+            build_environment(
+                &missing,
+                &referenced,
+                &ResolvedDeploymentBindings::default()
+            )
+            .is_err()
+        );
+        assert!(referenced_binding_names(&["TOKEN=${BROKEN".to_owned()]).is_err());
+    }
+
+    fn resolved_binding(name: &str, value: &str, secret: bool) -> crate::ResolvedDeploymentBinding {
+        crate::ResolvedDeploymentBinding {
+            name: name.to_owned(),
+            value: zeroize::Zeroizing::new(value.to_owned()),
+            secret,
+            snapshot: DeploymentBindingSnapshot {
+                name: name.to_owned(),
+                kind: if secret { "Secret" } else { "Variable" }.to_owned(),
+                scope: "Deployment".to_owned(),
+                value: if secret { "********" } else { value }.to_owned(),
+                secret_id: secret.then(Uuid::now_v7),
+                secret_delivery_mode: secret.then(|| "Environment".to_owned()),
+                target_path: None,
+            },
+        }
+    }
+
     struct TimeoutStore {
         claim: DeletionClaim,
         releases: Arc<AtomicUsize>,
+        apply_claim: Option<ApplyClaim>,
+        apply_completions: Arc<AtomicUsize>,
+        apply_failures: Arc<AtomicUsize>,
     }
 
     impl DeploymentStore for TimeoutStore {
@@ -792,6 +1426,60 @@ mod tests {
             self.releases.fetch_add(1, Ordering::Relaxed);
             async { Ok(()) }.boxed()
         }
+
+        fn claim_apply<'a>(
+            &'a self,
+            _: ActorId,
+            _: bool,
+            _: Uuid,
+        ) -> BoxFuture<'a, Result<ApplyClaim, DeploymentError>> {
+            let claim = self.apply_claim.clone();
+            async move {
+                claim.ok_or_else(|| {
+                    DeploymentError::Runtime("Apply is unavailable in this fixture.".to_owned())
+                })
+            }
+            .boxed()
+        }
+
+        fn complete_apply<'a>(
+            &'a self,
+            _: ActorId,
+            _: &'a ApplyClaim,
+            _: &'a RuntimeDeploymentResult,
+            _: Option<&'a str>,
+            _: &'a [DeploymentBindingSnapshot],
+        ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+            self.apply_completions.fetch_add(1, Ordering::Relaxed);
+            async { Ok(()) }.boxed()
+        }
+
+        fn fail_apply<'a>(
+            &'a self,
+            _: ActorId,
+            _: &'a ApplyClaim,
+            _: &'a str,
+            _: Option<&'a RuntimeDeploymentResult>,
+            _: &'a [DeploymentBindingSnapshot],
+        ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+            self.apply_failures.fetch_add(1, Ordering::Relaxed);
+            async { Ok(()) }.boxed()
+        }
+
+        fn stale_apply_claims<'a>(
+            &'a self,
+            _: i64,
+            _: i64,
+        ) -> BoxFuture<'a, Result<Vec<(ActorId, ApplyClaim)>, DeploymentError>> {
+            let claim = self.apply_claim.clone();
+            async move {
+                Ok(claim
+                    .map(|claim| (ActorId::new(Uuid::from_u128(1)), claim))
+                    .into_iter()
+                    .collect())
+            }
+            .boxed()
+        }
     }
 
     struct PendingRuntime;
@@ -821,6 +1509,113 @@ mod tests {
                 std::future::pending().await
             }
             .boxed()
+        }
+    }
+
+    struct SuccessfulApplyRuntime {
+        commands: Arc<Mutex<Vec<RuntimeDeploymentCommand>>>,
+    }
+
+    impl DeploymentRuntimePort for SuccessfulApplyRuntime {
+        fn delete_container<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+            async { Ok(()) }.boxed()
+        }
+
+        fn prepare_image<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a DeploymentImageInfo,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
+            async {
+                Ok(PreparedDeploymentImage {
+                    docker_image_id: "sha256:image".to_owned(),
+                    digest: None,
+                })
+            }
+            .boxed()
+        }
+
+        fn apply_container<'a>(
+            &'a self,
+            _: Uuid,
+            command: &'a RuntimeDeploymentCommand,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
+            self.commands.lock().unwrap().push(command.clone());
+            async {
+                Ok(RuntimeDeploymentResult {
+                    docker_container_id: "container".to_owned(),
+                    docker_image_id: "sha256:image".to_owned(),
+                    state: RuntimeContainerState::Running,
+                })
+            }
+            .boxed()
+        }
+    }
+
+    struct PendingApplyRuntime;
+
+    impl DeploymentRuntimePort for PendingApplyRuntime {
+        fn delete_container<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+            async { Ok(()) }.boxed()
+        }
+
+        fn prepare_image<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a DeploymentImageInfo,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
+            async {
+                Ok(PreparedDeploymentImage {
+                    docker_image_id: "sha256:image".to_owned(),
+                    digest: None,
+                })
+            }
+            .boxed()
+        }
+
+        fn apply_container<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a RuntimeDeploymentCommand,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
+            std::future::pending().boxed()
+        }
+    }
+
+    struct ObservedApplyRuntime(Option<RuntimeDeploymentResult>);
+
+    impl DeploymentRuntimePort for ObservedApplyRuntime {
+        fn delete_container<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+            async { Ok(()) }.boxed()
+        }
+
+        fn observe_deployment<'a>(
+            &'a self,
+            _: Uuid,
+            _: Uuid,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Option<RuntimeDeploymentResult>, DeploymentError>> {
+            let result = self.0.clone();
+            async move { Ok(result) }.boxed()
         }
     }
 
@@ -857,6 +1652,9 @@ mod tests {
                     spec: spec(),
                 },
                 releases: Arc::clone(&releases),
+                apply_claim: None,
+                apply_completions: Arc::new(AtomicUsize::new(0)),
+                apply_failures: Arc::new(AtomicUsize::new(0)),
             }),
             Arc::new(PendingRuntime),
             Arc::new(AllowEntitlements),
@@ -893,6 +1691,9 @@ mod tests {
                     spec: spec(),
                 },
                 releases: Arc::clone(&releases),
+                apply_claim: None,
+                apply_completions: Arc::new(AtomicUsize::new(0)),
+                apply_failures: Arc::new(AtomicUsize::new(0)),
             }),
             Arc::new(SignalledPendingRuntime(Arc::clone(&started))),
             Arc::new(AllowEntitlements),
@@ -920,6 +1721,149 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dropping_apply_progress_does_not_cancel_the_claimed_operation() {
+        let deployment_id = Uuid::now_v7();
+        let completions = Arc::new(AtomicUsize::new(0));
+        let commands = Arc::new(Mutex::new(Vec::new()));
+        let service = DeploymentService::new(
+            Arc::new(apply_store(
+                deployment_id,
+                Arc::clone(&completions),
+                Arc::new(AtomicUsize::new(0)),
+            )),
+            Arc::new(SuccessfulApplyRuntime {
+                commands: Arc::clone(&commands),
+            }),
+            Arc::new(AllowEntitlements),
+            CancellationToken::new(),
+        );
+
+        let progress = service
+            .apply(ActorId::new(Uuid::now_v7()), true, deployment_id, false)
+            .await
+            .unwrap();
+        drop(progress);
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while completions.load(Ordering::Relaxed) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(completions.load(Ordering::Relaxed), 1);
+        assert_eq!(commands.lock().unwrap()[0].deployment_id, deployment_id);
+    }
+
+    #[tokio::test]
+    async fn timed_out_apply_leaves_the_claim_for_bounded_reconciliation() {
+        let deployment_id = Uuid::now_v7();
+        let failures = Arc::new(AtomicUsize::new(0));
+        let service = DeploymentService::new(
+            Arc::new(apply_store(
+                deployment_id,
+                Arc::new(AtomicUsize::new(0)),
+                Arc::clone(&failures),
+            )),
+            Arc::new(PendingApplyRuntime),
+            Arc::new(AllowEntitlements),
+            CancellationToken::new(),
+        )
+        .with_apply_timeout(Duration::from_millis(5));
+
+        let mut progress = service
+            .apply(ActorId::new(Uuid::now_v7()), true, deployment_id, false)
+            .await
+            .unwrap();
+        let mut terminal = None;
+        while let Some(item) = progress.recv().await {
+            terminal = item.error_message;
+        }
+
+        assert_eq!(failures.load(Ordering::Relaxed), 0);
+        assert!(terminal.is_some_and(|message| message.contains("timed out")));
+    }
+
+    #[tokio::test]
+    async fn stale_apply_reconciliation_finishes_only_a_running_container() {
+        let deployment_id = Uuid::now_v7();
+        let completions = Arc::new(AtomicUsize::new(0));
+        let failures = Arc::new(AtomicUsize::new(0));
+        let service = DeploymentService::new(
+            Arc::new(apply_store(
+                deployment_id,
+                Arc::clone(&completions),
+                Arc::clone(&failures),
+            )),
+            Arc::new(ObservedApplyRuntime(Some(RuntimeDeploymentResult {
+                docker_container_id: "recovered".to_owned(),
+                docker_image_id: "sha256:image".to_owned(),
+                state: RuntimeContainerState::Running,
+            }))),
+            Arc::new(AllowEntitlements),
+            CancellationToken::new(),
+        );
+
+        assert_eq!(service.reconcile_stale_applies(1, 10).await.unwrap(), 1);
+        assert_eq!(completions.load(Ordering::Relaxed), 1);
+        assert_eq!(failures.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn stale_apply_reconciliation_fails_an_unconfirmed_runtime_outcome() {
+        let deployment_id = Uuid::now_v7();
+        let completions = Arc::new(AtomicUsize::new(0));
+        let failures = Arc::new(AtomicUsize::new(0));
+        let service = DeploymentService::new(
+            Arc::new(apply_store(
+                deployment_id,
+                Arc::clone(&completions),
+                Arc::clone(&failures),
+            )),
+            Arc::new(ObservedApplyRuntime(None)),
+            Arc::new(AllowEntitlements),
+            CancellationToken::new(),
+        );
+
+        assert_eq!(service.reconcile_stale_applies(1, 10).await.unwrap(), 1);
+        assert_eq!(completions.load(Ordering::Relaxed), 0);
+        assert_eq!(failures.load(Ordering::Relaxed), 1);
+    }
+
+    fn apply_store(
+        deployment_id: Uuid,
+        completions: Arc<AtomicUsize>,
+        failures: Arc<AtomicUsize>,
+    ) -> TimeoutStore {
+        TimeoutStore {
+            claim: DeletionClaim {
+                id: deployment_id,
+                platform_id: Uuid::now_v7(),
+                name: "web".to_owned(),
+                docker_container_ids: Vec::new(),
+                row_version: 1,
+                previous_status: "Created".to_owned(),
+                description: None,
+                spec: spec(),
+            },
+            releases: Arc::new(AtomicUsize::new(0)),
+            apply_claim: Some(ApplyClaim {
+                id: deployment_id,
+                platform_id: Uuid::now_v7(),
+                platform_address: "local".to_owned(),
+                name: "web".to_owned(),
+                row_version: 1,
+                description: None,
+                spec: spec(),
+                existing_container_id: None,
+                existing_docker_container_id: None,
+            }),
+            apply_completions: completions,
+            apply_failures: failures,
+        }
+    }
+
+    #[tokio::test]
     async fn create_rejects_new_auto_deploy_without_its_entitlement() {
         let deployment_id = Uuid::now_v7();
         let service = DeploymentService::new(
@@ -935,6 +1879,9 @@ mod tests {
                     spec: spec(),
                 },
                 releases: Arc::new(AtomicUsize::new(0)),
+                apply_claim: None,
+                apply_completions: Arc::new(AtomicUsize::new(0)),
+                apply_failures: Arc::new(AtomicUsize::new(0)),
             }),
             Arc::new(PendingRuntime),
             Arc::new(DenyEntitlements),

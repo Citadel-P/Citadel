@@ -228,6 +228,7 @@ fn snapshot(platform_id: Uuid, include_task: bool) -> RuntimeInventorySnapshot {
             api_version: "1.49".into(),
             minimum_api_version: "1.24".into(),
             agent_version: None,
+            swarm: None,
         },
         containers: vec![RuntimeContainerSummary {
             id: "container-1".into(),

@@ -8,7 +8,9 @@ publish = false
 [dependencies]
 axum.workspace = true
 axum-server.workspace = true
+async-stream.workspace = true
 base64.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 citadel-adapters = { path = "../adapters" }
 citadel-application = { path = "../application" }

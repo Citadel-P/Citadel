@@ -22,6 +22,12 @@ pub mod citadel {
         }
     }
 
+    pub mod deployments {
+        pub mod v1 {
+            tonic::include_proto!("citadel.deployments.v1");
+        }
+    }
+
     pub mod images {
         pub mod v1 {
             tonic::include_proto!("citadel.images.v1");

@@ -8,19 +8,19 @@ use async_stream::try_stream;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 use reqwest::{Client, Response, StatusCode};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
 use super::generated::{
-    CONFIG_LIST, CONTAINER_DELETE, CONTAINER_INSPECT, CONTAINER_LIST, CONTAINER_STATS,
-    ContainerInspect, ContainerStats, ContainerSummary, DockerEvent, DockerInfo, DockerNetwork,
-    DockerVersion, DockerVolume, Endpoint, IMAGE_LIST, ImageSummary, NETWORK_CREATE,
-    NETWORK_DELETE, NETWORK_INSPECT, NETWORK_LIST, NODE_LIST, NetworkCreateRequest,
-    NetworkCreateResponse, SECRET_LIST, SERVICE_LIST, SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO,
-    SYSTEM_PING, SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret, SwarmService,
-    SwarmTask, TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST,
-    VolumeCreateOptions, VolumeListResponse,
+    CONFIG_LIST, CONTAINER_CREATE, CONTAINER_DELETE, CONTAINER_INSPECT, CONTAINER_LIST,
+    CONTAINER_START, CONTAINER_STATS, ContainerInspect, ContainerStats, ContainerSummary,
+    DockerEvent, DockerInfo, DockerNetwork, DockerVersion, DockerVolume, Endpoint, IMAGE_CREATE,
+    IMAGE_LIST, ImageSummary, NETWORK_CREATE, NETWORK_DELETE, NETWORK_INSPECT, NETWORK_LIST,
+    NODE_LIST, NetworkCreateRequest, NetworkCreateResponse, SECRET_LIST, SERVICE_LIST,
+    SWARM_INSPECT, SYSTEM_EVENTS, SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmConfig,
+    SwarmInspect, SwarmNode, SwarmSecret, SwarmService, SwarmTask, TASK_LIST, VOLUME_CREATE,
+    VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST, VolumeCreateOptions, VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -29,6 +29,33 @@ const MAX_JSON_BODY_BYTES: usize = 16 * 1024 * 1024;
 const MAX_STREAM_ITEM_BYTES: usize = 1024 * 1024;
 
 pub type DockerJsonStream<T> = Pin<Box<dyn Stream<Item = Result<T, DockerError>> + Send + 'static>>;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ContainerCreateResponse {
+    id: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerImagePullMessage {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub progress: Option<String>,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(rename = "errorDetail", default)]
+    pub error_detail: Option<DockerImagePullError>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DockerImagePullError {
+    #[serde(default)]
+    pub message: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ApiVersion {
@@ -222,6 +249,70 @@ impl DockerClient {
         self.send_request::<()>(&CONTAINER_DELETE, &path, Some(&query), None)
             .await?;
         Ok(())
+    }
+
+    pub async fn create_container<T: Serialize + ?Sized>(
+        &self,
+        name: &str,
+        body: &T,
+    ) -> Result<String, DockerError> {
+        validate_identifier(name)?;
+        let query = format!("name={}", urlencoding::encode(name));
+        let response: ContainerCreateResponse = self
+            .request_json(
+                &CONTAINER_CREATE,
+                CONTAINER_CREATE.path,
+                Some(&query),
+                Some(body),
+            )
+            .await?;
+        Ok(response.id)
+    }
+
+    pub async fn start_container(&self, id: &str) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        let path = CONTAINER_START
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        match self
+            .send_request::<()>(&CONTAINER_START, &path, None, None)
+            .await
+        {
+            Ok(_)
+            | Err(DockerError::Api {
+                status: StatusCode::NOT_MODIFIED,
+                ..
+            }) => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn pull_image(
+        &self,
+        image: &str,
+        registry_auth: Option<&str>,
+    ) -> Result<DockerJsonStream<DockerImagePullMessage>, DockerError> {
+        if image.trim().is_empty() || image.len() > 2048 {
+            return Err(DockerError::InvalidIdentifier);
+        }
+        self.ensure_supported()?;
+        let version = self.negotiated_version().await?;
+        let query = format!("fromImage={}", urlencoding::encode(image));
+        let url = format!("http://localhost/v{version}{}?{query}", IMAGE_CREATE.path);
+        let mut request = self.client.post(url);
+        if let Some(auth) = registry_auth {
+            request = request.header("X-Registry-Auth", auth);
+        }
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = bounded_body(response, 64 * 1024).await?;
+            return Err(DockerError::Api {
+                status,
+                message: String::from_utf8_lossy(&body).into_owned(),
+            });
+        }
+        Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
     }
 
     pub async fn inspect_swarm(&self) -> Result<SwarmInspect, DockerError> {
@@ -576,5 +667,39 @@ mod tests {
             validate_identifier("  "),
             Err(DockerError::InvalidIdentifier)
         ));
+    }
+
+    #[test]
+    fn generated_models_accept_null_optional_collections_emitted_by_docker() {
+        let info: DockerInfo = serde_json::from_value(serde_json::json!({
+            "Swarm": { "RemoteManagers": null }
+        }))
+        .unwrap();
+        assert!(info.swarm.unwrap().remote_managers.is_empty());
+
+        let volumes: VolumeListResponse = serde_json::from_value(serde_json::json!({
+            "Volumes": [{
+                "Name": "data",
+                "Status": null,
+                "Labels": null,
+                "Options": null
+            }],
+            "Warnings": null
+        }))
+        .unwrap();
+        assert!(volumes.warnings.is_empty());
+        let volume = &volumes.volumes[0];
+        assert!(volume.status.is_empty());
+        assert!(volume.labels.is_empty());
+        assert!(volume.options.is_empty());
+
+        let network: DockerNetwork = serde_json::from_value(serde_json::json!({
+            "Id": "network-1",
+            "Containers": null,
+            "Peers": null
+        }))
+        .unwrap();
+        assert!(network.containers.is_empty());
+        assert!(network.peers.is_empty());
     }
 }

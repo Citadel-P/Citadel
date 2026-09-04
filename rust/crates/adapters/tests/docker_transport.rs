@@ -16,7 +16,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..24 {
+        for _ in 0..28 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -40,7 +40,21 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
                 .unwrap()
                 .to_owned();
             let path = first_line.split_whitespace().nth(1).unwrap().to_owned();
+            if path.contains("/images/create") {
+                let headers = String::from_utf8_lossy(&request);
+                assert!(
+                    headers
+                        .to_ascii_lowercase()
+                        .contains("x-registry-auth: registry-auth")
+                );
+            }
             if path.ends_with("/networks/create") || path.ends_with("/volumes/create") {
+                assert!(first_line.starts_with("POST "));
+            }
+            if path.contains("/containers/create")
+                || path.contains("/start")
+                || path.contains("/images/create")
+            {
                 assert!(first_line.starts_with("POST "));
             }
             if path.contains("/networks/network-created")
@@ -88,6 +102,21 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
         .delete_container("container-delete", true, true)
         .await
         .unwrap();
+    let created = client
+        .create_container("web", &serde_json::json!({"Image":"sha256:image"}))
+        .await
+        .unwrap();
+    assert_eq!(created, "container-created");
+    client.start_container(&created).await.unwrap();
+    let mut pull = client
+        .pull_image("nginx:latest", Some("registry-auth"))
+        .await
+        .unwrap();
+    assert_eq!(
+        pull.next().await.unwrap().unwrap().status.as_deref(),
+        Some("Downloaded")
+    );
+    assert_eq!(client.list_images().await.unwrap()[0].id, "sha256:image");
     let swarm = client.inspect_swarm().await.unwrap();
     assert_eq!(swarm.id, "swarm-fixture");
     assert_eq!(swarm.version.index, 7);
@@ -189,6 +218,10 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/containers/json?all=true",
             "/v1.49/containers/container-fixture/json",
             "/v1.49/containers/container-delete?v=true&force=true&link=false",
+            "/v1.49/containers/create?name=web",
+            "/v1.49/containers/container-created/start",
+            "/v1.49/images/create?fromImage=nginx%3Alatest",
+            "/v1.49/images/json?all=true",
             "/v1.49/swarm",
             "/v1.49/images/json?all=true",
             "/v1.49/volumes",
@@ -219,7 +252,7 @@ fn response_for(path: &str) -> Vec<u8> {
             r#"{"Version":"29.6.2","ApiVersion":"1.53","MinAPIVersion":"1.44","GitCommit":"fixture","Os":"linux","Arch":"amd64"}"#
         }
         "/v1.49/info" => {
-            r#"{"ID":"daemon-fixture","Containers":1,"ContainersRunning":1,"ContainersStopped":0,"ContainersPaused":0,"Images":1,"NCPU":2,"MemTotal":1073741824}"#
+            r#"{"ID":"daemon-fixture","Containers":1,"ContainersRunning":1,"ContainersStopped":0,"ContainersPaused":0,"Images":1,"NCPU":2,"MemTotal":1073741824,"Swarm":{"LocalNodeState":"inactive","RemoteManagers":null}}"#
         }
         "/v1.49/containers/json?all=true" => {
             r#"[{"Id":"container-fixture","Names":["/fixture"],"Image":"nginx:alpine","ImageID":"sha256:fixture","Created":1,"Labels":{},"State":"running","Status":"Up"}]"#
@@ -228,6 +261,11 @@ fn response_for(path: &str) -> Vec<u8> {
             r#"{"Id":"container-fixture","Created":"2026-01-01T00:00:00Z","Path":"nginx","Args":[],"State":{"Status":"running","Running":true},"Image":"sha256:fixture","Name":"/fixture","Config":{"Image":"nginx:alpine","Labels":{}}}"#
         }
         "/v1.49/containers/container-delete?v=true&force=true&link=false" => "",
+        "/v1.49/containers/create?name=web" => r#"{"Id":"container-created","Warnings":[]}"#,
+        "/v1.49/containers/container-created/start" => "",
+        "/v1.49/images/create?fromImage=nginx%3Alatest" => {
+            "{\"status\":\"Downloaded\",\"id\":\"sha256:image\"}\n"
+        }
         "/v1.49/swarm" => {
             r#"{"ID":"swarm-fixture","Version":{"Index":7},"CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-02T00:00:00Z","JoinTokens":{"Worker":"worker-secret","Manager":"manager-secret"}}"#
         }
@@ -235,13 +273,13 @@ fn response_for(path: &str) -> Vec<u8> {
             r#"[{"Id":"sha256:image","RepoTags":["nginx:alpine"],"RepoDigests":[],"Created":1,"Size":10,"Labels":{},"Containers":1}]"#
         }
         "/v1.49/volumes" => {
-            r#"{"Volumes":[{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{}}],"Warnings":[]}"#
+            r#"{"Volumes":[{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Status":null,"Labels":null,"Scope":"local","Options":null}],"Warnings":null}"#
         }
         "/v1.49/volumes/data" => {
-            r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{}}"#
+            r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Status":null,"Labels":null,"Scope":"local","Options":null}"#
         }
         "/v1.49/networks" => {
-            r#"[{"Name":"bridge","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"local","Driver":"bridge","EnableIPv4":true,"Labels":{},"Options":{}}]"#
+            r#"[{"Name":"bridge","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"local","Driver":"bridge","EnableIPv4":true,"Containers":null,"Peers":null,"Labels":{},"Options":{}}]"#
         }
         "/v1.49/networks/network-1" => {
             r#"{"Name":"bridge","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"local","Driver":"bridge","EnableIPv4":true,"Containers":{},"Peers":[{"Name":"peer-1","IP":"10.0.0.2"}],"Labels":{},"Options":{}}"#

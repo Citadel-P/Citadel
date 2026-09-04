@@ -7,8 +7,14 @@ use citadel_contracts::citadel::containers::v1::{
     DeleteContainerRequest, ListContainersRequest, StreamContainersStatsRequest,
     container_service_client::ContainerServiceClient,
 };
+use citadel_contracts::citadel::deployments::v1::{
+    ApplyDeploymentRequest, ContainerRestartPolicy as ProtoRestartPolicy, DeployedContainerState,
+    DeploymentSpec as ProtoDeploymentSpec, LifeCycleSpec as ProtoLifeCycleSpec,
+    ResourceSpec as ProtoResourceSpec, StopSignal as ProtoStopSignal,
+    deployment_service_client::DeploymentServiceClient,
+};
 use citadel_contracts::citadel::images::v1::{
-    ListImagesRequest, image_service_client::ImageServiceClient,
+    ListImagesRequest, PullImageRequest, image_service_client::ImageServiceClient,
 };
 use citadel_contracts::citadel::networks::v1::{
     ConfigFromMessage, CreateNetworkRequest, DeleteNetworkRequest, InspectNetworkRequest,
@@ -28,6 +34,10 @@ use citadel_contracts::citadel::volumes::v1::{
     CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
     volume_service_client::VolumeServiceClient,
 };
+use citadel_deployments::{
+    ContainerRestartPolicy, RuntimeContainerState, RuntimeDeploymentCommand,
+    RuntimeDeploymentResult, StopSignal,
+};
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, PlatformInventoryPort,
     PlatformResourceMutationPort, PlatformRuntimePort, RuntimeCapabilityError,
@@ -35,7 +45,10 @@ use citadel_platforms::{
     RuntimeNetworkSummary, RuntimeStatsStream, RuntimeSwarmConfig, RuntimeSwarmNode,
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
-use citadel_platforms::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats};
+use citadel_platforms::{
+    RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats, RuntimeSwarmInfo,
+    RuntimeSwarmPeer,
+};
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use prost::Message;
@@ -52,9 +65,11 @@ const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(200);
 const PLATFORM_INFO_METHOD: &str = "/citadel.platforms.v1.PlatformService/GetPlatformInfo";
 const LIST_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/List";
 const DELETE_CONTAINER_METHOD: &str = "/citadel.containers.v1.ContainerService/Delete";
+const APPLY_DEPLOYMENT_METHOD: &str = "/citadel.deployments.v1.DeploymentService/Apply";
 const STREAM_CONTAINERS_STATS_METHOD: &str =
     "/citadel.containers.v1.ContainerService/StreamContainersStats";
 const LIST_IMAGES_METHOD: &str = "/citadel.images.v1.ImageService/List";
+const PULL_IMAGE_METHOD: &str = "/citadel.images.v1.ImageService/Pull";
 const LIST_NETWORKS_METHOD: &str = "/citadel.networks.v1.NetworkService/List";
 const INSPECT_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Inspect";
 const CREATE_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Create";
@@ -343,6 +358,148 @@ impl AgentClient {
         ImageServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
             .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    fn deployment_client(&self) -> DeploymentServiceClient<Channel> {
+        DeploymentServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+            .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
+    }
+
+    /// Pull is deliberately not retried: once an Agent accepts this mutation,
+    /// retrying after an ambiguous transport failure could duplicate work.
+    pub async fn pull_deployment_image(
+        &self,
+        image: &str,
+        registry_auth: Option<String>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            PullImageRequest {
+                from_image: image.to_owned(),
+                from_src: None,
+                repo: None,
+                tag: None,
+                auth: registry_auth,
+                changes: Vec::new(),
+            },
+            PULL_IMAGE_METHOD,
+            None,
+        )?;
+        let mut client = self.image_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(
+                self.operation_timeout,
+                client.pull(request),
+            ) => result
+                .map_err(|_| timeout_error("opening the Agent image-pull stream"))?
+                .map_err(normalize_status)?,
+        };
+        let mut stream = response.into_inner();
+        loop {
+            let item = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                item = stream.next() => item,
+            };
+            let Some(item) = item else { break };
+            let item = item.map_err(normalize_status)?;
+            let message = item
+                .error_message
+                .or_else(|| item.error.and_then(|error| error.message));
+            if let Some(message) = message.filter(|message| !message.trim().is_empty()) {
+                return Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Remote,
+                    message,
+                    false,
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply is deliberately not retried for the same mutation-safety reason as Pull.
+    pub async fn apply_deployment(
+        &self,
+        command: &RuntimeDeploymentCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<RuntimeDeploymentResult, RuntimeCapabilityError> {
+        let spec = &command.spec;
+        let life_cycle_spec = spec
+            .life_cycle_spec
+            .as_ref()
+            .map(|life_cycle| ProtoLifeCycleSpec {
+                stop_timeout: life_cycle.stop_timeout,
+                stop_signal: life_cycle.stop_signal.map(|signal| match signal {
+                    StopSignal::SIGTERM => ProtoStopSignal::Sigterm as i32,
+                    StopSignal::SIGKILL => ProtoStopSignal::Sigkill as i32,
+                    StopSignal::SIGINT => ProtoStopSignal::Sigint as i32,
+                    StopSignal::SIGQUIT => ProtoStopSignal::Sigquit as i32,
+                }),
+                restart_policy: match life_cycle.restart_policy {
+                    ContainerRestartPolicy::No => ProtoRestartPolicy::No as i32,
+                    ContainerRestartPolicy::Always => ProtoRestartPolicy::Always as i32,
+                    ContainerRestartPolicy::OnFailure => ProtoRestartPolicy::OnFailure as i32,
+                    ContainerRestartPolicy::UnlessStopped => {
+                        ProtoRestartPolicy::UnlessStopped as i32
+                    }
+                },
+            });
+        let resource_spec = spec
+            .resource_spec
+            .as_ref()
+            .map(|resource| ProtoResourceSpec {
+                nano_cpus: resource.nano_cpus,
+                memory_limit: resource.memory_limit,
+            });
+        let request = self.signer.sign(
+            ApplyDeploymentRequest {
+                image_id: command.image_id.clone(),
+                name: command.name.clone(),
+                spec: Some(ProtoDeploymentSpec {
+                    image_id: command.image_id.clone(),
+                    life_cycle_spec,
+                    resource_spec,
+                    labels: spec
+                        .labels
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect(),
+                    ports: spec.ports.clone().unwrap_or_default(),
+                    env_vars: command.environment_variables.clone(),
+                    volumes: spec.volumes.clone().unwrap_or_default(),
+                    networks: spec.networks.clone().unwrap_or_default(),
+                    command: spec.command.clone().unwrap_or_default(),
+                }),
+            },
+            APPLY_DEPLOYMENT_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.deployment_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(
+                self.operation_timeout,
+                client.apply(request),
+            ) => result
+                .map_err(|_| timeout_error("applying a Deployment through the Agent"))?
+                .map_err(normalize_status)?,
+        }
+        .into_inner();
+        let state = match DeployedContainerState::try_from(response.deployed_container_state) {
+            Ok(DeployedContainerState::Running) => RuntimeContainerState::Running,
+            Ok(DeployedContainerState::Exited) => RuntimeContainerState::Exited,
+            Ok(DeployedContainerState::Timeout) | Err(_) => RuntimeContainerState::Timeout,
+        };
+        Ok(RuntimeDeploymentResult {
+            docker_container_id: response.container_id,
+            docker_image_id: command.image_id.clone(),
+            state,
+        })
     }
 
     fn network_client(&self) -> NetworkServiceClient<Channel> {
@@ -1293,6 +1450,25 @@ fn nonempty(value: String) -> Option<String> {
 
 fn map_platform_info(value: PlatformInfoResponse) -> RuntimePlatformInfo {
     let stats = value.platform_stat.unwrap_or_default();
+    let swarm = value.swarm_info.map(|swarm| RuntimeSwarmInfo {
+        node_id: swarm.node_id,
+        node_addr: swarm.node_addr,
+        local_node_state: swarm.local_node_state,
+        control_available: swarm.control_available,
+        error: nonempty(swarm.error),
+        remote_managers: swarm
+            .remote_managers
+            .into_iter()
+            .map(|manager| RuntimeSwarmPeer {
+                node_id: manager.node_id,
+                address: manager.addr,
+            })
+            .collect(),
+        nodes: swarm.nodes,
+        managers: swarm.managers,
+        cluster_id: nonempty(swarm.cluster_id),
+        cluster_created_at: protobuf_timestamp(swarm.cluster_created_at),
+    });
     RuntimePlatformInfo {
         daemon_id: value.id,
         server_version: value.server_version,
@@ -1308,6 +1484,7 @@ fn map_platform_info(value: PlatformInfoResponse) -> RuntimePlatformInfo {
         api_version: value.api_version,
         minimum_api_version: value.minimum_api_version,
         agent_version: Some(value.agent_version),
+        swarm,
     }
 }
 

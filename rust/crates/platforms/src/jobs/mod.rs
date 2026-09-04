@@ -7,4 +7,6 @@ pub use container_stats::{
     persist_container_stats,
 };
 pub use event_policy::triggers_inventory_reconciliation;
-pub use inventory_reconciliation::{InventoryCollectionTarget, collect_inventory};
+pub use inventory_reconciliation::{
+    InventoryCollectionTarget, collect_inventory, collect_inventory_from_info,
+};

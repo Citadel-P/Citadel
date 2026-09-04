@@ -13,6 +13,12 @@ use citadel_contracts::citadel::containers::v1::{
     ExecClientMessage, ExecServerMessage, InspectContainerRequest, ListContainersRequest,
     ListContainersResponse, StreamContainerStatsRequest, StreamContainersStatsRequest,
 };
+use citadel_contracts::citadel::deployments::v1::deployment_service_server::{
+    DeploymentService as AgentDeploymentService, DeploymentServiceServer,
+};
+use citadel_contracts::citadel::deployments::v1::{
+    ApplyDeploymentRequest, ApplyDeploymentResponse, DeployedContainerState,
+};
 use citadel_contracts::citadel::networks::v1::network_service_server::{
     NetworkService, NetworkServiceServer,
 };
@@ -29,6 +35,10 @@ use citadel_contracts::citadel::volumes::v1::{
     CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, ListVolumesResponse,
     RemoveVolumeRequest, RemoveVolumeResponse,
 };
+use citadel_deployments::{
+    DeploymentImageInfo, DeploymentSpec, RuntimeContainerState, RuntimeDeploymentCommand,
+    UpdateBehavior,
+};
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
 };
@@ -41,6 +51,31 @@ struct MutationFixture {
     fail_network_create: bool,
     network_create_calls: Arc<AtomicUsize>,
     container_delete_calls: Arc<AtomicUsize>,
+    deployment_apply_calls: Arc<AtomicUsize>,
+}
+
+#[tonic::async_trait]
+impl AgentDeploymentService for MutationFixture {
+    async fn apply(
+        &self,
+        request: Request<ApplyDeploymentRequest>,
+    ) -> Result<Response<ApplyDeploymentResponse>, Status> {
+        require_signature(&request)?;
+        let request = request.get_ref();
+        assert_eq!(request.image_id, "sha256:image");
+        assert_eq!(request.name, "web");
+        let spec = request.spec.as_ref().expect("Deployment spec");
+        assert_eq!(spec.env_vars, ["TOKEN=resolved"]);
+        assert_eq!(
+            spec.labels.get("owner").map(String::as_str),
+            Some("citadel")
+        );
+        self.deployment_apply_calls.fetch_add(1, Ordering::Relaxed);
+        Ok(Response::new(ApplyDeploymentResponse {
+            container_id: "container-applied".to_owned(),
+            deployed_container_state: DeployedContainerState::Running as i32,
+        }))
+    }
 }
 
 type TestStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
@@ -232,13 +267,15 @@ impl VolumeService for MutationFixture {
 }
 
 #[tokio::test]
-async fn agent_network_and_volume_mutations_are_signed_and_transport_equivalent() {
+async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_equivalent() {
     let calls = Arc::new(AtomicUsize::new(0));
     let container_calls = Arc::new(AtomicUsize::new(0));
+    let deployment_calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
         fail_network_create: false,
         network_create_calls: calls.clone(),
         container_delete_calls: container_calls.clone(),
+        deployment_apply_calls: deployment_calls.clone(),
     })
     .await;
     let client = connect(&address).await;
@@ -276,8 +313,15 @@ async fn agent_network_and_volume_mutations_are_signed_and_transport_equivalent(
         .delete_container("container-1", &cancellation)
         .await
         .unwrap();
+    let applied = client
+        .apply_deployment(&deployment_command(), &cancellation)
+        .await
+        .unwrap();
+    assert_eq!(applied.docker_container_id, "container-applied");
+    assert_eq!(applied.state, RuntimeContainerState::Running);
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(container_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(deployment_calls.load(Ordering::Relaxed), 1);
     shutdown.cancel();
 }
 
@@ -288,6 +332,7 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
         fail_network_create: true,
         network_create_calls: calls.clone(),
         container_delete_calls: Arc::new(AtomicUsize::new(0)),
+        deployment_apply_calls: Arc::new(AtomicUsize::new(0)),
     })
     .await;
     let error = PlatformResourceMutationPort::create_network(
@@ -329,6 +374,32 @@ fn network_input() -> CreateRuntimeNetwork {
     }
 }
 
+fn deployment_command() -> RuntimeDeploymentCommand {
+    RuntimeDeploymentCommand {
+        deployment_id: uuid::Uuid::now_v7(),
+        name: "web".to_owned(),
+        image_id: "sha256:image".to_owned(),
+        spec: DeploymentSpec {
+            image: DeploymentImageInfo::Local {
+                image_id: "image".to_owned(),
+            },
+            update_behavior: UpdateBehavior::Disabled,
+            life_cycle_spec: None,
+            resource_spec: None,
+            labels: Some(std::collections::BTreeMap::from([(
+                "owner".to_owned(),
+                "citadel".to_owned(),
+            )])),
+            ports: None,
+            volumes: None,
+            networks: None,
+            command: None,
+            environment_variables: None,
+        },
+        environment_variables: vec!["TOKEN=resolved".to_owned()],
+    }
+}
+
 async fn connect(address: &str) -> AgentClient {
     AgentClient::connect(
         address,
@@ -349,6 +420,7 @@ async fn start_fixture(fixture: MutationFixture) -> (String, CancellationToken) 
     tokio::spawn(async move {
         tonic::transport::Server::builder()
             .add_service(ContainerServiceServer::new(fixture.clone()))
+            .add_service(DeploymentServiceServer::new(fixture.clone()))
             .add_service(NetworkServiceServer::new(fixture.clone()))
             .add_service(VolumeServiceServer::new(fixture))
             .serve_with_shutdown(address, shutdown.cancelled_owned())

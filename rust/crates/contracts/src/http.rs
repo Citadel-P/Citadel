@@ -1049,6 +1049,13 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[]
     },
+    APPLY_DEPLOYMENT => {
+        method: Post, path: "/api/v1/deployments/apply", operation_id: "applyDeployment", summary: "Apply a Deployment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ApplyDeploymentInput"), response_schema: Some("DeploymentStreamItems"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable],
+        parameters: &[]
+    },
     DELETE_DEPLOYMENTS => {
         method: Delete, path: "/api/v1/deployments", operation_id: "deleteDeployments", summary: "Delete Deployments",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1104,6 +1111,13 @@ route_catalog! {
         request_schema: None, response_schema: Some("PlatformsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::query("tags", ParameterSchema::ArrayString)]
+    },
+    CREATE_PLATFORM => {
+        method: Post, path: "/api/v1/platforms", operation_id: "createPlatform", summary: "Create a Platform",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreatePlatformInput"), response_schema: Some("PlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[]
     },
     GET_PLATFORM => {
         method: Get, path: "/api/v1/platforms/{id}", operation_id: "getPlatfom", summary: "Get a Platform",
@@ -2147,6 +2161,12 @@ mod tests {
                 "createDeployment",
             ),
             (
+                routes::APPLY_DEPLOYMENT,
+                HttpMethod::Post,
+                "/api/v1/deployments/apply",
+                "applyDeployment",
+            ),
+            (
                 routes::DELETE_DEPLOYMENTS,
                 HttpMethod::Delete,
                 "/api/v1/deployments",
@@ -2198,5 +2218,24 @@ mod tests {
             assert!(route.public);
             assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
         }
+    }
+
+    #[test]
+    fn platform_creation_preserves_the_dotnet_http_contract() {
+        assert_eq!(routes::CREATE_PLATFORM.method, HttpMethod::Post);
+        assert_eq!(routes::CREATE_PLATFORM.path, "/api/v1/platforms");
+        assert_eq!(routes::CREATE_PLATFORM.operation_id, "createPlatform");
+        assert_eq!(
+            routes::CREATE_PLATFORM.authentication,
+            RouteAuthentication::Actor
+        );
+        assert_eq!(
+            routes::CREATE_PLATFORM.request_schema,
+            Some("CreatePlatformInput")
+        );
+        assert_eq!(
+            routes::CREATE_PLATFORM.response_schema,
+            Some("PlatformView")
+        );
     }
 }

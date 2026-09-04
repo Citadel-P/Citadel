@@ -476,6 +476,73 @@ pub struct RenameDeploymentInput {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplyDeploymentInput {
+    pub id: Uuid,
+    #[serde(default)]
+    pub recreate: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentApplyError {
+    pub code: i64,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagePullProgress {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentStreamItem {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<ImagePullProgress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<DeploymentApplyError>,
+}
+
+impl DeploymentStreamItem {
+    #[must_use]
+    pub fn info(message: impl Into<String>) -> Self {
+        Self {
+            progress_message: Some(message.into()),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn failure(code: i64, message: impl Into<String>) -> Self {
+        let message = message.into();
+        Self {
+            error_message: Some(message.clone()),
+            error: Some(DeploymentApplyError { code, message }),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DeploymentFilter {
     pub tags: Vec<String>,
@@ -526,6 +593,79 @@ pub struct DeletionClaim {
     pub previous_status: String,
     pub description: Option<String>,
     pub spec: DeploymentSpec,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplyClaim {
+    pub id: Uuid,
+    pub platform_id: Uuid,
+    pub platform_address: String,
+    pub name: String,
+    pub row_version: i64,
+    pub description: Option<String>,
+    pub spec: DeploymentSpec,
+    pub existing_container_id: Option<Uuid>,
+    pub existing_docker_container_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedDeploymentImage {
+    pub docker_image_id: String,
+    pub digest: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RuntimeDeploymentCommand {
+    pub deployment_id: Uuid,
+    pub name: String,
+    pub image_id: String,
+    pub spec: DeploymentSpec,
+    pub environment_variables: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeContainerState {
+    Running,
+    Exited,
+    Timeout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDeploymentResult {
+    pub docker_container_id: String,
+    pub docker_image_id: String,
+    pub state: RuntimeContainerState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeploymentBindingSnapshot {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Kind")]
+    pub kind: String,
+    #[serde(rename = "Scope")]
+    pub scope: String,
+    #[serde(rename = "Value")]
+    pub value: String,
+    #[serde(rename = "SecretId", skip_serializing_if = "Option::is_none")]
+    pub secret_id: Option<Uuid>,
+    #[serde(rename = "SecretDeliveryMode", skip_serializing_if = "Option::is_none")]
+    pub secret_delivery_mode: Option<String>,
+    #[serde(rename = "TargetPath", skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ResolvedDeploymentBinding {
+    pub name: String,
+    pub value: zeroize::Zeroizing<String>,
+    pub secret: bool,
+    pub snapshot: DeploymentBindingSnapshot,
+}
+
+#[derive(Debug, Default)]
+pub struct ResolvedDeploymentBindings {
+    pub entries: Vec<ResolvedDeploymentBinding>,
 }
 
 #[derive(Debug, thiserror::Error)]

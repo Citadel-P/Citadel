@@ -1,12 +1,29 @@
-use citadel_deployments::{DeploymentError, DeploymentRuntimePort};
-use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
-use futures_util::{FutureExt, future::BoxFuture};
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
+
+use base64::Engine;
+use citadel_deployments::{
+    ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntimePort,
+    PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
+    RuntimeDeploymentResult, StopSignal,
+};
+use citadel_platforms::{
+    PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind,
+};
+use futures_util::{FutureExt, StreamExt, future::BoxFuture};
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::agent::AgentClient;
 use crate::docker::{DockerClient, DockerError};
+
+const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_DOCKER_HUB_ID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000100);
+const DEPLOYMENT_LABEL: &str = "com.citadel.deployment-id";
+const MANAGED_LABEL: &str = "com.citadel.managed";
 
 #[derive(Clone)]
 pub struct DeploymentRuntimeRouter {
@@ -24,9 +41,375 @@ impl DeploymentRuntimeRouter {
             agent,
         }
     }
+
+    async fn platform(&self, platform_id: Uuid) -> Result<PlatformTarget, DeploymentError> {
+        let row = sqlx::query("SELECT connectortype,address,status FROM platforms WHERE id=$1")
+            .bind(platform_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)?
+            .ok_or(DeploymentError::NotFound)?;
+        let status: String = row.try_get("status").map_err(storage)?;
+        if status != "Online" {
+            return Err(DeploymentError::Runtime(
+                "Platform not found or disconnected.".to_owned(),
+            ));
+        }
+        Ok(PlatformTarget {
+            connector: row.try_get("connectortype").map_err(storage)?,
+            address: row.try_get("address").map_err(storage)?,
+        })
+    }
+
+    fn agent_for(&self, target: &PlatformTarget) -> Result<&AgentClient, DeploymentError> {
+        self.agent
+            .as_ref()
+            .filter(|agent| {
+                agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
+            })
+            .ok_or_else(|| {
+                DeploymentError::Runtime(
+                    "The configured Agent transport is unavailable.".to_owned(),
+                )
+            })
+    }
+
+    async fn prepare_local_image(
+        &self,
+        platform_id: Uuid,
+        image_id: &str,
+    ) -> Result<PreparedDeploymentImage, DeploymentError> {
+        let id = Uuid::parse_str(image_id).map_err(|_| {
+            DeploymentError::Validation("The selected local image is invalid.".to_owned())
+        })?;
+        let docker_image_id = sqlx::query_scalar::<_, String>(
+            "SELECT dockerimageid FROM images WHERE id=$1 AND platformid=$2",
+        )
+        .bind(id)
+        .bind(platform_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| {
+            DeploymentError::Validation(
+                "The selected local image is not available on this platform.".to_owned(),
+            )
+        })?;
+        Ok(PreparedDeploymentImage {
+            docker_image_id,
+            digest: None,
+        })
+    }
+
+    async fn registry(
+        &self,
+        registry_id: Uuid,
+        image_tag: &str,
+    ) -> Result<RegistryPull, DeploymentError> {
+        let row =
+            sqlx::query("SELECT registryhost,configuration,status FROM registries WHERE id=$1")
+                .bind(registry_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .ok_or_else(|| {
+                    DeploymentError::Validation("The selected Registry was not found.".to_owned())
+                })?;
+        let status: String = row.try_get("status").map_err(storage)?;
+        if status.eq_ignore_ascii_case("Disabled") {
+            return Err(DeploymentError::Validation(
+                "The selected Registry is disabled.".to_owned(),
+            ));
+        }
+        let host: String = row.try_get("registryhost").map_err(storage)?;
+        let configuration: Value = row.try_get("configuration").map_err(storage)?;
+        let image = qualify_image_reference(&host, image_tag)?;
+        let auth = registry_auth(registry_id, &host, &configuration)?;
+        Ok(RegistryPull { image, auth })
+    }
+
+    async fn prepare_external_image(
+        &self,
+        platform_id: Uuid,
+        registry_id: Uuid,
+        image_tag: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<PreparedDeploymentImage, DeploymentError> {
+        let target = self.platform(platform_id).await?;
+        let pull = self.registry(registry_id, image_tag).await?;
+        if target.connector.eq_ignore_ascii_case("Local") {
+            let mut stream = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                result = self.docker.pull_image(
+                    &pull.image,
+                    pull.auth.as_ref().map(|auth| auth.as_str()),
+                ) => result,
+            }
+            .map_err(runtime)?;
+            while let Some(item) = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                item = stream.next() => item,
+            } {
+                let item = item.map_err(runtime)?;
+                if let Some(message) = item
+                    .error
+                    .or_else(|| item.error_detail.map(|detail| detail.message))
+                    .filter(|message| !message.trim().is_empty())
+                {
+                    return Err(DeploymentError::Runtime(message));
+                }
+            }
+            let images = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                result = self.docker.list_images() => result,
+            }
+            .map_err(runtime)?;
+            return find_image(
+                &pull.image,
+                images
+                    .into_iter()
+                    .map(|image| (image.id, image.repo_tags, image.repo_digests)),
+            );
+        }
+        if target.connector.eq_ignore_ascii_case("Agent") {
+            let agent = self.agent_for(&target)?;
+            agent
+                .pull_deployment_image(
+                    &pull.image,
+                    pull.auth.as_ref().map(|auth| auth.as_str().to_owned()),
+                    cancellation,
+                )
+                .await
+                .map_err(agent_runtime)?;
+            let images = agent
+                .list_images(cancellation)
+                .await
+                .map_err(agent_runtime)?;
+            return find_image(
+                &pull.image,
+                images
+                    .into_iter()
+                    .map(|image| (image.id, image.repo_tags, image.repo_digests)),
+            );
+        }
+        Err(edge_unavailable())
+    }
+
+    async fn apply_local(
+        &self,
+        command: &RuntimeDeploymentCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<RuntimeDeploymentResult, DeploymentError> {
+        let body = docker_create_body(command)?;
+        let container_id = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+            result = self.docker.create_container(&command.name, &body) => result,
+        }
+        .map_err(runtime)?;
+        let start_result = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+            result = self.docker.start_container(&container_id) => result,
+        };
+        if let Err(error) = start_result {
+            // Docker may have accepted Start before the response failed. Inspect the
+            // already-owned Container instead of retrying an ambiguous mutation.
+            tracing::warn!(%error, %container_id, "Deployment container Start returned an error; observing its state");
+        }
+        let state = self.wait_for_container(&container_id, cancellation).await?;
+        Ok(RuntimeDeploymentResult {
+            docker_container_id: container_id,
+            docker_image_id: command.image_id.clone(),
+            state,
+        })
+    }
+
+    async fn wait_for_container(
+        &self,
+        container_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<RuntimeContainerState, DeploymentError> {
+        let deadline = Instant::now() + CONTAINER_START_TIMEOUT;
+        loop {
+            let inspect = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                result = self.docker.inspect_container(container_id) => result,
+            }
+            .map_err(runtime)?;
+            if let Some(state) = observed_container_state(&inspect.state) {
+                return Ok(state);
+            }
+            if Instant::now() >= deadline {
+                return Ok(RuntimeContainerState::Timeout);
+            }
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                () = tokio::time::sleep(Duration::from_millis(500)) => {}
+            }
+        }
+    }
+}
+
+fn observed_container_state(
+    state: &crate::docker::generated::ContainerState,
+) -> Option<RuntimeContainerState> {
+    if let Some(health) = &state.health {
+        if health.status.eq_ignore_ascii_case("starting") {
+            return None;
+        }
+        return Some(if health.status.eq_ignore_ascii_case("healthy") {
+            RuntimeContainerState::Running
+        } else {
+            RuntimeContainerState::Exited
+        });
+    }
+    if state.running {
+        return Some(RuntimeContainerState::Running);
+    }
+    (state.status.eq_ignore_ascii_case("exited") || state.dead)
+        .then_some(RuntimeContainerState::Exited)
 }
 
 impl DeploymentRuntimePort for DeploymentRuntimeRouter {
+    fn prepare_image<'a>(
+        &'a self,
+        platform_id: Uuid,
+        image: &'a DeploymentImageInfo,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
+        async move {
+            match image {
+                DeploymentImageInfo::Local { image_id } => {
+                    self.prepare_local_image(platform_id, image_id).await
+                }
+                DeploymentImageInfo::External {
+                    registry_id,
+                    image_tag,
+                    ..
+                } => {
+                    self.prepare_external_image(
+                        platform_id,
+                        *registry_id,
+                        image_tag,
+                        cancellation,
+                    )
+                    .await
+                }
+                DeploymentImageInfo::Build { .. } => Err(DeploymentError::Validation(
+                    "Build-backed Deployment Apply is not available until Build execution migrates to Rust."
+                        .to_owned(),
+                )),
+            }
+        }
+        .boxed()
+    }
+
+    fn apply_container<'a>(
+        &'a self,
+        platform_id: Uuid,
+        command: &'a RuntimeDeploymentCommand,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
+        async move {
+            let target = self.platform(platform_id).await?;
+            if target.connector.eq_ignore_ascii_case("Local") {
+                return self.apply_local(command, cancellation).await;
+            }
+            if target.connector.eq_ignore_ascii_case("Agent") {
+                let mut normalized = command.clone();
+                normalize_resource_limits(&mut normalized);
+                add_ownership_labels(&mut normalized);
+                return self
+                    .agent_for(&target)?
+                    .apply_deployment(&normalized, cancellation)
+                    .await
+                    .map_err(agent_runtime);
+            }
+            Err(edge_unavailable())
+        }
+        .boxed()
+    }
+
+    fn observe_deployment<'a>(
+        &'a self,
+        platform_id: Uuid,
+        deployment_id: Uuid,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<RuntimeDeploymentResult>, DeploymentError>> {
+        async move {
+            let target = self.platform(platform_id).await?;
+            let deployment_id = deployment_id.to_string();
+            if target.connector.eq_ignore_ascii_case("Local") {
+                let containers = tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                    result = self.docker.list_containers(true) => result,
+                }
+                .map_err(runtime)?;
+                let Some(container) = containers
+                    .into_iter()
+                    .filter(|container| {
+                        container.labels.get(DEPLOYMENT_LABEL) == Some(&deployment_id)
+                    })
+                    .max_by_key(|container| {
+                        (
+                            container.created,
+                            container.state.eq_ignore_ascii_case("running"),
+                        )
+                    })
+                else {
+                    return Ok(None);
+                };
+                let inspect = tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
+                    result = self.docker.inspect_container(&container.id) => result,
+                }
+                .map_err(runtime)?;
+                return Ok(Some(RuntimeDeploymentResult {
+                    docker_container_id: container.id,
+                    docker_image_id: container.image_id,
+                    state: observed_container_state(&inspect.state)
+                        .unwrap_or(RuntimeContainerState::Timeout),
+                }));
+            }
+            if target.connector.eq_ignore_ascii_case("Agent") {
+                let containers = self
+                    .agent_for(&target)?
+                    .list_containers(cancellation)
+                    .await
+                    .map_err(agent_runtime)?;
+                let Some(container) = containers
+                    .into_iter()
+                    .filter(|container| {
+                        container.labels.get(DEPLOYMENT_LABEL) == Some(&deployment_id)
+                    })
+                    .max_by_key(|container| {
+                        (
+                            container.created,
+                            container.state.eq_ignore_ascii_case("running"),
+                        )
+                    })
+                else {
+                    return Ok(None);
+                };
+                return Ok(Some(RuntimeDeploymentResult {
+                    docker_container_id: container.id,
+                    docker_image_id: container.image_id,
+                    state: container_summary_state(&container.state, &container.status),
+                }));
+            }
+            Err(edge_unavailable())
+        }
+        .boxed()
+    }
+
     fn delete_container<'a>(
         &'a self,
         platform_id: Uuid,
@@ -34,48 +417,481 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         async move {
-            let row = sqlx::query("SELECT connectortype,address FROM platforms WHERE id=$1")
-                .bind(platform_id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|error| DeploymentError::Storage(error.to_string()))?
-                .ok_or(DeploymentError::NotFound)?;
-            let connector: String = row
-                .try_get("connectortype")
-                .map_err(|error| DeploymentError::Storage(error.to_string()))?;
-            let address: String = row
-                .try_get("address")
-                .map_err(|error| DeploymentError::Storage(error.to_string()))?;
-            if connector.eq_ignore_ascii_case("Local") {
+            let target = self.platform(platform_id).await?;
+            if target.connector.eq_ignore_ascii_case("Local") {
                 let result = tokio::select! {
                     biased;
                     () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
                     result = self.docker.delete_container(docker_container_id, true, true) => result,
                 };
                 return match result {
-                    Ok(()) | Err(DockerError::Api { status: reqwest::StatusCode::NOT_FOUND, .. }) => Ok(()),
-                    Err(error) => Err(DeploymentError::Runtime(error.to_string())),
+                    Ok(())
+                    | Err(DockerError::Api {
+                        status: reqwest::StatusCode::NOT_FOUND,
+                        ..
+                    }) => Ok(()),
+                    Err(error) => Err(runtime(error)),
                 };
             }
-            if connector.eq_ignore_ascii_case("Agent") {
-                let agent = self
-                    .agent
-                    .as_ref()
-                    .filter(|agent| agent.address().trim_end_matches('/') == address.trim_end_matches('/'))
-                    .ok_or_else(|| DeploymentError::Runtime("The configured Agent transport is unavailable.".to_owned()))?;
-                return match agent.delete_container(docker_container_id, cancellation).await {
+            if target.connector.eq_ignore_ascii_case("Agent") {
+                return match self
+                    .agent_for(&target)?
+                    .delete_container(docker_container_id, cancellation)
+                    .await
+                {
                     Ok(())
                     | Err(RuntimeCapabilityError {
                         kind: RuntimeErrorKind::NotFound,
                         ..
                     }) => Ok(()),
-                    Err(error) => Err(DeploymentError::Runtime(error.to_string())),
+                    Err(error) => Err(agent_runtime(error)),
                 };
             }
-            Err(DeploymentError::Runtime(
-                "The Edge Agent is disconnected or unavailable.".to_owned(),
-            ))
+            Err(edge_unavailable())
         }
         .boxed()
+    }
+}
+
+struct PlatformTarget {
+    connector: String,
+    address: String,
+}
+
+struct RegistryPull {
+    image: String,
+    auth: Option<Zeroizing<String>>,
+}
+
+fn qualify_image_reference(host: &str, image: &str) -> Result<String, DeploymentError> {
+    let image = image.trim();
+    if image.is_empty() || image.len() > 2048 {
+        return Err(DeploymentError::Validation(
+            "The external image reference is invalid.".to_owned(),
+        ));
+    }
+    let docker_hub = host.eq_ignore_ascii_case("hub.docker.com")
+        || host.eq_ignore_ascii_case("docker.io")
+        || host.eq_ignore_ascii_case("registry-1.docker.io");
+    let first = image.split('/').next().unwrap_or_default();
+    let already_qualified = image.contains('/')
+        && (first.contains('.') || first.contains(':') || first.eq_ignore_ascii_case("localhost"));
+    let mut qualified = if docker_hub || already_qualified {
+        image.to_owned()
+    } else {
+        format!(
+            "{}/{}",
+            host.trim_end_matches('/'),
+            image.trim_start_matches('/')
+        )
+    };
+    let last = qualified.rsplit('/').next().unwrap_or_default();
+    if !qualified.contains('@') && !last.contains(':') {
+        qualified.push_str(":latest");
+    }
+    Ok(qualified)
+}
+
+fn registry_auth(
+    registry_id: Uuid,
+    host: &str,
+    configuration: &Value,
+) -> Result<Option<Zeroizing<String>>, DeploymentError> {
+    let kind = configuration
+        .get("$type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let field = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|name| configuration.get(*name).and_then(Value::as_str))
+    };
+    let enabled = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|name| configuration.get(*name).and_then(Value::as_bool))
+    };
+    let credentials = match kind {
+        "DockerHub" => field(&["UserName", "userName", "username"]).zip(field(&["PAT", "pat"])),
+        "GitHub" => {
+            if enabled(&["GhcrAuthEnabled", "ghcrAuthEnabled"]) == Some(true) {
+                field(&["NameSpace", "nameSpace"]).zip(field(&["PAT", "pat"]))
+            } else {
+                None
+            }
+        }
+        "Custom" => {
+            if enabled(&["AuthEnabled", "authEnabled"]) == Some(true) {
+                field(&["UserName", "userName", "username"]).zip(field(&["Password", "password"]))
+            } else {
+                None
+            }
+        }
+        "" if registry_id == DEFAULT_DOCKER_HUB_ID => None,
+        _ => {
+            return Err(DeploymentError::Validation(
+                "This Registry type is not available for Deployment Apply in the Rust server yet."
+                    .to_owned(),
+            ));
+        }
+    };
+    let Some((username, password)) = credentials else {
+        return Ok(None);
+    };
+    let json = serde_json::to_vec(&json!({
+        "username": username,
+        "password": password,
+        "serveraddress": host,
+    }))
+    .map_err(|error| DeploymentError::Storage(error.to_string()))?;
+    Ok(Some(Zeroizing::new(
+        base64::engine::general_purpose::STANDARD.encode(json),
+    )))
+}
+
+fn find_image<I>(requested: &str, images: I) -> Result<PreparedDeploymentImage, DeploymentError>
+where
+    I: IntoIterator<Item = (String, Vec<String>, Vec<String>)>,
+{
+    let images = images.into_iter().collect::<Vec<_>>();
+    let repository = tag_repository(requested);
+    for exact_only in [true, false] {
+        for (id, tags, digests) in &images {
+            let exact = tags.iter().any(|tag| tag == requested)
+                || digests.iter().any(|digest| digest == requested);
+            let same_repository = tags.iter().any(|tag| tag_repository(tag) == repository)
+                || digests
+                    .iter()
+                    .any(|digest| tag_repository(digest) == repository);
+            if (exact_only && !exact) || (!exact_only && !same_repository) {
+                continue;
+            }
+            let digest = digests
+                .iter()
+                .find(|digest| tag_repository(digest) == repository);
+            return Ok(PreparedDeploymentImage {
+                docker_image_id: id.clone(),
+                digest: digest.cloned(),
+            });
+        }
+    }
+    Err(DeploymentError::Runtime(format!(
+        "Docker pulled '{requested}' but did not report the image afterwards."
+    )))
+}
+
+fn tag_repository(reference: &str) -> &str {
+    let without_digest = reference.split('@').next().unwrap_or(reference);
+    let last_slash = without_digest.rfind('/');
+    match without_digest.rfind(':') {
+        Some(colon) if last_slash.is_none_or(|slash| colon > slash) => &without_digest[..colon],
+        _ => without_digest,
+    }
+}
+
+fn docker_create_body(command: &RuntimeDeploymentCommand) -> Result<Value, DeploymentError> {
+    let mut command = command.clone();
+    normalize_resource_limits(&mut command);
+    add_ownership_labels(&mut command);
+    let mut exposed_ports = serde_json::Map::new();
+    let mut port_bindings = serde_json::Map::new();
+    for value in command.spec.ports.as_deref().unwrap_or_default() {
+        let (key, host_port) = parse_port(value)?;
+        exposed_ports.insert(key.clone(), json!({}));
+        if let Some(host_port) = host_port {
+            port_bindings.insert(key, json!([{ "HostPort": host_port.to_string() }]));
+        }
+    }
+    let mounts = command
+        .spec
+        .volumes
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|value| parse_mount(value))
+        .collect::<Result<Vec<_>, _>>()?;
+    let endpoints = command
+        .spec
+        .networks
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|network| (network.to_owned(), json!({})))
+        .collect::<serde_json::Map<_, _>>();
+    let resource = command.spec.resource_spec.as_ref();
+    let memory = resource
+        .and_then(|value| value.memory_limit)
+        .map(|value| value as i64)
+        .unwrap_or_default();
+    let nano_cpus = resource
+        .and_then(|value| value.nano_cpus)
+        .map(|value| value as i64)
+        .unwrap_or_default();
+    let lifecycle = command.spec.life_cycle_spec.as_ref();
+    let restart = lifecycle.map_or(ContainerRestartPolicy::No, |value| value.restart_policy);
+    Ok(json!({
+        "Image": command.image_id,
+        "Cmd": command.spec.command,
+        "Env": command.environment_variables,
+        "Labels": command.spec.labels,
+        "StopSignal": lifecycle.and_then(|value| value.stop_signal).map(stop_signal),
+        "StopTimeout": lifecycle.and_then(|value| value.stop_timeout),
+        "ExposedPorts": exposed_ports,
+        "HostConfig": {
+            "PortBindings": port_bindings,
+            "Mounts": mounts,
+            "Memory": memory,
+            "NanoCpus": nano_cpus,
+            "RestartPolicy": { "Name": restart_policy(restart) }
+        },
+        "NetworkingConfig": { "EndpointsConfig": endpoints }
+    }))
+}
+
+fn normalize_resource_limits(command: &mut RuntimeDeploymentCommand) {
+    if let Some(resource) = command.spec.resource_spec.as_mut() {
+        resource.nano_cpus = resource
+            .nano_cpus
+            .filter(|value| *value > 0.0)
+            .map(|value| value * 1_000_000_000.0);
+        resource.memory_limit = resource
+            .memory_limit
+            .filter(|value| *value > 0.0)
+            .map(|value| value * 1024.0 * 1024.0);
+    }
+}
+
+fn add_ownership_labels(command: &mut RuntimeDeploymentCommand) {
+    let labels = command.spec.labels.get_or_insert_with(BTreeMap::new);
+    labels.insert(MANAGED_LABEL.to_owned(), "true".to_owned());
+    labels.insert(
+        DEPLOYMENT_LABEL.to_owned(),
+        command.deployment_id.to_string(),
+    );
+}
+
+fn parse_port(value: &str) -> Result<(String, Option<u16>), DeploymentError> {
+    let (port, protocol) = value.split_once('/').unwrap_or((value, "tcp"));
+    if !matches!(protocol, "tcp" | "udp" | "sctp") {
+        return Err(DeploymentError::Validation(format!(
+            "Deployment port '{value}' uses an unsupported protocol."
+        )));
+    }
+    let (host, container) = port
+        .split_once(':')
+        .map_or((None, port), |(host, container)| (Some(host), container));
+    let container = container.parse::<u16>().map_err(|_| {
+        DeploymentError::Validation(format!("Deployment port '{value}' is invalid."))
+    })?;
+    let host = host.map(str::parse::<u16>).transpose().map_err(|_| {
+        DeploymentError::Validation(format!("Deployment port '{value}' is invalid."))
+    })?;
+    Ok((format!("{container}/{protocol}"), host))
+}
+
+fn parse_mount(value: &str) -> Result<Value, DeploymentError> {
+    let parts = value.split(':').collect::<Vec<_>>();
+    if parts.is_empty() || parts.len() > 3 || parts.iter().any(|part| part.is_empty()) {
+        return Err(DeploymentError::Validation(format!(
+            "Deployment volume '{value}' is invalid."
+        )));
+    }
+    let (source, target, read_only) = match parts.as_slice() {
+        [target] => (None, *target, false),
+        [source, target] => (Some(*source), *target, false),
+        [source, target, mode]
+            if mode.eq_ignore_ascii_case("ro") || mode.eq_ignore_ascii_case("rw") =>
+        {
+            (Some(*source), *target, mode.eq_ignore_ascii_case("ro"))
+        }
+        _ => {
+            return Err(DeploymentError::Validation(format!(
+                "Deployment volume '{value}' is invalid."
+            )));
+        }
+    };
+    if !target.starts_with('/') {
+        return Err(DeploymentError::Validation(format!(
+            "Deployment volume target '{target}' must be an absolute container path."
+        )));
+    }
+    let kind = source.map_or("volume", |source| {
+        if source.starts_with('/') || source.starts_with("./") || source.starts_with("../") {
+            "bind"
+        } else {
+            "volume"
+        }
+    });
+    Ok(json!({
+        "Type": kind,
+        "Source": source,
+        "Target": target,
+        "ReadOnly": read_only,
+    }))
+}
+
+const fn stop_signal(signal: StopSignal) -> &'static str {
+    match signal {
+        StopSignal::SIGTERM => "SIGTERM",
+        StopSignal::SIGKILL => "SIGKILL",
+        StopSignal::SIGINT => "SIGINT",
+        StopSignal::SIGQUIT => "SIGQUIT",
+    }
+}
+
+const fn restart_policy(policy: ContainerRestartPolicy) -> &'static str {
+    match policy {
+        ContainerRestartPolicy::No => "no",
+        ContainerRestartPolicy::Always => "always",
+        ContainerRestartPolicy::OnFailure => "on-failure",
+        ContainerRestartPolicy::UnlessStopped => "unless-stopped",
+    }
+}
+
+fn container_summary_state(state: &str, status: &str) -> RuntimeContainerState {
+    if state.eq_ignore_ascii_case("running") && !status.to_ascii_lowercase().contains("unhealthy") {
+        RuntimeContainerState::Running
+    } else {
+        RuntimeContainerState::Exited
+    }
+}
+
+fn runtime(error: DockerError) -> DeploymentError {
+    DeploymentError::Runtime(error.to_string())
+}
+
+fn agent_runtime(error: RuntimeCapabilityError) -> DeploymentError {
+    if error.kind == RuntimeErrorKind::Cancelled {
+        DeploymentError::Cancelled
+    } else {
+        DeploymentError::Runtime(error.to_string())
+    }
+}
+
+fn edge_unavailable() -> DeploymentError {
+    DeploymentError::Runtime("The Edge Agent is disconnected or unavailable.".to_owned())
+}
+
+fn storage(error: sqlx::Error) -> DeploymentError {
+    DeploymentError::Storage(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use citadel_deployments::{DeploymentImageInfo, DeploymentSpec, UpdateBehavior};
+
+    fn command() -> RuntimeDeploymentCommand {
+        RuntimeDeploymentCommand {
+            deployment_id: Uuid::from_u128(0x1234),
+            name: "web".to_owned(),
+            image_id: "sha256:image".to_owned(),
+            spec: DeploymentSpec {
+                image: DeploymentImageInfo::Local {
+                    image_id: Uuid::from_u128(0x99).to_string(),
+                },
+                update_behavior: UpdateBehavior::Disabled,
+                life_cycle_spec: None,
+                resource_spec: None,
+                labels: None,
+                ports: Some(vec!["8080:80/tcp".to_owned(), "53/udp".to_owned()]),
+                volumes: Some(vec!["data:/data:ro".to_owned()]),
+                networks: Some(vec!["frontend".to_owned()]),
+                command: Some(vec!["nginx".to_owned()]),
+                environment_variables: Some(vec!["IGNORED=source".to_owned()]),
+            },
+            environment_variables: vec!["ACTIVE=resolved".to_owned()],
+        }
+    }
+
+    #[test]
+    fn create_body_maps_runtime_values_and_ownership_without_source_environment() {
+        let body = docker_create_body(&command()).unwrap();
+
+        assert_eq!(body["Image"], "sha256:image");
+        assert_eq!(body["Env"][0], "ACTIVE=resolved");
+        assert!(body.to_string().find("IGNORED=source").is_none());
+        assert_eq!(body["ExposedPorts"]["80/tcp"], json!({}));
+        assert_eq!(
+            body["HostConfig"]["PortBindings"]["80/tcp"][0]["HostPort"],
+            "8080"
+        );
+        assert_eq!(body["HostConfig"]["Mounts"][0]["Type"], "volume");
+        assert_eq!(body["HostConfig"]["Mounts"][0]["ReadOnly"], true);
+        assert_eq!(body["HostConfig"]["Memory"], 0);
+        assert_eq!(body["HostConfig"]["NanoCpus"], 0);
+        assert_eq!(
+            body["Labels"][DEPLOYMENT_LABEL],
+            Uuid::from_u128(0x1234).to_string()
+        );
+        assert_eq!(body["Labels"][MANAGED_LABEL], "true");
+    }
+
+    #[test]
+    fn image_reference_qualification_preserves_ports_and_adds_default_tag() {
+        assert_eq!(
+            qualify_image_reference("hub.docker.com", "nginx").unwrap(),
+            "nginx:latest"
+        );
+        assert_eq!(
+            qualify_image_reference("registry.example:5000", "team/web").unwrap(),
+            "registry.example:5000/team/web:latest"
+        );
+        assert_eq!(
+            tag_repository("registry.example:5000/team/web:1.2"),
+            "registry.example:5000/team/web"
+        );
+        let selected = find_image(
+            "team/web:latest",
+            [
+                (
+                    "sha256:old".to_owned(),
+                    vec!["team/web:old".to_owned()],
+                    vec!["team/web@sha256:old".to_owned()],
+                ),
+                (
+                    "sha256:current".to_owned(),
+                    vec!["team/web:latest".to_owned()],
+                    vec!["team/web@sha256:current".to_owned()],
+                ),
+            ],
+        )
+        .unwrap();
+        assert_eq!(selected.docker_image_id, "sha256:current");
+    }
+
+    #[test]
+    fn malformed_port_and_mount_are_rejected_before_docker_is_called() {
+        assert!(parse_port("abc:80").is_err());
+        assert!(parse_port("80/http").is_err());
+        assert!(parse_mount("data:relative").is_err());
+        assert!(parse_mount("a:/data:ro:extra").is_err());
+    }
+
+    #[test]
+    fn container_health_takes_precedence_over_the_running_flag() {
+        let mut state = crate::docker::generated::ContainerState {
+            running: true,
+            health: Some(crate::docker::generated::ContainerHealth {
+                status: "starting".to_owned(),
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(observed_container_state(&state), None);
+        state.health.as_mut().unwrap().status = "unhealthy".to_owned();
+        assert_eq!(
+            observed_container_state(&state),
+            Some(RuntimeContainerState::Exited)
+        );
+        state.health.as_mut().unwrap().status = "healthy".to_owned();
+        assert_eq!(
+            observed_container_state(&state),
+            Some(RuntimeContainerState::Running)
+        );
+        assert_eq!(
+            container_summary_state("running", "Up 30 seconds (unhealthy)"),
+            RuntimeContainerState::Exited
+        );
     }
 }
