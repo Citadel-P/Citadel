@@ -1220,10 +1220,10 @@ fn phase6_deployment_schemas() -> Map<String, Value> {
     schemas.insert(
         "DeploymentSpec".into(),
         json!({
-            "type":"object","required":["image","updateBehavior"],"additionalProperties":false,
+            "type":"object","required":["image"],"additionalProperties":false,
             "properties":{
                 "image":{"$ref":"#/components/schemas/DeploymentImageInfo"},
-                "updateBehavior":{"$ref":"#/components/schemas/UpdateBehavior"},
+                "updateBehavior":{"$ref":"#/components/schemas/UpdateBehavior","default":"Disabled"},
                 "lifeCycleSpec":nullable(json!({"$ref":"#/components/schemas/LifeCycleSpec"})),
                 "resourceSpec":nullable(json!({"$ref":"#/components/schemas/ResourceSpec"})),
                 "labels":{"type":["object","null"],"additionalProperties":string()},
@@ -2507,6 +2507,18 @@ fn write_or_check(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deployment_update_behavior_is_optional_and_defaults_to_disabled() {
+        for document in [document(false), document(true)] {
+            let schema = &document["components"]["schemas"]["DeploymentSpec"];
+            assert_eq!(schema["required"], json!(["image"]));
+            assert_eq!(
+                schema["properties"]["updateBehavior"]["default"],
+                "Disabled"
+            );
+        }
+    }
 
     #[test]
     fn generated_documents_do_not_contain_dangling_schema_references() {

@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UpdateBehavior {
+    #[default]
     #[serde(alias = "disabled")]
     Disabled,
     #[serde(alias = "notify")]
@@ -197,6 +198,7 @@ pub struct LifeCycleSpec {
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentSpec {
     pub image: DeploymentImageInfo,
+    #[serde(default)]
     pub update_behavior: UpdateBehavior,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub life_cycle_spec: Option<LifeCycleSpec>,
@@ -1000,6 +1002,54 @@ mod tests {
         .unwrap();
 
         assert!(input.tag_ids.is_empty());
+    }
+
+    #[test]
+    fn create_contract_defaults_omitted_update_behavior_to_disabled() {
+        // The existing UI omits this field when automatic updates are not selected.
+        let input: CreateDeploymentInput = serde_json::from_value(serde_json::json!({
+            "name":"nginx",
+            "platformId":"01a071b6-cc32-7c42-afb2-9656711f2aaa",
+            "spec":{
+                "image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"},
+                "ports":[],"networks":["bridge"]
+            }
+        })).unwrap();
+        assert_eq!(input.spec.update_behavior, UpdateBehavior::Disabled);
+        assert!(input.spec.validate().is_ok());
+        assert_eq!(input.spec.networks, Some(vec!["bridge".into()]));
+        assert_eq!(
+            input.spec.to_storage_value().unwrap()["UpdateBehavior"],
+            "Disabled"
+        );
+    }
+
+    #[test]
+    fn update_behavior_preserves_explicit_values_and_rejects_invalid_values() {
+        for behavior in ["Disabled", "Notify", "AutoDeploy"] {
+            let spec: DeploymentSpec = serde_json::from_value(serde_json::json!({
+                "image":{"$type":"External","registryId":Uuid::from_u128(0x100),"imageTag":"nginx"},
+                "updateBehavior":behavior
+            }))
+            .unwrap();
+            assert_eq!(
+                serde_json::to_value(spec).unwrap()["updateBehavior"],
+                behavior
+            );
+        }
+        for invalid in [
+            serde_json::Value::Null,
+            serde_json::json!("invalid"),
+            serde_json::json!(123),
+        ] {
+            assert!(
+                serde_json::from_value::<DeploymentSpec>(serde_json::json!({
+                    "image":{"$type":"Local","imageId":"sha256:test"},"updateBehavior":invalid
+                }))
+                .is_err()
+            );
+        }
+        assert!(serde_json::from_value::<DeploymentSpec>(serde_json::json!({})).is_err());
     }
 
     #[test]
