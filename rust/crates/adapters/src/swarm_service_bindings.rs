@@ -10,16 +10,24 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::secret_value_resolver::PostgresSecretValueResolver;
+
 #[derive(Clone)]
 pub struct PostgresSwarmServiceBindingResolver {
     pool: PgPool,
-    protector: Arc<dyn ResourceSecretProtector>,
+    secrets: PostgresSecretValueResolver,
 }
 
 impl PostgresSwarmServiceBindingResolver {
-    #[must_use]
-    pub fn new(pool: PgPool, protector: Arc<dyn ResourceSecretProtector>) -> Self {
-        Self { pool, protector }
+    pub fn new(
+        pool: PgPool,
+        protector: Arc<dyn ResourceSecretProtector>,
+    ) -> Result<Self, SwarmServiceError> {
+        Ok(Self {
+            pool: pool.clone(),
+            secrets: PostgresSecretValueResolver::new(pool, protector)
+                .map_err(|error| SwarmServiceError::Storage(error.to_string()))?,
+        })
     }
 }
 
@@ -39,10 +47,8 @@ impl SwarmServiceBindingResolverPort for PostgresSwarmServiceBindingResolver {
                 .collect::<Vec<_>>();
             let rows = sqlx::query(
                 r#"SELECT binding.name,binding.kind,binding.secretdeliverymode,
-                          binding.value,secret.providertype,internal.encryptedvalue
+                          binding.value,binding.secretid
                    FROM resourcebindings binding
-                   LEFT JOIN secretdefinitions secret ON secret.id=binding.secretid
-                   LEFT JOIN internalsecretvalues internal ON internal.secretid=secret.id
                    WHERE (binding.scope='Global' AND binding.resourceid IS NULL
                           OR binding.scope='SwarmService' AND binding.resourceid=$1)
                      AND lower(binding.name)=ANY($2::text[])
@@ -69,34 +75,19 @@ impl SwarmServiceBindingResolverPort for PostgresSwarmServiceBindingResolver {
                             "Secret '{name}' must use environment-variable delivery for a Service."
                         )));
                     }
-                    if row
-                        .try_get::<Option<String>, _>("providertype")
-                        .map_err(storage)?
-                        .as_deref()
-                        != Some("InternalEncrypted")
-                    {
-                        return Err(SwarmServiceError::Validation(format!(
-                            "External Secret '{name}' cannot be resolved until external provider execution migrates to Rust."
-                        )));
-                    }
-                    let envelope = row
-                        .try_get::<Option<String>, _>("encryptedvalue")
+                    let secret_id = row
+                        .try_get::<Option<Uuid>, _>("secretid")
                         .map_err(storage)?
                         .ok_or_else(|| {
                             SwarmServiceError::Validation(format!(
-                                "Secret '{name}' has no encrypted value."
+                                "Secret binding '{name}' has no Secret reference."
                             ))
                         })?;
-                    let plaintext = self.protector.unprotect(&envelope).map_err(|_| {
+                    self.secrets.resolve(secret_id).await.map_err(|error| {
                         SwarmServiceError::Validation(format!(
-                            "Secret '{name}' could not be decrypted."
+                            "Secret '{name}' could not be resolved: {error}"
                         ))
-                    })?;
-                    Zeroizing::new(String::from_utf8(plaintext.to_vec()).map_err(|_| {
-                        SwarmServiceError::Validation(format!(
-                            "Secret '{name}' does not contain valid UTF-8 text."
-                        ))
-                    })?)
+                    })?
                 } else {
                     Zeroizing::new(
                         row.try_get::<Option<String>, _>("value")

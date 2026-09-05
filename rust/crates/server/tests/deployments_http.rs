@@ -67,6 +67,7 @@ impl DeploymentRuntimePort for RecordingRuntime {
             Ok(PreparedDeploymentImage {
                 docker_image_id: "sha256:applied".to_owned(),
                 digest: None,
+                resolved_build: None,
             })
         }
         .boxed()

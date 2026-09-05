@@ -505,6 +505,65 @@ async fn list_networks(
     ))
 }
 
+/// Called only after LookupStore has checked source/context Platform access.
+pub(crate) async fn lookup_platform_resources(
+    state: &PlatformsHttpState,
+    platform_id: Uuid,
+    kind: citadel_domain::LookupResourceType,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let runtime = match runtime_for(state, platform_id).await {
+        Ok(runtime) => runtime,
+        Err(error) => return Ok(runtime_error_response(error, headers)),
+    };
+    let cancellation = CancellationToken::new();
+    let names = if kind == citadel_domain::LookupResourceType::Volume {
+        let result = match runtime {
+            RuntimeRef::Local(runtime) => {
+                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            }
+            RuntimeRef::Agent(runtime) => {
+                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            }
+        };
+        result.map(|values| {
+            values
+                .into_iter()
+                .map(|value| value.name)
+                .collect::<Vec<_>>()
+        })
+    } else {
+        let result = match runtime {
+            RuntimeRef::Local(runtime) => {
+                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            }
+            RuntimeRef::Agent(runtime) => {
+                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            }
+        };
+        result.map(|values| {
+            values
+                .into_iter()
+                .map(|value| value.name)
+                .collect::<Vec<_>>()
+        })
+    };
+    let mut names = match names {
+        Ok(names) => names,
+        Err(error) => return Ok(runtime_error_response(error, headers)),
+    };
+    names.sort();
+    let rows: Vec<_> = names
+        .into_iter()
+        .map(|name| citadel_resources::LookupResourceInfo {
+            id: Uuid::nil(),
+            name,
+            group: None,
+        })
+        .collect();
+    Ok(no_store(Json(rows).into_response()))
+}
+
 async fn get_network(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1256,6 +1315,67 @@ async fn volume_capabilities(
 enum RuntimeRef<'a> {
     Local(&'a DockerClient),
     Agent(&'a AgentClient),
+}
+
+pub(crate) async fn realtime_daemon_snapshot(
+    state: &PlatformsHttpState,
+    principal: &ActorPrincipal,
+    id: Uuid,
+) -> Result<crate::realtime_groups::GroupSnapshot, crate::realtime::RealtimeReadError> {
+    use crate::realtime::RealtimeReadError;
+    use crate::realtime_groups::{GroupRows, GroupSnapshot, RowStyle};
+    let failure = |error: RuntimeCapabilityError| RealtimeReadError::Storage(error.to_string());
+    let headers = HeaderMap::new();
+    let platform = authorize_platform(state, principal, id, &headers)
+        .await
+        .map_err(|_| RealtimeReadError::Authorization)?;
+    let volume_cap = volume_capabilities(state, principal, id, platform, &headers)
+        .await
+        .map_err(|_| RealtimeReadError::Authorization)?;
+    let runtime = runtime_for(state, id).await.map_err(failure)?;
+    let cancellation = CancellationToken::new();
+    let networks = match runtime {
+        RuntimeRef::Local(runtime) => {
+            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+        }
+        RuntimeRef::Agent(runtime) => {
+            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+        }
+    }
+    .map_err(failure)?;
+    let volumes = match runtime {
+        RuntimeRef::Local(runtime) => {
+            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+        }
+        RuntimeRef::Agent(runtime) => {
+            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+        }
+    }
+    .map_err(failure)?;
+    let serialize = |error: serde_json::Error| RealtimeReadError::Storage(error.to_string());
+    Ok(GroupSnapshot {
+        events: vec![],
+        rows: vec![
+            GroupRows {
+                target: "NetworkEventReceived",
+                style: RowStyle::Daemon,
+                rows: networks
+                    .into_iter()
+                    .map(|n| serde_json::to_value(map_network(n, network_capabilities(platform))))
+                    .collect::<Result<_, _>>()
+                    .map_err(serialize)?,
+            },
+            GroupRows {
+                target: "VolumeEventReceived",
+                style: RowStyle::Daemon,
+                rows: volumes
+                    .into_iter()
+                    .map(|v| serde_json::to_value(map_volume(v, volume_cap)))
+                    .collect::<Result<_, _>>()
+                    .map_err(serialize)?,
+            },
+        ],
+    })
 }
 
 async fn runtime_for(

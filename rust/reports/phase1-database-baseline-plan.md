@@ -23,8 +23,8 @@ Phase 2 will:
 1. deterministically copy the pinned generated SQL and remove only the
    `__EFMigrationsHistory` table and its journal insert;
 2. require exactly 82 product tables and retain all 92 generated seed inserts;
-3. store that result as the Rust-owned declarative `schema.sql` and immutable
-   `0001_rust_v1` baseline, with source and output checksums;
+3. store that result as the Rust-owned declarative `schema.sql` and generated
+   `0001_initial.sql` baseline, with source and output checksums;
 4. apply it with the Rust migration runner under a Citadel-specific PostgreSQL
    advisory lock and record checksum, name, start time, completion time, and
    failure evidence in a Rust-owned history table;
@@ -32,10 +32,13 @@ Phase 2 will:
 6. run clean install, concurrent startup, failed migration, checksum mismatch,
    restart, and restore tests on supported PostgreSQL versions.
 
-For later structural changes, update the Rust-owned SQL schema and generate an
-immutable migration with DPM. Generated destructive statements require explicit
-review. Seed and other data changes are explicit bounded data steps because a
-structural schema differ does not manage table contents.
+Before the first Rust release, structural changes update the Rust-owned SQL
+schema and regenerate the single `0001_initial.sql` baseline. Development data
+that has applied an older checksum must be reset. After release freezes that
+baseline, later structural changes use immutable DPM-generated migrations.
+Generated destructive statements require explicit review. Seed and other data
+changes are explicit bounded data steps because a structural schema differ does
+not manage table contents.
 
 ## Pre-release cutover
 

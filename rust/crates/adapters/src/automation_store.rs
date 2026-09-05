@@ -3,10 +3,32 @@ use citadel_automation::{
     AutomationActionInput, AutomationActionView, AutomationError, AutomationRunClaim,
     AutomationRunResult, AutomationRunView, AutomationStore, code_hash,
 };
-use citadel_domain::ActorId;
+use citadel_domain::{ActorId, ResourceType};
 use futures_util::future::BoxFuture;
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
+
+const READ_MASK: i32 = 1 | 2 | 4;
+const AUTHORIZED_CTE: &str = r#"
+WITH actor_scope AS (
+    SELECT actor.id AS actorid FROM actors actor
+    WHERE actor.id=$1 AND actor.isenabled
+    UNION
+    SELECT team.actorid
+    FROM actorteammemberships membership
+    JOIN teams team ON team.id=membership.teamid
+    JOIN actors team_actor ON team_actor.id=team.actorid AND team_actor.isenabled
+    WHERE membership.memberactorid=$1
+), global_access AS (
+    SELECT EXISTS (
+        SELECT 1 FROM actor_scope scope
+        JOIN actorroles assignment ON assignment.actorid=scope.actorid
+        JOIN permissions permission ON permission.roleid=assignment.roleid
+        WHERE permission.resourcetype=$2
+          AND (permission.permissionlevel & $3) <> 0
+    ) AS allowed
+)
+"#;
 
 #[derive(Clone)]
 pub struct PostgresAutomationStore {
@@ -40,9 +62,28 @@ impl AutomationStore for PostgresAutomationStore {
         })
     }
 
-    fn list<'a>(&'a self) -> BoxFuture<'a, Result<Vec<AutomationActionView>, AutomationError>> {
+    fn list(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+    ) -> BoxFuture<'_, Result<Vec<AutomationActionView>, AutomationError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM actions ORDER BY name,id")
+            let query = format!(
+                r#"{AUTHORIZED_CTE}
+SELECT action.* FROM actions action
+WHERE $4 OR (SELECT allowed FROM global_access) OR EXISTS (
+    SELECT 1 FROM actor_scope scope
+    JOIN resourceaccesses access ON access.actorid=scope.actorid
+    WHERE access.resourcetype=$2 AND access.resourceid=action.id
+      AND (access.permissionlevel & $3) <> 0
+)
+ORDER BY action.name,action.id"#
+            );
+            sqlx::query(AssertSqlSafe(query.as_str()))
+                .bind(actor.value())
+                .bind(ResourceType::AutomationAction as i32)
+                .bind(READ_MASK)
+                .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?
@@ -61,6 +102,49 @@ impl AutomationStore for PostgresAutomationStore {
                 .map_err(storage)?
                 .ok_or(AutomationError::NotFound)
                 .and_then(map_action)
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        id: Uuid,
+        input: &'a AutomationActionInput,
+    ) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>> {
+        Box::pin(async move {
+            let affected = sqlx::query("UPDATE actions SET alertonfailure=$2,code=$3,defaultargsjson=$4,description=$5,enabled=$6,runasactorid=$7,schedulecron=$8,scheduleenabled=$9,scheduletimezone=$10,timeoutseconds=$11,webhook=$12,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1")
+                .bind(id).bind(input.alert_on_failure).bind(&input.code)
+                .bind(parse_args(input.default_args_json.as_deref().unwrap_or("{}"))?)
+                .bind(input.description.as_deref()).bind(input.enabled)
+                .bind(input.run_as_actor_id.ok_or_else(|| AutomationError::Validation("Run-as Actor is required.".to_owned()))?)
+                .bind(input.schedule_cron.as_deref()).bind(input.schedule_enabled)
+                .bind(input.schedule_time_zone.as_deref().unwrap_or("UTC"))
+                .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref())
+                .execute(&self.pool).await.map_err(database)?.rows_affected();
+            if affected == 0 {
+                return Err(AutomationError::NotFound);
+            }
+            self.get(id).await
+        })
+    }
+
+    fn rename<'a>(
+        &'a self,
+        id: Uuid,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>> {
+        Box::pin(async move {
+            let name = name.trim();
+            if name.is_empty() || name.chars().count() > 128 {
+                return Err(AutomationError::Validation(
+                    "Automation Action name must contain between 1 and 128 characters.".to_owned(),
+                ));
+            }
+            let affected = sqlx::query("UPDATE actions SET name=$2,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1")
+                .bind(id).bind(name).execute(&self.pool).await.map_err(database)?.rows_affected();
+            if affected == 0 {
+                return Err(AutomationError::NotFound);
+            }
+            self.get(id).await
         })
     }
 
@@ -97,6 +181,7 @@ impl AutomationStore for PostgresAutomationStore {
         id: Uuid,
         trigger: &'a str,
         args: &'a serde_json::Value,
+        timeout_seconds: Option<i32>,
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
         Box::pin(async move {
             if !args.is_object() {
@@ -127,7 +212,13 @@ impl AutomationStore for PostgresAutomationStore {
             let code: String = action.try_get("code").map_err(storage)?;
             let name: String = action.try_get("name").map_err(storage)?;
             let run_as: Uuid = action.try_get("runasactorid").map_err(storage)?;
-            let timeout: i32 = action.try_get("timeoutseconds").map_err(storage)?;
+            let configured_timeout: i32 = action.try_get("timeoutseconds").map_err(storage)?;
+            let timeout = timeout_seconds.unwrap_or(configured_timeout);
+            if !(1..=86_400).contains(&timeout) {
+                return Err(AutomationError::Validation(
+                    "Automation timeout must be between 1 and 86400 seconds.".to_owned(),
+                ));
+            }
             sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Queued',$9,$10,$11)")
                 .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                 .bind(Utc::now()).bind(run_as).bind(timeout).bind(trigger).bind(actor.value())
@@ -190,6 +281,72 @@ impl AutomationStore for PostgresAutomationStore {
         })
     }
 
+    fn get_run<'a>(
+        &'a self,
+        action_id: Uuid,
+        run_id: Uuid,
+    ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
+        Box::pin(async move { get_run(&self.pool, action_id, run_id).await })
+    }
+
+    fn list_scheduled<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<AutomationActionView>, AutomationError>> {
+        Box::pin(async move {
+            sqlx::query("SELECT * FROM actions WHERE enabled=true AND scheduleenabled=true AND schedulecron IS NOT NULL ORDER BY id")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?
+                .into_iter()
+                .map(map_action)
+                .collect()
+        })
+    }
+
+    fn enqueue_scheduled<'a>(
+        &'a self,
+        action_id: Uuid,
+        scheduled_minute: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<Option<AutomationRunView>, AutomationError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let Some(action) = sqlx::query("SELECT * FROM actions WHERE id=$1 AND enabled=true AND scheduleenabled=true FOR UPDATE")
+                .bind(action_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(storage)? else {
+                    tx.rollback().await.map_err(storage)?;
+                    return Ok(None);
+                };
+            let last: Option<DateTime<Utc>> =
+                action.try_get("lastscheduledrunat").map_err(storage)?;
+            let state: String = action.try_get("controlstate").map_err(storage)?;
+            if last.is_some_and(|value| value >= scheduled_minute) || state != "Idle" {
+                tx.rollback().await.map_err(storage)?;
+                return Ok(None);
+            }
+            let run_id = Uuid::now_v7();
+            let code: String = action.try_get("code").map_err(storage)?;
+            let name: String = action.try_get("name").map_err(storage)?;
+            let run_as: Uuid = action.try_get("runasactorid").map_err(storage)?;
+            let timeout: i32 = action.try_get("timeoutseconds").map_err(storage)?;
+            let args: serde_json::Value = action.try_get("defaultargsjson").map_err(storage)?;
+            sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Queued',$9,'Schedule',NULL)")
+                .bind(run_id).bind(action_id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
+                .bind(Utc::now()).bind(run_as).bind(timeout)
+                .execute(&mut *tx).await.map_err(database)?;
+            let affected = sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,lastscheduledrunat=$3,rowversion=rowversion+1 WHERE id=$1 AND controlstate='Idle'")
+                .bind(action_id).bind(run_id).bind(scheduled_minute)
+                .execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            if affected != 1 {
+                tx.rollback().await.map_err(storage)?;
+                return Ok(None);
+            }
+            tx.commit().await.map_err(storage)?;
+            Ok(Some(get_run(&self.pool, action_id, run_id).await?))
+        })
+    }
+
     fn cancel<'a>(
         &'a self,
         action_id: Uuid,
@@ -216,7 +373,7 @@ async fn recover_interrupted(
     tx: &mut Transaction<'_, Postgres>,
     stale_before: DateTime<Utc>,
 ) -> Result<(), AutomationError> {
-    let rows = sqlx::query("UPDATE actionruns SET status='Failed',finishedat=CURRENT_TIMESTAMP,errormessage='Automation run was interrupted by a Core restart.' WHERE status='Running' AND startedat<$1 RETURNING actionid,id").bind(stale_before).fetch_all(&mut **tx).await.map_err(storage)?;
+    let rows = sqlx::query("UPDATE actionruns SET status='Failed',finishedat=CURRENT_TIMESTAMP,errormessage='Automation run was interrupted by a Core restart.' WHERE status='Running' AND startedat<$1 AND startedat+make_interval(secs=>timeoutseconds+300)<CURRENT_TIMESTAMP RETURNING actionid,id").bind(stale_before).fetch_all(&mut **tx).await.map_err(storage)?;
     for row in rows {
         let action: Uuid = row.try_get("actionid").map_err(storage)?;
         let run: Uuid = row.try_get("id").map_err(storage)?;
@@ -279,7 +436,10 @@ fn map_run(row: sqlx::postgres::PgRow) -> Result<AutomationRunView, AutomationEr
         status: row.try_get("status").map_err(storage)?,
         run_as_actor_id: row.try_get("runasactorid").map_err(storage)?,
         triggered_by_actor_id: row.try_get("triggeredbyactorid").map_err(storage)?,
-        args_json: row.try_get("argsjson").map_err(storage)?,
+        args_json: row
+            .try_get::<serde_json::Value, _>("argsjson")
+            .map_err(storage)?
+            .to_string(),
         code_snapshot: row.try_get("codesnapshot").map_err(storage)?,
         code_hash: row.try_get("codehash").map_err(storage)?,
         timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,

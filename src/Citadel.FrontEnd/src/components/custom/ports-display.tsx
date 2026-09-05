@@ -79,7 +79,8 @@ const getPublishedPorts = (ports?: Record<string, HostPortBinding[]> | null): Pu
   if (!ports) return [];
 
   return Object.entries(ports).flatMap(([containerPort, bindings]) => {
-    const publishedBindings = bindings.filter((binding) => binding.hostPort);
+    if (!Array.isArray(bindings)) return [];
+    const publishedBindings = bindings.filter((binding) => typeof binding?.hostPort === 'string' && binding.hostPort);
     const hostPort = publishedBindings[0]?.hostPort;
     if (!hostPort) return [];
 

@@ -4,6 +4,8 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use chrono::{Duration, Utc};
+use citadel_adapters::automation_store::PostgresAutomationStore;
+use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
@@ -12,6 +14,7 @@ use citadel_adapters::git_account_store::PostgresGitAccountStore;
 use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
+use citadel_automation::{AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
@@ -20,6 +23,7 @@ use citadel_identity::{
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_resources::ResourceMetadataService;
+use citadel_server::automation_http::{self, AutomationHttpState};
 use citadel_server::git_accounts_http::{self, GitAccountsHttpState};
 use citadel_server::git_repositories_http::{self, GitRepositoriesHttpState};
 use citadel_server::resources_http::{self, ResourcesHttpState};
@@ -71,6 +75,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         std::time::Duration::from_secs(60),
     ));
     let cancellation = tokio_util::sync::CancellationToken::new();
+    let automation = Arc::new(AutomationService::new(
+        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
+        AutomationRuntimeConfig {
+            deno_path: "deno".into(),
+            work_root: std::env::temp_dir()
+                .join(format!("citadel-automation-http-{}", Uuid::now_v7())),
+            internal_base_url: "http://127.0.0.1:8000".to_owned(),
+            endpoint_catalog_json: citadel_server::automation_endpoint_catalog_json(),
+            maximum_log_bytes: 64 * 1024,
+            stale_after: std::time::Duration::from_secs(60),
+        },
+    ));
     let app = resources_http::router(ResourcesHttpState {
         identity: Arc::clone(&identity),
         resources: Arc::clone(&resources),
@@ -82,7 +99,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         realtime: None,
     }))
     .merge(git_repositories_http::router(GitRepositoriesHttpState {
-        identity,
+        identity: Arc::clone(&identity),
         resources,
         execution: Arc::clone(&git_execution),
         realtime: None,
@@ -90,6 +107,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     }))
     .merge(webhooks_http::router(WebhooksHttpState {
         git: Arc::clone(&git_execution),
+        alerts: None,
+    }))
+    .merge(automation_http::router(AutomationHttpState {
+        identity,
+        automation,
     }));
     assert_eq!(
         request(&app, Method::GET, "/api/v1/tags", None, None)
@@ -133,6 +155,97 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         roles: vec!["Admin".into()],
     };
     let suffix = Uuid::now_v7().simple().to_string();
+
+    let automation_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/automation/actions",
+        Some(administrator.clone()),
+        Some(json!({
+            "name":format!("phase7-action-{suffix}"),
+            "description":"integration action",
+            "code":"console.log(args);",
+            "defaultArgsJson":"{}",
+            "enabled":true,
+            "scheduleEnabled":false,
+            "scheduleCron":null,
+            "scheduleTimeZone":"UTC",
+            "webhook":null,
+            "timeoutSeconds":30,
+            "alertOnFailure":true,
+            "runAsActorId":administrator_actor_id,
+            "tagIds":[]
+        })),
+    )
+    .await;
+    assert_eq!(automation_response.status(), StatusCode::OK);
+    let automation_action = response_json(automation_response).await;
+    let automation_id = automation_action["id"].as_str().unwrap();
+    let renamed = request(
+        &app,
+        Method::POST,
+        "/api/v1/automation/actions/rename",
+        Some(administrator.clone()),
+        Some(json!({"id":automation_id,"name":format!("phase7-renamed-{suffix}")})),
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::OK);
+    let updated = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/v1/automation/actions/{automation_id}"),
+        Some(administrator.clone()),
+        Some(json!({"description":null,"timeoutSeconds":45})),
+    )
+    .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let updated = response_json(updated).await;
+    assert_eq!(updated["timeoutSeconds"], 45);
+    assert!(updated["description"].is_null());
+    let unsupported_update = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/v1/automation/actions/{automation_id}"),
+        Some(administrator.clone()),
+        Some(json!({"name":"bypass-rename"})),
+    )
+    .await;
+    assert_eq!(unsupported_update.status(), StatusCode::BAD_REQUEST);
+    let queued_response = request(
+        &app,
+        Method::POST,
+        &format!("/api/v1/automation/actions/{automation_id}/run"),
+        Some(administrator.clone()),
+        Some(json!({"argsJson":"{\"mode\":\"manual\"}"})),
+    )
+    .await;
+    assert_eq!(queued_response.status(), StatusCode::OK);
+    let queued = response_json(queued_response).await;
+    let run_id = queued[0]["runId"].as_str().unwrap();
+    let persisted_run = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/automation/actions/{automation_id}/runs/{run_id}"),
+            Some(administrator.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(persisted_run["argsJson"], "{\"mode\":\"manual\"}");
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!("/api/v1/automation/actions/{automation_id}/runs/{run_id}/cancel"),
+            Some(administrator.clone()),
+            None,
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
     let malformed = request_raw(
         &app,
         Method::POST,

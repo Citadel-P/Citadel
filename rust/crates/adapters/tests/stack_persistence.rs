@@ -8,9 +8,9 @@ use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_stacks::{
     ComposeProjectRuntimeService, CreateStackInput, ImportComposeProjectInput, PatchStackInput,
-    StackDriftPolicy, StackFilter, StackImportClaim, StackImportKind, StackReleaseStatus,
-    StackRuntimePort, StackRuntimeResult, StackSource, StackSpec, StackSpecCommon, StackStore,
-    StackUpdateBehavior,
+    StackDriftPolicy, StackFilter, StackImportClaim, StackImportKind, StackReleaseSource,
+    StackReleaseStatus, StackRuntimePort, StackRuntimeResult, StackSource, StackSpec,
+    StackSpecCommon, StackStore, StackUpdateBehavior,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -128,6 +128,21 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 messages: Vec::new(),
             },
             &[],
+            Some(&StackReleaseSource {
+                source_type: StackSource::WebEditor,
+                git_repository_id: None,
+                git_repository_name: None,
+                branch: None,
+                requested_commit_sha: None,
+                resolved_commit_sha: String::new(),
+                compose_paths: vec!["compose.yml".to_owned()],
+                env_file_paths: Vec::new(),
+                git_repository_url: None,
+                working_directory: None,
+                watch_paths: None,
+                compose_env_files_from_repo: None,
+                compose_digest: Some("sha256:fixture".to_owned()),
+            }),
         )
         .await
         .unwrap();
@@ -140,6 +155,24 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             .is_some_and(|compose| compose.contains("nginx:alpine"))
     );
     let current = store.get_authorized(actor, true, created.id).await.unwrap();
+    assert_eq!(
+        store
+            .drift_monitor_candidates(None, 25)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|candidate| candidate.id == created.id)
+            .count(),
+        1,
+        "an idle healthy Stack with drift detection enabled must be monitored"
+    );
+    assert_eq!(
+        current
+            .source
+            .as_ref()
+            .and_then(|source| source.compose_digest.as_deref()),
+        Some("sha256:fixture")
+    );
     let updated = store
         .update(
             actor,
@@ -183,6 +216,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 messages: Vec::new(),
             },
             &[],
+            None,
         )
         .await
         .unwrap();
@@ -224,6 +258,15 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     let stopped = store.get_authorized(actor, true, created.id).await.unwrap();
     assert_eq!(stopped.status, StackReleaseStatus::Stopped);
     assert_eq!(stopped.control_state, "Idle");
+    assert!(
+        store
+            .drift_monitor_candidates(None, 25)
+            .await
+            .unwrap()
+            .iter()
+            .all(|candidate| candidate.id != created.id),
+        "an intentionally stopped Stack must not be treated as drift"
+    );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='StackStopped'"
@@ -412,6 +455,106 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .await
         .unwrap();
     store.complete_delete(actor, &imported_claim).await.unwrap();
+
+    let git_repository_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repository.git','Idle')")
+        .bind(git_repository_id)
+        .bind(actor.value())
+        .bind(format!("stack-git-{suffix}"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let git_stack = store
+        .create(
+            actor,
+            true,
+            &CreateStackInput {
+                name: format!("git-stack-{suffix}"),
+                platform_id,
+                description: None,
+                stack_source: StackSource::Git,
+                spec: StackSpec::Git {
+                    git_repo_id: git_repository_id,
+                    branch: "main".to_owned(),
+                    commit_sha: None,
+                    update_behavior: StackUpdateBehavior::Notify,
+                    webhook: None,
+                    compose_paths: vec!["compose.yml".to_owned()],
+                    working_directory: None,
+                    compose_env_files_from_repo: Vec::new(),
+                    watch_paths: Vec::new(),
+                    additional_env_file_from_repo: Vec::new(),
+                    common: StackSpecCommon::default(),
+                },
+                drift_policy: Some(StackDriftPolicy::default()),
+                tag_ids: Vec::new(),
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    let git_claim = store
+        .claim_apply(actor, true, git_stack.id, None)
+        .await
+        .unwrap();
+    let resolved_commit = "a".repeat(40);
+    store
+        .complete_apply(
+            actor,
+            &git_claim,
+            &StackRuntimeResult {
+                status: StackReleaseStatus::Healthy,
+                messages: Vec::new(),
+            },
+            &[],
+            Some(&StackReleaseSource {
+                source_type: StackSource::Git,
+                git_repository_id: Some(git_repository_id),
+                git_repository_name: Some("repository".to_owned()),
+                branch: Some("main".to_owned()),
+                requested_commit_sha: None,
+                resolved_commit_sha: resolved_commit.clone(),
+                compose_paths: vec!["compose.yml".to_owned()],
+                env_file_paths: Vec::new(),
+                git_repository_url: Some("https://example.test/repository.git".to_owned()),
+                working_directory: Some(".".to_owned()),
+                watch_paths: Some(Vec::new()),
+                compose_env_files_from_repo: Some(Vec::new()),
+                compose_digest: Some("sha256:git-fixture".to_owned()),
+            }),
+        )
+        .await
+        .unwrap();
+    let applied_git_stack = store
+        .get_authorized(actor, true, git_stack.id)
+        .await
+        .unwrap();
+    let citadel_stacks::StackUpdateState::Git {
+        recreate_stack_on_new_commit_state,
+        ..
+    } = applied_git_stack.stack_update_state
+    else {
+        panic!("Git Stack must retain Git update state");
+    };
+    assert_eq!(
+        recreate_stack_on_new_commit_state.current_commit_sha,
+        resolved_commit
+    );
+    assert!(
+        recreate_stack_on_new_commit_state
+            .remote_commit_sha
+            .is_none()
+    );
+    let git_delete = store
+        .claim_delete(actor, true, &[git_stack.id])
+        .await
+        .unwrap();
+    store.complete_delete(actor, &git_delete).await.unwrap();
+    sqlx::query("DELETE FROM gitrepositories WHERE id=$1")
+        .bind(git_repository_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let claims = store
         .claim_delete(actor, true, &[created.id])

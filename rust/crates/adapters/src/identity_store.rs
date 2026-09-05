@@ -501,6 +501,71 @@ GROUP BY subject.id, subject.name
         })
     }
 
+    fn load_run_as_principal(
+        &self,
+        actor_id: ActorId,
+    ) -> BoxFuture<'_, Result<Option<ActorPrincipal>, IdentityError>> {
+        Box::pin(async move {
+            let row = sqlx::query(
+                r#"
+WITH effective_roles AS (
+    SELECT ar.actorid, ar.roleid FROM actorroles ar WHERE ar.actorid = $1
+    UNION
+    SELECT atm.memberactorid, ar.roleid
+    FROM actorteammemberships atm
+    JOIN teams t ON t.id = atm.teamid
+    JOIN actors ta ON ta.id = t.actorid AND ta.isenabled
+    JOIN actorroles ar ON ar.actorid = t.actorid
+    WHERE atm.memberactorid = $1
+), subjects AS (
+    SELECT id, actorid, name, 'User'::text AS principaltype, NULL::timestamptz AS archivedatutc
+    FROM users
+    UNION ALL
+    SELECT id, actorid, name, 'ServiceAccount'::text AS principaltype, archivedatutc
+    FROM serviceaccounts
+)
+SELECT subject.id, subject.name, subject.principaltype,
+       COALESCE(array_agg(DISTINCT role.name) FILTER (WHERE role.name IS NOT NULL), ARRAY[]::text[]) AS roles
+FROM subjects subject
+JOIN actors actor ON actor.id = subject.actorid AND actor.isenabled
+LEFT JOIN effective_roles effective ON effective.actorid = actor.id
+LEFT JOIN roles role ON role.id = effective.roleid
+WHERE subject.actorid = $1
+  AND (subject.principaltype <> 'ServiceAccount' OR subject.archivedatutc IS NULL)
+GROUP BY subject.id, subject.name, subject.principaltype
+"#,
+            )
+            .bind(actor_id.value())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)?;
+            row.map(|row| {
+                let principal_type = match row
+                    .try_get::<String, _>("principaltype")
+                    .map_err(storage)?
+                    .as_str()
+                {
+                    "User" => AuthenticatedPrincipalType::User,
+                    "ServiceAccount" => AuthenticatedPrincipalType::ServiceAccount,
+                    _ => {
+                        return Err(IdentityError::Storage(
+                            "Invalid run-as Actor type.".to_owned(),
+                        ));
+                    }
+                };
+                Ok(ActorPrincipal {
+                    subject_id: row.try_get("id").map_err(storage)?,
+                    actor_id,
+                    name: row.try_get("name").map_err(storage)?,
+                    principal_type,
+                    credential_id: None,
+                    roles: row.try_get("roles").map_err(storage)?,
+                })
+            })
+            .transpose()
+        })
+    }
+
     fn load_service_account_credential(
         &self,
         credential_id: Uuid,

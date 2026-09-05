@@ -1,8 +1,11 @@
 #![forbid(unsafe_code)]
 
 pub mod activities_http;
+pub mod alerts_http;
 pub mod application_info_http;
 pub mod automation_http;
+pub mod backups_http;
+pub mod builds_http;
 mod capabilities;
 pub mod config;
 pub mod contract_router;
@@ -13,12 +16,14 @@ pub mod git_repositories_http;
 pub mod identity_http;
 pub mod license_http;
 pub mod license_realtime;
+pub mod lookup_http;
 pub mod metrics;
 pub mod mfa_http;
 pub mod oidc_http;
 pub mod platforms_http;
 pub mod profile_http;
 pub mod realtime;
+pub mod realtime_groups;
 pub mod resources_http;
 pub mod roles_http;
 pub mod service_accounts_http;
@@ -29,6 +34,34 @@ pub mod transport;
 pub mod users_http;
 pub mod webhooks_http;
 pub mod workers;
+
+pub fn automation_endpoint_catalog_json() -> String {
+    let endpoints = citadel_contracts::http::ROUTES
+        .iter()
+        .filter(|route| route.path.starts_with("/api/v1/"))
+        .map(|route| {
+            let group = route
+                .path
+                .trim_start_matches("/api/v1/")
+                .split('/')
+                .next()
+                .unwrap_or("api");
+            serde_json::json!({
+                "key": route.operation_id,
+                "group": group,
+                "method": match route.method {
+                    citadel_contracts::http::HttpMethod::Get => "GET",
+                    citadel_contracts::http::HttpMethod::Post => "POST",
+                    citadel_contracts::http::HttpMethod::Put => "PUT",
+                    citadel_contracts::http::HttpMethod::Patch => "PATCH",
+                    citadel_contracts::http::HttpMethod::Delete => "DELETE",
+                },
+                "path": route.path,
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::to_string(&endpoints).expect("typed HTTP contracts serialize")
+}
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

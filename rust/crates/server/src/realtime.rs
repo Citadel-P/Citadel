@@ -24,6 +24,44 @@ use zeroize::Zeroizing;
 use crate::config::RealtimeConfig;
 use crate::metrics::Metrics;
 
+/// Coarse invalidations for resource routers whose writes finish inside the
+/// handler. Jobs publish their claim/completion separately; no payload or IDs
+/// are broadcast here, and every follow-up read applies its normal ACL.
+pub fn notify_mutations(router: Router, resource_type: &'static str) -> Router {
+    router.layer(axum::middleware::from_fn_with_state(
+        resource_type,
+        mutation_notification,
+    ))
+}
+
+async fn mutation_notification(
+    State(resource_type): State<&'static str>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let hub = (!request.method().is_safe())
+        .then(|| request.extensions().get::<RealtimeHub>().cloned())
+        .flatten();
+    let response = next.run(request).await;
+    if response.status().is_success()
+        && let Some(hub) = hub
+    {
+        hub.publish_resource_change(resource_type, Uuid::nil(), "resourceChanged");
+    }
+    response
+}
+
+pub fn change_callback(
+    hub: Option<RealtimeHub>,
+    resource_type: &'static str,
+) -> Arc<dyn Fn() + Send + Sync> {
+    Arc::new(move || {
+        if let Some(hub) = &hub {
+            hub.publish_resource_change(resource_type, Uuid::nil(), "resourceChanged");
+        }
+    })
+}
+
 pub trait RealtimeReadPort: Send + Sync {
     fn authenticate<'a>(
         &'a self,
@@ -128,12 +166,12 @@ const MAX_WRITE_BUFFER_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct PublishedRuntimeEvent {
-    platform_id: Option<Uuid>,
-    resource_type: &'static str,
-    resource_id: Uuid,
-    event_kind: &'static str,
-    resource_revision: u64,
-    payload: Value,
+    pub(crate) platform_id: Option<Uuid>,
+    pub(crate) resource_type: &'static str,
+    pub(crate) resource_id: Uuid,
+    pub(crate) event_kind: &'static str,
+    pub(crate) resource_revision: u64,
+    pub(crate) payload: Value,
 }
 
 #[derive(Clone)]
@@ -257,6 +295,7 @@ pub struct RealtimeService {
 }
 
 struct RealtimeServiceInner {
+    groups: Option<Arc<dyn crate::realtime_groups::GroupReadPort>>,
     subscribe_timeout: Duration,
     send_timeout: Duration,
     authorization_recheck_interval: Duration,
@@ -290,6 +329,7 @@ impl RealtimeService {
     ) -> Self {
         Self {
             inner: Arc::new(RealtimeServiceInner {
+                groups: None,
                 subscribe_timeout: config.subscribe_timeout,
                 send_timeout: config.send_timeout,
                 authorization_recheck_interval: config.authorization_recheck_interval,
@@ -306,6 +346,13 @@ impl RealtimeService {
     #[must_use]
     pub fn hub(&self) -> RealtimeHub {
         self.inner.hub.clone()
+    }
+
+    pub fn with_groups(mut self, reader: Arc<dyn crate::realtime_groups::GroupReadPort>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure groups before sharing the realtime service")
+            .groups = Some(reader);
+        self
     }
 
     pub fn router(self) -> Router {
@@ -343,6 +390,10 @@ struct ClientMessage {
     resource_id: Option<Uuid>,
     last_sequence: Option<u64>,
     last_resource_revision: Option<u64>,
+    client_mode: Option<String>,
+    invocation_id: Option<String>,
+    target: Option<String>,
+    arguments: Option<Vec<Value>>,
 }
 
 #[derive(Serialize)]
@@ -451,7 +502,12 @@ async fn run_connection(
     cancellation: &CancellationToken,
 ) -> Result<(), RealtimeError> {
     let subscribe = receive_initial_subscription(socket, service.inner.subscribe_timeout).await?;
+    let groups_mode = subscribe.client_mode.as_deref() == Some("groups");
     let mut subscription = validate_subscription(service, subscribe).await?;
+
+    if groups_mode {
+        return run_group_connection(socket, service, subscription, cancellation).await;
+    }
 
     let mut connection = ConnectionState::new(subscription.platform_id);
     let mut receiver = service.inner.hub.subscribe();
@@ -503,6 +559,33 @@ async fn run_connection(
                 match event {
                     Ok(event) if event_matches(&event, &connection)
                         && event.resource_revision > connection.last_resource_revision => {
+                        // The global UI subscription can see only authorized Platform summaries,
+                        // never the container statistics carried by a scoped runtime event.
+                        let mut event_kind = event.event_kind;
+                        let mut payload = &event.payload;
+                        let platform_payload;
+                        if connection.platform_id.is_none()
+                            && let Some(platform_id) = event.platform_id
+                        {
+                            let platform = match authorize_platform(service, &subscription.principal, platform_id).await {
+                                Ok(platform) => platform,
+                                Err(RealtimeError::Authorization) => continue,
+                                Err(error) => return Err(error),
+                            };
+                            if event.payload["dockerResourceType"] == "containerStats" {
+                                event_kind = "platformStatsUpdated";
+                                platform_payload = json!({
+                                    "platformId": platform.id,
+                                    "stats": platform.stats,
+                                    "memTotal": platform.mem_total,
+                                });
+                            } else {
+                                event_kind = "platformInventoryChanged";
+                                platform_payload = json!({});
+                            }
+                            payload = &platform_payload;
+                        }
+                        let resource_id = if event.platform_id.is_none() { Uuid::nil() } else { event.resource_id };
                         send_envelope(
                             socket,
                             service,
@@ -510,9 +593,9 @@ async fn run_connection(
                             RealtimeEventRef {
                                 resource_revision: event.resource_revision,
                                 resource_type: event.resource_type,
-                                resource_id: event.resource_id,
-                                event_kind: event.event_kind,
-                                payload: &event.payload,
+                                resource_id,
+                                event_kind,
+                                payload,
                             },
                         ).await?;
                     }
@@ -542,6 +625,130 @@ async fn run_connection(
             }
         }
     }
+}
+
+async fn run_group_connection(
+    socket: &mut WebSocket,
+    service: &RealtimeService,
+    mut subscription: Subscription,
+    cancellation: &CancellationToken,
+) -> Result<(), RealtimeError> {
+    use crate::realtime_groups::{Group, GroupSubscription, MAX_GROUPS};
+    use std::collections::BTreeMap;
+    let reader = service
+        .inner
+        .groups
+        .as_ref()
+        .ok_or(RealtimeError::Authorization)?;
+    let mut groups: BTreeMap<String, GroupSubscription> = BTreeMap::new();
+    let mut receiver = service.inner.hub.subscribe();
+    send_group_message(
+        socket,
+        service,
+        &json!({"protocolVersion":1,"kind":"subscribed"}),
+    )
+    .await?;
+    let mut recheck = tokio::time::interval_at(
+        Instant::now() + service.inner.authorization_recheck_interval,
+        service.inner.authorization_recheck_interval,
+    );
+    recheck.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            biased;
+            ()=cancellation.cancelled()=>return Ok(()),
+            message=socket.next()=>{
+                let text=match message {
+                    Some(Ok(Message::Text(text)))=>text,
+                    Some(Ok(Message::Close(_)))|None=>return Ok(()),
+                    Some(Ok(Message::Ping(_)|Message::Pong(_)))=>continue,
+                    _=>return Err(RealtimeError::InvalidMessage("Expected a text invocation".into())),
+                };
+                let request=parse_client_message(&text)?;
+                if request.protocol_version!=REALTIME_PROTOCOL_VERSION || request.kind!="invoke" {return Err(RealtimeError::InvalidMessage("Expected a versioned invocation".into()));}
+                let invocation=request.invocation_id.filter(|id|!id.is_empty()&&id.len()<=64).ok_or_else(||RealtimeError::InvalidMessage("Invalid invocation ID".into()))?;
+                subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
+                let name=request.arguments.as_ref().and_then(|args|(args.len()==1).then(||args[0].as_str()).flatten());
+                let mut updates=vec![];
+                let error=match (request.target.as_deref(),name) {
+                    (Some("LeaveGroup"),Some(name))=>{groups.remove(name);None},
+                    (Some("JoinGroup"),Some(name))=>{
+                        if !groups.contains_key(name) && groups.len()>=MAX_GROUPS {Some("Realtime group limit exceeded")}
+                        else if let Some(group)=Group::parse(name) {
+                            match tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&group,None)).await {
+                                Ok(Ok(snapshot))=>{
+                                    if groups.contains_key(name) {
+                                        // Revalidate access even on an idempotent join.
+                                        send_group_message(socket,service,&json!({"protocolVersion":1,"kind":"completion","invocationId":invocation,"error":null})).await?;
+                                        continue;
+                                    }
+                                    let mut joined=GroupSubscription::new(group);
+                                    updates=joined.apply(snapshot,service.inner.snapshot_limit).map_err(map_realtime_read_error)?;
+                                    groups.insert(name.into(),joined);
+                                    None
+                                },
+                                Ok(Err(_))=>Some("Not authorized to join this group, or the resource is unavailable."),
+                                Err(_)=>Some("Realtime group initialization timed out"),
+                            }
+                        } else {Some("Not authorized to join this group.")}
+                    },
+                    _=>Some("This realtime method is not available in the Rust backend."),
+                };
+                send_group_message(socket,service,&json!({"protocolVersion":1,"kind":"completion","invocationId":invocation,"error":error})).await?;
+                for update in updates {send_group_message(socket,service,&update).await?;}
+            },
+            _=recheck.tick()=>{
+                subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
+            },
+            event=receiver.recv()=>{
+                let event=match event {
+                    Ok(event)=>event,
+                    Err(broadcast::error::RecvError::Lagged(_))=>{
+                        // Close rather than dropping changes. The existing reconnect
+                        // lifecycle rejoins groups and refreshes authoritative reads.
+                        service.inner.metrics.realtime_overflowed();
+                        return Err(RealtimeError::InvalidMessage("Realtime resynchronization required".into()));
+                    },
+                    Err(broadcast::error::RecvError::Closed)=>return Ok(()),
+                };
+                subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
+                if event.resource_type=="License" {
+                    send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("LicenseStateChanged",vec![])).await?;
+                    continue;
+                }
+                for joined in groups.values_mut().filter(|g|g.group.affected_by(&event)) {
+                    let snapshot=tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,Some(&event))).await
+                        .map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?;
+                    for update in joined.apply(snapshot,service.inner.snapshot_limit).map_err(map_realtime_read_error)? {
+                        send_group_message(socket,service,&update).await?;
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn send_group_message(
+    socket: &mut WebSocket,
+    service: &RealtimeService,
+    message: &impl Serialize,
+) -> Result<(), RealtimeError> {
+    let text = serde_json::to_string(message)
+        .map_err(|error| RealtimeError::Serialization(error.to_string()))?;
+    if text.len() > 4 * 1024 * 1024 {
+        return Err(RealtimeError::InvalidMessage(
+            "Realtime payload limit exceeded".into(),
+        ));
+    }
+    tokio::time::timeout(
+        service.inner.send_timeout,
+        socket.send(Message::Text(text.into())),
+    )
+    .await
+    .map_err(|_| RealtimeError::SendTimeout)?
+    .map_err(|error| RealtimeError::Socket(error.to_string()))?;
+    service.inner.metrics.realtime_message_sent();
+    Ok(())
 }
 
 async fn receive_initial_subscription(
@@ -740,7 +947,7 @@ async fn send_text(
 fn event_matches(event: &PublishedRuntimeEvent, connection: &ConnectionState) -> bool {
     match connection.platform_id {
         Some(platform_id) => event.platform_id == Some(platform_id),
-        None => event.platform_id.is_none(),
+        None => event.platform_id.is_none() || event.resource_type == PLATFORM_RESOURCE_TYPE,
     }
 }
 

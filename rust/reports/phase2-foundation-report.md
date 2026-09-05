@@ -10,7 +10,7 @@ slices migrate behavior behind differential tests.
 
 ## Implemented
 
-- `citadel-database` embeds one immutable Rust-v1 baseline, validates the
+- `citadel-database` embeds one generated Rust-v1 baseline, validates the
   generated manifest/checksum, serializes startup with a PostgreSQL advisory
   lock, records partial failures, rejects unknown or modified history, and
   exposes both `citadel-server migrate` and migrate-before-listen `serve`.

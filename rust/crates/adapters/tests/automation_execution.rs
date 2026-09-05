@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, Timelike, Utc};
 use citadel_adapters::automation_store::PostgresAutomationStore;
 use citadel_automation::{AutomationActionInput, AutomationRunResult, AutomationStore};
 use citadel_database::MigrationRunner;
@@ -43,7 +43,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     input.validate(actor).unwrap();
     let action = store.create(actor, &input).await.unwrap();
     let queued = store
-        .enqueue(actor, action.id, "Manual", &json!({"safe":true}))
+        .enqueue(actor, action.id, "Manual", &json!({"safe":true}), None)
         .await
         .unwrap();
     let claim = store
@@ -75,7 +75,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     assert_eq!(persisted[0].status, "Succeeded");
 
     let interrupted = store
-        .enqueue(actor, action.id, "Manual", &json!({}))
+        .enqueue(actor, action.id, "Manual", &json!({}), None)
         .await
         .unwrap();
     let _ = store
@@ -104,6 +104,33 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
             .unwrap()
             .contains("restart")
     );
+
+    sqlx::query("UPDATE actions SET scheduleenabled=true,schedulecron='* * * * *',controlstate='Idle',currentrunid=NULL WHERE id=$1")
+        .bind(action.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let scheduled_minute = Utc::now()
+        .with_second(0)
+        .unwrap()
+        .with_nanosecond(0)
+        .unwrap();
+    let (first, second) = tokio::join!(
+        store.enqueue_scheduled(action.id, scheduled_minute),
+        store.enqueue_scheduled(action.id, scheduled_minute)
+    );
+    assert_eq!(
+        usize::from(first.unwrap().is_some()) + usize::from(second.unwrap().is_some()),
+        1
+    );
+    let scheduled = store
+        .get_run(
+            action.id,
+            store.list_runs(action.id, 1).await.unwrap()[0].id,
+        )
+        .await
+        .unwrap();
+    assert_eq!(scheduled.trigger, "Schedule");
 
     sqlx::query("DELETE FROM actions WHERE id=$1")
         .bind(action.id)

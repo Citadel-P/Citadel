@@ -1,16 +1,22 @@
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use chrono::Utc;
 use citadel_adapters::crypto::AesGcmSecretProtector;
 use citadel_adapters::git_account_store::PostgresGitAccountStore;
 use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
+use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_git::{
     GitAccountService, GitCli, GitRepositoryExecutionService, GitRepositoryExecutionStore,
     SyncResult,
+};
+use citadel_stacks::{
+    StackOperationClaim, StackSourceMaterializerPort, StackSpec, StackSpecCommon,
+    StackUpdateBehavior,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -87,7 +93,9 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     git(&remote, &["config", "user.email", "citadel@example.test"]);
     git(&remote, &["config", "user.name", "Citadel Test"]);
     std::fs::write(remote.join("compose.yaml"), b"services: {}\n").unwrap();
-    git(&remote, &["add", "compose.yaml"]);
+    std::fs::create_dir_all(remote.join("config")).unwrap();
+    std::fs::write(remote.join("config/app.conf"), b"mode=production\n").unwrap();
+    git(&remote, &["add", "compose.yaml", "config/app.conf"]);
     git(&remote, &["commit", "-m", "initial"]);
     let expected = command_output(&remote, &["rev-parse", "HEAD"]);
     let repository_id = Uuid::now_v7();
@@ -103,12 +111,19 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         Arc::new(PostgresGitAccountStore::new(pool.clone())),
         Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap()),
     ));
-    let service = GitRepositoryExecutionService::new(
-        store,
-        accounts,
-        Arc::new(GitCli::new(Duration::from_secs(10))),
-        cache,
-        Duration::from_secs(60),
+    let notifications = Arc::new(AtomicUsize::new(0));
+    let changes = notifications.clone();
+    let service = Arc::new(
+        GitRepositoryExecutionService::new(
+            store,
+            accounts,
+            Arc::new(GitCli::new(Duration::from_secs(10))),
+            cache,
+            Duration::from_secs(60),
+        )
+        .with_change_notifier(Arc::new(move || {
+            changes.fetch_add(1, Ordering::SeqCst);
+        })),
     );
     assert!(
         service
@@ -126,6 +141,74 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     assert_eq!(persisted.0, "Healthy");
     assert_eq!(persisted.1.as_deref(), Some(expected.trim()));
     assert!(persisted.2.is_none());
+    assert_eq!(
+        notifications.load(Ordering::SeqCst),
+        2,
+        "claim and committed completion both notify"
+    );
+    assert!(
+        !service
+            .process_one(&CancellationToken::new())
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        notifications.load(Ordering::SeqCst),
+        2,
+        "idle workers do not notify"
+    );
+    let snapshot = service
+        .stack_snapshot(
+            repository_id,
+            Some(expected.trim()),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot.resolved_commit_sha, expected.trim());
+    assert_eq!(
+        snapshot
+            .files
+            .iter()
+            .map(|file| file.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        ["compose.yaml", "config/app.conf"]
+    );
+    assert_eq!(snapshot.files[1].content, b"mode=production\n");
+    let source = GitStackSourceMaterializer::new(Arc::clone(&service))
+        .materialize(
+            &StackOperationClaim {
+                stack_id: Uuid::now_v7(),
+                release_id: Uuid::now_v7(),
+                platform_id: Uuid::now_v7(),
+                name: "git-stack".to_owned(),
+                project_name: "git-stack".to_owned(),
+                platform_type: "Docker".to_owned(),
+                spec: StackSpec::Git {
+                    git_repo_id: repository_id,
+                    branch: "main".to_owned(),
+                    commit_sha: Some(expected.trim().to_owned()),
+                    update_behavior: StackUpdateBehavior::Disabled,
+                    webhook: None,
+                    compose_paths: vec!["compose.yaml".to_owned()],
+                    working_directory: None,
+                    compose_env_files_from_repo: Vec::new(),
+                    watch_paths: Vec::new(),
+                    additional_env_file_from_repo: Vec::new(),
+                    common: StackSpecCommon::default(),
+                },
+                row_version: 1,
+                actor_id: actor,
+                operation: "Apply".to_owned(),
+            },
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.compose_paths, ["compose.yaml"]);
+    assert_eq!(source.working_directory, ".");
+    assert_eq!(source.resolved_commit_sha.as_deref(), Some(expected.trim()));
+    assert_eq!(source.files.len(), 2);
     let activity_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='GitRepoCloned' AND status='Success'",
     )

@@ -18,7 +18,7 @@ use citadel_identity::{
 };
 use citadel_server::stacks_http::{self, StacksHttpState};
 use citadel_stacks::{
-    ComposeProjectRuntimeService, NoopStackChangeNotifier, ResolvedStackBindings,
+    ComposeProjectRuntimeService, NoopStackChangeNotifier, ResolvedStackBindings, StackApplySource,
     StackBindingResolverPort, StackDeletionClaim, StackError, StackImportClaim, StackImportKind,
     StackOperationClaim, StackOrchestrationMode, StackReleaseStatus, StackRuntimePort,
     StackRuntimeResult, StackRuntimeSnapshot, StackService,
@@ -48,14 +48,14 @@ impl StackRuntimePort for CompletingStackRuntime {
     fn apply<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
-        compose: &'a str,
+        source: &'a StackApplySource,
         environment: &'a [String],
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         Box::pin(async move {
             self.apply_calls.lock().unwrap().push(ApplyCall {
                 platform_type: claim.platform_type.clone(),
-                compose: compose.to_owned(),
+                compose: source.compose_contents()?.join("\n"),
                 environment: environment.to_vec(),
             });
             Ok(healthy())

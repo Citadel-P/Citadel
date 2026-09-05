@@ -2,10 +2,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::ActorPrincipal;
 use citadel_platforms::{
-    ContainerView, PlatformCapabilitiesView, PlatformView, WorkloadStatusCounts,
+    ContainerStatsStore, ContainerView, PlatformCapabilitiesView, PlatformReadStore,
+    PlatformStatView, PlatformView, RuntimeContainerStat, WorkloadStatusCounts,
 };
 use citadel_server::config::RealtimeConfig;
 use citadel_server::metrics::Metrics;
@@ -20,6 +24,44 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const TOKEN: &str = "phase0c-test-token-with-at-least-32-characters";
+
+#[tokio::test]
+async fn successful_mutations_invalidate_but_reads_and_failures_do_not() {
+    use axum::body::Body;
+    use axum::http::{Method, Request, StatusCode};
+    use tower::ServiceExt;
+
+    let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
+    let _subscriber = hub.subscribe();
+    for (method, status, revision) in [
+        (Method::GET, StatusCode::OK, 0),
+        (Method::POST, StatusCode::BAD_REQUEST, 0),
+        (Method::POST, StatusCode::INTERNAL_SERVER_ERROR, 0),
+        (Method::POST, StatusCode::NO_CONTENT, 1),
+        (Method::DELETE, StatusCode::OK, 2),
+    ] {
+        let app = citadel_server::realtime::notify_mutations(
+            axum::Router::new().route(
+                "/resource",
+                axum::routing::any(move || async move { status }),
+            ),
+            "User",
+        )
+        .layer(axum::Extension(hub.clone()));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/resource")
+                    .method(method)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+        assert_eq!(hub.current_revision(), revision);
+    }
+}
 
 #[tokio::test]
 async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
@@ -86,6 +128,14 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     assert_eq!(reconnect["sequence"], 1);
     assert_eq!(reconnect["resourceRevision"], 2);
     assert_eq!(reconnect["eventKind"], "snapshot");
+    hub.publish_container_stats(platform_id, &[]);
+    let scoped_stats = receive_json(&mut second).await;
+    assert_eq!(scoped_stats["eventKind"], "runtimeChanged");
+    assert_eq!(
+        scoped_stats["payload"]["dockerResourceType"],
+        "containerStats"
+    );
+    assert_eq!(scoped_stats["payload"]["stats"], json!([]));
     second.close(None).await.unwrap();
 
     shutdown.cancel();
@@ -133,9 +183,198 @@ async fn global_subscription_receives_metadata_free_resource_invalidations() {
     assert_eq!(event["eventKind"], "registryChanged");
     assert_eq!(event["payload"], json!({}));
 
+    for resource in [
+        "Deployment",
+        "Stack",
+        "SwarmService",
+        "Volume",
+        "Network",
+        "Build",
+        "BackupPolicy",
+        "AutomationAction",
+        "Alert",
+        "User",
+        "Team",
+        "Role",
+        "ServiceAccount",
+    ] {
+        hub.publish_resource_change(resource, Uuid::now_v7(), "resourceChanged");
+        let event = receive_json(&mut socket).await;
+        assert_eq!(event["resourceType"], resource);
+        assert_eq!(
+            event["resourceId"],
+            Uuid::nil().to_string(),
+            "global invalidations must not disclose private IDs"
+        );
+        assert_eq!(event["payload"], json!({}));
+    }
+
     socket.close(None).await.unwrap();
     shutdown.cancel();
     server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn global_platform_updates_use_authorized_aggregates_and_stop_after_revocation() {
+    let platform_id = Uuid::now_v7();
+    let allowed = Arc::new(AtomicBool::new(true));
+    let mut view = platform(platform_id);
+    view.mem_total = 4096;
+    view.stats = Some(vec![PlatformStatView {
+        created: 123,
+        cpu_usage: 12.5,
+        memory_usage: 25.0,
+        rx_bytes: 10.0,
+        tx_bytes: 20.0,
+        disk_used_bytes: None,
+        disk_total_bytes: None,
+        disk_usage: None,
+    }]);
+    let shutdown = CancellationToken::new();
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(FakeReader {
+            platform: view,
+            allowed: allowed.clone(),
+        }),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    );
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+            .await
+            .unwrap();
+    socket
+        .send(Message::Text(
+            json!({
+                "protocolVersion": 1, "kind": "subscribe", "accessToken": TOKEN
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+
+    hub.publish_container_stats(Uuid::now_v7(), &[]);
+    hub.publish_container_stats(platform_id, &[]);
+    let event = receive_json(&mut socket).await;
+    assert_eq!(event["eventKind"], "platformStatsUpdated");
+    assert_eq!(event["resourceId"], platform_id.to_string());
+    assert_eq!(event["payload"]["stats"][0]["cpuUsage"], 12.5);
+    assert_eq!(event["payload"]["stats"][0]["memoryUsage"], 25.0);
+    assert_eq!(event["payload"]["memTotal"], 4096);
+    assert!(event["payload"].get("runtimeResourceId").is_none());
+
+    hub.publish_runtime_change(platform_id, "container", "start", "private-container-id");
+    let event = receive_json(&mut socket).await;
+    assert_eq!(event["eventKind"], "platformInventoryChanged");
+    assert_eq!(event["payload"], json!({}));
+
+    allowed.store(false, Ordering::Release);
+    hub.publish_container_stats(platform_id, &[]);
+    hub.publish_resource_change("Registry", Uuid::nil(), "registryChanged");
+    // The sentinel proves the denied stats event was skipped, not merely delayed.
+    assert_eq!(receive_json(&mut socket).await["resourceType"], "Registry");
+    socket.close(None).await.unwrap();
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn global_subscription_streams_committed_platform_stats_after_store_recreation() {
+    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&database_url).await.unwrap();
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&database_url)
+        .await
+        .unwrap();
+    let platform_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,'Local',4,0,4096,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(platform_id).bind(format!("realtime-{platform_id}"))
+        .execute(&pool).await.unwrap();
+    for id in ["container-1", "container-2"] {
+        sqlx::query("INSERT INTO containers (id,created,dockercontainerid,dockerimageid,name,platformid,ports,state,updated) VALUES ($1,1,$2,'image',$2,$3,'[]','running',1)")
+            .bind(Uuid::now_v7()).bind(id).bind(platform_id).execute(&pool).await.unwrap();
+    }
+    let shutdown = CancellationToken::new();
+    let reader = PersistedReader {
+        authentication: FakeReader {
+            platform: platform(platform_id),
+            allowed: Arc::new(AtomicBool::new(true)),
+        },
+        store: PostgresPlatformReadStore::new(pool.clone()),
+    };
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(reader),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    );
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    for revision in 1..=2 {
+        // A new writer and connection still see persisted aggregates, not connection-local history.
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+                .await
+                .unwrap();
+        socket
+            .send(Message::Text(
+                json!({
+                    "protocolVersion": 1, "kind": "subscribe", "accessToken": TOKEN
+                })
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+        let created = chrono::Utc::now().timestamp() + revision;
+        let stats: Vec<_> = ["container-1", "container-2"]
+            .into_iter()
+            .map(|id| RuntimeContainerStat {
+                docker_container_id: id.into(),
+                created,
+                cpu_usage: 25.0 * revision as f64,
+                memory_active: 512.0,
+                memory_cache: 0.0,
+                memory_limit: 4096.0,
+                rx_bytes: 10.0,
+                tx_bytes: 20.0,
+            })
+            .collect();
+        assert_eq!(
+            PostgresContainerStatsStore::new(pool.clone())
+                .persist(platform_id, &stats)
+                .await
+                .unwrap(),
+            2
+        );
+        hub.publish_container_stats(platform_id, &stats);
+        let event = receive_json(&mut socket).await;
+        assert_eq!(event["eventKind"], "platformStatsUpdated");
+        assert_eq!(event["payload"]["stats"][0]["created"], created);
+        assert_eq!(
+            event["payload"]["stats"][0]["cpuUsage"],
+            12.5 * revision as f64
+        );
+        assert_eq!(event["payload"]["stats"][0]["memoryUsage"], 25.0);
+        assert_eq!(event["payload"]["stats"].as_array().unwrap().len(), 1);
+        socket.close(None).await.unwrap();
+    }
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+    sqlx::query("DELETE FROM platforms WHERE id = $1")
+        .bind(platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
 }
 
 #[tokio::test]
@@ -371,6 +610,44 @@ fn platform(id: Uuid) -> PlatformView {
 struct FakeReader {
     platform: PlatformView,
     allowed: Arc<AtomicBool>,
+}
+
+struct PersistedReader {
+    authentication: FakeReader,
+    store: PostgresPlatformReadStore,
+}
+
+impl RealtimeReadPort for PersistedReader {
+    fn authenticate<'a>(
+        &'a self,
+        token: &'a str,
+    ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+        self.authentication.authenticate(token)
+    }
+
+    fn authorize_platform<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+        Box::pin(async move {
+            self.authentication
+                .authorize_platform(principal, platform_id)
+                .await?;
+            self.store
+                .get_platform(platform_id)
+                .await
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
+                .ok_or(RealtimeReadError::Authorization)
+        })
+    }
+
+    fn list_containers(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+        self.authentication.list_containers(platform_id)
+    }
 }
 
 impl RealtimeReadPort for FakeReader {

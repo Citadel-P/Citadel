@@ -4,6 +4,9 @@ members = [
     "crates/execution",
     "crates/git",
     "crates/automation",
+    "crates/builds",
+    "crates/alerts",
+    "crates/backups",
     "crates/domain",
     "crates/identity",
     "crates/platforms",
@@ -45,7 +48,7 @@ jsonwebtoken = { version = "=10.2.0", default-features = false, features = ["rus
 prost = "=0.14.4"
 prost-types = "=0.14.4"
 protoc-bin-vendored = "=3.2.0"
-reqwest = { version = "=0.13.4", default-features = false, features = ["json", "stream"] }
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "stream", "rustls"] }
 rustls = { version = "=0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"

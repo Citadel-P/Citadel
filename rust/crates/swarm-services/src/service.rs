@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_domain::ActorId;
 use futures_util::future::BoxFuture;
 use tokio::sync::{Semaphore, mpsc};
@@ -186,6 +187,7 @@ pub struct ManagedSwarmServiceService {
     shutdown: CancellationToken,
     operation_timeout: Duration,
     slots: Arc<Semaphore>,
+    alerts: Option<Arc<dyn AlertEventSink>>,
 }
 
 impl ManagedSwarmServiceService {
@@ -203,7 +205,43 @@ impl ManagedSwarmServiceService {
             shutdown,
             operation_timeout: Duration::from_secs(10 * 60),
             slots: Arc::new(Semaphore::new(4)),
+            alerts: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_alerts(mut self, alerts: Arc<dyn AlertEventSink>) -> Self {
+        self.alerts = Some(alerts);
+        self
+    }
+
+    async fn report_operation_observation(
+        &self,
+        claim: &ServiceOperationClaim,
+        operation: &str,
+        message: &str,
+        matched: bool,
+    ) {
+        let Some(alerts) = &self.alerts else {
+            return;
+        };
+        let _ = alerts
+            .observe(&AlertObservation {
+                alert_type: "SwarmServiceOperationFailed".into(),
+                info: serde_json::json!({
+                    "HumanMessage": message,
+                    "Operation": operation,
+                    "OperationId": claim.operation_id,
+                }),
+                resource_id: claim.id,
+                resource_name: claim.docker_name.clone(),
+                resource_type: "SwarmService".into(),
+                deduplication_component: "operation".into(),
+                observed_at: chrono::Utc::now(),
+                value: None,
+                matched,
+            })
+            .await;
     }
 
     #[must_use]
@@ -479,6 +517,8 @@ impl ManagedSwarmServiceService {
                         .store
                         .fail_operation(actor_id, &claim, &message, false)
                         .await;
+                    self.report_operation_observation(&claim, kind.as_str(), &message, true)
+                        .await;
                     let _ = sender
                         .send(SwarmServiceProgressItem::failed(
                             id,
@@ -538,6 +578,13 @@ impl ManagedSwarmServiceService {
                     return;
                 }
                 self.notifier.changed(id, "applied");
+                self.report_operation_observation(
+                    &claim,
+                    kind.as_str(),
+                    "The Service operation completed successfully.",
+                    false,
+                )
+                .await;
                 let _ = sender
                     .send(SwarmServiceProgressItem::completed(
                         id,
@@ -574,6 +621,8 @@ impl ManagedSwarmServiceService {
                     .store
                     .fail_operation(actor_id, &claim, message, false)
                     .await;
+                self.report_operation_observation(&claim, kind.as_str(), message, true)
+                    .await;
                 self.notifier.changed(id, "failed");
                 let _ = sender
                     .send(SwarmServiceProgressItem::failed(
@@ -593,6 +642,8 @@ impl ManagedSwarmServiceService {
                     .store
                     .fail_operation(actor_id, &claim, &message, unknown)
                     .await;
+                self.report_operation_observation(&claim, kind.as_str(), &message, true)
+                    .await;
                 self.notifier.changed(id, "failed");
                 let _ = sender
                     .send(SwarmServiceProgressItem::failed(
@@ -608,6 +659,8 @@ impl ManagedSwarmServiceService {
                 let _ = self
                     .store
                     .fail_operation(actor_id, &claim, message, true)
+                    .await;
+                self.report_operation_observation(&claim, kind.as_str(), message, true)
                     .await;
                 self.notifier.changed(id, "outcomeUnknown");
                 let _ = sender
@@ -738,6 +791,13 @@ impl ManagedSwarmServiceService {
                     self.store
                         .complete_operation(actor_id, &claim, &result)
                         .await?;
+                    self.report_operation_observation(
+                        &claim,
+                        "Reconciliation",
+                        "The Service rollout completed successfully.",
+                        false,
+                    )
+                    .await;
                     self.notifier.changed(claim.id, "reconciled");
                     reconciled += 1;
                 }
@@ -750,6 +810,13 @@ impl ManagedSwarmServiceService {
                             false,
                         )
                         .await?;
+                    self.report_operation_observation(
+                        &claim,
+                        "Reconciliation",
+                        result.rollout_error.as_deref().unwrap(),
+                        true,
+                    )
+                    .await;
                     self.notifier.changed(claim.id, "failed");
                     reconciled += 1;
                 }

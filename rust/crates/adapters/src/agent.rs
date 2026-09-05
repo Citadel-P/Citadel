@@ -4,8 +4,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_stream::stream;
 use base64::Engine;
 use citadel_contracts::citadel::containers::v1::{
-    ContainerIds, DeleteContainerRequest, ListContainersRequest, StreamContainersStatsRequest,
-    container_service_client::ContainerServiceClient,
+    ContainerIds, CreateContainerRequest, DeleteContainerRequest, ExecBinaryRequest,
+    ListContainersRequest, StreamContainersStatsRequest,
+    container_service_client::ContainerServiceClient, exec_server_message,
 };
 use citadel_contracts::citadel::deployments::v1::{
     ApplyDeploymentRequest, ContainerRestartPolicy as ProtoRestartPolicy, DeployedContainerState,
@@ -14,7 +15,8 @@ use citadel_contracts::citadel::deployments::v1::{
     deployment_service_client::DeploymentServiceClient,
 };
 use citadel_contracts::citadel::images::v1::{
-    ListImagesRequest, PullImageRequest, image_service_client::ImageServiceClient,
+    BuildImageRequest, BuildImageSecret, ImageBuildResponse, ListImagesRequest, PullImageRequest,
+    PushImageRequest, image_service_client::ImageServiceClient,
 };
 use citadel_contracts::citadel::networks::v1::{
     ConfigFromMessage, CreateNetworkRequest, DeleteNetworkRequest, InspectNetworkRequest,
@@ -28,8 +30,8 @@ use citadel_contracts::citadel::shared_models::v1::{
 };
 use citadel_contracts::citadel::stacks::v1::{
     StackApplyEventType as ProtoStackApplyEventType, StackApplyRequest,
-    StackOrchestrationMode as ProtoStackOrchestrationMode,
-    stack_service_client::StackServiceClient,
+    StackCommand as ProtoStackCommand, StackOrchestrationMode as ProtoStackOrchestrationMode,
+    StackSourceFile as ProtoStackSourceFile, stack_service_client::StackServiceClient,
 };
 use citadel_contracts::citadel::swarm::v1::{
     CreateManagedSwarmServiceRequest, DeleteManagedSwarmServiceRequest, InspectSwarmServiceRequest,
@@ -66,13 +68,23 @@ use tonic::metadata::MetadataValue;
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Code, Request, Status};
 use url::Url;
+use zeroize::Zeroizing;
 
 const MAX_GRPC_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_UNARY_ATTEMPTS: usize = 3;
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(200);
+
+#[doc(hidden)]
+pub struct AgentStackRegistry {
+    pub(crate) name: String,
+    pub(crate) host: String,
+    pub(crate) auth: Zeroizing<String>,
+}
 const PLATFORM_INFO_METHOD: &str = "/citadel.platforms.v1.PlatformService/GetPlatformInfo";
 const LIST_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/List";
 const DELETE_CONTAINER_METHOD: &str = "/citadel.containers.v1.ContainerService/Delete";
+const CREATE_CONTAINER_METHOD: &str = "/citadel.containers.v1.ContainerService/Create";
+const EXEC_BINARY_METHOD: &str = "/citadel.containers.v1.ContainerService/ExecBinary";
 const START_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Start";
 const STOP_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Stop";
 const PAUSE_CONTAINERS_METHOD: &str = "/citadel.containers.v1.ContainerService/Pause";
@@ -84,6 +96,8 @@ const STREAM_CONTAINERS_STATS_METHOD: &str =
     "/citadel.containers.v1.ContainerService/StreamContainersStats";
 const LIST_IMAGES_METHOD: &str = "/citadel.images.v1.ImageService/List";
 const PULL_IMAGE_METHOD: &str = "/citadel.images.v1.ImageService/Pull";
+const BUILD_IMAGE_METHOD: &str = "/citadel.images.v1.ImageService/Build";
+const PUSH_IMAGE_METHOD: &str = "/citadel.images.v1.ImageService/Push";
 const LIST_NETWORKS_METHOD: &str = "/citadel.networks.v1.NetworkService/List";
 const INSPECT_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Inspect";
 const CREATE_NETWORK_METHOD: &str = "/citadel.networks.v1.NetworkService/Create";
@@ -122,6 +136,13 @@ pub enum AgentContainerAction {
     Pause,
     Unpause,
     Restart,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentBinaryExecOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_code: i32,
 }
 
 #[derive(Clone)]
@@ -233,6 +254,19 @@ pub struct AgentClient {
     signer: AgentRequestSigner,
     operation_timeout: Duration,
     address: String,
+}
+
+pub(crate) struct AgentBuildCommand {
+    pub context_archive: Vec<u8>,
+    pub dockerfile_path: String,
+    pub tags: Vec<String>,
+    pub build_args: std::collections::HashMap<String, String>,
+    pub target: Option<String>,
+    pub registry_auth: Option<String>,
+    pub registry_host: Option<String>,
+    pub timeout_seconds: i32,
+    pub maximum_log_bytes: usize,
+    pub secrets: Vec<(String, String)>,
 }
 
 impl AgentClient {
@@ -381,6 +415,133 @@ impl AgentClient {
         Ok(())
     }
 
+    pub async fn create_container(
+        &self,
+        request: CreateContainerRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<String, RuntimeCapabilityError> {
+        if request.name.trim().is_empty() || request.name.len() > 255 {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::InvalidRequest,
+                "the Container name is invalid",
+                false,
+            ));
+        }
+        let request = self.signer.sign(
+            request,
+            CREATE_CONTAINER_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.container_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.create(request)) => {
+                result.map_err(|_| timeout_error("creating a Container through the Agent"))?
+                    .map_err(normalize_status)?
+            }
+        };
+        let id = response.into_inner().container_id;
+        if id.trim().is_empty() || id.len() > 256 {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Remote,
+                "the Agent returned an invalid Container identifier",
+                false,
+            ));
+        }
+        Ok(id)
+    }
+
+    pub async fn exec_binary(
+        &self,
+        request: ExecBinaryRequest,
+        timeout: Duration,
+        maximum_output_bytes: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<AgentBinaryExecOutput, RuntimeCapabilityError> {
+        if request.container_id.trim().is_empty()
+            || request.container_id.len() > 256
+            || request.cmd.is_empty()
+            || request.cmd.len() > 256
+            || maximum_output_bytes == 0
+        {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::InvalidRequest,
+                "the Agent binary execution request is invalid",
+                false,
+            ));
+        }
+        let signed = self
+            .signer
+            .sign(request, EXEC_BINARY_METHOD, Some(timeout))?;
+        let mut client = self.container_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.exec_binary(signed)) => {
+                result.map_err(|_| timeout_error("opening Agent binary execution"))?
+                    .map_err(normalize_status)?
+            }
+        };
+        let consume = async {
+            let mut stream = response.into_inner();
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut exit_code = None;
+            while let Some(message) = stream.message().await.map_err(normalize_status)? {
+                match message.msg {
+                    Some(exec_server_message::Msg::Output(output)) => {
+                        if stdout
+                            .len()
+                            .saturating_add(stderr.len())
+                            .saturating_add(output.data.len())
+                            > maximum_output_bytes
+                        {
+                            return Err(RuntimeCapabilityError::new(
+                                RuntimeErrorKind::Remote,
+                                "Agent binary execution exceeded the output limit",
+                                false,
+                            ));
+                        }
+                        let target = if output.stream == 1 {
+                            &mut stderr
+                        } else {
+                            &mut stdout
+                        };
+                        target.extend_from_slice(&output.data);
+                    }
+                    Some(exec_server_message::Msg::Exit(exit)) => exit_code = Some(exit.exit_code),
+                    Some(exec_server_message::Msg::Error(error)) => {
+                        return Err(RuntimeCapabilityError::new(
+                            RuntimeErrorKind::Remote,
+                            error.message,
+                            false,
+                        ));
+                    }
+                    None => {}
+                }
+            }
+            Ok(AgentBinaryExecOutput {
+                stdout,
+                stderr,
+                exit_code: exit_code.ok_or_else(|| {
+                    RuntimeCapabilityError::new(
+                        RuntimeErrorKind::Remote,
+                        "Agent binary execution ended without an exit code",
+                        false,
+                    )
+                })?,
+            })
+        };
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(cancelled_error()),
+            result = tokio::time::timeout(timeout, consume) => {
+                result.map_err(|_| timeout_error("running Agent binary execution"))?
+            }
+        }
+    }
+
     pub async fn change_containers_state(
         &self,
         ids: &[String],
@@ -435,6 +596,79 @@ impl AgentClient {
             .max_encoding_message_size(MAX_GRPC_MESSAGE_BYTES)
     }
 
+    pub(crate) async fn build_image(
+        &self,
+        command: AgentBuildCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<String, RuntimeCapabilityError> {
+        let maximum_log_bytes = command.maximum_log_bytes.max(1024);
+        let request = self.signer.sign(
+            BuildImageRequest {
+                context_directory: ".".to_owned(),
+                dockerfile_path: command.dockerfile_path.clone(),
+                tags: command.tags.clone(),
+                build_args: command.build_args,
+                target: command.target,
+                registry_auth: command.registry_auth.clone(),
+                registry_host: command.registry_host,
+                timeout_seconds: command.timeout_seconds,
+                max_line_bytes: 16 * 1024,
+                context_archive: command.context_archive,
+                dockerfile_archive_path: Some(command.dockerfile_path),
+                build_secrets: command
+                    .secrets
+                    .into_iter()
+                    .map(|(id, value)| BuildImageSecret { id, value })
+                    .collect(),
+            },
+            BUILD_IMAGE_METHOD,
+            None,
+        )?;
+        let mut client = self.image_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.build(request)) => {
+                result.map_err(|_| timeout_error("opening the Agent image Build stream"))?
+                    .map_err(normalize_status)?
+            }
+        };
+        let mut output =
+            consume_image_build_stream(response.into_inner(), maximum_log_bytes, cancellation)
+                .await?;
+        for reference in command.tags {
+            let request = self.signer.sign(
+                PushImageRequest {
+                    image_reference: reference,
+                    registry_auth: command.registry_auth.clone(),
+                },
+                PUSH_IMAGE_METHOD,
+                None,
+            )?;
+            let response = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.push(request)) => {
+                    result.map_err(|_| timeout_error("opening the Agent image Push stream"))?
+                        .map_err(normalize_status)?
+                }
+            };
+            let pushed = consume_image_build_stream(
+                response.into_inner(),
+                maximum_log_bytes.saturating_sub(output.len()).max(1024),
+                cancellation,
+            )
+            .await?;
+            if !pushed.is_empty() {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                append_bounded(&mut output, &pushed, maximum_log_bytes);
+            }
+        }
+        Ok(output)
+    }
+
     fn deployment_client(&self) -> DeploymentServiceClient<Channel> {
         DeploymentServiceClient::new(self.channel.clone())
             .max_decoding_message_size(MAX_GRPC_MESSAGE_BYTES)
@@ -451,30 +685,44 @@ impl AgentClient {
     pub async fn apply_stack(
         &self,
         claim: &citadel_stacks::StackOperationClaim,
-        compose: &str,
+        source: &citadel_stacks::StackApplySource,
         environment: &[String],
+        registry: Option<&AgentStackRegistry>,
         cancellation: &CancellationToken,
     ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError> {
         let request = self.signer.sign(
             StackApplyRequest {
                 stack_name: claim.name.clone(),
-                compose_file_content: Some(compose.to_owned()),
+                compose_file_content: None,
                 project_name: Some(claim.project_name.clone()),
                 environment_file_path: claim.spec.common().env_file_path.clone(),
-                registry_auth: None,
-                registry_name: None,
-                registry_host: None,
+                registry_auth: registry.map(|value| value.auth.to_string()),
+                registry_name: registry.map(|value| value.name.clone()),
+                registry_host: registry.map(|value| value.host.clone()),
                 destroy_before_deploy: claim.spec.common().destroy_before_deploy,
                 environment_variables: environment.to_vec(),
-                pre_deploy: None,
-                post_deploy: None,
+                pre_deploy: claim.spec.common().pre_deploy.as_ref().map(|command| {
+                    ProtoStackCommand {
+                        commands: command.commands.clone(),
+                        path: command.path.clone(),
+                    }
+                }),
+                post_deploy: claim.spec.common().post_deploy.as_ref().map(|command| {
+                    ProtoStackCommand {
+                        commands: command.commands.clone(),
+                        path: command.path.clone(),
+                    }
+                }),
                 service_names: Vec::new(),
                 pull_images: true,
-                source_working_directory: None,
-                source_compose_file_paths: Vec::new(),
-                source_env_file_paths: Vec::new(),
-                labels_override_file_path: None,
-                generated_files_directory: None,
+                source_working_directory: Some(source.working_directory.clone()),
+                source_compose_file_paths: source.compose_paths.clone(),
+                source_env_file_paths: source.env_file_paths.clone(),
+                labels_override_file_path: source.labels_override_path.clone(),
+                generated_files_directory: source
+                    .labels_override_path
+                    .as_deref()
+                    .and_then(|path| path.rsplit_once('/').map(|(parent, _)| parent.to_owned())),
                 secret_files: Vec::new(),
                 secret_target_service_names: Vec::new(),
                 orchestration_mode: if claim.platform_type == "DockerSwarm" {
@@ -482,7 +730,14 @@ impl AgentClient {
                 } else {
                     ProtoStackOrchestrationMode::DockerCompose as i32
                 },
-                source_files: Vec::new(),
+                source_files: source
+                    .files
+                    .iter()
+                    .map(|file| ProtoStackSourceFile {
+                        relative_path: file.relative_path.clone(),
+                        content: file.content.clone(),
+                    })
+                    .collect(),
                 retained_swarm_secrets: Vec::new(),
                 retained_swarm_configs: Vec::new(),
                 convert_compose_project_to_swarm: false,
@@ -1766,7 +2021,7 @@ fn map_container(value: ContainerMessage) -> RuntimeContainerSummary {
                     .into_iter()
                     .map(|binding| {
                         serde_json::json!({
-                            "hostIp": binding.host_ip,
+                            "hostIP": binding.host_ip,
                             "hostPort": binding.host_port,
                         })
                     })
@@ -1873,6 +2128,63 @@ fn normalize_status(status: Status) -> RuntimeCapabilityError {
         _ => (RuntimeErrorKind::Remote, false),
     };
     RuntimeCapabilityError::new(kind, status.message(), retryable)
+}
+
+async fn consume_image_build_stream(
+    mut stream: tonic::Streaming<ImageBuildResponse>,
+    maximum_bytes: usize,
+    cancellation: &CancellationToken,
+) -> Result<String, RuntimeCapabilityError> {
+    let mut output = String::new();
+    loop {
+        let next = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            item = stream.next() => item,
+        };
+        let Some(item) = next else { break };
+        let item = item.map_err(normalize_status)?;
+        let error = item
+            .error_message
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                item.error
+                    .as_ref()
+                    .and_then(|error| error.message.as_deref())
+                    .filter(|value| !value.trim().is_empty())
+            });
+        if let Some(error) = error {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Remote,
+                error.to_owned(),
+                false,
+            ));
+        }
+        for value in [item.stream, item.status, item.progress_message]
+            .into_iter()
+            .flatten()
+            .filter(|value| !value.trim().is_empty())
+        {
+            if !output.is_empty() && !output.ends_with('\n') {
+                append_bounded(&mut output, "\n", maximum_bytes);
+            }
+            append_bounded(&mut output, &value, maximum_bytes);
+        }
+    }
+    Ok(output)
+}
+
+fn append_bounded(output: &mut String, value: &str, maximum_bytes: usize) {
+    let available = maximum_bytes.saturating_sub(output.len());
+    if available == 0 {
+        return;
+    }
+    let mut end = value.len().min(available);
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    output.push_str(&value[..end]);
 }
 
 #[cfg(test)]
@@ -2021,7 +2333,7 @@ mod tests {
 
         assert_eq!(mapped.name, "web");
         assert_eq!(mapped.state, "running");
-        assert_eq!(mapped.ports["80/tcp"][0]["hostIp"], "0.0.0.0");
+        assert_eq!(mapped.ports["80/tcp"][0]["hostIP"], "0.0.0.0");
         assert_eq!(mapped.ports["80/tcp"][0]["hostPort"], "8080");
     }
 

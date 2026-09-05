@@ -86,6 +86,35 @@ impl PostgresStackStore {
 }
 
 impl StackStore for PostgresStackStore {
+    fn drift_monitor_candidates(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<StackView>, StackError>> {
+        Box::pin(async move {
+            let sql = format!(
+                r#"{AUTHORIZED_CTES}{PROJECTION}
+WHERE s.controlstate='Idle'
+  AND r.status IN ('Healthy','Degraded')
+  AND COALESCE(s.driftpolicy->>'mode','Disabled') <> 'Disabled'
+  AND ($3::uuid IS NULL OR s.id > $3)
+ORDER BY s.id
+LIMIT $4"#
+            );
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(Uuid::nil())
+                .bind(true)
+                .bind(after)
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?
+                .into_iter()
+                .map(map_stack)
+                .collect()
+        })
+    }
+
     fn list_authorized<'a>(
         &'a self,
         actor: ActorId,
@@ -529,21 +558,38 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         claim: &'a StackOperationClaim,
         result: &'a StackRuntimeResult,
         bindings: &'a [ResourceBindingSnapshot],
+        source: Option<&'a StackReleaseSource>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' FOR UPDATE OF s,r")
+            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.stackupdatestate,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' FOR UPDATE OF s,r")
                 .bind(claim.stack_id).bind(claim.release_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Conflict("The Stack operation was superseded.".to_owned()))?;
-            let changed=sqlx::query("UPDATE stackreleases SET status=$3,resourcebindings=$4 WHERE id=$1 AND stackid=$2 AND status='Applying'")
-                .bind(claim.release_id).bind(claim.stack_id).bind(result.status.as_str()).bind(ResourceBindingSnapshot::list_to_storage_value(bindings)?)
+            let update_state = if let Some(source) =
+                source.filter(|source| source.source_type == StackSource::Git)
+            {
+                let mut state = StackUpdateState::from_storage_value(
+                    row.try_get("stackupdatestate").map_err(storage)?,
+                )?;
+                state
+                    .record_applied_commit(&source.resolved_commit_sha, Utc::now())
+                    .then(|| state.to_storage_value())
+                    .transpose()?
+            } else {
+                None
+            };
+            let source = source
+                .map(StackReleaseSource::to_storage_value)
+                .transpose()?;
+            let changed=sqlx::query("UPDATE stackreleases SET status=$3,resourcebindings=$4,source=COALESCE($5,source) WHERE id=$1 AND stackid=$2 AND status='Applying'")
+                .bind(claim.release_id).bind(claim.stack_id).bind(result.status.as_str()).bind(ResourceBindingSnapshot::list_to_storage_value(bindings)?).bind(source)
                 .execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed != 1 {
                 return Err(StackError::Conflict(
                     "The Stack operation was superseded.".to_owned(),
                 ));
             }
-            sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
-                .bind(claim.stack_id).bind(claim.release_id).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,stackupdatestate=COALESCE($3,stackupdatestate),rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
+                .bind(claim.stack_id).bind(claim.release_id).bind(update_state).execute(&mut *tx).await.map_err(storage)?;
             let snapshot = stack_snapshot(
                 claim.stack_id,
                 row.try_get("name").map_err(storage)?,

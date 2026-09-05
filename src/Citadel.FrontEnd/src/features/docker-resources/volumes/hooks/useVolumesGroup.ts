@@ -9,20 +9,16 @@ import { useRead } from '@/lib/hooks';
 
 export const useVolumesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listVolumes', { platformId });
-  const [volumes, setVolumes] = useState<VolumesView | undefined>();
+  const [volumes, setVolumes] = useState<VolumesView | undefined>(data?.data);
   const capabilities = data?.data.capabilities;
 
   const lastDataRef = useRef<VolumesView | undefined>(data?.data);
-  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>();
+  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
       lastDataRef.current = data.data;
-      setVolumes(
-        nodeSnapshotRef.current
-          ? { ...data.data, volumes: nodeSnapshotRef.current.volumes }
-          : data.data,
-      );
+      setVolumes(nodeSnapshotRef.current ? { ...data.data, volumes: nodeSnapshotRef.current.volumes } : data.data);
     }
   }, [data?.data]);
 

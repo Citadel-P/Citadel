@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_domain::ActorId;
 use futures_util::future::BoxFuture;
 use tokio::sync::{Semaphore, mpsc};
@@ -12,15 +13,22 @@ use crate::{
     ApplyStackInput, ComposeModel, ComposeProjectImportDraftView, ComposeProjectImportSourceView,
     ComposeProjectImportValidation, ComposeProjectServiceComparison, ComposeProjectStackDraftView,
     CreateStackInput, ImportComposeProjectInput, PatchStackInput, ResolvedStackBindings,
-    ResourceCapabilities, RollbackStackInput, StackAction, StackAdoptionIssue, StackConfigView,
-    StackDeletionClaim, StackDrift, StackDriftReport, StackError, StackFilter, StackImportClaim,
+    ResolvedStackBuildImageBinding, ResourceCapabilities, RollbackStackInput, StackAction,
+    StackAdoptionIssue, StackConfigView, StackDeletionClaim, StackDrift, StackDriftMonitorFailure,
+    StackDriftMonitorResult, StackDriftReport, StackError, StackFilter, StackImportClaim,
     StackOperationClaim, StackOrchestrationMode, StackReleaseStatus, StackReleaseView,
-    StackRuntimeResult, StackRuntimeSnapshot, StackSpec, StackStateClaim, StackStreamItem,
-    StackView, StacksView, analyze_swarm_compatibility, compose_digest, inject_ownership_labels,
-    merge_json, normalize_description, normalize_name, normalize_tags, parse_compose, validation,
+    StackRuntimeResult, StackRuntimeSnapshot, StackSourceFile, StackSpec, StackStateClaim,
+    StackStreamItem, StackView, StacksView, analyze_swarm_compatibility, compose_digest,
+    create_ownership_labels_override, merge_json, normalize_description, normalize_name,
+    normalize_tags, parse_compose, validation,
 };
 
 pub trait StackStore: Send + Sync {
+    fn drift_monitor_candidates(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<StackView>, StackError>>;
     fn list_authorized<'a>(
         &'a self,
         actor: ActorId,
@@ -81,6 +89,7 @@ pub trait StackStore: Send + Sync {
         claim: &'a StackOperationClaim,
         result: &'a StackRuntimeResult,
         bindings: &'a [crate::ResourceBindingSnapshot],
+        source: Option<&'a crate::StackReleaseSource>,
     ) -> BoxFuture<'a, Result<(), StackError>>;
     fn fail_apply<'a>(
         &'a self,
@@ -151,7 +160,7 @@ pub trait StackRuntimePort: Send + Sync {
     fn apply<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
-        compose: &'a str,
+        source: &'a crate::StackApplySource,
         environment: &'a [String],
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>>;
@@ -196,12 +205,27 @@ pub trait StackRuntimePort: Send + Sync {
     ) -> BoxFuture<'a, Result<StackImportClaim, StackError>>;
 }
 
+pub trait StackSourceMaterializerPort: Send + Sync {
+    fn materialize<'a>(
+        &'a self,
+        claim: &'a StackOperationClaim,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<crate::StackApplySource, StackError>>;
+}
+
 pub trait StackBindingResolverPort: Send + Sync {
     fn resolve<'a>(
         &'a self,
         stack_id: Uuid,
         names: &'a [String],
     ) -> BoxFuture<'a, Result<ResolvedStackBindings, StackError>>;
+}
+
+pub trait StackBuildImageResolverPort: Send + Sync {
+    fn resolve<'a>(
+        &'a self,
+        bindings: &'a [crate::StackBuildImageBinding],
+    ) -> BoxFuture<'a, Result<Vec<ResolvedStackBuildImageBinding>, StackError>>;
 }
 
 pub trait StackChangeNotifier: Send + Sync {
@@ -218,11 +242,14 @@ impl StackChangeNotifier for NoopStackChangeNotifier {
 pub struct StackService {
     store: Arc<dyn StackStore>,
     runtime: Arc<dyn StackRuntimePort>,
+    source_materializer: Option<Arc<dyn StackSourceMaterializerPort>>,
     bindings: Arc<dyn StackBindingResolverPort>,
+    build_images: Option<Arc<dyn StackBuildImageResolverPort>>,
     notifier: Arc<dyn StackChangeNotifier>,
     operations: Arc<Semaphore>,
     shutdown: CancellationToken,
     timeout: Duration,
+    alerts: Option<Arc<dyn AlertEventSink>>,
 }
 
 impl StackService {
@@ -237,17 +264,44 @@ impl StackService {
         Self {
             store,
             runtime,
+            source_materializer: None,
             bindings,
+            build_images: None,
             notifier,
             operations: Arc::new(Semaphore::new(4)),
             shutdown,
             timeout: Duration::from_secs(15 * 60),
+            alerts: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_source_materializer(
+        mut self,
+        source_materializer: Arc<dyn StackSourceMaterializerPort>,
+    ) -> Self {
+        self.source_materializer = Some(source_materializer);
+        self
+    }
+
+    #[must_use]
+    pub fn with_build_image_resolver(
+        mut self,
+        resolver: Arc<dyn StackBuildImageResolverPort>,
+    ) -> Self {
+        self.build_images = Some(resolver);
+        self
     }
 
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    #[must_use]
+    pub fn with_alerts(mut self, alerts: Arc<dyn AlertEventSink>) -> Self {
+        self.alerts = Some(alerts);
         self
     }
 
@@ -265,6 +319,55 @@ impl StackService {
                 .await?,
             capabilities,
         })
+    }
+
+    /// Evaluates the bounded set of active Stacks whose drift policy is enabled.
+    /// A failure on one Stack is returned to the caller for diagnostics without
+    /// preventing the remaining candidates from being checked.
+    pub async fn monitor_drift(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> Result<StackDriftMonitorResult, StackError> {
+        if limit <= 0 {
+            return Err(validation(
+                "The Stack drift monitor limit must be positive.",
+            ));
+        }
+        let mut candidates = self.store.drift_monitor_candidates(after, limit).await?;
+        if candidates.is_empty() && after.is_some() {
+            candidates = self.store.drift_monitor_candidates(None, limit).await?;
+        }
+        let mut result = StackDriftMonitorResult {
+            checked: 0,
+            reconciled: 0,
+            failures: Vec::new(),
+            next_cursor: None,
+        };
+        let system = ActorId::new(Uuid::nil());
+        for stack in candidates {
+            if self.shutdown.is_cancelled() {
+                break;
+            }
+            result.next_cursor = Some(stack.id);
+            let outcome = if stack.drift_policy.mode == crate::StackDriftMode::AutoFix {
+                self.reconcile_drift(system, true, stack.id)
+                    .await
+                    .map(|reconciliation| {
+                        result.reconciled += usize::from(!reconciliation.actions.is_empty());
+                    })
+            } else {
+                self.drift(system, true, stack.id).await.map(|_| ())
+            };
+            match outcome {
+                Ok(()) => result.checked += 1,
+                Err(error) => result.failures.push(StackDriftMonitorFailure {
+                    stack_id: stack.id,
+                    message: error.to_string(),
+                }),
+            }
+        }
+        Ok(result)
     }
 
     pub async fn get(
@@ -453,9 +556,12 @@ impl StackService {
             .claim_apply(actor, administrator, id, rollback)
             .await?;
         let runtime = Arc::clone(&self.runtime);
+        let source_materializer = self.source_materializer.clone();
         let store = Arc::clone(&self.store);
         let bindings = Arc::clone(&self.bindings);
+        let build_images = self.build_images.clone();
         let notifier = Arc::clone(&self.notifier);
+        let alerts = self.alerts.clone();
         let cancellation = self.shutdown.child_token();
         let timeout = self.timeout;
         let (sender, receiver) = mpsc::channel(32);
@@ -463,9 +569,12 @@ impl StackService {
             let _permit = permit;
             execute_apply(
                 runtime,
+                source_materializer,
                 store,
                 bindings,
+                build_images,
                 notifier,
+                alerts,
                 actor,
                 claim,
                 cancellation,
@@ -683,10 +792,11 @@ impl StackService {
                 "The requested import kind does not match the Platform runtime.",
             ));
         }
-        let compose = spec.compose_file().ok_or_else(|| {
-            validation("Git Stack import validation requires Phase 7 source materialization.")
-        })?;
-        let desired = parse_compose(&[compose.to_owned()])?;
+        let source = self
+            .materialize_import_source(platform_id, project_name, &name, spec, claim.import_kind)
+            .await?;
+        let compose_files = source.compose_contents()?;
+        let desired = parse_compose(&compose_files)?;
         let desired_by_name = desired
             .services
             .iter()
@@ -717,10 +827,8 @@ impl StackService {
             .collect();
         let mut issues = Vec::new();
         if claim.import_kind == crate::StackImportKind::SwarmStack {
-            let compatibility = analyze_swarm_compatibility(
-                &[compose.to_owned()],
-                &spec.common().build_image_bindings,
-            )?;
+            let compatibility =
+                analyze_swarm_compatibility(&compose_files, &spec.common().build_image_bindings)?;
             issues.extend(compatibility.issues.into_iter().map(|issue| {
                 StackAdoptionIssue {
                     code: issue.code,
@@ -749,7 +857,11 @@ impl StackService {
         }
         let spec_json =
             serde_json::to_string(spec).map_err(|error| StackError::Storage(error.to_string()))?;
-        let preview_fingerprint = compose_digest(&[import_runtime_fingerprint(&claim), spec_json]);
+        let preview_fingerprint = compose_digest(&[
+            import_runtime_fingerprint(&claim),
+            spec_json,
+            source.resolved_commit_sha.unwrap_or_default(),
+        ]);
         Ok(ComposeProjectImportValidation {
             services,
             issues,
@@ -777,9 +889,50 @@ impl StackService {
                 &self.shutdown.child_token(),
             )
             .await?;
+        let source = self
+            .materialize_import_source(
+                input.platform_id,
+                &input.project_name,
+                &input.name,
+                &input.spec,
+                claim.import_kind,
+            )
+            .await?;
+        let compose_files = source.compose_contents()?;
+        let desired = parse_compose(&compose_files)?;
+        if claim.import_kind == crate::StackImportKind::SwarmStack
+            && let Some(issue) = analyze_swarm_compatibility(
+                &compose_files,
+                &input.spec.common().build_image_bindings,
+            )?
+            .issues
+            .into_iter()
+            .find(|issue| issue.severity == crate::SwarmStackCompatibilitySeverity::Error)
+        {
+            return Err(validation(&issue.message));
+        }
+        let desired_names = desired
+            .services
+            .iter()
+            .map(|service| service.name.as_str())
+            .collect::<BTreeSet<_>>();
+        if let Some(service) = claim
+            .services
+            .iter()
+            .find(|service| !desired_names.contains(service.name.as_str()))
+        {
+            return Err(validation(&format!(
+                "Runtime Service '{}' is not defined by the selected source.",
+                service.name
+            )));
+        }
         let spec_json = serde_json::to_string(&input.spec)
             .map_err(|error| StackError::Storage(error.to_string()))?;
-        let expected_fingerprint = compose_digest(&[import_runtime_fingerprint(&claim), spec_json]);
+        let expected_fingerprint = compose_digest(&[
+            import_runtime_fingerprint(&claim),
+            spec_json,
+            source.resolved_commit_sha.unwrap_or_default(),
+        ]);
         if expected_fingerprint != input.preview_fingerprint
             || claim.import_kind != input.import_kind
         {
@@ -794,6 +947,56 @@ impl StackService {
             .await?;
         self.notifier.changed(imported.id, "imported");
         Ok(imported)
+    }
+
+    async fn materialize_import_source(
+        &self,
+        platform_id: Uuid,
+        project_name: &str,
+        name: &str,
+        spec: &StackSpec,
+        import_kind: crate::StackImportKind,
+    ) -> Result<crate::StackApplySource, StackError> {
+        match spec {
+            StackSpec::WebEditor { compose_file, .. } => Ok(crate::StackApplySource {
+                files: vec![StackSourceFile {
+                    relative_path: "compose.yml".to_owned(),
+                    content: compose_file.as_bytes().to_vec(),
+                }],
+                compose_paths: vec!["compose.yml".to_owned()],
+                env_file_paths: Vec::new(),
+                working_directory: ".".to_owned(),
+                labels_override_path: None,
+                resolved_commit_sha: None,
+            }),
+            StackSpec::Git { .. } => {
+                let materializer = self.source_materializer.as_ref().ok_or_else(|| {
+                    validation("Git Stack source materialization is unavailable.")
+                })?;
+                let cancellation = self.shutdown.child_token();
+                materializer
+                    .materialize(
+                        &StackOperationClaim {
+                            stack_id: Uuid::nil(),
+                            release_id: Uuid::nil(),
+                            platform_id,
+                            name: name.to_owned(),
+                            project_name: project_name.to_owned(),
+                            platform_type: match import_kind {
+                                crate::StackImportKind::ComposeProject => "Docker",
+                                crate::StackImportKind::SwarmStack => "DockerSwarm",
+                            }
+                            .to_owned(),
+                            spec: spec.clone(),
+                            row_version: 0,
+                            actor_id: Uuid::nil(),
+                            operation: "ValidateImport".to_owned(),
+                        },
+                        &cancellation,
+                    )
+                    .await
+            }
+        }
     }
 
     pub async fn drift(
@@ -814,7 +1017,16 @@ impl StackService {
                 &self.shutdown.child_token(),
             )
             .await?;
-        calculate_drift(&stack, &runtime)
+        let report = calculate_drift(&stack, &runtime)?;
+        if stack.drift_policy.alert_on_drift
+            && let Some(alerts) = &self.alerts
+        {
+            let observation = stack_drift_observation(&stack, &report, "StackDriftDetected");
+            if let Err(error) = alerts.observe(&observation).await {
+                tracing::warn!(%error, stack_id=%stack.id, "Stack drift Alert evaluation failed");
+            }
+        }
+        Ok(report)
     }
 
     pub async fn update_drift_policy(
@@ -902,6 +1114,29 @@ impl StackService {
             crate::StackReconciliationStatus::Partial
         };
         self.notifier.changed(id, "reconciled");
+        if status == crate::StackReconciliationStatus::Reconciled
+            && let Some(alerts) = &self.alerts
+        {
+            let observation = AlertObservation {
+                alert_type: "StackDriftAutoReconciled".to_owned(),
+                info: serde_json::json!({
+                    "StackId": stack.id,
+                    "StackName": &stack.name,
+                    "ActionCount": actions.len(),
+                    "HumanMessage": format!("Stack '{}' drift was reconciled.", stack.name),
+                }),
+                resource_id: stack.id,
+                resource_name: stack.name.clone(),
+                resource_type: "Stack".to_owned(),
+                deduplication_component: "drift".to_owned(),
+                observed_at: chrono::Utc::now(),
+                value: None,
+                matched: true,
+            };
+            if let Err(error) = alerts.observe(&observation).await {
+                tracing::warn!(%error, stack_id=%stack.id, "Stack reconciliation Alert evaluation failed");
+            }
+        }
         Ok(crate::StackReconciliationResult {
             stack_id: id,
             status,
@@ -932,7 +1167,7 @@ impl StackService {
             match result {
                 Ok(Ok(Some(result))) if result.status == StackReleaseStatus::Healthy => {
                     self.store
-                        .complete_apply(actor, &claim, &result, &[])
+                        .complete_apply(actor, &claim, &result, &[], None)
                         .await?;
                     self.notifier.changed(claim.stack_id, "reconciled");
                     count += 1;
@@ -1059,11 +1294,14 @@ fn stable_runtime_status(snapshot: &StackRuntimeSnapshot) -> Option<StackRelease
 #[allow(clippy::too_many_arguments)]
 async fn execute_apply(
     runtime: Arc<dyn StackRuntimePort>,
+    source_materializer: Option<Arc<dyn StackSourceMaterializerPort>>,
     store: Arc<dyn StackStore>,
     bindings: Arc<dyn StackBindingResolverPort>,
+    build_images: Option<Arc<dyn StackBuildImageResolverPort>>,
     notifier: Arc<dyn StackChangeNotifier>,
+    alerts: Option<Arc<dyn AlertEventSink>>,
     actor: ActorId,
-    claim: StackOperationClaim,
+    mut claim: StackOperationClaim,
     cancellation: CancellationToken,
     timeout: Duration,
     sender: mpsc::Sender<StackStreamItem>,
@@ -1073,24 +1311,97 @@ async fn execute_apply(
             "Resolving Stack variables and secrets...",
         ))
         .await;
-    let compose = match claim.spec.compose_file() {
-        Some(value) => value.to_owned(),
-        None => {
-            let message = "Git Stack source materialization belongs to Phase 7 and is unavailable.";
-            let _ = store.fail_apply(actor, &claim, message, false).await;
-            let _ = sender
-                .send(StackStreamItem::completed(
-                    StackReleaseStatus::Failed,
-                    message,
-                ))
+    let mut source = match &claim.spec {
+        StackSpec::WebEditor { compose_file, .. } => crate::StackApplySource {
+            files: vec![StackSourceFile {
+                relative_path: "compose.yml".to_owned(),
+                content: compose_file.as_bytes().to_vec(),
+            }],
+            compose_paths: vec!["compose.yml".to_owned()],
+            env_file_paths: Vec::new(),
+            working_directory: ".".to_owned(),
+            labels_override_path: None,
+            resolved_commit_sha: None,
+        },
+        StackSpec::Git { .. } => {
+            let Some(materializer) = source_materializer else {
+                fail_apply_before_runtime(
+                    &store,
+                    actor,
+                    &claim,
+                    &sender,
+                    "Git Stack source materialization is unavailable.",
+                )
                 .await;
+                return;
+            };
+            match materializer.materialize(&claim, &cancellation).await {
+                Ok(source) => source,
+                Err(error) => {
+                    fail_apply_before_runtime(&store, actor, &claim, &sender, &error.to_string())
+                        .await;
+                    return;
+                }
+            }
+        }
+    };
+    let compose_files = match source.compose_contents() {
+        Ok(files) => files,
+        Err(error) => {
+            fail_apply_before_runtime(&store, actor, &claim, &sender, &error.to_string()).await;
             return;
         }
     };
-    let model = match parse_compose(std::slice::from_ref(&compose)) {
+    let resolved_build_images = if claim.spec.common().build_image_bindings.is_empty() {
+        Vec::new()
+    } else {
+        let Some(resolver) = build_images else {
+            fail_apply_before_runtime(
+                &store,
+                actor,
+                &claim,
+                &sender,
+                "Stack Build image resolution is unavailable.",
+            )
+            .await;
+            return;
+        };
+        match resolver
+            .resolve(&claim.spec.common().build_image_bindings)
+            .await
+        {
+            Ok(resolved) => resolved,
+            Err(error) => {
+                fail_apply_before_runtime(&store, actor, &claim, &sender, &error.to_string()).await;
+                return;
+            }
+        }
+    };
+    if !resolved_build_images.is_empty() {
+        for resolved in &resolved_build_images {
+            let _ = sender
+                .send(StackStreamItem::system(format!(
+                    "Resolved service '{}' from Build{}.",
+                    resolved.service_name,
+                    resolved
+                        .build_run_id
+                        .map(|id| format!(" Run {id}"))
+                        .unwrap_or_default()
+                )))
+                .await;
+        }
+        let override_path = ".citadel/citadel.build-images.yml".to_owned();
+        source.files.push(StackSourceFile {
+            relative_path: override_path.clone(),
+            content: build_image_override(&resolved_build_images).into_bytes(),
+        });
+        source.compose_paths.push(override_path);
+    }
+    let model = match parse_compose(&compose_files) {
         Ok(value) => value,
         Err(error) => {
             let message = error.to_string();
+            report_stack_configuration_failure(alerts.as_ref(), &claim, &message).await;
             let _ = store.fail_apply(actor, &claim, &message, false).await;
             let _ = sender
                 .send(StackStreamItem::completed(
@@ -1101,11 +1412,55 @@ async fn execute_apply(
             return;
         }
     };
+    let release_source = match (&claim.spec, source.resolved_commit_sha.as_deref()) {
+        (
+            StackSpec::Git {
+                git_repo_id,
+                branch,
+                commit_sha,
+                compose_paths,
+                working_directory,
+                compose_env_files_from_repo,
+                watch_paths,
+                additional_env_file_from_repo,
+                ..
+            },
+            Some(resolved_commit_sha),
+        ) => Some(crate::StackReleaseSource {
+            source_type: crate::StackSource::Git,
+            git_repository_id: Some(*git_repo_id),
+            git_repository_name: None,
+            branch: Some(branch.clone()),
+            requested_commit_sha: commit_sha.clone(),
+            resolved_commit_sha: resolved_commit_sha.to_owned(),
+            compose_paths: compose_paths.clone(),
+            env_file_paths: if compose_env_files_from_repo.is_empty() {
+                additional_env_file_from_repo.clone()
+            } else {
+                compose_env_files_from_repo.clone()
+            },
+            git_repository_url: None,
+            working_directory: working_directory.clone().or_else(|| {
+                compose_paths[0]
+                    .rsplit_once('/')
+                    .map(|(parent, _)| parent.to_owned())
+            }),
+            watch_paths: Some(watch_paths.clone()),
+            compose_env_files_from_repo: Some(if compose_env_files_from_repo.is_empty() {
+                additional_env_file_from_repo.clone()
+            } else {
+                compose_env_files_from_repo.clone()
+            }),
+            compose_digest: Some(compose_digest(&compose_files)),
+        }),
+        _ => None,
+    };
     let names = model.variables.iter().cloned().collect::<Vec<_>>();
     let resolved = match bindings.resolve(claim.stack_id, &names).await {
         Ok(value) => value,
         Err(error) => {
             let message = error.to_string();
+            report_stack_configuration_failure(alerts.as_ref(), &claim, &message).await;
             let _ = store.fail_apply(actor, &claim, &message, false).await;
             let _ = sender
                 .send(StackStreamItem::completed(
@@ -1120,6 +1475,7 @@ async fn execute_apply(
         Ok(value) => value,
         Err(error) => {
             let message = error.to_string();
+            report_stack_configuration_failure(alerts.as_ref(), &claim, &message).await;
             let _ = store.fail_apply(actor, &claim, &message, false).await;
             let _ = sender
                 .send(StackStreamItem::completed(
@@ -1130,8 +1486,8 @@ async fn execute_apply(
             return;
         }
     };
-    let compose = match inject_ownership_labels(
-        &compose,
+    let labels_override = match create_ownership_labels_override(
+        &compose_files,
         claim.stack_id,
         claim.release_id,
         claim.platform_type == "DockerSwarm",
@@ -1149,6 +1505,12 @@ async fn execute_apply(
             return;
         }
     };
+    let labels_override_path = ".citadel/citadel.labels.yml".to_owned();
+    source.files.push(StackSourceFile {
+        relative_path: labels_override_path.clone(),
+        content: labels_override.into_bytes(),
+    });
+    source.labels_override_path = Some(labels_override_path);
     let _ = sender
         .send(StackStreamItem::system(
             "Submitting Stack deployment to Docker...",
@@ -1156,7 +1518,7 @@ async fn execute_apply(
         .await;
     match tokio::time::timeout(
         timeout,
-        runtime.apply(&claim, &compose, &environment, &cancellation),
+        runtime.apply(&claim, &source, &environment, &cancellation),
     )
     .await
     {
@@ -1165,13 +1527,23 @@ async fn execute_apply(
                 let _ = sender.send(item.clone()).await;
             }
             if result.status == StackReleaseStatus::Healthy {
+                let applied_at = chrono::Utc::now();
+                for binding in &mut claim.spec.common_mut().build_image_bindings {
+                    if let Some(resolved) = resolved_build_images.iter().find(|resolved| {
+                        resolved
+                            .service_name
+                            .eq_ignore_ascii_case(&binding.service_name)
+                    }) {
+                        binding.record_applied(resolved, applied_at);
+                    }
+                }
                 let snapshots = resolved
                     .entries
                     .iter()
                     .map(|entry| entry.snapshot.clone())
                     .collect::<Vec<_>>();
                 if let Err(error) = store
-                    .complete_apply(actor, &claim, &result, &snapshots)
+                    .complete_apply(actor, &claim, &result, &snapshots, release_source.as_ref())
                     .await
                 {
                     let _ = sender
@@ -1229,6 +1601,94 @@ async fn execute_apply(
                 ))
                 .await;
         }
+    }
+}
+
+fn build_image_override(bindings: &[ResolvedStackBuildImageBinding]) -> String {
+    let mut output = String::from("services:\n");
+    for binding in bindings {
+        output.push_str("  ");
+        output.push_str(&yaml_quote(&binding.service_name));
+        output.push_str(":\n    image: ");
+        output.push_str(&yaml_quote(&binding.image_reference));
+        output.push('\n');
+    }
+    output
+}
+
+fn yaml_quote(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+async fn fail_apply_before_runtime(
+    store: &Arc<dyn StackStore>,
+    actor: ActorId,
+    claim: &StackOperationClaim,
+    sender: &mpsc::Sender<StackStreamItem>,
+    message: &str,
+) {
+    let _ = store.fail_apply(actor, claim, message, false).await;
+    let _ = sender
+        .send(StackStreamItem::completed(
+            StackReleaseStatus::Failed,
+            message,
+        ))
+        .await;
+}
+
+async fn report_stack_configuration_failure(
+    alerts: Option<&Arc<dyn AlertEventSink>>,
+    claim: &StackOperationClaim,
+    message: &str,
+) {
+    let Some(alerts) = alerts else { return };
+    let observation = AlertObservation {
+        alert_type: "StackConfigurationResolutionFailed".to_owned(),
+        info: serde_json::json!({
+            "StackId": claim.stack_id,
+            "StackName": claim.name,
+            "Reason": message,
+            "HumanMessage": message,
+        }),
+        resource_id: claim.stack_id,
+        resource_name: claim.name.clone(),
+        resource_type: "Stack".to_owned(),
+        deduplication_component: claim.release_id.to_string(),
+        observed_at: chrono::Utc::now(),
+        value: None,
+        matched: true,
+    };
+    if let Err(error) = alerts.observe(&observation).await {
+        tracing::warn!(%error, stack_id=%claim.stack_id, "Stack configuration Alert evaluation failed");
+    }
+}
+
+fn stack_drift_observation(
+    stack: &StackView,
+    report: &StackDriftReport,
+    alert_type: &str,
+) -> AlertObservation {
+    AlertObservation {
+        alert_type: alert_type.to_owned(),
+        info: serde_json::json!({
+            "StackId": stack.id,
+            "StackName": stack.name,
+            "HasStructuralDrift": report.has_structural_drift,
+            "DriftCount": report.drifts.len(),
+            "Drifts": report.drifts,
+            "HumanMessage": if report.has_drift {
+                format!("Stack '{}' has configuration drift.", stack.name)
+            } else {
+                format!("Stack '{}' no longer has configuration drift.", stack.name)
+            },
+        }),
+        resource_id: stack.id,
+        resource_name: stack.name.clone(),
+        resource_type: "Stack".to_owned(),
+        deduplication_component: "drift".to_owned(),
+        observed_at: chrono::Utc::now(),
+        value: None,
+        matched: report.has_drift,
     }
 }
 
@@ -1573,6 +2033,21 @@ mod tests {
         assert_ne!(
             import_runtime_fingerprint(&base),
             import_runtime_fingerprint(&changed)
+        );
+    }
+
+    #[test]
+    fn build_image_override_quotes_service_names_and_uses_resolved_images() {
+        let output = build_image_override(&[ResolvedStackBuildImageBinding {
+            service_name: "api-worker".to_owned(),
+            build_project_id: Uuid::now_v7(),
+            image_reference: "registry.test:5000/team/api@sha256:abc".to_owned(),
+            digest: Some("sha256:abc".to_owned()),
+            build_run_id: Some(Uuid::now_v7()),
+        }]);
+        assert_eq!(
+            output,
+            "services:\n  \"api-worker\":\n    image: \"registry.test:5000/team/api@sha256:abc\"\n"
         );
     }
 }

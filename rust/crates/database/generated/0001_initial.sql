@@ -1,5 +1,5 @@
--- @generated immutable migration; do not edit.
--- Imported once from: src/Citadel.Infrastructure/Scripts/script0001.sql
+-- @generated pre-release baseline; do not edit.
+-- Generated from: crates/database/src/schema/schema.sql
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -760,6 +760,26 @@ CREATE TABLE alertevents (
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     CONSTRAINT pk_alertevents PRIMARY KEY (id),
     CONSTRAINT fk_alertevents_alertrules_alertruleid FOREIGN KEY (alertruleid) REFERENCES alertrules (id) ON DELETE CASCADE
+);
+
+CREATE TABLE alertdeliveryoutbox (
+    id uuid NOT NULL,
+    alerteventid uuid NOT NULL,
+    alertchannelid uuid NOT NULL,
+    attemptcount integer NOT NULL DEFAULT 0,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    claimedat timestamp with time zone,
+    claimowner uuid,
+    deliveredat timestamp with time zone,
+    lasterror text,
+    nextattemptat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    status text NOT NULL DEFAULT 'Pending',
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_alertdeliveryoutbox PRIMARY KEY (id),
+    CONSTRAINT ck_alertdeliveryoutbox_attemptcount CHECK (attemptcount >= 0),
+    CONSTRAINT ck_alertdeliveryoutbox_status CHECK (status IN ('Pending', 'Delivering', 'DeadLetter')),
+    CONSTRAINT fk_alertdeliveryoutbox_alertchannels_alertchannelid FOREIGN KEY (alertchannelid) REFERENCES alertchannels (id) ON DELETE CASCADE,
+    CONSTRAINT fk_alertdeliveryoutbox_alertevents_alerteventid FOREIGN KEY (alerteventid) REFERENCES alertevents (id) ON DELETE CASCADE
 );
 
 CREATE TABLE alertrulechannels (
@@ -1649,6 +1669,14 @@ CREATE INDEX ix_actorroles_roleid ON actorroles (roleid);
 CREATE INDEX ix_actorteammemberships_memberactorid ON actorteammemberships (memberactorid);
 
 CREATE INDEX ix_alertchannels_createdbyactorid ON alertchannels (createdbyactorid);
+
+CREATE INDEX ix_alertdeliveryoutbox_alertchannelid ON alertdeliveryoutbox (alertchannelid);
+
+CREATE INDEX ix_alertdeliveryoutbox_alerteventid ON alertdeliveryoutbox (alerteventid);
+
+CREATE INDEX ix_alertdeliveryoutbox_due ON alertdeliveryoutbox (nextattemptat, id) WHERE status IN ('Pending', 'Delivering');
+
+CREATE UNIQUE INDEX ix_alertdeliveryoutbox_event_channel ON alertdeliveryoutbox (alerteventid, alertchannelid);
 
 CREATE INDEX ix_alertevents_alertruleid ON alertevents (alertruleid);
 

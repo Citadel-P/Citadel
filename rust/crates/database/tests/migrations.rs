@@ -39,7 +39,14 @@ async fn clean_install_restart_and_checksum_enforcement() {
             .unwrap()
             .try_get("count")
             .unwrap();
-    assert_eq!(table_count, 83, "82 product tables plus the Rust journal");
+    assert_eq!(table_count, 84, "83 product tables plus the Rust journal");
+
+    let outbox_exists: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.alertdeliveryoutbox') IS NOT NULL")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert!(outbox_exists);
 
     let role_count: i64 = sqlx::query("SELECT count(*) AS count FROM roles")
         .fetch_one(&mut connection)

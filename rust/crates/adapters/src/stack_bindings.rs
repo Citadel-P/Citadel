@@ -11,16 +11,24 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::secret_value_resolver::PostgresSecretValueResolver;
+
 #[derive(Clone)]
 pub struct PostgresStackBindingResolver {
     pool: PgPool,
-    protector: Arc<dyn ResourceSecretProtector>,
+    secrets: PostgresSecretValueResolver,
 }
 
 impl PostgresStackBindingResolver {
-    #[must_use]
-    pub fn new(pool: PgPool, protector: Arc<dyn ResourceSecretProtector>) -> Self {
-        Self { pool, protector }
+    pub fn new(
+        pool: PgPool,
+        protector: Arc<dyn ResourceSecretProtector>,
+    ) -> Result<Self, StackError> {
+        Ok(Self {
+            pool: pool.clone(),
+            secrets: PostgresSecretValueResolver::new(pool, protector)
+                .map_err(|error| StackError::Storage(error.to_string()))?,
+        })
     }
 }
 
@@ -39,11 +47,8 @@ impl StackBindingResolverPort for PostgresStackBindingResolver {
                 .map(|name| name.to_ascii_lowercase())
                 .collect::<Vec<_>>();
             let rows = sqlx::query(
-                r#"SELECT b.name,b.kind,b.scope,b.value,b.secretid,b.secretdeliverymode,b.targetpath,
-                          secret.providertype,internal.encryptedvalue
+                r#"SELECT b.name,b.kind,b.scope,b.value,b.secretid,b.secretdeliverymode,b.targetpath
                    FROM resourcebindings b
-                   LEFT JOIN secretdefinitions secret ON secret.id=b.secretid
-                   LEFT JOIN internalsecretvalues internal ON internal.secretid=secret.id
                    WHERE (b.scope='Global' AND b.resourceid IS NULL
                           OR b.scope='Stack' AND b.resourceid=$1)
                      AND lower(b.name)=ANY($2::text[])
@@ -71,25 +76,16 @@ impl StackBindingResolverPort for PostgresStackBindingResolver {
                             "Secret '{name}' must use environment-variable delivery for this Stack."
                         )));
                     }
-                    let provider: Option<String> = row.try_get("providertype").map_err(storage)?;
-                    if provider.as_deref() != Some("InternalEncrypted") {
-                        return Err(StackError::Validation(format!(
-                            "External Secret '{name}' cannot be resolved until external provider execution migrates to Rust."
-                        )));
-                    }
-                    let envelope: Option<String> =
-                        row.try_get("encryptedvalue").map_err(storage)?;
-                    let envelope = envelope.ok_or_else(|| {
-                        StackError::Validation(format!("Secret '{name}' has no encrypted value."))
-                    })?;
-                    let plaintext = self.protector.unprotect(&envelope).map_err(|_| {
-                        StackError::Validation(format!("Secret '{name}' could not be decrypted."))
-                    })?;
-                    Zeroizing::new(String::from_utf8(plaintext.to_vec()).map_err(|_| {
+                    let secret_id = secret_id.ok_or_else(|| {
                         StackError::Validation(format!(
-                            "Secret '{name}' does not contain valid UTF-8 text."
+                            "Secret binding '{name}' has no Secret reference."
                         ))
-                    })?)
+                    })?;
+                    self.secrets.resolve(secret_id).await.map_err(|error| {
+                        StackError::Validation(format!(
+                            "Secret '{name}' could not be resolved: {error}"
+                        ))
+                    })?
                 } else {
                     Zeroizing::new(
                         row.try_get::<Option<String>, _>("value")

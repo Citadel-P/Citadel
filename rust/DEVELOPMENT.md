@@ -24,6 +24,11 @@ Use **Dev Containers: Rebuild Container** after changing `.devcontainer/`.
 Ordinary source changes do not require a rebuild. PostgreSQL, Cargo, npm, and
 frontend dependency data use named volumes and survive a rebuild.
 
+Runtime files (including Git repository caches and Automation runs) use the
+`citadel-data` volume at `/home/vscode/.local/share/citadel`, configured through
+`CITADEL_DATA_ROOT`. Container initialization makes this private directory
+writable by `vscode`. It survives rebuilds alongside the PostgreSQL volume.
+
 ## Run Citadel
 
 For normal browser testing, press `Ctrl+Shift+B`. This runs the default
@@ -37,6 +42,11 @@ Open these addresses from the host:
 
 The task creates separate **citadel-api** and **citadel-ui** terminal panels.
 The API is ready when its panel reports `Rust foundation server listening`.
+
+The Dev Container enables file-watcher polling at one-second intervals so Vite
+detects edits made on the Windows host. Without polling, mounted files can change
+while Vite continues serving an older transformed module, even after a browser
+refresh.
 
 To stop both processes, run **Tasks: Terminate Task** from the Command Palette
 and select **Citadel: Run application (API + UI)**. Closing or rebuilding the
@@ -79,6 +89,43 @@ Run the committed tasks from **Terminal > Run Task**:
 - **Citadel: Check frontend** runs frontend lint and unit tests.
 - **Citadel: Initialize development dependencies** refreshes locked Cargo and
   npm dependencies when their lockfiles change.
+
+## Database schema changes
+
+The declarative schema in `crates/database/src/schema/schema.sql` is the Rust
+database authority. Until the first Rust release, keep a single generated
+baseline and fold schema changes into it; do not hand-write migration SQL:
+
+```bash
+cd /workspace/rust
+cargo run --locked -p xtask -- database refresh-baseline
+cargo run --locked -p xtask -- database verify
+```
+
+`refresh-baseline` regenerates `0001_initial.sql`, its checksum manifest, and the
+compile-time migration catalog from the declarative schema. Numbered follow-up
+migrations begin only after the first Rust release freezes that baseline.
+
+## Restore a Citadel system backup
+
+Stop every Citadel Core instance before restoring. Extract the selected Restic
+snapshot to a private local directory, configure the target PostgreSQL URL, and
+run the offline command from the Rust release image or development container:
+
+```bash
+export DATABASE_URL='postgres://citadel:password@postgres:5432/citadel'
+cargo run --locked -p citadel-server -- restore-system \
+  --bundle /private/recovery-bundle \
+  --confirm-instance-replacement
+```
+
+The command validates the manifest, its complete checksum inventory, safe file
+paths, and the PostgreSQL archive signature before changing the database. It
+then performs a single-transaction `pg_restore --clean`; a failed restore rolls
+back instead of leaving a partially replaced schema. Keep every Core instance
+offline until the command succeeds. The restored database still requires the
+same `Jwt__Key` and `Secrets__EncryptionKey` external configuration recorded by
+the recovery manifest.
 
 ## Troubleshooting
 

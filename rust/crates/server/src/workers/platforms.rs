@@ -5,10 +5,13 @@ use citadel_adapters::agent::AgentClient;
 use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
 use citadel_adapters::docker::{DockerClient, DockerError};
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
+use citadel_alerts::{AlertDeliveryService, AlertEventSink, AlertObservation};
 use citadel_application::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
 use citadel_automation::AutomationService;
+use citadel_backups::BackupService;
+use citadel_builds::BuildService;
 use citadel_deployments::DeploymentService;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_platforms::jobs::{
@@ -47,6 +50,10 @@ pub struct WorkerDependencies {
     pub stacks: Arc<StackService>,
     pub git: Arc<GitRepositoryExecutionService>,
     pub automation: Arc<AutomationService>,
+    pub builds: Arc<BuildService>,
+    pub backups: Arc<BackupService>,
+    pub alerts: Arc<dyn AlertEventSink>,
+    pub alert_deliveries: Arc<AlertDeliveryService>,
 }
 
 pub fn register(
@@ -67,14 +74,42 @@ pub fn register(
         stacks,
         git,
         automation,
+        builds,
+        backups,
+        alerts,
+        alert_deliveries,
     } = dependencies;
     supervisor.spawn(
         "git-repository-sync",
-        super::git::git_repository_sync(cancellation.child_token(), git, realtime.clone()),
+        super::git::git_repository_sync(cancellation.child_token(), git),
     );
     supervisor.spawn(
         "automation-runs",
-        super::automation::automation_runs(cancellation.child_token(), automation),
+        super::automation::automation_runs(cancellation.child_token(), Arc::clone(&automation)),
+    );
+    supervisor.spawn(
+        "automation-scheduler",
+        super::automation::automation_scheduler(cancellation.child_token(), automation),
+    );
+    supervisor.spawn(
+        "alert-deliveries",
+        super::alerts::deliveries(cancellation.child_token(), alert_deliveries),
+    );
+    supervisor.spawn(
+        "build-runs",
+        super::builds::build_runs(cancellation.child_token(), builds),
+    );
+    supervisor.spawn(
+        "backup-runs",
+        super::backups::backup_runs(cancellation.child_token(), Arc::clone(&backups)),
+    );
+    supervisor.spawn(
+        "backup-restore-runs",
+        super::backups::restore_runs(cancellation.child_token(), Arc::clone(&backups)),
+    );
+    supervisor.spawn(
+        "backup-policy-scheduler",
+        super::backups::policy_scheduler(cancellation.child_token(), backups),
     );
     supervisor.spawn(
         "deployment-apply-reconciliation",
@@ -92,7 +127,14 @@ pub fn register(
     );
     supervisor.spawn(
         "stack-operation-reconciliation",
-        super::stacks::stack_operation_reconciliation(cancellation.child_token(), stacks),
+        super::stacks::stack_operation_reconciliation(
+            cancellation.child_token(),
+            Arc::clone(&stacks),
+        ),
+    );
+    supervisor.spawn(
+        "stack-drift-monitor",
+        super::stacks::stack_drift_monitor(cancellation.child_token(), stacks),
     );
     let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
     let (local_reconcile_sender, local_reconcile_receiver) =
@@ -142,6 +184,7 @@ pub fn register(
                 local_triggers: local_reconcile_receiver,
                 agent_triggers: agent_reconcile_receiver,
                 realtime: realtime.clone(),
+                alerts: Arc::clone(&alerts),
                 interval: settings.reconciliation_interval,
                 retry_delay: settings.agent_reconnect_delay,
             },
@@ -159,15 +202,19 @@ pub fn register(
         ),
     );
     if let Some(agent) = agent {
+        let context = StatsWorkerContext {
+            pool: pool.clone(),
+            metrics: Arc::clone(&metrics),
+            realtime: realtime.clone(),
+            alerts: Arc::clone(&alerts),
+            fetch_interval: settings.probe_interval,
+        };
         supervisor.spawn(
             "agent-container-stats",
             agent_container_stats(
                 cancellation.child_token(),
                 agent,
-                pool.clone(),
-                Arc::clone(&metrics),
-                realtime.clone(),
-                settings.probe_interval,
+                context,
                 settings.agent_reconnect_delay,
             ),
         );
@@ -177,12 +224,24 @@ pub fn register(
         local_container_stats(
             cancellation.child_token(),
             docker,
-            pool,
-            Arc::clone(&metrics),
-            realtime,
-            settings.probe_interval,
+            StatsWorkerContext {
+                pool,
+                metrics,
+                realtime,
+                alerts,
+                fetch_interval: settings.probe_interval,
+            },
         ),
     );
+}
+
+#[derive(Clone)]
+struct StatsWorkerContext {
+    pool: PgPool,
+    metrics: Arc<Metrics>,
+    realtime: Option<RealtimeHub>,
+    alerts: Arc<dyn AlertEventSink>,
+    fetch_interval: Duration,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -202,6 +261,7 @@ struct InventoryEvent {
 #[derive(Debug)]
 struct ReconciliationTarget {
     id: uuid::Uuid,
+    name: String,
     address: String,
     connector_type: String,
     platform_type: String,
@@ -214,6 +274,7 @@ struct InventoryReconciliationWorker {
     local_triggers: BoundedReceiver<()>,
     agent_triggers: BoundedReceiver<()>,
     realtime: Option<RealtimeHub>,
+    alerts: Arc<dyn AlertEventSink>,
     interval: Duration,
     retry_delay: Duration,
 }
@@ -244,17 +305,7 @@ async fn inventory_reconciliation(
             }
         }
 
-        if let Err(error) = reconcile_inventory(
-            &cancellation,
-            &worker.docker,
-            worker.agent.as_ref(),
-            &worker.pool,
-            &store,
-            worker.realtime.as_ref(),
-            scope,
-        )
-        .await
-        {
+        if let Err(error) = reconcile_inventory(&cancellation, &worker, &store, scope).await {
             tracing::warn!(%error, "platform inventory reconciliation failed");
             tokio::select! {
                 biased;
@@ -286,14 +337,11 @@ async fn inventory_reconciliation(
 
 async fn reconcile_inventory(
     cancellation: &CancellationToken,
-    docker: &DockerClient,
-    agent: Option<&AgentClient>,
-    pool: &PgPool,
+    worker: &InventoryReconciliationWorker,
     store: &dyn InventoryProjectionStore,
-    realtime: Option<&RealtimeHub>,
     scope: Option<ReconciliationTrigger>,
 ) -> Result<(), RuntimeCapabilityError> {
-    let targets = reconciliation_targets(pool).await?;
+    let targets = reconciliation_targets(&worker.pool).await?;
     for target in targets {
         if cancellation.is_cancelled() {
             return Ok(());
@@ -313,9 +361,9 @@ async fn reconcile_inventory(
         }
         let runtime: &dyn PlatformInventoryPort =
             if target.connector_type.eq_ignore_ascii_case("Local") {
-                docker
+                &worker.docker
             } else if target.connector_type.eq_ignore_ascii_case("Agent") {
-                let Some(agent) = agent else {
+                let Some(agent) = worker.agent.as_ref() else {
                     continue;
                 };
                 if agent.address().trim_end_matches('/') != target.address.trim_end_matches('/') {
@@ -341,7 +389,15 @@ async fn reconcile_inventory(
         {
             Ok(snapshot) => {
                 let change = store.persist(&snapshot).await?;
-                if let Some(realtime) = realtime {
+                let observation = platform_reachable_observation(&target);
+                if let Err(alert_error) = worker.alerts.observe(&observation).await {
+                    tracing::error!(
+                        %alert_error,
+                        platform_id = %target.id,
+                        "platform recovery Alert evaluation failed"
+                    );
+                }
+                if let Some(realtime) = worker.realtime.as_ref() {
                     realtime.publish_runtime_change(
                         target.id,
                         "platformInventory",
@@ -360,10 +416,64 @@ async fn reconcile_inventory(
                     %error,
                     "platform inventory target failed"
                 );
+                let observation = platform_unreachable_observation(&target, &error);
+                if let Err(alert_error) = worker.alerts.observe(&observation).await {
+                    tracing::error!(
+                        %alert_error,
+                        platform_id = %target.id,
+                        "platform failure Alert evaluation failed"
+                    );
+                }
             }
         }
     }
     Ok(())
+}
+
+fn platform_reachable_observation(target: &ReconciliationTarget) -> AlertObservation {
+    AlertObservation {
+        alert_type: "PlatformUnreachable".to_owned(),
+        info: serde_json::json!({
+            "PlatformName": target.name,
+            "Id": target.id,
+            "Address": target.address,
+            "HumanMessage": format!("Platform '{}' is reachable.", target.name),
+        }),
+        resource_id: target.id,
+        resource_name: target.name.clone(),
+        resource_type: "Platform".to_owned(),
+        deduplication_component: "inventory".to_owned(),
+        observed_at: chrono::Utc::now(),
+        value: None,
+        matched: false,
+    }
+}
+
+fn platform_unreachable_observation(
+    target: &ReconciliationTarget,
+    error: &RuntimeCapabilityError,
+) -> AlertObservation {
+    let message = format!(
+        "Could not synchronize platform '{}': {}",
+        target.name, error
+    );
+    AlertObservation {
+        alert_type: "PlatformUnreachable".to_owned(),
+        info: serde_json::json!({
+            "PlatformName": target.name,
+            "Id": target.id,
+            "Address": target.address,
+            "ErrorMessage": error.to_string(),
+            "HumanMessage": message,
+        }),
+        resource_id: target.id,
+        resource_name: target.name.clone(),
+        resource_type: "Platform".to_owned(),
+        deduplication_component: "inventory".to_owned(),
+        observed_at: chrono::Utc::now(),
+        value: None,
+        matched: true,
+    }
 }
 
 async fn reconciliation_targets(
@@ -371,7 +481,7 @@ async fn reconciliation_targets(
 ) -> Result<Vec<ReconciliationTarget>, RuntimeCapabilityError> {
     let rows = sqlx::query(
         r#"
-SELECT id, address, connectortype,
+SELECT id, name, address, connectortype,
        COALESCE(platformdescriptor->>'$type', 'Docker') AS platformtype
 FROM platforms
 WHERE connectortype IN ('Local', 'Agent', 'EdgeAgent')
@@ -385,6 +495,7 @@ ORDER BY id
         .map(|row| {
             Ok(ReconciliationTarget {
                 id: row.try_get("id").map_err(worker_storage)?,
+                name: row.try_get("name").map_err(worker_storage)?,
                 address: row.try_get("address").map_err(worker_storage)?,
                 connector_type: row.try_get("connectortype").map_err(worker_storage)?,
                 platform_type: row.try_get("platformtype").map_err(worker_storage)?,
@@ -404,14 +515,11 @@ fn worker_storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
 async fn local_container_stats(
     cancellation: CancellationToken,
     docker: DockerClient,
-    pool: PgPool,
-    metrics: Arc<Metrics>,
-    realtime: Option<RealtimeHub>,
-    fetch_interval: Duration,
+    context: StatsWorkerContext,
 ) -> Result<(), std::convert::Infallible> {
-    let _task = metrics.task_guard();
-    let store = PostgresContainerStatsStore::new(pool.clone());
-    let mut ticker = tokio::time::interval(fetch_interval);
+    let _task = context.metrics.task_guard();
+    let store = PostgresContainerStatsStore::new(context.pool.clone());
+    let mut ticker = tokio::time::interval(context.fetch_interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
@@ -419,7 +527,7 @@ async fn local_container_stats(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
-        let platform_id = match local_platform_id(&pool).await {
+        let platform_id = match local_platform_id(&context.pool).await {
             Ok(Some(id)) => id,
             Ok(None) => continue,
             Err(error) => {
@@ -448,8 +556,9 @@ async fn local_container_stats(
         match persist_container_stats(&store, platform_id, &stats).await {
             Ok(0) => continue,
             Ok(_) => {
-                metrics.local_stats_sampled();
-                if let Some(realtime) = realtime.as_ref() {
+                context.metrics.local_stats_sampled();
+                observe_platform_metrics(&context.pool, context.alerts.as_ref(), platform_id).await;
+                if let Some(realtime) = context.realtime.as_ref() {
                     realtime.publish_container_stats(platform_id, &stats);
                 }
             }
@@ -463,20 +572,17 @@ async fn local_container_stats(
 async fn agent_container_stats(
     cancellation: CancellationToken,
     agent: AgentClient,
-    pool: PgPool,
-    metrics: Arc<Metrics>,
-    realtime: Option<RealtimeHub>,
-    fetch_interval: Duration,
+    context: StatsWorkerContext,
     reconnect_delay: Duration,
 ) -> Result<(), RuntimeCapabilityError> {
-    let _task = metrics.task_guard();
-    let store = PostgresContainerStatsStore::new(pool.clone());
+    let _task = context.metrics.task_guard();
+    let store = PostgresContainerStatsStore::new(context.pool.clone());
     loop {
         if let Err(error) = agent.get_info(&cancellation).await {
             if cancellation.is_cancelled() {
                 return Ok(());
             }
-            metrics.agent_handshake_failed();
+            context.metrics.agent_handshake_failed();
             if !error.retryable {
                 return Err(error);
             }
@@ -486,7 +592,7 @@ async fn agent_container_stats(
             }
             continue;
         }
-        let platform_id = match agent_platform_id(&pool, agent.address()).await {
+        let platform_id = match agent_platform_id(&context.pool, agent.address()).await {
             Ok(Some(id)) => id,
             Ok(None) => {
                 if wait_to_reconnect(&cancellation, reconnect_delay).await {
@@ -503,13 +609,13 @@ async fn agent_container_stats(
             }
         };
         let mut stream = match agent
-            .stream_container_stats(fetch_interval, &cancellation)
+            .stream_container_stats(context.fetch_interval, &cancellation)
             .await
         {
             Ok(stream) => stream,
             Err(_error) if cancellation.is_cancelled() => return Ok(()),
             Err(error) if error.retryable => {
-                metrics.agent_stream_reconnected();
+                context.metrics.agent_stream_reconnected();
                 tracing::warn!(%error, "Agent stats stream connection failed");
                 if wait_to_reconnect(&cancellation, reconnect_delay).await {
                     return Ok(());
@@ -527,8 +633,14 @@ async fn agent_container_stats(
                     match persist_container_stats(&store, platform_id, &stats).await {
                         Ok(0) => continue,
                         Ok(_) => {
-                            metrics.agent_stats_sampled();
-                            if let Some(realtime) = realtime.as_ref() {
+                            context.metrics.agent_stats_sampled();
+                            observe_platform_metrics(
+                                &context.pool,
+                                context.alerts.as_ref(),
+                                platform_id,
+                            )
+                            .await;
+                            if let Some(realtime) = context.realtime.as_ref() {
                                 realtime.publish_container_stats(platform_id, &stats);
                             }
                         }
@@ -538,20 +650,91 @@ async fn agent_container_stats(
                     }
                 }
                 Some(Err(error)) if error.retryable => {
-                    metrics.agent_stream_reconnected();
+                    context.metrics.agent_stream_reconnected();
                     tracing::warn!(%error, "Agent stats stream interrupted");
                     break;
                 }
                 Some(Err(error)) => return Err(error),
                 None if cancellation.is_cancelled() => return Ok(()),
                 None => {
-                    metrics.agent_stream_reconnected();
+                    context.metrics.agent_stream_reconnected();
                     break;
                 }
             }
         }
         if wait_to_reconnect(&cancellation, reconnect_delay).await {
             return Ok(());
+        }
+    }
+}
+
+async fn observe_platform_metrics(
+    pool: &PgPool,
+    alerts: &dyn AlertEventSink,
+    platform_id: uuid::Uuid,
+) {
+    let row = match sqlx::query(
+        "SELECT p.name,s.cpuusage,s.memoryusage,s.diskusage,s.diskusedbytes,s.disktotalbytes FROM platforms p JOIN LATERAL (SELECT * FROM platformstats WHERE platformid=p.id ORDER BY created DESC LIMIT 1) s ON true WHERE p.id=$1",
+    )
+    .bind(platform_id)
+    .fetch_optional(pool)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return,
+        Err(error) => {
+            tracing::warn!(%error, %platform_id, "Platform Alert metric lookup failed");
+            return;
+        }
+    };
+    let name = match row.try_get::<String, _>("name") {
+        Ok(name) => name,
+        Err(error) => {
+            tracing::warn!(%error, %platform_id, "Platform Alert metric mapping failed");
+            return;
+        }
+    };
+    let values = [
+        (
+            "PlatformCpuHigh",
+            "CPU",
+            row.try_get::<f64, _>("cpuusage").ok(),
+        ),
+        (
+            "PlatformRamHigh",
+            "RAM",
+            row.try_get::<f64, _>("memoryusage").ok(),
+        ),
+        (
+            "PlatformDiskHigh",
+            "disk",
+            row.try_get::<Option<f64>, _>("diskusage").ok().flatten(),
+        ),
+    ];
+    for (alert_type, label, value) in values {
+        let Some(value) = value.filter(|value| value.is_finite() && (0.0..=100.0).contains(value))
+        else {
+            continue;
+        };
+        let observation = AlertObservation {
+            alert_type: alert_type.to_owned(),
+            info: serde_json::json!({
+                "PlatformName": name,
+                "Value": value,
+                "DiskUsedBytes": row.try_get::<Option<i64>, _>("diskusedbytes").ok().flatten(),
+                "DiskTotalBytes": row.try_get::<Option<i64>, _>("disktotalbytes").ok().flatten(),
+                "HumanMessage": format!("Platform '{name}' {label} usage is {value:.1}%."),
+            }),
+            resource_id: platform_id,
+            resource_name: name.clone(),
+            resource_type: "Platform".to_owned(),
+            deduplication_component: "utilization".to_owned(),
+            observed_at: chrono::Utc::now(),
+            value: Some(value),
+            matched: true,
+        };
+        if let Err(error) = alerts.observe(&observation).await {
+            tracing::warn!(%error, %platform_id, alert_type, "Platform Alert evaluation failed");
         }
     }
 }
@@ -863,5 +1046,37 @@ mod tests {
         assert_eq!(local_receiver.try_recv(), Some(()));
         assert_eq!(local_receiver.try_recv(), None);
         assert_eq!(agent_receiver.try_recv(), Some(()));
+    }
+
+    #[test]
+    fn platform_inventory_failure_maps_to_the_existing_alert_contract() {
+        let id = uuid::Uuid::now_v7();
+        let target = ReconciliationTarget {
+            id,
+            name: "worker-01".into(),
+            address: "http://agent:8080".into(),
+            connector_type: "Agent".into(),
+            platform_type: "Docker".into(),
+        };
+        let error = RuntimeCapabilityError::new(
+            citadel_platforms::RuntimeErrorKind::Remote,
+            "connection refused",
+            true,
+        );
+
+        let observation = platform_unreachable_observation(&target, &error);
+
+        assert_eq!(observation.alert_type, "PlatformUnreachable");
+        assert_eq!(observation.resource_id, id);
+        assert_eq!(observation.resource_type, "Platform");
+        assert_eq!(observation.info["PlatformName"], "worker-01");
+        assert_eq!(observation.info["Address"], "http://agent:8080");
+        assert_eq!(observation.deduplication_component, "inventory");
+        assert!(observation.matched);
+
+        let recovered = platform_reachable_observation(&target);
+        assert_eq!(recovered.alert_type, observation.alert_type);
+        assert_eq!(recovered.deduplication_component, "inventory");
+        assert!(!recovered.matched);
     }
 }

@@ -246,13 +246,40 @@ Secret/Config reconstruction and Edge Agent mutation remain Phase 7/10
 boundaries; the Phase 6 update evaluator does not pretend those transports are
 available.
 
-Phase 7A introduces the reusable bounded external-process boundary and ports
-the Git-account lifecycle. Child stdout/stderr, duration, cancellation, and
-cleanup are bounded; Git first-clone publication is atomic; account credentials
-are authenticated-encrypted before persistence; and the existing authorized
-HTTP/OpenAPI contract is retained. Repository synchronization, credential
-injection, content browsing, polling, and webhooks are the next Git slice, not
-silent success paths. See
+Phase 7 now includes the bounded external-process foundation; encrypted Git
+accounts and durable repository synchronization; repository browsing,
+comparison, Compose discovery, polling, and authenticated webhooks; bounded
+Deno automation runs and scheduling; local Docker build runs; Alert resource
+lifecycle, Build/Automation event evaluation, and durable retrying Shoutrrr
+channel delivery; and durable local Docker-volume
+backup/restore runs with scheduling, cancellation, leases, recovery, retention,
+execution-time run-as authorization, immutable workload-to-volume plans, and
+per-volume outcomes. Citadel-system policies create a PostgreSQL recovery
+bundle, validate it before Restic upload, and can be restored only through the
+explicitly confirmed offline `restore-system` command. Platform CPU/RAM/disk
+threshold observations and Platform/Build/Automation failure events use the
+same durable Alert pipeline. The release image pins and includes Git, Docker
+CLI, Deno, Shoutrrr, Restic, and the PostgreSQL client tools used by these paths.
+
+Regular-Agent builds and Git-backed Stack Apply now use signed, bounded source
+transport and persist their immutable Git provenance. Build-backed Deployment
+Apply resolves and records the exact successful Build Run it deploys.
+Stack Build-image bindings use the same immutable provenance rule through a
+generated Compose override without rewriting user source.
+Eligible Stacks are also checked for drift on a bounded five-minute schedule;
+one failing Stack cannot prevent the remaining candidates from being checked.
+Standalone Stack Apply executes configured pre/post commands on Local and
+regular-Agent connectors and resolves Registry authentication only for the
+active Apply attempt. Swarm rejects those Compose-only options instead of
+silently ignoring them. An opt-in two-database recovery test verifies that a
+Citadel-system bundle restores persisted state into a clean PostgreSQL target.
+S3-compatible Volume backup/restore now runs through the configured regular
+Agent and verifies exact Swarm Node identity before execution. Edge Agent
+backup/build execution, multi-node session routing, the remaining
+product-specific Alert producers, and the external-service
+acceptance matrix remain explicit
+open Phase 7 work; unsupported connector paths fail closed and never fall back
+to Core's Docker daemon. See
 `reports/phase7a-external-execution-git-accounts-report.md` and run
 `./rust/scripts/Test-Phase7AExternalExecution.ps1`.
 

@@ -58,7 +58,7 @@ impl From<ActivityFilterQuery> for ActivityFilter {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ActivityView {
+pub(crate) struct ActivityView {
     id: Uuid,
     platform_id: Option<Uuid>,
     resource_id: Option<Uuid>,
@@ -147,7 +147,7 @@ fn map_activities(records: PagedActivityRecords) -> Result<ActivitiesView, Ident
     })
 }
 
-fn map_activity(record: ActivityRecord) -> Result<ActivityView, IdentityError> {
+pub(crate) fn map_activity(record: ActivityRecord) -> Result<ActivityView, IdentityError> {
     let info = serde_json::from_str::<Value>(&record.info_json)
         .map_err(|error| IdentityError::Storage(error.to_string()))?;
     Ok(ActivityView {

@@ -10,8 +10,9 @@ use citadel_contracts::citadel::containers::v1::container_service_server::{
 use citadel_contracts::citadel::containers::v1::{
     ContainerIds, ContainerLogRequest, ContainerLogResponse, ContainersStatsResponse,
     CreateContainerRequest, CreateContainerResponse, DeleteContainerRequest, ExecBinaryRequest,
-    ExecClientMessage, ExecServerMessage, InspectContainerRequest, ListContainersRequest,
-    ListContainersResponse, StreamContainerStatsRequest, StreamContainersStatsRequest,
+    ExecClientMessage, ExecExit, ExecOutput, ExecServerMessage, InspectContainerRequest,
+    ListContainersRequest, ListContainersResponse, StreamContainerStatsRequest,
+    StreamContainersStatsRequest, StreamType, exec_server_message,
 };
 use citadel_contracts::citadel::deployments::v1::deployment_service_server::{
     DeploymentService as AgentDeploymentService, DeploymentServiceServer,
@@ -48,7 +49,10 @@ use citadel_deployments::{
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
 };
-use citadel_stacks::{StackOperationClaim, StackSpec, StackSpecCommon, StackUpdateBehavior};
+use citadel_stacks::{
+    StackApplySource, StackOperationClaim, StackSourceFile, StackSpec, StackSpecCommon,
+    StackUpdateBehavior,
+};
 use futures_util::Stream;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
@@ -100,7 +104,10 @@ impl ContainerService for MutationFixture {
 
     async fn start(&self, request: Request<ContainerIds>) -> Result<Response<()>, Status> {
         require_signature(&request)?;
-        assert_eq!(request.get_ref().ids, ["container-1", "container-2"]);
+        assert!(
+            request.get_ref().ids == ["container-1", "container-2"]
+                || request.get_ref().ids == ["backup-helper"]
+        );
         self.container_action_calls.fetch_add(1, Ordering::Relaxed);
         Ok(Response::new(()))
     }
@@ -127,7 +134,7 @@ impl ContainerService for MutationFixture {
     ) -> Result<Response<()>, Status> {
         require_signature(&request)?;
         let request = request.get_ref();
-        assert_eq!(request.ids, ["container-1"]);
+        assert!(request.ids == ["container-1"] || request.ids == ["backup-helper"]);
         assert_eq!(request.v, Some(true));
         assert_eq!(request.force, Some(true));
         assert_eq!(request.link, Some(false));
@@ -144,9 +151,12 @@ impl ContainerService for MutationFixture {
 
     async fn create(
         &self,
-        _: Request<CreateContainerRequest>,
+        request: Request<CreateContainerRequest>,
     ) -> Result<Response<CreateContainerResponse>, Status> {
-        Err(Status::unimplemented("not used"))
+        require_signature(&request)?;
+        Ok(Response::new(CreateContainerResponse {
+            container_id: "backup-helper".to_owned(),
+        }))
     }
 
     type ExecStream = TestStream<ExecServerMessage>;
@@ -162,9 +172,21 @@ impl ContainerService for MutationFixture {
 
     async fn exec_binary(
         &self,
-        _: Request<ExecBinaryRequest>,
+        request: Request<ExecBinaryRequest>,
     ) -> Result<Response<Self::ExecBinaryStream>, Status> {
-        Err(Status::unimplemented("not used"))
+        require_signature(&request)?;
+        assert_eq!(request.get_ref().container_id, "backup-helper");
+        Ok(Response::new(Box::pin(futures_util::stream::iter([
+            Ok(ExecServerMessage {
+                msg: Some(exec_server_message::Msg::Output(ExecOutput {
+                    data: b"{\"message_type\":\"summary\"}\n".to_vec(),
+                    stream: StreamType::Stdout as i32,
+                })),
+            }),
+            Ok(ExecServerMessage {
+                msg: Some(exec_server_message::Msg::Exit(ExecExit { exit_code: 0 })),
+            }),
+        ]))))
     }
 
     type StreamContainerLogsStream = TestStream<ContainerLogResponse>;
@@ -206,11 +228,25 @@ impl AgentStackService for MutationFixture {
         require_signature(&request)?;
         let request = request.get_ref();
         assert_eq!(request.project_name.as_deref(), Some("agent-stack"));
+        assert!(request.compose_file_content.is_none());
+        assert_eq!(request.source_compose_file_paths, ["compose.yml"]);
+        assert_eq!(request.source_files.len(), 1);
         assert_eq!(
-            request.compose_file_content.as_deref(),
-            Some("services:\n  web:\n    image: nginx\n")
+            request.source_files[0].content,
+            b"services:\n  web:\n    image: nginx\n"
         );
         assert_eq!(request.environment_variables, ["TOKEN=resolved"]);
+        assert_eq!(
+            request.pre_deploy.as_ref().unwrap().commands,
+            ["echo preparing"]
+        );
+        assert_eq!(
+            request
+                .post_deploy
+                .as_ref()
+                .map(|command| command.path.as_str()),
+            Some("scripts")
+        );
         assert_eq!(
             request.orchestration_mode,
             StackOrchestrationMode::DockerCompose as i32
@@ -378,8 +414,19 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
     let stack = client
         .apply_stack(
             &stack_claim(),
-            "services:\n  web:\n    image: nginx\n",
+            &StackApplySource {
+                files: vec![StackSourceFile {
+                    relative_path: "compose.yml".to_owned(),
+                    content: b"services:\n  web:\n    image: nginx\n".to_vec(),
+                }],
+                compose_paths: vec!["compose.yml".to_owned()],
+                env_file_paths: Vec::new(),
+                working_directory: ".".to_owned(),
+                labels_override_path: None,
+                resolved_commit_sha: None,
+            },
             &["TOKEN=resolved".to_owned()],
+            None,
             &cancellation,
         )
         .await
@@ -414,6 +461,78 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
     .unwrap_err();
     assert_eq!(error.kind, RuntimeErrorKind::Unavailable);
     assert_eq!(calls.load(Ordering::Relaxed), 1);
+    shutdown.cancel();
+}
+
+#[tokio::test]
+async fn signed_agent_container_create_and_binary_exec_are_bounded() {
+    let (address, shutdown) = start_fixture(MutationFixture {
+        fail_network_create: false,
+        network_create_calls: Arc::new(AtomicUsize::new(0)),
+        container_delete_calls: Arc::new(AtomicUsize::new(0)),
+        deployment_apply_calls: Arc::new(AtomicUsize::new(0)),
+        container_action_calls: Arc::new(AtomicUsize::new(0)),
+        stack_apply_calls: Arc::new(AtomicUsize::new(0)),
+    })
+    .await;
+    let client = connect(&address).await;
+    let cancellation = CancellationToken::new();
+    let container_id = client
+        .create_container(
+            CreateContainerRequest {
+                name: "backup-helper".to_owned(),
+                image_id: "restic/restic:0.18.1".to_owned(),
+                ..Default::default()
+            },
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    client
+        .change_containers_state(
+            std::slice::from_ref(&container_id),
+            AgentContainerAction::Start,
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    let output = client
+        .exec_binary(
+            ExecBinaryRequest {
+                container_id: container_id.clone(),
+                cmd: vec!["restic".to_owned(), "backup".to_owned()],
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                ..Default::default()
+            },
+            Duration::from_secs(5),
+            4096,
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    assert_eq!(output.exit_code, 0);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("summary"));
+    let bounded = client
+        .exec_binary(
+            ExecBinaryRequest {
+                container_id: container_id.clone(),
+                cmd: vec!["restic".to_owned(), "backup".to_owned()],
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                ..Default::default()
+            },
+            Duration::from_secs(5),
+            4,
+            &cancellation,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(bounded.kind, RuntimeErrorKind::Remote);
+    client
+        .delete_container(&container_id, &cancellation)
+        .await
+        .unwrap();
     shutdown.cancel();
 }
 
@@ -484,6 +603,14 @@ fn stack_claim() -> StackOperationClaim {
             update_behavior: StackUpdateBehavior::Disabled,
             common: StackSpecCommon {
                 destroy_before_deploy: false,
+                pre_deploy: Some(citadel_stacks::StackCommand {
+                    commands: vec!["echo preparing".to_owned()],
+                    path: ".".to_owned(),
+                }),
+                post_deploy: Some(citadel_stacks::StackCommand {
+                    commands: vec!["echo complete".to_owned()],
+                    path: "scripts".to_owned(),
+                }),
                 ..Default::default()
             },
         },

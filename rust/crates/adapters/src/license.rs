@@ -596,7 +596,7 @@ fn hex_digest(bytes: &[u8]) -> String {
         .collect()
 }
 
-async fn get_or_create_identity(
+pub(crate) async fn get_or_create_identity(
     transaction: &mut Transaction<'_, Postgres>,
     now: DateTime<Utc>,
 ) -> Result<CitadelInstanceIdentity, IdentityError> {

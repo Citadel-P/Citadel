@@ -23,6 +23,8 @@ use crate::{
 const MAX_DIRECTORY_ENTRIES: usize = 1_000;
 const MAX_STRUCTURED_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TEXT_PREVIEW_BYTES: usize = 1024 * 1024;
+const MAX_STACK_SOURCE_FILES: usize = 512;
+const MAX_STACK_SOURCE_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +99,18 @@ pub struct GitComposeProjectCandidate {
     pub compose_paths: Vec<String>,
     pub env_file_paths: Vec<String>,
     pub suggested_watch_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitSnapshotFile {
+    pub relative_path: String,
+    pub content: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitSnapshot {
+    pub resolved_commit_sha: String,
+    pub files: Vec<GitSnapshotFile>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -222,6 +236,7 @@ pub struct GitRepositoryExecutionService {
     cli: Arc<GitCli>,
     cache_root: PathBuf,
     stale_after: Duration,
+    on_change: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl GitRepositoryExecutionService {
@@ -239,6 +254,19 @@ impl GitRepositoryExecutionService {
             cli,
             cache_root,
             stale_after,
+            on_change: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_change_notifier(mut self, on_change: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_change = Some(on_change);
+        self
+    }
+
+    fn changed(&self) {
+        if let Some(on_change) = &self.on_change {
+            on_change();
         }
     }
 
@@ -284,6 +312,7 @@ impl GitRepositoryExecutionService {
         let Some(claim) = self.store.claim_next(stale_before).await? else {
             return Ok(false);
         };
+        self.changed();
         let result = self.synchronize_claim(&claim, cancellation).await;
         match result {
             Ok(result) => self.store.complete(&claim, &result).await?,
@@ -292,11 +321,16 @@ impl GitRepositoryExecutionService {
                 self.store.fail(&claim, &message).await?;
             }
         }
+        self.changed();
         Ok(true)
     }
 
     pub async fn enqueue_due(&self, limit: usize) -> Result<usize, GitRepositoryExecutionError> {
-        self.store.enqueue_due(limit.clamp(1, 100)).await
+        let count = self.store.enqueue_due(limit.clamp(1, 100)).await?;
+        if count > 0 {
+            self.changed();
+        }
+        Ok(count)
     }
 
     pub async fn receive_webhook(
@@ -343,6 +377,7 @@ impl GitRepositoryExecutionService {
             .as_deref()
             .or(webhook.branch_filter.as_deref());
         self.store.enqueue_sync(actor_id, id, branch).await?;
+        self.changed();
         Ok(GitWebhookOutcome::Queued)
     }
 
@@ -358,6 +393,96 @@ impl GitRepositoryExecutionService {
             .resolve_named_commit(&self.cache_path(source.id), &stored, cancellation)
             .await
             .map_err(Into::into)
+    }
+
+    /// Materializes one immutable, bounded Git tree in memory for transport to
+    /// the Stack runtime. Git links and submodules are rejected because their
+    /// filesystem semantics cannot be reproduced safely by a byte-file bundle.
+    pub async fn stack_snapshot(
+        &self,
+        id: Uuid,
+        revision: Option<&str>,
+        cancellation: &CancellationToken,
+    ) -> Result<GitSnapshot, GitRepositoryExecutionError> {
+        let commit = self.resolve_commit(id, revision, cancellation).await?;
+        let listing = self
+            .cli
+            .list_tree_recursive(
+                &self.cache_path(id),
+                &commit,
+                MAX_STACK_SOURCE_FILES + 1,
+                MAX_STRUCTURED_OUTPUT_BYTES,
+                cancellation,
+            )
+            .await?;
+        if listing.truncated || listing.entries.len() > MAX_STACK_SOURCE_FILES {
+            return Err(GitRepositoryExecutionError::Validation(format!(
+                "Git Stack source contains more than {MAX_STACK_SOURCE_FILES} files."
+            )));
+        }
+        let total = listing
+            .entries
+            .iter()
+            .try_fold(0_u64, |total, entry| match entry.entry_type {
+                GitEntryType::File => total.checked_add(entry.size.unwrap_or_default()),
+                GitEntryType::Symlink => None,
+                GitEntryType::Submodule | GitEntryType::Directory => Some(total),
+            });
+        let Some(total) = total else {
+            return Err(GitRepositoryExecutionError::Validation(
+                "Git Stack source contains a symbolic link, which cannot be transported safely."
+                    .to_owned(),
+            ));
+        };
+        if listing
+            .entries
+            .iter()
+            .any(|entry| entry.entry_type == GitEntryType::Submodule)
+        {
+            return Err(GitRepositoryExecutionError::Validation(
+                "Git Stack source contains a submodule, which is not supported.".to_owned(),
+            ));
+        }
+        if total > MAX_STACK_SOURCE_BYTES as u64 {
+            return Err(GitRepositoryExecutionError::Validation(format!(
+                "Git Stack source exceeds the {} MiB transport limit.",
+                MAX_STACK_SOURCE_BYTES / (1024 * 1024)
+            )));
+        }
+        let mut files = Vec::with_capacity(listing.entries.len());
+        for entry in listing
+            .entries
+            .into_iter()
+            .filter(|entry| entry.entry_type == GitEntryType::File)
+        {
+            let size = usize::try_from(entry.size.unwrap_or_default()).map_err(|_| {
+                GitRepositoryExecutionError::Validation(
+                    "Git Stack source file is too large for this platform.".to_owned(),
+                )
+            })?;
+            let content = if size == 0 {
+                Vec::new()
+            } else {
+                let blob = self
+                    .cli
+                    .read_blob(&self.cache_path(id), &entry.object_id, size, cancellation)
+                    .await?;
+                if blob.truncated || blob.content.len() != size {
+                    return Err(GitRepositoryExecutionError::Git(GitError::InvalidOutput(
+                        format!("Git returned incomplete content for '{}'.", entry.path),
+                    )));
+                }
+                blob.content
+            };
+            files.push(GitSnapshotFile {
+                relative_path: validate_repository_path(&entry.path, true)?,
+                content,
+            });
+        }
+        Ok(GitSnapshot {
+            resolved_commit_sha: commit,
+            files,
+        })
     }
 
     pub async fn list_directory(

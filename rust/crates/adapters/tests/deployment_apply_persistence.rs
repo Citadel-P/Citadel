@@ -229,7 +229,7 @@ async fn binding_resolution_uses_resource_precedence_and_keeps_secrets_masked() 
     .await
     .unwrap();
 
-    let resolver = PostgresDeploymentBindingResolver::new(pool.clone(), protector);
+    let resolver = PostgresDeploymentBindingResolver::new(pool.clone(), protector).unwrap();
     let resolved = resolver
         .resolve(deployment_id, &[variable_name.clone(), secret_name.clone()])
         .await

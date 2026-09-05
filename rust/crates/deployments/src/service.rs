@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_domain::{ActorId, LicenseCapability};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -242,6 +243,7 @@ pub struct DeploymentService {
     delete_timeout: Duration,
     apply_timeout: Duration,
     apply_slots: Arc<Semaphore>,
+    alerts: Option<Arc<dyn AlertEventSink>>,
 }
 
 impl DeploymentService {
@@ -262,6 +264,7 @@ impl DeploymentService {
             delete_timeout: Duration::from_secs(30),
             apply_timeout: Duration::from_secs(10 * 60),
             apply_slots: Arc::new(Semaphore::new(4)),
+            alerts: None,
         }
     }
 
@@ -277,6 +280,12 @@ impl DeploymentService {
         bindings: Arc<dyn DeploymentBindingResolverPort>,
     ) -> Self {
         self.bindings = bindings;
+        self
+    }
+
+    #[must_use]
+    pub fn with_alerts(mut self, alerts: Arc<dyn AlertEventSink>) -> Self {
+        self.alerts = Some(alerts);
         self
     }
 
@@ -534,6 +543,7 @@ impl DeploymentService {
             runtime: Arc::clone(&self.runtime),
             bindings: Arc::clone(&self.bindings),
             notifier: Arc::clone(&self.notifier),
+            alerts: self.alerts.clone(),
             sender,
             _permit: permit,
         };
@@ -630,13 +640,14 @@ struct ApplyOperation {
     runtime: Arc<dyn DeploymentRuntimePort>,
     bindings: Arc<dyn DeploymentBindingResolverPort>,
     notifier: Arc<dyn DeploymentChangeNotifier>,
+    alerts: Option<Arc<dyn AlertEventSink>>,
     sender: mpsc::Sender<DeploymentStreamItem>,
     _permit: OwnedSemaphorePermit,
 }
 
 impl ApplyOperation {
     async fn run(
-        self,
+        mut self,
         shutdown: &CancellationToken,
         timeout: Duration,
     ) -> Result<(), DeploymentError> {
@@ -678,14 +689,10 @@ impl ApplyOperation {
         Ok(())
     }
 
-    async fn execute_inner(&self, cancellation: &CancellationToken) -> Result<(), DeploymentError> {
-        if matches!(self.claim.spec.image, DeploymentImageInfo::Build { .. }) {
-            return Err(DeploymentError::Validation(
-                "Build-backed Deployment Apply is not available until Build execution migrates to Rust."
-                    .to_owned(),
-            ));
-        }
-
+    async fn execute_inner(
+        &mut self,
+        cancellation: &CancellationToken,
+    ) -> Result<(), DeploymentError> {
         match &self.claim.spec.image {
             DeploymentImageInfo::External { image_tag, .. } => {
                 self.send(DeploymentStreamItem::info(format!(
@@ -703,6 +710,7 @@ impl ApplyOperation {
                 cancellation,
             ) => image?,
         };
+        apply_resolved_build(&mut self.claim.spec.image, &image)?;
 
         if self.recreate
             && let Some(container_id) = self.claim.existing_docker_container_id.as_deref()
@@ -724,13 +732,31 @@ impl ApplyOperation {
             .environment_variables
             .as_deref()
             .unwrap_or_default();
-        let referenced = referenced_binding_names(configured_environment)?;
+        let referenced = match referenced_binding_names(configured_environment) {
+            Ok(referenced) => referenced,
+            Err(error) => {
+                self.report_configuration_failure(&error.to_string()).await;
+                return Err(error);
+            }
+        };
         let resolved = tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
-            resolved = self.bindings.resolve(self.claim.id, &referenced) => resolved?,
+            resolved = self.bindings.resolve(self.claim.id, &referenced) => match resolved {
+                Ok(resolved) => resolved,
+                Err(error) => {
+                    self.report_configuration_failure(&error.to_string()).await;
+                    return Err(error);
+                }
+            },
         };
-        let environment = build_environment(configured_environment, &referenced, &resolved)?;
+        let environment = match build_environment(configured_environment, &referenced, &resolved) {
+            Ok(environment) => environment,
+            Err(error) => {
+                self.report_configuration_failure(&error.to_string()).await;
+                return Err(error);
+            }
+        };
         self.send(DeploymentStreamItem::info(binding_message(&resolved)));
         self.send(DeploymentStreamItem::info(format!(
             "Applying deployment to {}...",
@@ -804,8 +830,65 @@ impl ApplyOperation {
         Ok(())
     }
 
+    async fn report_configuration_failure(&self, message: &str) {
+        let Some(alerts) = &self.alerts else { return };
+        let observation = AlertObservation {
+            alert_type: "DeploymentConfigurationResolutionFailed".to_owned(),
+            info: serde_json::json!({
+                "DeploymentId": self.claim.id,
+                "DeploymentName": &self.claim.name,
+                "Reason": message,
+                "HumanMessage": message,
+            }),
+            resource_id: self.claim.id,
+            resource_name: self.claim.name.clone(),
+            resource_type: "Deployment".to_owned(),
+            deduplication_component: self.claim.row_version.to_string(),
+            observed_at: chrono::Utc::now(),
+            value: None,
+            matched: true,
+        };
+        let _ = alerts.observe(&observation).await;
+    }
+
     fn send(&self, item: DeploymentStreamItem) {
         let _ = self.sender.try_send(item);
+    }
+}
+
+fn apply_resolved_build(
+    image: &mut DeploymentImageInfo,
+    prepared: &crate::PreparedDeploymentImage,
+) -> Result<(), DeploymentError> {
+    match (&*image, prepared.resolved_build.as_ref()) {
+        (
+            DeploymentImageInfo::Build {
+                build_project_id,
+                redeploy_on_build,
+                ..
+            },
+            Some(build),
+        ) => {
+            *image = DeploymentImageInfo::Build {
+                build_project_id: *build_project_id,
+                redeploy_on_build: *redeploy_on_build,
+                resolved_image_reference: Some(build.image_reference.clone()),
+                resolved_digest: build.digest.clone(),
+                resolved_build_run_id: Some(build.build_run_id),
+                applied_image_reference: Some(build.image_reference.clone()),
+                applied_digest: prepared.digest.clone().or_else(|| build.digest.clone()),
+                applied_build_run_id: Some(build.build_run_id),
+                applied_at: Some(chrono::Utc::now()),
+            };
+            Ok(())
+        }
+        (DeploymentImageInfo::Build { .. }, None) => Err(DeploymentError::Runtime(
+            "Build-backed Deployment image preparation returned no Build provenance.".to_owned(),
+        )),
+        (_, Some(_)) => Err(DeploymentError::Runtime(
+            "Docker returned Build provenance for a non-Build Deployment.".to_owned(),
+        )),
+        (_, None) => Ok(()),
     }
 }
 
@@ -1308,6 +1391,65 @@ mod tests {
         assert!(referenced_binding_names(&["TOKEN=${BROKEN".to_owned()]).is_err());
     }
 
+    #[test]
+    fn successful_build_apply_records_the_exact_resolved_run_and_image() {
+        let project_id = Uuid::now_v7();
+        let run_id = Uuid::now_v7();
+        let mut image = DeploymentImageInfo::Build {
+            build_project_id: project_id,
+            redeploy_on_build: true,
+            resolved_image_reference: None,
+            resolved_digest: None,
+            resolved_build_run_id: None,
+            applied_image_reference: None,
+            applied_digest: None,
+            applied_build_run_id: None,
+            applied_at: None,
+        };
+        apply_resolved_build(
+            &mut image,
+            &PreparedDeploymentImage {
+                docker_image_id: "sha256:local".to_owned(),
+                digest: Some("registry/app@sha256:pulled".to_owned()),
+                resolved_build: Some(crate::ResolvedDeploymentBuild {
+                    image_reference: "registry/app:main".to_owned(),
+                    digest: Some("sha256:built".to_owned()),
+                    build_run_id: run_id,
+                }),
+            },
+        )
+        .unwrap();
+        let DeploymentImageInfo::Build {
+            resolved_image_reference,
+            resolved_digest,
+            resolved_build_run_id,
+            applied_image_reference,
+            applied_digest,
+            applied_build_run_id,
+            applied_at,
+            ..
+        } = image
+        else {
+            unreachable!();
+        };
+        assert_eq!(
+            resolved_image_reference.as_deref(),
+            Some("registry/app:main")
+        );
+        assert_eq!(resolved_digest.as_deref(), Some("sha256:built"));
+        assert_eq!(resolved_build_run_id, Some(run_id));
+        assert_eq!(
+            applied_image_reference.as_deref(),
+            Some("registry/app:main")
+        );
+        assert_eq!(
+            applied_digest.as_deref(),
+            Some("registry/app@sha256:pulled")
+        );
+        assert_eq!(applied_build_run_id, Some(run_id));
+        assert!(applied_at.is_some());
+    }
+
     fn resolved_binding(name: &str, value: &str, secret: bool) -> crate::ResolvedDeploymentBinding {
         crate::ResolvedDeploymentBinding {
             name: name.to_owned(),
@@ -1536,6 +1678,7 @@ mod tests {
                 Ok(PreparedDeploymentImage {
                     docker_image_id: "sha256:image".to_owned(),
                     digest: None,
+                    resolved_build: None,
                 })
             }
             .boxed()
@@ -1581,6 +1724,7 @@ mod tests {
                 Ok(PreparedDeploymentImage {
                     docker_image_id: "sha256:image".to_owned(),
                     digest: None,
+                    resolved_build: None,
                 })
             }
             .boxed()

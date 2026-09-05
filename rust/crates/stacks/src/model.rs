@@ -195,6 +195,29 @@ impl StackBuildImageBinding {
         self.applied_at = None;
         self
     }
+
+    pub fn record_applied(
+        &mut self,
+        resolved: &ResolvedStackBuildImageBinding,
+        applied_at: DateTime<Utc>,
+    ) {
+        self.resolved_image_reference = Some(resolved.image_reference.clone());
+        self.resolved_digest = resolved.digest.clone();
+        self.resolved_build_run_id = resolved.build_run_id;
+        self.applied_image_reference = Some(resolved.image_reference.clone());
+        self.applied_digest = resolved.digest.clone();
+        self.applied_build_run_id = resolved.build_run_id;
+        self.applied_at = Some(applied_at);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedStackBuildImageBinding {
+    pub service_name: String,
+    pub build_project_id: Uuid,
+    pub image_reference: String,
+    pub digest: Option<String>,
+    pub build_run_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -517,6 +540,26 @@ impl StackUpdateState {
     pub fn from_storage_value(mut value: Value) -> Result<Self, StackError> {
         rename_object_keys(&mut value, false);
         serde_json::from_value(value).map_err(json_storage)
+    }
+
+    /// Records the immutable Git revision that produced the successfully applied release.
+    /// Returns `false` when this is not a Git-backed Stack state.
+    pub fn record_applied_commit(
+        &mut self,
+        resolved_commit_sha: &str,
+        observed_at: DateTime<Utc>,
+    ) -> bool {
+        let Self::Git {
+            recreate_stack_on_new_commit_state,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        recreate_stack_on_new_commit_state.current_commit_sha = resolved_commit_sha.to_owned();
+        recreate_stack_on_new_commit_state.remote_commit_sha = None;
+        recreate_stack_on_new_commit_state.last_checked_at = observed_at;
+        true
     }
 }
 
@@ -931,6 +974,42 @@ pub struct StackOperationClaim {
     pub operation: String,
 }
 
+/// An immutable, bounded Stack source snapshot prepared for one Apply attempt.
+/// Paths are repository-relative and are validated again by each runtime
+/// transport before they are written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackApplySource {
+    pub files: Vec<StackSourceFile>,
+    pub compose_paths: Vec<String>,
+    pub env_file_paths: Vec<String>,
+    pub working_directory: String,
+    pub labels_override_path: Option<String>,
+    pub resolved_commit_sha: Option<String>,
+}
+
+impl StackApplySource {
+    pub fn compose_contents(&self) -> Result<Vec<String>, StackError> {
+        self.compose_paths
+            .iter()
+            .map(|path| {
+                let file = self
+                    .files
+                    .iter()
+                    .find(|file| file.relative_path == *path)
+                    .ok_or_else(|| validation(&format!("Compose file '{path}' is unavailable.")))?;
+                String::from_utf8(file.content.clone())
+                    .map_err(|_| validation(&format!("Compose file '{path}' is not valid UTF-8.")))
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackSourceFile {
+    pub relative_path: String,
+    pub content: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackDeletionClaim {
     pub stack_id: Uuid,
@@ -1019,6 +1098,20 @@ pub struct StackDriftReport {
     pub has_auto_fixable_drift: bool,
     pub has_structural_drift: bool,
     pub drifts: Vec<StackDrift>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackDriftMonitorFailure {
+    pub stack_id: Uuid,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackDriftMonitorResult {
+    pub checked: usize,
+    pub reconciled: usize,
+    pub failures: Vec<StackDriftMonitorFailure>,
+    pub next_cursor: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1257,4 +1350,79 @@ pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
     values.sort_unstable();
     values.dedup();
     values
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn successful_git_apply_advances_and_clears_the_update_state() {
+        let previous = Utc::now() - chrono::Duration::hours(1);
+        let observed = Utc::now();
+        let mut state = StackUpdateState::Git {
+            recreate_stack_on_new_image_state: RecreateStackOnNewImageState::default(),
+            recreate_stack_on_new_commit_state: RecreateStackOnNewCommitState {
+                current_commit_sha: "old".to_owned(),
+                remote_commit_sha: Some("new".to_owned()),
+                last_checked_at: previous,
+            },
+        };
+
+        assert!(state.record_applied_commit("new", observed));
+        let StackUpdateState::Git {
+            recreate_stack_on_new_commit_state,
+            ..
+        } = state
+        else {
+            unreachable!();
+        };
+        assert_eq!(recreate_stack_on_new_commit_state.current_commit_sha, "new");
+        assert!(
+            recreate_stack_on_new_commit_state
+                .remote_commit_sha
+                .is_none()
+        );
+        assert_eq!(recreate_stack_on_new_commit_state.last_checked_at, observed);
+    }
+
+    #[test]
+    fn web_editor_apply_does_not_create_git_update_state() {
+        let mut state = StackUpdateState::WebEditor {
+            recreate_stack_on_new_image_state: RecreateStackOnNewImageState::default(),
+        };
+        assert!(!state.record_applied_commit("commit", Utc::now()));
+    }
+
+    #[test]
+    fn applied_build_binding_records_one_exact_artifact() {
+        let project_id = Uuid::now_v7();
+        let run_id = Uuid::now_v7();
+        let applied_at = Utc::now();
+        let mut binding = StackBuildImageBinding {
+            service_name: "api".to_owned(),
+            build_project_id: project_id,
+            redeploy_on_build: true,
+            resolved_image_reference: None,
+            resolved_digest: None,
+            resolved_build_run_id: None,
+            applied_image_reference: None,
+            applied_digest: None,
+            applied_build_run_id: None,
+            applied_at: None,
+        };
+        binding.record_applied(
+            &ResolvedStackBuildImageBinding {
+                service_name: "api".to_owned(),
+                build_project_id: project_id,
+                image_reference: "registry.test/api@sha256:abc".to_owned(),
+                digest: Some("sha256:abc".to_owned()),
+                build_run_id: Some(run_id),
+            },
+            applied_at,
+        );
+        assert_eq!(binding.applied_build_run_id, Some(run_id));
+        assert_eq!(binding.resolved_build_run_id, Some(run_id));
+        assert_eq!(binding.applied_at, Some(applied_at));
+    }
 }

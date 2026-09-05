@@ -56,12 +56,14 @@ For the initial baseline:
 2. remove only `__EFMigrationsHistory` DDL and its final journal insert;
 3. retain the complete product DDL and generated seed data;
 4. record the source hash and verify the resulting 82-table baseline; and
-5. make the copied result the Rust-owned `schema.sql` and immutable Rust-v1
+5. make the copied result the Rust-owned `schema.sql` and generated Rust-v1
    baseline migration.
 
 After that one-time import, EF and `script0001.sql` leave the Rust schema
-pipeline. Future structural changes start from the Rust-owned SQL schema and
-generate reviewable immutable migrations with DPM.
+pipeline. Until the first Rust release, structural changes regenerate the sole
+`0001_initial.sql` baseline from the Rust-owned schema. The first release freezes
+that baseline; subsequent structural changes generate reviewable immutable
+migrations with DPM.
 
 Before Citadel's first public release, a rename may intentionally appear as a
 destructive drop/add because development data is disposable. Destructive SQL is
