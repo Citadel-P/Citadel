@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 chrono.workspace = true
+citadel-alerts = { path = "../alerts" }
 citadel-domain = { path = "../domain" }
 futures-util.workspace = true
 serde.workspace = true
@@ -16,6 +17,6 @@ sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+tracing.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
-

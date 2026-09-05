@@ -8,10 +8,12 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_application::{
     LicenseStateNotifier, LicenseTransitionMonitor, LicenseValidationPersistence,
     license_transition_delay,
 };
+use citadel_domain::LicenseStatus;
 use citadel_identity::IdentityService;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -266,6 +268,7 @@ pub async fn run_license_transition_monitor(
     cancellation: CancellationToken,
     monitor: LicenseTransitionMonitor,
     hub: LicenseRealtimeHub,
+    alerts: Arc<dyn AlertEventSink>,
 ) -> Result<(), Infallible> {
     let mut wake = hub.subscribe();
     loop {
@@ -277,6 +280,51 @@ pub async fn run_license_transition_monitor(
                     // never advertise a state that was rolled back.
                     if let Some(instance_id) = check.instance_id {
                         hub.publish(instance_id);
+                        for (alert_type, message, matched) in match check.status {
+                            Some(LicenseStatus::GracePeriod) => vec![
+                                (
+                                    "LicenseEnteredGracePeriod",
+                                    "The Citadel license entered its grace period.",
+                                    true,
+                                ),
+                                (
+                                    "LicenseExpired",
+                                    "The Citadel license is not expired.",
+                                    false,
+                                ),
+                            ],
+                            Some(LicenseStatus::Expired) => vec![
+                                (
+                                    "LicenseEnteredGracePeriod",
+                                    "The Citadel license left its grace period.",
+                                    false,
+                                ),
+                                ("LicenseExpired", "The Citadel license expired.", true),
+                            ],
+                            Some(LicenseStatus::Valid) => vec![
+                                (
+                                    "LicenseEnteredGracePeriod",
+                                    "The Citadel license is valid.",
+                                    false,
+                                ),
+                                ("LicenseExpired", "The Citadel license is valid.", false),
+                            ],
+                            _ => Vec::new(),
+                        } {
+                            let _ = alerts
+                                .observe(&AlertObservation {
+                                    alert_type: alert_type.into(),
+                                    info: serde_json::json!({"HumanMessage": message}),
+                                    resource_id: instance_id,
+                                    resource_name: "Citadel license".into(),
+                                    resource_type: "License".into(),
+                                    deduplication_component: "license-state".into(),
+                                    observed_at: now,
+                                    value: None,
+                                    matched,
+                                })
+                                .await;
+                        }
                     }
                 }
                 license_transition_delay(now, check.next_boundary)

@@ -54,11 +54,26 @@ pub async fn authentication_middleware(
     next: Next,
 ) -> Response {
     if let Some(token) = bearer(request.headers())
-        && let Ok(principal) = identity.authenticate_bearer(token).await
+        && let Ok(authenticated) = identity.authenticate_bearer_context(token).await
     {
-        request.extensions_mut().insert(principal);
+        if authenticated.automation_run_id.is_some()
+            && automation_token_path_is_blocked(request.uri().path())
+        {
+            return identity_error_response(IdentityError::Forbidden, request.headers());
+        }
+        request.extensions_mut().insert(authenticated.principal);
     }
     next.run(request).await
+}
+
+fn automation_token_path_is_blocked(path: &str) -> bool {
+    path.starts_with("/api/v1/authentication")
+        || path.starts_with("/api/v1/automation")
+        || path.starts_with("/api/v1/resourceBindings/secrets")
+        || path.starts_with("/api/v1/resourceBindings/secret-providers")
+        || path.split('/').any(|segment| {
+            segment.eq_ignore_ascii_case("terminal") || segment.eq_ignore_ascii_case("exec")
+        })
 }
 
 async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap) -> Response {
@@ -647,5 +662,22 @@ mod tests {
             roles: vec!["Admin".to_owned()],
         };
         assert!(require_human_administrator(Some(Extension(principal))).is_ok());
+    }
+
+    #[test]
+    fn automation_tokens_cannot_reenter_sensitive_execution_surfaces() {
+        for path in [
+            "/api/v1/authentication/logout",
+            "/api/v1/automation/actions",
+            "/api/v1/resourceBindings/secrets",
+            "/api/v1/platforms/one/containers/two/terminal",
+            "/api/v1/tasks/one/exec",
+        ] {
+            assert!(automation_token_path_is_blocked(path), "{path}");
+        }
+        assert!(!automation_token_path_is_blocked("/api/v1/platforms"));
+        assert!(!automation_token_path_is_blocked(
+            "/api/v1/stacks/one/apply"
+        ));
     }
 }

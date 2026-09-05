@@ -14,6 +14,10 @@ bytes.workspace = true
 chrono.workspace = true
 citadel-application = { path = "../application" }
 citadel-automation = { path = "../automation" }
+citadel-alerts = { path = "../alerts" }
+citadel-builds = { path = "../builds" }
+citadel-backups = { path = "../backups" }
+citadel-execution = { path = "../execution" }
 citadel-contracts = { path = "../contracts" }
 citadel-domain = { path = "../domain" }
 citadel-git = { path = "../git" }

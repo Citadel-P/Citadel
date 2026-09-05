@@ -45,6 +45,11 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/lookup.rs"]
+mod lookup;
+#[path = "platforms_http/realtime_groups.rs"]
+mod realtime_groups;
+
 struct Fixture {
     app: Router,
     pool: PgPool,
@@ -55,6 +60,7 @@ struct Fixture {
     realtime: IdentityRealtimeReader,
     docker_server: tokio::task::JoinHandle<()>,
     docker_socket: PathBuf,
+    lookup_state: citadel_server::lookup_http::LookupHttpState,
     _guard: OwnedMutexGuard<()>,
 }
 
@@ -218,16 +224,33 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     )
     .await;
     assert_eq!(containers["containers"][0]["name"], "web");
+    let expected_ports = json!({
+        "80/tcp": [
+            {"hostIP": "0.0.0.0", "hostPort": "8080"},
+            {"hostIP": "::", "hostPort": "8080"}
+        ],
+        "443/tcp": []
+    });
+    assert_eq!(containers["containers"][0]["ports"], expected_ports);
     let container_id = containers["containers"][0]["id"].as_str().unwrap();
-    assert_eq!(
+    let container = json_body(
         send(
             &fixture,
             &format!("/api/v1/containers/{container_id}"),
             Some(fixture.administrator.clone()),
         )
+        .await,
+    )
+    .await;
+    assert_eq!(container["ports"], expected_ports);
+    let snapshot_containers = fixture
+        .realtime
+        .list_containers(fixture.platform_id)
         .await
-        .status(),
-        StatusCode::OK
+        .unwrap();
+    assert_eq!(
+        snapshot_containers[0].ports, expected_ports,
+        "WebSocket snapshots use the same public shape"
     );
     assert_eq!(
         send(
@@ -458,7 +481,7 @@ async fn fixture() -> Fixture {
         Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
         Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
     ));
-    let app = platforms_http::router(PlatformsHttpState {
+    let platform_state = PlatformsHttpState {
         identity,
         platforms,
         registrations,
@@ -467,7 +490,16 @@ async fn fixture() -> Fixture {
         docker,
         agent: None,
         realtime: None,
-    });
+    };
+    let lookup_state = citadel_server::lookup_http::LookupHttpState {
+        store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
+            pool.clone(),
+        )),
+        entitlements: Arc::new(StaticEntitlementService::new(true)),
+        platforms: platform_state.clone(),
+    };
+    let app = platforms_http::router(platform_state)
+        .merge(citadel_server::lookup_http::router(lookup_state.clone()));
     Fixture {
         app,
         pool,
@@ -478,6 +510,7 @@ async fn fixture() -> Fixture {
         realtime,
         docker_server,
         docker_socket,
+        lookup_state,
         _guard: guard,
     }
 }
@@ -603,7 +636,12 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             state: "running".into(),
             status: "Up".into(),
             labels: BTreeMap::new(),
-            ports: json!([]),
+            // Raw rows from older Local projections must work without a reset.
+            ports: json!([
+                {"PrivatePort": 80, "PublicPort": 8080, "Type": "tcp", "IP": "0.0.0.0"},
+                {"PrivatePort": 80, "PublicPort": 8080, "Type": "tcp", "IP": "::"},
+                {"PrivatePort": 443, "Type": "tcp", "IP": ""}
+            ]),
             stack: None,
             is_system: false,
             system_role: None,

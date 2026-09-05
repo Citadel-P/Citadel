@@ -23,7 +23,7 @@ use crate::activity_store::insert_activity as insert_typed_activity;
 
 const READ_MASK: i32 = 1 | 2 | 4;
 const DEFAULT_REGISTRY_ID: Uuid = Uuid::from_u128(0x100);
-const AUTHORIZED_CTE: &str = r#"
+pub(crate) const AUTHORIZED_CTE: &str = r#"
 WITH actor_scope AS (
     SELECT actor.id AS actorid
     FROM actors actor

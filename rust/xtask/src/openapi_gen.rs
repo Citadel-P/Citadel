@@ -756,6 +756,7 @@ fn schemas() -> Value {
             "type": "object", "required": ["id", "name", "group"], "additionalProperties": false,
             "properties": { "id": uuid(), "name": string(), "group": nullable_string() }
         },
+        "LookupResourceType": { "type": "string", "enum": citadel_domain::LookupResourceType::ALL },
         "ResourceAccessView": {
             "type": "object",
             "required": ["resourceType", "resourceId", "resourceName", "permissionLevel", "specificPermissions"],
@@ -1575,6 +1576,7 @@ fn phase5_schemas() -> Map<String, Value> {
     schemas.insert("AutomationActionView".into(), automation_action);
     schemas.insert("AutomationActionsView".into(), json!({"type":"object","required":["actions"],"properties":{"actions":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionView"}}}}));
     schemas.insert("AutomationActionInput".into(), json!({"type":"object","required":["name","code","enabled","scheduleEnabled","alertOnFailure"],"properties":{"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":nullable_string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":nullable_string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":nullable_uuid(),"tagIds":uuid_array()}}));
+    schemas.insert("UpdateAutomationActionInput".into(), json!({"type":"object","additionalProperties":false,"properties":{"description":nullable_string(),"code":nullable_string(),"defaultArgsJson":nullable_string(),"enabled":{"type":["boolean","null"]},"scheduleEnabled":{"type":["boolean","null"]},"scheduleCron":nullable_string(),"scheduleTimeZone":nullable_string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":["boolean","null"]},"runAsActorId":nullable_uuid()}}));
     schemas.insert(
         "RunAutomationActionInput".into(),
         json!({"type":"object","properties":{"argsJson":{"type":"object"},"timeoutSeconds":{"type":["integer","null"],"format":"int32"}}}),
@@ -1584,9 +1586,80 @@ fn phase5_schemas() -> Map<String, Value> {
         json!({"type":"object","properties":{"argsJson":{"type":"object"}}}),
     );
     schemas.insert("AutomationActionRunView".into(), json!({"type":"object","required":["id","actionId","actionName","trigger","status","runAsActorId","argsJson","codeSnapshot","codeHash","timeoutSeconds","queuedAt"],"properties":{"id":uuid(),"actionId":uuid(),"actionName":string(),"trigger":string(),"status":string(),"runAsActorId":uuid(),"triggeredByActorId":nullable_uuid(),"argsJson":{"type":"object"},"codeSnapshot":string(),"codeHash":string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"finishedAt":{"type":["string","null"],"format":"date-time"},"durationMs":{"type":["integer","null"],"format":"int64"},"exitCode":{"type":["integer","null"],"format":"int32"},"logs":nullable_string(),"errorMessage":nullable_string()}}));
-    schemas.insert("AutomationActionRunStreamItems".into(), json!({"type":"array","items":{"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string()}}}));
+    schemas.insert("AutomationActionRunStreamItem".into(), json!({"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string()}}));
     schemas.insert("AutomationActionRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionRunView"}}}}));
     schemas.insert("AutomationActionRunLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":string()}}));
+
+    schemas.insert("BuildArgSpec".into(), json!({"type":"object","required":["name","value"],"properties":{"name":string(),"value":nullable_string()}}));
+    schemas.insert("BuildSecretSpec".into(), json!({"type":"object","required":["id","secretId"],"properties":{"id":string(),"secretId":uuid()}}));
+    schemas.insert(
+        "BuildProjectBuilderKind".into(),
+        json!({"type":"string","enum":["Platform","BuildAgentPool"]}),
+    );
+    schemas.insert("BuildProjectInput".into(), json!({"type":"object","required":["name","enabled","gitRepositoryId","registryId","imageRepository"],"properties":{"name":string(),"description":nullable_string(),"enabled":{"type":"boolean"},"gitRepositoryId":uuid(),"branch":nullable_string(),"contextPath":nullable_string(),"dockerfilePath":nullable_string(),"target":nullable_string(),"buildArgs":{"type":"array","items":{"$ref":"#/components/schemas/BuildArgSpec"}},"buildSecrets":{"type":"array","items":{"$ref":"#/components/schemas/BuildSecretSpec"}},"platformId":nullable_uuid(),"registryId":uuid(),"imageRepository":string(),"tagTemplates":string_array(),"webhook":{"type":["object","null"]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"retentionRunCount":{"type":["integer","null"],"format":"int32"},"tagIds":uuid_array(),"builderKind":{"$ref":"#/components/schemas/BuildProjectBuilderKind"},"buildAgentPoolId":nullable_uuid()}}));
+    schemas.insert("BuildProjectView".into(), json!({"type":"object","required":["id","name","normalizedName","enabled","gitRepositoryId","branch","contextPath","dockerfilePath","buildArgs","buildSecrets","builderKind","registryId","imageRepository","tagTemplates","timeoutSeconds","retentionRunCount","controlState","createdByActorId","createdAt","updatedAt","rowVersion"],"properties":{"id":uuid(),"name":string(),"normalizedName":string(),"description":nullable_string(),"enabled":{"type":"boolean"},"gitRepositoryId":uuid(),"branch":string(),"contextPath":string(),"dockerfilePath":string(),"target":nullable_string(),"buildArgs":{"type":"array","items":{"$ref":"#/components/schemas/BuildArgSpec"}},"buildSecrets":{"type":"array","items":{"$ref":"#/components/schemas/BuildSecretSpec"}},"builderKind":{"$ref":"#/components/schemas/BuildProjectBuilderKind"},"platformId":nullable_uuid(),"buildAgentPoolId":nullable_uuid(),"registryId":uuid(),"imageRepository":string(),"tagTemplates":string_array(),"webhook":{"type":["object","null"]},"timeoutSeconds":{"type":"integer","format":"int32"},"retentionRunCount":{"type":"integer","format":"int32"},"currentRunId":nullable_uuid(),"controlState":string(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"createdByActorId":uuid(),"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},"archivedAt":{"type":["string","null"],"format":"date-time"},"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert("BuildProjectsView".into(), json!({"type":"object","required":["projects"],"properties":{"projects":{"type":"array","items":{"$ref":"#/components/schemas/BuildProjectView"}}}}));
+    schemas.insert("QueueBuildRunInput".into(), json!({"type":"object","properties":{"trigger":string(),"triggerSourceId":nullable_uuid()}}));
+    schemas.insert("BuildRunView".into(), json!({"type":"object","required":["id","buildProjectId","projectNameSnapshot","gitRepositoryId","branch","contextPath","dockerfilePath","imageRepository","imageReferences","trigger","status","timeoutSeconds","queuedAt","triggeredByActorId"],"properties":{"id":uuid(),"buildProjectId":uuid(),"projectNameSnapshot":string(),"gitRepositoryId":uuid(),"branch":string(),"resolvedCommitSha":nullable_string(),"contextPath":string(),"dockerfilePath":string(),"target":nullable_string(),"imageRepository":string(),"imageReferences":string_array(),"trigger":string(),"status":string(),"imageDigest":nullable_string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"completedAt":{"type":["string","null"],"format":"date-time"},"exitCode":{"type":["integer","null"],"format":"int32"},"errorCode":nullable_string(),"errorMessage":nullable_string(),"triggeredByActorId":uuid()}}));
+    schemas.insert("BuildRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/BuildRunView"}}}}));
+    schemas.insert("BuildLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":{"type":"array","items":{"type":"object","properties":{"stream":string(),"message":string()}}}}}));
+    schemas.insert("BuildAgentPoolInput".into(), json!({"type":"object","required":["name","enabled","providerSpec"],"properties":{"name":string(),"description":nullable_string(),"enabled":{"type":"boolean"},"providerSpec":{"type":"object"},"maxActiveBuilders":{"type":["integer","null"],"format":"int32"},"queueTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"provisioningTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"registrationTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"heartbeatTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"cleanupTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"maximumInstanceLifetimeSeconds":{"type":["integer","null"],"format":"int32"},"failureRetentionMinutes":{"type":["integer","null"],"format":"int32"},"tagIds":uuid_array()}}));
+    schemas.insert("BuildAgentPoolView".into(), json!({"allOf":[{"$ref":"#/components/schemas/BuildAgentPoolInput"},{"type":"object","required":["id","normalizedName","provider","lastValidationStatus","controlState","createdByActorId","createdAt","updatedAt","rowVersion"],"properties":{"id":uuid(),"normalizedName":string(),"provider":string(),"lastValidationStatus":string(),"lastValidationMessage":nullable_string(),"lastValidatedAt":nullable_date_time(),"controlState":string(),"controlTriggeredBy":nullable_uuid(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}]}));
+    schemas.insert("BuildAgentPoolsView".into(), json!({"type":"object","required":["buildAgentPools"],"properties":{"buildAgentPools":{"type":"array","items":{"$ref":"#/components/schemas/BuildAgentPoolView"}}}}));
+    schemas.insert("AlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url","isActive"],"properties":{"name":string(),"alertDestination":string(),"url":string(),"isActive":{"type":"boolean"}}}));
+    schemas.insert("VerifyAlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url"],"properties":{"name":string(),"alertDestination":string(),"url":string()}}));
+    schemas.insert("AlertChannelView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertChannelInput"},{"type":"object","required":["id","createdByActorId","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"createdAt":date_time()}}]}));
+    schemas.insert("AlertChannelsView".into(), json!({"type":"object","required":["channels"],"properties":{"channels":{"type":"array","items":{"$ref":"#/components/schemas/AlertChannelView"}}}}));
+    schemas.insert("AlertRuleInput".into(), json!({"type":"object","required":["name","type","severity","status","channelIds","limitedTo","quietHours"],"properties":{"name":string(),"description":nullable_string(),"type":string(),"severity":string(),"cooldownSeconds":{"type":["integer","null"],"format":"int32"},"requiredMatches":{"type":["integer","null"],"format":"int32"},"threshold":{"type":["number","null"],"format":"double"},"status":string(),"channelIds":uuid_array(),"limitedTo":{"type":"array","items":{"type":"object"}},"quietHours":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert(
+        "CreateAlertRuleInput".into(),
+        json!({"$ref":"#/components/schemas/AlertRuleInput"}),
+    );
+    schemas.insert(
+        "PatchAlertRuleInput".into(),
+        json!({"$ref":"#/components/schemas/AlertRuleInput"}),
+    );
+    schemas.insert("AlertRuleView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertRuleInput"},{"type":"object","required":["id","createdByActorId","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"createdAt":date_time()}}]}));
+    schemas.insert("AlertRulesView".into(), json!({"type":"object","required":["alertRules"],"properties":{"alertRules":{"type":"array","items":{"$ref":"#/components/schemas/AlertRuleView"}}}}));
+    schemas.insert("AlertEventView".into(), json!({"type":"object","required":["id","alertRuleId","type","severity","status","message","info","resourceName","resourceType","createdAt","updatedAt"],"properties":{"id":uuid(),"alertRuleId":uuid(),"type":string(),"severity":string(),"status":string(),"message":string(),"info":{"type":"object"},"resourceId":nullable_uuid(),"resourceName":string(),"resourceType":string(),"acknowledgedByActorId":nullable_uuid(),"acknowledgedAt":nullable_date_time(),"resolvedByActorId":nullable_uuid(),"resolvedAt":nullable_date_time(),"resolutionNote":nullable_string(),"createdAt":date_time(),"updatedAt":date_time()}}));
+    schemas.insert("AlertEventsView".into(), json!({"type":"object","required":["pagedResult"],"properties":{"pagedResult":{"type":"object","required":["items","totalCount","page","pageSize"],"properties":{"items":{"type":"array","items":{"$ref":"#/components/schemas/AlertEventView"}},"totalCount":{"type":"integer","format":"int64"},"page":{"type":"integer","format":"int32"},"pageSize":{"type":"integer","format":"int32"}}}}}));
+    schemas.insert(
+        "AlertIdsInput".into(),
+        json!({"type":"object","required":["ids"],"properties":{"ids":uuid_array()}}),
+    );
+    for name in [
+        "DeleteAlertChannelsInput",
+        "DeleteAlertRulesInput",
+        "AcknowledgeAlertEventsInput",
+    ] {
+        schemas.insert(
+            name.into(),
+            json!({"$ref":"#/components/schemas/AlertIdsInput"}),
+        );
+    }
+    schemas.insert("ResolveAlertEventsInput".into(), json!({"type":"object","required":["ids"],"properties":{"ids":uuid_array(),"resolutionNote":nullable_string()}}));
+    schemas.insert("UnresolvedAlertsCountView".into(), json!({"type":"object","required":["count"],"properties":{"count":{"type":"integer","format":"int64"}}}));
+
+    let backup_repository_spec = json!({"type":"object","required":["$type"],"properties":{"$type":string()},"additionalProperties":true});
+    let backup_source_spec = json!({"type":"object","required":["$type"],"properties":{"$type":string()},"additionalProperties":true});
+    schemas.insert("BackupRepositorySpec".into(), backup_repository_spec);
+    schemas.insert("BackupSourceSpec".into(), backup_source_spec);
+    schemas.insert("BackupRepositoryInput".into(), json!({"type":"object","required":["name","description","spec","passwordSecretId"],"properties":{"name":string(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/BackupRepositorySpec"},"passwordSecretId":uuid()}}));
+    schemas.insert("BackupRepositoryView".into(), json!({"type":"object","required":["id","name","normalizedName","description","type","spec","passwordSecretId","status","controlState","currentRunId","controlStartedAt","lastPrunedAt","lastCheckedAt","createdByActorId","createdAt","updatedAt","archivedAt","rowVersion"],"properties":{"id":uuid(),"name":string(),"normalizedName":string(),"description":nullable_string(),"type":string(),"spec":{"$ref":"#/components/schemas/BackupRepositorySpec"},"passwordSecretId":uuid(),"status":string(),"controlState":string(),"currentRunId":nullable_uuid(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"lastPrunedAt":nullable_date_time(),"lastCheckedAt":nullable_date_time(),"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert("BackupRepositoriesView".into(), json!({"type":"object","required":["repositories","capabilities"],"properties":{"repositories":{"type":"array","items":{"$ref":"#/components/schemas/BackupRepositoryView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}));
+    schemas.insert("ValidateBackupRepositoryInput".into(), json!({"type":"object","required":["location","platformId"],"properties":{"location":string(),"platformId":nullable_uuid()}}));
+    schemas.insert("BackupRepositoryValidationView".into(), json!({"type":"object","required":["id","backupRepositoryId","location","platformId","status","lastValidatedAt","lastErrorCode","lastErrorMessage"],"properties":{"id":uuid(),"backupRepositoryId":uuid(),"location":string(),"platformId":nullable_uuid(),"status":string(),"lastValidatedAt":date_time(),"lastErrorCode":nullable_string(),"lastErrorMessage":nullable_string()}}));
+    schemas.insert("BackupPolicyInput".into(), json!({"type":"object","required":["name","description","source","backupRepositoryId"],"properties":{"name":string(),"description":nullable_string(),"source":{"$ref":"#/components/schemas/BackupSourceSpec"},"backupRepositoryId":uuid(),"enabled":{"type":"boolean","default":true},"cron":nullable_string(),"timeZone":nullable_string(),"webhook":{"type":["object","null"]},"keepLastSuccessful":{"type":["integer","null"],"format":"int32"},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":"boolean","default":true},"runAsActorId":nullable_uuid(),"tagIds":{"type":["array","null"],"items":uuid()}}}));
+    schemas.insert("BackupPolicyView".into(), json!({"type":"object","required":["id","name","normalizedName","description","source","backupRepositoryId","enabled","cron","timeZone","webhook","keepLastSuccessful","timeoutSeconds","alertOnFailure","runAsActorId","controlState","currentRunId","lastScheduledRunAt","firstSuccessfulRunAt","createdByActorId","createdAt","updatedAt","archivedAt","rowVersion"],"properties":{"id":uuid(),"name":string(),"normalizedName":string(),"description":nullable_string(),"source":{"$ref":"#/components/schemas/BackupSourceSpec"},"backupRepositoryId":uuid(),"enabled":{"type":"boolean"},"cron":nullable_string(),"timeZone":nullable_string(),"webhook":{"type":["object","null"]},"keepLastSuccessful":{"type":"integer","format":"int32"},"timeoutSeconds":{"type":"integer","format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":uuid(),"controlState":string(),"currentRunId":nullable_uuid(),"lastScheduledRunAt":nullable_date_time(),"firstSuccessfulRunAt":nullable_date_time(),"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}));
+    schemas.insert("BackupPoliciesView".into(), json!({"type":"object","required":["policies","capabilities"],"properties":{"policies":{"type":"array","items":{"$ref":"#/components/schemas/BackupPolicyView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}));
+    schemas.insert("QueueBackupRunInput".into(), json!({"type":"object","properties":{"trigger":string(),"triggerSourceId":nullable_uuid()}}));
+    schemas.insert("BackupRunItemView".into(), json!({"type":"object","required":["id","backupRunId","platformId","volumeName","status"],"properties":{"id":uuid(),"backupRunId":uuid(),"platformId":uuid(),"volumeName":string(),"dockerNodeId":nullable_string(),"nodeHostname":nullable_string(),"status":string(),"resticSnapshotId":nullable_string(),"parentSnapshotId":nullable_string(),"filesProcessed":{"type":["integer","null"],"format":"int64"},"bytesProcessed":{"type":["integer","null"],"format":"int64"},"bytesAdded":{"type":["integer","null"],"format":"int64"},"startedAt":nullable_date_time(),"completedAt":nullable_date_time(),"exitCode":{"type":["integer","null"],"format":"int32"},"errorCode":nullable_string(),"errorMessage":nullable_string()}}));
+    schemas.insert("BackupRunView".into(), json!({"type":"object","required":["id","backupPolicyId","policyNameSnapshot","backupRepositoryId","repositoryTypeSnapshot","sourceSnapshot","trigger","status","snapshotAvailability","warnings","queuedAt","triggeredByActorId","items"],"properties":{"id":uuid(),"backupPolicyId":uuid(),"policyNameSnapshot":string(),"backupRepositoryId":uuid(),"repositoryTypeSnapshot":string(),"sourceSnapshot":{"$ref":"#/components/schemas/BackupSourceSpec"},"trigger":string(),"status":string(),"snapshotAvailability":string(),"resticSnapshotId":nullable_string(),"parentSnapshotId":nullable_string(),"filesProcessed":{"type":["integer","null"],"format":"int64"},"bytesProcessed":{"type":["integer","null"],"format":"int64"},"bytesAdded":{"type":["integer","null"],"format":"int64"},"warnings":string_array(),"queuedAt":date_time(),"startedAt":nullable_date_time(),"completedAt":nullable_date_time(),"exitCode":{"type":["integer","null"],"format":"int32"},"errorCode":nullable_string(),"errorMessage":nullable_string(),"triggeredByActorId":uuid(),"items":{"type":"array","items":{"$ref":"#/components/schemas/BackupRunItemView"}}}}));
+    schemas.insert("BackupRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/BackupRunView"}}}}));
+    schemas.insert("BackupLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":string()}}));
+    schemas.insert("RestoreVolumeInput".into(), json!({"type":"object","required":["targetPlatformId","targetVolumeName","overwriteExisting"],"properties":{"targetPlatformId":uuid(),"targetVolumeName":string(),"overwriteExisting":{"type":"boolean"},"targetDockerNodeId":nullable_string(),"sourceBackupRunItemId":nullable_uuid()}}));
+    schemas.insert("BackupRestoreRunView".into(), json!({"type":"object","required":["id","backupRunId","backupRepositoryId","targetPlatformId","targetVolumeName","overwriteExisting","status","queuedAt","triggeredByActorId"],"properties":{"id":uuid(),"backupRunId":uuid(),"backupRepositoryId":uuid(),"sourceBackupRunItemId":nullable_uuid(),"targetPlatformId":uuid(),"targetDockerNodeId":nullable_string(),"targetVolumeName":string(),"overwriteExisting":{"type":"boolean"},"status":string(),"queuedAt":date_time(),"startedAt":nullable_date_time(),"completedAt":nullable_date_time(),"exitCode":{"type":["integer","null"],"format":"int32"},"errorCode":nullable_string(),"errorMessage":nullable_string(),"triggeredByActorId":uuid()}}));
+    schemas.insert("BackupRestoreRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/BackupRestoreRunView"}}}}));
 
     schemas.insert(
         "CreateNetworkInput".into(),
@@ -2126,6 +2199,10 @@ fn nullable_date_time() -> Value {
     json!({ "type": ["string", "null"], "format": "date-time" })
 }
 
+fn date_time() -> Value {
+    json!({ "type": "string", "format": "date-time" })
+}
+
 fn uuid_array() -> Value {
     json!({ "type": "array", "items": uuid() })
 }
@@ -2258,10 +2335,11 @@ fn operation(route: &RouteContract) -> Value {
     let success = route.response_schema.map_or_else(
         || json!({ "description": "Success" }),
         |schema| {
-            let response_schema = if schema == "AutomationActionRunStreamItems" {
-                json!({"type":"array","items":{"$ref":"#/components/schemas/AutomationActionRunStreamItem"}})
+            let item_schema = json!({"$ref": format!("#/components/schemas/{schema}")});
+            let response_schema = if route.response_is_array {
+                json!({"type":"array","items":item_schema})
             } else {
-                json!({"$ref": format!("#/components/schemas/{schema}")})
+                item_schema
             };
             json!({
                 "description": "Success",

@@ -612,6 +612,14 @@ pub struct ApplyClaim {
 pub struct PreparedDeploymentImage {
     pub docker_image_id: String,
     pub digest: Option<String>,
+    pub resolved_build: Option<ResolvedDeploymentBuild>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedDeploymentBuild {
+    pub image_reference: String,
+    pub digest: Option<String>,
+    pub build_run_id: Uuid,
 }
 
 #[derive(Debug, Clone)]

@@ -198,7 +198,7 @@ fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
         state: container.state.to_ascii_lowercase(),
         status: container.status,
         labels: container.labels.into_iter().collect(),
-        ports: container.ports,
+        ports: crate::container_ports::normalize(container.ports),
     }
 }
 
@@ -273,6 +273,7 @@ mod tests {
             id: "container-1".to_owned(),
             names: vec!["/web.1.task".to_owned()],
             state: "RUNNING".to_owned(),
+            ports: serde_json::json!([{"PrivatePort": 80, "PublicPort": 8080, "Type": "tcp", "IP": "0.0.0.0"}]),
             labels: HashMap::from([
                 ("com.docker.swarm.task.id".to_owned(), "task-1".to_owned()),
                 ("com.docker.stack.namespace".to_owned(), "demo".to_owned()),
@@ -287,6 +288,10 @@ mod tests {
 
         assert_eq!(container.name, "web.1.task");
         assert_eq!(container.state, "running");
+        assert_eq!(
+            container.ports,
+            serde_json::json!({"80/tcp": [{"hostIP": "0.0.0.0", "hostPort": "8080"}]})
+        );
         assert_eq!(container.stack.as_deref(), Some("demo"));
         assert!(container.is_swarm_task);
         assert!(container.is_system);

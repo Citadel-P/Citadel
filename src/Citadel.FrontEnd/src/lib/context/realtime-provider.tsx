@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/auth-context';
 import { createSignalRConnection, SignalRConnectionFactory } from '../createSignalRConnection';
+import { createWebSocketConnection } from '../createWebSocketConnection';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
 import { LiveConnectionState, RealtimeContext } from './realtime-context';
 
@@ -80,7 +81,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   const { accessToken } = useAuthContext();
   const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  const signalREnabled = realtimeTransport === 'SignalR';
+  const signalREnabled = realtimeTransport === 'SignalR' || realtimeTransport === 'WebSocketV1';
   const webSocketEnabled = realtimeTransport === 'WebSocketV1';
 
   const tokenRef = useRef<string | undefined>(accessToken);
@@ -92,115 +93,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   const retryPromiseRef = useRef<Promise<void> | null>(null);
   const startInProgressRef = useRef(false);
   const rebuildGenerationRef = useRef(0);
-  const webSocketRef = useRef<WebSocket>();
-  const [webSocketGeneration, setWebSocketGeneration] = useState(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
-
-  useEffect(() => {
-    if (realtimeTransport !== 'WebSocketV1' || !accessToken) return;
-
-    let disposed = false;
-    let socket: WebSocket | undefined;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let retryIndex = 0;
-    const retryDelays = [0, 2_000, 5_000, 10_000, 30_000];
-    const invalidateLicense = () => {
-      void queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] });
-      void queryClient.invalidateQueries({ queryKey: ['getLicense'] });
-    };
-    const invalidateResourceQueries = (resourceType?: string, eventKind?: string) => {
-      if (resourceType === 'License' || eventKind === 'licenseStateChanged') {
-        invalidateLicense();
-        return;
-      }
-      const prefixes =
-        eventKind === 'resourceTagsChanged'
-          ? [
-              'listTags',
-              'listPlatforms',
-              'listRegistries',
-              'listGitRepositories',
-              'getPlatfom',
-              'getPlatformTags',
-              'getRegistry',
-              'getRegistryTags',
-              'getGitRepository',
-              'getGitRepositoryTags',
-            ]
-          : resourceType === 'Tag'
-            ? ['listTags']
-            : resourceType === 'Registry'
-              ? ['listRegistries', 'getRegistry', 'getRegistryConfig', 'getRegistryTags', 'listActivities']
-              : resourceType === 'GitRepository'
-                ? [
-                    'listGitRepositories',
-                    'getGitRepository',
-                    'getGitRepositoryConfig',
-                    'getGitRepositoryTags',
-                    'listActivities',
-                  ]
-                : resourceType === 'Binding'
-                  ? ['getGlobalResourceBindings', 'getResourceBindings', 'listSecretDefinitions', 'listSecretProviders']
-                  : [];
-      if (prefixes.length === 0) return;
-      void queryClient.invalidateQueries({
-        predicate: (query) => prefixes.includes(String(query.queryKey[0])),
-      });
-    };
-    const connect = () => {
-      if (disposed) return;
-      const url = new URL('/api/v1/realtime', baseUrl || window.location.origin);
-      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = webSocketFactory(url.toString());
-      webSocketRef.current = socket;
-      socket.addEventListener('open', () => {
-        socket?.send(
-          JSON.stringify({ protocolVersion: 1, kind: 'subscribe', accessToken }),
-        );
-      });
-      socket.addEventListener('message', (event) => {
-        try {
-          const envelope = JSON.parse(String(event.data)) as {
-            protocolVersion?: number;
-            eventKind?: string;
-            kind?: string;
-            resourceType?: string;
-          };
-          if (envelope.protocolVersion === 1) {
-            if (envelope.kind === 'subscribed') {
-              retryIndex = 0;
-              setConnectionState(HubConnectionState.Connected);
-              setLiveConnectionState('connected');
-              setInterruptedAt(undefined);
-              setLastConnectedAt(Date.now());
-              invalidateLicense();
-            } else {
-              invalidateResourceQueries(envelope.resourceType, envelope.eventKind);
-            }
-          }
-        } catch {
-          // A malformed notification is ignored; authoritative API reads remain unchanged.
-        }
-      });
-      socket.addEventListener('close', () => {
-        if (disposed) return;
-        setConnectionState(HubConnectionState.Disconnected);
-        setLiveConnectionState(isBrowserOffline() ? 'offline' : 'reconnecting');
-        setInterruptedAt((current) => current ?? Date.now());
-        const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)];
-        retryIndex += 1;
-        retryTimer = setTimeout(connect, delay);
-      });
-    };
-
-    connect();
-    return () => {
-      disposed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (webSocketRef.current === socket) webSocketRef.current = undefined;
-      socket?.close();
-    };
-  }, [accessToken, baseUrl, queryClient, realtimeTransport, webSocketFactory, webSocketGeneration]);
 
   const markConnected = useCallback(() => {
     setConnectionState(HubConnectionState.Connected);
@@ -239,10 +132,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       const cancelRef: CancellationRef = { current: false };
       activeCancelRef.current = cancelRef;
 
-      const conn = connectionFactory({
-        baseUrl,
-        accessTokenFactory: () => tokenRef.current ?? '',
-      });
+      const options = { baseUrl, accessTokenFactory: () => tokenRef.current ?? '' };
+      const conn = webSocketEnabled ? createWebSocketConnection(options, webSocketFactory) : connectionFactory(options);
 
       activeConnectionRef.current = conn;
       startInProgressRef.current = true;
@@ -389,6 +280,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     [
       baseUrl,
       connectionFactory,
+      webSocketEnabled,
+      webSocketFactory,
       markConnected,
       markInterrupted,
       queryClient,
@@ -449,18 +342,6 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   );
 
   const retryConnection = useCallback(() => {
-    if (webSocketEnabled) {
-      if (isBrowserOffline()) {
-        markInterrupted('offline');
-        return Promise.reject(new Error('Cannot reconnect while the browser is offline'));
-      }
-
-      setConnectionState(HubConnectionState.Connecting);
-      setLiveConnectionState('connecting');
-      setWebSocketGeneration((current) => current + 1);
-      return Promise.resolve();
-    }
-
     if (!signalREnabled) {
       return Promise.reject(new Error('Realtime transport is not enabled'));
     }
@@ -494,7 +375,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     };
     void retryPromise.then(clearRetry, clearRetry);
     return retryPromise;
-  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled, webSocketEnabled]);
+  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled]);
 
   useEffect(() => {
     tokenRef.current = accessToken;
@@ -553,13 +434,6 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     };
 
     const handleOnline = () => {
-      if (webSocketEnabled) {
-        setConnectionState(HubConnectionState.Connecting);
-        setLiveConnectionState('connecting');
-        setWebSocketGeneration((current) => current + 1);
-        return;
-      }
-
       const activeConnection = activeConnectionRef.current;
       if (activeConnection?.state === HubConnectionState.Connected) {
         markConnected();

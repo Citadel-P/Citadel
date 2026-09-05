@@ -1,15 +1,17 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+use base64::Engine as _;
 use citadel_platforms::{PlatformInventoryPort, PlatformResourceMutationPort};
 use citadel_stacks::{
-    ComposeProjectRuntimeService, StackAction, StackApplyEventType, StackDeletionClaim, StackDrift,
-    StackDriftPolicy, StackError, StackImportClaim, StackImportKind, StackOperationClaim,
-    StackOrchestrationMode, StackReconciliationAction, StackReconciliationActionType,
-    StackReleaseStatus, StackRuntimeContainer, StackRuntimePort, StackRuntimeResult,
-    StackRuntimeService, StackRuntimeSnapshot, StackStreamItem,
+    ComposeProjectRuntimeService, StackAction, StackApplyEventType, StackApplySource, StackCommand,
+    StackDeletionClaim, StackDrift, StackDriftPolicy, StackError, StackImportClaim,
+    StackImportKind, StackOperationClaim, StackOrchestrationMode, StackReconciliationAction,
+    StackReconciliationActionType, StackReleaseStatus, StackRuntimeContainer, StackRuntimePort,
+    StackRuntimeResult, StackRuntimeService, StackRuntimeSnapshot, StackStreamItem,
 };
 use futures_util::{FutureExt, future::BoxFuture};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use tokio::io::AsyncReadExt;
@@ -17,10 +19,11 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agent::{AgentClient, AgentContainerAction};
+use crate::agent::{AgentClient, AgentContainerAction, AgentStackRegistry};
 use crate::docker::DockerClient;
 
 const MAX_PROCESS_OUTPUT_BYTES: usize = 256 * 1024;
+const MAX_STACK_MESSAGES_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
 pub struct StackRuntimeRouter {
@@ -71,52 +74,146 @@ impl StackRuntimeRouter {
     async fn apply_local(
         &self,
         claim: &StackOperationClaim,
-        compose: &str,
+        source: &StackApplySource,
         environment: &[String],
+        registry: Option<&AgentStackRegistry>,
         cancellation: &CancellationToken,
     ) -> Result<StackRuntimeResult, StackError> {
         let root = temporary_run_root(claim.stack_id);
         tokio::fs::create_dir_all(&root).await.map_err(runtime_io)?;
-        let compose_path = root.join("compose.yml");
-        let env_path = root.join(".env");
+        set_private_directory(&root).await?;
         let result = async {
-            tokio::fs::write(&compose_path, compose)
-                .await
-                .map_err(runtime_io)?;
+            stage_source(&root, source).await?;
+            let working_directory = resolve_staged_path(&root, &source.working_directory)?;
+            let compose_paths = source
+                .compose_paths
+                .iter()
+                .map(|path| resolve_staged_path(&root, path))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut env_paths = source
+                .env_file_paths
+                .iter()
+                .map(|path| resolve_staged_path(&root, path))
+                .collect::<Result<Vec<_>, _>>()?;
+            let labels_override = source
+                .labels_override_path
+                .as_deref()
+                .map(|path| resolve_staged_path(&root, path))
+                .transpose()?;
+            let generated_env = root.join(".citadel/environment.env");
             if !environment.is_empty() {
                 let mut contents = environment.join("\n");
                 contents.push('\n');
-                tokio::fs::write(&env_path, contents)
+                if let Some(parent) = generated_env.parent() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(runtime_io)?;
+                }
+                tokio::fs::write(&generated_env, contents)
                     .await
                     .map_err(runtime_io)?;
+                set_private_file(&generated_env).await?;
+                env_paths.push(generated_env);
+            }
+            let docker_config = if let Some(registry) = registry {
+                let directory = root.join(".citadel/docker");
+                tokio::fs::create_dir_all(&directory)
+                    .await
+                    .map_err(runtime_io)?;
+                set_private_directory(&directory).await?;
+                let config = serde_json::to_vec(&serde_json::json!({
+                    "auths": {
+                        registry.host.as_str(): { "auth": registry.auth.as_str() }
+                    }
+                }))
+                .map_err(runtime_io)?;
+                tokio::fs::write(directory.join("config.json"), config)
+                    .await
+                    .map_err(runtime_io)?;
+                set_private_file(&directory.join("config.json")).await?;
+                Some(directory)
+            } else {
+                None
+            };
+            let mut messages = Vec::new();
+            if let Some(command) = claim.spec.common().pre_deploy.as_ref() {
+                let command_result =
+                    run_stack_commands(command, &working_directory, environment, cancellation)
+                        .await?;
+                let status = command_result.status;
+                append_messages_bounded(&mut messages, command_result.messages);
+                if status != StackReleaseStatus::Healthy {
+                    return Ok(StackRuntimeResult { status, messages });
+                }
             }
             if claim.platform_type == "DockerSwarm" {
-                let args = vec![
+                let mut args = vec![
                     "stack".to_owned(),
                     "deploy".to_owned(),
                     "--detach=false".to_owned(),
                     "--prune".to_owned(),
-                    "-c".to_owned(),
-                    compose_path.display().to_string(),
-                    claim.project_name.clone(),
                 ];
-                run_docker(&args, &root, environment, cancellation).await
+                for path in &compose_paths {
+                    args.extend(["-c".to_owned(), path.display().to_string()]);
+                }
+                if let Some(path) = labels_override.as_ref() {
+                    args.extend(["-c".to_owned(), path.display().to_string()]);
+                }
+                if registry.is_some() {
+                    args.push("--with-registry-auth".to_owned());
+                }
+                args.push(claim.project_name.clone());
+                prepend_docker_config(&mut args, docker_config.as_deref());
+                let result =
+                    run_docker(&args, &working_directory, environment, cancellation).await?;
+                append_messages_bounded(&mut messages, result.messages);
+                Ok(StackRuntimeResult {
+                    status: result.status,
+                    messages,
+                })
             } else {
                 if claim.spec.common().destroy_before_deploy {
-                    let down =
-                        compose_args(&compose_path, &env_path, &claim.project_name, &["down"]);
-                    let down_result = run_docker(&down, &root, environment, cancellation).await?;
-                    if down_result.status != StackReleaseStatus::Healthy {
-                        return Ok(down_result);
+                    let down = compose_args(
+                        &compose_paths,
+                        labels_override.as_deref(),
+                        &env_paths,
+                        &claim.project_name,
+                        &["down"],
+                    );
+                    let mut down = down;
+                    prepend_docker_config(&mut down, docker_config.as_deref());
+                    let down_result =
+                        run_docker(&down, &working_directory, environment, cancellation).await?;
+                    let status = down_result.status;
+                    append_messages_bounded(&mut messages, down_result.messages);
+                    if status != StackReleaseStatus::Healthy {
+                        return Ok(StackRuntimeResult { status, messages });
                     }
                 }
-                let up = compose_args(
-                    &compose_path,
-                    &env_path,
+                let mut up = compose_args(
+                    &compose_paths,
+                    labels_override.as_deref(),
+                    &env_paths,
                     &claim.project_name,
                     &["up", "-d", "--remove-orphans"],
                 );
-                run_docker(&up, &root, environment, cancellation).await
+                prepend_docker_config(&mut up, docker_config.as_deref());
+                let mut result =
+                    run_docker(&up, &working_directory, environment, cancellation).await?;
+                append_messages_bounded(&mut messages, result.messages);
+                if result.status == StackReleaseStatus::Healthy
+                    && let Some(command) = claim.spec.common().post_deploy.as_ref()
+                {
+                    let command_result =
+                        run_stack_commands(command, &working_directory, environment, cancellation)
+                            .await?;
+                    append_messages_bounded(&mut messages, command_result.messages);
+                    result.status = command_result.status;
+                }
+                Ok(StackRuntimeResult {
+                    status: result.status,
+                    messages,
+                })
             }
         }
         .await;
@@ -245,16 +342,18 @@ impl StackRuntimePort for StackRuntimeRouter {
     fn apply<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
-        compose: &'a str,
+        source: &'a StackApplySource,
         environment: &'a [String],
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         async move {
+            validate_stack_execution(claim)?;
             let target = self.platform(claim.platform_id).await?;
+            let registry = self.stack_registry(claim.spec.common().registry_id).await?;
             if target.connector.eq_ignore_ascii_case("Local") {
-                self.apply_local(claim, compose, environment, cancellation).await
+                self.apply_local(claim, source, environment, registry.as_ref(), cancellation).await
             } else if target.connector.eq_ignore_ascii_case("Agent") {
-                self.agent_for(&target)?.apply_stack(claim, compose, environment, cancellation).await.map_err(agent_error)
+                self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
             }
@@ -631,25 +730,168 @@ impl StackRuntimePort for StackRuntimeRouter {
     }
 }
 
+impl StackRuntimeRouter {
+    async fn stack_registry(
+        &self,
+        registry_id: Option<Uuid>,
+    ) -> Result<Option<AgentStackRegistry>, StackError> {
+        let Some(registry_id) = registry_id else {
+            return Ok(None);
+        };
+        let row = sqlx::query(
+            "SELECT name,registryhost,configuration,status FROM registries WHERE id=$1",
+        )
+        .bind(registry_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| StackError::Validation("The selected Registry was not found.".to_owned()))?;
+        let status: String = row.try_get("status").map_err(storage)?;
+        if status.eq_ignore_ascii_case("Disabled") {
+            return Err(StackError::Validation(
+                "The selected Registry is disabled.".to_owned(),
+            ));
+        }
+        let configuration: Value = row.try_get("configuration").map_err(storage)?;
+        let Some((username, password)) = registry_user_password(&configuration)? else {
+            return Ok(None);
+        };
+        Ok(Some(AgentStackRegistry {
+            name: row.try_get("name").map_err(storage)?,
+            host: row.try_get("registryhost").map_err(storage)?,
+            auth: zeroize::Zeroizing::new(
+                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}")),
+            ),
+        }))
+    }
+}
+
 fn temporary_run_root(stack_id: Uuid) -> PathBuf {
     std::env::temp_dir()
         .join("citadel-stack-runs")
         .join(format!("{}-{}", stack_id.simple(), Uuid::now_v7().simple()))
 }
 
-fn compose_args(compose: &Path, env: &Path, project: &str, tail: &[&str]) -> Vec<String> {
-    let mut args = vec![
-        "compose".to_owned(),
-        "-p".to_owned(),
-        project.to_owned(),
-        "-f".to_owned(),
-        compose.display().to_string(),
-    ];
-    if env.exists() {
-        args.extend(["--env-file".to_owned(), env.display().to_string()]);
+fn compose_args(
+    compose: &[PathBuf],
+    labels_override: Option<&Path>,
+    env: &[PathBuf],
+    project: &str,
+    tail: &[&str],
+) -> Vec<String> {
+    let mut args = vec!["compose".to_owned(), "-p".to_owned(), project.to_owned()];
+    for path in compose {
+        args.extend(["-f".to_owned(), path.display().to_string()]);
+    }
+    if let Some(path) = labels_override {
+        args.extend(["-f".to_owned(), path.display().to_string()]);
+    }
+    for path in env {
+        args.extend(["--env-file".to_owned(), path.display().to_string()]);
     }
     args.extend(tail.iter().map(|value| (*value).to_owned()));
     args
+}
+
+fn prepend_docker_config(args: &mut Vec<String>, config: Option<&Path>) {
+    if let Some(config) = config {
+        args.splice(0..0, ["--config".to_owned(), config.display().to_string()]);
+    }
+}
+
+fn registry_user_password(configuration: &Value) -> Result<Option<(String, String)>, StackError> {
+    let kind = configuration
+        .get("$type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let string = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|name| configuration.get(*name).and_then(Value::as_str))
+    };
+    let boolean = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|name| configuration.get(*name).and_then(Value::as_bool))
+    };
+    let values = match kind {
+        "DockerHub" => string(&["UserName", "userName", "username"]).zip(string(&["PAT", "pat"])),
+        "GitHub" if boolean(&["GhcrAuthEnabled", "ghcrAuthEnabled"]) == Some(true) => {
+            string(&["NameSpace", "nameSpace"]).zip(string(&["PAT", "pat"]))
+        }
+        "Custom" if boolean(&["AuthEnabled", "authEnabled"]) == Some(true) => {
+            string(&["UserName", "userName", "username"]).zip(string(&["Password", "password"]))
+        }
+        "GitHub" | "Custom" | "" => None,
+        _ => {
+            return Err(StackError::Validation(
+                "This Registry type is not available for Stack Apply in the Rust server yet."
+                    .to_owned(),
+            ));
+        }
+    };
+    Ok(values
+        .filter(|(username, password)| !username.is_empty() && !password.is_empty())
+        .map(|(username, password)| (username.to_owned(), password.to_owned())))
+}
+
+async fn stage_source(root: &Path, source: &StackApplySource) -> Result<(), StackError> {
+    for file in &source.files {
+        let target = resolve_staged_path(root, &file.relative_path)?;
+        if let Some(parent) = target.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(runtime_io)?;
+        }
+        tokio::fs::write(target, &file.content)
+            .await
+            .map_err(runtime_io)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn set_private_directory(path: &Path) -> Result<(), StackError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(runtime_io)
+}
+
+#[cfg(not(unix))]
+async fn set_private_directory(_path: &Path) -> Result<(), StackError> {
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn set_private_file(path: &Path) -> Result<(), StackError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .await
+        .map_err(runtime_io)
+}
+
+#[cfg(not(unix))]
+async fn set_private_file(_path: &Path) -> Result<(), StackError> {
+    Ok(())
+}
+
+fn resolve_staged_path(root: &Path, relative: &str) -> Result<PathBuf, StackError> {
+    use std::path::Component;
+
+    let path = Path::new(relative);
+    if relative.trim().is_empty()
+        || path
+            .components()
+            .any(|part| !matches!(part, Component::Normal(_) | Component::CurDir))
+    {
+        return Err(StackError::Validation(format!(
+            "Stack source path '{relative}' must be relative and cannot escape its source root."
+        )));
+    }
+    Ok(root.join(path))
 }
 
 async fn run_docker(
@@ -658,7 +900,101 @@ async fn run_docker(
     environment: &[String],
     cancellation: &CancellationToken,
 ) -> Result<StackRuntimeResult, StackError> {
-    let mut command = Command::new("docker");
+    run_process("docker", args, directory, environment, cancellation).await
+}
+
+async fn run_stack_commands(
+    command: &StackCommand,
+    root: &Path,
+    environment: &[String],
+    cancellation: &CancellationToken,
+) -> Result<StackRuntimeResult, StackError> {
+    let directory = resolve_staged_path(root, &command.path)?;
+    if !tokio::fs::try_exists(&directory)
+        .await
+        .map_err(runtime_io)?
+    {
+        return Ok(StackRuntimeResult {
+            status: StackReleaseStatus::Failed,
+            messages: vec![StackStreamItem {
+                event_type: StackApplyEventType::StdErr,
+                message: Some(format!("Command path '{}' does not exist.", command.path)),
+                exit_code: None,
+                stack_status: None,
+                severity: None,
+            }],
+        });
+    }
+
+    let mut messages = Vec::new();
+    for value in command
+        .commands
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let (program, arguments) = shell_invocation(value);
+        let result =
+            run_process(program, &arguments, &directory, environment, cancellation).await?;
+        append_messages_bounded(&mut messages, result.messages);
+        if result.status != StackReleaseStatus::Healthy {
+            return Ok(StackRuntimeResult {
+                status: result.status,
+                messages,
+            });
+        }
+    }
+    Ok(StackRuntimeResult {
+        status: StackReleaseStatus::Healthy,
+        messages,
+    })
+}
+
+fn append_messages_bounded(target: &mut Vec<StackStreamItem>, source: Vec<StackStreamItem>) {
+    let mut remaining = MAX_STACK_MESSAGES_BYTES.saturating_sub(
+        target
+            .iter()
+            .filter_map(|item| item.message.as_ref())
+            .map(String::len)
+            .sum::<usize>(),
+    );
+    for mut item in source {
+        if let Some(message) = item.message.as_mut() {
+            if remaining == 0 {
+                continue;
+            }
+            if message.len() > remaining {
+                message.truncate(message.floor_char_boundary(remaining));
+            }
+            remaining = remaining.saturating_sub(message.len());
+        }
+        target.push(item);
+    }
+}
+
+fn shell_invocation(command: &str) -> (&'static str, Vec<String>) {
+    if cfg!(windows) {
+        (
+            "cmd.exe",
+            vec![
+                "/D".to_owned(),
+                "/S".to_owned(),
+                "/C".to_owned(),
+                command.to_owned(),
+            ],
+        )
+    } else {
+        ("/bin/sh", vec!["-c".to_owned(), command.to_owned()])
+    }
+}
+
+async fn run_process(
+    program: &str,
+    args: &[String],
+    directory: &Path,
+    environment: &[String],
+    cancellation: &CancellationToken,
+) -> Result<StackRuntimeResult, StackError> {
+    let mut command = Command::new(program);
     command
         .args(args)
         .current_dir(directory)
@@ -671,18 +1007,32 @@ async fn run_docker(
             command.env(name, value);
         }
     }
+    collect_process(command, cancellation).await
+}
+
+async fn collect_process(
+    mut command: Command,
+    cancellation: &CancellationToken,
+) -> Result<StackRuntimeResult, StackError> {
     let mut child = command.spawn().map_err(runtime_io)?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| StackError::Runtime("Docker stdout was not captured.".to_owned()))?;
+        .ok_or_else(|| StackError::Runtime("Process stdout was not captured.".to_owned()))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| StackError::Runtime("Docker stderr was not captured.".to_owned()))?;
+        .ok_or_else(|| StackError::Runtime("Process stderr was not captured.".to_owned()))?;
     let stdout_task = tokio::spawn(read_bounded(stdout));
     let stderr_task = tokio::spawn(read_bounded(stderr));
-    let status = tokio::select! { biased; () = cancellation.cancelled() => { let _=child.kill().await; return Err(StackError::Cancelled); }, value=child.wait()=>value.map_err(runtime_io)? };
+    let status = tokio::select! {
+        biased;
+        () = cancellation.cancelled() => {
+            let _ = child.kill().await;
+            return Err(StackError::Cancelled);
+        },
+        value = child.wait() => value.map_err(runtime_io)?,
+    };
     let stdout = stdout_task
         .await
         .map_err(|error| StackError::Runtime(error.to_string()))??;
@@ -706,6 +1056,21 @@ async fn run_docker(
         },
         messages,
     })
+}
+
+fn validate_stack_execution(claim: &StackOperationClaim) -> Result<(), StackError> {
+    let common = claim.spec.common();
+    if claim.platform_type == "DockerSwarm"
+        && (common.destroy_before_deploy
+            || common.pre_deploy.is_some()
+            || common.post_deploy.is_some())
+    {
+        return Err(StackError::Validation(
+            "Swarm Stack deploy does not support destroy-before-deploy or pre/post commands."
+                .to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 async fn read_bounded(
@@ -754,6 +1119,7 @@ fn orchestration(value: &str) -> Result<StackOrchestrationMode, StackError> {
         )),
     }
 }
+
 fn runtime_io(error: impl std::fmt::Display) -> StackError {
     StackError::Runtime(error.to_string())
 }
@@ -780,5 +1146,158 @@ fn reconciliation_action(
         action,
         succeeded: result.is_ok(),
         error_message: result.err().map(|error| error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transported_stack_paths_cannot_escape_the_staging_root() {
+        let root = Path::new("/tmp/citadel-stack-source");
+        assert!(resolve_staged_path(root, "compose.yml").is_ok());
+        assert!(resolve_staged_path(root, "apps/web/compose.yml").is_ok());
+        assert!(resolve_staged_path(root, "../compose.yml").is_err());
+        assert!(resolve_staged_path(root, "/compose.yml").is_err());
+        assert!(resolve_staged_path(root, "").is_err());
+    }
+
+    #[test]
+    fn compose_arguments_preserve_source_file_and_environment_order() {
+        let args = compose_args(
+            &[PathBuf::from("base.yml"), PathBuf::from("prod.yml")],
+            Some(Path::new("citadel.labels.yml")),
+            &[PathBuf::from("repo.env"), PathBuf::from("resolved.env")],
+            "demo",
+            &["up", "-d"],
+        );
+        assert_eq!(
+            args,
+            [
+                "compose",
+                "-p",
+                "demo",
+                "-f",
+                "base.yml",
+                "-f",
+                "prod.yml",
+                "-f",
+                "citadel.labels.yml",
+                "--env-file",
+                "repo.env",
+                "--env-file",
+                "resolved.env",
+                "up",
+                "-d",
+            ]
+        );
+    }
+
+    #[test]
+    fn swarm_stack_rejects_compose_only_execution_options() {
+        let claim = StackOperationClaim {
+            stack_id: Uuid::now_v7(),
+            release_id: Uuid::now_v7(),
+            platform_id: Uuid::now_v7(),
+            name: "demo".to_owned(),
+            project_name: "demo".to_owned(),
+            platform_type: "DockerSwarm".to_owned(),
+            spec: citadel_stacks::StackSpec::WebEditor {
+                compose_file: "services: {}".to_owned(),
+                update_behavior: citadel_stacks::StackUpdateBehavior::Disabled,
+                common: citadel_stacks::StackSpecCommon {
+                    destroy_before_deploy: false,
+                    pre_deploy: Some(StackCommand {
+                        commands: vec!["echo unsupported".to_owned()],
+                        path: ".".to_owned(),
+                    }),
+                    ..Default::default()
+                },
+            },
+            row_version: 1,
+            actor_id: Uuid::nil(),
+            operation: "Apply".to_owned(),
+        };
+
+        assert!(matches!(
+            validate_stack_execution(&claim),
+            Err(StackError::Validation(message)) if message.contains("pre/post")
+        ));
+    }
+
+    #[test]
+    fn shell_commands_are_passed_as_one_argument_to_the_platform_shell() {
+        let (_, arguments) = shell_invocation("printf '%s' \"$TOKEN\"");
+        assert_eq!(
+            arguments.last().map(String::as_str),
+            Some("printf '%s' \"$TOKEN\"")
+        );
+    }
+
+    #[test]
+    fn stack_registry_credentials_follow_the_existing_registry_contract() {
+        let credentials = registry_user_password(&serde_json::json!({
+            "$type": "DockerHub",
+            "UserName": "citadel",
+            "PAT": "secret"
+        }))
+        .unwrap()
+        .unwrap();
+        assert_eq!(credentials, ("citadel".to_owned(), "secret".to_owned()));
+        assert_eq!(
+            registry_user_password(&serde_json::json!({
+                "$type": "Custom",
+                "AuthEnabled": false,
+                "UserName": "ignored",
+                "Password": "ignored"
+            }))
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn docker_configuration_is_a_global_cli_option() {
+        let mut arguments = vec!["stack".to_owned(), "deploy".to_owned()];
+        prepend_docker_config(&mut arguments, Some(Path::new("/tmp/docker-config")));
+        assert_eq!(
+            arguments,
+            ["--config", "/tmp/docker-config", "stack", "deploy"]
+        );
+    }
+
+    #[tokio::test]
+    async fn stack_commands_use_the_staged_directory_and_resolved_environment() {
+        let root = std::env::temp_dir().join(format!(
+            "citadel-stack-command-test-{}",
+            Uuid::now_v7().simple()
+        ));
+        tokio::fs::create_dir_all(&root).await.unwrap();
+        let command = if cfg!(windows) {
+            "echo %CITADEL_TEST_VALUE%>marker.txt"
+        } else {
+            "printf %s \"$CITADEL_TEST_VALUE\" > marker.txt"
+        };
+        let result = run_stack_commands(
+            &StackCommand {
+                commands: vec![command.to_owned()],
+                path: ".".to_owned(),
+            },
+            &root,
+            &["CITADEL_TEST_VALUE=resolved".to_owned()],
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.status, StackReleaseStatus::Healthy);
+        assert_eq!(
+            tokio::fs::read_to_string(root.join("marker.txt"))
+                .await
+                .unwrap()
+                .trim(),
+            "resolved"
+        );
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 }

@@ -4,6 +4,7 @@ import { ComponentProps, PropsWithChildren, StrictMode, useCallback, useEffect, 
 import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeWebSocket } from '@/test/fakes/websocket';
 import { RealtimeProvider } from './realtime-provider';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { RealtimeContextType, useRealtimeContext } from './realtime-context';
@@ -141,34 +142,7 @@ function ConnectionStatusProbe({ onContext }: { onContext?: (context: RealtimeCo
   );
 }
 
-class FakeWebSocket {
-  private readonly listeners = new Map<string, Set<EventListener>>();
-
-  readonly send = vi.fn();
-  readonly close = vi.fn();
-  readonly addEventListener = vi.fn((type: string, listener: EventListener) => {
-    const listeners = this.listeners.get(type) ?? new Set<EventListener>();
-    listeners.add(listener);
-    this.listeners.set(type, listeners);
-  });
-
-  emit(type: string, event: Event) {
-    this.listeners.get(type)?.forEach((listener) => listener.call(this, event));
-  }
-
-  asWebSocket(): WebSocket {
-    return this as unknown as WebSocket;
-  }
-}
-
 describe('RealtimeProvider', () => {
-  beforeEach(() => {
-    Object.defineProperty(window.navigator, 'onLine', {
-      configurable: true,
-      value: true,
-    });
-  });
-
   it('reports the initial connection and established reconnect lifecycle', async () => {
     const fake = new FakeHubConnection();
     const startGate = deferred<void>();
@@ -558,81 +532,29 @@ describe('RealtimeProvider', () => {
     expect(await screen.findByText('streamed')).toBeInTheDocument();
   });
 
-  it('reports the Rust WebSocket lifecycle and refreshes license state without reading event payloads', async () => {
+  it('adapts Rust events without a resource invalidation policy', async () => {
     const fake = new FakeHubConnection();
-    fake.start.mockResolvedValue();
     const socket = new FakeWebSocket();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const rendered = render(
-      <SignalRTestRoot
-        fake={fake}
-        queryClient={queryClient}
-        realtimeTransport="WebSocketV1"
-        webSocketFactory={() => socket.asWebSocket()}>
+      <SignalRTestRoot fake={fake} queryClient={queryClient} realtimeTransport="WebSocketV1"
+        startConnection={(connection) => connection.start()} webSocketFactory={() => socket.asWebSocket()}>
         <ConnectionStatusProbe />
       </SignalRTestRoot>,
     );
-
-    expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
     act(() => socket.emit('open', new Event('open')));
-    expect(fake.start).not.toHaveBeenCalled();
-    expect(socket.send).toHaveBeenCalledWith(
-      JSON.stringify({ protocolVersion: 1, kind: 'subscribe', accessToken: 'access-token' }),
-    );
-    act(() =>
-      socket.emit(
-        'message',
-        new MessageEvent('message', {
-          data: JSON.stringify({ protocolVersion: 1, kind: 'subscribed' }),
-        }),
-      ),
-    );
-    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] }),
-    );
-    invalidate.mockClear();
-
-    act(() =>
-      socket.emit(
-        'message',
-        new MessageEvent('message', {
-          data: JSON.stringify({
-            protocolVersion: 1,
-            eventKind: 'licenseStateChanged',
-            payload: { ignored: 'must-not-be-used' },
-          }),
-        }),
-      ),
-    );
-    await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] });
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicense'] });
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
+      protocolVersion: 1, kind: 'subscribe', clientMode: 'groups', accessToken: 'access-token',
     });
+    act(() => socket.message({ protocolVersion: 1, kind: 'subscribed' }));
+    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+    expect(invalidate).not.toHaveBeenCalled();
+    act(() => socket.message({ protocolVersion: 1, kind: 'event', target: 'LicenseStateChanged', arguments: [] }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] });
     invalidate.mockClear();
-
-    act(() =>
-      socket.emit(
-        'message',
-        new MessageEvent('message', {
-          data: JSON.stringify({
-            protocolVersion: 1,
-            resourceType: 'Registry',
-            eventKind: 'registryChanged',
-          }),
-        }),
-      ),
-    );
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ predicate: expect.any(Function) }),
-    );
-    const predicate = invalidate.mock.calls[0]?.[0]?.predicate;
-    if (!predicate) throw new Error('Registry invalidation predicate was not registered.');
-    type InvalidatedQuery = Parameters<typeof predicate>[0];
-    expect(predicate({ queryKey: ['listRegistries'] } as InvalidatedQuery)).toBe(true);
-    expect(predicate({ queryKey: ['listPlatforms'] } as InvalidatedQuery)).toBe(false);
-
+    act(() => socket.message({ protocolVersion: 1, resourceType: 'Registry', eventKind: 'registryChanged' }));
+    expect(invalidate).not.toHaveBeenCalled();
     rendered.unmount();
     expect(socket.close).toHaveBeenCalled();
   });

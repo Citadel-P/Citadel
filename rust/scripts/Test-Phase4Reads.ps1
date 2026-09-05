@@ -59,7 +59,7 @@ try {
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--lib')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--test', 'platforms_http', '--', '--ignored', '--test-threads=1')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--test', 'platform_creation_http', '--', '--ignored', '--test-threads=1')
-    Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--test', 'realtime_subscription')
+    Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--test', 'realtime_subscription', '--', '--include-ignored')
 }
 finally {
     & docker rm --force $postgres 2>$null | Out-Null

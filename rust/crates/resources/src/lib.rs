@@ -2,6 +2,7 @@
 
 mod bindings;
 mod catalog;
+mod lookup;
 mod tags;
 
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use zeroize::Zeroizing;
 
 pub use bindings::*;
 pub use catalog::*;
+pub use lookup::*;
 pub use tags::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

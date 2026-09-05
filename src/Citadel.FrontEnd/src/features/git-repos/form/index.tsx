@@ -83,21 +83,25 @@ export const GitRepoFormComponents: RequiredFormComponents = {
 };
 
 function GitRepoSubHeader({ latestActivity }: { latestActivity: LatestActivityView | null }) {
-  if (!latestActivity?.info) return null;
+  const info = latestActivity?.info;
+  if (!info || (info.$type !== 'GitRepoCloned' && info.$type !== 'GitRepoPulled')) return null;
 
-  if (latestActivity?.status === ActivityStatus.Success && latestActivity.info) {
+  if (latestActivity.status === ActivityStatus.Success) {
+    const commitSha = info.result?.commitSha;
+    if (!commitSha) return null;
+
     return (
-      <AlertMessage date={latestActivity?.createdAt} type={'success'}>
+      <AlertMessage date={latestActivity.createdAt} type={'success'}>
         <div className="flex flex-wrap gap-2 items-center ">
           Repository updated successfully to commit <GitCommitHorizontalIcon width={13} height={13} />
-          {truncate((latestActivity.info as any).result.commitSha, 12, 'right', true)}
+          {truncate(commitSha, 12, 'right', true)}
         </div>
       </AlertMessage>
     );
   }
   return (
     <ActivityAlertZone
-      info={latestActivity?.info as any}
+      info={info}
       activity={latestActivity as any}
       title="Sync Error"
       date={latestActivity?.createdAt}

@@ -135,6 +135,14 @@ pub struct AccessTokenClaims {
     pub principal_type: AuthenticatedPrincipalType,
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    #[serde(default)]
+    pub automation_run_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthenticatedBearer {
+    pub principal: ActorPrincipal,
+    pub automation_run_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,6 +228,11 @@ pub trait IdentityStore: Send + Sync {
         expected_subject_id: Uuid,
         principal_type: AuthenticatedPrincipalType,
         credential_id: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Option<ActorPrincipal>, IdentityError>>;
+
+    fn load_run_as_principal(
+        &self,
+        actor_id: ActorId,
     ) -> BoxFuture<'_, Result<Option<ActorPrincipal>, IdentityError>>;
 
     fn load_service_account_credential(
@@ -481,6 +494,7 @@ impl IdentityService {
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + self.access_token_lifetime,
+            automation_run_id: None,
         })?;
         Ok(SessionTokens {
             access_token: access,
@@ -558,19 +572,33 @@ impl IdentityService {
     }
 
     pub async fn authenticate_bearer(&self, token: &str) -> Result<ActorPrincipal, IdentityError> {
+        Ok(self.authenticate_bearer_context(token).await?.principal)
+    }
+
+    pub async fn authenticate_bearer_context(
+        &self,
+        token: &str,
+    ) -> Result<AuthenticatedBearer, IdentityError> {
         if token.starts_with("cit_sa_") {
-            return self.authenticate_service_account(token).await;
+            return Ok(AuthenticatedBearer {
+                principal: self.authenticate_service_account(token).await?,
+                automation_run_id: None,
+            });
         }
         let claims = self
             .tokens
             .decode_access(token)
             .map_err(|_| IdentityError::InvalidCredentials)?;
-        if claims.expires_at <= self.clock.now()
-            || claims.principal_type != AuthenticatedPrincipalType::User
+        if claims.expires_at <= self.clock.now() {
+            return Err(IdentityError::InvalidCredentials);
+        }
+        if claims.principal_type == AuthenticatedPrincipalType::ServiceAccount
+            && claims.automation_run_id.is_none()
         {
             return Err(IdentityError::InvalidCredentials);
         }
-        self.store
+        let principal = self
+            .store
             .load_principal(
                 claims.actor_id,
                 claims.subject_id,
@@ -578,7 +606,99 @@ impl IdentityService {
                 None,
             )
             .await?
-            .ok_or(IdentityError::InvalidCredentials)
+            .ok_or(IdentityError::InvalidCredentials)?;
+        Ok(AuthenticatedBearer {
+            principal,
+            automation_run_id: claims.automation_run_id,
+        })
+    }
+
+    pub async fn ensure_run_as_allowed(
+        &self,
+        caller: &ActorPrincipal,
+        run_as_actor_id: ActorId,
+    ) -> Result<ActorPrincipal, IdentityError> {
+        let target = self
+            .store
+            .load_run_as_principal(run_as_actor_id)
+            .await?
+            .ok_or_else(|| {
+                IdentityError::Validation(
+                    "The run-as identity is unavailable or disabled.".to_owned(),
+                )
+            })?;
+        if target.principal_type == AuthenticatedPrincipalType::ServiceAccount
+            && !self.entitlements.custom_access_control_enabled().await?
+        {
+            return Err(IdentityError::LicenseRequired("CustomAccessControl"));
+        }
+        if caller.is_administrator() || caller.actor_id == run_as_actor_id {
+            return Ok(target);
+        }
+        if target.principal_type != AuthenticatedPrincipalType::ServiceAccount {
+            return Err(IdentityError::Forbidden);
+        }
+        self.authorize_resource(
+            caller,
+            ResourceType::ServiceAccount,
+            target.subject_id,
+            PermissionLevel::Read,
+            Some(SpecificPermission::Use),
+        )
+        .await?;
+        Ok(target)
+    }
+
+    pub async fn execution_principal(
+        &self,
+        actor_id: ActorId,
+    ) -> Result<ActorPrincipal, IdentityError> {
+        let principal = self
+            .store
+            .load_run_as_principal(actor_id)
+            .await?
+            .ok_or_else(|| {
+                IdentityError::Validation(
+                    "The run-as identity is unavailable or disabled.".to_owned(),
+                )
+            })?;
+        if principal.principal_type == AuthenticatedPrincipalType::ServiceAccount
+            && !self.entitlements.custom_access_control_enabled().await?
+        {
+            return Err(IdentityError::LicenseRequired("CustomAccessControl"));
+        }
+        Ok(principal)
+    }
+
+    pub async fn issue_automation_access_token(
+        &self,
+        run_as_actor_id: ActorId,
+        automation_run_id: Uuid,
+        lifetime: Duration,
+    ) -> Result<String, IdentityError> {
+        let target = self
+            .store
+            .load_run_as_principal(run_as_actor_id)
+            .await?
+            .ok_or_else(|| {
+                IdentityError::Validation(
+                    "The run-as identity is unavailable or disabled.".to_owned(),
+                )
+            })?;
+        if target.principal_type == AuthenticatedPrincipalType::ServiceAccount
+            && !self.entitlements.custom_access_control_enabled().await?
+        {
+            return Err(IdentityError::LicenseRequired("CustomAccessControl"));
+        }
+        let issued_at = self.clock.now();
+        self.tokens.encode_access(&AccessTokenClaims {
+            subject_id: target.subject_id,
+            actor_id: target.actor_id,
+            principal_type: target.principal_type,
+            issued_at,
+            expires_at: issued_at + lifetime,
+            automation_run_id: Some(automation_run_id),
+        })
     }
 
     async fn authenticate_service_account(
@@ -716,6 +836,7 @@ impl IdentityService {
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + self.access_token_lifetime,
+            automation_run_id: None,
         })?;
         let refresh_token = self.tokens.encode_refresh(&RefreshTokenClaims {
             session_id,

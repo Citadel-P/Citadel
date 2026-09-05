@@ -1,5 +1,66 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LookupResourceType {
+    Platform,
+    Deployment,
+    Stack,
+    Image,
+    Network,
+    Volume,
+    Registry,
+    GitRepository,
+    GitAccount,
+    OidcProvider,
+    AutomationAction,
+    Alert,
+    AlertChannel,
+    User,
+    UserActor,
+    Team,
+    Role,
+    ResourceBinding,
+    License,
+    BackupRepository,
+    BackupPolicy,
+    Build,
+    BuildAgentPool,
+    SwarmService,
+    RunAsActor,
+    ServiceAccount,
+}
+
+impl LookupResourceType {
+    pub const ALL: &'static [Self] = &[
+        Self::Platform,
+        Self::Deployment,
+        Self::Stack,
+        Self::Image,
+        Self::Network,
+        Self::Volume,
+        Self::Registry,
+        Self::GitRepository,
+        Self::GitAccount,
+        Self::OidcProvider,
+        Self::AutomationAction,
+        Self::Alert,
+        Self::AlertChannel,
+        Self::User,
+        Self::UserActor,
+        Self::Team,
+        Self::Role,
+        Self::ResourceBinding,
+        Self::License,
+        Self::BackupRepository,
+        Self::BackupPolicy,
+        Self::Build,
+        Self::BuildAgentPool,
+        Self::SwarmService,
+        Self::RunAsActor,
+        Self::ServiceAccount,
+    ];
+}
+
 macro_rules! database_string_enum {
     ($(#[$metadata:meta])* pub enum $name:ident { $($(#[$variant_metadata:meta])* $variant:ident),+ $(,)? }) => {
         $(#[$metadata])*

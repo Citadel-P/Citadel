@@ -10,7 +10,6 @@ const MIGRATION_LOCK_KEY: i64 = 0x4369_7461_6465_6c31;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(15);
 const ADVISORY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const ADVISORY_LOCK_RETRY: Duration = Duration::from_millis(100);
-const INITIAL_SQL: &str = include_str!("../generated/0001_initial.sql");
 
 #[derive(Debug, thiserror::Error)]
 pub enum MigrationError {
@@ -82,13 +81,7 @@ struct JournalEntry {
     completed: bool,
 }
 
-const MIGRATIONS: &[EmbeddedMigration] = &[EmbeddedMigration {
-    id: "0001",
-    name: "initial",
-    file: "0001_initial.sql",
-    sql: INITIAL_SQL,
-    transactional: true,
-}];
+include!("../generated/catalog.rs");
 
 pub struct MigrationRunner;
 
@@ -228,13 +221,6 @@ async fn apply_migration(
     migration: &EmbeddedMigration,
     checksum: &str,
 ) -> Result<(), MigrationError> {
-    if !migration.transactional {
-        return Err(MigrationError::InvalidManifest(format!(
-            "migration '{}' is non-transactional; Phase 2 has no reviewed non-transactional runner path",
-            migration.id
-        )));
-    }
-
     sqlx::query(
         r#"
 INSERT INTO citadel_schema_migrations (id, name, checksum, started_at, completed_at, failure)
@@ -254,24 +240,20 @@ WHERE citadel_schema_migrations.completed_at IS NULL
     .execute(&mut *connection)
     .await?;
 
+    apply_in_runner_transaction(connection, migration).await
+}
+
+async fn apply_in_runner_transaction(
+    connection: &mut PgConnection,
+    migration: &EmbeddedMigration,
+) -> Result<(), MigrationError> {
     let mut transaction = connection.begin().await?;
     let apply_result = sqlx::raw_sql(migration.sql)
         .execute(&mut *transaction)
         .await;
     if let Err(error) = apply_result {
         transaction.rollback().await?;
-        let message = bounded_error(&error.to_string());
-        sqlx::query(
-            "UPDATE citadel_schema_migrations SET failure = $2 WHERE id = $1 AND completed_at IS NULL",
-        )
-        .bind(migration.id)
-        .bind(&message)
-        .execute(&mut *connection)
-        .await?;
-        return Err(MigrationError::Apply {
-            id: migration.id.to_owned(),
-            message,
-        });
+        return record_failure(connection, migration, error).await;
     }
 
     sqlx::query(
@@ -284,10 +266,29 @@ WHERE citadel_schema_migrations.completed_at IS NULL
     Ok(())
 }
 
+async fn record_failure(
+    connection: &mut PgConnection,
+    migration: &EmbeddedMigration,
+    error: sqlx::Error,
+) -> Result<(), MigrationError> {
+    let message = bounded_error(&error.to_string());
+    sqlx::query(
+        "UPDATE citadel_schema_migrations SET failure=$2 WHERE id=$1 AND completed_at IS NULL",
+    )
+    .bind(migration.id)
+    .bind(&message)
+    .execute(&mut *connection)
+    .await?;
+    Err(MigrationError::Apply {
+        id: migration.id.to_owned(),
+        message,
+    })
+}
+
 fn validate_manifest() -> Result<BTreeMap<String, ManifestMigration>, MigrationError> {
     let manifest: Manifest = serde_json::from_str(super::MIGRATION_MANIFEST_JSON)
         .map_err(|error| MigrationError::InvalidManifest(error.to_string()))?;
-    if manifest.schema_version != 1 {
+    if manifest.schema_version != u32::try_from(MIGRATIONS.len()).unwrap_or(u32::MAX) {
         return Err(MigrationError::InvalidManifest(format!(
             "unsupported schema version {}",
             manifest.schema_version
@@ -356,10 +357,10 @@ mod tests {
     fn embedded_manifest_and_baseline_are_consistent() {
         let manifest = validate_manifest().expect("embedded catalog should be valid");
         assert_eq!(manifest.len(), 1);
-        assert!(!INITIAL_SQL.contains("__EFMigrationsHistory"));
-        assert!(!INITIAL_SQL.contains("START TRANSACTION"));
-        assert_eq!(INITIAL_SQL.matches("CREATE TABLE ").count(), 82);
-        assert_eq!(INITIAL_SQL.matches("INSERT INTO ").count(), 92);
+        assert!(!MIGRATIONS[0].sql.contains("__EFMigrationsHistory"));
+        assert!(!MIGRATIONS[0].sql.contains("START TRANSACTION"));
+        assert_eq!(MIGRATIONS[0].sql.matches("CREATE TABLE ").count(), 83);
+        assert_eq!(MIGRATIONS[0].sql.matches("INSERT INTO ").count(), 92);
     }
 
     #[test]

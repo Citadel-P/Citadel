@@ -59,6 +59,32 @@ the enrollment, binding, routing, and reconnect security boundary.
   sends an authoritative bounded snapshot, filters events by Platform, reports
   lag as a resync condition, and periodically rechecks authorization.
 
+Platform dashboard follow-up (2026-09-05): the existing Local/Agent statistics
+writers already commit aggregate Platform samples, but the global SPA socket
+was not receiving them. Global subscriptions now check Platform access on each
+notification and send the latest persisted aggregate as `platformStatsUpdated`.
+They do not expose individual Container samples or runtime identifiers. Scoped
+Container subscriptions retain their existing payloads. Inventory reconciliation
+also emits a metadata-free `platformChanged` notification after persistence.
+
+The SPA updates existing Platform list/detail query entries directly, retaining
+capabilities, tags, and filtered-list membership. Older samples are ignored and
+only the latest summary sample is retained. Subscription/reconnect and lag
+recovery invalidate active Platform reads once; there is no periodic browser
+polling or additional statistics worker. These are aggregate Container CPU/RAM
+measurements, not measurements of every host process; missing disk metrics stay
+unavailable.
+
+Regression evidence: `server/tests/realtime_subscription.rs` covers authorized
+global delivery, denied Platforms, permission revocation, and real PostgreSQL
+stats persistence through a real WebSocket across reconnections/store recreation.
+The existing `adapters/tests/platform_inventory_persistence.rs` retains aggregate
+persistence and unknown-Container isolation coverage. The frontend
+`realtime-provider.test.tsx` exercises the actual Platform hooks and CPU/RAM card,
+detail-cache updates, filtered lists, out-of-order samples, reconnect/resync, and
+late events after disposal. This extends the .NET `PlatformsStatsWriterJobTests`
+and `ApplicationHubAuthorizationTests` parity areas.
+
 ### 4D — Swarm reads
 
 - Nodes, Services, Tasks, Networks, Configs, and Secrets have bounded list and

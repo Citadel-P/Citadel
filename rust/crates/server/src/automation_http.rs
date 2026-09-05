@@ -22,18 +22,23 @@ pub struct AutomationHttpState {
 }
 
 pub fn router(state: AutomationHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_AUTOMATION_ACTIONS, list)
-        .contract_route(routes::CREATE_AUTOMATION_ACTION, create)
-        .contract_route(routes::GET_AUTOMATION_ACTION, get_one)
-        .contract_route(routes::DELETE_AUTOMATION_ACTION, remove)
-        .contract_route(routes::RUN_AUTOMATION_ACTION, run_action)
-        .contract_route(routes::TEST_AUTOMATION_ACTION, test_action)
-        .contract_route(routes::LIST_AUTOMATION_RUNS, list_runs)
-        .contract_route(routes::GET_AUTOMATION_RUN, get_run)
-        .contract_route(routes::GET_AUTOMATION_RUN_LOGS, run_logs)
-        .contract_route(routes::CANCEL_AUTOMATION_RUN, cancel_run)
-        .with_state(state)
+    crate::realtime::notify_mutations(
+        Router::new()
+            .contract_route(routes::LIST_AUTOMATION_ACTIONS, list)
+            .contract_route(routes::CREATE_AUTOMATION_ACTION, create)
+            .contract_route(routes::GET_AUTOMATION_ACTION, get_one)
+            .contract_route(routes::RENAME_AUTOMATION_ACTION, rename)
+            .contract_route(routes::UPDATE_AUTOMATION_ACTION, update)
+            .contract_route(routes::DELETE_AUTOMATION_ACTION, remove)
+            .contract_route(routes::RUN_AUTOMATION_ACTION, run_action)
+            .contract_route(routes::TEST_AUTOMATION_ACTION, test_action)
+            .contract_route(routes::LIST_AUTOMATION_RUNS, list_runs)
+            .contract_route(routes::GET_AUTOMATION_RUN, get_run)
+            .contract_route(routes::GET_AUTOMATION_RUN_LOGS, run_logs)
+            .contract_route(routes::CANCEL_AUTOMATION_RUN, cancel_run)
+            .with_state(state),
+        "AutomationAction",
+    )
 }
 
 #[derive(Serialize)]
@@ -52,6 +57,14 @@ struct RunList {
 #[serde(rename_all = "camelCase")]
 struct RunInput {
     args_json: Option<Value>,
+    timeout_seconds: Option<i32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameInput {
+    id: Uuid,
+    name: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -65,9 +78,13 @@ async fn list(
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
-    authorize_global(&state, &principal, PermissionLevel::Read, &headers).await?;
     let actions = identity_result(
-        state.automation.store().list().await.map_err(map_error),
+        state
+            .automation
+            .store()
+            .list(principal.actor_id, principal.is_administrator())
+            .await
+            .map_err(map_error),
         &headers,
     )?;
     Ok(no_store(Json(ActionList { actions }).into_response()))
@@ -83,6 +100,20 @@ async fn create(
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
     identity_result(
         input.validate(principal.actor_id).map_err(map_error),
+        &headers,
+    )?;
+    identity_result(
+        state
+            .identity
+            .ensure_run_as_allowed(
+                &principal,
+                citadel_domain::ActorId::new(
+                    input
+                        .run_as_actor_id
+                        .expect("validation sets the run-as Actor"),
+                ),
+            )
+            .await,
         &headers,
     )?;
     let action = identity_result(
@@ -107,6 +138,77 @@ async fn get_one(
     authorize(&state, &principal, id, PermissionLevel::Read, &headers).await?;
     let action = identity_result(
         state.automation.store().get(id).await.map_err(map_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(action).into_response()))
+}
+
+async fn rename(
+    State(state): State<AutomationHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    Json(input): Json<RenameInput>,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize(
+        &state,
+        &principal,
+        input.id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    let action = identity_result(
+        state
+            .automation
+            .store()
+            .rename(input.id, &input.name)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(action).into_response()))
+}
+
+async fn update(
+    State(state): State<AutomationHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<Value>,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
+    let current = identity_result(
+        state.automation.store().get(id).await.map_err(map_error),
+        &headers,
+    )?;
+    let mut input = merge_update(current, patch, &headers)?;
+    identity_result(
+        input.validate(principal.actor_id).map_err(map_error),
+        &headers,
+    )?;
+    identity_result(
+        state
+            .identity
+            .ensure_run_as_allowed(
+                &principal,
+                citadel_domain::ActorId::new(
+                    input
+                        .run_as_actor_id
+                        .expect("validation sets the run-as Actor"),
+                ),
+            )
+            .await,
+        &headers,
+    )?;
+    let action = identity_result(
+        state
+            .automation
+            .store()
+            .update(id, &input)
+            .await
+            .map_err(map_error),
         &headers,
     )?;
     Ok(no_store(Json(action).into_response()))
@@ -157,14 +259,27 @@ async fn enqueue(
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Execute, &headers).await?;
-    let args = input
-        .and_then(|Json(value)| value.args_json)
-        .unwrap_or_else(|| serde_json::json!({}));
+    let input = input.map(|Json(value)| value).unwrap_or_default();
+    let args = match input.args_json {
+        Some(Value::String(value)) => identity_result(
+            serde_json::from_str::<Value>(&value)
+                .map_err(|_| IdentityError::Validation("Args must be valid JSON.".to_owned())),
+            &headers,
+        )?,
+        Some(value) => value,
+        None => serde_json::json!({}),
+    };
     let run = identity_result(
         state
             .automation
             .store()
-            .enqueue(principal.actor_id, id, trigger, &args)
+            .enqueue(
+                principal.actor_id,
+                id,
+                trigger,
+                &args,
+                input.timeout_seconds,
+            )
             .await
             .map_err(map_error),
         &headers,
@@ -210,16 +325,11 @@ async fn get_run(
         state
             .automation
             .store()
-            .list_runs(id, 100)
+            .get_run(id, run_id)
             .await
             .map_err(map_error),
         &headers,
-    )?
-    .into_iter()
-    .find(|run| run.id == run_id)
-    .ok_or_else(|| {
-        crate::identity_http::IdentityHttpError::from_parts(IdentityError::NotFound, &headers)
-    })?;
+    )?;
     Ok(no_store(Json(run).into_response()))
 }
 
@@ -235,16 +345,11 @@ async fn run_logs(
         state
             .automation
             .store()
-            .list_runs(id, 100)
+            .get_run(id, run_id)
             .await
             .map_err(map_error),
         &headers,
-    )?
-    .into_iter()
-    .find(|run| run.id == run_id)
-    .ok_or_else(|| {
-        crate::identity_http::IdentityHttpError::from_parts(IdentityError::NotFound, &headers)
-    })?;
+    )?;
     Ok(no_store(
         Json(serde_json::json!({"runId":run.id,"logs":run.logs.unwrap_or_default()}))
             .into_response(),
@@ -260,12 +365,7 @@ async fn cancel_run(
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Execute, &headers).await?;
     identity_result(
-        state
-            .automation
-            .store()
-            .cancel(id, run_id)
-            .await
-            .map_err(map_error),
+        state.automation.cancel(id, run_id).await.map_err(map_error),
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
@@ -282,6 +382,70 @@ fn actor(
         headers,
     )
 }
+
+fn merge_update(
+    current: citadel_automation::AutomationActionView,
+    patch: Value,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<AutomationActionInput> {
+    const FIELDS: &[&str] = &[
+        "description",
+        "code",
+        "defaultArgsJson",
+        "enabled",
+        "scheduleEnabled",
+        "scheduleCron",
+        "scheduleTimeZone",
+        "webhook",
+        "timeoutSeconds",
+        "alertOnFailure",
+        "runAsActorId",
+    ];
+    let Value::Object(patch) = patch else {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Automation Action update must be a JSON object.".to_owned(),
+            )),
+            headers,
+        );
+    };
+    if let Some(field) = patch.keys().find(|field| !FIELDS.contains(&field.as_str())) {
+        return identity_result(
+            Err(IdentityError::Validation(format!(
+                "Automation Action update field '{field}' is not supported."
+            ))),
+            headers,
+        );
+    }
+    let mut value = serde_json::json!({
+        "name": current.name,
+        "description": current.description,
+        "code": current.code,
+        "defaultArgsJson": current.default_args_json,
+        "enabled": current.enabled,
+        "scheduleEnabled": current.schedule_enabled,
+        "scheduleCron": current.schedule_cron,
+        "scheduleTimeZone": current.schedule_time_zone,
+        "webhook": current.webhook,
+        "timeoutSeconds": current.timeout_seconds,
+        "alertOnFailure": current.alert_on_failure,
+        "runAsActorId": current.run_as_actor_id,
+        "tagIds": [],
+    });
+    let target = value
+        .as_object_mut()
+        .expect("Automation Action update base is an object");
+    for (key, value) in patch {
+        target.insert(key, value);
+    }
+    identity_result(
+        serde_json::from_value(value).map_err(|error| {
+            IdentityError::Validation(format!("Automation Action update is invalid: {error}"))
+        }),
+        headers,
+    )
+}
+
 async fn authorize_global(
     state: &AutomationHttpState,
     principal: &ActorPrincipal,
@@ -319,5 +483,6 @@ fn map_error(error: AutomationError) -> IdentityError {
         AutomationError::NotFound => IdentityError::NotFound,
         AutomationError::Conflict(message) => IdentityError::Conflict(message),
         AutomationError::Storage(message) => IdentityError::Storage(message),
+        AutomationError::External(message) => IdentityError::External(message),
     }
 }

@@ -30,19 +30,22 @@ pub struct UsersHttpState {
 }
 
 pub fn router(state: UsersHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_USERS, list)
-        .contract_route(routes::SEARCH_USERS, search)
-        .contract_route(routes::GET_USER, get)
-        .contract_route(routes::CREATE_USER, create)
-        .contract_route(routes::UPDATE_USER, patch)
-        .contract_route(routes::RENAME_USER, rename)
-        .contract_route(routes::ADD_USER_ROLE, add_role)
-        .contract_route(routes::REMOVE_USER_ROLE, remove_role)
-        .contract_route(routes::ADD_USER_RESOURCE_ACCESS, add_resource_access)
-        .contract_route(routes::REMOVE_USER_RESOURCE_ACCESS, remove_resource_access)
-        .contract_route(routes::DELETE_USERS, delete)
-        .with_state(state)
+    crate::realtime::notify_mutations(
+        Router::new()
+            .contract_route(routes::LIST_USERS, list)
+            .contract_route(routes::SEARCH_USERS, search)
+            .contract_route(routes::GET_USER, get)
+            .contract_route(routes::CREATE_USER, create)
+            .contract_route(routes::UPDATE_USER, patch)
+            .contract_route(routes::RENAME_USER, rename)
+            .contract_route(routes::ADD_USER_ROLE, add_role)
+            .contract_route(routes::REMOVE_USER_ROLE, remove_role)
+            .contract_route(routes::ADD_USER_RESOURCE_ACCESS, add_resource_access)
+            .contract_route(routes::REMOVE_USER_RESOURCE_ACCESS, remove_resource_access)
+            .contract_route(routes::DELETE_USERS, delete)
+            .with_state(state),
+        "User",
+    )
 }
 
 #[derive(Debug, Deserialize)]

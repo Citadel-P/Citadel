@@ -11,6 +11,10 @@ COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yam
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml
 COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos \
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos
+COPY src/Citadel.FrontEnd/src/api/schema/swagger.json \
+    ./src/Citadel.FrontEnd/src/api/schema/swagger.json
+COPY test/fixtures/identity-authorization-cases.json \
+    ./test/fixtures/identity-authorization-cases.json
 WORKDIR /source/rust
 ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
@@ -23,10 +27,43 @@ RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry
     && cargo build --locked --release -p citadel-server \
     && cp target/release/citadel-server /tmp/citadel-server
 
+FROM docker.io/library/docker@sha256:f7d048590d889e00868920f658e807ecbc4ef662d51c9af67eb5534a447d58d6 AS docker-cli
+FROM docker.io/denoland/deno@sha256:b0e1bf78aea23abe03edf5c411cb9db3e1011d8659bfdeafcb80c1f53cdd71d7 AS deno
+FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS shoutrrr
+ARG TARGETARCH
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && case "$TARGETARCH" in \
+         amd64) archive='shoutrrr_linux_amd64_0.19.0.tar.gz'; checksum='e857441d23747486a4404b1fd1e6a82d1fbe8e0397fabddf412955f15c2e3e57' ;; \
+         arm64) archive='shoutrrr_linux_arm64v8_0.19.0.tar.gz'; checksum='67321d97a7ebd19f6f5d7bbeabb6337256882716eee28e8204828fe314c9e215' ;; \
+         *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl --fail --location --silent --show-error \
+         "https://github.com/nicholas-fedor/shoutrrr/releases/download/v0.19.0/$archive" \
+         --output /tmp/shoutrrr.tar.gz \
+    && echo "$checksum  /tmp/shoutrrr.tar.gz" | sha256sum --check --strict \
+    && tar -xzf /tmp/shoutrrr.tar.gz -C /usr/local/bin shoutrrr \
+    && chmod 0755 /usr/local/bin/shoutrrr
+
 FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates git openssh-client postgresql-client restic \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /tmp/citadel-server /app/citadel-server
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=deno /deno /usr/local/bin/deno
+COPY --from=shoutrrr /usr/local/bin/shoutrrr /usr/local/bin/shoutrrr
+
+RUN git --version \
+    && docker --version \
+    && deno --version \
+    && shoutrrr --version \
+    && pg_dump --version \
+    && restic version \
+    && mkdir -p /app/data \
+    && chown -R 65532:0 /app
 
 USER 65532:0
 EXPOSE 8000

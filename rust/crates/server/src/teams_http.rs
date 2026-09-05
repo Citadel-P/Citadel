@@ -30,21 +30,24 @@ pub struct TeamsHttpState {
 }
 
 pub fn router(state: TeamsHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_TEAMS, list)
-        .contract_route(routes::SEARCH_TEAMS, search)
-        .contract_route(routes::GET_TEAM, get)
-        .contract_route(routes::CREATE_TEAM, create)
-        .contract_route(routes::PATCH_TEAM, patch)
-        .contract_route(routes::RENAME_TEAM, rename)
-        .contract_route(routes::ADD_TEAM_ROLE, add_role)
-        .contract_route(routes::REMOVE_TEAM_ROLE, remove_role)
-        .contract_route(routes::ADD_TEAM_MEMBER, add_member)
-        .contract_route(routes::REMOVE_TEAM_MEMBER, remove_member)
-        .contract_route(routes::ADD_TEAM_RESOURCE_ACCESS, add_resource_access)
-        .contract_route(routes::REMOVE_TEAM_RESOURCE_ACCESS, remove_resource_access)
-        .contract_route(routes::DELETE_TEAMS, delete)
-        .with_state(state)
+    crate::realtime::notify_mutations(
+        Router::new()
+            .contract_route(routes::LIST_TEAMS, list)
+            .contract_route(routes::SEARCH_TEAMS, search)
+            .contract_route(routes::GET_TEAM, get)
+            .contract_route(routes::CREATE_TEAM, create)
+            .contract_route(routes::PATCH_TEAM, patch)
+            .contract_route(routes::RENAME_TEAM, rename)
+            .contract_route(routes::ADD_TEAM_ROLE, add_role)
+            .contract_route(routes::REMOVE_TEAM_ROLE, remove_role)
+            .contract_route(routes::ADD_TEAM_MEMBER, add_member)
+            .contract_route(routes::REMOVE_TEAM_MEMBER, remove_member)
+            .contract_route(routes::ADD_TEAM_RESOURCE_ACCESS, add_resource_access)
+            .contract_route(routes::REMOVE_TEAM_RESOURCE_ACCESS, remove_resource_access)
+            .contract_route(routes::DELETE_TEAMS, delete)
+            .with_state(state),
+        "Team",
+    )
 }
 
 #[derive(Debug, Deserialize)]

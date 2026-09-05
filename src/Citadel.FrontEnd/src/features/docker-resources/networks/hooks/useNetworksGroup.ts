@@ -9,18 +9,16 @@ import { useRead } from '@/lib/hooks';
 
 export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listNetworks', { platformId });
-  const [networks, setNetworks] = useState<NetworksView | undefined>();
+  const [networks, setNetworks] = useState<NetworksView | undefined>(data?.data);
   const lastDataRef = useRef<NetworksView | undefined>(data?.data);
-  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>();
+  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
   const capabilities = data?.data.capabilities;
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
       lastDataRef.current = data.data;
       const snapshot = nodeSnapshotRef.current;
-      const clusterNetworks = snapshot
-        ? data.data.networks.filter((network) => !network.dockerNodeId)
-        : [];
+      const clusterNetworks = snapshot ? data.data.networks.filter((network) => !network.dockerNodeId) : [];
       setNetworks(snapshot ? { ...data.data, networks: [...clusterNetworks, ...snapshot.networks] } : data.data);
     }
   }, [data?.data]);

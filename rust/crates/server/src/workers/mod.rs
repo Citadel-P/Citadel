@@ -1,4 +1,7 @@
+mod alerts;
 mod automation;
+mod backups;
+mod builds;
 mod deployments;
 mod git;
 mod platforms;

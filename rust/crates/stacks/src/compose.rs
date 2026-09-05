@@ -42,6 +42,9 @@ pub struct ComposeService {
 pub struct ComposeModel {
     pub services: Vec<ComposeService>,
     pub named_volumes: BTreeSet<String>,
+    pub volume_names: BTreeMap<String, String>,
+    pub external_volumes: BTreeSet<String>,
+    pub service_volumes: BTreeMap<String, BTreeSet<String>>,
     pub external_secrets: BTreeMap<String, String>,
     pub external_configs: BTreeMap<String, String>,
     pub variables: BTreeSet<String>,
@@ -229,6 +232,9 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
     let mut model = ComposeModel {
         services: Vec::new(),
         named_volumes: BTreeSet::new(),
+        volume_names: BTreeMap::new(),
+        external_volumes: BTreeSet::new(),
+        service_volumes: BTreeMap::new(),
         external_secrets: BTreeMap::new(),
         external_configs: BTreeMap::new(),
         variables: BTreeSet::new(),
@@ -245,6 +251,12 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
                     .as_mapping()
                     .and_then(|map| scalar_at(map, "image"))
                     .map(str::to_owned);
+                if let Some(definition) = definition.as_mapping() {
+                    collect_service_volumes(
+                        definition,
+                        model.service_volumes.entry(name.to_owned()).or_default(),
+                    );
+                }
                 merged_services
                     .entry(name.to_owned())
                     .and_modify(|current| {
@@ -256,6 +268,11 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
             }
         }
         collect_named_resources(&document, "volumes", &mut model.named_volumes);
+        collect_volume_metadata(
+            &document,
+            &mut model.volume_names,
+            &mut model.external_volumes,
+        );
         collect_external_resources(&document, "secrets", &mut model.external_secrets);
         collect_external_resources(&document, "configs", &mut model.external_configs);
     }
@@ -267,6 +284,70 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
         return Err(validation("A Stack must define at least one Service."));
     }
     Ok(model)
+}
+
+fn collect_service_volumes(service: &Mapping, target: &mut BTreeSet<String>) {
+    let Some(volumes) = service
+        .get(Value::String("volumes".to_owned()))
+        .and_then(Value::as_sequence)
+    else {
+        return;
+    };
+    for volume in volumes {
+        let source = match volume {
+            Value::String(value) => value.split(':').next(),
+            Value::Mapping(value)
+                if scalar_at(value, "type")
+                    .is_none_or(|kind| kind.eq_ignore_ascii_case("volume")) =>
+            {
+                scalar_at(value, "source")
+            }
+            _ => None,
+        };
+        if let Some(source) = source.filter(|value| is_named_volume_reference(value)) {
+            target.insert(source.to_owned());
+        }
+    }
+}
+
+fn is_named_volume_reference(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('.')
+        && !value.starts_with('/')
+        && !value.starts_with('~')
+        && !value.contains('\\')
+}
+
+fn collect_volume_metadata(
+    document: &Value,
+    names: &mut BTreeMap<String, String>,
+    external: &mut BTreeSet<String>,
+) {
+    let Some(volumes) = mapping_at(document, "volumes") else {
+        return;
+    };
+    for (key, definition) in volumes {
+        let Some(key) = key.as_str() else { continue };
+        let Some(definition) = definition.as_mapping() else {
+            continue;
+        };
+        let external_value = definition.get(Value::String("external".to_owned()));
+        let is_external = matches!(
+            external_value,
+            Some(Value::Bool(true)) | Some(Value::Mapping(_))
+        );
+        let name = scalar_at(definition, "name")
+            .or_else(|| {
+                external_value
+                    .and_then(Value::as_mapping)
+                    .and_then(|value| scalar_at(value, "name"))
+            })
+            .unwrap_or(key);
+        names.insert(key.to_owned(), name.to_owned());
+        if is_external {
+            external.insert(key.to_owned());
+        }
+    }
 }
 
 pub fn inject_ownership_labels(
@@ -308,6 +389,88 @@ pub fn inject_ownership_labels(
         }
     }
     serde_yaml_ng::to_string(&document).map_err(|error| StackError::Validation(error.to_string()))
+}
+
+/// Creates the final Compose override used for Git-backed Stacks. Keeping the
+/// generated labels in a separate file preserves the immutable repository
+/// snapshot and lets Docker apply normal multi-file Compose merge semantics.
+pub fn create_ownership_labels_override(
+    compose_files: &[String],
+    stack_id: Uuid,
+    release_id: Uuid,
+    include_swarm_service_labels: bool,
+) -> Result<String, StackError> {
+    validate_input_limits(compose_files)?;
+    let mut definitions = BTreeMap::<String, Vec<String>>::new();
+    for content in compose_files {
+        let document = parse_document(content)?;
+        let Some(services) = mapping_at(&document, "services") else {
+            continue;
+        };
+        for (name, service) in services {
+            let name = name
+                .as_str()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| validation("Service names must be non-empty strings."))?;
+            let service = service
+                .as_mapping()
+                .ok_or_else(|| validation("Service definitions must be mappings."))?;
+            reject_reserved_labels(service, name)?;
+            definitions.entry(name.to_owned()).or_default().push(
+                serde_yaml_ng::to_string(&Value::Mapping(service.clone())).map_err(|error| {
+                    validation(&format!("Could not hash Compose Service: {error}"))
+                })?,
+            );
+        }
+    }
+    if definitions.is_empty() {
+        return Err(validation("A Stack must define at least one Service."));
+    }
+    let service_count = definitions.len();
+    let mut services = Mapping::new();
+    for (name, service_definitions) in definitions {
+        let mut hash = Sha256::new();
+        for definition in service_definitions {
+            hash.update((definition.len() as u64).to_be_bytes());
+            hash.update(definition.as_bytes());
+        }
+        let service_hash = hash
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let mut service = Mapping::new();
+        let mut labels = Mapping::new();
+        set_ownership_labels(
+            &mut labels,
+            stack_id,
+            release_id,
+            &service_hash,
+            service_count,
+        );
+        service.insert(Value::String("labels".to_owned()), Value::Mapping(labels));
+        if include_swarm_service_labels {
+            let mut deploy = Mapping::new();
+            let mut labels = Mapping::new();
+            set_ownership_labels(
+                &mut labels,
+                stack_id,
+                release_id,
+                &service_hash,
+                service_count,
+            );
+            deploy.insert(Value::String("labels".to_owned()), Value::Mapping(labels));
+            service.insert(Value::String("deploy".to_owned()), Value::Mapping(deploy));
+        }
+        services.insert(Value::String(name), Value::Mapping(service));
+    }
+    let mut root = Mapping::new();
+    root.insert(
+        Value::String("services".to_owned()),
+        Value::Mapping(services),
+    );
+    serde_yaml_ng::to_string(&Value::Mapping(root))
+        .map_err(|error| validation(&format!("Could not create labels override: {error}")))
 }
 
 #[must_use]
@@ -1010,6 +1173,58 @@ mod tests {
     }
 
     #[test]
+    fn ownership_override_covers_services_across_all_compose_files() {
+        let stack_id = Uuid::now_v7();
+        let release_id = Uuid::now_v7();
+        let override_file = create_ownership_labels_override(
+            &[
+                "services:\n  api:\n    image: example/api:1\n".to_owned(),
+                "services:\n  api:\n    deploy:\n      replicas: 2\n  worker:\n    image: example/worker:1\n"
+                    .to_owned(),
+            ],
+            stack_id,
+            release_id,
+            true,
+        )
+        .unwrap();
+        let document: Value = serde_yaml_ng::from_str(&override_file).unwrap();
+        let services = mapping_at(&document, "services").unwrap();
+        assert_eq!(services.len(), 2);
+        for service in services.values().filter_map(Value::as_mapping) {
+            let labels = service
+                .get(Value::String("labels".to_owned()))
+                .and_then(Value::as_mapping)
+                .unwrap();
+            assert_eq!(
+                labels.get(Value::String("com.citadel.stack-id".to_owned())),
+                Some(&Value::String(stack_id.to_string()))
+            );
+            assert!(
+                service
+                    .get(Value::String("deploy".to_owned()))
+                    .and_then(Value::as_mapping)
+                    .and_then(|deploy| deploy.get(Value::String("labels".to_owned())))
+                    .is_some()
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_override_rejects_reserved_labels_in_any_compose_file() {
+        let error = create_ownership_labels_override(
+            &[
+                "services:\n  api:\n    image: nginx\n".to_owned(),
+                "services:\n  api:\n    labels:\n      com.citadel.managed: fake\n".to_owned(),
+            ],
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            false,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("reserved com.citadel"));
+    }
+
+    #[test]
     fn parser_finds_variables_named_volumes_and_external_identity() {
         let model = parse_compose(&["services:\n  api:\n    image: nginx:${TAG:-latest}\n    environment:\n      TOKEN: ${TOKEN:?required}\n      ESCAPED: $${NOT_A_BINDING}\nvolumes:\n  data:\nsecrets:\n  token:\n    name: shared-token\n    external: true\n".to_owned()]).unwrap();
         assert_eq!(
@@ -1019,6 +1234,17 @@ mod tests {
         assert_eq!(model.optional_variables, BTreeSet::from(["TAG".to_owned()]));
         assert!(model.named_volumes.contains("data"));
         assert_eq!(model.external_secrets["token"], "shared-token");
+    }
+
+    #[test]
+    fn parser_retains_service_volume_references_and_physical_names() {
+        let model = parse_compose(&["services:\n  api:\n    image: nginx\n    volumes:\n      - data:/data\n      - type: volume\n        source: shared\n        target: /shared\n      - ./host:/host\nvolumes:\n  data: {}\n  shared:\n    external: true\n    name: global-shared\n".to_owned()]).unwrap();
+        assert_eq!(
+            model.service_volumes["api"],
+            BTreeSet::from(["data".to_owned(), "shared".to_owned()])
+        );
+        assert_eq!(model.volume_names["shared"], "global-shared");
+        assert!(model.external_volumes.contains("shared"));
     }
 
     #[test]

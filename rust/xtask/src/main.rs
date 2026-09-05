@@ -46,6 +46,10 @@ enum DatabaseCommand {
     Verify,
     /// Recreate the one-time Rust-v1 baseline from the frozen accepted .NET input.
     ImportBaseline,
+    /// Regenerate the unreleased Rust baseline from the declarative schema.
+    RefreshBaseline,
+    /// Refresh the embedded baseline checksum and schema hash.
+    RefreshCatalog,
 }
 
 #[derive(Deserialize)]
@@ -509,6 +513,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Database { command } => match command {
             DatabaseCommand::Verify => database_gen::verify(),
             DatabaseCommand::ImportBaseline => database_gen::import_baseline(),
+            DatabaseCommand::RefreshBaseline => database_gen::refresh_baseline(),
+            DatabaseCommand::RefreshCatalog => database_gen::refresh_catalog(),
         },
         Command::Openapi { check } => openapi_gen::generate(check),
         Command::Docker { check } => generate_docker(check),

@@ -2,7 +2,7 @@ use citadel_domain::PermissionLevel;
 use citadel_identity::PermissionGrant;
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ResourceCapabilities {
     pub can_read: bool,
@@ -17,5 +17,11 @@ impl From<PermissionGrant> for ResourceCapabilities {
             can_write: permission.level.grants(PermissionLevel::Write),
             can_execute: permission.level.grants(PermissionLevel::Execute),
         }
+    }
+}
+
+impl From<Option<PermissionGrant>> for ResourceCapabilities {
+    fn from(permission: Option<PermissionGrant>) -> Self {
+        permission.map_or_else(Self::default, Self::from)
     }
 }

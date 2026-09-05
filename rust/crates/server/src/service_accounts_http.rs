@@ -32,28 +32,31 @@ pub struct ServiceAccountHttpState {
 }
 
 pub fn router(state: ServiceAccountHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_SERVICE_ACCOUNTS, list)
-        .contract_route(routes::CREATE_SERVICE_ACCOUNT, create)
-        .contract_route(routes::ARCHIVE_SERVICE_ACCOUNTS, archive)
-        .contract_route(routes::GET_SERVICE_ACCOUNT_LIMITS, limits)
-        .contract_route(routes::GET_SERVICE_ACCOUNT, get_one)
-        .contract_route(routes::UPDATE_SERVICE_ACCOUNT, update)
-        .contract_route(routes::RENAME_SERVICE_ACCOUNT, rename)
-        .contract_route(routes::ADD_SERVICE_ACCOUNT_ROLE, add_role)
-        .contract_route(routes::REMOVE_SERVICE_ACCOUNT_ROLE, remove_role)
-        .contract_route(
-            routes::ADD_SERVICE_ACCOUNT_RESOURCE_ACCESS,
-            add_resource_access,
-        )
-        .contract_route(
-            routes::REMOVE_SERVICE_ACCOUNT_RESOURCE_ACCESS,
-            remove_resource_access,
-        )
-        .contract_route(routes::LIST_SERVICE_ACCOUNT_TOKENS, list_tokens)
-        .contract_route(routes::CREATE_SERVICE_ACCOUNT_TOKEN, create_token)
-        .contract_route(routes::REVOKE_SERVICE_ACCOUNT_TOKEN, revoke_token)
-        .with_state(state)
+    crate::realtime::notify_mutations(
+        Router::new()
+            .contract_route(routes::LIST_SERVICE_ACCOUNTS, list)
+            .contract_route(routes::CREATE_SERVICE_ACCOUNT, create)
+            .contract_route(routes::ARCHIVE_SERVICE_ACCOUNTS, archive)
+            .contract_route(routes::GET_SERVICE_ACCOUNT_LIMITS, limits)
+            .contract_route(routes::GET_SERVICE_ACCOUNT, get_one)
+            .contract_route(routes::UPDATE_SERVICE_ACCOUNT, update)
+            .contract_route(routes::RENAME_SERVICE_ACCOUNT, rename)
+            .contract_route(routes::ADD_SERVICE_ACCOUNT_ROLE, add_role)
+            .contract_route(routes::REMOVE_SERVICE_ACCOUNT_ROLE, remove_role)
+            .contract_route(
+                routes::ADD_SERVICE_ACCOUNT_RESOURCE_ACCESS,
+                add_resource_access,
+            )
+            .contract_route(
+                routes::REMOVE_SERVICE_ACCOUNT_RESOURCE_ACCESS,
+                remove_resource_access,
+            )
+            .contract_route(routes::LIST_SERVICE_ACCOUNT_TOKENS, list_tokens)
+            .contract_route(routes::CREATE_SERVICE_ACCOUNT_TOKEN, create_token)
+            .contract_route(routes::REVOKE_SERVICE_ACCOUNT_TOKEN, revoke_token)
+            .with_state(state),
+        "ServiceAccount",
+    )
 }
 
 #[derive(Debug, Deserialize)]

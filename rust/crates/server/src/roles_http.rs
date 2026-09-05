@@ -30,15 +30,18 @@ pub struct RolesHttpState {
 }
 
 pub fn router(state: RolesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_ROLES, list)
-        .contract_route(routes::GET_ROLE, get)
-        .contract_route(routes::CREATE_ROLE, create)
-        .contract_route(routes::PATCH_ROLE_PERMISSIONS, patch_permissions)
-        .contract_route(routes::RENAME_ROLE, rename)
-        .contract_route(routes::DELETE_ROLES, delete)
-        .contract_route(routes::GET_PERMISSION_MATRIX, get_permission_matrix)
-        .with_state(state)
+    crate::realtime::notify_mutations(
+        Router::new()
+            .contract_route(routes::LIST_ROLES, list)
+            .contract_route(routes::GET_ROLE, get)
+            .contract_route(routes::CREATE_ROLE, create)
+            .contract_route(routes::PATCH_ROLE_PERMISSIONS, patch_permissions)
+            .contract_route(routes::RENAME_ROLE, rename)
+            .contract_route(routes::DELETE_ROLES, delete)
+            .contract_route(routes::GET_PERMISSION_MATRIX, get_permission_matrix)
+            .with_state(state),
+        "Role",
+    )
 }
 
 #[derive(Serialize)]

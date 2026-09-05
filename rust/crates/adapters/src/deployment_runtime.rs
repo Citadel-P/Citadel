@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use citadel_deployments::{
     ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntimePort,
-    PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
-    RuntimeDeploymentResult, StopSignal,
+    PreparedDeploymentImage, ResolvedDeploymentBuild, RuntimeContainerState,
+    RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
 };
 use citadel_platforms::{
     PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind,
@@ -98,7 +98,68 @@ impl DeploymentRuntimeRouter {
         Ok(PreparedDeploymentImage {
             docker_image_id,
             digest: None,
+            resolved_build: None,
         })
+    }
+
+    async fn prepare_build_image(
+        &self,
+        platform_id: Uuid,
+        build_project_id: Uuid,
+        resolved_build_run_id: Option<Uuid>,
+        cancellation: &CancellationToken,
+    ) -> Result<PreparedDeploymentImage, DeploymentError> {
+        let row = sqlx::query(
+            r#"SELECT project.registryid,run.id,run.imagereferences,run.imagedigest
+FROM buildprojects project
+JOIN LATERAL (
+    SELECT candidate.id,candidate.imagereferences,candidate.imagedigest
+    FROM buildruns candidate
+    WHERE candidate.buildprojectid=project.id
+      AND candidate.status='Succeeded'
+      AND ($2::uuid IS NULL OR candidate.id=$2)
+    ORDER BY candidate.completedat DESC NULLS LAST,candidate.id DESC
+    LIMIT 1
+) run ON TRUE
+WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
+        )
+        .bind(build_project_id)
+        .bind(resolved_build_run_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| {
+            DeploymentError::Validation(
+                "The selected Build Project has no successful Build Run to deploy.".to_owned(),
+            )
+        })?;
+        let references: Value = row.try_get("imagereferences").map_err(storage)?;
+        let reference = references
+            .as_array()
+            .and_then(|values| values.first())
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| {
+                DeploymentError::Validation(
+                    "The selected Build Run has no deployable image reference.".to_owned(),
+                )
+            })?
+            .to_owned();
+        let build = ResolvedDeploymentBuild {
+            image_reference: reference.clone(),
+            digest: row.try_get("imagedigest").map_err(storage)?,
+            build_run_id: row.try_get("id").map_err(storage)?,
+        };
+        let mut prepared = self
+            .prepare_external_image(
+                platform_id,
+                row.try_get("registryid").map_err(storage)?,
+                &reference,
+                cancellation,
+            )
+            .await?;
+        prepared.resolved_build = Some(build);
+        Ok(prepared)
     }
 
     async fn registry(
@@ -293,18 +354,22 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
                     image_tag,
                     ..
                 } => {
-                    self.prepare_external_image(
+                    self.prepare_external_image(platform_id, *registry_id, image_tag, cancellation)
+                        .await
+                }
+                DeploymentImageInfo::Build {
+                    build_project_id,
+                    resolved_build_run_id,
+                    ..
+                } => {
+                    self.prepare_build_image(
                         platform_id,
-                        *registry_id,
-                        image_tag,
+                        *build_project_id,
+                        *resolved_build_run_id,
                         cancellation,
                     )
                     .await
                 }
-                DeploymentImageInfo::Build { .. } => Err(DeploymentError::Validation(
-                    "Build-backed Deployment Apply is not available until Build execution migrates to Rust."
-                        .to_owned(),
-                )),
             }
         }
         .boxed()
@@ -572,6 +637,7 @@ where
             return Ok(PreparedDeploymentImage {
                 docker_image_id: id.clone(),
                 digest: digest.cloned(),
+                resolved_build: None,
             });
         }
     }

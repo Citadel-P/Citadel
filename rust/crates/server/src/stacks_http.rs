@@ -228,6 +228,7 @@ async fn create(
         &headers,
     )?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_git_source(&state, &principal, &input.spec, &headers).await?;
     let value = identity_result(
         state
             .stacks
@@ -256,6 +257,7 @@ async fn update(
     )
     .await?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_git_patch_source(&state, &principal, input.spec.as_ref(), &headers).await?;
     let value = identity_result(
         state
             .stacks
@@ -664,6 +666,7 @@ async fn validate_import_draft(
         &headers,
     )?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_git_source(&state, &principal, &input.spec, &headers).await?;
     let value = identity_result(
         state
             .stacks
@@ -719,6 +722,7 @@ async fn import(
         &headers,
     )?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    authorize_git_source(&state, &principal, &input.spec, &headers).await?;
     if input.stack_source != input.spec.source() {
         return Err(crate::identity_http::IdentityHttpError::from_parts(
             IdentityError::Validation("Stack source and specification type must match.".to_owned()),
@@ -768,6 +772,59 @@ async fn import(
         &headers,
     )?;
     Ok(no_store(Json(value).into_response()))
+}
+
+async fn authorize_git_source(
+    state: &StacksHttpState,
+    principal: &ActorPrincipal,
+    spec: &citadel_stacks::StackSpec,
+    headers: &HeaderMap,
+) -> Result<(), crate::identity_http::IdentityHttpError> {
+    let citadel_stacks::StackSpec::Git { git_repo_id, .. } = spec else {
+        return Ok(());
+    };
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                principal,
+                ResourceType::GitRepository,
+                *git_repo_id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        headers,
+    )
+}
+
+async fn authorize_git_patch_source(
+    state: &StacksHttpState,
+    principal: &ActorPrincipal,
+    spec: Option<&Value>,
+    headers: &HeaderMap,
+) -> Result<(), crate::identity_http::IdentityHttpError> {
+    let Some(git_repository_id) = spec
+        .and_then(Value::as_object)
+        .and_then(|spec| spec.get("gitRepoId").or_else(|| spec.get("GitRepoId")))
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+    else {
+        return Ok(());
+    };
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                principal,
+                ResourceType::GitRepository,
+                git_repository_id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        headers,
+    )
 }
 
 macro_rules! state_action {

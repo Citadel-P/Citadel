@@ -7,8 +7,8 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_stacks::{
-    StackDeletionClaim, StackOperationClaim, StackRuntimePort, StackSpec, StackSpecCommon,
-    StackUpdateBehavior, inject_ownership_labels,
+    StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntimePort, StackSourceFile,
+    StackSpec, StackSpecCommon, StackUpdateBehavior, create_ownership_labels_override,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -18,10 +18,10 @@ use uuid::Uuid;
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL, CITADEL_PHASE6_RUNTIME_IMAGE, Docker CLI, Compose, and a Unix socket"]
 async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
     let fixture = Fixture::new("Docker").await;
-    let compose = fixture.compose();
+    let source = fixture.source();
     let applied = fixture
         .runtime
-        .apply(&fixture.claim(), &compose, &[], &fixture.cancellation)
+        .apply(&fixture.claim(), &source, &[], &fixture.cancellation)
         .await
         .unwrap();
     assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);
@@ -63,10 +63,10 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
 #[ignore = "requires the Phase 6 fixture and a Docker daemon already initialized as a Swarm manager"]
 async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
     let fixture = Fixture::new("DockerSwarm").await;
-    let compose = fixture.compose();
+    let source = fixture.source();
     let applied = fixture
         .runtime
-        .apply(&fixture.claim(), &compose, &[], &fixture.cancellation)
+        .apply(&fixture.claim(), &source, &[], &fixture.cancellation)
         .await
         .unwrap();
     assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);
@@ -166,14 +166,32 @@ impl Fixture {
         }
     }
 
-    fn compose(&self) -> String {
-        inject_ownership_labels(
-            self.spec().compose_file().unwrap(),
+    fn source(&self) -> StackApplySource {
+        let compose = self.spec().compose_file().unwrap().to_owned();
+        let labels = create_ownership_labels_override(
+            std::slice::from_ref(&compose),
             self.stack_id,
             self.release_id,
             self.platform_type == "DockerSwarm",
         )
-        .unwrap()
+        .unwrap();
+        StackApplySource {
+            files: vec![
+                StackSourceFile {
+                    relative_path: "compose.yml".to_owned(),
+                    content: compose.into_bytes(),
+                },
+                StackSourceFile {
+                    relative_path: ".citadel/citadel.labels.yml".to_owned(),
+                    content: labels.into_bytes(),
+                },
+            ],
+            compose_paths: vec!["compose.yml".to_owned()],
+            env_file_paths: Vec::new(),
+            working_directory: ".".to_owned(),
+            labels_override_path: Some(".citadel/citadel.labels.yml".to_owned()),
+            resolved_commit_sha: None,
+        }
     }
 
     fn claim(&self) -> StackOperationClaim {

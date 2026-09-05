@@ -481,6 +481,7 @@ async fn realtime_transition_notification_is_authenticated_versioned_and_metadat
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + Duration::minutes(5),
+            automation_run_id: None,
         })
         .unwrap();
     let (mut socket, _) =

@@ -16,17 +16,22 @@ services:
       Jwt__Key: citadel-development-jwt-key-at-least-32-bytes
       Secrets__EncryptionKey: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
       CITADEL_RUST_DOCKER_SOCKET: /var/run/docker.sock
+      CITADEL_DATA_ROOT: /home/vscode/.local/share/citadel
       CARGO_TARGET_DIR: /home/vscode/.cache/citadel-target
       SQLX_OFFLINE: "true"
       RUST_BACKTRACE: "1"
       RUST_LOG: citadel_server=debug,citadel_adapters=info
       VITE_API_BASE_URL: http://localhost:8000
+      # Windows bind mounts do not reliably forward file-change events to Vite.
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
     volumes:
       - ..:/workspace:cached
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
       - rust-target:/home/vscode/.cache/citadel-target
       - npm-cache:/home/vscode/.npm
+      - citadel-data:/home/vscode/.local/share/citadel
       - type: volume
         source: frontend-node-modules
         target: /workspace/src/Citadel.FrontEnd/node_modules
@@ -63,5 +68,6 @@ volumes:
   cargo-git:
   rust-target:
   npm-cache:
+  citadel-data:
   frontend-node-modules:
   postgres-data:
