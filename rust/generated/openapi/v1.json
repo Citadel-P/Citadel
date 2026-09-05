@@ -4488,7 +4488,8 @@
             ]
           },
           "updateBehavior": {
-            "$ref": "#/components/schemas/UpdateBehavior"
+            "$ref": "#/components/schemas/UpdateBehavior",
+            "default": "Disabled"
           },
           "volumes": {
             "items": {
@@ -4501,8 +4502,7 @@
           }
         },
         "required": [
-          "image",
-          "updateBehavior"
+          "image"
         ],
         "type": "object"
       },

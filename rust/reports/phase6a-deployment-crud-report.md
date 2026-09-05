@@ -2,6 +2,24 @@
 
 Date: 2026-09-03
 
+## Compatibility correction — 2026-09-05
+
+The existing frontend can omit `spec.updateBehavior` when creating a Deployment.
+Rust incorrectly required it during JSON deserialization, returning a generic
+400 before reaching the create handler. The supplied nginx/External/bridge payload
+reproduced `missing field updateBehavior` in a regression test before the fix.
+
+Omission now defaults to `Disabled`, matching .NET's zero-valued enum behavior.
+Explicit modes remain intact; invalid values, null, and a missing image are still
+rejected. OpenAPI marks the field optional with its default. No frontend change
+or database migration is needed.
+
+Coverage extends the .NET `DeploymentCreateTests` external-image creation and
+persistence scenario with the exact omitted-field shape: POST succeeds, the
+database stores `Disabled`, and GET returns the saved image/network configuration.
+Deployment model tests cover omission and explicit/invalid modes; an OpenAPI
+generator test guards the optional-field contract.
+
 ## Outcome
 
 Phase 6A is implemented. Rust now owns the existing Deployment

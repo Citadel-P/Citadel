@@ -308,6 +308,42 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         StatusCode::CONFLICT
     );
 
+    let defaulted_response = request(
+        &app, Method::POST, "/api/v1/deployments", Some(admin.clone()),
+        Some(json!({
+            "name":format!("defaulted-{suffix}"),"platformId":platform_id,
+            "spec":{
+                "image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"},
+                "ports":[],"networks":["bridge"]
+            }
+        })),
+    ).await;
+    let status = defaulted_response.status();
+    let defaulted = response_json(defaulted_response).await;
+    assert_eq!(status, StatusCode::OK, "{defaulted}");
+    assert_eq!(defaulted["spec"]["updateBehavior"], "Disabled");
+    assert_eq!(defaulted["status"], "Created");
+    let defaulted_id = Uuid::parse_str(defaulted["id"].as_str().unwrap()).unwrap();
+    let stored: Value = sqlx::query_scalar("SELECT spec FROM deployments WHERE id=$1")
+        .bind(defaulted_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored["UpdateBehavior"], "Disabled");
+    assert_eq!(stored["Networks"], json!(["bridge"]));
+    let read_back = request(
+        &app,
+        Method::GET,
+        &format!("/api/v1/deployments/{defaulted_id}"),
+        Some(admin.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(read_back.status(), StatusCode::OK);
+    let read_back = response_json(read_back).await;
+    assert_eq!(read_back["spec"]["updateBehavior"], "Disabled");
+    assert_eq!(read_back["spec"]["image"]["imageTag"], "nginx");
+
     let external_response = request(
         &app,
         Method::POST,
