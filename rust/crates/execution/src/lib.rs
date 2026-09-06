@@ -44,6 +44,7 @@ impl Default for ProcessLimits {
 /// `Debug` is intentionally not implemented because arguments, environment
 /// values, or stdin may contain credentials.
 pub struct ProcessRequest {
+    pub output: Option<mpsc::Sender<ProcessChunk>>,
     pub program: OsString,
     pub arguments: Vec<OsString>,
     pub current_directory: Option<PathBuf>,
@@ -56,6 +57,7 @@ impl ProcessRequest {
     #[must_use]
     pub fn new(program: impl Into<OsString>) -> Self {
         Self {
+            output: None,
             program: program.into(),
             arguments: Vec::new(),
             current_directory: None,
@@ -98,6 +100,18 @@ impl ProcessRequest {
         self.limits = limits;
         self
     }
+
+    #[must_use]
+    pub fn output(mut self, sender: mpsc::Sender<ProcessChunk>) -> Self {
+        self.output = Some(sender);
+        self
+    }
+}
+
+/// Raw output: callers must redact before logging or persisting it.
+pub struct ProcessChunk {
+    pub stream: &'static str,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,6 +160,9 @@ pub async fn run(
     cancellation: &CancellationToken,
 ) -> Result<ProcessOutput, ProcessError> {
     validate_limits(request.limits)?;
+    if cancellation.is_cancelled() {
+        return Err(ProcessError::Cancelled);
+    }
 
     let mut command = Command::new(&request.program);
     command
@@ -169,12 +186,15 @@ pub async fn run(
     let stdout = child.stdout.take().expect("piped stdout is available");
     let stderr = child.stderr.take().expect("piped stderr is available");
     let (limit_sender, mut limit_receiver) = mpsc::channel(1);
+    let output_cancellation = cancellation.child_token();
     let stdout_reader = tokio::spawn(read_bounded(
         stdout,
         request.limits.maximum_stdout_bytes,
         "stdout",
         request.limits.output_limit_policy,
         limit_sender.clone(),
+        request.output.clone(),
+        output_cancellation.clone(),
     ));
     let stderr_reader = tokio::spawn(read_bounded(
         stderr,
@@ -182,6 +202,8 @@ pub async fn run(
         "stderr",
         request.limits.output_limit_policy,
         limit_sender,
+        request.output,
+        output_cancellation.clone(),
     ));
     let stdin_writer = request.stdin.map(|input| {
         let mut stdin = child.stdin.take().expect("piped stdin is available");
@@ -204,6 +226,7 @@ pub async fn run(
     };
 
     if !matches!(completion, Completion::Exited(_)) {
+        output_cancellation.cancel();
         let _ = child.start_kill();
         child.wait().await.map_err(ProcessError::Io)?;
     }
@@ -261,6 +284,8 @@ async fn read_bounded<R>(
     stream: &'static str,
     policy: OutputLimitPolicy,
     limit_sender: mpsc::Sender<(&'static str, usize)>,
+    output_sender: Option<mpsc::Sender<ProcessChunk>>,
+    cancellation: CancellationToken,
 ) -> Result<(Vec<u8>, bool), std::io::Error>
 where
     R: AsyncRead + Unpin,
@@ -274,6 +299,18 @@ where
             return Ok((output, truncated));
         }
         let remaining = limit.saturating_sub(output.len());
+        let retained = count.min(remaining);
+        if retained > 0
+            && let Some(sender) = &output_sender
+        {
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => {},
+                result = sender.send(ProcessChunk { stream, bytes: buffer[..retained].to_vec() }) => {
+                    result.map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Output consumer closed."))?;
+                }
+            }
+        }
         if count > remaining {
             output.extend_from_slice(&buffer[..remaining]);
             truncated = true;

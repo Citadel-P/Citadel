@@ -15,7 +15,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use tokio_util::sync::CancellationToken;
 type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
-fn reader(f: &Fixture) -> ApplicationGroupReader {
+pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
         identity: f.lookup_state.platforms.identity.clone(),
         platforms: f.lookup_state.platforms.platforms.clone(),

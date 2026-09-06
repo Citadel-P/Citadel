@@ -96,7 +96,7 @@ impl AgentExecutionClient {
                     },
                     cancellation,
                 )?;
-                crate::agent::consume_image_build_stream(frames, 0, cancellation).await?;
+                crate::agent::consume_image_build_stream(frames, 0, None, cancellation).await?;
                 Ok(())
             }
         }
@@ -359,9 +359,13 @@ impl AgentExecutionClient {
                 }
             }
         };
-        let mut output =
-            crate::agent::consume_image_build_stream(Box::pin(frames), maximum, cancellation)
-                .await?;
+        let mut output = crate::agent::consume_image_build_stream(
+            Box::pin(frames),
+            maximum,
+            command.output.as_ref(),
+            cancellation,
+        )
+        .await?;
         for reference in command.tags {
             let request = PushImageRequest {
                 image_reference: reference,
@@ -387,6 +391,7 @@ impl AgentExecutionClient {
             let pushed = crate::agent::consume_image_build_stream(
                 Box::pin(frames),
                 maximum.saturating_sub(output.len()),
+                command.output.as_ref(),
                 cancellation,
             )
             .await?;

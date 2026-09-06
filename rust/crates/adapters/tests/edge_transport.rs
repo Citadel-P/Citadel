@@ -214,6 +214,7 @@ async fn verify_node_projection_isolation(
     // .NET SwarmNodeDataPlaneJobTests: an older snapshot cannot delete a
     // Container observed by a newer event, nor another Node's resources.
     store.persist_inventory(&session, &snapshot).await.unwrap();
+    verify_node_local_resources(pool, store, &session, &snapshot).await;
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM containers WHERE platformid=$1")
         .bind(platform)
         .fetch_one(pool)
@@ -288,6 +289,137 @@ async fn verify_node_projection_isolation(
         .bind(platform).fetch_all(pool).await.unwrap();
     assert_eq!(nodes, ["worker"], "disconnect must not stale another Node");
     assert!(store.persist_stats(&replacement, &stats).await.is_err());
+}
+
+// Ports SwarmPersistenceTests.NodeLocalResources_ShouldPreservePerNodeIdentity
+// and the late-snapshot invariant from SwarmNodeDataPlaneJobTests.
+async fn verify_node_local_resources(
+    pool: &PgPool,
+    store: &PostgresEdgeStore,
+    session: &citadel_adapters::edge::EdgeSession,
+    initial: &citadel_platforms::RuntimeInventorySnapshot,
+) {
+    use citadel_platforms::{RuntimeImageSummary, RuntimeNetworkSummary, RuntimeVolumeSummary};
+    let mut snapshot = initial.clone();
+    snapshot.observed_at += chrono::Duration::seconds(1);
+    snapshot.images = vec![RuntimeImageSummary {
+        id: "shared-image".into(),
+        repo_tags: vec!["redis:latest".into()],
+        repo_digests: vec!["redis@sha256:abc".into()],
+        ..Default::default()
+    }];
+    snapshot.volumes = vec![RuntimeVolumeSummary {
+        name: "data".into(),
+        ..Default::default()
+    }];
+    snapshot.networks = vec![RuntimeNetworkSummary {
+        id: "bridge".into(),
+        ..Default::default()
+    }];
+    snapshot.networks.push(RuntimeNetworkSummary {
+        id: "overlay".into(),
+        scope: "Swarm".into(),
+        ..Default::default()
+    });
+    store.persist_inventory(session, &snapshot).await.unwrap();
+    let platform = snapshot.platform_id;
+    let image_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM swarmnodeimageprojections WHERE platformid=$1 AND dockernodeid='worker'",
+    )
+    .bind(platform)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    // Identical daemon IDs/names on another Node must remain independent.
+    for query in [
+        "INSERT INTO swarmnodeimageprojections SELECT gen_random_uuid(),contentidentity,dockerimageid,'other-worker',false,observedat,platformid,resource FROM swarmnodeimageprojections WHERE platformid=$1 AND dockernodeid='worker'",
+        "INSERT INTO swarmnodevolumeprojections SELECT platformid,'other-worker',volumename,false,observedat,resource FROM swarmnodevolumeprojections WHERE platformid=$1 AND dockernodeid='worker'",
+        "INSERT INTO swarmnodenetworkprojections SELECT platformid,'other-worker',dockernetworkid,false,observedat,resource FROM swarmnodenetworkprojections WHERE platformid=$1 AND dockernodeid='worker'",
+    ] {
+        sqlx::query(query)
+            .bind(platform)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    let old = snapshot.clone();
+    snapshot.observed_at += chrono::Duration::seconds(1);
+    snapshot.images[0].repo_tags = vec!["redis:updated".into()];
+    store.persist_inventory(session, &snapshot).await.unwrap();
+    store.persist_inventory(session, &old).await.unwrap();
+    let (stable_id, tags, identity): (Uuid, serde_json::Value, String) = sqlx::query_as("SELECT id,resource->'repo_tags',contentidentity FROM swarmnodeimageprojections WHERE platformid=$1 AND dockernodeid='worker'")
+        .bind(platform).fetch_one(pool).await.unwrap();
+    assert_eq!(stable_id, image_id);
+    assert_eq!(tags, serde_json::json!(["redis:updated"]));
+    assert_eq!(identity, "redis@sha256:abc");
+    {
+        use citadel_platforms::PlatformReadStore;
+        let images =
+            citadel_adapters::platform_read_store::PostgresPlatformReadStore::new(pool.clone())
+                .list_images(platform)
+                .await
+                .unwrap();
+        assert_eq!(images.len(), 2);
+        let image = images
+            .iter()
+            .find(|image| image.docker_node_id.as_deref() == Some("worker"))
+            .unwrap();
+        assert_eq!(image.id, image_id);
+        assert_eq!(image.node_hostname.as_deref(), Some("worker-host"));
+        assert_eq!(
+            image.repo_digests.as_deref(),
+            Some(["redis@sha256:abc".into()].as_slice())
+        );
+        assert!(!image.is_stale);
+        let store =
+            citadel_adapters::platform_read_store::PostgresPlatformReadStore::new(pool.clone());
+        let volumes = store.list_node_volumes(platform).await.unwrap();
+        assert_eq!(volumes.len(), 2);
+        let networks = store.list_node_networks(platform).await.unwrap();
+        assert_eq!(
+            networks.len(),
+            2,
+            "cluster overlays must not be duplicated per Node"
+        );
+        assert!(
+            networks
+                .iter()
+                .all(|network| network.resource.id == "bridge")
+        );
+    }
+
+    // A failed resource batch must roll back the watermark and all projections.
+    let mut invalid = snapshot.clone();
+    invalid.observed_at += chrono::Duration::seconds(1);
+    invalid.images[0].repo_tags = vec!["must-not-persist".into()];
+    invalid.volumes.push(invalid.volumes[0].clone());
+    assert!(store.persist_inventory(session, &invalid).await.is_err());
+    let tags: serde_json::Value = sqlx::query_scalar("SELECT resource->'repo_tags' FROM swarmnodeimageprojections WHERE platformid=$1 AND dockernodeid='worker'")
+        .bind(platform).fetch_one(pool).await.unwrap();
+    assert_eq!(tags, serde_json::json!(["redis:updated"]));
+
+    snapshot.observed_at = invalid.observed_at;
+    snapshot.images.clear();
+    snapshot.volumes.clear();
+    snapshot.networks.clear();
+    store.persist_inventory(session, &snapshot).await.unwrap();
+    store.persist_inventory(session, &old).await.unwrap();
+    for query in [
+        "SELECT dockernodeid FROM swarmnodeimageprojections WHERE platformid=$1",
+        "SELECT dockernodeid FROM swarmnodevolumeprojections WHERE platformid=$1",
+        "SELECT dockernodeid FROM swarmnodenetworkprojections WHERE platformid=$1",
+    ] {
+        let nodes: Vec<String> = sqlx::query_scalar(query)
+            .bind(platform)
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            nodes,
+            ["other-worker"],
+            "late scan cannot resurrect deleted resources"
+        );
+    }
 }
 
 #[tokio::test]

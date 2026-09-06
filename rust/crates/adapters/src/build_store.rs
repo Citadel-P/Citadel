@@ -369,13 +369,13 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
     fn logs<'a>(
         &'a self,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<Vec<citadel_builds::BuildLog>, BuildError>> {
+    ) -> BoxFuture<'a, Result<Vec<citadel_builds::BuildLogEntry>, BuildError>> {
         Box::pin(async move {
             if !exists_run(&self.pool, id).await? {
                 return Err(BuildError::NotFound);
             }
             sqlx::query(
-                "SELECT stream,message FROM buildrunlogs WHERE buildrunid=$1 ORDER BY createdat,id",
+                "SELECT id,buildrunid,createdat,stream,message FROM buildrunlogs WHERE buildrunid=$1 ORDER BY createdat,id",
             )
             .bind(id)
             .fetch_all(&self.pool)
@@ -383,7 +383,10 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
             .map_err(storage)?
             .into_iter()
             .map(|row| {
-                Ok(citadel_builds::BuildLog {
+                Ok(citadel_builds::BuildLogEntry {
+                    id: row.try_get("id").map_err(storage)?,
+                    build_run_id: row.try_get("buildrunid").map_err(storage)?,
+                    created_at: row.try_get("createdat").map_err(storage)?,
                     stream: row.try_get("stream").map_err(storage)?,
                     message: row.try_get("message").map_err(storage)?,
                 })
@@ -404,6 +407,33 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
                 tx.rollback().await.map_err(storage)?;
                 Ok(false)
             }
+        })
+    }
+    fn append_log<'a>(
+        &'a self,
+        run_id: Uuid,
+        log: &'a citadel_builds::BuildLog,
+    ) -> BoxFuture<'a, Result<citadel_builds::BuildLogEntry, BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let active: Option<Uuid> = sqlx::query_scalar("SELECT id FROM buildruns WHERE id=$1 AND status IN ('Preparing','Running') FOR UPDATE")
+                .bind(run_id).fetch_optional(&mut *tx).await.map_err(storage)?;
+            if active.is_none() {
+                return Err(BuildError::Conflict(
+                    "Build Run is no longer active.".into(),
+                ));
+            }
+            let entry = citadel_builds::BuildLogEntry {
+                id: Uuid::now_v7(),
+                build_run_id: run_id,
+                created_at: Utc::now(),
+                stream: log.stream.clone(),
+                message: log.message.clone(),
+            };
+            sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,stream,message) VALUES($1,$2,$3,$4,$5)")
+                .bind(entry.id).bind(run_id).bind(entry.created_at).bind(&entry.stream).bind(&entry.message).execute(&mut *tx).await.map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(entry)
         })
     }
 }

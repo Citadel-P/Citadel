@@ -63,7 +63,7 @@ struct Runs {
 #[serde(rename_all = "camelCase")]
 struct Logs {
     run_id: Uuid,
-    logs: Vec<citadel_builds::BuildLog>,
+    logs: Vec<citadel_builds::BuildLogEntry>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

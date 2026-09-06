@@ -15,7 +15,9 @@ services:
       Cors__1: http://127.0.0.1:5173
       Jwt__Key: citadel-development-jwt-key-at-least-32-bytes
       Secrets__EncryptionKey: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
-      CITADEL_RUST_DOCKER_SOCKET: /var/run/docker.sock
+      # Bypass the feature's socat proxy: its half-close timeout truncates exec/run output.
+      DOCKER_HOST: unix:///var/run/docker-host.sock
+      CITADEL_RUST_DOCKER_SOCKET: /var/run/docker-host.sock
       CITADEL_DATA_ROOT: /home/vscode/.local/share/citadel
       CARGO_TARGET_DIR: /home/vscode/.cache/citadel-target
       SQLX_OFFLINE: "true"
@@ -37,6 +39,10 @@ services:
         target: /workspace/src/Citadel.FrontEnd/node_modules
         volume:
           nocopy: true
+    # Docker Desktop's host socket is owned by group 0. Keep vscode non-root
+    # without making the host socket world-writable.
+    group_add:
+      - "0"
     cap_add:
       - SYS_PTRACE
     security_opt:

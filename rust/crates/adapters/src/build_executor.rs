@@ -25,6 +25,9 @@ use crate::edge::{EdgeRegistry, EdgeTarget};
 use crate::local_docker_target::LocalDockerTargetGuard;
 use crate::secret_value_resolver::PostgresSecretValueResolver;
 
+#[path = "build_output.rs"]
+mod output;
+
 #[derive(Clone)]
 pub struct PostgresBuildSecretResolver {
     resolver: PostgresSecretValueResolver,
@@ -162,6 +165,7 @@ impl BuildExecutor for PlatformBuildExecutor {
     fn execute<'a>(
         &'a self,
         claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
@@ -174,7 +178,7 @@ impl BuildExecutor for PlatformBuildExecutor {
                 let available = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL AND COALESCE(providerspec->>'ConnectionMode',providerspec->>'connectionMode','')='EdgeAgent')")
                     .bind(id).fetch_one(&self.pool).await;
                 return match (available, &self.edge) {
-                    (Ok(true), Some(edge)) => edge.execute(claim, cancellation).await,
+                    (Ok(true), Some(edge)) => edge.execute(claim, logs, cancellation).await,
                     (Err(error), _) => failed(BuildFailure::Io(error.to_string())),
                     _ => failed(BuildFailure::Validation("The selected Build Agent Pool is unavailable or does not use Edge transport.".into())),
                 };
@@ -205,21 +209,21 @@ impl BuildExecutor for PlatformBuildExecutor {
                 ));
             }
             match connector.as_str() {
-                "Local" => self.local.execute(claim, cancellation).await,
+                "Local" => self.local.execute(claim, logs, cancellation).await,
                 "Agent" => match &self.agent {
                     Some(agent)
                         if agent.address().is_some_and(|configured| {
                             configured.trim_end_matches('/') == address.trim_end_matches('/')
                         }) =>
                     {
-                        agent.execute(claim, cancellation).await
+                        agent.execute(claim, logs, cancellation).await
                     }
                     _ => failed(BuildFailure::Validation(
                         "The configured Agent Build transport is unavailable.".to_owned(),
                     )),
                 },
                 "EdgeAgent" => match &self.edge {
-                    Some(edge) => edge.execute(claim, cancellation).await,
+                    Some(edge) => edge.execute(claim, logs, cancellation).await,
                     None => failed(BuildFailure::Validation(
                         "Edge Agent Build transport is unavailable.".into(),
                     )),
@@ -288,6 +292,7 @@ impl AgentDockerBuildExecutor {
     async fn execute_inner(
         &self,
         claim: &BuildClaim,
+        progress: &dyn citadel_builds::BuildLogSink,
         cancellation: &CancellationToken,
     ) -> Result<BuildExecutionResult, BuildFailure> {
         let repository = tokio::fs::canonicalize(
@@ -365,33 +370,47 @@ impl AgentDockerBuildExecutor {
             .iter()
             .map(|value| value.as_str())
             .chain(credentials.as_ref().map(|value| value.password.as_str()))
+            .chain(registry_auth.as_deref())
             .collect::<Vec<_>>();
-        let output = client
-            .build_image(
-                AgentBuildCommand {
-                    context_archive,
-                    dockerfile_path,
-                    tags: references.clone(),
-                    build_args,
-                    target: claim.run.target.clone(),
-                    registry_auth,
-                    registry_host: Some(
-                        normalize_registry_host(&claim.run.registry_host)?.to_owned(),
-                    ),
-                    timeout_seconds: claim.run.timeout_seconds,
-                    maximum_log_bytes: self.maximum_log_bytes,
-                    secrets,
-                },
-                cancellation,
-            )
-            .await
-            .map_err(|error| {
-                if cancellation.is_cancelled() {
-                    BuildFailure::Process(ProcessError::Cancelled)
-                } else {
-                    BuildFailure::Command(redact_values(&error.to_string(), &sensitive))
-                }
-            })?;
+        let execution_cancellation = cancellation.child_token();
+        let (sender, receiver) = tokio::sync::mpsc::channel(8);
+        let execution = async {
+            client
+                .build_image(
+                    AgentBuildCommand {
+                        context_archive,
+                        dockerfile_path,
+                        tags: references.clone(),
+                        build_args,
+                        target: claim.run.target.clone(),
+                        registry_auth: registry_auth.clone(),
+                        registry_host: Some(
+                            normalize_registry_host(&claim.run.registry_host)?.to_owned(),
+                        ),
+                        timeout_seconds: claim.run.timeout_seconds,
+                        maximum_log_bytes: self.maximum_log_bytes,
+                        secrets,
+                        output: Some(sender),
+                    },
+                    &execution_cancellation,
+                )
+                .await
+                .map_err(|error| {
+                    if cancellation.is_cancelled() {
+                        BuildFailure::Process(ProcessError::Cancelled)
+                    } else {
+                        BuildFailure::Command(redact_values(&error.to_string(), &sensitive))
+                    }
+                })
+        };
+        let output = output::capture(
+            execution,
+            receiver,
+            progress,
+            &sensitive,
+            &execution_cancellation,
+        )
+        .await?;
         Ok(BuildExecutionResult {
             status: "Succeeded",
             exit_code: Some(0),
@@ -400,10 +419,7 @@ impl AgentDockerBuildExecutor {
             image_references: references,
             error_code: None,
             error_message: None,
-            logs: vec![BuildLog {
-                stream: "stdout".to_owned(),
-                message: redact_values(&output, &sensitive),
-            }],
+            logs: vec![],
         })
     }
 }
@@ -412,10 +428,11 @@ impl BuildExecutor for AgentDockerBuildExecutor {
     fn execute<'a>(
         &'a self,
         claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
-            self.execute_inner(claim, cancellation)
+            self.execute_inner(claim, logs, cancellation)
                 .await
                 .unwrap_or_else(failed)
         })
@@ -444,6 +461,7 @@ impl LocalDockerBuildExecutor {
     async fn execute_inner(
         &self,
         claim: &BuildClaim,
+        progress: &dyn citadel_builds::BuildLogSink,
         cancellation: &CancellationToken,
     ) -> Result<BuildExecutionResult, BuildFailure> {
         if claim.project.builder_kind != "Platform" {
@@ -581,20 +599,25 @@ impl LocalDockerBuildExecutor {
             for (name, value) in &secret_environment {
                 request = request.env(name, value.as_str());
             }
-            let built = run(request, cancellation)
-                .await
-                .map_err(BuildFailure::Process)?;
             let redaction_values = secret_environment
                 .iter()
                 .map(|(_, value)| value.as_str())
+                .chain(
+                    registry_credentials
+                        .as_ref()
+                        .map(|value| value.password.as_str()),
+                )
                 .collect::<Vec<_>>();
-            let mut output = redact_values(&logs(&built.stdout, &built.stderr), &redaction_values);
+            let built = output::run(request, cancellation, progress, &redaction_values).await?;
             if !built.succeeded() {
-                return Err(BuildFailure::Command(output));
+                return Err(BuildFailure::Command(redact_values(
+                    &logs(&built.stdout, &built.stderr),
+                    &redaction_values,
+                )));
             }
             let mut digest = None;
             for reference in &references {
-                let pushed = run(
+                let pushed = output::run(
                     ProcessRequest::new(self.docker.clone())
                         .args([OsString::from("push"), OsString::from(reference)])
                         .env("DOCKER_CONFIG", docker_config.as_os_str())
@@ -603,16 +626,16 @@ impl LocalDockerBuildExecutor {
                             self.maximum_log_bytes,
                         )),
                     cancellation,
+                    progress,
+                    &redaction_values,
                 )
-                .await
-                .map_err(BuildFailure::Process)?;
+                .await?;
                 let push_log = logs(&pushed.stdout, &pushed.stderr);
-                if !output.is_empty() && !push_log.is_empty() {
-                    output.push('\n');
-                }
-                output.push_str(&push_log);
                 if !pushed.succeeded() {
-                    return Err(BuildFailure::Command(output));
+                    return Err(BuildFailure::Command(redact_values(
+                        &push_log,
+                        &redaction_values,
+                    )));
                 }
                 digest = digest.or_else(|| find_digest(&push_log));
             }
@@ -624,10 +647,7 @@ impl LocalDockerBuildExecutor {
                 image_references: references,
                 error_code: None,
                 error_message: None,
-                logs: vec![BuildLog {
-                    stream: "stdout".to_owned(),
-                    message: redact(&output),
-                }],
+                logs: vec![],
             })
         }
         .await;
@@ -710,10 +730,11 @@ impl BuildExecutor for LocalDockerBuildExecutor {
     fn execute<'a>(
         &'a self,
         claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
-            self.execute_inner(claim, cancellation)
+            self.execute_inner(claim, logs, cancellation)
                 .await
                 .unwrap_or_else(failed)
         })

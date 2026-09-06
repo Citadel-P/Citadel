@@ -609,7 +609,7 @@ async fn cleanup_stale(
     Ok(())
 }
 
-fn json(value: &impl Serialize) -> Result<Value, RuntimeCapabilityError> {
+pub(crate) fn json(value: &impl Serialize) -> Result<Value, RuntimeCapabilityError> {
     serde_json::to_value(value).map_err(|error| {
         RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
     })
@@ -625,7 +625,7 @@ fn bounded_i32(value: i64) -> i32 {
     })
 }
 
-fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
+pub(crate) fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
 }
 

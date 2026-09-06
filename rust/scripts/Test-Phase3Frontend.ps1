@@ -1,11 +1,18 @@
 param(
     [switch]$SkipBuild,
+    [ValidatePattern('^citadel-rust-e2e-[a-z0-9-]+$')][string]$BuildCacheVolume,
     [string[]]$TestFiles = @('tests/compatibility/oidc.spec.ts'),
     [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44',
     [string]$KeycloakImage = 'quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13'
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'BuildCache.ps1')
+if ($SkipBuild -and -not $BuildCacheVolume) {
+    throw '-SkipBuild requires an explicit -BuildCacheVolume from a previous build.'
+}
+$removeBuildCache = -not $BuildCacheVolume
+if ($removeBuildCache) { $BuildCacheVolume = New-CitadelBuildCacheName }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $frontendRoot = Join-Path $repoRoot 'src\Citadel.FrontEnd'
 $e2eRoot = Join-Path $repoRoot 'test\Citadel.Tests.E2E'
@@ -50,7 +57,7 @@ try {
             --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
             --volume 'citadel-rust-git:/usr/local/cargo/git' `
             --volume 'citadel-rustup:/usr/local/rustup' `
-            --volume 'citadel-rust-target:/source/rust/target' `
+            --volume "${BuildCacheVolume}:/source/rust/target" `
             --workdir /source/rust `
             $rustImage `
             cargo build --locked -p citadel-server
@@ -93,7 +100,7 @@ try {
     & docker run --detach --name $server --network $network `
         --publish '127.0.0.1:18000:8000' `
         --volume "${repoRoot}:/source:ro" `
-        --volume 'citadel-rust-target:/source/rust/target:ro' `
+        --volume "${BuildCacheVolume}:/source/rust/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
         --env "DATABASE_URL=postgres://citadel:citadel-e2e@${postgres}:5432/citadel" `
         --env 'Transport__Mode=Disabled' `
@@ -129,4 +136,5 @@ finally {
     if (@(& docker network ls --format '{{.Name}}') -contains $network) {
         & docker network rm $network | Out-Null
     }
+    if ($removeBuildCache) { Remove-CitadelBuildCache -Name $BuildCacheVolume }
 }

@@ -375,6 +375,14 @@ pub struct SwarmSecretView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
+#[derive(Debug)]
+pub struct NodeResourceProjection<T> {
+    pub resource: T,
+    pub docker_node_id: String,
+    pub node_hostname: Option<String>,
+    pub is_stale: bool,
+}
+
 pub trait PlatformReadStore: Send + Sync {
     fn list_authorized<'a>(
         &'a self,
@@ -408,6 +416,22 @@ pub trait PlatformReadStore: Send + Sync {
         &self,
         platform_id: Uuid,
     ) -> BoxFuture<'_, Result<Vec<ImageView>, AuthorizedReadError>>;
+
+    fn list_node_volumes(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<Vec<NodeResourceProjection<crate::RuntimeVolumeSummary>>, AuthorizedReadError>,
+    >;
+
+    fn list_node_networks(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<Vec<NodeResourceProjection<crate::RuntimeNetworkSummary>>, AuthorizedReadError>,
+    >;
 
     fn list_swarm_nodes(
         &self,
@@ -536,6 +560,21 @@ impl PlatformReadService {
         platform_id: Uuid,
     ) -> Result<Vec<ImageView>, AuthorizedReadError> {
         self.store.list_images(platform_id).await
+    }
+
+    pub async fn list_node_volumes(
+        &self,
+        platform_id: Uuid,
+    ) -> Result<Vec<NodeResourceProjection<crate::RuntimeVolumeSummary>>, AuthorizedReadError> {
+        self.store.list_node_volumes(platform_id).await
+    }
+
+    pub async fn list_node_networks(
+        &self,
+        platform_id: Uuid,
+    ) -> Result<Vec<NodeResourceProjection<crate::RuntimeNetworkSummary>>, AuthorizedReadError>
+    {
+        self.store.list_node_networks(platform_id).await
     }
 
     pub async fn list_swarm_nodes(

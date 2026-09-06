@@ -2,6 +2,14 @@
 
 Run these commands from the repository root in PowerShell.
 
+Docker-based Cargo test suites use a unique `citadel-rust-test-<id>` build
+volume per invocation and remove it in `finally`, including after test failures.
+Dependencies/toolchains remain cached; compiled output is reused within a suite
+but not between suites. A forcibly killed PowerShell process or unavailable
+Docker daemon can prevent cleanup; the script warns when Docker refuses removal.
+Cleanup never prunes unrelated volumes or forcibly removes an in-use volume.
+Run `./rust/scripts/Test-BuildCache.ps1` to test these safety rules without Docker.
+
 ```powershell
 # Rebuild and verify the generated Docker subset.
 docker run --rm --mount type=bind,source=${PWD},target=/repo -w /repo/rust `
@@ -112,7 +120,7 @@ existing Keycloak OIDC suite. Pass one or more repository-relative Playwright
 files through `-TestFiles` to exercise other migrated screens, for example:
 
 ```powershell
-./rust/scripts/Test-Phase3Frontend.ps1 -SkipBuild -TestFiles @(
+./rust/scripts/Test-Phase3Frontend.ps1 -TestFiles @(
   'tests/compatibility/oidc.spec.ts',
   'tests/compatibility/access.spec.ts',
   'tests/smoke/licensing.spec.ts'
@@ -122,8 +130,11 @@ files through `-TestFiles` to exercise other migrated screens, for example:
 The combined Phase 3 browser run covers first-run setup, OIDC redirect and
 callback, browser-session restoration and logout, User/Team production forms,
 Roles, Community-gated Service Accounts, License rendering, and OIDC provider
-administration. Use `-SkipBuild` only after both the frontend bundle and Rust
-debug server have already been built.
+administration. For repeated browser runs, opt into a retained compiler cache
+with `-BuildCacheVolume citadel-rust-e2e-local` on the first build, then pass that
+same option with `-SkipBuild`. This explicitly retained cache is not removed by
+the script; delete it when finished. Without this opt-in, the default temporary
+cache is always cleaned, so `-SkipBuild` requires an explicit retained volume.
 
 # Phase 4 Platform and Docker reads
 
@@ -167,6 +178,17 @@ and network in `finally`.
 Run `./rust/scripts/Test-Phase7AExternalExecution.ps1` from the repository
 root. It verifies the bounded child-process primitive, Git argument and cache
 safety, encrypted Git-account persistence, authorized HTTP lifecycle, and
-generated OpenAPI parity against a disposable PostgreSQL database. This is the
-Phase 7 foundation and Git-account slice; Git synchronization/webhooks and the
-other external-execution contexts remain subsequent slices.
+generated OpenAPI parity against a disposable PostgreSQL database. The gate also
+covers Git synchronization, Automation/Build/Backup execution, Alert persistence,
+Edge enrollment/transport, node projection isolation and authorized HTTP/realtime
+responses. Agent command responders are test peers, not released Agents.
+
+For the real Local Docker/Restic volume round trip, start the development
+container and run `./rust/scripts/Test-Phase7LocalBackup.ps1` from the host.
+Use `-DevContainer <name>` if the workspace container has a different name.
+It creates a separate disposable PostgreSQL database and uniquely named Docker
+volumes, backs up a file, restores it at the volume root, verifies persisted
+results and rejects an unapproved overwrite. It uses the existing development
+compiler cache and does not build a Citadel image or touch the development DB.
+The test removes its fixture volumes; the script removes its fixture database.
+This does not replace the Agent/Edge, RustFS or multi-node acceptance gates.

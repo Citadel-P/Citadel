@@ -506,11 +506,25 @@ async fn list_networks(
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let networks = values
+    let mut networks: Vec<_> = values
         .into_iter()
         .filter(|network| network_matches(network, &filters))
         .map(|network| map_network(network, capabilities))
         .collect();
+    let node_networks = identity_result(
+        state
+            .platforms
+            .list_node_networks(platform_id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    networks.extend(
+        node_networks
+            .into_iter()
+            .filter(|network| network_matches(&network.resource, &filters))
+            .map(|network| map_node_network(network, capabilities)),
+    );
     Ok(no_store(
         Json(NetworksResponse {
             networks,
@@ -602,19 +616,16 @@ async fn get_network(
     identity_result(validate_docker_resource_id(&network_id), &headers)?;
     if let Some(node_id) = selector.docker_node_id.as_deref() {
         identity_result(validate_docker_resource_id(node_id), &headers)?;
-        return Ok(runtime_error_response(
-            node_routing_unavailable(node_id),
-            &headers,
-        ));
     }
     let platform_capabilities =
         authorize_platform(&state, &principal, platform_id, &headers).await?;
     let capabilities = network_capabilities(platform_capabilities);
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
+    let runtime =
+        match runtime_for_node(&state, platform_id, selector.docker_node_id.as_deref()).await {
+            Ok(runtime) => runtime,
+            Err(error) => return Ok(runtime_error_response(error, &headers)),
+        };
     let value = match runtime {
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
@@ -626,10 +637,11 @@ async fn get_network(
             PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
         }
     };
-    let network = match value {
+    let mut network = match value {
         Ok(network) => map_network(network, capabilities),
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
+    network.docker_node_id = selector.docker_node_id;
     Ok(no_store(Json(network).into_response()))
 }
 
@@ -853,11 +865,25 @@ async fn list_volumes(
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let volumes = values
+    let mut volumes: Vec<_> = values
         .into_iter()
         .filter(|volume| volume_matches(volume, &filters))
         .map(|volume| map_volume(volume, capabilities))
         .collect();
+    let node_volumes = identity_result(
+        state
+            .platforms
+            .list_node_volumes(platform_id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    volumes.extend(
+        node_volumes
+            .into_iter()
+            .filter(|volume| volume_matches(&volume.resource, &filters))
+            .map(|volume| map_node_volume(volume, capabilities)),
+    );
     Ok(no_store(
         Json(VolumesResponse {
             volumes,
@@ -884,10 +910,6 @@ async fn get_volume(
     identity_result(validate_docker_resource_id(&name), &headers)?;
     if let Some(node_id) = selector.docker_node_id.as_deref() {
         identity_result(validate_docker_resource_id(node_id), &headers)?;
-        return Ok(runtime_error_response(
-            node_routing_unavailable(node_id),
-            &headers,
-        ));
     }
     let platform_capabilities =
         authorize_platform(&state, &principal, platform_id, &headers).await?;
@@ -900,10 +922,11 @@ async fn get_volume(
     )
     .await?;
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
+    let runtime =
+        match runtime_for_node(&state, platform_id, selector.docker_node_id.as_deref()).await {
+            Ok(runtime) => runtime,
+            Err(error) => return Ok(runtime_error_response(error, &headers)),
+        };
     let value = match runtime {
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
@@ -915,10 +938,11 @@ async fn get_volume(
             PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
         }
     };
-    let volume = match value {
+    let mut volume = match value {
         Ok(volume) => map_volume(volume, capabilities),
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
+    volume.docker_node_id = selector.docker_node_id;
     Ok(no_store(Json(volume).into_response()))
 }
 
@@ -1051,14 +1075,6 @@ async fn delete_volumes(
         publish_runtime_change(&state, input.platform_id, "volume", "remove", name);
     }
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
-}
-
-fn node_routing_unavailable(node_id: &str) -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(
-        RuntimeErrorKind::Unavailable,
-        format!("Node-specific routing to '{node_id}' is unavailable."),
-        true,
-    )
 }
 
 macro_rules! swarm_list_handler {
@@ -1416,8 +1432,44 @@ pub(crate) async fn realtime_daemon_snapshot(
     }
     .map_err(failure)?;
     let serialize = |error: serde_json::Error| RealtimeReadError::Storage(error.to_string());
+    let mut events = vec![];
+    if platform_is_swarm(state, id)
+        .await
+        .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
+    {
+        let failure = |error: AuthorizedReadError| RealtimeReadError::Storage(error.to_string());
+        let mut images = state.platforms.list_images(id).await.map_err(failure)?;
+        for image in &mut images {
+            image.capabilities = Some(image_capabilities(platform));
+        }
+        let mut all_volumes: Vec<_> = volumes
+            .iter()
+            .cloned()
+            .map(|volume| map_volume(volume, volume_cap))
+            .collect();
+        all_volumes.extend(
+            state
+                .platforms
+                .list_node_volumes(id)
+                .await
+                .map_err(failure)?
+                .into_iter()
+                .map(|volume| map_node_volume(volume, volume_cap)),
+        );
+        let node_networks: Vec<_> = state
+            .platforms
+            .list_node_networks(id)
+            .await
+            .map_err(failure)?
+            .into_iter()
+            .map(|network| map_node_network(network, network_capabilities(platform)))
+            .collect();
+        events.push(crate::realtime_groups::ClientEvent::new("SwarmNodeLocalResourcesUpdated", vec![serde_json::json!({
+            "platformId": id, "images": images, "volumes": all_volumes, "networks": node_networks,
+        })]));
+    }
     Ok(GroupSnapshot {
-        events: vec![],
+        events,
         rows: vec![
             GroupRows {
                 target: "NetworkEventReceived",
@@ -1439,6 +1491,74 @@ pub(crate) async fn realtime_daemon_snapshot(
             },
         ],
     })
+}
+
+async fn runtime_for_node<'a>(
+    state: &'a PlatformsHttpState,
+    platform_id: Uuid,
+    node_id: Option<&str>,
+) -> Result<RuntimeRef<'a>, RuntimeCapabilityError> {
+    let Some(node_id) = node_id else {
+        return runtime_for(state, platform_id).await;
+    };
+    let node = state
+        .platforms
+        .get_swarm_node(platform_id, node_id)
+        .await
+        .map_err(|error| {
+            RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+        })?
+        .ok_or_else(|| {
+            RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Swarm Node not found.", false)
+        })?;
+    if !node.is_stale {
+        if let Ok(session) = state
+            .edge
+            .get(&EdgeTarget::node(platform_id, node_id.into()))
+        {
+            return Ok(RuntimeRef::Edge(EdgeRuntime { session }));
+        }
+        let manager: Option<String> =
+            sqlx::query_scalar("SELECT platformdescriptor->>'nodeID' FROM platforms WHERE id=$1")
+                .bind(platform_id)
+                .fetch_one(&state.pool)
+                .await
+                .map_err(|error| {
+                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+                })?;
+        if manager.as_deref() != Some(node_id) {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Unavailable,
+                "The owning Node Agent is disconnected or unavailable.",
+                false,
+            ));
+        }
+        // The connected manager is eligible only when its live identity matches.
+        // Never treat a missing worker session as permission to use that daemon.
+        let runtime = runtime_for(state, platform_id).await?;
+        let cancellation = CancellationToken::new();
+        let info = match &runtime {
+            RuntimeRef::Local(runtime) => {
+                citadel_platforms::PlatformRuntimePort::get_info(*runtime, &cancellation).await
+            }
+            RuntimeRef::Agent(runtime) => {
+                citadel_platforms::PlatformRuntimePort::get_info(*runtime, &cancellation).await
+            }
+            RuntimeRef::Edge(runtime) => {
+                citadel_platforms::PlatformRuntimePort::get_info(runtime, &cancellation).await
+            }
+        }?;
+        if info.swarm.is_some_and(|swarm| {
+            swarm.node_id == node_id && swarm.local_node_state.eq_ignore_ascii_case("active")
+        }) {
+            return Ok(runtime);
+        }
+    }
+    Err(RuntimeCapabilityError::new(
+        RuntimeErrorKind::Unavailable,
+        "The owning Node Agent is disconnected or unavailable.",
+        false,
+    ))
 }
 
 async fn runtime_for(
@@ -1525,6 +1645,34 @@ fn map_network(
         stale_reason: None,
         capabilities: Some(capabilities),
     }
+}
+
+fn map_node_network(
+    node: citadel_platforms::NodeResourceProjection<RuntimeNetworkSummary>,
+    capabilities: NetworkCapabilitiesView,
+) -> NetworkView {
+    let mut view = map_network(node.resource, capabilities);
+    view.docker_node_id = Some(node.docker_node_id);
+    view.node_hostname = node.node_hostname;
+    view.is_stale = node.is_stale;
+    view.stale_reason = node
+        .is_stale
+        .then(|| "Node Agent is disconnected or unavailable.".into());
+    view
+}
+
+fn map_node_volume(
+    node: citadel_platforms::NodeResourceProjection<RuntimeVolumeSummary>,
+    capabilities: VolumeCapabilitiesView,
+) -> VolumeView {
+    let mut view = map_volume(node.resource, capabilities);
+    view.docker_node_id = Some(node.docker_node_id);
+    view.node_hostname = node.node_hostname;
+    view.is_stale = node.is_stale;
+    view.stale_reason = node
+        .is_stale
+        .then(|| "Node Agent is disconnected or unavailable.".into());
+    view
 }
 
 fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView) -> VolumeView {

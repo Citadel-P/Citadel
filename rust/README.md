@@ -274,14 +274,19 @@ active Apply attempt. Swarm rejects those Compose-only options instead of
 silently ignoring them. An opt-in two-database recovery test verifies that a
 Citadel-system bundle restores persisted state into a clean PostgreSQL target.
 S3-compatible Volume backup/restore now runs through the configured regular
-Agent and verifies exact Swarm Node identity before execution. Edge Agent
-backup/build execution, multi-node session routing, the remaining
-product-specific Alert producers, and the external-service
-acceptance matrix remain explicit
-open Phase 7 work; unsupported connector paths fail closed and never fall back
-to Core's Docker daemon. See
-`reports/phase7a-external-execution-git-accounts-report.md` and run
-`./rust/scripts/Test-Phase7AExternalExecution.ps1`.
+Agent or exact-node Edge session. Edge workload execution, enrolled Build Pool
+execution and incremental bounded/redacted Build logs are wired. Node snapshots
+persist isolated Container/Image/Volume/Network projections and publish the
+existing UI realtime contracts. A real Local Docker/Restic acceptance test
+verifies backup results and restored files at the volume root.
+
+Cloud Build Pool provisioning, node installation/rebind, remaining node-local
+endpoints, interactive logs/terminal transport, remaining product-specific
+Alert producers and the complete external-service acceptance matrix remain
+open Phase 7 work. Unsupported connector paths fail closed and never fall back
+to Core's Docker daemon. See `reports/phase7-edge-execution-report.md`; run
+`./rust/scripts/Test-Phase7AExternalExecution.ps1` for the database/contract gate
+and `./rust/scripts/Test-Phase7LocalBackup.ps1` for the real Local volume test.
 
 ## Interactive development
 

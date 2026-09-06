@@ -265,7 +265,13 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         4096,
         pool.clone(),
     );
-    let rejected = executor.execute(&claim, &CancellationToken::new()).await;
+    let rejected = executor
+        .execute(
+            &claim,
+            &citadel_builds::NoopBuildLogSink,
+            &CancellationToken::new(),
+        )
+        .await;
     assert_eq!(rejected.status, "Failed");
     assert!(
         rejected

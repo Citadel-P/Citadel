@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use citadel_domain::ActorId;
 use citadel_platforms::{
     AuthorizedReadError, ContainerStatView, ContainerView, EffectivePlatformPermission, ImageView,
-    PlatformReadStore, PlatformStatView, PlatformView, SwarmConfigView, SwarmNetworkView,
-    SwarmNodeView, SwarmSecretView, SwarmServiceView, SwarmTaskView, WorkloadStatusCounts,
+    NodeResourceProjection, PlatformReadStore, PlatformStatView, PlatformView,
+    RuntimeNetworkSummary, RuntimeVolumeSummary, SwarmConfigView, SwarmNetworkView, SwarmNodeView,
+    SwarmSecretView, SwarmServiceView, SwarmTaskView, WorkloadStatusCounts,
 };
 use futures_util::future::BoxFuture;
 use serde::de::DeserializeOwned;
@@ -291,12 +292,29 @@ GROUP BY requested.id
         Box::pin(async move {
             sqlx::query(
                 r#"
-SELECT image.*, NULL::text AS contentidentity, NULL::text AS dockernodeid,
+SELECT image.id, image.tags::jsonb AS tags, image.name, image.dockerimageid,
+       image.size, image.containers, image.platformid, image.createdat,
+       image.controlstate, image.updatedat, image.registryid,
+       NULL::text AS contentidentity, NULL::text AS dockernodeid,
        NULL::text AS nodehostname, FALSE AS isstale, NULL::text AS stalereason,
        NULL::jsonb AS repodigests
 FROM images image
 WHERE image.platformid = $1
-ORDER BY image.name, image.id
+UNION ALL
+SELECT image.id, image.resource->'repo_tags',
+       COALESCE(image.resource->'repo_tags'->>0, image.dockerimageid), image.dockerimageid,
+       (image.resource->>'size')::double precision,
+       LEAST(GREATEST((image.resource->>'containers')::bigint, 0), 2147483647)::integer,
+       image.platformid, to_timestamp((image.resource->>'created')::bigint),
+       'Idle', image.observedat, NULL::uuid,
+       image.contentidentity, image.dockernodeid, node.hostname, image.isstale,
+       CASE WHEN image.isstale THEN 'Node Agent is disconnected or unavailable.' END,
+       image.resource->'repo_digests'
+FROM swarmnodeimageprojections image
+LEFT JOIN swarmnodeprojections node
+  ON node.platformid=image.platformid AND node.dockernodeid=image.dockernodeid
+WHERE image.platformid=$1
+ORDER BY name, id
 "#,
             )
             .bind(platform_id)
@@ -314,6 +332,32 @@ ORDER BY image.name, image.id
         platform_id: Uuid,
     ) -> BoxFuture<'_, Result<Vec<SwarmNodeView>, AuthorizedReadError>> {
         Box::pin(list_swarm_nodes(&self.pool, platform_id, None))
+    }
+
+    fn list_node_volumes(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<NodeResourceProjection<RuntimeVolumeSummary>>, AuthorizedReadError>>
+    {
+        Box::pin(async move {
+            sqlx::query("SELECT resource.resource,resource.dockernodeid,resource.isstale,node.hostname FROM swarmnodevolumeprojections resource LEFT JOIN swarmnodeprojections node ON node.platformid=resource.platformid AND node.dockernodeid=resource.dockernodeid WHERE resource.platformid=$1 ORDER BY resource.volumename,resource.dockernodeid")
+                .bind(platform_id).fetch_all(&self.pool).await.map_err(storage)?
+                .into_iter().map(map_node_resource).collect()
+        })
+    }
+
+    fn list_node_networks(
+        &self,
+        platform_id: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<Vec<NodeResourceProjection<RuntimeNetworkSummary>>, AuthorizedReadError>,
+    > {
+        Box::pin(async move {
+            sqlx::query("SELECT resource.resource,resource.dockernodeid,resource.isstale,node.hostname FROM swarmnodenetworkprojections resource LEFT JOIN swarmnodeprojections node ON node.platformid=resource.platformid AND node.dockernodeid=resource.dockernodeid WHERE resource.platformid=$1 ORDER BY resource.dockernetworkid,resource.dockernodeid")
+                .bind(platform_id).fetch_all(&self.pool).await.map_err(storage)?
+                .into_iter().map(map_node_resource).collect()
+        })
     }
 
     fn get_swarm_node<'a>(
@@ -601,6 +645,17 @@ fn map_container(row: PgRow) -> Result<ContainerView, AuthorizedReadError> {
         deployment_id: row.try_get("deploymentid").map_err(storage)?,
         stack_id: row.try_get("stackid").map_err(storage)?,
         capabilities: None,
+    })
+}
+
+fn map_node_resource<T: DeserializeOwned>(
+    row: PgRow,
+) -> Result<NodeResourceProjection<T>, AuthorizedReadError> {
+    Ok(NodeResourceProjection {
+        resource: json(row.try_get("resource").map_err(storage)?)?,
+        docker_node_id: row.try_get("dockernodeid").map_err(storage)?,
+        node_hostname: row.try_get("hostname").map_err(storage)?,
+        is_stale: row.try_get("isstale").map_err(storage)?,
     })
 }
 

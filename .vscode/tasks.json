@@ -2,6 +2,13 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Citadel: Maintain Rust build cache",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/.devcontainer/clean-build-cache.sh"],
+      "problemMatcher": []
+    },
+    {
       "label": "Citadel: Run application (API + UI)",
       "detail": "Starts both the Rust API and Vite UI for normal browser testing.",
       "dependsOn": ["Citadel: Run Rust API", "Citadel: Run UI only"],
@@ -23,6 +30,7 @@
     },
     {
       "label": "Citadel: Run Rust API",
+      "dependsOn": "Citadel: Maintain Rust build cache",
       "type": "process",
       "command": "cargo",
       "args": ["run", "--locked", "-p", "citadel-server", "--", "serve"],
@@ -71,6 +79,7 @@
     },
     {
       "label": "Citadel: Check Rust workspace",
+      "dependsOn": "Citadel: Maintain Rust build cache",
       "type": "shell",
       "command": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast",
       "options": {

@@ -544,6 +544,9 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .with_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
             "Build",
+        ))
+        .with_log_notifier(citadel_server::realtime::build_log_callback(
+            realtime_hub.clone(),
         )),
     );
     let platform_registrations = Arc::new(PlatformRegistrationService::new(

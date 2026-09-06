@@ -49,6 +49,8 @@ static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 mod edge;
 #[path = "platforms_http/lookup.rs"]
 mod lookup;
+#[path = "platforms_http/node_resources.rs"]
+mod node_resources;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
 #[path = "platforms_http/statistics.rs"]

@@ -311,6 +311,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .is_some_and(|message| message.contains("Edge Agent is disconnected or unavailable"))
     );
     edge_failure_cleans_helper_on_the_exact_node(executor, &guarded_claim, platform).await;
+    edge_restore_uses_the_saved_snapshot_root(&pool, &guarded_claim, platform).await;
 
     sqlx::query("DELETE FROM backuprunlogs WHERE backuprunid IN (SELECT id FROM backupruns WHERE backuprepositoryid=$1)").bind(repository.id).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1")
@@ -444,6 +445,195 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     assert_eq!(result.items[0].status, "Failed");
     assert!(wrong_outbound.try_recv().is_err());
     assert_eq!(selected.pending_count(), 0);
+}
+
+// Extends .NET BackupRestoreRunExecutionTests with cross-connector root parity.
+// The peer validates canonical Agent commands, not a real Restic installation.
+async fn edge_restore_uses_the_saved_snapshot_root(
+    pool: &sqlx::PgPool,
+    backup: &citadel_backups::BackupClaim,
+    platform: Uuid,
+) {
+    use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_backups::{BackupRestoreRunView, BackupSecretResolver, RestoreClaim};
+    use citadel_contracts::citadel::{
+        containers::v1::{
+            CreateContainerRequest, CreateContainerResponse, ExecBinaryRequest, ExecExit,
+            ExecOutput, ExecServerMessage, exec_server_message,
+        },
+        edge::v1::{EdgeCommandKind as Kind, core_envelope},
+        volumes::v1::ListVolumesResponse,
+    };
+    use futures_util::future::BoxFuture;
+    use prost::Message;
+    use zeroize::Zeroizing;
+    struct Password;
+    impl BackupSecretResolver for Password {
+        fn resolve(
+            &self,
+            _: Uuid,
+        ) -> BoxFuture<'_, Result<Zeroizing<String>, citadel_backups::BackupError>> {
+            Box::pin(async { Ok(Zeroizing::new("fixture-password".into())) })
+        }
+    }
+    for root in ["/data", "/source", "/unexpected"] {
+        let registry = EdgeRegistry::default();
+        let (_wrong, mut other) = registry
+            .register(
+                EdgeTarget::node(platform, "source-node".into()),
+                Uuid::now_v7(),
+            )
+            .unwrap();
+        let (session, mut receiver) = registry
+            .register(
+                EdgeTarget::node(platform, "restore-node".into()),
+                Uuid::now_v7(),
+            )
+            .unwrap();
+        let executor = DockerResticBackupExecutor::new(
+            "docker-must-not-run",
+            "restic:test",
+            Arc::new(Password),
+            4096,
+            pool.clone(),
+        )
+        .with_edge(registry);
+        let snapshot = "a".repeat(64);
+        let mut repository = backup.repository.clone();
+        repository.repository_type = "S3Compatible".into();
+        repository.spec = json!({"endpoint":"http://s3.test", "bucket":"backups",
+            "accessKeySecretId":Uuid::now_v7(), "secretKeySecretId":Uuid::now_v7()});
+        let mut source = backup.run.clone();
+        source.restic_snapshot_id = Some(snapshot.clone());
+        let claim = RestoreClaim {
+            repository,
+            source,
+            source_item: None,
+            run: BackupRestoreRunView {
+                id: Uuid::now_v7(),
+                backup_run_id: backup.run.id,
+                backup_repository_id: backup.repository.id,
+                source_backup_run_item_id: None,
+                target_platform_id: platform,
+                target_docker_node_id: Some("restore-node".into()),
+                target_volume_name: "target".into(),
+                overwrite_existing: false,
+                status: "Running".into(),
+                queued_at: Utc::now(),
+                started_at: Some(Utc::now()),
+                completed_at: None,
+                exit_code: None,
+                error_code: None,
+                error_message: None,
+                triggered_by_actor_id: SYSTEM_ACTOR_ID,
+            },
+        };
+        let cancellation = CancellationToken::new();
+        let peer = async {
+            let mut kinds = vec![
+                Kind::VolumeList,
+                Kind::ContainerCreate,
+                Kind::ContainerStart,
+                Kind::ContainerExecBinary,
+            ];
+            if root != "/unexpected" {
+                kinds.push(Kind::ContainerExecBinary);
+            }
+            kinds.push(Kind::ContainerDelete);
+            let mut metadata = true;
+            for kind in kinds {
+                let envelope =
+                    tokio::time::timeout(std::time::Duration::from_secs(5), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("expected command");
+                };
+                assert_eq!(command.kind, kind as i32);
+                assert_eq!(command.node_id, "restore-node");
+                match kind {
+                    Kind::VolumeList => {
+                        session.output(id, ListVolumesResponse::default().encode_to_vec());
+                    }
+                    Kind::ContainerCreate => {
+                        let request =
+                            CreateContainerRequest::decode(command.payload.as_slice()).unwrap();
+                        assert_eq!(request.mounts[0].source.as_deref(), Some("target"));
+                        assert_eq!(request.mounts[0].target.as_deref(), Some("/target"));
+                        session.output(
+                            id,
+                            CreateContainerResponse {
+                                container_id: "restore-helper".into(),
+                            }
+                            .encode_to_vec(),
+                        );
+                    }
+                    Kind::ContainerExecBinary => {
+                        let request =
+                            ExecBinaryRequest::decode(command.payload.as_slice()).unwrap();
+                        assert_eq!(request.container_id, "restore-helper");
+                        assert_eq!(request.env["RESTIC_PASSWORD"], "fixture-password");
+                        if metadata {
+                            assert_eq!(request.cmd, ["restic", "snapshots", "--json", &snapshot]);
+                            session.output(
+                                id,
+                                ExecServerMessage {
+                                    msg: Some(exec_server_message::Msg::Output(ExecOutput {
+                                        data: serde_json::to_vec(
+                                            &json!([{"id":snapshot, "paths":[root]}]),
+                                        )
+                                        .unwrap(),
+                                        stream: 0,
+                                    })),
+                                }
+                                .encode_to_vec(),
+                            );
+                        } else {
+                            assert_eq!(
+                                request.cmd,
+                                [
+                                    "restic",
+                                    "restore",
+                                    &format!("{snapshot}:{root}"),
+                                    "--target",
+                                    "/target",
+                                    "--delete"
+                                ]
+                            );
+                        }
+                        metadata = false;
+                        session.output(
+                            id,
+                            ExecServerMessage {
+                                msg: Some(exec_server_message::Msg::Exit(ExecExit {
+                                    exit_code: 0,
+                                })),
+                            }
+                            .encode_to_vec(),
+                        );
+                    }
+                    _ => {}
+                }
+                session.complete(id, true);
+            }
+        };
+        let (result, ()) = tokio::join!(executor.restore(&claim, &cancellation), peer);
+        assert_eq!(
+            result.status,
+            if root == "/unexpected" {
+                "Failed"
+            } else {
+                "Succeeded"
+            }
+        );
+        assert!(
+            other.try_recv().is_err(),
+            "the source node must not receive restore commands"
+        );
+        assert_eq!(session.pending_count(), 0);
+    }
 }
 
 fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult {

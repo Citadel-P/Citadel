@@ -722,21 +722,50 @@ impl DockerResticBackupExecutor {
             .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
         let name = format!("citadel-restore-{}", claim.run.id.simple());
         let volume = &claim.run.target_volume_name;
-        let inspect = self
+        // A failed inspect is not proof that a volume is absent (the daemon
+        // may be unavailable). Only a successful, complete listing may do that.
+        let listed = self
             .execute(
-                vec!["volume".into(), "inspect".into(), volume.into()],
+                vec![
+                    "volume".into(),
+                    "ls".into(),
+                    "--filter".into(),
+                    format!("name={volume}").into(),
+                    "--format".into(),
+                    "{{.Name}}".into(),
+                ],
                 vec![],
                 Duration::from_secs(30),
                 cancellation,
             )
-            .await;
+            .await?;
+        let existing = listed_volume_exists(&listed, volume)?;
         if cancellation.is_cancelled() {
             return Err("Restore was cancelled.".into());
         }
-        if inspect.is_ok() && !claim.run.overwrite_existing {
+        if existing && !claim.run.overwrite_existing {
             return Err("Target Volume already exists.".into());
         }
-        let created = inspect.is_err();
+        let metadata_name = format!("citadel-restore-metadata-{}", claim.run.id.simple());
+        let (mut metadata_args, metadata_env) =
+            self.base_args(&metadata_name, &claim.repository).await?;
+        metadata_args.extend([
+            self.image.clone().into(),
+            "snapshots".into(),
+            "--json".into(),
+            snapshot.into(),
+        ]);
+        let metadata = self
+            .execute(
+                metadata_args,
+                metadata_env,
+                Duration::from_secs(60),
+                cancellation,
+            )
+            .await;
+        self.cleanup(&metadata_name).await;
+        let subtree = snapshot_subtree(&metadata?.stdout, snapshot)?;
+        let created = !existing;
         if created {
             self.execute(
                 vec!["volume".into(), "create".into(), volume.into()],
@@ -752,9 +781,9 @@ impl DockerResticBackupExecutor {
             format!("{volume}:/restore/data").into(),
             self.image.clone().into(),
             "restore".into(),
-            snapshot.into(),
+            subtree.into(),
             "--target".into(),
-            "/restore".into(),
+            "/restore/data".into(),
             "--delete".into(),
         ]);
         let output = self
@@ -819,6 +848,31 @@ impl DockerResticBackupExecutor {
                 .await
                 .map_err(|error| error.to_string())?;
             let environment = self.agent_repository_environment(&claim.repository).await?;
+            let metadata = agent
+                .exec_binary(
+                    ExecBinaryRequest {
+                        container_id: container_id.clone(),
+                        cmd: vec![
+                            "restic".into(),
+                            "snapshots".into(),
+                            "--json".into(),
+                            snapshot.into(),
+                        ],
+                        env: environment.clone(),
+                        attach_stdout: Some(true),
+                        attach_stderr: Some(true),
+                        tty: false,
+                    },
+                    Duration::from_secs(60),
+                    self.maximum_output,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            if metadata.exit_code != 0 {
+                return Err(redact(&String::from_utf8_lossy(&metadata.stderr)));
+            }
+            let subtree = snapshot_subtree(&metadata.stdout, snapshot)?;
             let output = agent
                 .exec_binary(
                     ExecBinaryRequest {
@@ -826,7 +880,7 @@ impl DockerResticBackupExecutor {
                         cmd: vec![
                             "restic".to_owned(),
                             "restore".to_owned(),
-                            snapshot.to_owned(),
+                            subtree,
                             "--target".to_owned(),
                             "/target".to_owned(),
                             "--delete".to_owned(),
@@ -1291,6 +1345,52 @@ impl DockerResticBackupExecutor {
     }
 }
 
+fn listed_volume_exists(
+    output: &citadel_execution::ProcessOutput,
+    name: &str,
+) -> Result<bool, String> {
+    if !output.succeeded() || output.stdout_truncated || output.stderr_truncated {
+        return Err("Could not determine whether the target Volume exists.".into());
+    }
+    let names = std::str::from_utf8(&output.stdout)
+        .map_err(|_| "Docker returned an invalid Volume listing.".to_owned())?;
+    Ok(names.lines().any(|value| value == name))
+}
+
+/// Local and remote historical backups used different helper mount paths.
+/// Read the snapshot's actual path, rather than guessing from the restore Node.
+fn snapshot_subtree(metadata: &[u8], expected_id: &str) -> Result<String, String> {
+    let invalid = || "Backup snapshot has an invalid or unsupported Volume root.".to_owned();
+    let snapshots: Vec<Value> = serde_json::from_slice(metadata).map_err(|_| invalid())?;
+    let [snapshot] = snapshots.as_slice() else {
+        return Err(invalid());
+    };
+    let id = snapshot
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    if !(8..=64).contains(&expected_id.len())
+        || !expected_id.bytes().all(|b| b.is_ascii_hexdigit())
+        || id.len() != 64
+        || !id.bytes().all(|b| b.is_ascii_hexdigit())
+        || !id.starts_with(expected_id)
+    {
+        return Err(invalid());
+    }
+    let paths = snapshot
+        .get("paths")
+        .and_then(Value::as_array)
+        .ok_or_else(invalid)?;
+    let [path] = paths.as_slice() else {
+        return Err(invalid());
+    };
+    let path = path
+        .as_str()
+        .filter(|path| matches!(*path, "/source" | "/data"))
+        .ok_or_else(invalid)?;
+    Ok(format!("{id}:{path}"))
+}
+
 fn sum_item_metric(
     items: &[BackupRunItemResult],
     select: impl Fn(&BackupRunItemResult) -> Option<i64>,
@@ -1430,6 +1530,61 @@ fn policy_tag(id: Uuid) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn restores_the_recorded_volume_root_not_the_helper_directory() {
+        let id = "a".repeat(64);
+        for root in ["/source", "/data"] {
+            let metadata =
+                serde_json::to_vec(&serde_json::json!([{"id": id, "paths": [root]}])).unwrap();
+            assert_eq!(
+                snapshot_subtree(&metadata, &id).unwrap(),
+                format!("{id}:{root}")
+            );
+            assert_eq!(
+                snapshot_subtree(&metadata, &id[..8]).unwrap(),
+                format!("{id}:{root}")
+            );
+        }
+    }
+
+    #[test]
+    fn restore_requires_a_successful_complete_volume_listing() {
+        let mut output = citadel_execution::ProcessOutput {
+            exit_code: Some(0),
+            stdout: b"target-other\ntarget\n".to_vec(),
+            stderr: vec![],
+            stdout_truncated: false,
+            stderr_truncated: false,
+        };
+        assert_eq!(listed_volume_exists(&output, "target"), Ok(true));
+        assert_eq!(listed_volume_exists(&output, "absent"), Ok(false));
+        output.stdout_truncated = true;
+        assert!(listed_volume_exists(&output, "absent").is_err());
+        output.stdout_truncated = false;
+        output.exit_code = Some(1);
+        assert!(listed_volume_exists(&output, "absent").is_err());
+        output.exit_code = Some(0);
+        output.stdout = vec![0xff];
+        assert!(listed_volume_exists(&output, "absent").is_err());
+        output.stdout.clear();
+        assert_eq!(listed_volume_exists(&output, "absent"), Ok(false));
+    }
+
+    #[test]
+    fn restore_rejects_ambiguous_unknown_and_mismatched_snapshots() {
+        let id = "a".repeat(64);
+        for metadata in [
+            serde_json::json!([]),
+            serde_json::json!([{"id": id, "paths": ["/"]}]),
+            serde_json::json!([{"id": id, "paths": ["/source", "/data"]}]),
+            serde_json::json!([{"id": "b".repeat(64), "paths": ["/data"]}]),
+            serde_json::json!([{"id": id, "paths": ["/data"]}, {"id": id, "paths": ["/data"]}]),
+        ] {
+            assert!(snapshot_subtree(&serde_json::to_vec(&metadata).unwrap(), &id).is_err());
+        }
+        assert!(snapshot_subtree(b"truncated JSON", &id).is_err());
+    }
+
     #[test]
     fn redaction_preserves_lines_and_removes_credentials() {
         assert_eq!(redact("ok\npassword=abc\ndone"), "ok\n[redacted]\ndone");
