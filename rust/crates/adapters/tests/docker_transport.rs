@@ -28,6 +28,159 @@ async fn cancelled_task_inspection_does_not_open_the_docker_socket() {
 }
 
 #[tokio::test]
+async fn node_agent_setup_uses_generated_distribution_and_create_routes() {
+    use serde_json::json;
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        let mut calls = vec![];
+        for _ in 0..4 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = vec![];
+            let mut buffer = [0; 4096];
+            let header_end = loop {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 16384);
+                bytes.extend_from_slice(&buffer[..n]);
+                if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break end + 4;
+                }
+            };
+            let header = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+            let line = header.lines().next().unwrap().to_owned();
+            let length = header
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length: ")
+                        .map(|n| n.parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            while bytes.len() < header_end + length {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let body = if line.starts_with("GET /version ") {
+                json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})
+            } else if line.starts_with("GET ") {
+                json!({"Descriptor":{"digest":"sha256:abc"}})
+            } else {
+                let sent: serde_json::Value =
+                    serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap();
+                assert_eq!(sent["Data"], "dGVzdA==");
+                assert_eq!(sent["Labels"]["com.citadel.system"], "true");
+                json!({"ID":"created"})
+            }
+            .to_string();
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+            socket.shutdown().await.unwrap();
+            calls.push(line);
+        }
+        calls
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    client
+        .distribution_inspect("ghcr.io/citadel-p/agent:latest")
+        .await
+        .unwrap();
+    let spec = json!({"Name":"bootstrap","Data":"dGVzdA==","Labels":{"com.citadel.system":"true"}});
+    assert_eq!(
+        client.create_swarm_material(true, &spec).await.unwrap()["ID"],
+        "created"
+    );
+    assert_eq!(
+        client.create_swarm_material(false, &spec).await.unwrap()["ID"],
+        "created"
+    );
+    let calls = server.await.unwrap();
+    assert!(
+        calls[1].starts_with("GET /v1.49/distribution/ghcr.io%2Fcitadel-p%2Fagent%3Alatest/json "),
+        "{:?}",
+        calls
+    );
+    assert!(calls[2].starts_with("POST /v1.49/secrets/create "));
+    assert!(calls[3].starts_with("POST /v1.49/configs/create "));
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn node_agent_resources_use_generated_inspect_and_delete_contracts() {
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        let mut calls = Vec::new();
+        for _ in 0..7 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut chunk = [0; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut chunk).await.unwrap();
+                assert!(n > 0 && request.len() < 16 * 1024);
+                request.extend_from_slice(&chunk[..n]);
+            }
+            let line = String::from_utf8_lossy(&request)
+                .lines()
+                .next()
+                .unwrap()
+                .to_owned();
+            let mut parts = line.split_whitespace();
+            let method = parts.next().unwrap();
+            let resource = parts.next().unwrap();
+            let (status, body) = if resource == "/version" {
+                ("200 OK", r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#)
+            } else if method == "DELETE" {
+                ("204 No Content", "")
+            } else {
+                (
+                    "200 OK",
+                    r#"{"ID":"owned","Version":{"Index":1},"Spec":{"Labels":{"com.citadel.system":"true"}}}"#,
+                )
+            };
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            socket.shutdown().await.unwrap();
+            calls.push(format!("{method} {resource}"));
+        }
+        calls
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    assert_eq!(
+        client.inspect_swarm_service("owned").await.unwrap().spec["Labels"]["com.citadel.system"],
+        "true"
+    );
+    client.delete_swarm_service("owned").await.unwrap();
+    assert_eq!(
+        client.inspect_swarm_secret("owned").await.unwrap().spec["Labels"]["com.citadel.system"],
+        "true"
+    );
+    client.delete_swarm_secret("owned").await.unwrap();
+    assert_eq!(
+        client.inspect_swarm_config("owned").await.unwrap().spec["Labels"]["com.citadel.system"],
+        "true"
+    );
+    client.delete_swarm_config("owned").await.unwrap();
+    assert_eq!(
+        server.await.unwrap(),
+        [
+            "GET /version",
+            "GET /v1.49/services/owned",
+            "DELETE /v1.49/services/owned",
+            "GET /v1.49/secrets/owned",
+            "DELETE /v1.49/secrets/owned",
+            "GET /v1.49/configs/owned",
+            "DELETE /v1.49/configs/owned"
+        ]
+    );
+    assert!(client.inspect_swarm_secret("").await.is_err());
+    assert!(client.delete_swarm_config("").await.is_err());
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
 async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_streams() {
     let socket_path = temp_socket();
     let listener = UnixListener::bind(&socket_path).unwrap();

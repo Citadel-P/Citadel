@@ -465,6 +465,76 @@ impl DockerClient {
         self.get_json(&SECRET_LIST, SECRET_LIST.path, None).await
     }
 
+    pub async fn inspect_swarm_secret(&self, id: &str) -> Result<SwarmSecret, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::SECRET_INSPECT;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{id}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+    pub async fn distribution_inspect(
+        &self,
+        image: &str,
+    ) -> Result<serde_json::Value, DockerError> {
+        validate_identifier(image)?;
+        let endpoint = &super::generated::DISTRIBUTION_INSPECT;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{name}", &urlencoding::encode(image)),
+            None,
+        )
+        .await
+    }
+    pub async fn create_swarm_material(
+        &self,
+        secret: bool,
+        spec: &serde_json::Value,
+    ) -> Result<serde_json::Value, DockerError> {
+        let endpoint = if secret {
+            &super::generated::SECRET_CREATE
+        } else {
+            &super::generated::CONFIG_CREATE
+        };
+        self.request_json(endpoint, endpoint.path, None, Some(spec))
+            .await
+    }
+    pub async fn inspect_swarm_config(&self, id: &str) -> Result<SwarmConfig, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::CONFIG_INSPECT;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{id}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+    pub async fn delete_swarm_secret(&self, id: &str) -> Result<(), DockerError> {
+        self.delete_swarm_resource(&super::generated::SECRET_DELETE, id)
+            .await
+    }
+    pub async fn delete_swarm_config(&self, id: &str) -> Result<(), DockerError> {
+        self.delete_swarm_resource(&super::generated::CONFIG_DELETE, id)
+            .await
+    }
+    async fn delete_swarm_resource(
+        &self,
+        endpoint: &Endpoint,
+        id: &str,
+    ) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        self.send_request::<()>(
+            endpoint,
+            &endpoint.path.replace("{id}", &urlencoding::encode(id)),
+            None,
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn list_swarm_configs(&self) -> Result<Vec<SwarmConfig>, DockerError> {
         self.get_json(&CONFIG_LIST, CONFIG_LIST.path, None).await
     }

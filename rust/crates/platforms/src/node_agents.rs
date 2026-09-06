@@ -1,5 +1,8 @@
 //! Coverage is a read model, not proof that a mutation can be routed to a node.
 //! Runtime operations still perform exact-node identity and freshness checks.
+pub mod lifecycle;
+pub mod setup;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;

@@ -1436,6 +1436,34 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
+    REMOVE_NODE_AGENTS => {
+        method: Delete, path: "/api/v1/platforms/{id}/node-agents", operation_id: "removeSwarmNodeAgents", summary: "Remove Docker Swarm node agents",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("NodeAgentProgressList"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    INSTALL_NODE_AGENTS => {
+        method: Post, path: "/api/v1/platforms/{id}/node-agents/install", operation_id: "installSwarmNodeAgents", summary: "Install Docker Swarm node agents",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("NodeAgentProgressList"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPAIR_NODE_AGENTS => {
+        method: Post, path: "/api/v1/platforms/{id}/node-agents/repair", operation_id: "repairSwarmNodeAgents", summary: "Repair Docker Swarm node-agent coverage",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("NodeAgentProgressList"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPGRADE_NODE_AGENTS => {
+        method: Post, path: "/api/v1/platforms/{id}/node-agents/upgrade", operation_id: "upgradeSwarmNodeAgents", summary: "Upgrade Docker Swarm node agents",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("NodeAgentProgressList"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
     REVOKE_EDGE => {
         method: Post, path: "/api/v1/platforms/{id}/edge/revoke", operation_id: "revokeEdgeAgent", summary: "Revoke an Edge Agent binding",
         public: true, setup_exempt: false, authentication: Actor,

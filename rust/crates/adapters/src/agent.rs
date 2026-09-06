@@ -1,5 +1,7 @@
 use std::fs;
 
+#[path = "agent_node_agents.rs"]
+mod node_agents;
 #[path = "agent_workloads.rs"]
 pub(crate) mod workloads;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

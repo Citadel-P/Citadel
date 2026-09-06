@@ -210,7 +210,7 @@ pub(super) fn cancelled_error() -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Docker call cancelled", false)
 }
 
-pub(super) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
+pub(crate) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
     let (kind, retryable) = match &error {
         DockerError::Transport(transport) if transport.is_timeout() => {
             (RuntimeErrorKind::Timeout, true)

@@ -31,6 +31,8 @@ mod local_docker_target;
 pub mod lookup_store;
 pub mod mfa;
 pub mod node_agent_coverage;
+pub mod node_agent_lifecycle_store;
+pub mod node_agent_runtime;
 mod node_inventory_store;
 pub mod oidc_protocol;
 pub mod oidc_store;

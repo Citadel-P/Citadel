@@ -1,6 +1,6 @@
 mod inventory;
 mod mutations;
-mod runtime;
+pub(crate) mod runtime;
 mod transport;
 
 pub mod generated;

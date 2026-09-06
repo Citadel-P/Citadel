@@ -7,6 +7,164 @@ pub struct EdgeHttpContext {
     pub registry: EdgeRegistry,
     pub core_url: String,
     pub agent_image: String,
+    pub node_agent_ca_bundle: Option<Arc<[u8]>>,
+}
+
+use citadel_platforms::node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions};
+macro_rules! setup_handler {
+    ($name:ident,$kind:ident) => {
+        pub(super) async fn $name(
+            State(state): State<PlatformsHttpState>,
+            Extension(edge): Extension<EdgeHttpContext>,
+            principal: Option<Extension<ActorPrincipal>>,
+            path: Result<Path<Uuid>, PathRejection>,
+            headers: HeaderMap,
+        ) -> IdentityHttpResult {
+            node_agent_operation(
+                state,
+                principal,
+                path,
+                headers,
+                Some((
+                    SetupKind::$kind,
+                    SetupOptions {
+                        core_url: edge.core_url,
+                        image: edge.agent_image,
+                        ca_bundle: edge.node_agent_ca_bundle,
+                    },
+                )),
+            )
+            .await
+        }
+    };
+}
+setup_handler!(install_node_agents, Install);
+setup_handler!(repair_node_agents, Repair);
+setup_handler!(upgrade_node_agents, Upgrade);
+
+pub(super) async fn remove_node_agents(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    node_agent_operation(state, principal, path, headers, None).await
+}
+async fn node_agent_operation(
+    state: PlatformsHttpState,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+    setup: Option<(SetupKind, SetupOptions)>,
+) -> IdentityHttpResult {
+    static OPERATIONS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    let capabilities =
+        authorize_platform_level(&state, &principal, id, PermissionLevel::Execute, &headers)
+            .await?;
+    if !capabilities.can_manage_node_agents {
+        return identity_result(Err(IdentityError::Forbidden), &headers);
+    }
+    let platform = required(
+        state
+            .platforms
+            .get_platform(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    if platform.platform_type != "DockerSwarm" {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Node agents require a Docker Swarm platform.".into(),
+            )),
+            &headers,
+        );
+    }
+    if let Some((_, options)) = &setup {
+        identity_result(
+            options
+                .validate()
+                .map_err(|e| IdentityError::Validation(e.message)),
+            &headers,
+        )?;
+    }
+    let permit = match OPERATIONS.try_acquire() {
+        Ok(permit) => permit,
+        Err(_) => {
+            return Ok(runtime_error_response(
+                RuntimeCapabilityError::new(
+                    RuntimeErrorKind::ResourceExhausted,
+                    "Too many node-agent operations are running.",
+                    true,
+                ),
+                &headers,
+            ));
+        }
+    };
+    let notify_state = state.clone();
+    let store = Arc::new(
+        citadel_adapters::node_agent_lifecycle_store::PostgresNodeAgentLifecycleStore(
+            state.pool.clone(),
+        ),
+    );
+    let runtime = Arc::new(
+        citadel_adapters::node_agent_runtime::NodeAgentRuntimeRouter {
+            pool: state.pool,
+            docker: state.docker,
+            agent: state.agent,
+            edge: state.edge,
+        },
+    );
+    let changed: Arc<dyn Fn(Uuid) + Send + Sync> = Arc::new(move |id| {
+        publish_runtime_change(
+            &notify_state,
+            id,
+            "nodeAgentCoverage",
+            "update",
+            &id.to_string(),
+        );
+    });
+    let cancellation = CancellationToken::new();
+    let guard = cancellation.clone().drop_guard();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move {
+        let _permit = permit;
+        if let Some((kind, options)) = setup {
+            NodeAgentSetupService {
+                store,
+                runtime,
+                changed,
+            }
+            .run(principal.actor_id, id, kind, options, sender, cancellation)
+            .await;
+        } else {
+            citadel_platforms::node_agents::lifecycle::NodeAgentRemovalService {
+                store,
+                runtime,
+                changed,
+            }
+            .remove(principal.actor_id, id, sender, cancellation)
+            .await;
+        }
+    });
+    let stream = async_stream::stream! {
+        let _guard = guard;
+        yield Ok::<_,std::convert::Infallible>(bytes::Bytes::from_static(b"["));
+        let mut first=true;
+        while let Some(item)=receiver.recv().await {
+            if !first {yield Ok(bytes::Bytes::from_static(b","));} first=false;
+            yield Ok(bytes::Bytes::from(serde_json::to_vec(&item).expect("Node-agent progress serializes")));
+        }
+        yield Ok(bytes::Bytes::from_static(b"]"));
+    };
+    let mut response = no_store(axum::body::Body::from_stream(stream).into_response());
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    Ok(response)
 }
 
 pub(super) async fn node_coverage(

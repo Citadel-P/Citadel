@@ -49,6 +49,10 @@ static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 mod edge;
 #[path = "platforms_http/lookup.rs"]
 mod lookup;
+#[path = "platforms_http/node_agent_lifecycle.rs"]
+mod node_agent_lifecycle;
+#[path = "platforms_http/node_agent_setup.rs"]
+mod node_agent_setup;
 #[path = "platforms_http/node_coverage.rs"]
 mod node_coverage;
 #[path = "platforms_http/node_resources.rs"]
@@ -404,6 +408,10 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
 }
 
 async fn fixture() -> Fixture {
+    fixture_for_cluster("cluster-test".into()).await
+}
+
+async fn fixture_for_cluster(cluster: String) -> Fixture {
     let guard = TEST_LOCK
         .get_or_init(|| Arc::new(Mutex::new(())))
         .clone()
@@ -480,7 +488,7 @@ async fn fixture() -> Fixture {
         credential_id: None,
         roles: vec!["Admin".to_owned()],
     };
-    let (docker, docker_server, docker_socket) = docker_fixture().await;
+    let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(7, cluster).await;
     let platforms = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReadStore::new(pool.clone()),
     )));
@@ -525,12 +533,15 @@ async fn fixture() -> Fixture {
     }
 }
 
-async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
-    docker_fixture_with_limit(7).await
-}
-
 async fn docker_fixture_with_limit(
     request_limit: usize,
+) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
+    docker_fixture_for_cluster(request_limit, "cluster-test".into()).await
+}
+
+async fn docker_fixture_for_cluster(
+    request_limit: usize,
+    cluster: String,
 ) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
     let socket = std::env::temp_dir().join(format!("citadel-phase4-http-{}.sock", Uuid::now_v7()));
     let listener = UnixListener::bind(&socket).unwrap();
@@ -597,6 +608,7 @@ async fn docker_fixture_with_limit(
                 }
                 unexpected => panic!("unexpected Docker fixture request {unexpected:?}"),
             };
+            let body = body.replace("cluster-test", &cluster);
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
