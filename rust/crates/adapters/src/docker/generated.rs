@@ -238,6 +238,55 @@ pub const SECRET_LIST: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const SECRET_INSPECT: Endpoint = Endpoint {
+    operation_id: "SecretInspect",
+    method: "GET",
+    path: "/secrets/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const SECRET_CREATE: Endpoint = Endpoint {
+    operation_id: "SecretCreate",
+    method: "POST",
+    path: "/secrets/create",
+    versioned: true,
+    streaming: false,
+};
+pub const CONFIG_CREATE: Endpoint = Endpoint {
+    operation_id: "ConfigCreate",
+    method: "POST",
+    path: "/configs/create",
+    versioned: true,
+    streaming: false,
+};
+pub const DISTRIBUTION_INSPECT: Endpoint = Endpoint {
+    operation_id: "DistributionInspect",
+    method: "GET",
+    path: "/distribution/{name}/json",
+    versioned: true,
+    streaming: false,
+};
+pub const SECRET_DELETE: Endpoint = Endpoint {
+    operation_id: "SecretDelete",
+    method: "DELETE",
+    path: "/secrets/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const CONFIG_INSPECT: Endpoint = Endpoint {
+    operation_id: "ConfigInspect",
+    method: "GET",
+    path: "/configs/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const CONFIG_DELETE: Endpoint = Endpoint {
+    operation_id: "ConfigDelete",
+    method: "DELETE",
+    path: "/configs/{id}",
+    versioned: true,
+    streaming: false,
+};
 pub const CONFIG_LIST: Endpoint = Endpoint {
     operation_id: "ConfigList",
     method: "GET",

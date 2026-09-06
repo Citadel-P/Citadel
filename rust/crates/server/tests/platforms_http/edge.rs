@@ -12,6 +12,7 @@ async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_an
         registry: EdgeRegistry::default(),
         core_url: "https://core.example.test".into(),
         agent_image: "ghcr.io/citadel-p/citadel.agent:latest".into(),
+        node_agent_ca_bundle: None,
     }));
     let input = json!({"name":format!("edge-{}",Uuid::now_v7().simple()),"connectorType":"EdgeAgent","type":"Docker","address":null,"tagIds":[fixture.tag_id]});
     let result = request(

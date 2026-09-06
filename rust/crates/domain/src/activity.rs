@@ -844,6 +844,16 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Platform")]
         platform: PlatformActivitySnapshot,
     },
+    PlatformNodeAgentLifecycle {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Kind")]
+        kind: &'static str,
+        #[serde(rename = "State")]
+        state: &'static str,
+        #[serde(rename = "Message")]
+        message: String,
+    },
     GitRepoCreated {
         #[serde(rename = "GitRepo")]
         git_repo: GitRepositoryActivitySnapshot,
@@ -1610,6 +1620,9 @@ impl ActivityEventInfo {
                 ActivityEventType::SwarmServiceOperationFailed
             }
             Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
+            Self::PlatformNodeAgentLifecycle { .. } => {
+                ActivityEventType::PlatformNodeAgentLifecycle
+            }
             Self::GitRepoCreated { .. } => ActivityEventType::GitRepoCreated,
             Self::GitRepoUpdated { .. } => ActivityEventType::GitRepoUpdated,
             Self::GitRepoRenamed { .. } => ActivityEventType::GitRepoRenamed,
@@ -1950,6 +1963,38 @@ impl ActivityEvent {
             created_at,
         )?;
         event.platform_id = Some(resource_id);
+        Ok(event)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn node_agent_lifecycle(
+        resource_id: Uuid,
+        resource_name: String,
+        actor: ActorId,
+        operation_id: Uuid,
+        status: ActivityStatus,
+        message: String,
+        created_at: DateTime<Utc>,
+        kind: &'static str,
+    ) -> Result<Self, ActivityInvariantError> {
+        let state = match status {
+            ActivityStatus::Success => "Completed",
+            ActivityStatus::Information => "Running",
+            _ => "Failed",
+        };
+        let mut event = Self::new_platform_event(
+            resource_id,
+            resource_name,
+            actor,
+            ActivityEventInfo::PlatformNodeAgentLifecycle {
+                operation_id,
+                kind,
+                state,
+                message,
+            },
+            created_at,
+        )?;
+        event.status = status;
         Ok(event)
     }
 

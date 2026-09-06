@@ -1086,6 +1086,10 @@ fn schemas() -> Value {
             }
         },
         "PlatformCapabilities": platform_capabilities(),
+        "NodeAgentProgressList": {"type":"array","items":{"$ref":"#/components/schemas/SwarmNodeAgentProgressItem"}},
+        "SwarmNodeAgentProgressItem": {"type":"object","required":["platformId","operationId","stage","message"],"properties":{
+            "platformId":{"type":"string","format":"uuid"},"operationId":{"type":"string","format":"uuid"},"stage":{"type":"string"},"message":{"type":"string"},"isCompleted":{"type":"boolean","default":false},"isWarning":{"type":"boolean","default":false},"errorMessage":{"type":["null","string"]}
+        }},
         "SwarmNodeAgentCoverageView": {"type":"object","required":["state","isInstalled","coveredNodes","eligibleNodes","totalNodes","connectedNodes","offlineNodes","enrollingNodes","missingNodes","incompatibleNodes","unsupportedNodes","unschedulableNodes","staleNodes","reasons","nodes","canManageNodeAgents"],"properties":{
             "state":string(),"isInstalled":{"type":"boolean"},"coveredNodes":{"type":"integer"},"eligibleNodes":{"type":"integer"},"totalNodes":{"type":"integer"},"connectedNodes":{"type":"integer"},"offlineNodes":{"type":"integer"},"enrollingNodes":{"type":"integer"},"missingNodes":{"type":"integer"},"incompatibleNodes":{"type":"integer"},"unsupportedNodes":{"type":"integer"},"unschedulableNodes":{"type":"integer"},"staleNodes":{"type":"integer"},
             "lastMembershipReconciliationAtUtc":nullable_string(),"agentImageReference":nullable_string(),"agentImageDigest":nullable_string(),"enrollmentExpiresAtUtc":nullable_string(),"operation":{"anyOf":[{"$ref":"#/components/schemas/SwarmNodeAgentOperationResult"},{"type":"null"}]},"reasons":{"type":"array","items":string()},"nodes":{"type":"array","items":{"$ref":"#/components/schemas/SwarmNodeAgentNodeCoverageResult"}},"canManageNodeAgents":{"type":"boolean"}

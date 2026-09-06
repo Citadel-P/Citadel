@@ -301,8 +301,22 @@ its Git source; Automation workers share configurable concurrency and timeout
 limits, and Backup automated execution rechecks its license entitlement.
 The node-agent coverage endpoint reports manager/satellite coverage, stale
 runtime data, unsupported nodes and system-Service drift without exposing
-enrollment credentials. Installation/repair/upgrade/removal are still pending.
-Remaining Build execution/trigger parity, node installation, remaining node-local
+enrollment credentials. Removal now uses the existing streamed-progress endpoint:
+it requires Platform Execute plus ManageNodeAgents, validates the pinned manager,
+removes only owned infrastructure and revokes node credentials. It preserves the
+manager connection and node-agent state volumes. Failed removals can be retried;
+cleanup warnings identify resources left for review. Install, Repair and Upgrade
+now share a bounded system-Service workflow through the existing progress UI.
+Configure `EdgeAgent__PublicGrpcUrl` to a node-reachable HTTP(S) origin (not localhost)
+and `CITADEL_EDGE_AGENT_IMAGE` to the Agent image. The workflow resolves its digest,
+checks Linux architecture coverage and uses a short-lived, hash-only bootstrap
+credential mounted as a Docker Secret. An optional
+`CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH` supplies the Core CA bundle (up to 1 MiB).
+Completion requires the current Service Tasks and their live satellite connections;
+paused rollouts, cancellation and timeout persist failure and revoke bootstrap access.
+A manager-only cluster needs no satellite Service. Released-Agent/multi-node setup
+acceptance remains a required gate.
+Remaining Build execution/trigger parity, remaining node-local
 endpoints, interactive logs/terminal transport, remaining product-specific
 Alert producers and the complete external-service acceptance matrix remain
 open Phase 7 work. Unsupported connector paths fail closed and never fall back

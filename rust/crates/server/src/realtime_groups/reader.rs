@@ -203,6 +203,11 @@ impl ApplicationGroupReader {
         if g.kind == "swarm-services" {
             self.permission(p, Platform, id, None).await?;
         }
+        if g.kind == "docker-daemon"
+            && e.is_some_and(|event| event.payload["dockerResourceType"] == "nodeAgentCoverage")
+        {
+            return event("SwarmNodeAgentCoverageChanged", id.unwrap());
+        }
         if g.kind == "build-run"
             && let Some(event) =
                 e.filter(|event| event.event_kind == "buildLogs" && Some(event.resource_id) == id)

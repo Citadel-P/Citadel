@@ -907,6 +907,20 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .max_encoding_message_size(citadel_adapters::edge::MAX_PAYLOAD + 4096);
     let edge_routes = tonic::service::Routes::new(edge_service).into_axum_router();
     app = app.layer(axum::Extension(platforms_http::EdgeHttpContext {
+        node_agent_ca_bundle: match std::env::var_os("CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH") {
+            None => None,
+            Some(path) => {
+                use std::io::Read;
+                let mut data = Vec::new();
+                std::fs::File::open(path)?
+                    .take(1024 * 1024 + 1)
+                    .read_to_end(&mut data)?;
+                if data.is_empty() || data.len() > 1024 * 1024 {
+                    return Err("Node-agent CA bundle must be between 1 byte and 1 MiB".into());
+                }
+                Some(data.into())
+            }
+        },
         store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
         registry: edge_registry,
         core_url: config

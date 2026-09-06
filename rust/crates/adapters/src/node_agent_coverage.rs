@@ -114,12 +114,23 @@ WHERE n.platformid=$1 ORDER BY n.dockernodeid LIMIT 10001
         if let (Some(operation_id), Some(kind), Some(state), Some(started_at_utc)) =
             (operation_id, kind, state, started)
         {
+            // An expired claim is retryable. Do not leave the existing UI's
+            // lifecycle actions disabled forever after a Core crash.
+            let expired =
+                state == "Running" && started_at_utc < now - chrono::Duration::minutes(30);
             operation = Some(NodeAgentOperation {
                 operation_id,
                 kind,
-                state,
+                state: if expired { "Failed".into() } else { state },
                 started_at_utc,
-                error: row.try_get("operationerror")?,
+                error: if expired {
+                    Some(
+                        "The node-agent operation expired. Retry to reconcile partial state."
+                            .into(),
+                    )
+                } else {
+                    row.try_get("operationerror")?
+                },
             });
         }
         if installed

@@ -346,7 +346,8 @@ and temporary tool containers; development data was not modified.
   connector with a 30-second bound. Persistence rechecks cluster/manager identity
   and only writes if inventory is still empty, preserving concurrent background
   reconciliation. Transport failure propagates without saving an empty snapshot.
-  Lifecycle mutations are not implemented.
+  Installation, repair and upgrade mutations are not implemented. Removal is
+  described in the follow-up below.
 
 | .NET reference | Rust coverage added |
 | --- | --- |
@@ -378,13 +379,98 @@ Verification of this follow-up:
   PostgreSQL/RustFS containers and UUID-scoped volumes, removed afterwards.
   Backup acceptance and Automation HTTP test Clippy passed.
 
+## Node-agent removal follow-up
+
+The Rust endpoint `DELETE /api/v1/platforms/{id}/node-agents` now streams the
+existing progress contract without frontend changes. It requires Platform Execute
+and ManageNodeAgents. The manager's daemon, node and cluster identities are checked
+before the durable claim and before runtime deletion. Local, signed Agent and Edge
+dispatch use the canonical shared contracts; an unavailable manager never causes
+fallback to a different Docker daemon.
+
+Removal checks every ownership label before deleting the Service, revokes satellite
+and bootstrap credentials transactionally, disconnects the selected node sessions,
+marks their projections stale, and attempts Secret/CA Config cleanup. Unowned
+resources are preserved. Cleanup failures produce warnings; state volumes and the
+manager binding are retained. Failed primary operations retain installation IDs
+for retry. Running operations have exclusive claims and stale completions cannot
+overwrite a successor. Claim/completion Activities commit with the state changes;
+coverage changes use the existing realtime event. Expired operation claims are
+reported as failed/retryable by coverage, so a Core crash cannot leave the existing
+UI actions disabled indefinitely.
+
+Additional .NET scenario mapping:
+
+| .NET reference | Rust coverage |
+| --- | --- |
+| `LifecycleEndpoints_ShouldRequirePlatformScopedManageNodeAgentsPermission` (DELETE case) | HTTP 401/403 and Execute-without-ManageNodeAgents rejection |
+| `Remove_ShouldRevokeNodeBindingsAndPersistRemovedDesiredState` | HTTP/PostgreSQL persisted removal, satellite/bootstrap revocation, manager preservation and typed lifecycle Activities |
+| Lifecycle concurrency and manager-identity guards | competing claims, expired-claim replacement, stale completion/revocation rejection, mismatched daemon and transaction rollback |
+| Node-agent resource ownership and exact transport | ownership label unit test, generated Unix Docker inspect/delete tests and Edge command-peer Service/Secret/Config deletion; foreign Service and missing manager rejected |
+| Cancellation/partial failure safety | application unit tests for canceled removal, failed primary deletion, cleanup warnings, persistence failure and full progress channel |
+
+This is removal, not installation/repair/upgrade completion. Command-peer tests
+are not released-Agent or multi-node acceptance.
+
+Verification: 336 workspace library tests passed. The Phase 7A gate includes
+47 PostgreSQL/HTTP/HTTP2 tests, process/Agent/session tests and the Local Docker
+transport tests. OpenAPI verifies 310 full / 258 public contracts; generated
+Docker API 1.49 verification and targeted Clippy pass. This gate now runs the
+Platform lifecycle unit tests and generated Docker transport tests automatically.
+
+## Node-agent installation, repair and upgrade follow-up
+
+The existing POST `node-agents/install`, `node-agents/repair` and
+`node-agents/upgrade` endpoints now use one application workflow and the same
+progress, permission and durable-operation contracts as removal. Local Docker,
+signed Agent RPC and Edge commands use the existing shared transport surface.
+There are no frontend changes or new database migrations.
+
+The workflow verifies pinned manager identity and ownership, resolves a digest
+supporting eligible Linux node architectures, stores only the hash of a random
+10-minute bootstrap credential, and mounts that credential as a Docker Secret.
+The global system Service excludes the connected manager, retains its node-local
+state volume, and has bounded resources, log rotation and valid Secret/Config file
+permissions. Optional Core CA configuration is loaded once at startup with a
+1 MiB bound. Service identity is persisted before waiting for enrollment.
+
+Successful Docker submission is not successful setup: completion requires a
+completed rollout, current running Tasks on the pinned image, matching non-revoked
+task bindings and live satellite sessions. Setup is bounded to five minutes;
+cancellation, failure and timeout finalize the operation and revoke bootstrap
+access. Repair recovers an owned Service by stable name after interrupted creation.
+Old owned Secret/CA material is cleaned up only after coverage succeeds; cleanup
+failures are warnings. Manager-only installation creates no bootstrap or Service.
+
+Additional .NET scenario mapping:
+
+| .NET reference | Rust coverage |
+| --- | --- |
+| `GetLinuxArchitectures_ShouldIncludeSingleManifestDescriptorPlatform` and `...ShouldUnionManifestListAndDescriptorPlatforms` | OCI descriptor/index mapping tests, architecture aliases and digest/architecture validation |
+| `Install_AfterRemoval_ShouldRestoreInstalledDesiredState` | HTTP/PostgreSQL installation from Removed plus Repair/Upgrade state and typed Activities |
+| `LifecycleEndpoints_ShouldRequirePlatformScopedManageNodeAgentsPermission` (three POST cases) | unauthenticated and Execute-only rejection, scoped ManageNodeAgents success |
+| Bootstrap lifecycle and partial failure safeguards | PostgreSQL hash/expiry/version rotation/revocation, competing operation and stale-writer fencing; cancellation, paused rollout and stale-Task timeout unit tests |
+| Local/Agent/Edge system-Service contract | generated Docker distribution/Secret/Config routes, hardened Local task spec, canonical Edge create/update commands and exact-manager/no-fallback assertions |
+
+These are unit, HTTP/database and command-peer tests. The .NET
+`ManagerConnector_ShouldInstallRouteWorkerContainersAndRecoverPartialCoverage`
+released-Agent three-node acceptance scenario is still required; it is not
+replaced by these tests.
+
+Verification: 345 workspace library tests passed. The Phase 7A gate passed,
+including 50 PostgreSQL/HTTP/HTTP2 tests, process/Agent/session tests and four
+Local Docker transport tests. Server binary and new HTTP/transport test Clippy
+passed. Generated Docker API 1.49 and OpenAPI checks passed (313 full / 261 public
+contracts). The disposable PostgreSQL fixture was removed; no user workloads,
+database volumes or node-agent installations were modified during verification.
+
 ## Still required
 
 - Remaining Build execution/source/trigger parity and released-Agent
   build/push acceptance. AWS
   provisioning is not implemented in the .NET execution reference either.
-- Node-agent installation/bootstrap APIs and the
-  remaining node-local detail/mutation/browsing routes.
+- Remaining node-local detail/mutation/browsing routes and released-Agent
+  installation/repair/upgrade acceptance.
 - Interactive logs/terminal wiring and its permission/transport acceptance tests.
 - Remaining Git/image update producers.
 - Stack/Service webhook dispatch, webhook audit-event parity,
