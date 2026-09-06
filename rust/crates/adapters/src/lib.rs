@@ -29,6 +29,7 @@ pub mod license;
 mod local_docker_target;
 pub mod lookup_store;
 pub mod mfa;
+mod node_inventory_store;
 pub mod oidc_protocol;
 pub mod oidc_store;
 pub mod platform_read_store;

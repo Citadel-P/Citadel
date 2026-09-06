@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'BuildCache.ps1')
+$buildCacheVolume = New-CitadelBuildCacheName
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $compose = Join-Path $repoRoot 'rust\compose.phase0a.yml'
@@ -14,7 +16,7 @@ try {
         --mount $mount `
         --volume 'citadel-rust-cargo-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-cargo-git:/usr/local/cargo/git' `
-        --volume 'citadel-rust-target:/repo/rust/target' `
+        --volume "${buildCacheVolume}:/repo/rust/target" `
         --workdir /repo/rust `
         rust:1.97.1-bookworm `
         cargo test --locked -p citadel-adapters --test authorized_read -- --ignored --exact actor_authorized_platform_read_preserves_direct_and_team_scope
@@ -22,4 +24,5 @@ try {
 }
 finally {
     & docker compose --file $compose down --volumes
+    Remove-CitadelBuildCache -Name $buildCacheVolume
 }

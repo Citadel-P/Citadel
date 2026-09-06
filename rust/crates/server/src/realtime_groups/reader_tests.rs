@@ -1,6 +1,35 @@
 use super::*;
 use citadel_platforms::ContainerView;
 
+#[test]
+fn build_log_events_only_target_the_matching_run_group() {
+    let run = Uuid::now_v7();
+    let event = PublishedRuntimeEvent {
+        platform_id: None,
+        resource_type: "Build",
+        resource_id: run,
+        event_kind: "buildLogs",
+        resource_revision: 1,
+        payload: json!({"entries":[]}),
+    };
+    assert!(
+        Group::parse(&format!("build-run:{run}"))
+            .unwrap()
+            .affected_by(&event)
+    );
+    for group in [
+        format!("build-run:{}", Uuid::now_v7()),
+        format!("build-runs:{run}"),
+        "build-projects".into(),
+        format!("activity:Build:{run}"),
+    ] {
+        assert!(
+            !Group::parse(&group).unwrap().affected_by(&event),
+            "{group}"
+        );
+    }
+}
+
 fn container(node: Option<&str>) -> ContainerView {
     ContainerView {
         id: Uuid::now_v7(),

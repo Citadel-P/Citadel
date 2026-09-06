@@ -27,8 +27,70 @@ fn process_helper() {
             std::io::stdout().write_all(&[b'x'; 128]).unwrap();
         }
         Ok("wait") => std::thread::sleep(Duration::from_secs(20)),
+        Ok("stream-wait") => {
+            std::io::stdout().write_all(b"ready-for-cancel").unwrap();
+            std::io::stdout().flush().unwrap();
+            std::thread::sleep(Duration::from_secs(20));
+        }
         _ => {}
     }
+}
+
+#[tokio::test]
+async fn delivers_output_before_exit_and_cancellation_reaps_the_child() {
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let cancellation = CancellationToken::new();
+    let execution = run(
+        helper("stream-wait", ProcessLimits::default()).output(sender),
+        &cancellation,
+    );
+    let observe = async {
+        let mut received = Vec::new();
+        while !String::from_utf8_lossy(&received).contains("ready-for-cancel") {
+            let chunk = receiver.recv().await.expect("child is still running");
+            assert!(chunk.bytes.len() <= 8192);
+            received.extend(chunk.bytes);
+        }
+        cancellation.cancel();
+        while receiver.recv().await.is_some() {}
+    };
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(execution, observe)
+    })
+    .await
+    .unwrap();
+    assert!(matches!(result, Err(ProcessError::Cancelled)));
+}
+
+#[tokio::test]
+async fn a_full_output_channel_does_not_prevent_timeout_cleanup() {
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    let limits = ProcessLimits {
+        timeout: Duration::from_millis(200),
+        ..ProcessLimits::default()
+    };
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        run(
+            helper("output", limits).output(sender),
+            &CancellationToken::new(),
+        ),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(result, Err(ProcessError::Timeout(_))));
+}
+
+#[tokio::test]
+async fn precancelled_request_does_not_spawn_an_executable() {
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+    let result = run(
+        ProcessRequest::new("citadel-deliberately-nonexistent-executable"),
+        &cancellation,
+    )
+    .await;
+    assert!(matches!(result, Err(ProcessError::Cancelled)));
 }
 
 #[tokio::test]

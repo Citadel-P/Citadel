@@ -3,6 +3,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'BuildCache.ps1')
+$buildCacheVolume = New-CitadelBuildCacheName
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "citadel-rust-phase3-$suffix"
@@ -43,7 +45,7 @@ function Start-Phase3Server {
     & docker run --detach --name $server --network $network `
         --publish '127.0.0.1::8000' `
         --volume "${repoRoot}:/source:ro" `
-        --volume 'citadel-rust-target:/source/rust/target:ro' `
+        --volume "${buildCacheVolume}:/source/rust/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
         --workdir /source/rust `
         --env "DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$serverDatabase" `
@@ -104,7 +106,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -117,7 +119,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -130,7 +132,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -143,7 +145,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -156,7 +158,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -169,7 +171,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -182,7 +184,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -195,7 +197,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE3_DATABASE_URL=postgres://citadel_phase3:citadel_phase3@${postgres}:5432/$integrationDatabase" `
         --env 'SQLX_OFFLINE=true' `
@@ -208,7 +210,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
@@ -220,7 +222,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
@@ -909,4 +911,5 @@ finally {
     if (@(& docker network ls --format '{{.Name}}') -contains $network) {
         & docker network rm $network | Out-Null
     }
+    Remove-CitadelBuildCache -Name $buildCacheVolume
 }

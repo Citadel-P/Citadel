@@ -73,6 +73,16 @@ url = "=2.5.8"
 uuid = { version = "=1.24.1", features = ["serde", "v7"] }
 zeroize = "=1.8.2"
 
+# Keep full variable/type debugging for Citadel's development crates, without
+# embedding the dependency graph's debug information in every executable.
+[profile.dev.package."*"]
+debug = false
+
+# Test executables need useful backtraces, not full interactive debug data.
+[profile.test]
+debug = "line-tables-only"
+incremental = false
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

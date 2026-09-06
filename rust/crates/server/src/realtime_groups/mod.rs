@@ -89,6 +89,9 @@ impl Group {
     }
 
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if event.event_kind == "buildLogs" {
+            return self.kind == "build-run" && self.id == Some(event.resource_id);
+        }
         if self.kind == "activity" {
             return event.payload["dockerResourceType"] != "containerStats"
                 && self.reference.as_deref() == Some(event.resource_type)

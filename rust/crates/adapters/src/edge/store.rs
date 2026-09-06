@@ -311,7 +311,7 @@ impl PostgresEdgeStore {
             {
                 return Err(EdgeStoreError::Unauthorized);
             }
-            crate::inventory_projection_store::persist_containers(&mut tx, snapshot, Some(node_id))
+            crate::node_inventory_store::persist(&mut tx, snapshot, node_id)
                 .await
                 .map_err(|_| EdgeStoreError::Invalid("Node inventory persistence failed."))?;
         } else {
@@ -392,6 +392,7 @@ async fn mark_node_stale(
         "UPDATE swarmnodeimageprojections SET isstale=true WHERE platformid=$1 AND dockernodeid=$2",
         "UPDATE swarmnodevolumeprojections SET isstale=true WHERE platformid=$1 AND dockernodeid=$2",
         "UPDATE swarmnodenetworkprojections SET isstale=true WHERE platformid=$1 AND dockernodeid=$2",
+        "UPDATE swarmnoderuntimeprojectionstates SET isstale=true,stalesince=COALESCE(stalesince,now()),stalereason='Node Agent is disconnected or unavailable.' WHERE platformid=$1 AND dockernodeid=$2",
     ] {
         sqlx::query(query)
             .bind(platform)

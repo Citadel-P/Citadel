@@ -2257,19 +2257,41 @@
         ],
         "type": "object"
       },
+      "BuildLogEntry": {
+        "properties": {
+          "buildRunId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "stream": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "buildRunId",
+          "createdAt",
+          "stream",
+          "message"
+        ],
+        "type": "object"
+      },
       "BuildLogsView": {
         "properties": {
           "logs": {
             "items": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "stream": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
+              "$ref": "#/components/schemas/BuildLogEntry"
             },
             "type": "array"
           },

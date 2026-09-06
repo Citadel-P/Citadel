@@ -203,6 +203,18 @@ impl ApplicationGroupReader {
         if g.kind == "swarm-services" {
             self.permission(p, Platform, id, None).await?;
         }
+        if g.kind == "build-run"
+            && let Some(event) =
+                e.filter(|event| event.event_kind == "buildLogs" && Some(event.resource_id) == id)
+        {
+            return Ok(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "BuildRunLogsAppended",
+                    vec![json!(id.unwrap()), event.payload["entries"].clone()],
+                )],
+            });
+        }
         if g.kind == "swarm-service" {
             let service = self
                 .services

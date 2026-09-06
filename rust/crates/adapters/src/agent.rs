@@ -309,6 +309,7 @@ pub struct AgentClient {
 }
 
 pub(crate) struct AgentBuildCommand {
+    pub output: Option<tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
     pub context_archive: Vec<u8>,
     pub dockerfile_path: String,
     pub tags: Vec<String>,
@@ -685,9 +686,13 @@ impl AgentClient {
                     .map_err(normalize_status)?
             }
         };
-        let mut output =
-            consume_image_build_stream(response.into_inner(), maximum_log_bytes, cancellation)
-                .await?;
+        let mut output = consume_image_build_stream(
+            response.into_inner(),
+            maximum_log_bytes,
+            command.output.as_ref(),
+            cancellation,
+        )
+        .await?;
         for reference in command.tags {
             let request = self.signer.sign(
                 PushImageRequest {
@@ -707,7 +712,8 @@ impl AgentClient {
             };
             let pushed = consume_image_build_stream(
                 response.into_inner(),
-                maximum_log_bytes.saturating_sub(output.len()).max(1024),
+                maximum_log_bytes.saturating_sub(output.len()),
+                command.output.as_ref(),
                 cancellation,
             )
             .await?;
@@ -2038,6 +2044,7 @@ fn normalize_status(status: Status) -> RuntimeCapabilityError {
 pub(crate) async fn consume_image_build_stream<S>(
     mut stream: S,
     maximum_bytes: usize,
+    progress: Option<&tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
     cancellation: &CancellationToken,
 ) -> Result<String, RuntimeCapabilityError>
 where
@@ -2074,6 +2081,18 @@ where
             .flatten()
             .filter(|value| !value.trim().is_empty())
         {
+            if let Some(progress) = progress {
+                let retained = value.len().min(maximum_bytes.saturating_sub(output.len()));
+                for bytes in value.as_bytes()[..retained].chunks(8192) {
+                    tokio::select! {
+                        biased;
+                        () = cancellation.cancelled() => return Err(cancelled_error()),
+                        sent = progress.send(citadel_execution::ProcessChunk { stream: "stdout", bytes: bytes.to_vec() }) => {
+                            sent.map_err(|_| RuntimeCapabilityError::new(RuntimeErrorKind::Remote, "Build output consumer closed.", false))?;
+                        }
+                    }
+                }
+            }
             if !output.is_empty() && !output.ends_with('\n') {
                 append_bounded(&mut output, "\n", maximum_bytes);
             }

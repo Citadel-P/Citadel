@@ -24,6 +24,32 @@ Use **Dev Containers: Rebuild Container** after changing `.devcontainer/`.
 Ordinary source changes do not require a rebuild. PostgreSQL, Cargo, npm, and
 frontend dependency data use named volumes and survive a rebuild.
 
+Both the API and Docker CLI use the feature-mounted `/var/run/docker-host.sock`
+directly. The feature's `/var/run/docker.sock` proxy can truncate delayed Docker
+exec/run output after a half-close, which breaks long-running builds and backups.
+The workspace stays non-root; an additional group grants access to Docker
+Desktop's group-0 socket without changing the host socket's permissions. Docker
+access is privileged: use this development environment only with trusted code.
+
+Compiler output is disposable. On container start and before the VS Code Rust
+run/check/debug tasks, Citadel checks the dedicated `rust-target` cache. It runs
+`cargo clean` for dev/test, release and documentation output if the cache
+reaches 8 GiB or the container filesystem has less
+than 5 GiB free, unless a Cargo/rustc build is already active. This is a cleanup
+threshold, not a hard disk quota; one build can exceed it. Direct terminal Cargo
+commands do not invoke this hook. Run `bash .devcontainer/clean-build-cache.sh`
+from the repository root before a manual build when needed.
+
+The volume mountpoint is preserved. Run
+`bash .devcontainer/test-clean-build-cache.sh` inside the devcontainer to verify
+the thresholds and safety checks without deleting any actual artifacts.
+
+Cleanup affects only `/home/vscode/.cache/citadel-target`, not PostgreSQL,
+runtime data, downloaded dependencies, or source files. The next build after
+cleanup takes longer. Development builds retain full debug information for
+Citadel crates; dependencies omit it, and tests use line-level backtraces without
+incremental artifacts. No production build settings are changed.
+
 Runtime files (including Git repository caches and Automation runs) use the
 `citadel-data` volume at `/home/vscode/.local/share/citadel`, configured through
 `CITADEL_DATA_ROOT`. Container initialization makes this private directory

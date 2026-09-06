@@ -104,7 +104,9 @@ async fn edge_build_pushes_the_requested_tags_using_the_shared_contract() {
         .unwrap();
     let client = AgentExecutionClient::Edge(session.clone());
     let cancellation = CancellationToken::new();
+    let (progress, mut progress_receiver) = tokio::sync::mpsc::channel(1);
     let command = AgentBuildCommand {
+        output: Some(progress),
         context_archive: vec![1, 2, 3],
         dockerfile_path: "Dockerfile".into(),
         tags: vec!["registry.test/app:test".into()],
@@ -138,6 +140,11 @@ async fn edge_build_pushes_the_requested_tags_using_the_shared_contract() {
             }
             .encode_to_vec(),
         );
+        let live = progress_receiver.recv().await.unwrap();
+        assert_eq!(
+            live.bytes, b"built",
+            "Output must arrive before Agent command completion"
+        );
         session.complete(id, true);
         let envelope = receiver.recv().await.unwrap();
         let id = Uuid::parse_str(&envelope.command_id).unwrap();
@@ -159,6 +166,7 @@ async fn edge_build_pushes_the_requested_tags_using_the_shared_contract() {
             }
             .encode_to_vec(),
         );
+        assert_eq!(progress_receiver.recv().await.unwrap().bytes, b"pushed");
         session.complete(id, true);
     };
     let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {

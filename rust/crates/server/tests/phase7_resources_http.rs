@@ -17,7 +17,9 @@ use citadel_backups::{
     BackupRepositoryView, BackupRunAuthorizer, BackupService, BackupSourcePlan,
     BackupSourcePlanner, RestoreClaim, RestoreExecutionResult,
 };
-use citadel_builds::{BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildService};
+use citadel_builds::{
+    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildService, BuildStore,
+};
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, ResourceType};
 use citadel_identity::{
@@ -66,11 +68,14 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let _subscriber = hub.subscribe();
     let builds = Arc::new(
         BuildService::new(
-            build_store,
-            Arc::new(FakeBuildExecutor),
+            build_store.clone(),
+            Arc::new(FakeBuildExecutor { pool: pool.clone() }),
             Duration::minutes(5),
         )
-        .with_change_notifier(change_callback(Some(hub.clone()), "Build")),
+        .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
+        .with_log_notifier(citadel_server::realtime::build_log_callback(Some(
+            hub.clone(),
+        ))),
     );
     let backups = Arc::new(
         BackupService::new(
@@ -515,13 +520,45 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     let before = hub.current_revision();
     assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
-    assert_eq!(hub.current_revision(), before + 2);
+    assert_eq!(hub.current_revision(), before + 3);
     let status: String = sqlx::query_scalar("SELECT status FROM buildruns WHERE id=$1")
         .bind(Uuid::parse_str(run["id"].as_str().unwrap()).unwrap())
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(status, "Succeeded");
+    let build_run_id = Uuid::parse_str(run["id"].as_str().unwrap()).unwrap();
+    let logs_url = format!("/api/v1/buildRuns/{build_run_id}/logs");
+    let logs = request(&app, Method::GET, &logs_url, Some(principal.clone()), None).await;
+    assert_eq!(logs.status(), StatusCode::OK);
+    let logs = response_json(logs).await;
+    assert_eq!(logs["logs"][0]["message"], "live output");
+    assert_eq!(logs["logs"][0]["buildRunId"], run["id"]);
+    assert!(Uuid::parse_str(logs["logs"][0]["id"].as_str().unwrap()).is_ok());
+    assert!(
+        chrono::DateTime::parse_from_rfc3339(logs["logs"][0]["createdAt"].as_str().unwrap())
+            .is_ok()
+    );
+    let again =
+        response_json(request(&app, Method::GET, &logs_url, Some(principal.clone()), None).await)
+            .await;
+    assert_eq!(
+        logs, again,
+        "Persisted IDs must be stable across reconnect/refetch"
+    );
+    assert!(
+        build_store
+            .append_log(
+                build_run_id,
+                &BuildLog {
+                    stream: "stdout".into(),
+                    message: "late output".into()
+                }
+            )
+            .await
+            .is_err(),
+        "A terminal run must reject late log writes"
+    );
     let run = response_json(
         request(
             &app,
@@ -678,14 +715,24 @@ async fn response_json(response: axum::response::Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
 }
 
-struct FakeBuildExecutor;
+struct FakeBuildExecutor {
+    pool: sqlx::PgPool,
+}
 impl BuildExecutor for FakeBuildExecutor {
     fn execute<'a>(
         &'a self,
-        _: &'a BuildClaim,
+        claim: &'a BuildClaim,
+        progress: &'a dyn citadel_builds::BuildLogSink,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
-        Box::pin(async {
+        Box::pin(async move {
+            progress.append("stdout", "live\0 output").await.unwrap();
+            let persisted: String = sqlx::query_scalar("SELECT message FROM buildrunlogs WHERE buildrunid=$1 ORDER BY createdat,id LIMIT 1")
+                .bind(claim.run.id).fetch_one(&self.pool).await.unwrap();
+            assert_eq!(
+                persisted, "live output",
+                "Output must be persisted before the execution completes"
+            );
             BuildExecutionResult {
                 status: "Succeeded",
                 exit_code: Some(0),

@@ -4,6 +4,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'BuildCache.ps1')
+$buildCacheVolume = New-CitadelBuildCacheName
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "citadel-rust-phase6-stack-$suffix"
@@ -20,7 +22,7 @@ function Invoke-RustTest {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE6_DATABASE_URL=$databaseUrl" `
         --env 'SQLX_OFFLINE=true' `
@@ -38,7 +40,7 @@ function Invoke-RuntimeLifecycleTest {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --volume '/var/run/docker.sock:/var/run/docker.sock' `
         --workdir /source/rust `
         --env "CITADEL_PHASE6_DATABASE_URL=$databaseUrl" `
@@ -86,4 +88,5 @@ try {
 finally {
     & docker rm --force $postgres 2>$null | Out-Null
     & docker network rm $network 2>$null | Out-Null
+    Remove-CitadelBuildCache -Name $buildCacheVolume
 }

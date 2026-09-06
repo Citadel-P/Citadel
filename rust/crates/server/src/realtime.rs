@@ -62,6 +62,14 @@ pub fn change_callback(
     })
 }
 
+pub fn build_log_callback(hub: Option<RealtimeHub>) -> citadel_builds::BuildLogNotifier {
+    Arc::new(move |run_id, entry| {
+        if let Some(hub) = &hub {
+            hub.publish_build_log(run_id, entry);
+        }
+    })
+}
+
 pub trait RealtimeReadPort: Send + Sync {
     fn authenticate<'a>(
         &'a self,
@@ -274,6 +282,19 @@ impl RealtimeHub {
             return self.current_revision();
         }
         self.publish(None, resource_type, resource_id, event_kind, json!({}))
+    }
+
+    pub fn publish_build_log(&self, run_id: Uuid, entry: citadel_builds::BuildLogEntry) -> u64 {
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(
+            None,
+            "Build",
+            run_id,
+            "buildLogs",
+            json!({"entries":[entry]}),
+        )
     }
 
     fn publish(

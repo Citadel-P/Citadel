@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod logs;
+pub use logs::{BuildLogEntry, BuildLogNotifier, BuildLogSink, NoopBuildLogSink};
+
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -527,7 +530,12 @@ pub trait BuildStore: Send + Sync {
         limit: usize,
     ) -> BoxFuture<'a, Result<Vec<BuildRunView>, BuildError>>;
     fn get_run<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildRunView, BuildError>>;
-    fn logs<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Vec<BuildLog>, BuildError>>;
+    fn logs<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Vec<BuildLogEntry>, BuildError>>;
+    fn append_log<'a>(
+        &'a self,
+        run_id: Uuid,
+        log: &'a BuildLog,
+    ) -> BoxFuture<'a, Result<BuildLogEntry, BuildError>>;
     fn cancel_queued<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<bool, BuildError>>;
 }
 
@@ -535,6 +543,7 @@ pub trait BuildExecutor: Send + Sync {
     fn execute<'a>(
         &'a self,
         claim: &'a BuildClaim,
+        logs: &'a dyn BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult>;
 }
@@ -559,6 +568,7 @@ pub trait BuildRegistryCredentialResolver: Send + Sync {
 }
 
 pub struct BuildService {
+    on_log: Option<BuildLogNotifier>,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BuildStore>,
     executor: Arc<dyn BuildExecutor>,
@@ -568,6 +578,10 @@ pub struct BuildService {
 }
 
 impl BuildService {
+    pub fn with_log_notifier(mut self, notifier: BuildLogNotifier) -> Self {
+        self.on_log = Some(notifier);
+        self
+    }
     pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
         self.on_change = Some(notifier);
         self
@@ -585,6 +599,7 @@ impl BuildService {
         stale_after: chrono::Duration,
     ) -> Self {
         Self {
+            on_log: None,
             store,
             on_change: None,
             executor,
@@ -610,7 +625,9 @@ impl BuildService {
             .lock()
             .map_err(|_| BuildError::Storage("Build cancellation state is poisoned.".to_owned()))?
             .insert(claim.run.id, cancellation.clone());
-        let execution = self.executor.execute(&claim, &cancellation);
+        let logs =
+            logs::PersistedBuildLogs::new(self.store.clone(), claim.run.id, self.on_log.clone());
+        let execution = self.executor.execute(&claim, &logs, &cancellation);
         tokio::pin!(execution);
         let result = tokio::select! {
             result = &mut execution => result,

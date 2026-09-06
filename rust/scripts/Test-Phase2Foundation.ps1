@@ -3,6 +3,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'BuildCache.ps1')
+$buildCacheVolume = New-CitadelBuildCacheName
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "citadel-rust-phase2-$suffix"
@@ -43,7 +45,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
@@ -53,7 +55,7 @@ try {
     & docker run --detach --name $server --network $network `
         --publish '127.0.0.1::8000' `
         --volume "${repoRoot}:/source:ro" `
-        --volume 'citadel-rust-target:/source/rust/target:ro' `
+        --volume "${buildCacheVolume}:/source/rust/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
         --workdir /source/rust `
         --env "DATABASE_URL=postgres://citadel_phase2:citadel_phase2@${postgres}:5432/citadel_phase2_server" `
@@ -100,7 +102,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_TEST_DATABASE_URL=$databaseUrl" `
         --env 'SQLX_OFFLINE=true' `
@@ -113,7 +115,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         --env "CITADEL_PHASE0_DATABASE_URL=$databaseUrl" `
         --env 'SQLX_OFFLINE=true' `
@@ -126,7 +128,7 @@ try {
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
         --volume 'citadel-rustup:/usr/local/rustup' `
-        --volume 'citadel-rust-target:/source/rust/target' `
+        --volume "${buildCacheVolume}:/source/rust/target" `
         --workdir /source/rust `
         $rustImage `
         sh -c 'cargo run --locked -p xtask -- database verify && cargo run --locked -p xtask -- docker --check && cargo run --locked -p xtask -- openapi --check'
@@ -143,4 +145,5 @@ finally {
     if (@(& docker network ls --format '{{.Name}}') -contains $network) {
         & docker network rm $network | Out-Null
     }
+    Remove-CitadelBuildCache -Name $buildCacheVolume
 }

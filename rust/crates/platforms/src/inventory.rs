@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use futures_util::future::BoxFuture;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -20,7 +20,7 @@ pub struct RuntimeImageSummary {
     pub containers: i64,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RuntimeNetworkSummary {
     pub id: String,
     pub name: String,
@@ -42,7 +42,7 @@ pub struct RuntimeNetworkSummary {
     pub peers: Vec<Value>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RuntimeVolumeSummary {
     pub name: String,
     pub in_use: bool,

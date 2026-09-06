@@ -55,7 +55,7 @@ Status: implemented portions below; **Phase 7 remains open**.
   container ID. Snapshot time is captured before the scan, and an older snapshot
   cannot delete a container observed by a newer event. Replaced/revoked sessions
   cannot persist data. Disconnect marks only the affected Node's projections stale.
-  Node Image/Volume/Network projection ingestion is still outstanding.
+  Node Image/Volume/Network projection ingestion was added in the follow-up below.
 - Build Pool Edge enrollment/status/revoke routes retain .NET operation IDs and
   permissions. Build Pool enrollment does not mount the host filesystem. Queued
   Pool builds use that Pool's session, and the short claim transaction enforces
@@ -122,14 +122,64 @@ Verified after the additional completion work on 2026-09-05:
 The tests used disposable databases, not the running development database.
 No .NET Agent candidate image or full external-service matrix was run.
 
+## Inventory and restore follow-up (2026-09-06)
+
+- Node snapshots now atomically persist Containers, Images, Volumes and local
+  Networks. A per-node scan watermark rejects late snapshots even after a row
+  has been deleted; malformed batches roll back the whole snapshot. Stable
+  image IDs, node isolation, session fencing and stale-on-disconnect behavior
+  are covered against PostgreSQL. Cluster overlay Networks are not duplicated.
+- Existing authorized resource lists include node projections and publish the
+  existing `SwarmNodeLocalResourcesUpdated` UI event. Volume/Network inspect
+  selects the exact node session; manager fallback requires a matching live
+  node identity. Tests cover capabilities, denial before dispatch, missing
+  worker rejection, realtime payloads and retaining manager Volumes. No React
+  changes or schema migrations were required. This does not implement all
+  node-local mutation, image-detail or volume-browsing endpoints.
+- Incremental Build output uses bounded/redacted retention and the existing
+  Build log realtime contract. Library, persistence and HTTP tests cover it;
+  this is not evidence for released-Agent end-to-end Build execution.
+- Real Docker + Restic 0.18.1 + PostgreSQL acceptance exposed and now covers
+  volume-root restoration. Local and Agent snapshots contain `/data` and
+  `/source` respectively: restore validates snapshot metadata and selects the
+  recorded subtree, regardless of the target connector. Unsupported or
+  ambiguous roots fail rather than restoring into an unexpected subdirectory.
+  Agent command-peer tests verify both roots, exact target routing and helper
+  cleanup after invalid metadata. Local acceptance verifies actual restored
+  bytes, persisted results and rejection of unapproved overwrite.
+- The development Docker socket proxy truncated delayed `docker run` output.
+  Direct host-socket access fixes it without running the workspace as root or
+  changing host socket permissions. Rebuild the development container to use
+  the updated configuration. `Test-Phase7LocalBackup.ps1` also works with an
+  existing workspace and creates only disposable, uniquely named fixtures.
+
+Additional .NET references: `SwarmPersistenceTests` node-local identity tests,
+`SwarmNodeDataPlaneJobTests` late-snapshot tests, `BackupRestoreRunExecutionTests`,
+and the volume round trip from `SwarmBackupCompatibilityTests`. The new Local
+acceptance is deliberately not claimed as the full Swarm compatibility port.
+
+Verified on 2026-09-06:
+
+- Workspace library tests: 308 passed.
+- Targeted PostgreSQL/HTTP/HTTP2 suites: 32 passed.
+- Process-runner and Edge session suites: 16 passed.
+- Real Local Docker/Restic/PostgreSQL backup acceptance: 1 passed, including
+  reruns through `Test-Phase7LocalBackup.ps1` with fresh disposable databases.
+- Adapter/server library and test Clippy, formatting, Compose validation and
+  regenerated OpenAPI check passed (292 full / 240 public operations).
+
+No frontend feature files were changed and no Citadel images were built. The
+released-Agent/provider/multi-node matrix was not run. All database fixtures
+were separate from the running development database.
+
 ## Still required
 
 - Build Agent Pool cloud provisioning, instance cleanup/recovery, and the full
   provider lifecycle acceptance matrix.
-- Node-agent installation/bootstrap APIs, node-ID rebind recovery, and Node
-  Image/Volume/Network projection ingestion/read integration.
+- Node-agent installation/bootstrap APIs, node-ID rebind recovery, and the
+  remaining node-local detail/mutation/browsing routes.
 - Interactive logs/terminal wiring and its permission/transport acceptance tests.
-- Remaining Git/image update producers and incremental Build log events.
+- Remaining Git/image update producers.
 - Real Local/Agent/Edge external-service acceptance, multi-node backup/restore,
   Citadel-system exact-node execution, and interrupted-operation recovery.
 

@@ -174,10 +174,10 @@ The Edge follow-up is documented in `phase7-edge-execution-report.md`. It adds
 enrollment, authenticated sessions, Platform-backed builds, exact-node Volume
 backup routing, and protocol/recovery tests. It does not close the full exit gate.
 
-1. Finish Build Agent Pool provisioning/enrollment/execution, node-agent
+1. Finish Build Agent Pool cloud provisioning/cleanup, node-agent
    installation/bootstrap management and node-identity rebind recovery.
-   Ordinary Platform-backed Edge builds are wired; pool-backed builds are not.
-2. Finish node inventory/statistics supervision and the complete multi-node
+   Platform-backed and enrolled Pool-backed Edge execution are wired.
+2. Finish the remaining node-local resource endpoints and complete multi-node
    backup/restore acceptance matrix, including Citadel-system placement and
    interrupted operations. Exact-node Volume routing and failure cleanup are
    implemented, but they are not a substitute for real multi-node acceptance.
@@ -190,5 +190,12 @@ backup routing, and protocol/recovery tests. It does not close the full exit gat
 4. Add real Docker/registry/Deno/Shoutrrr/Restic differential acceptance across
    supported connector types. The Phase 7 exit gate remains open until the full
    backup/restore matrix and interrupted-operation recovery pass.
-5. Complete Edge workload Apply/mutation and interactive runtime transport,
-   including logs/terminal compatibility and incremental Build log events.
+5. Complete interactive runtime transport, including logs/terminal compatibility.
+   Ordinary Edge workload Apply/mutation and incremental Build log events are
+   implemented; released-Agent differential acceptance is still required.
+
+The 2026-09-06 inventory/restore follow-up in `phase7-edge-execution-report.md`
+adds node-local snapshot persistence, existing HTTP/realtime list contracts,
+exact-node Volume/Network reads and a real Local Docker/Restic restore test.
+Run `Test-Phase7LocalBackup.ps1` for that disposable-fixture test; it is not the
+full Agent/Edge/RustFS multi-node matrix.
