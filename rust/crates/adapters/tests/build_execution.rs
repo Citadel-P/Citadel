@@ -194,7 +194,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     // Build queue parity: different Projects cannot race past a Pool's limit.
     let mut pool_input: citadel_builds::BuildAgentPoolInput = serde_json::from_value(serde_json::json!({
         "name":format!("pool-{}",Uuid::now_v7()),"enabled":true,
-        "providerSpec":{"$type":"GenericEdge","connectionMode":"EdgeAgent"},"maxActiveBuilders":1
+        "providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"},"maxActiveBuilders":1
     })).unwrap();
     pool_input.validate().unwrap();
     let build_pool = store.create_pool(actor, &pool_input).await.unwrap();
@@ -312,6 +312,11 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .unwrap();
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(actor.value())
         .execute(&pool)
         .await
         .unwrap();

@@ -280,7 +280,19 @@ persist isolated Container/Image/Volume/Network projections and publish the
 existing UI realtime contracts. A real Local Docker/Restic acceptance test
 verifies backup results and restored files at the volume root.
 
-Cloud Build Pool provisioning, node installation/rebind, remaining node-local
+Build Pool Test/edit/rename/metadata now preserve the .NET contracts and write
+transactional activities. Pool HTTP/realtime rows include capabilities. Signed
+inbound execution uses the selected pool endpoint; node-ID rebind is fenced by
+proof, identity, membership and grace-period checks. Real Deno/Shoutrrr tests
+verify process outcomes, cancellation, token redaction and delivery retry. Run
+`./rust/scripts/Test-Phase7AutomationExternal.ps1` with the development workspace
+running; it uses disposable fixtures and extracts tools from `-CoreImage`.
+Automation lifecycle Activities commit with their state changes, mask webhook
+secrets, and reject stale edits/completions. Metadata-only edits do not create
+configuration Activities. HTTP progress streaming and tag/filter parity are
+still pending.
+
+Remaining Build lifecycle/health/tag-filter parity, node installation, remaining node-local
 endpoints, interactive logs/terminal transport, remaining product-specific
 Alert producers and the complete external-service acceptance matrix remain
 open Phase 7 work. Unsupported connector paths fail closed and never fall back

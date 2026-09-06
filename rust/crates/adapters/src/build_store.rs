@@ -75,8 +75,23 @@ impl BuildStore for PostgresBuildStore {
             )
             .await
             .map_err(build_tag_error)?;
+            let pool = sqlx::query("SELECT * FROM buildagentpools WHERE id=$1")
+                .bind(id)
+                .fetch_one(&mut *transaction)
+                .await
+                .map_err(storage)
+                .and_then(map_pool)?;
+            record_pool_activity(
+                &mut transaction,
+                &pool,
+                actor,
+                citadel_domain::ActivityEventInfo::BuildAgentPoolCreated {
+                    pool: pool.snapshot(),
+                },
+            )
+            .await?;
             transaction.commit().await.map_err(storage)?;
-            self.get_pool(id).await
+            Ok(pool)
         })
     }
     fn list_pools(
@@ -110,9 +125,40 @@ ORDER BY pool.name,pool.id"#
                 .collect()
         })
     }
+    fn pool_permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, BuildError>> {
+        Box::pin(async move {
+            let query = format!(
+                r#"{AUTHORIZED_CTE}
+SELECT ids.id, COALESCE(bit_or(grants.level),0)::int4
+FROM unnest($4::uuid[]) ids(id)
+LEFT JOIN LATERAL (
+    SELECT p.permissionlevel AS level FROM actor_scope scope
+    JOIN actorroles assignment ON assignment.actorid=scope.actorid
+    JOIN permissions p ON p.roleid=assignment.roleid AND p.resourcetype=$2
+    UNION ALL
+    SELECT access.permissionlevel FROM actor_scope scope
+    JOIN resourceaccesses access ON access.actorid=scope.actorid
+    WHERE access.resourcetype=$2 AND access.resourceid=ids.id
+) grants ON true GROUP BY ids.id"#
+            );
+            let rows: Vec<(Uuid, i32)> = sqlx::query_as(AssertSqlSafe(query.as_str()))
+                .bind(actor.value())
+                .bind(ResourceType::BuildAgentPool as i32)
+                .bind(READ_MASK)
+                .bind(ids)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
+            Ok(rows.into_iter().collect())
+        })
+    }
     fn get_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM buildagentpools WHERE id=$1")
+            sqlx::query("SELECT * FROM buildagentpools WHERE id=$1 AND archivedat IS NULL")
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await
@@ -121,14 +167,118 @@ ORDER BY pool.name,pool.id"#
                 .and_then(map_pool)
         })
     }
-    fn archive_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), BuildError>> {
+    fn claim_pool_test(
+        &self,
+        id: Uuid,
+        actor: ActorId,
+    ) -> BoxFuture<'_, Result<BuildAgentPoolView, BuildError>> {
         Box::pin(async move {
-            let affected=sqlx::query("UPDATE buildagentpools SET enabled=false,archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND controlstate='Idle'").bind(id).execute(&self.pool).await.map_err(storage)?.rows_affected();
-            if affected == 1 {
-                Ok(())
+            // Reclaim a crashed check only after its bounded 120-second deadline.
+            sqlx::query("UPDATE buildagentpools SET controlstate='Processing',controltriggeredby=$2,controlstartedat=EXTRACT(EPOCH FROM now())::bigint,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) RETURNING *")
+                .bind(id).bind(actor.value()).fetch_optional(&self.pool).await.map_err(storage)?
+                .ok_or_else(|| BuildError::Conflict("A Build Pool operation is already running or the pool is archived.".into())).and_then(map_pool)
+        })
+    }
+    fn finish_pool_test<'a>(
+        &'a self,
+        claim: &'a BuildAgentPoolView,
+        result: &'a citadel_builds::BuildPoolCheck,
+    ) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let message: String = result.message.chars().take(2048).collect();
+            let row = sqlx::query("UPDATE buildagentpools SET controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' RETURNING *")
+                .bind(claim.id).bind(claim.row_version).bind(if result.ready { "Ready" } else { "Invalid" }).bind(&message)
+                .fetch_optional(&mut *tx).await.map_err(storage)?
+                .ok_or_else(|| BuildError::Conflict("The Build Pool check has been superseded.".into()))?;
+            let pool = map_pool(row)?;
+            let activity =
+                citadel_domain::ActivityEvent::new_build_pool_event(
+                    pool.id,
+                    pool.name.clone(),
+                    ActorId::new(claim.control_triggered_by.ok_or_else(|| {
+                        BuildError::Storage("Build Pool claim has no actor.".into())
+                    })?),
+                    citadel_domain::ActivityEventInfo::BuildAgentPoolTested {
+                        pool: pool.snapshot(),
+                        status: pool.last_validation_status.clone(),
+                        message,
+                    },
+                    Utc::now(),
+                )
+                .map_err(storage)?;
+            crate::activity_store::insert_activity(&mut tx, &activity)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(pool)
+        })
+    }
+    fn update_pool<'a>(
+        &'a self,
+        current: &'a BuildAgentPoolView,
+        input: &'a BuildAgentPoolInput,
+        actor: ActorId,
+    ) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row = sqlx::query("UPDATE buildagentpools SET name=$3,normalizedname=$4,description=$5,enabled=$6,provider=$7,providerspec=$8,maxactivebuilders=$9,queuetimeoutseconds=$10,provisioningtimeoutseconds=$11,registrationtimeoutseconds=$12,heartbeattimeoutseconds=$13,cleanuptimeoutseconds=$14,maximuminstancelifetimeseconds=$15,failureretentionminutes=$16,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
+                .bind(current.id).bind(current.row_version).bind(&input.name).bind(input.name.to_uppercase())
+                .bind(&input.description).bind(input.enabled).bind(input.provider_spec["$type"].as_str()).bind(&input.provider_spec)
+                .bind(input.max_active_builders).bind(input.queue_timeout_seconds).bind(input.provisioning_timeout_seconds)
+                .bind(input.registration_timeout_seconds).bind(input.heartbeat_timeout_seconds).bind(input.cleanup_timeout_seconds)
+                .bind(input.maximum_instance_lifetime_seconds).bind(input.failure_retention_minutes)
+                .fetch_optional(&mut *tx).await.map_err(database)?
+                .ok_or_else(|| BuildError::Conflict("The Build Pool was modified, archived or is processing. Refresh and try again.".into()))?;
+            let pool = map_pool(row)?;
+            let info = if current.name != pool.name {
+                citadel_domain::ActivityEventInfo::BuildAgentPoolRenamed {
+                    old_name: current.name.clone(),
+                    new_name: pool.name.clone(),
+                }
             } else {
-                Err(BuildError::NotFound)
+                citadel_domain::ActivityEventInfo::BuildAgentPoolUpdated {
+                    old_pool: current.snapshot(),
+                    new_pool: pool.snapshot(),
+                }
+            };
+            record_pool_activity(&mut tx, &pool, actor, info).await?;
+            tx.commit().await.map_err(storage)?;
+            Ok(pool)
+        })
+    }
+    fn archive_pool<'a>(
+        &'a self,
+        id: Uuid,
+        actor: ActorId,
+    ) -> BoxFuture<'a, Result<(), BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let current = sqlx::query(
+                "SELECT * FROM buildagentpools WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BuildError::NotFound)
+            .and_then(map_pool)?;
+            if current.control_state != "Idle" {
+                return Err(BuildError::Conflict("The Build Pool is processing.".into()));
             }
+            sqlx::query("UPDATE buildagentpools SET enabled=false,archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1")
+                .bind(id).execute(&mut *tx).await.map_err(storage)?;
+            record_pool_activity(
+                &mut tx,
+                &current,
+                actor,
+                citadel_domain::ActivityEventInfo::BuildAgentPoolDeleted {
+                    pool: current.snapshot(),
+                },
+            )
+            .await?;
+            tx.commit().await.map_err(storage)?;
+            Ok(())
         })
     }
     fn create<'a>(
@@ -436,6 +586,25 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
             Ok(entry)
         })
     }
+}
+
+async fn record_pool_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    pool: &BuildAgentPoolView,
+    actor: ActorId,
+    info: citadel_domain::ActivityEventInfo,
+) -> Result<(), BuildError> {
+    let activity = citadel_domain::ActivityEvent::new_build_pool_event(
+        pool.id,
+        pool.name.clone(),
+        actor,
+        info,
+        Utc::now(),
+    )
+    .map_err(storage)?;
+    crate::activity_store::insert_activity(tx, &activity)
+        .await
+        .map_err(storage)
 }
 
 async fn recover(

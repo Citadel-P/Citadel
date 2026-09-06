@@ -511,15 +511,27 @@ impl ApplicationGroupReader {
             ),
             "build-agent-pools" => rows(
                 "BuildAgentPoolInfoUpdated",
-                self.builds
-                    .list_pools(actor, admin)
-                    .await
-                    .map_err(failure)?,
+                crate::builds_http::authorized_pools(
+                    self.builds.as_ref(),
+                    p,
+                    self.builds
+                        .list_pools(actor, admin)
+                        .await
+                        .map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "build-agent-pool" => rows(
                 "BuildAgentPoolInfoUpdated",
-                vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
+                crate::builds_http::authorized_pools(
+                    self.builds.as_ref(),
+                    p,
+                    vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "build-runs" => rows(

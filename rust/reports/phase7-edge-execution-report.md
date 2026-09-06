@@ -60,7 +60,7 @@ Status: implemented portions below; **Phase 7 remains open**.
   permissions. Build Pool enrollment does not mount the host filesystem. Queued
   Pool builds use that Pool's session, and the short claim transaction enforces
   the persisted concurrent-build limit across workers. Pool changes publish to
-  the Build Pool realtime group. Cloud provisioning is not yet implemented.
+  the Build Pool realtime group. See the provider-scope correction below.
 - Test fixtures now use unique Docker Service IDs and Platform addresses so
   the database-backed gate can run repeatedly without fixture collisions.
 - The real PostgreSQL 18 `citadel_system_recovery` test passed: create a private
@@ -172,14 +172,97 @@ No frontend feature files were changed and no Citadel images were built. The
 released-Agent/provider/multi-node matrix was not run. All database fixtures
 were separate from the running development database.
 
+## Build Pool, rebind and external-process follow-up (2026-09-06)
+
+- Build Pool providers now follow .NET: `SelfManagedVm` and `AwsEc2`, not the
+  invented `GenericEdge` / `HetznerCloud` contracts. The .NET executor and Test
+  handler support self-managed pools only. AWS provisioning is not existing
+  .NET behavior to migrate; adding it needs a separate product slice.
+- Implemented the existing pool Test, partial update, rename and metadata HTTP
+  operations. Test claims are bounded and survive request cancellation; stale
+  completions cannot overwrite a replacement claim. Create, update, rename,
+  delete and Test activities commit with their resource changes. Activity
+  snapshots use the .NET field shape. Archived pools are excluded from reads.
+- Pool lists now return `pools` and capabilities, as the existing UI expects.
+  HTTP and realtime pool rows share capability mapping with batched ACL reads.
+  Edge revocation requires Execute, not just Write. This does not claim full
+  Build Project/Pool tag-filter and background-health parity.
+- Self-managed inbound checks/builds connect to the selected pool endpoint,
+  retaining the configured Agent signing identity and insecure-transport policy.
+  No unbounded endpoint cache or local-daemon fallback is introduced. Core still
+  requires its existing configured signed-Agent transport for inbound pools.
+- Node rebind requires the same signing key, daemon and cluster; current owned
+  Service/Task identity; an absent old Node beyond the ten-minute grace period;
+  and non-stale membership. A reconnect Hello does not change persistence.
+  Membership is checked again after proof, under the binding lock, before
+  committing. Late old-node sessions cannot reconnect or overwrite the new one.
+  Enrollment also validates the cluster ownership label and retains observed
+  hostname/role/Service/Task identity.
+- Added real Deno and Shoutrrr acceptance. It exposed a persisted raw run-token
+  leak, now fixed by exact-token redaction in addition to assignment redaction.
+  Credential-bearing run directories are private on Unix. Tests exercise API
+  calls, arguments, exit code 7, bounded output, denied filesystem access,
+  timeout, cancellation/reaping, source cleanup, persisted failure alerts, and
+  an actual Shoutrrr HTTP 503/retry/success round trip. Nonzero exit reasons now
+  match .NET instead of treating all stderr as the error summary.
+- Added typed Automation Activity domain contracts and transactional create,
+  update, rename, delete, queue, start, success, failure, timeout, cancellation,
+  rejection and interrupted-run events. A rejected run leaves the existing
+  claim intact; late completion cannot duplicate events or raise a new failure
+  alert. Configuration updates use row-version fencing, and audit snapshots
+  mask webhook secrets. The metadata endpoint updates descriptions without a
+  configuration Activity, matching .NET. PostgreSQL tests also prove rollback
+  when Activity persistence fails. The HTTP progress stream remains open.
+
+| .NET reference | New Rust evidence |
+| --- | --- |
+| `BuildAgentPoolCommandTests` capability checks | `phase7_resources_http/build_pools.rs`, `build_pool_checker` unit tests and signed `agent_build_pool` HTTP/2 test |
+| `BuildEndpointTests.BuildAgentPoolEndpoints_ShouldPersistLifecycleAndEdgeEnrollment` | Test/edit/rename/metadata/archive/Edge persistence, activities, concurrency, capability and permission cases in `phase7_resources_http` (tag filtering remains open) |
+| `SwarmNodeAgentLifecycleTests` reconnect/rebind cases | PostgreSQL `edge_transport` checks old membership, grace, key/daemon/cluster/Task identity, stale membership, proof-before-write and old-session rejection |
+| `AutomationServicesTests` redaction/buffering/coordinator cases | Existing library tests plus real Deno output/cancellation checks |
+| `AutomationActionIntegrationTests` create/update/rename/delete, metadata, cancellation, rejection and recovery cases | `resources_http` and `automation_execution` assert persisted resource/run state and typed Activities, CAS and audit rollback |
+| `AutomationActionIntegrationTests` success, nonzero exit and failure-alert cases | `automation_external_acceptance` with real Deno, PostgreSQL and Shoutrrr, including terminal Activities; HTTP streaming and tag parity remain open |
+
+Run `rust/scripts/Test-Phase7AutomationExternal.ps1` from the repository root
+with the development workspace running. It extracts the actual Deno/Shoutrrr
+tools from `-CoreImage`, creates its own temporary PostgreSQL fixture, and removes
+its tools/fixtures afterward. It does not build an image or touch development
+data. The verified local candidate supplied Deno 2.5.2. This process gate does
+not substitute for released-Agent or multi-node compatibility acceptance.
+
+Verified for this follow-up:
+
+- Workspace library tests: 312 passed.
+- PostgreSQL adapter/HTTP suites: 42 passed on a fresh disposable database.
+- Signed Agent, Edge session and process-runner tests: 20 passed.
+- Real Deno/Shoutrrr/PostgreSQL acceptance: 1 passed, including terminal
+  Activities, process cleanup and HTTP delivery retry.
+- Adapter/server/xtask library and test Clippy, formatting, generated OpenAPI
+  verification (297 full / 245 public operations), and database baseline
+  verification passed. No schema changes were needed.
+
+The final database gate used a fresh fixture. Reusing the earlier test database
+exposed a queued Git repository left by an earlier HTTP fixture: a global queue
+claim then selected that repository rather than the new test's repository.
+Run the provided fixture scripts against disposable databases, not development
+data. A separate fixed-name global binding collision in `resources_http` was
+removed by giving that fixture a unique name.
+
+No React feature files or shared Agent protocol files were changed. No Citadel
+images were built. These results do not close the gaps below or constitute a
+complete port of every Phase 7 .NET test.
+
 ## Still required
 
-- Build Agent Pool cloud provisioning, instance cleanup/recovery, and the full
-  provider lifecycle acceptance matrix.
-- Node-agent installation/bootstrap APIs, node-ID rebind recovery, and the
+- Remaining Build Project/Pool lifecycle and tag-filter parity, automatic Pool
+  health/recovery monitoring, and released-Agent build/push acceptance. AWS
+  provisioning is not implemented in the .NET execution reference either.
+- Node-agent installation/bootstrap APIs and the
   remaining node-local detail/mutation/browsing routes.
 - Interactive logs/terminal wiring and its permission/transport acceptance tests.
 - Remaining Git/image update producers.
+- Remaining Automation HTTP progress, tag/filter and configuration/permission
+  parity and their complete .NET integration-test mapping.
 - Real Local/Agent/Edge external-service acceptance, multi-node backup/restore,
   Citadel-system exact-node execution, and interrupted-operation recovery.
 

@@ -54,7 +54,7 @@ fn envelope(body: agent_envelope::Body) -> AgentEnvelope {
 async fn build_pool_enrollment_requires_build_capabilities_and_preserves_pool_identity() {
     let (pool, store, _) = setup().await;
     let target = EdgeTarget::build_pool(Uuid::now_v7());
-    sqlx::query("INSERT INTO buildagentpools(id,name,normalizedname,createdbyactorid,provider,providerspec) VALUES($1,$2,$2,$3,'GenericEdge','{\"ConnectionMode\":\"EdgeAgent\"}')")
+    sqlx::query("INSERT INTO buildagentpools(id,name,normalizedname,createdbyactorid,provider,providerspec) VALUES($1,$2,$2,$3,'SelfManagedVm','{\"$type\":\"SelfManagedVm\",\"ConnectionMode\":\"EdgeAgent\"}')")
         .bind(target.resource_id).bind(target.resource_id.to_string()).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
     let (_, token, _) = store
         .create_enrollment(&target, SYSTEM_ACTOR_ID)
@@ -120,9 +120,9 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
         .bind(platform).bind(&cluster).bind(&service_id).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO swarmnodeprojections(platformid,dockernodeid,address,architecture,availability,desiredtaskcount,engineversion,hostname,isleader,labels,observedat,operatingsystem,reachability,role,runningtaskcount,status,versionindex) VALUES($1,'worker','10.0.0.2','amd64','active',1,'29','worker-host',false,'{}',now(),'linux','reachable','worker',1,'ready',1)")
         .bind(platform).execute(&pool).await.unwrap();
-    let labels = serde_json::json!({"com.citadel.system":"true","com.citadel.system-role":"swarm-node-agent","com.citadel.platform-id":platform});
+    let labels = serde_json::json!({"com.citadel.system":"true","com.citadel.system-role":"swarm-node-agent","com.citadel.platform-id":platform,"com.citadel.swarm-cluster-id":cluster});
     sqlx::query("INSERT INTO swarmserviceprojections(platformid,dockerserviceid,configids,desiredtaskcount,image,labels,mode,name,networkids,observedat,ports,runningtaskcount,secretids,updatestate,versionindex) VALUES($1,$3,'[]',1,'agent',$2,'global','node-agents','[]',now(),'[]',1,'[]','completed',1)")
-        .bind(platform).bind(labels).bind(&service_id).execute(&pool).await.unwrap();
+        .bind(platform).bind(&labels).bind(&service_id).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,state,versionindex) VALUES($1,'agent-task','running','worker',$2,'agent','agent-task','worker-host',now(),'[]','node-agents','running',1)")
         .bind(platform).bind(&service_id).execute(&pool).await.unwrap();
     let mut bytes = [0; 32];
@@ -153,6 +153,18 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("UPDATE swarmserviceprojections SET labels=labels-'com.citadel.swarm-cluster-id' WHERE platformid=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    assert!(
+        store.enroll(&request).await.is_err(),
+        "a service from another cluster cannot enroll a node"
+    );
+    sqlx::query("UPDATE swarmserviceprojections SET labels=$2 WHERE platformid=$1")
+        .bind(platform)
+        .bind(labels)
+        .execute(&pool)
+        .await
+        .unwrap();
     let binding = store.enroll(&request).await.unwrap();
     assert_eq!(binding.target, EdgeTarget::node(platform, "worker".into()));
     assert!(
@@ -160,7 +172,8 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
         "duplicate active node identity"
     );
     verify_node_projection_isolation(&pool, &store, &binding).await;
-    store.revoke(&binding.target).await.unwrap();
+    let rebound = verify_node_rebind(&pool, &store, &binding, &request).await;
+    store.revoke(&rebound).await.unwrap();
     let count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM edgeagentbindings WHERE platformid=$1 AND revokedatutc IS NULL",
     )
@@ -170,6 +183,113 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
     .unwrap();
     assert_eq!(count, 0);
     pool.close().await;
+}
+
+// Ports SwarmNodeAgentLifecycleTests.Reconnect_ShouldRebindPersistedIdentity_WhenNodeRejoinsAfterRemovalGrace.
+async fn verify_node_rebind(
+    pool: &PgPool,
+    store: &PostgresEdgeStore,
+    binding: &citadel_adapters::edge::EdgeBinding,
+    request: &EnrollmentRequest,
+) -> EdgeTarget {
+    let platform = binding.target.platform_id;
+    let new_node = "worker-rejoined";
+    sqlx::query("INSERT INTO swarmnodeprojections SELECT (jsonb_populate_record(NULL::swarmnodeprojections,to_jsonb(n)||jsonb_build_object('dockernodeid',$2::text))).* FROM swarmnodeprojections n WHERE platformid=$1 AND dockernodeid='worker'")
+        .bind(platform).bind(new_node).execute(pool).await.unwrap();
+    sqlx::query("UPDATE swarmtaskprojections SET dockernodeid=$2 WHERE platformid=$1 AND dockertaskid='agent-task'").bind(platform).bind(new_node).execute(pool).await.unwrap();
+    let fingerprint: String =
+        sqlx::query_scalar("SELECT agentfingerprint FROM edgeagentbindings WHERE agentid=$1")
+            .bind(binding.agent_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let hello = AgentHello {
+        agent_id: binding.agent_id.to_string(),
+        agent_fingerprint: fingerprint,
+        platform_id: platform.to_string(),
+        resource_id: platform.to_string(),
+        resource_type: 0,
+        profile: 1,
+        protocol_version: 1,
+        capabilities_json: request.capabilities_json.clone(),
+        daemon_id: request.daemon_id.clone(),
+        cluster_id: request.cluster_id.clone(),
+        node_id: new_node.into(),
+        docker_hostname: request.docker_hostname.clone(),
+        swarm_role: request.swarm_role.clone(),
+        service_id: request.service_id.clone(),
+        task_id: request.task_id.clone(),
+        ..Default::default()
+    };
+    assert!(
+        store.reconnect(&hello).await.is_err(),
+        "the previous node is still a member"
+    );
+    sqlx::query("DELETE FROM swarmnodeprojections WHERE platformid=$1 AND dockernodeid='worker'")
+        .bind(platform)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        store.reconnect(&hello).await.is_err(),
+        "removal grace has not elapsed"
+    );
+    sqlx::query("UPDATE edgeagentbindings SET lastheartbeatatutc=now()-interval '20 minutes',lastdisconnectedatutc=now()-interval '20 minutes',lastauthenticatedatutc=now()-interval '20 minutes',firstenrolledatutc=now()-interval '20 minutes',createdatutc=now()-interval '20 minutes' WHERE agentid=$1")
+        .bind(binding.agent_id).execute(pool).await.unwrap();
+    let mut invalid = hello.clone();
+    invalid.daemon_id = "different-daemon".into();
+    assert!(store.reconnect(&invalid).await.is_err());
+    invalid = hello.clone();
+    invalid.cluster_id = "different-cluster".into();
+    assert!(store.reconnect(&invalid).await.is_err());
+    invalid = hello.clone();
+    invalid.task_id = "unknown-task".into();
+    assert!(store.reconnect(&invalid).await.is_err());
+    let candidate = store.reconnect(&hello).await.unwrap();
+    let persisted: String =
+        sqlx::query_scalar("SELECT dockernodeid FROM edgeagentbindings WHERE agentid=$1")
+            .bind(binding.agent_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        persisted, "worker",
+        "a Hello without proof must not change the binding"
+    );
+    sqlx::query("UPDATE swarmnodeprojections SET isstale=true WHERE platformid=$1")
+        .bind(platform)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .connected(&candidate, chrono::Utc::now())
+            .await
+            .is_err(),
+        "recheck membership after proof"
+    );
+    sqlx::query("UPDATE swarmnodeprojections SET isstale=false WHERE platformid=$1")
+        .bind(platform)
+        .execute(pool)
+        .await
+        .unwrap();
+    store
+        .connected(&candidate, chrono::Utc::now())
+        .await
+        .unwrap();
+    let persisted: (String, String) = sqlx::query_as(
+        "SELECT dockernodeid,lastobservedtaskid FROM edgeagentbindings WHERE agentid=$1",
+    )
+    .bind(binding.agent_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, (new_node.into(), "agent-task".into()));
+    assert!(
+        store.connected(binding, chrono::Utc::now()).await.is_err(),
+        "old node identity is fenced"
+    );
+    store.reconnect(&hello).await.unwrap().target
 }
 
 async fn verify_node_projection_isolation(

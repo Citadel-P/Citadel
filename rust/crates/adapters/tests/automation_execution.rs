@@ -42,10 +42,36 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     };
     input.validate(actor).unwrap();
     let action = store.create(actor, &input).await.unwrap();
+    let created: serde_json::Value = sqlx::query_scalar(
+        "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='ActionCreated'",
+    )
+    .bind(action.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(created["Action"]["Name"], input.name);
     let queued = store
         .enqueue(actor, action.id, "Manual", &json!({"safe":true}), None)
         .await
         .unwrap();
+    assert!(
+        store
+            .enqueue(actor, action.id, "Manual", &json!({}), None)
+            .await
+            .is_err()
+    );
+    let rejected = store.list_runs(action.id, 10).await.unwrap();
+    assert_eq!(
+        rejected
+            .iter()
+            .filter(|run| run.status == "Rejected")
+            .count(),
+        1
+    );
+    assert_eq!(
+        store.get(action.id).await.unwrap().current_run_id,
+        Some(queued.id)
+    );
     let claim = store
         .claim_next(Utc::now() - Duration::minutes(10))
         .await
@@ -72,7 +98,34 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .await
         .unwrap();
     let persisted = store.list_runs(action.id, 10).await.unwrap();
-    assert_eq!(persisted[0].status, "Succeeded");
+    assert_eq!(
+        persisted
+            .iter()
+            .find(|run| run.id == queued.id)
+            .unwrap()
+            .status,
+        "Succeeded"
+    );
+    // A repeated or late completion must not generate a second activity.
+    let committed = store
+        .finish(
+            &claim,
+            &AutomationRunResult {
+                status: "Failed",
+                exit_code: Some(1),
+                logs: "late".into(),
+                error: Some("late".into()),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        !committed,
+        "late completion must not notify or raise failure alerts"
+    );
+    let completed: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='ActionRunSucceeded'")
+        .bind(action.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(completed, 1);
 
     let interrupted = store
         .enqueue(actor, action.id, "Manual", &json!({}), None)
@@ -131,8 +184,61 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .await
         .unwrap();
     assert_eq!(scheduled.trigger, "Schedule");
+    store.cancel(action.id, scheduled.id).await.unwrap();
+    let events: Vec<String> = sqlx::query_scalar(
+        "SELECT eventtype FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
+    )
+    .bind(action.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    for expected in [
+        "ActionCreated",
+        "ActionRunQueued",
+        "ActionRunRejected",
+        "ActionRunStarted",
+        "ActionRunSucceeded",
+        "ActionRunFailed",
+        "ActionRunCancelled",
+    ] {
+        assert!(
+            events.iter().any(|event| event == expected),
+            "missing {expected}: {events:?}"
+        );
+    }
+    let current = store.get(action.id).await.unwrap();
+    input.webhook = Some(json!({"enabled":true,"secret":"do-not-audit"}));
+    let updated = store.update(&current, &input, actor, false).await.unwrap();
+    assert!(
+        store.update(&current, &input, actor, false).await.is_err(),
+        "stale edit must not overwrite state"
+    );
+    let audit: serde_json::Value = sqlx::query_scalar(
+        "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='ActionUpdated'",
+    )
+    .bind(action.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit["NewAction"]["Webhook"]["secret"], "********");
+    assert!(!audit.to_string().contains("do-not-audit"));
+    assert_eq!(updated.webhook.as_ref().unwrap()["secret"], "do-not-audit");
+
+    // Audit persistence failure rolls the resource change back.
+    assert!(
+        store
+            .rename(action.id, "must-rollback", ActorId::new(Uuid::now_v7()))
+            .await
+            .is_err()
+    );
+    assert_eq!(store.get(action.id).await.unwrap().name, action.name);
 
     sqlx::query("DELETE FROM actions WHERE id=$1")
+        .bind(action.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE resourceid=$1")
         .bind(action.id)
         .execute(&pool)
         .await

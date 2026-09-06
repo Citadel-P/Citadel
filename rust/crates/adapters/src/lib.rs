@@ -11,6 +11,7 @@ pub mod backup_executor;
 pub mod backup_source_planner;
 pub mod backup_store;
 pub mod build_executor;
+pub mod build_pool_checker;
 pub mod build_store;
 pub mod citadel_system_backup;
 mod container_ports;

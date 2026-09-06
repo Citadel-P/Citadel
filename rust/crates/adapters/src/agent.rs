@@ -306,6 +306,7 @@ pub struct AgentClient {
     signer: AgentRequestSigner,
     operation_timeout: Duration,
     address: String,
+    allow_insecure: bool,
 }
 
 pub(crate) struct AgentBuildCommand {
@@ -355,12 +356,55 @@ impl AgentClient {
             signer,
             operation_timeout,
             address,
+            allow_insecure,
         })
+    }
+
+    /// Reuse the configured signing identity and transport policy for an
+    /// explicitly selected pool. Do not cache an unbounded set of endpoints.
+    pub async fn for_address(
+        &self,
+        address: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Self, RuntimeCapabilityError> {
+        if cancellation.is_cancelled() {
+            return Err(cancelled_error());
+        }
+        let address = validate_address(address, self.allow_insecure)?;
+        if self.address == address {
+            return Ok(self.clone());
+        }
+        tokio::select! {
+            () = cancellation.cancelled() => Err(cancelled_error()),
+            result = Self::connect(&address, self.signer.clone(), self.operation_timeout, self.allow_insecure) => result,
+        }
     }
 
     #[must_use]
     pub fn address(&self) -> &str {
         &self.address
+    }
+
+    pub async fn check_build_host(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::CheckBuildHostResponse,
+        RuntimeCapabilityError,
+    > {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                (),
+                "/citadel.images.v1.ImageService/CheckBuildHost",
+                Some(self.operation_timeout),
+            )?;
+            self.image_client()
+                .check_build_host(request)
+                .await
+                .map(|value| value.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
     }
 
     pub async fn handshake(

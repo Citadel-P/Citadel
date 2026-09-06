@@ -1626,7 +1626,22 @@ fn phase5_schemas() -> Map<String, Value> {
     schemas.insert("BuildLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":{"type":"array","items":{"$ref":"#/components/schemas/BuildLogEntry"}}}}));
     schemas.insert("BuildAgentPoolInput".into(), json!({"type":"object","required":["name","enabled","providerSpec"],"properties":{"name":string(),"description":nullable_string(),"enabled":{"type":"boolean"},"providerSpec":{"type":"object"},"maxActiveBuilders":{"type":["integer","null"],"format":"int32"},"queueTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"provisioningTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"registrationTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"heartbeatTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"cleanupTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"maximumInstanceLifetimeSeconds":{"type":["integer","null"],"format":"int32"},"failureRetentionMinutes":{"type":["integer","null"],"format":"int32"},"tagIds":uuid_array()}}));
     schemas.insert("BuildAgentPoolView".into(), json!({"allOf":[{"$ref":"#/components/schemas/BuildAgentPoolInput"},{"type":"object","required":["id","normalizedName","provider","lastValidationStatus","controlState","createdByActorId","createdAt","updatedAt","rowVersion"],"properties":{"id":uuid(),"normalizedName":string(),"provider":string(),"lastValidationStatus":string(),"lastValidationMessage":nullable_string(),"lastValidatedAt":nullable_date_time(),"controlState":string(),"controlTriggeredBy":nullable_uuid(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}]}));
-    schemas.insert("BuildAgentPoolsView".into(), json!({"type":"object","required":["buildAgentPools"],"properties":{"buildAgentPools":{"type":"array","items":{"$ref":"#/components/schemas/BuildAgentPoolView"}}}}));
+    let mut pool_update = schemas["BuildAgentPoolInput"]["properties"]
+        .as_object()
+        .expect("pool properties")
+        .clone();
+    pool_update.remove("name");
+    pool_update.remove("tagIds");
+    schemas.insert(
+        "UpdateBuildAgentPoolInput".into(),
+        json!({"type":"object","properties":pool_update,"additionalProperties":false}),
+    );
+    schemas["BuildAgentPoolView"]["allOf"][1]["properties"]["capabilities"] =
+        json!({"$ref":"#/components/schemas/ResourceCapabilities"});
+    schemas.insert(
+        "BuildAgentPoolsView".into(),
+        collection_view("pools", "BuildAgentPoolView", "ResourceCapabilities"),
+    );
     schemas.insert("AlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url","isActive"],"properties":{"name":string(),"alertDestination":string(),"url":string(),"isActive":{"type":"boolean"}}}));
     schemas.insert("VerifyAlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url"],"properties":{"name":string(),"alertDestination":string(),"url":string()}}));
     schemas.insert("AlertChannelView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertChannelInput"},{"type":"object","required":["id","createdByActorId","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"createdAt":date_time()}}]}));
