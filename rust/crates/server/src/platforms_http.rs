@@ -7,6 +7,7 @@ use axum::response::IntoResponse;
 use axum::{Json, Router};
 use citadel_adapters::agent::AgentClient;
 use citadel_adapters::docker::DockerClient;
+use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeTarget};
 use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
@@ -39,6 +40,10 @@ const ALL_PLATFORM_SPECIFIC: i32 = SpecificPermission::Logs as i32
     | SpecificPermission::ManageNodeAgents as i32;
 const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
+mod edge;
+mod statistics;
+pub use edge::EdgeHttpContext;
+
 #[derive(Clone)]
 pub struct PlatformsHttpState {
     pub identity: Arc<IdentityService>,
@@ -48,7 +53,9 @@ pub struct PlatformsHttpState {
     pub resource_metadata: Arc<dyn ResourceMetadataStore>,
     pub docker: DockerClient,
     pub agent: Option<AgentClient>,
+    pub edge: EdgeRegistry,
     pub realtime: Option<RealtimeHub>,
+    pub stats_sample_max_age: std::time::Duration,
 }
 
 pub fn router(state: PlatformsHttpState) -> Router {
@@ -56,9 +63,18 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
         .contract_route(routes::CREATE_PLATFORM, create_platform)
         .contract_route(routes::GET_PLATFORM, get_platform)
+        .contract_route(routes::CREATE_EDGE_ENROLLMENT, edge::enroll)
+        .contract_route(routes::GET_EDGE_STATUS, edge::status)
+        .contract_route(routes::REVOKE_EDGE, edge::revoke)
         .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
         .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)
         .contract_route(routes::GET_CONTAINER, get_container)
+        .contract_route(routes::GET_CONTAINER_STATS, statistics::container)
+        .contract_route(routes::GET_PLATFORM_STATS, statistics::platform)
+        .contract_route(routes::GET_DEPLOYMENT_STATS, statistics::deployment)
+        .contract_route(routes::GET_STACK_STATS, statistics::stack)
+        .contract_route(routes::GET_SWARM_SERVICE_STATS, statistics::service)
+        .contract_route(routes::GET_SWARM_TASK_STATS, statistics::task)
         .contract_route(routes::LIST_PLATFORM_IMAGES, list_images)
         .contract_route(routes::LIST_PLATFORM_NETWORKS, list_networks)
         .contract_route(routes::GET_PLATFORM_NETWORK, get_network)
@@ -482,6 +498,9 @@ async fn list_networks(
         RuntimeRef::Agent(runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
+        RuntimeRef::Edge(ref runtime) => {
+            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+        }
     };
     let values = match values {
         Ok(values) => values,
@@ -525,6 +544,9 @@ pub(crate) async fn lookup_platform_resources(
             RuntimeRef::Agent(runtime) => {
                 PlatformInventoryPort::list_volumes(runtime, &cancellation).await
             }
+            RuntimeRef::Edge(ref runtime) => {
+                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            }
         };
         result.map(|values| {
             values
@@ -538,6 +560,9 @@ pub(crate) async fn lookup_platform_resources(
                 PlatformInventoryPort::list_networks(runtime, &cancellation).await
             }
             RuntimeRef::Agent(runtime) => {
+                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            }
+            RuntimeRef::Edge(ref runtime) => {
                 PlatformInventoryPort::list_networks(runtime, &cancellation).await
             }
         };
@@ -597,6 +622,9 @@ async fn get_network(
         RuntimeRef::Agent(runtime) => {
             PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
         }
+        RuntimeRef::Edge(ref runtime) => {
+            PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
+        }
     };
     let network = match value {
         Ok(network) => map_network(network, capabilities),
@@ -639,6 +667,10 @@ async fn create_network(
                 .await
         }
         Ok(RuntimeRef::Agent(runtime)) => {
+            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
+                .await
+        }
+        Ok(RuntimeRef::Edge(ref runtime)) => {
             PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
                 .await
         }
@@ -688,6 +720,9 @@ async fn delete_networks(
                 PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
             }
             RuntimeRef::Agent(runtime) => {
+                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+            }
+            RuntimeRef::Edge(ref runtime) => {
                 PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
             }
         };
@@ -750,6 +785,9 @@ async fn delete_networks(
             RuntimeRef::Agent(runtime) => {
                 PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
             }
+            RuntimeRef::Edge(ref runtime) => {
+                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+            }
         };
         match result {
             Ok(()) => deleted += 1,
@@ -805,6 +843,9 @@ async fn list_volumes(
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Agent(runtime) => {
+            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+        }
+        RuntimeRef::Edge(ref runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
     };
@@ -870,6 +911,9 @@ async fn get_volume(
         RuntimeRef::Agent(runtime) => {
             PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
         }
+        RuntimeRef::Edge(ref runtime) => {
+            PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
+        }
     };
     let volume = match value {
         Ok(volume) => map_volume(volume, capabilities),
@@ -909,6 +953,9 @@ async fn create_volume(
             PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
         }
         Ok(RuntimeRef::Agent(runtime)) => {
+            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+        }
+        Ok(RuntimeRef::Edge(ref runtime)) => {
             PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
         }
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -968,6 +1015,15 @@ async fn delete_volumes(
                 .await
             }
             RuntimeRef::Agent(runtime) => {
+                PlatformResourceMutationPort::delete_volume(
+                    runtime,
+                    name,
+                    input.force.unwrap_or(false),
+                    &cancellation,
+                )
+                .await
+            }
+            RuntimeRef::Edge(ref runtime) => {
                 PlatformResourceMutationPort::delete_volume(
                     runtime,
                     name,
@@ -1315,6 +1371,7 @@ async fn volume_capabilities(
 enum RuntimeRef<'a> {
     Local(&'a DockerClient),
     Agent(&'a AgentClient),
+    Edge(EdgeRuntime),
 }
 
 pub(crate) async fn realtime_daemon_snapshot(
@@ -1341,6 +1398,9 @@ pub(crate) async fn realtime_daemon_snapshot(
         RuntimeRef::Agent(runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
+        RuntimeRef::Edge(ref runtime) => {
+            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+        }
     }
     .map_err(failure)?;
     let volumes = match runtime {
@@ -1348,6 +1408,9 @@ pub(crate) async fn realtime_daemon_snapshot(
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Agent(runtime) => {
+            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+        }
+        RuntimeRef::Edge(ref runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
     }
@@ -1395,6 +1458,15 @@ async fn runtime_for(
         RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Platform not found", false)
     })?;
     let (connector, address) = platform;
+    if connector.eq_ignore_ascii_case("EdgeAgent") {
+        return state
+            .edge
+            .get(&EdgeTarget::platform(platform_id))
+            .map(|session| RuntimeRef::Edge(EdgeRuntime { session }))
+            .map_err(|error| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, error.to_string(), false)
+            });
+    }
     if connector.eq_ignore_ascii_case("Local") {
         return Ok(RuntimeRef::Local(&state.docker));
     }

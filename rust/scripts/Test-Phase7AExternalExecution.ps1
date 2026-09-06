@@ -21,6 +21,7 @@ function Invoke-Rust {
         --volume 'citadel-rust-target:/source/rust/target' `
         --workdir /source/rust `
         --env "CITADEL_PHASE5_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+        --env "CITADEL_PHASE4_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
         --env "CITADEL_PHASE7_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
@@ -64,8 +65,12 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-backups')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--lib')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_sessions')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'phase7_resources_http', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_transport', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'platforms_http', '--test', 'platform_creation_http', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'platform_inventory_persistence', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('run', '--locked', '-p', 'xtask', '--', 'openapi', '--check')
 }
 finally {

@@ -8,7 +8,6 @@ use citadel_contracts::citadel::containers::v1::{
 };
 use citadel_contracts::citadel::shared_models::v1::Mount;
 use citadel_execution::{OutputLimitPolicy, ProcessLimits, ProcessRequest, run};
-use citadel_platforms::{PlatformInventoryPort, RuntimeErrorKind};
 use citadel_resources::ResourceSecretProtector;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -18,6 +17,8 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::agent::{AgentClient, AgentContainerAction};
+use crate::agent_execution::AgentExecutionClient;
+use crate::edge::{EdgeRegistry, EdgeTarget};
 use crate::local_docker_target::LocalDockerTargetGuard;
 use crate::secret_value_resolver::PostgresSecretValueResolver;
 
@@ -55,11 +56,12 @@ pub struct DockerResticBackupExecutor {
     maximum_output: usize,
     targets: LocalDockerTargetGuard,
     agent: Option<AgentClient>,
+    edge: EdgeRegistry,
 }
 
 enum BackupExecutionTarget {
     Local,
-    Agent,
+    Agent(AgentExecutionClient),
 }
 impl DockerResticBackupExecutor {
     pub fn new(
@@ -77,12 +79,19 @@ impl DockerResticBackupExecutor {
             maximum_output,
             targets: LocalDockerTargetGuard::new(pool),
             agent: None,
+            edge: EdgeRegistry::default(),
         }
     }
 
     #[must_use]
     pub fn with_agent(mut self, agent: Option<AgentClient>) -> Self {
         self.agent = agent;
+        self
+    }
+
+    #[must_use]
+    pub fn with_edge(mut self, edge: EdgeRegistry) -> Self {
+        self.edge = edge;
         self
     }
 }
@@ -329,15 +338,8 @@ impl DockerResticBackupExecutor {
                 BackupExecutionTarget::Local => {
                     self.run_backup_item(claim, item, cancellation).await
                 }
-                BackupExecutionTarget::Agent => {
-                    let Some(agent) = self.agent.as_ref() else {
-                        return Err((
-                            "The configured Agent backup transport is unavailable.".to_owned(),
-                            logs,
-                            results,
-                        ));
-                    };
-                    self.run_agent_backup_item(agent, claim, item, cancellation)
+                BackupExecutionTarget::Agent(agent) => {
+                    self.run_agent_backup_item(&agent, claim, item, cancellation)
                         .await
                 }
             };
@@ -538,7 +540,7 @@ impl DockerResticBackupExecutor {
 
     async fn run_agent_backup_item(
         &self,
-        agent: &AgentClient,
+        agent: &AgentExecutionClient,
         claim: &BackupClaim,
         item: &BackupSourceItem,
         cancellation: &CancellationToken,
@@ -709,11 +711,8 @@ impl DockerResticBackupExecutor {
                 cancellation,
             )
             .await?;
-        if let BackupExecutionTarget::Agent = target {
-            let agent = self.agent.as_ref().ok_or_else(|| {
-                "The configured Agent backup transport is unavailable.".to_owned()
-            })?;
-            return self.run_agent_restore(agent, claim, cancellation).await;
+        if let BackupExecutionTarget::Agent(agent) = target {
+            return self.run_agent_restore(&agent, claim, cancellation).await;
         }
         let snapshot = claim
             .source_item
@@ -782,7 +781,7 @@ impl DockerResticBackupExecutor {
 
     async fn run_agent_restore(
         &self,
-        agent: &AgentClient,
+        agent: &AgentExecutionClient,
         claim: &RestoreClaim,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
@@ -792,17 +791,10 @@ impl DockerResticBackupExecutor {
             .and_then(|item| item.restic_snapshot_id.as_deref())
             .or(claim.source.restic_snapshot_id.as_deref())
             .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
-        let existing = match PlatformInventoryPort::inspect_volume(
-            agent,
-            &claim.run.target_volume_name,
-            cancellation,
-        )
-        .await
-        {
-            Ok(_) => true,
-            Err(error) if error.kind == RuntimeErrorKind::NotFound => false,
-            Err(error) => return Err(error.to_string()),
-        };
+        let existing = agent
+            .volume_exists(&claim.run.target_volume_name, cancellation)
+            .await
+            .map_err(|error| error.to_string())?;
         if existing && !claim.run.overwrite_existing {
             return Err("Target Volume already exists.".to_owned());
         }
@@ -879,18 +871,60 @@ impl DockerResticBackupExecutor {
             return Err("The selected Platform is disconnected or unavailable.".to_owned());
         }
         let connector: String = row.try_get("connectortype").map_err(storage_text)?;
-        if connector == "Local" && node_id.is_none() {
+        if let Some(node_id) = node_id {
+            let target = EdgeTarget::node(platform_id, node_id.to_owned());
+            if let Ok(session) = self.edge.get(&target) {
+                return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
+                    session,
+                )));
+            }
+        }
+        if connector == "EdgeAgent" {
+            let session = self
+                .edge
+                .get(&EdgeTarget::platform(platform_id))
+                .map_err(|error| error.to_string())?;
+            if let Some(expected) = node_id {
+                use citadel_platforms::PlatformRuntimePort;
+                let info = crate::edge::EdgeRuntime {
+                    session: session.clone(),
+                }
+                .get_info(cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+                if info.swarm.as_ref().map(|swarm| swarm.node_id.as_str()) != Some(expected) {
+                    return Err(
+                        "The connected Edge Agent is not on the required Swarm Node.".into(),
+                    );
+                }
+            }
+            return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
+                session,
+            )));
+        }
+        if connector == "Local" {
+            if let Some(expected) = node_id {
+                let actual = self
+                    .execute(
+                        vec!["info".into(), "--format".into(), "{{.Swarm.NodeID}}".into()],
+                        vec![],
+                        Duration::from_secs(30),
+                        cancellation,
+                    )
+                    .await?;
+                if !actual.succeeded() || String::from_utf8_lossy(&actual.stdout).trim() != expected
+                {
+                    return Err(
+                        "The selected Swarm Node Agent is disconnected or unavailable.".into(),
+                    );
+                }
+            }
             return Ok(BackupExecutionTarget::Local);
         }
         if connector != "Agent" {
-            return Err(if connector == "EdgeAgent" {
-                "Edge Agent backup execution is unavailable until the Rust inbound command session is connected."
-                    .to_owned()
-            } else if connector == "Local" {
-                "An exact-node Swarm backup requires an Agent connected to that node.".to_owned()
-            } else {
-                format!("Platform connector '{connector}' does not support backup execution.")
-            });
+            return Err(format!(
+                "Platform connector '{connector}' does not support backup execution."
+            ));
         }
         let address: String = row.try_get("address").map_err(storage_text)?;
         let agent = self
@@ -914,12 +948,14 @@ impl DockerResticBackupExecutor {
                 ));
             }
         }
-        Ok(BackupExecutionTarget::Agent)
+        Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Direct(
+            Arc::new(agent.clone()),
+        )))
     }
 
     async fn create_agent_helper(
         &self,
-        agent: &AgentClient,
+        agent: &AgentExecutionClient,
         platform_id: Uuid,
         volume: &str,
         read_only: bool,

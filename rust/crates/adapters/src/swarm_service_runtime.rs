@@ -27,6 +27,7 @@ pub struct SwarmServiceRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
     agent: Option<AgentClient>,
+    edge: crate::edge::EdgeRegistry,
 }
 
 impl SwarmServiceRuntimeRouter {
@@ -36,7 +37,50 @@ impl SwarmServiceRuntimeRouter {
             pool,
             docker,
             agent,
+            edge: crate::edge::EdgeRegistry::default(),
         }
+    }
+
+    #[must_use]
+    pub fn with_edge(mut self, edge: crate::edge::EdgeRegistry) -> Self {
+        self.edge = edge;
+        self
+    }
+
+    async fn agent_for(
+        &self,
+        platform_id: Uuid,
+    ) -> Result<crate::agent_execution::AgentExecutionClient, SwarmServiceError> {
+        use crate::{agent_execution::AgentExecutionClient, edge::EdgeTarget};
+        let row = sqlx::query("SELECT connectortype,address FROM platforms WHERE id=$1")
+            .bind(platform_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)?
+            .ok_or(SwarmServiceError::NotFound)?;
+        let connector: String = row.try_get("connectortype").map_err(storage)?;
+        let address: String = row.try_get("address").map_err(storage)?;
+        if connector == "EdgeAgent" {
+            return self
+                .edge
+                .get(&EdgeTarget::platform(platform_id))
+                .map(AgentExecutionClient::Edge)
+                .map_err(|_| {
+                    SwarmServiceError::Runtime(
+                        "The Edge Agent is disconnected or unavailable.".into(),
+                    )
+                });
+        }
+        self.agent
+            .as_ref()
+            .filter(|agent| {
+                connector == "Agent"
+                    && agent.address().trim_end_matches('/') == address.trim_end_matches('/')
+            })
+            .map(|agent| AgentExecutionClient::Direct(std::sync::Arc::new(agent.clone())))
+            .ok_or_else(|| {
+                SwarmServiceError::Runtime("The configured Agent transport is unavailable.".into())
+            })
     }
 
     async fn connector(&self, platform_id: Uuid) -> Result<String, SwarmServiceError> {
@@ -119,9 +163,7 @@ impl SwarmServiceRuntimeRouter {
         force_increment: i32,
         cancellation: &CancellationToken,
     ) -> Result<RuntimeServiceResult, SwarmServiceError> {
-        let agent = self.agent.as_ref().ok_or_else(|| {
-            SwarmServiceError::Runtime("The configured Agent transport is unavailable.".to_owned())
-        })?;
+        let agent = self.agent_for(claim.platform_id).await?;
         let image = claim.spec.image.source_reference().ok_or_else(|| {
             SwarmServiceError::Validation("The Service image has not been resolved.".to_owned())
         })?;
@@ -189,7 +231,7 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
                     self.mutate_local(claim, ServiceOperationKind::Apply, 0, cancellation)
                         .await
                 }
-                "Agent" => self.mutate_agent(claim, 0, cancellation).await,
+                "Agent" | "EdgeAgent" => self.mutate_agent(claim, 0, cancellation).await,
                 _ => Err(edge_unavailable()),
             }
         })
@@ -206,7 +248,7 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
                     self.mutate_local(claim, ServiceOperationKind::Scale, 0, cancellation)
                         .await
                 }
-                "Agent" => self.mutate_agent(claim, 0, cancellation).await,
+                "Agent" | "EdgeAgent" => self.mutate_agent(claim, 0, cancellation).await,
                 _ => Err(edge_unavailable()),
             }
         })
@@ -222,7 +264,7 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
                     self.mutate_local(claim, ServiceOperationKind::ForceUpdate, 1, cancellation)
                         .await
                 }
-                "Agent" => self.mutate_agent(claim, 1, cancellation).await,
+                "Agent" | "EdgeAgent" => self.mutate_agent(claim, 1, cancellation).await,
                 _ => Err(edge_unavailable()),
             }
         })
@@ -243,12 +285,8 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
                         Err(error) => Err(runtime(error)),
                     }
                 }
-                "Agent" => {
-                    let agent = self.agent.as_ref().ok_or_else(|| {
-                        SwarmServiceError::Runtime(
-                            "The configured Agent transport is unavailable.".to_owned(),
-                        )
-                    })?;
+                "Agent" | "EdgeAgent" => {
+                    let agent = self.agent_for(platform_id).await?;
                     agent
                         .delete_managed_swarm_service(
                             DeleteManagedSwarmServiceRequest {
@@ -283,12 +321,8 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
                         true,
                     )))
                 }
-                "Agent" => {
-                    let agent = self.agent.as_ref().ok_or_else(|| {
-                        SwarmServiceError::Runtime(
-                            "The configured Agent transport is unavailable.".to_owned(),
-                        )
-                    })?;
+                "Agent" | "EdgeAgent" => {
+                    let agent = self.agent_for(claim.platform_id).await?;
                     let observed = agent
                         .inspect_managed_swarm_service(id, cancellation)
                         .await

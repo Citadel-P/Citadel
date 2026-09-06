@@ -6,10 +6,14 @@
   "runServices": ["postgres"],
   "shutdownAction": "stopCompose",
   "remoteUser": "vscode",
-  "forwardPorts": [8000, 5173],
+  "forwardPorts": [8000, 8001, 5173],
   "portsAttributes": {
     "8000": {
       "label": "Citadel Rust API",
+      "requireLocalPort": true
+    },
+    "8001": {
+      "label": "Citadel Edge gRPC",
       "requireLocalPort": true
     },
     "5173": {

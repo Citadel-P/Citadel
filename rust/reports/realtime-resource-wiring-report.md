@@ -75,8 +75,10 @@ reconnect, stale sockets, disposal, and bounded outstanding requests. Existing
 
 - Live logs and terminal/exec methods and their specific-permission tests. Rust
   rejects these methods; an adapter cannot implement missing backend execution.
-- Historical Container/Service/Task statistics endpoints and complete node-agent
-  coverage. Live delivery alone does not complete dependent screens.
+- Historical statistics endpoints are now implemented; see
+  `runtime-statistics-parity-report.md` for behavior, tests and limits. Complete
+  node-agent coverage is still open. History and live delivery do not substitute
+  for a connected exact-node data plane.
 - Incremental Build log tailing (BuildRunLogsAppended), beyond lifecycle snapshots.
 - Selected-user alert push (AlertEventReceived) and its .NET recipient-isolation
   scenario. Current alert snapshots obey HTTP read authorization, not selected

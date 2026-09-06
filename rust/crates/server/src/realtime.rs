@@ -237,6 +237,15 @@ impl RealtimeHub {
         platform_id: Uuid,
         stats: &[citadel_platforms::RuntimeContainerStat],
     ) -> u64 {
+        self.publish_scoped_container_stats(platform_id, None, stats)
+    }
+
+    pub fn publish_scoped_container_stats(
+        &self,
+        platform_id: Uuid,
+        node_id: Option<&str>,
+        stats: &[citadel_platforms::RuntimeContainerStat],
+    ) -> u64 {
         if self.inner.sender.receiver_count() == 0 {
             return self.current_revision();
         }
@@ -247,6 +256,7 @@ impl RealtimeHub {
             "runtimeChanged",
             json!({
                 "dockerResourceType": "containerStats",
+                "dockerNodeId": node_id,
                 "action": "sample",
                 "runtimeResourceId": platform_id,
                 "stats": stats,

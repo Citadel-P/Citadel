@@ -26,22 +26,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source: ProtoSource = serde_json::from_slice(&fs::read(&source_file)?)?;
     let proto_directory = normalize(crate_directory.join(source.directory));
     let mut protos = Vec::with_capacity(source.files.len());
+    let mut edge_protos = Vec::new();
     for file in source.files {
         let path = proto_directory.join(&file.name);
         println!("cargo:rerun-if-changed={}", path.display());
         verify_checksum(&path, &file.sha256)?;
-        protos.push(path);
+        if file.name == "edge_agent_service.proto" {
+            edge_protos.push(path);
+        } else {
+            protos.push(path);
+        }
     }
 
     let protoc = protoc_bin_vendored::protoc_bin_path()?;
     let protobuf_include = protoc_bin_vendored::include_path()?;
     let mut prost = prost_build::Config::new();
-    prost.protoc_executable(protoc);
+    prost.protoc_executable(&protoc);
 
     tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
-        .compile_with_config(prost, &protos, &[proto_directory, protobuf_include])?;
+        .compile_with_config(
+            prost,
+            &protos,
+            &[proto_directory.clone(), protobuf_include.clone()],
+        )?;
+
+    // The Edge RPC itself is named Connect. Do not generate the identically
+    // named convenience Channel constructor; callers supply a Channel to new().
+    let mut prost = prost_build::Config::new();
+    prost.protoc_executable(protoc);
+    tonic_prost_build::configure()
+        .build_transport(false)
+        .compile_with_config(prost, &edge_protos, &[proto_directory, protobuf_include])?;
 
     Ok(())
 }

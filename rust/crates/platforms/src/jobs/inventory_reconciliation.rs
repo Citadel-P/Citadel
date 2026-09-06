@@ -18,6 +18,7 @@ pub async fn collect_inventory(
     target: &InventoryCollectionTarget,
     cancellation: &CancellationToken,
 ) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
+    let observed_at = Utc::now();
     let (info, containers, images, networks, volumes) = tokio::try_join!(
         runtime.get_info(cancellation),
         runtime.list_containers(cancellation),
@@ -34,7 +35,7 @@ pub async fn collect_inventory(
         networks,
         volumes,
         swarm,
-        observed_at: Utc::now(),
+        observed_at,
     })
 }
 
@@ -44,6 +45,7 @@ pub async fn collect_inventory_from_info(
     info: RuntimePlatformInfo,
     cancellation: &CancellationToken,
 ) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
+    let observed_at = Utc::now();
     let (containers, images, networks, volumes) = tokio::try_join!(
         runtime.list_containers(cancellation),
         runtime.list_images(cancellation),
@@ -59,7 +61,7 @@ pub async fn collect_inventory_from_info(
         networks,
         volumes,
         swarm,
-        observed_at: Utc::now(),
+        observed_at,
     })
 }
 

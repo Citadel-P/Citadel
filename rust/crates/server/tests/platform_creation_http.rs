@@ -52,7 +52,7 @@ struct StaticInventory {
 
 #[derive(Clone)]
 enum InfoOutcome {
-    Value(RuntimePlatformInfo),
+    Value(Box<RuntimePlatformInfo>),
     Error(RuntimeErrorKind, String, bool),
 }
 
@@ -60,7 +60,7 @@ impl StaticInventory {
     fn standalone(daemon_id: impl Into<String>) -> Self {
         Self {
             calls: AtomicUsize::new(0),
-            info: InfoOutcome::Value(RuntimePlatformInfo {
+            info: InfoOutcome::Value(Box::new(RuntimePlatformInfo {
                 daemon_id: daemon_id.into(),
                 server_version: "28.0.0".into(),
                 operating_system: "Linux".into(),
@@ -76,7 +76,7 @@ impl StaticInventory {
                 minimum_api_version: "1.41".into(),
                 agent_version: Some("test-agent".into()),
                 swarm: None,
-            }),
+            })),
             containers: vec![container("docker-container-1", "running", false)],
             images: vec![RuntimeImageSummary {
                 id: "sha256:image-1".into(),
@@ -142,7 +142,7 @@ impl PlatformRuntimePort for StaticInventory {
         let outcome = self.info.clone();
         Box::pin(async move {
             match outcome {
-                InfoOutcome::Value(info) => Ok(info),
+                InfoOutcome::Value(info) => Ok(*info),
                 InfoOutcome::Error(kind, message, retryable) => {
                     Err(RuntimeCapabilityError::new(kind, message, retryable))
                 }
@@ -299,7 +299,9 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
+        edge: citadel_adapters::edge::EdgeRegistry::default(),
         realtime: None,
+        stats_sample_max_age: StdDuration::from_secs(30),
     });
 
     let input = json!({
@@ -819,6 +821,8 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
         realtime: Some(realtime.clone()),
+        edge: citadel_adapters::edge::EdgeRegistry::default(),
+        stats_sample_max_age: StdDuration::from_secs(30),
     });
     TestHarness {
         app,

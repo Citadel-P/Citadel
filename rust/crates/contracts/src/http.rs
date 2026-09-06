@@ -250,6 +250,11 @@ const SWARM_TASK_FILTER_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::query("serviceId", ParameterSchema::String),
 ];
 
+const STATS_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::path_uuid("id"),
+    ParameterContract::query("hours", ParameterSchema::Reference("StatsHours")),
+];
+
 const REGISTRY_FILTER_PARAMETERS: &[ParameterContract] = &[
     ParameterContract::query(
         "includeDisabled",
@@ -1410,6 +1415,27 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
+    CREATE_EDGE_ENROLLMENT => {
+        method: Post, path: "/api/v1/platforms/{id}/edge/enrollments", operation_id: "createEdgeAgentEnrollment", summary: "Create an Edge Agent enrollment token",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("EdgeAgentEnrollmentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_EDGE_STATUS => {
+        method: Get, path: "/api/v1/platforms/{id}/edge/status", operation_id: "getEdgeAgentStatus", summary: "Get Edge Agent connection status",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("EdgeAgentStatusView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REVOKE_EDGE => {
+        method: Post, path: "/api/v1/platforms/{id}/edge/revoke", operation_id: "revokeEdgeAgent", summary: "Revoke an Edge Agent binding",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
     LIST_PLATFORM_CONTAINERS => {
         method: Get, path: "/api/v1/platforms/{id}/containers", operation_id: "listContainers", summary: "List Platform Containers",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1423,6 +1449,48 @@ route_catalog! {
         request_schema: None, response_schema: Some("ContainerView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_CONTAINER_STATS => {
+        method: Get, path: "/api/v1/containers/{id}/stats", operation_id: "getContainerStats", summary: "Get Container statistics",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_string("id"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
+    },
+    GET_PLATFORM_STATS => {
+        method: Get, path: "/api/v1/platforms/{id}/stats", operation_id: "getPlatformStats", summary: "Get Platform statistics",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("PlatformStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: STATS_PARAMETERS
+    },
+    GET_DEPLOYMENT_STATS => {
+        method: Get, path: "/api/v1/deployments/{id}/stats", operation_id: "getDeploymentStats", summary: "Get Deployment statistics",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: STATS_PARAMETERS
+    },
+    GET_STACK_STATS => {
+        method: Get, path: "/api/v1/stacks/{stackId}/stats", operation_id: "getStackStats", summary: "Get Stack Container statistics",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("stackId"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
+    },
+    GET_SWARM_SERVICE_STATS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats", operation_id: "getSwarmServiceStats", summary: "Get Service statistics and node coverage",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
+    },
+    GET_SWARM_TASK_STATS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats", operation_id: "getSwarmTaskStats", summary: "Get current Task statistics",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmTaskStatsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
     },
     LIST_PLATFORM_IMAGES => {
         method: Get, path: "/api/v1/images/{platformId}", operation_id: "listImages", summary: "List Platform Images",
@@ -1935,6 +2003,24 @@ route_catalog! {
     },
     ARCHIVE_BUILD_AGENT_POOL => {
         method: Delete, path: "/api/v1/buildAgentPools/{id}", operation_id: "archiveBuildAgentPool", summary: "Archive a Build Agent Pool",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    CREATE_BUILD_POOL_EDGE_ENROLLMENT => {
+        method: Post, path: "/api/v1/buildAgentPools/{id}/edge/enrollments", operation_id: "createBuildAgentPoolEdgeEnrollment", summary: "Create build pool Edge Agent enrollment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("EdgeAgentEnrollmentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BUILD_POOL_EDGE_STATUS => {
+        method: Get, path: "/api/v1/buildAgentPools/{id}/edge/status", operation_id: "getBuildAgentPoolEdgeStatus", summary: "Get build pool Edge Agent status",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("EdgeAgentStatusView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REVOKE_BUILD_POOL_EDGE => {
+        method: Post, path: "/api/v1/buildAgentPools/{id}/edge/revoke", operation_id: "revokeBuildAgentPoolEdgeAgent", summary: "Revoke build pool Edge Agent",
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]

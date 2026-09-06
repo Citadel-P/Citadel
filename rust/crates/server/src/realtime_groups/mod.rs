@@ -172,6 +172,7 @@ pub enum RowStyle {
     Daemon,
     DockerResource,
     Activity,
+    Notification,
     Platforms,
 }
 #[derive(Default)]
@@ -225,13 +226,14 @@ impl GroupSubscription {
                         .map(str::to_owned)
                 })
                 .collect();
+            let initial = !self.known.contains_key(batch.target);
             let previous = self.known.entry(batch.target).or_default();
             for removed in previous.difference(&ids) {
                 match batch.style {
                     RowStyle::Platforms => {
                         events.push(ClientEvent::new("PlatformsDeleted", vec![json!(removed)]))
                     }
-                    RowStyle::Activity => {}
+                    RowStyle::Activity | RowStyle::Notification => {}
                     RowStyle::DockerResource => {
                         if let Some(row) = self
                             .tombstones
@@ -265,6 +267,12 @@ impl GroupSubscription {
                     RowStyle::Platforms => vec![row],
                     RowStyle::Activity => {
                         if previous.contains(id) {
+                            continue;
+                        }
+                        vec![row]
+                    }
+                    RowStyle::Notification => {
+                        if initial || previous.contains(id) {
                             continue;
                         }
                         vec![row]
@@ -303,6 +311,34 @@ impl GroupSubscription {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn alert_notifications_do_not_replay_history_or_repeat_existing_events() {
+        let mut subscription = GroupSubscription::new(Group::parse("alert-events").unwrap());
+        let snapshot = |ids: &[&str]| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "AlertEventReceived",
+                rows: ids.iter().map(|id| json!({"id":id})).collect(),
+                style: RowStyle::Notification,
+            }],
+            events: vec![],
+        };
+        assert!(
+            subscription
+                .apply(snapshot(&["old"]), 100)
+                .unwrap()
+                .is_empty()
+        );
+        let events = subscription.apply(snapshot(&["old", "new"]), 100).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].arguments, vec![json!({"id":"new"})]);
+        assert!(
+            subscription
+                .apply(snapshot(&["old", "new"]), 100)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(subscription.apply(snapshot(&[]), 100).unwrap().is_empty());
+    }
     #[test]
     fn rejects_private_untyped_malformed_and_unimplemented_stream_groups() {
         for name in [

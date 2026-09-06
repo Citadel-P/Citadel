@@ -1,0 +1,138 @@
+# Phase 7: Edge execution follow-up
+
+Status: implemented portions below; **Phase 7 remains open**.
+
+## Implemented
+
+- The existing Edge protobuf is generated from its pinned Contracts-submodule
+  source. Rust Core accepts the .NET enrollment and Ed25519 reconnect protocol.
+  This is not a rewrite of the Agent or its payload contracts.
+- Edge Platform creation persists an Offline resource without contacting a
+  nonexistent daemon. The existing enrollment/status/revoke HTTP routes enforce
+  Platform permissions and retain the existing UI payloads. Tokens are returned
+  once with `no-store`; PostgreSQL stores only their hashes.
+- Single-use enrollment is transactional. Expired, consumed, revoked and
+  mismatched identities fail closed. Node enrollment verifies the installation,
+  cluster, current manager-owned Service and Task, and exact eligible Node.
+- Reconnect replaces its previous session. Late old-session heartbeat,
+  disconnect and inventory writes cannot overwrite the replacement. Revocation
+  and inventory persistence are ordered transactionally.
+- Commands use bounded queues, deadlines and cancellation, with a shared 32 MiB
+  queued-payload budget, 16 concurrent commands and 8 streams per session.
+  A consumer that overflows its output allowance fails; it does not accumulate
+  an unbounded backlog. Dropped commands send cancellation; if cancellation
+  cannot be queued the session closes. Mutations are not replayed on reconnect.
+- Ordinary Edge Platform inventory refreshes on daemon events, coalesces bursts,
+  and performs a periodic full reconciliation. Full scans have a shared
+  concurrency bound and successful commits publish existing realtime events.
+- Platform-backed builds transport immutable Git archives and BuildKit Secrets
+  through Edge, followed by canonical push commands. Build output and errors
+  redact resolved Secret values and Registry credentials.
+- S3 Volume backup/restore helpers can execute on an exact Node Edge session.
+  The connected Local/regular-Agent/ordinary-Edge manager is used only after
+  verifying its live Node ID. No worker fallback to another daemon is allowed.
+  Helper cleanup uses an independent cancellation token after execution fails.
+- Alert subscriptions emit `AlertEventReceived` for newly observed authorized
+  events without replaying historical notifications at connection time.
+- Git synchronization no longer drops its in-flight execution when the
+  scheduler's one-minute tick fires.
+
+## Additional completion work (2026-09-05)
+
+- Deployment Apply, Stack Apply, managed Swarm Service create/update/delete,
+  and image pull now route to the selected ordinary Edge Platform. Direct and
+  Edge Agents share the Deployment/Stack protobuf mapping. There is no local
+  daemon fallback and no replay of a disconnected mutation.
+- Stack output retention is bounded to 512 KiB while all status frames are
+  drained. A failed deployment remains failed even if later rollback/cleanup
+  reports success. Cancellation and a disconnected stream cannot report success.
+- Edge Network/Volume reads and mutations use the existing authorized HTTP
+  routes and shared Direct-Agent mapping. The task-statistics validation path
+  can inspect a Task through the Edge manager.
+- Node-profile sessions supervise independent inventory and statistics streams.
+  Container snapshots and samples persist against `(Platform, Node, Docker ID)`;
+  a worker cannot update manager statistics or another Node with the same Docker
+  container ID. Snapshot time is captured before the scan, and an older snapshot
+  cannot delete a container observed by a newer event. Replaced/revoked sessions
+  cannot persist data. Disconnect marks only the affected Node's projections stale.
+  Node Image/Volume/Network projection ingestion is still outstanding.
+- Build Pool Edge enrollment/status/revoke routes retain .NET operation IDs and
+  permissions. Build Pool enrollment does not mount the host filesystem. Queued
+  Pool builds use that Pool's session, and the short claim transaction enforces
+  the persisted concurrent-build limit across workers. Pool changes publish to
+  the Build Pool realtime group. Cloud provisioning is not yet implemented.
+- Test fixtures now use unique Docker Service IDs and Platform addresses so
+  the database-backed gate can run repeatedly without fixture collisions.
+- The real PostgreSQL 18 `citadel_system_recovery` test passed: create a private
+  bundle with `pg_dump`, restore it into a separate clean target with
+  `pg_restore`, and verify persisted state. This verifies database disaster
+  recovery, not the remote Restic/RustFS or multi-node acceptance matrix.
+
+No React feature changes or database migrations were needed for this follow-up.
+OpenAPI and its generated contract inventory were regenerated.
+
+## Running Edge locally
+
+The REST API uses `Transport__ApiPort` (default 8000). Edge gRPC uses the separate
+`Transport__EdgeGrpcPort` (default 8001), matching the existing configuration.
+Set `EdgeAgent__PublicGrpcUrl` to the HTTP/2 endpoint reachable **from the Agent**;
+`localhost` inside an Agent container is not Core. Configure the existing TLS or
+trusted reverse-proxy mode for production. Do not expose disabled transport
+security to an untrusted network.
+
+Create an Edge Platform, request its enrollment from the Platform screen and
+use the returned instructions. `CITADEL_EDGE_AGENT_IMAGE` can point to the .NET
+Agent image under test. Normal .NET Agent capabilities and protobuf compatibility
+are required. The development container forwards port 8001 after reopening it.
+
+## Test mapping and limits
+
+| .NET reference | Rust coverage |
+| --- | --- |
+| `EdgeAgentSessionRegistryTests` | replacement, exact-node lookup, old disconnect isolation |
+| `EdgeAgentCommandRouterTests` | cancellation, deadline, concurrency/byte/queue bounds, node command restrictions |
+| `EdgeAgentTests` enrollment lifecycle | authorized HTTP creation/enrollment/status/revoke and hashed, one-use PostgreSQL enrollment |
+| Edge acceptance protocol client | real HTTP/2 enrollment, invalid signature rejection, signed reconnect, command completion and revocation |
+| Node enrollment identity checks | PostgreSQL-backed installation/Service/Task/Node validation; stale, wrong-task and manager enrollment rejection |
+| `EdgeAgentConnectorTests` execution contracts | Build/Push protobuf, binary output/exit semantics, missing unary response and pre-cancel rejection |
+| backup routing and cleanup | exact-node helper cleanup on failure with a second node receiving no commands |
+| `StackServiceTests` rollback and failed Apply | bounded retained output, sticky failure despite later cleanup success, stream cancellation/disconnect |
+| `SwarmNodeDataPlaneJobTests.ReconciliationSnapshot_ShouldNotDeleteContainerObservedByNewerEvent` | PostgreSQL node isolation, snapshot ordering, statistics persistence, stale-session and late-disconnect rejection |
+| Build Pool enrollment and Build concurrency | authorized HTTP lifecycle and two simultaneous PostgreSQL claims with a one-slot Pool |
+| Container statistics realtime mapping | identical Docker IDs on different Nodes cannot overwrite each other's UI samples |
+
+Run `rust/scripts/Test-Phase7AExternalExecution.ps1` for the repeatable gate.
+These tests include real PostgreSQL and a real HTTP/2 transport, but the Agent
+command responders are test peers. They do **not** prove that a released .NET
+Agent, Docker, registry and RustFS perform a complete backup/restore together.
+
+Verified after the additional completion work on 2026-09-05:
+
+- Workspace library tests: 301 passed.
+- Edge session tests: 7 passed.
+- Targeted PostgreSQL/HTTP/HTTP2 suites: 38 passed (10 adapter execution and
+  inventory tests, plus 28 server resource, Platform, lookup and statistics tests).
+- Real PostgreSQL 18 system recovery: 1 passed using separate disposable source
+  and target databases and matching `pg_dump`/`pg_restore` tools.
+- Adapter/server library and test Clippy: no warnings.
+- Formatting, server compilation through the test builds, generated OpenAPI
+  check (292 full / 240 public operations), and baseline database-schema
+  verification passed. The initial schema was not changed.
+
+The tests used disposable databases, not the running development database.
+No .NET Agent candidate image or full external-service matrix was run.
+
+## Still required
+
+- Build Agent Pool cloud provisioning, instance cleanup/recovery, and the full
+  provider lifecycle acceptance matrix.
+- Node-agent installation/bootstrap APIs, node-ID rebind recovery, and Node
+  Image/Volume/Network projection ingestion/read integration.
+- Interactive logs/terminal wiring and its permission/transport acceptance tests.
+- Remaining Git/image update producers and incremental Build log events.
+- Real Local/Agent/Edge external-service acceptance, multi-node backup/restore,
+  Citadel-system exact-node execution, and interrupted-operation recovery.
+
+The pre-existing local `citadel-rust-phase7:local` image lacks the Restic binary;
+it predates the current Dockerfile's Restic installation. It cannot serve as a
+passing candidate for the external-service acceptance matrix without rebuilding.

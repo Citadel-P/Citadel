@@ -68,7 +68,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost','Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
         .bind(platform)
         .bind(format!("backup-platform-{}", platform.simple()))
         .execute(&pool)
@@ -308,8 +308,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         rejected
             .error_message
             .as_deref()
-            .is_some_and(|message| message.contains("Edge Agent backup execution"))
+            .is_some_and(|message| message.contains("Edge Agent is disconnected or unavailable"))
     );
+    edge_failure_cleans_helper_on_the_exact_node(executor, &guarded_claim, platform).await;
 
     sqlx::query("DELETE FROM backuprunlogs WHERE backuprunid IN (SELECT id FROM backupruns WHERE backuprepositoryid=$1)").bind(repository.id).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1")
@@ -369,6 +370,80 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .execute(&pool)
         .await
         .unwrap();
+}
+
+async fn edge_failure_cleans_helper_on_the_exact_node(
+    executor: DockerResticBackupExecutor,
+    claim: &citadel_backups::BackupClaim,
+    platform: Uuid,
+) {
+    use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_contracts::citadel::{
+        containers::v1::CreateContainerResponse,
+        edge::v1::{EdgeCommandKind, core_envelope},
+    };
+    use prost::Message;
+    let registry = EdgeRegistry::default();
+    let (_wrong, mut wrong_outbound) = registry
+        .register(
+            EdgeTarget::node(platform, "node-one".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (selected, mut outbound) = registry
+        .register(
+            EdgeTarget::node(platform, "node-two".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let executor = executor.with_edge(registry);
+    let plan = BackupSourcePlan {
+        display_name: "fixture".into(),
+        items: vec![BackupSourceItem::new(
+            platform,
+            "volume-one".into(),
+            Some("node-two".into()),
+            None,
+        )],
+        warnings: vec![],
+        local_directory: None,
+    };
+    let cancellation = CancellationToken::new();
+    let run = executor.backup(claim, &plan, &cancellation);
+    let agent = async {
+        for kind in [
+            EdgeCommandKind::ContainerCreate,
+            EdgeCommandKind::ContainerStart,
+            EdgeCommandKind::ContainerDelete,
+        ] {
+            let message = tokio::time::timeout(std::time::Duration::from_secs(5), outbound.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            let id = Uuid::parse_str(&message.command_id).unwrap();
+            let Some(core_envelope::Body::Command(command)) = message.body else {
+                panic!("expected command")
+            };
+            assert_eq!(command.node_id, "node-two");
+            assert_eq!(command.kind, kind as i32);
+            if kind == EdgeCommandKind::ContainerCreate {
+                selected.output(
+                    id,
+                    CreateContainerResponse {
+                        container_id: "helper-on-node-two".into(),
+                    }
+                    .encode_to_vec(),
+                );
+            }
+            selected.complete(id, kind != EdgeCommandKind::ContainerStart);
+        }
+    };
+    let (result, ()) = tokio::join!(run, agent);
+    assert_eq!(result.status, "Failed");
+    assert_eq!(result.items.len(), 1);
+    assert_eq!(result.items[0].status, "Failed");
+    assert!(wrong_outbound.try_recv().is_err());
+    assert_eq!(selected.pending_count(), 0);
 }
 
 fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult {

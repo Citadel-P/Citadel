@@ -20,6 +20,8 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::agent::{AgentBuildCommand, AgentClient};
+use crate::agent_execution::AgentExecutionClient;
+use crate::edge::{EdgeRegistry, EdgeTarget};
 use crate::local_docker_target::LocalDockerTargetGuard;
 use crate::secret_value_resolver::PostgresSecretValueResolver;
 
@@ -131,6 +133,7 @@ pub struct PlatformBuildExecutor {
     pool: PgPool,
     local: Arc<dyn BuildExecutor>,
     agent: Option<AgentDockerBuildExecutor>,
+    edge: Option<AgentDockerBuildExecutor>,
 }
 
 impl PlatformBuildExecutor {
@@ -140,7 +143,18 @@ impl PlatformBuildExecutor {
         local: Arc<dyn BuildExecutor>,
         agent: Option<AgentDockerBuildExecutor>,
     ) -> Self {
-        Self { pool, local, agent }
+        Self {
+            pool,
+            local,
+            agent,
+            edge: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_edge(mut self, edge: AgentDockerBuildExecutor) -> Self {
+        self.edge = Some(edge);
+        self
     }
 }
 
@@ -151,6 +165,20 @@ impl BuildExecutor for PlatformBuildExecutor {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
+            if claim.project.builder_kind == "BuildAgentPool" {
+                let Some(id) = claim.project.build_agent_pool_id else {
+                    return failed(BuildFailure::Validation(
+                        "Build has no selected Agent Pool.".into(),
+                    ));
+                };
+                let available = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL AND COALESCE(providerspec->>'ConnectionMode',providerspec->>'connectionMode','')='EdgeAgent')")
+                    .bind(id).fetch_one(&self.pool).await;
+                return match (available, &self.edge) {
+                    (Ok(true), Some(edge)) => edge.execute(claim, cancellation).await,
+                    (Err(error), _) => failed(BuildFailure::Io(error.to_string())),
+                    _ => failed(BuildFailure::Validation("The selected Build Agent Pool is unavailable or does not use Edge transport.".into())),
+                };
+            }
             let Some(platform_id) = claim.project.platform_id else {
                 return failed(BuildFailure::Validation(
                     "Platform Build has no selected Platform.".to_owned(),
@@ -180,8 +208,9 @@ impl BuildExecutor for PlatformBuildExecutor {
                 "Local" => self.local.execute(claim, cancellation).await,
                 "Agent" => match &self.agent {
                     Some(agent)
-                        if agent.client.address().trim_end_matches('/')
-                            == address.trim_end_matches('/') =>
+                        if agent.address().is_some_and(|configured| {
+                            configured.trim_end_matches('/') == address.trim_end_matches('/')
+                        }) =>
                     {
                         agent.execute(claim, cancellation).await
                     }
@@ -189,10 +218,12 @@ impl BuildExecutor for PlatformBuildExecutor {
                         "The configured Agent Build transport is unavailable.".to_owned(),
                     )),
                 },
-                "EdgeAgent" => failed(BuildFailure::Validation(
-                    "Edge Agent Build execution is unavailable until its inbound command transport is connected."
-                        .to_owned(),
-                )),
+                "EdgeAgent" => match &self.edge {
+                    Some(edge) => edge.execute(claim, cancellation).await,
+                    None => failed(BuildFailure::Validation(
+                        "Edge Agent Build transport is unavailable.".into(),
+                    )),
+                },
                 _ => failed(BuildFailure::Validation(
                     "Build Platform connector is unsupported.".to_owned(),
                 )),
@@ -203,10 +234,15 @@ impl BuildExecutor for PlatformBuildExecutor {
 
 pub struct AgentDockerBuildExecutor {
     git_cache_root: PathBuf,
-    client: AgentClient,
+    client: BuildTransport,
     secrets: Arc<dyn BuildSecretResolver>,
     registries: Arc<dyn BuildRegistryCredentialResolver>,
     maximum_log_bytes: usize,
+}
+
+enum BuildTransport {
+    Direct(Arc<AgentClient>),
+    Edge(EdgeRegistry),
 }
 
 impl AgentDockerBuildExecutor {
@@ -220,10 +256,32 @@ impl AgentDockerBuildExecutor {
     ) -> Self {
         Self {
             git_cache_root,
-            client,
+            client: BuildTransport::Direct(Arc::new(client)),
             secrets,
             registries,
             maximum_log_bytes: maximum_log_bytes.max(1024),
+        }
+    }
+
+    pub fn new_edge(
+        git_cache_root: PathBuf,
+        registry: EdgeRegistry,
+        secrets: Arc<dyn BuildSecretResolver>,
+        registries: Arc<dyn BuildRegistryCredentialResolver>,
+        maximum_log_bytes: usize,
+    ) -> Self {
+        Self {
+            git_cache_root,
+            client: BuildTransport::Edge(registry),
+            secrets,
+            registries,
+            maximum_log_bytes: maximum_log_bytes.max(1024),
+        }
+    }
+    fn address(&self) -> Option<&str> {
+        match &self.client {
+            BuildTransport::Direct(client) => Some(client.address()),
+            BuildTransport::Edge(_) => None,
         }
     }
 
@@ -261,6 +319,7 @@ impl AgentDockerBuildExecutor {
             .map(|credentials| encode_registry_auth(credentials, &claim.run.registry_host))
             .transpose()?;
         let mut secrets = Vec::with_capacity(claim.project.build_secrets.len());
+        let mut secret_values = Vec::with_capacity(claim.project.build_secrets.len());
         for secret in &claim.project.build_secrets {
             let value = self
                 .secrets
@@ -268,6 +327,7 @@ impl AgentDockerBuildExecutor {
                 .await
                 .map_err(|error| BuildFailure::Validation(error.to_string()))?;
             secrets.push((secret.id.clone(), value.to_string()));
+            secret_values.push(value);
         }
         let build_args = claim
             .project
@@ -280,8 +340,33 @@ impl AgentDockerBuildExecutor {
                     .map(|value| (argument.name.clone(), value.clone()))
             })
             .collect::<HashMap<_, _>>();
-        let output = self
-            .client
+        let client = match &self.client {
+            BuildTransport::Direct(client) => AgentExecutionClient::Direct(client.clone()),
+            BuildTransport::Edge(registry) => {
+                let target = match claim.project.builder_kind.as_str() {
+                    "Platform" => claim.project.platform_id.map(EdgeTarget::platform),
+                    "BuildAgentPool" => claim
+                        .project
+                        .build_agent_pool_id
+                        .map(EdgeTarget::build_pool),
+                    _ => None,
+                }
+                .ok_or_else(|| {
+                    BuildFailure::Validation("Build execution target is invalid.".into())
+                })?;
+                AgentExecutionClient::Edge(
+                    registry
+                        .get(&target)
+                        .map_err(|error| BuildFailure::Validation(error.to_string()))?,
+                )
+            }
+        };
+        let sensitive = secret_values
+            .iter()
+            .map(|value| value.as_str())
+            .chain(credentials.as_ref().map(|value| value.password.as_str()))
+            .collect::<Vec<_>>();
+        let output = client
             .build_image(
                 AgentBuildCommand {
                     context_archive,
@@ -304,7 +389,7 @@ impl AgentDockerBuildExecutor {
                 if cancellation.is_cancelled() {
                     BuildFailure::Process(ProcessError::Cancelled)
                 } else {
-                    BuildFailure::Command(error.to_string())
+                    BuildFailure::Command(redact_values(&error.to_string(), &sensitive))
                 }
             })?;
         Ok(BuildExecutionResult {
@@ -317,13 +402,7 @@ impl AgentDockerBuildExecutor {
             error_message: None,
             logs: vec![BuildLog {
                 stream: "stdout".to_owned(),
-                message: redact_values(
-                    &output,
-                    &credentials
-                        .as_ref()
-                        .map(|value| vec![value.password.as_str()])
-                        .unwrap_or_default(),
-                ),
+                message: redact_values(&output, &sensitive),
             }],
         })
     }

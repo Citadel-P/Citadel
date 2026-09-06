@@ -224,6 +224,13 @@ pub const TASK_LIST: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const TASK_INSPECT: Endpoint = Endpoint {
+    operation_id: "TaskInspect",
+    method: "GET",
+    path: "/tasks/{id}",
+    versioned: true,
+    streaming: false,
+};
 pub const SECRET_LIST: Endpoint = Endpoint {
     operation_id: "SecretList",
     method: "GET",

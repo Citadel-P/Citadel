@@ -97,7 +97,15 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         store: alert_store,
         delivery: Arc::new(FakeAlertDelivery),
     }))
-    .layer(axum::Extension(hub.clone()));
+    .layer(axum::Extension(hub.clone()))
+    .layer(axum::Extension(
+        citadel_server::platforms_http::EdgeHttpContext {
+            store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
+            registry: citadel_adapters::edge::EdgeRegistry::default(),
+            core_url: "https://core.example.test:8001".into(),
+            agent_image: "citadel-agent:test".into(),
+        },
+    ));
 
     assert_eq!(
         request(&app, Method::GET, "/api/v1/buildProjects", None, None)
@@ -114,6 +122,98 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let fixture = seed_dependencies(&pool, principal.actor_id).await;
     let suffix = Uuid::now_v7().simple().to_string();
 
+    let build_pool_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/buildAgentPools",
+        Some(principal.clone()),
+        Some(json!({
+            "name":format!("pool-{suffix}"), "enabled":true,
+            "providerSpec":{"$type":"GenericEdge","connectionMode":"EdgeAgent"}
+        })),
+    )
+    .await;
+    assert_eq!(build_pool_response.status(), StatusCode::OK);
+    let build_pool = response_json(build_pool_response).await;
+    let pool_id = build_pool["id"].as_str().unwrap();
+    let edge_path = format!("/api/v1/buildAgentPools/{pool_id}/edge");
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!("{edge_path}/enrollments"),
+            None,
+            None
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let enrollment = request(
+        &app,
+        Method::POST,
+        &format!("{edge_path}/enrollments"),
+        Some(principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(enrollment.status(), StatusCode::OK);
+    assert!(
+        enrollment.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("no-store")
+    );
+    let enrollment = response_json(enrollment).await;
+    assert_eq!(enrollment["platformId"], Uuid::nil().to_string());
+    let command = enrollment["instructions"]["dockerRunCommand"]
+        .as_str()
+        .unwrap();
+    assert!(command.contains("edge-build-agent"));
+    assert!(
+        !command.contains("/:/host"),
+        "Build pool does not need host filesystem access"
+    );
+    let stored_hash: String =
+        sqlx::query_scalar("SELECT tokenhash FROM edgeagentenrollments WHERE id=$1")
+            .bind(Uuid::parse_str(enrollment["enrollmentId"].as_str().unwrap()).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_ne!(stored_hash, enrollment["token"].as_str().unwrap());
+    assert_eq!(
+        request(
+            &app,
+            Method::GET,
+            &format!("{edge_path}/status"),
+            Some(principal.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!("{edge_path}/revoke"),
+            Some(principal.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    let revoked: bool =
+        sqlx::query_scalar("SELECT revokedatutc IS NOT NULL FROM edgeagentenrollments WHERE id=$1")
+            .bind(Uuid::parse_str(enrollment["enrollmentId"].as_str().unwrap()).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(revoked);
+
+    let before_channel = hub.current_revision();
     let channel = response_json(
         request(
             &app,
@@ -133,7 +233,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let channel_id = channel["id"].as_str().unwrap();
     assert_eq!(
         hub.current_revision(),
-        1,
+        before_channel + 1,
         "successful persisted mutations notify"
     );
     let invalid_rule = request(
@@ -145,7 +245,11 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(invalid_rule.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(hub.current_revision(), 1, "rejected writes must not notify");
+    assert_eq!(
+        hub.current_revision(),
+        before_channel + 1,
+        "rejected writes must not notify"
+    );
     let rule = response_json(
         request(
             &app,
@@ -289,6 +393,24 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
 
     let reader = seed_regular_user(&pool).await;
+    for (method, suffix) in [
+        (Method::GET, "status"),
+        (Method::POST, "enrollments"),
+        (Method::POST, "revoke"),
+    ] {
+        assert_eq!(
+            request(
+                &app,
+                method,
+                &format!("{edge_path}/{suffix}"),
+                Some(reader.clone()),
+                None
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
     assert_eq!(
         response_json(
             request(
@@ -501,7 +623,7 @@ async fn seed_dependencies(pool: &sqlx::PgPool, actor: ActorId) -> FixtureIds {
         git_repository: Uuid::now_v7(),
         secret: Uuid::now_v7(),
     };
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost','Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
         .bind(ids.platform).bind(format!("phase7-platform-{}", ids.platform.simple())).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}',$2,$3,'docker.io','Enabled')")
         .bind(ids.registry).bind(actor.value()).bind(format!("phase7-registry-{}", ids.registry.simple())).execute(pool).await.unwrap();

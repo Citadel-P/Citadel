@@ -375,6 +375,21 @@ fn map_service(value: SwarmService) -> RuntimeSwarmService {
     .normalize_ownership()
 }
 
+impl citadel_platforms::SwarmTaskRuntimePort for DockerClient {
+    fn inspect_task<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeSwarmTask, RuntimeCapabilityError>> {
+        async move {
+            tokio::select! {biased;
+                ()=cancellation.cancelled()=>Err(cancelled_error()),
+                result=self.inspect_swarm_task(id)=>result.map(map_task).map_err(normalize_docker_error),
+            }
+        }.boxed()
+    }
+}
+
 fn map_task(value: SwarmTask) -> RuntimeSwarmTask {
     RuntimeSwarmTask {
         id: value.id,

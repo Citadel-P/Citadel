@@ -20,8 +20,8 @@ use super::generated::{
     NODE_LIST, NetworkCreateRequest, NetworkCreateResponse, SECRET_LIST, SERVICE_CREATE,
     SERVICE_DELETE, SERVICE_INSPECT, SERVICE_LIST, SERVICE_UPDATE, SWARM_INSPECT, SYSTEM_EVENTS,
     SYSTEM_INFO, SYSTEM_PING, SYSTEM_VERSION, SwarmConfig, SwarmInspect, SwarmNode, SwarmSecret,
-    SwarmService, SwarmTask, TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT, VOLUME_LIST,
-    VolumeCreateOptions, VolumeListResponse,
+    SwarmService, SwarmTask, TASK_INSPECT, TASK_LIST, VOLUME_CREATE, VOLUME_DELETE, VOLUME_INSPECT,
+    VOLUME_LIST, VolumeCreateOptions, VolumeListResponse,
 };
 
 const MINIMUM_SUPPORTED_VERSION: ApiVersion = ApiVersion::new(1, 41);
@@ -409,6 +409,12 @@ impl DockerClient {
             .path
             .replace("{id}", &urlencoding::encode(id));
         self.get_json(&SERVICE_INSPECT, &path, None).await
+    }
+
+    pub async fn inspect_swarm_task(&self, id: &str) -> Result<SwarmTask, DockerError> {
+        validate_identifier(id)?;
+        let path = TASK_INSPECT.path.replace("{id}", &urlencoding::encode(id));
+        self.get_json(&TASK_INSPECT, &path, None).await
     }
 
     pub async fn create_swarm_service(

@@ -2,6 +2,7 @@
 
 pub mod activity_store;
 pub mod agent;
+mod agent_execution;
 pub mod alert_store;
 pub mod automation_store;
 pub mod automation_token;
@@ -19,6 +20,7 @@ pub mod deployment_bindings;
 pub mod deployment_runtime;
 pub mod deployment_store;
 pub mod docker;
+pub mod edge;
 pub mod git_account_store;
 pub mod git_repository_execution_store;
 pub mod identity_store;
@@ -44,6 +46,7 @@ pub mod stack_build_images;
 pub mod stack_runtime;
 pub mod stack_source_materializer;
 pub mod stack_store;
+pub mod statistics_read_store;
 pub mod swarm_service_bindings;
 pub mod swarm_service_runtime;
 pub mod swarm_service_store;

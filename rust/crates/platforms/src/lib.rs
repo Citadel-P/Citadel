@@ -17,11 +17,13 @@ pub mod jobs;
 mod mutations;
 mod read;
 mod registration;
+mod statistics;
 
 pub use inventory::*;
 pub use mutations::*;
 pub use read::*;
 pub use registration::*;
+pub use statistics::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

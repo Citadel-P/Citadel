@@ -7,9 +7,7 @@ use citadel_deployments::{
     PreparedDeploymentImage, ResolvedDeploymentBuild, RuntimeContainerState,
     RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
 };
-use citadel_platforms::{
-    PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind,
-};
+use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
@@ -30,6 +28,7 @@ pub struct DeploymentRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
     agent: Option<AgentClient>,
+    edge: crate::edge::EdgeRegistry,
 }
 
 impl DeploymentRuntimeRouter {
@@ -39,7 +38,14 @@ impl DeploymentRuntimeRouter {
             pool,
             docker,
             agent,
+            edge: crate::edge::EdgeRegistry::default(),
         }
+    }
+
+    #[must_use]
+    pub fn with_edge(mut self, edge: crate::edge::EdgeRegistry) -> Self {
+        self.edge = edge;
+        self
     }
 
     async fn platform(&self, platform_id: Uuid) -> Result<PlatformTarget, DeploymentError> {
@@ -56,21 +62,37 @@ impl DeploymentRuntimeRouter {
             ));
         }
         Ok(PlatformTarget {
+            platform_id,
             connector: row.try_get("connectortype").map_err(storage)?,
             address: row.try_get("address").map_err(storage)?,
         })
     }
 
-    fn agent_for(&self, target: &PlatformTarget) -> Result<&AgentClient, DeploymentError> {
+    fn agent_for(
+        &self,
+        target: &PlatformTarget,
+    ) -> Result<crate::agent_execution::AgentExecutionClient, DeploymentError> {
+        use crate::{agent_execution::AgentExecutionClient, edge::EdgeTarget};
+        if target.connector.eq_ignore_ascii_case("EdgeAgent") {
+            return self
+                .edge
+                .get(&EdgeTarget::platform(target.platform_id))
+                .map(AgentExecutionClient::Edge)
+                .map_err(|_| {
+                    DeploymentError::Runtime(
+                        "The Edge Agent is disconnected or unavailable.".into(),
+                    )
+                });
+        }
         self.agent
             .as_ref()
             .filter(|agent| {
-                agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
+                target.connector.eq_ignore_ascii_case("Agent")
+                    && agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
             })
+            .map(|agent| AgentExecutionClient::Direct(std::sync::Arc::new(agent.clone())))
             .ok_or_else(|| {
-                DeploymentError::Runtime(
-                    "The configured Agent transport is unavailable.".to_owned(),
-                )
+                DeploymentError::Runtime("The configured Agent transport is unavailable.".into())
             })
     }
 
@@ -235,7 +257,7 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
                     .map(|image| (image.id, image.repo_tags, image.repo_digests)),
             );
         }
-        if target.connector.eq_ignore_ascii_case("Agent") {
+        if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
             let agent = self.agent_for(&target)?;
             agent
                 .pull_deployment_image(
@@ -386,7 +408,7 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
             if target.connector.eq_ignore_ascii_case("Local") {
                 return self.apply_local(command, cancellation).await;
             }
-            if target.connector.eq_ignore_ascii_case("Agent") {
+            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
                 let mut normalized = command.clone();
                 normalize_resource_limits(&mut normalized);
                 add_ownership_labels(&mut normalized);
@@ -444,7 +466,7 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
                         .unwrap_or(RuntimeContainerState::Timeout),
                 }));
             }
-            if target.connector.eq_ignore_ascii_case("Agent") {
+            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
                 let containers = self
                     .agent_for(&target)?
                     .list_containers(cancellation)
@@ -498,7 +520,7 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
                     Err(error) => Err(runtime(error)),
                 };
             }
-            if target.connector.eq_ignore_ascii_case("Agent") {
+            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
                 return match self
                     .agent_for(&target)?
                     .delete_container(docker_container_id, cancellation)
@@ -519,6 +541,7 @@ impl DeploymentRuntimePort for DeploymentRuntimeRouter {
 }
 
 struct PlatformTarget {
+    platform_id: Uuid,
     connector: String,
     address: String,
 }

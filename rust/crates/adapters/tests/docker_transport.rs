@@ -11,6 +11,23 @@ use tokio::net::UnixListener;
 use uuid::Uuid;
 
 #[tokio::test]
+async fn cancelled_task_inspection_does_not_open_the_docker_socket() {
+    use citadel_platforms::{RuntimeErrorKind, SwarmTaskRuntimePort};
+    let socket = temp_socket();
+    let client = DockerClient::new(&socket, Duration::from_secs(1)).unwrap();
+    let cancellation = tokio_util::sync::CancellationToken::new();
+    cancellation.cancel();
+    assert_eq!(
+        client
+            .inspect_task("task", &cancellation)
+            .await
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::Cancelled
+    );
+}
+
+#[tokio::test]
 async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_streams() {
     let socket_path = temp_socket();
     let listener = UnixListener::bind(&socket_path).unwrap();

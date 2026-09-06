@@ -438,6 +438,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             "AutomationAction",
         )),
     );
+    let edge_registry = citadel_adapters::edge::EdgeRegistry::default();
     let backups = Arc::new(
         BackupService::new(
             Arc::new(PostgresBackupStore::new(pool.clone())),
@@ -453,7 +454,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                     4 * 1024 * 1024,
                     pool.clone(),
                 )
-                .with_agent(agent.clone()),
+                .with_agent(agent.clone())
+                .with_edge(edge_registry.clone()),
             ),
             Arc::new(
                 PostgresBackupSourcePlanner::new(pool.clone())
@@ -517,19 +519,25 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         AgentDockerBuildExecutor::new(
             data_root.join("git-repositories"),
             client,
-            build_secrets,
-            build_registries,
+            build_secrets.clone(),
+            build_registries.clone(),
             4 * 1024 * 1024,
         )
     });
     let builds = Arc::new(
         BuildService::new(
             Arc::new(PostgresBuildStore::new(pool.clone())),
-            Arc::new(PlatformBuildExecutor::new(
-                pool.clone(),
-                local_builds,
-                agent_builds,
-            )),
+            Arc::new(
+                PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds).with_edge(
+                    AgentDockerBuildExecutor::new_edge(
+                        data_root.join("git-repositories"),
+                        edge_registry.clone(),
+                        build_secrets,
+                        build_registries,
+                        4 * 1024 * 1024,
+                    ),
+                ),
+            ),
             chrono::Duration::minutes(10),
         )
         .with_alerts(alert_store.clone())
@@ -548,11 +556,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let deployments = Arc::new(
         DeploymentService::new(
             Arc::new(PostgresDeploymentStore::new(pool.clone())),
-            Arc::new(DeploymentRuntimeRouter::new(
-                pool.clone(),
-                docker.clone(),
-                agent.clone(),
-            )),
+            Arc::new(
+                DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+            ),
             entitlements.clone(),
             cancellation.clone(),
         )
@@ -568,11 +575,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let swarm_services = Arc::new(
         ManagedSwarmServiceService::new(
             Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
-            Arc::new(SwarmServiceRuntimeRouter::new(
-                pool.clone(),
-                docker.clone(),
-                agent.clone(),
-            )),
+            Arc::new(
+                SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+            ),
             cancellation.clone(),
         )
         .with_notifier(Arc::new(
@@ -587,11 +593,10 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let stacks = Arc::new(
         StackService::new(
             Arc::new(PostgresStackStore::new(pool.clone())),
-            Arc::new(StackRuntimeRouter::new(
-                pool.clone(),
-                docker.clone(),
-                agent.clone(),
-            )),
+            Arc::new(
+                StackRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+            ),
             Arc::new(PostgresStackBindingResolver::new(
                 pool.clone(),
                 secret_protector.clone(),
@@ -615,7 +620,12 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         resource_metadata,
         docker: docker.clone(),
         agent: agent.clone(),
+        edge: edge_registry.clone(),
         realtime: realtime_hub.clone(),
+        stats_sample_max_age: config
+            .probe_interval
+            .saturating_mul(3)
+            .max(std::time::Duration::from_secs(30)),
     };
     let realtime = config.realtime.as_ref().map(|realtime_config| {
         RealtimeService::with_hub(
@@ -655,6 +665,15 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         )
     });
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
+    supervisor.spawn(
+        "edge-platform-inventory",
+        workers::edge::run(
+            cancellation.child_token(),
+            edge_registry.clone(),
+            pool.clone(),
+            realtime_hub.clone(),
+        ),
+    );
     supervisor.spawn(
         "service-account-last-used",
         last_used_worker.run(cancellation.child_token()),
@@ -842,6 +861,31 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             .route("/openapi/v1.json", get(openapi_full))
             .route("/openapi/public/v1.json", get(openapi_public));
     }
+    let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
+        citadel_adapters::edge::EdgeIntake::new(citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()), edge_registry.clone()),
+    ).max_decoding_message_size(citadel_adapters::edge::MAX_PAYLOAD + 4096)
+        .max_encoding_message_size(citadel_adapters::edge::MAX_PAYLOAD + 4096);
+    let edge_routes = tonic::service::Routes::new(edge_service).into_axum_router();
+    app = app.layer(axum::Extension(platforms_http::EdgeHttpContext {
+        store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
+        registry: edge_registry,
+        core_url: config
+            .transport
+            .edge_agent_public_url
+            .to_string()
+            .trim_end_matches('/')
+            .to_owned(),
+        agent_image: std::env::var("CITADEL_EDGE_AGENT_IMAGE")
+            .unwrap_or_else(|_| "ghcr.io/citadel-p/citadel.agent:latest".into()),
+    }));
+    let mut edge_transport = config.transport.clone();
+    edge_transport.static_root = None;
+    let edge_app = transport::secure_router_with_grpc(
+        Router::new(),
+        &edge_transport,
+        Arc::clone(&readiness),
+        Some(edge_routes),
+    )?;
     let app = transport::secure_router(
         app.layer(middleware::from_fn_with_state(
             identity,
@@ -862,6 +906,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         config.listen_address,
         config.transport.clone(),
         app,
+        edge_app,
         cancellation.clone(),
         config.shutdown_timeout,
     );
@@ -906,20 +951,33 @@ async fn run_server(
     address: std::net::SocketAddr,
     transport_config: citadel_server::config::TransportConfig,
     app: Router,
+    edge_app: Router,
     cancellation: CancellationToken,
     shutdown_timeout: Duration,
 ) -> std::io::Result<()> {
-    let http = transport::serve(
-        address,
-        &transport_config,
-        app,
-        cancellation.clone(),
-        shutdown_timeout,
-    );
+    let http = async {
+        tokio::try_join!(
+            transport::serve(
+                address,
+                &transport_config,
+                app,
+                cancellation.clone(),
+                shutdown_timeout
+            ),
+            transport::serve(
+                std::net::SocketAddr::new(address.ip(), transport_config.edge_grpc_port),
+                &transport_config,
+                edge_app,
+                cancellation.clone(),
+                shutdown_timeout
+            ),
+        )
+        .map(|_| ())
+    };
     tokio::pin!(http);
     tokio::select! {
         result = &mut http => result,
-        () = shutdown_signal(cancellation) => http.await,
+        () = shutdown_signal(cancellation.clone()) => http.await,
     }
 }
 

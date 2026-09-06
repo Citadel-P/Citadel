@@ -45,7 +45,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost','Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}'::json,$2,$3,'docker.io','Enabled')").bind(registry).bind(actor.value()).bind(format!("build-registry-{}",registry.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repo.git','Idle')").bind(repository).bind(actor.value()).bind(format!("build-repo-{}",repository.simple())).execute(&pool).await.unwrap();
     let store = PostgresBuildStore::new(pool.clone());
@@ -191,6 +191,66 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .await
             .unwrap();
     assert_eq!(retained, 2);
+    // Build queue parity: different Projects cannot race past a Pool's limit.
+    let mut pool_input: citadel_builds::BuildAgentPoolInput = serde_json::from_value(serde_json::json!({
+        "name":format!("pool-{}",Uuid::now_v7()),"enabled":true,
+        "providerSpec":{"$type":"GenericEdge","connectionMode":"EdgeAgent"},"maxActiveBuilders":1
+    })).unwrap();
+    pool_input.validate().unwrap();
+    let build_pool = store.create_pool(actor, &pool_input).await.unwrap();
+    input.tag_ids.clear();
+    input.platform_id = None;
+    input.builder_kind = "BuildAgentPool".into();
+    input.build_agent_pool_id = Some(build_pool.id);
+    let mut pool_projects = Vec::new();
+    for _ in 0..2 {
+        input.name = format!("pool-build-{}", Uuid::now_v7());
+        let project = store.create(actor, &input).await.unwrap();
+        store.enqueue(actor, project.id, "Manual").await.unwrap();
+        pool_projects.push(project.id);
+    }
+    let (a, b) = tokio::join!(
+        store.claim_next(Utc::now() - Duration::minutes(5)),
+        store.claim_next(Utc::now() - Duration::minutes(5))
+    );
+    let claimed = [a.unwrap(), b.unwrap()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    assert_eq!(claimed.len(), 1);
+    assert!(
+        store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    store
+        .finish(&claimed[0], &success_result('e'))
+        .await
+        .unwrap();
+    let next = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(next.project.id, claimed[0].project.id);
+    store.finish(&next, &success_result('f')).await.unwrap();
+    sqlx::query("DELETE FROM buildruns WHERE buildprojectid=ANY($1)")
+        .bind(&pool_projects)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM buildprojects WHERE id=ANY($1)")
+        .bind(&pool_projects)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM buildagentpools WHERE id=$1")
+        .bind(build_pool.id)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE platforms SET connectortype='Agent' WHERE id=$1")
         .bind(platform)
         .execute(&pool)
