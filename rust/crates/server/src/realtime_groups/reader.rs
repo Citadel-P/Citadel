@@ -12,6 +12,10 @@ use citadel_stacks::StackStore;
 use citadel_swarm_services::SwarmServiceStore;
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "reader_tests.rs"]
+mod tests;
+
 // Reuse the same authorized read models as HTTP. No internal HTTP requests,
 // browser query policy, copied SQL schema, or second resource cache.
 pub struct ApplicationGroupReader {
@@ -128,7 +132,16 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?;
                 return Ok(GroupSnapshot {
-                    rows: vec![],
+                    rows: vec![GroupRows {
+                        target: "AlertEventReceived",
+                        rows: events
+                            .items
+                            .iter()
+                            .map(serde_json::to_value)
+                            .collect::<Result<_, _>>()
+                            .map_err(failure)?,
+                        style: RowStyle::Notification,
+                    }],
                     events: vec![
                         ClientEvent::new(
                             "AlertEventsUpdated",
@@ -624,6 +637,9 @@ fn container_data(
         "capabilities":container.capabilities,
     });
     if let Some(stat) = event
+        .filter(|event| {
+            event.payload["dockerNodeId"].as_str() == container.docker_node_id.as_deref()
+        })
         .and_then(|e| e.payload["stats"].as_array())
         .and_then(|stats| {
             stats
@@ -648,7 +664,10 @@ fn map_stats(
         .iter()
         .filter_map(|stat| {
             let id = stat["dockerContainerId"].as_str()?;
-            let container = containers.iter().find(|c| c.container_id == id)?;
+            let container = containers.iter().find(|c| {
+                c.container_id == id
+                    && c.docker_node_id.as_deref() == event.payload["dockerNodeId"].as_str()
+            })?;
             let mut mapped = stat.clone();
             mapped["containerId"] = json!(container.id);
             Some(mapped)

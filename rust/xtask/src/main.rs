@@ -265,6 +265,13 @@ const OPERATIONS: &[OperationSpec] = &[
         streaming: false,
     },
     OperationSpec {
+        operation_id: "TaskInspect",
+        method: "get",
+        path: "/tasks/{id}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
         operation_id: "SecretList",
         method: "get",
         path: "/secrets",

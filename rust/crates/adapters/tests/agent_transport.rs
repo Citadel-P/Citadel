@@ -242,3 +242,28 @@ async fn signed_agent_daemon_events_are_normalized_for_reconciliation() {
     assert!(stream.next().await.is_none());
     server_cancellation.cancel();
 }
+
+#[tokio::test]
+async fn cancelled_task_inspection_does_not_issue_an_agent_request() {
+    use citadel_platforms::SwarmTaskRuntimePort;
+    let (address, _, _, server_cancellation) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[9; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+    assert_eq!(
+        client
+            .inspect_task("task", &cancellation)
+            .await
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::Cancelled
+    );
+    server_cancellation.cancel();
+}

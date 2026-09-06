@@ -3,6 +3,11 @@
 pub mod http;
 
 pub mod citadel {
+    pub mod edge {
+        pub mod v1 {
+            tonic::include_proto!("citadel.edge.v1");
+        }
+    }
     pub mod shared_models {
         pub mod v1 {
             tonic::include_proto!("citadel.shared_models.v1");

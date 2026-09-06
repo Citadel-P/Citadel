@@ -30,6 +30,7 @@ pub struct StackRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
     agent: Option<AgentClient>,
+    edge: crate::edge::EdgeRegistry,
 }
 
 impl StackRuntimeRouter {
@@ -39,7 +40,14 @@ impl StackRuntimeRouter {
             pool,
             docker,
             agent,
+            edge: crate::edge::EdgeRegistry::default(),
         }
+    }
+
+    #[must_use]
+    pub fn with_edge(mut self, edge: crate::edge::EdgeRegistry) -> Self {
+        self.edge = edge;
+        self
     }
 
     async fn platform(&self, platform_id: Uuid) -> Result<PlatformTarget, StackError> {
@@ -55,19 +63,35 @@ impl StackRuntimeRouter {
             ));
         }
         Ok(PlatformTarget {
+            platform_id,
             connector: row.try_get("connectortype").map_err(storage)?,
             address: row.try_get("address").map_err(storage)?,
         })
     }
 
-    fn agent_for(&self, target: &PlatformTarget) -> Result<&AgentClient, StackError> {
+    fn agent_for(
+        &self,
+        target: &PlatformTarget,
+    ) -> Result<crate::agent_execution::AgentExecutionClient, StackError> {
+        use crate::{agent_execution::AgentExecutionClient, edge::EdgeTarget};
+        if target.connector.eq_ignore_ascii_case("EdgeAgent") {
+            return self
+                .edge
+                .get(&EdgeTarget::platform(target.platform_id))
+                .map(AgentExecutionClient::Edge)
+                .map_err(|_| {
+                    StackError::Runtime("The Edge Agent is disconnected or unavailable.".into())
+                });
+        }
         self.agent
             .as_ref()
             .filter(|agent| {
-                agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
+                target.connector.eq_ignore_ascii_case("Agent")
+                    && agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
             })
+            .map(|agent| AgentExecutionClient::Direct(std::sync::Arc::new(agent.clone())))
             .ok_or_else(|| {
-                StackError::Runtime("The configured Agent transport is unavailable.".to_owned())
+                StackError::Runtime("The configured Agent transport is unavailable.".into())
             })
     }
 
@@ -310,29 +334,23 @@ impl StackRuntimeRouter {
         .map_err(storage)
     }
 
-    async fn delete_compose_networks<T>(
+    async fn delete_compose_networks<F, Fut>(
         &self,
-        transport: &T,
+        networks: Vec<citadel_platforms::RuntimeNetworkSummary>,
         project: &str,
-        cancellation: &CancellationToken,
+        delete: F,
     ) -> Result<(), StackError>
     where
-        T: PlatformInventoryPort + PlatformResourceMutationPort,
+        F: Fn(String) -> Fut,
+        Fut: std::future::Future<Output = Result<(), citadel_platforms::RuntimeCapabilityError>>,
     {
-        let networks = transport
-            .list_networks(cancellation)
-            .await
-            .map_err(agent_error)?;
         for network in networks.into_iter().filter(|network| {
             network
                 .labels
                 .get("com.docker.compose.project")
                 .is_some_and(|value| value == project)
         }) {
-            transport
-                .delete_network(&network.id, cancellation)
-                .await
-                .map_err(agent_error)?;
+            delete(network.id).await.map_err(agent_error)?;
         }
         Ok(())
     }
@@ -352,7 +370,7 @@ impl StackRuntimePort for StackRuntimeRouter {
             let registry = self.stack_registry(claim.spec.common().registry_id).await?;
             if target.connector.eq_ignore_ascii_case("Local") {
                 self.apply_local(claim, source, environment, registry.as_ref(), cancellation).await
-            } else if target.connector.eq_ignore_ascii_case("Agent") {
+            } else if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
                 self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
@@ -472,8 +490,14 @@ impl StackRuntimePort for StackRuntimeRouter {
                         .await
                         .map_err(runtime_io)?;
                 }
-                self.delete_compose_networks(&self.docker, &claim.project_name, cancellation)
+                let networks = PlatformInventoryPort::list_networks(&self.docker, cancellation)
                     .await
+                    .map_err(agent_error)?;
+                self.delete_compose_networks(networks, &claim.project_name, |id| async move {
+                    PlatformResourceMutationPort::delete_network(&self.docker, &id, cancellation)
+                        .await
+                })
+                .await
             } else {
                 let agent = self.agent_for(&target)?;
                 for id in container_ids {
@@ -482,8 +506,15 @@ impl StackRuntimePort for StackRuntimeRouter {
                         .await
                         .map_err(agent_error)?;
                 }
-                self.delete_compose_networks(agent, &claim.project_name, cancellation)
+                let networks = agent
+                    .list_networks(cancellation)
                     .await
+                    .map_err(agent_error)?;
+                let agent = &agent;
+                self.delete_compose_networks(networks, &claim.project_name, |id| async move {
+                    agent.delete_network(&id, cancellation).await
+                })
+                .await
             }
         }
         .boxed()
@@ -1130,6 +1161,7 @@ fn agent_error(error: impl std::fmt::Display) -> StackError {
     StackError::Runtime(error.to_string())
 }
 struct PlatformTarget {
+    platform_id: Uuid,
     connector: String,
     address: String,
 }

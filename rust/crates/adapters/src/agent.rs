@@ -1,4 +1,7 @@
 use std::fs;
+
+#[path = "agent_workloads.rs"]
+pub(crate) mod workloads;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_stream::stream;
@@ -72,6 +75,55 @@ use zeroize::Zeroizing;
 
 const MAX_GRPC_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_UNARY_ATTEMPTS: usize = 3;
+
+pub(crate) fn map_container_stats(
+    value: citadel_contracts::citadel::containers::v1::ContainersStatsResponse,
+) -> Vec<RuntimeContainerStat> {
+    let created = chrono::Utc::now().timestamp();
+    value
+        .containers
+        .into_iter()
+        .map(|(id, stat)| RuntimeContainerStat {
+            docker_container_id: id,
+            memory_active: stat.memory_active,
+            memory_cache: stat.memory_cache,
+            cpu_usage: stat.cpu_usage,
+            memory_limit: stat.memory_limit,
+            rx_bytes: stat.rx_bytes,
+            tx_bytes: stat.tx_bytes,
+            created,
+        })
+        .collect()
+}
+
+impl citadel_platforms::SwarmTaskRuntimePort for AgentClient {
+    fn inspect_task<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeSwarmTask, RuntimeCapabilityError>> {
+        async move {
+            let response = self
+                .retry_unary(cancellation, || async {
+                    let request = self.signer.sign(
+                        citadel_contracts::citadel::swarm::v1::InspectSwarmTaskRequest {
+                            task_id: id.into(),
+                        },
+                        "/citadel.swarm.v1.SwarmService/InspectTask",
+                        Some(self.operation_timeout),
+                    )?;
+                    self.swarm_client()
+                        .inspect_task(request)
+                        .await
+                        .map(|value| value.into_inner())
+                        .map_err(normalize_status)
+                })
+                .await?;
+            Ok(map_swarm_task(response))
+        }
+        .boxed()
+    }
+}
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(200);
 
 #[doc(hidden)]
@@ -691,57 +743,7 @@ impl AgentClient {
         cancellation: &CancellationToken,
     ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError> {
         let request = self.signer.sign(
-            StackApplyRequest {
-                stack_name: claim.name.clone(),
-                compose_file_content: None,
-                project_name: Some(claim.project_name.clone()),
-                environment_file_path: claim.spec.common().env_file_path.clone(),
-                registry_auth: registry.map(|value| value.auth.to_string()),
-                registry_name: registry.map(|value| value.name.clone()),
-                registry_host: registry.map(|value| value.host.clone()),
-                destroy_before_deploy: claim.spec.common().destroy_before_deploy,
-                environment_variables: environment.to_vec(),
-                pre_deploy: claim.spec.common().pre_deploy.as_ref().map(|command| {
-                    ProtoStackCommand {
-                        commands: command.commands.clone(),
-                        path: command.path.clone(),
-                    }
-                }),
-                post_deploy: claim.spec.common().post_deploy.as_ref().map(|command| {
-                    ProtoStackCommand {
-                        commands: command.commands.clone(),
-                        path: command.path.clone(),
-                    }
-                }),
-                service_names: Vec::new(),
-                pull_images: true,
-                source_working_directory: Some(source.working_directory.clone()),
-                source_compose_file_paths: source.compose_paths.clone(),
-                source_env_file_paths: source.env_file_paths.clone(),
-                labels_override_file_path: source.labels_override_path.clone(),
-                generated_files_directory: source
-                    .labels_override_path
-                    .as_deref()
-                    .and_then(|path| path.rsplit_once('/').map(|(parent, _)| parent.to_owned())),
-                secret_files: Vec::new(),
-                secret_target_service_names: Vec::new(),
-                orchestration_mode: if claim.platform_type == "DockerSwarm" {
-                    ProtoStackOrchestrationMode::DockerSwarm as i32
-                } else {
-                    ProtoStackOrchestrationMode::DockerCompose as i32
-                },
-                source_files: source
-                    .files
-                    .iter()
-                    .map(|file| ProtoStackSourceFile {
-                        relative_path: file.relative_path.clone(),
-                        content: file.content.clone(),
-                    })
-                    .collect(),
-                retained_swarm_secrets: Vec::new(),
-                retained_swarm_configs: Vec::new(),
-                convert_compose_project_to_swarm: false,
-            },
+            workloads::stack_request(claim, source, environment, registry),
             APPLY_STACK_METHOD,
             None,
         )?;
@@ -754,44 +756,7 @@ impl AgentClient {
                     .map_err(normalize_status)?
             }
         };
-        let mut stream = response.into_inner();
-        let mut status = citadel_stacks::StackReleaseStatus::Failed;
-        let mut messages = Vec::new();
-        loop {
-            let next = tokio::select! {
-                biased;
-                () = cancellation.cancelled() => return Err(cancelled_error()),
-                item = stream.next() => item,
-            };
-            let Some(item) = next else { break };
-            let item = item.map_err(normalize_status)?;
-            if let Some(value) = item.stack_status.as_deref() {
-                status = citadel_stacks::StackReleaseStatus::parse(value).map_err(|error| {
-                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-                })?;
-            } else if item.exit_code == Some(0) {
-                status = citadel_stacks::StackReleaseStatus::Healthy;
-            }
-            let event_type = match ProtoStackApplyEventType::try_from(item.r#type) {
-                Ok(ProtoStackApplyEventType::StdOut) => citadel_stacks::StackApplyEventType::StdOut,
-                Ok(ProtoStackApplyEventType::StdErr) => citadel_stacks::StackApplyEventType::StdErr,
-                Ok(ProtoStackApplyEventType::SystemMessage) => {
-                    citadel_stacks::StackApplyEventType::SystemMessage
-                }
-                Ok(ProtoStackApplyEventType::CommandCompleted) => {
-                    citadel_stacks::StackApplyEventType::CommandCompleted
-                }
-                _ => citadel_stacks::StackApplyEventType::Unknown,
-            };
-            messages.push(citadel_stacks::StackStreamItem {
-                event_type,
-                message: item.message,
-                exit_code: item.exit_code,
-                stack_status: Some(status),
-                severity: None,
-            });
-        }
-        Ok(citadel_stacks::StackRuntimeResult { status, messages })
+        workloads::consume_stack_stream(response.into_inner(), cancellation).await
     }
 
     /// Pull is deliberately not retried: once an Agent accepts this mutation,
@@ -854,55 +819,8 @@ impl AgentClient {
         command: &RuntimeDeploymentCommand,
         cancellation: &CancellationToken,
     ) -> Result<RuntimeDeploymentResult, RuntimeCapabilityError> {
-        let spec = &command.spec;
-        let life_cycle_spec = spec
-            .life_cycle_spec
-            .as_ref()
-            .map(|life_cycle| ProtoLifeCycleSpec {
-                stop_timeout: life_cycle.stop_timeout,
-                stop_signal: life_cycle.stop_signal.map(|signal| match signal {
-                    StopSignal::SIGTERM => ProtoStopSignal::Sigterm as i32,
-                    StopSignal::SIGKILL => ProtoStopSignal::Sigkill as i32,
-                    StopSignal::SIGINT => ProtoStopSignal::Sigint as i32,
-                    StopSignal::SIGQUIT => ProtoStopSignal::Sigquit as i32,
-                }),
-                restart_policy: match life_cycle.restart_policy {
-                    ContainerRestartPolicy::No => ProtoRestartPolicy::No as i32,
-                    ContainerRestartPolicy::Always => ProtoRestartPolicy::Always as i32,
-                    ContainerRestartPolicy::OnFailure => ProtoRestartPolicy::OnFailure as i32,
-                    ContainerRestartPolicy::UnlessStopped => {
-                        ProtoRestartPolicy::UnlessStopped as i32
-                    }
-                },
-            });
-        let resource_spec = spec
-            .resource_spec
-            .as_ref()
-            .map(|resource| ProtoResourceSpec {
-                nano_cpus: resource.nano_cpus,
-                memory_limit: resource.memory_limit,
-            });
         let request = self.signer.sign(
-            ApplyDeploymentRequest {
-                image_id: command.image_id.clone(),
-                name: command.name.clone(),
-                spec: Some(ProtoDeploymentSpec {
-                    image_id: command.image_id.clone(),
-                    life_cycle_spec,
-                    resource_spec,
-                    labels: spec
-                        .labels
-                        .clone()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .collect(),
-                    ports: spec.ports.clone().unwrap_or_default(),
-                    env_vars: command.environment_variables.clone(),
-                    volumes: spec.volumes.clone().unwrap_or_default(),
-                    networks: spec.networks.clone().unwrap_or_default(),
-                    command: spec.command.clone().unwrap_or_default(),
-                }),
-            },
+            workloads::deployment_request(command),
             APPLY_DEPLOYMENT_METHOD,
             Some(self.operation_timeout),
         )?;
@@ -918,16 +836,7 @@ impl AgentClient {
                 .map_err(normalize_status)?,
         }
         .into_inner();
-        let state = match DeployedContainerState::try_from(response.deployed_container_state) {
-            Ok(DeployedContainerState::Running) => RuntimeContainerState::Running,
-            Ok(DeployedContainerState::Exited) => RuntimeContainerState::Exited,
-            Ok(DeployedContainerState::Timeout) | Err(_) => RuntimeContainerState::Timeout,
-        };
-        Ok(RuntimeDeploymentResult {
-            docker_container_id: response.container_id,
-            docker_image_id: command.image_id.clone(),
-            state,
-        })
+        Ok(workloads::deployment_result(command, response))
     }
 
     fn network_client(&self) -> NetworkServiceClient<Channel> {
@@ -1088,17 +997,7 @@ impl AgentClient {
                 };
                 match next {
                     Some(Ok(value)) => {
-                        let created = chrono::Utc::now().timestamp();
-                        yield Ok(value.containers.into_iter().map(|(id, stat)| RuntimeContainerStat {
-                            docker_container_id: id,
-                            memory_active: stat.memory_active,
-                            memory_cache: stat.memory_cache,
-                            cpu_usage: stat.cpu_usage,
-                            memory_limit: stat.memory_limit,
-                            rx_bytes: stat.rx_bytes,
-                            tx_bytes: stat.tx_bytes,
-                            created,
-                        }).collect());
+                        yield Ok(map_container_stats(value));
                     }
                     Some(Err(error)) => {
                         yield Err(normalize_status(error));
@@ -1151,7 +1050,9 @@ impl AgentClient {
     }
 }
 
-fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<AgentDaemonEvent> {
+pub(crate) fn map_daemon_event(
+    kind: Option<daemon_event_response::Kind>,
+) -> Option<AgentDaemonEvent> {
     let event = match kind? {
         daemon_event_response::Kind::DaemonContainerEventResponse(value) => AgentDaemonEvent {
             resource_type: "container",
@@ -1194,6 +1095,38 @@ const fn daemon_resource_type(value: i32) -> &'static str {
     }
 }
 
+pub(crate) fn network_request(input: &CreateRuntimeNetwork) -> CreateNetworkRequest {
+    CreateNetworkRequest {
+        name: input.name.clone(),
+        driver: Some(input.driver.clone()),
+        scope: Some(input.scope.clone()),
+        internal: input.internal,
+        attachable: input.attachable,
+        ingress: input.ingress,
+        config_only: input.config_only,
+        config_from: input.config_from.as_ref().map(|value| ConfigFromMessage {
+            network: value.network.clone(),
+        }),
+        ipam: input.ipam.as_ref().map(|value| IpamMessage {
+            driver: Some(value.driver.clone()),
+            config: value
+                .config
+                .iter()
+                .map(|item| IpamConfigMessage {
+                    subnet: Some(item.subnet.clone()),
+                    ip_range: Some(item.ip_range.clone()),
+                    gateway: Some(item.gateway.clone()),
+                })
+                .collect(),
+            options: value.options.clone().into_iter().collect(),
+        }),
+        enable_i_pv6: input.enable_ipv6,
+        enable_i_pv4: input.enable_ipv4,
+        options: input.options.clone().into_iter().collect(),
+        labels: input.labels.clone().into_iter().collect(),
+    }
+}
+
 impl PlatformResourceMutationPort for AgentClient {
     fn create_network<'a>(
         &'a self,
@@ -1202,35 +1135,7 @@ impl PlatformResourceMutationPort for AgentClient {
     ) -> BoxFuture<'a, Result<CreatedRuntimeNetwork, RuntimeCapabilityError>> {
         async move {
             let request = self.signer.sign(
-                CreateNetworkRequest {
-                    name: input.name.clone(),
-                    driver: Some(input.driver.clone()),
-                    scope: Some(input.scope.clone()),
-                    internal: input.internal,
-                    attachable: input.attachable,
-                    ingress: input.ingress,
-                    config_only: input.config_only,
-                    config_from: input.config_from.as_ref().map(|value| ConfigFromMessage {
-                        network: value.network.clone(),
-                    }),
-                    ipam: input.ipam.as_ref().map(|value| IpamMessage {
-                        driver: Some(value.driver.clone()),
-                        config: value
-                            .config
-                            .iter()
-                            .map(|item| IpamConfigMessage {
-                                subnet: Some(item.subnet.clone()),
-                                ip_range: Some(item.ip_range.clone()),
-                                gateway: Some(item.gateway.clone()),
-                            })
-                            .collect(),
-                        options: value.options.clone().into_iter().collect(),
-                    }),
-                    enable_i_pv6: input.enable_ipv6,
-                    enable_i_pv4: input.enable_ipv4,
-                    options: input.options.clone().into_iter().collect(),
-                    labels: input.labels.clone().into_iter().collect(),
-                },
+                network_request(input),
                 CREATE_NETWORK_METHOD,
                 Some(self.operation_timeout),
             )?;
@@ -1703,7 +1608,7 @@ impl PlatformInventoryPort for AgentClient {
     }
 }
 
-fn map_image(
+pub(crate) fn map_image(
     image: citadel_contracts::citadel::shared_models::v1::ImageReply,
 ) -> RuntimeImageSummary {
     RuntimeImageSummary {
@@ -1716,7 +1621,7 @@ fn map_image(
     }
 }
 
-fn map_network(
+pub(crate) fn map_network(
     network: citadel_contracts::citadel::shared_models::v1::Network,
 ) -> RuntimeNetworkSummary {
     let ipam = network.ipam.map(|ipam| {
@@ -1752,7 +1657,7 @@ fn map_network(
     }
 }
 
-fn map_network_inspect(network: InspectNetworkResponse) -> RuntimeNetworkSummary {
+pub(crate) fn map_network_inspect(network: InspectNetworkResponse) -> RuntimeNetworkSummary {
     let container_count = network.containers.len();
     RuntimeNetworkSummary {
         id: network.id,
@@ -1805,7 +1710,7 @@ fn map_network_inspect(network: InspectNetworkResponse) -> RuntimeNetworkSummary
     }
 }
 
-fn map_volume(
+pub(crate) fn map_volume(
     volume: citadel_contracts::citadel::shared_models::v1::VolumeResponse,
 ) -> RuntimeVolumeSummary {
     RuntimeVolumeSummary {
@@ -1849,7 +1754,7 @@ fn map_volume(
     }
 }
 
-fn map_swarm_node(
+pub(crate) fn map_swarm_node(
     value: citadel_contracts::citadel::swarm::v1::SwarmNodeMessage,
 ) -> RuntimeSwarmNode {
     RuntimeSwarmNode {
@@ -1872,7 +1777,7 @@ fn map_swarm_node(
     }
 }
 
-fn map_swarm_service(
+pub(crate) fn map_swarm_service(
     value: citadel_contracts::citadel::swarm::v1::SwarmServiceMessage,
 ) -> RuntimeSwarmService {
     RuntimeSwarmService {
@@ -1903,7 +1808,7 @@ fn map_swarm_service(
     .normalize_ownership()
 }
 
-fn map_swarm_task(
+pub(crate) fn map_swarm_task(
     value: citadel_contracts::citadel::swarm::v1::SwarmTaskMessage,
 ) -> RuntimeSwarmTask {
     RuntimeSwarmTask {
@@ -1926,7 +1831,7 @@ fn map_swarm_task(
     }
 }
 
-fn map_swarm_config(
+pub(crate) fn map_swarm_config(
     value: citadel_contracts::citadel::swarm::v1::SwarmConfigMessage,
 ) -> RuntimeSwarmConfig {
     RuntimeSwarmConfig {
@@ -1940,7 +1845,7 @@ fn map_swarm_config(
     }
 }
 
-fn map_swarm_secret(
+pub(crate) fn map_swarm_secret(
     value: citadel_contracts::citadel::swarm::v1::SwarmSecretMessage,
 ) -> RuntimeSwarmSecret {
     RuntimeSwarmSecret {
@@ -1969,7 +1874,7 @@ fn nonempty(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
 
-fn map_platform_info(value: PlatformInfoResponse) -> RuntimePlatformInfo {
+pub(crate) fn map_platform_info(value: PlatformInfoResponse) -> RuntimePlatformInfo {
     let stats = value.platform_stat.unwrap_or_default();
     let swarm = value.swarm_info.map(|swarm| RuntimeSwarmInfo {
         node_id: swarm.node_id,
@@ -2009,7 +1914,7 @@ fn map_platform_info(value: PlatformInfoResponse) -> RuntimePlatformInfo {
     }
 }
 
-fn map_container(value: ContainerMessage) -> RuntimeContainerSummary {
+pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary {
     let state = value.state().as_str_name().to_ascii_lowercase();
     let ports = serde_json::Value::Object(
         value
@@ -2048,7 +1953,7 @@ fn map_container(value: ContainerMessage) -> RuntimeContainerSummary {
     }
 }
 
-fn map_platform_stats(
+pub(crate) fn map_platform_stats(
     value: citadel_contracts::citadel::platforms::v1::PlatformStatsResponse,
 ) -> RuntimePlatformStats {
     let stat = value.stat.unwrap_or_default();
@@ -2130,11 +2035,14 @@ fn normalize_status(status: Status) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(kind, status.message(), retryable)
 }
 
-async fn consume_image_build_stream(
-    mut stream: tonic::Streaming<ImageBuildResponse>,
+pub(crate) async fn consume_image_build_stream<S>(
+    mut stream: S,
     maximum_bytes: usize,
     cancellation: &CancellationToken,
-) -> Result<String, RuntimeCapabilityError> {
+) -> Result<String, RuntimeCapabilityError>
+where
+    S: futures_util::Stream<Item = Result<ImageBuildResponse, Status>> + Unpin,
+{
     let mut output = String::new();
     loop {
         let next = tokio::select! {

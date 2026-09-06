@@ -1090,6 +1090,13 @@ fn schemas() -> Value {
         "NetworkCapabilities": network_capabilities(),
         "VolumeCapabilities": volume_capabilities(),
         "PlatformView": platform_view(),
+        "EdgeAgentEnrollmentView": {"type":"object","required":["enrollmentId","platformId","token","expiresAtUtc","instructions"],"properties":{
+            "enrollmentId":uuid(),"platformId":uuid(),"token":string(),"expiresAtUtc":{"type":"string","format":"date-time"},
+            "instructions":{"type":"object","required":["coreUrl","environment","agentImage","dockerRunCommand"],"properties":{"coreUrl":string(),"agentImage":string(),"dockerRunCommand":string(),"environment":{"type":"object","additionalProperties":{"type":"string"}}}}
+        }},
+        "EdgeAgentStatusView": {"type":"object","required":["connectionStatus"],"properties":{
+            "connectionStatus":string(),"lastConnectedAtUtc":nullable_string(),"lastDisconnectedAtUtc":nullable_string(),"lastHeartbeatAtUtc":nullable_string(),"lastSeenVersion":nullable_string(),"lastSeenHostname":nullable_string(),"agentFingerprint":nullable_string(),"protocolVersion":{"type":["integer","null"],"format":"int32"},"revokedAtUtc":nullable_string(),"enrollmentExpiresAtUtc":nullable_string()
+        }},
         "PlatformType": { "type": "string", "enum": ["Docker", "DockerSwarm", "Kubernetes"] },
         "PlatformConnectorType": { "type": "string", "enum": ["Unknown", "Local", "Agent", "EdgeAgent"] },
         "CreatePlatformInput": {
@@ -1108,6 +1115,14 @@ fn schemas() -> Value {
         },
         "PlatformsView": collection_view("platforms", "PlatformView", "ResourceCapabilities"),
         "ContainerView": container_view(),
+        "StatsHours": {"type":"integer","format":"int32","enum":[24,48,72],"default":24},
+        "ContainerStatView": {"type":"object","required":["containerId","created","cpuUsage","memoryActive","memoryCache","memoryLimit","rxBytes","txBytes"],"properties":{
+            "containerId":uuid(),"created":{"type":"integer","format":"int64"},"cpuUsage":{"type":"number"},"memoryActive":{"type":"number"},"memoryCache":{"type":"number"},"memoryLimit":{"type":"number"},"rxBytes":{"type":"number"},"txBytes":{"type":"number"}}},
+        "PlatformStatView": {"type":"object","required":["created","cpuUsage","memoryUsage","rxBytes","txBytes"],"properties":{
+            "created":{"type":"integer","format":"int64"},"cpuUsage":{"type":"number"},"memoryUsage":{"type":"number"},"rxBytes":{"type":"number"},"txBytes":{"type":"number"},"diskUsedBytes":{"type":["integer","null"],"format":"int64"},"diskTotalBytes":{"type":["integer","null"],"format":"int64"},"diskUsage":{"type":["number","null"]}}},
+        "ContainerStatsView": {"type":"object","required":["stats"],"properties":{"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}},
+        "PlatformStatsView": {"type":"object","required":["stats"],"properties":{"stats":{"type":"array","items":{"$ref":"#/components/schemas/PlatformStatView"}}}},
+        "StackStatsView": {"type":"object","required":["containers"],"properties":{"containers":{"type":"array","items":{"type":"object","required":["containerId","containerName","stats"],"properties":{"containerId":string(),"containerName":string(),"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}}}}},
         "ContainersView": collection_view("containers", "ContainerView", "PlatformCapabilities"),
         "ImageView": image_view(),
         "ImagesView": collection_view("images", "ImageView", "ImageCapabilities"),
@@ -1119,8 +1134,13 @@ fn schemas() -> Value {
         "SwarmNodeView": swarm_node_view(),
         "SwarmNodesView": collection_view("items", "SwarmNodeView", "PlatformCapabilities"),
         "SwarmServiceView": swarm_service_view(),
+        "SwarmServiceStatsView": {"type":"object","required":["dockerServiceId","observedTasks","expectedTasks","complete","observedContainerProjectionIds","missingDockerNodeIds","stats"],"properties":{
+            "dockerServiceId":string(),"observedTasks":integer(),"expectedTasks":integer(),"complete":{"type":"boolean"},
+            "observedContainerProjectionIds":{"type":"array","items":uuid()},"missingDockerNodeIds":{"type":"array","items":string()},
+            "oldestSampleAt":nullable_date_time(),"newestSampleAt":nullable_date_time(),"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}},
         "SwarmServicesView": collection_view("items", "SwarmServiceView", "PlatformCapabilities"),
         "SwarmTaskView": swarm_task_view(),
+        "SwarmTaskStatsView": {"type":"object","required":["containerProjectionId","dockerContainerId","stats"],"properties":{"containerProjectionId":uuid(),"dockerContainerId":string(),"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}},
         "SwarmTasksView": collection_view("items", "SwarmTaskView", "PlatformCapabilities"),
         "SwarmNetworkView": swarm_network_view(),
         "SwarmNetworksView": collection_view("items", "SwarmNetworkView", "PlatformCapabilities"),

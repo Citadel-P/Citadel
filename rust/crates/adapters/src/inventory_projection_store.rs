@@ -45,7 +45,7 @@ pub(crate) async fn persist_snapshot(
 ) -> Result<(), RuntimeCapabilityError> {
     persist_platform(transaction, snapshot).await?;
     persist_images(transaction, snapshot).await?;
-    persist_containers(transaction, snapshot).await?;
+    persist_containers(transaction, snapshot, None).await?;
     if let Some(swarm) = &snapshot.swarm {
         persist_swarm(transaction, snapshot, swarm).await?;
     }
@@ -67,6 +67,12 @@ async fn persist_platform(
         "architecture": snapshot.info.architecture,
         "apiVersion": snapshot.info.api_version,
         "minimumApiVersion": snapshot.info.minimum_api_version,
+        // Refresh (or clear) the connected daemon identity on every inventory
+        // commit. Legacy manager Containers have no explicit node column.
+        "nodeID": snapshot.info.swarm.as_ref()
+            .filter(|swarm| swarm.control_available && swarm.local_node_state.eq_ignore_ascii_case("active"))
+            .map(|swarm| swarm.node_id.as_str())
+            .filter(|id| !id.is_empty()),
     });
     if let Some(swarm) = &snapshot.swarm {
         let object = descriptor
@@ -170,13 +176,19 @@ WHERE image.platformid = $1
     Ok(())
 }
 
-async fn persist_containers(
+pub(crate) async fn persist_containers(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
+    node_id: Option<&str>,
 ) -> Result<(), RuntimeCapabilityError> {
     let payload = json(&snapshot.containers)?;
     let observed = snapshot.observed_at.timestamp();
-    sqlx::query(
+    let conflict = if node_id.is_some() {
+        "(dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL"
+    } else {
+        "(dockercontainerid, platformid) WHERE dockernodeid IS NULL"
+    };
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         r#"
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
@@ -189,14 +201,14 @@ WITH incoming AS (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, rowversion,
-        projectionobservedat)
+        projectionobservedat, dockernodeid)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name, incoming."imageId",
            incoming.created, initcap(incoming.state), 'Idle', $3, incoming.stack,
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
-           COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3
+           COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3, $4
     FROM incoming
-    ON CONFLICT (dockercontainerid, platformid) WHERE dockernodeid IS NULL DO UPDATE
+    ON CONFLICT {conflict} DO UPDATE
     SET name = EXCLUDED.name,
         dockerimageid = EXCLUDED.dockerimageid,
         state = EXCLUDED.state,
@@ -211,17 +223,20 @@ WITH incoming AS (
         projectionstalesince = NULL,
         projectionstalereason = NULL,
         rowversion = containers.rowversion + 1
+    WHERE COALESCE(containers.projectionobservedat, 0) <= EXCLUDED.projectionobservedat
     RETURNING dockercontainerid
 )
 DELETE FROM containers container
 WHERE container.platformid = $1
-  AND container.dockernodeid IS NULL
+  AND container.dockernodeid IS NOT DISTINCT FROM $4
+  AND COALESCE(container.projectionobservedat, 0) <= $3
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = container.dockercontainerid)
-"#,
-    )
+"#
+    )))
     .bind(snapshot.platform_id)
     .bind(payload)
     .bind(observed)
+    .bind(node_id)
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
@@ -231,11 +246,13 @@ UPDATE containers container
 SET imageid = image.id
 FROM images image
 WHERE container.platformid = $1
+  AND container.dockernodeid IS NOT DISTINCT FROM $2
   AND image.platformid = container.platformid
   AND image.dockerimageid = container.dockerimageid
 "#,
     )
     .bind(snapshot.platform_id)
+    .bind(node_id)
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;

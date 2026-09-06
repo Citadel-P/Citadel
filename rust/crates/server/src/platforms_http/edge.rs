@@ -1,0 +1,128 @@
+use super::*;
+use citadel_adapters::edge::{EdgeRegistry, EdgeStoreError, EdgeTarget, PostgresEdgeStore};
+
+#[derive(Clone)]
+pub struct EdgeHttpContext {
+    pub store: PostgresEdgeStore,
+    pub registry: EdgeRegistry,
+    pub core_url: String,
+    pub agent_image: String,
+}
+
+pub(super) async fn enroll(
+    State(state): State<PlatformsHttpState>,
+    Extension(edge): Extension<EdgeHttpContext>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
+    edge.enrollment(
+        EdgeTarget::platform(id),
+        principal.actor_id.value(),
+        &headers,
+    )
+    .await
+}
+pub(super) async fn status(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_platform_level(&state, &principal, id, PermissionLevel::Read, &headers).await?;
+    let status = identity_result(
+        PostgresEdgeStore::new(state.pool)
+            .status(&EdgeTarget::platform(id))
+            .await
+            .map_err(error),
+        &headers,
+    )?;
+    Ok(no_store(Json(status).into_response()))
+}
+pub(super) async fn revoke(
+    State(state): State<PlatformsHttpState>,
+    Extension(edge): Extension<EdgeHttpContext>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
+    let target = EdgeTarget::platform(id);
+    let store = PostgresEdgeStore::new(state.pool.clone());
+    identity_result(store.status(&target).await.map_err(error), &headers)?;
+    identity_result(store.revoke(&target).await.map_err(error), &headers)?;
+    edge.registry.disconnect(&target);
+    publish_runtime_change(&state, id, "platform", "update", &id.to_string());
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
+}
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+fn error(error: EdgeStoreError) -> IdentityError {
+    EdgeHttpContext::error(error)
+}
+
+impl EdgeHttpContext {
+    pub(crate) async fn enrollment(
+        &self,
+        target: EdgeTarget,
+        actor_id: Uuid,
+        headers: &HeaderMap,
+    ) -> IdentityHttpResult {
+        let (enrollment, token, expires) = identity_result(
+            self.store
+                .create_enrollment(&target, actor_id)
+                .await
+                .map_err(Self::error),
+            headers,
+        )?;
+        let name = if target.resource_type == 1 {
+            "edge-build-agent"
+        } else {
+            "edge-agent"
+        };
+        let host_mount = if target.resource_type == 0 {
+            " -v /:/host:ro --label com.citadel.system=true --label com.citadel.system-role=edge-agent"
+        } else {
+            ""
+        };
+        let volume = name.replace('-', "_") + "_data";
+        let environment = std::collections::BTreeMap::from([
+            ("CITADEL_AGENT_MODE", "edge".to_owned()),
+            ("CITADEL_CORE_URL", self.core_url.clone()),
+            ("CITADEL_EDGE_ENROLLMENT_TOKEN", token.clone()),
+            (
+                "CITADEL_EDGE_AGENT_KEY_PATH",
+                format!("/app/data/{name}.key"),
+            ),
+            (
+                "CITADEL_EDGE_IDENTITY_PATH",
+                format!("/app/data/{name}.identity.json"),
+            ),
+        ]);
+        let env = environment
+            .iter()
+            .map(|(key, value)| format!(" -e {}", shell_quote(&format!("{key}={value}"))))
+            .collect::<String>();
+        let command = format!(
+            "docker run -d --name {name} --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock{host_mount} -v {volume}:/app/data{env} {}",
+            shell_quote(&self.agent_image)
+        );
+        Ok(no_store(Json(serde_json::json!({"enrollmentId":enrollment,"platformId":target.platform_id,"token":token,"expiresAtUtc":expires,"instructions":{"coreUrl":self.core_url,"environment":environment,"agentImage":self.agent_image,"dockerRunCommand":command}})).into_response()))
+    }
+    pub(crate) fn error(error: EdgeStoreError) -> IdentityError {
+        match error {
+            EdgeStoreError::NotFound => IdentityError::NotFound,
+            EdgeStoreError::Unauthorized => IdentityError::Conflict(error.to_string()),
+            EdgeStoreError::Invalid(message) => IdentityError::Validation(message.into()),
+            EdgeStoreError::Storage(source) => IdentityError::Storage(source.to_string()),
+        }
+    }
+}

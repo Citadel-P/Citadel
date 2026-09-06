@@ -84,7 +84,8 @@ Never point either variable at a database containing valuable state.
   lifetime, resolve encrypted build secrets at execution, and persist terminal
   results. Agent builds transport one bounded immutable Git archive, signed
   requests, Docker-compatible Registry authentication, BuildKit secrets, and
-  bounded Build/Push output. Edge Agent builds still fail closed.
+  bounded Build/Push output. Platform-backed Edge builds now use the same
+  canonical messages through authenticated inbound sessions.
 - Alert channels, rules, events, acknowledgement, resolution, incident
   deduplication, and verification are persisted. Channel delivery uses the
   pinned Shoutrrr executable through the bounded process runner and supports
@@ -108,8 +109,9 @@ Never point either variable at a database containing valuable state.
   per-volume items. Deployment, standalone Stack, Web-editor Swarm Stack, and
   managed Swarm Service sources reject bind/anonymous or unstable placement,
   deduplicate shared Volumes, acquire child leases atomically, and persist each
-  item outcome. Exact-node execution still fails closed until its Agent command
-  transport is available. Git-backed Swarm Stack plans resolve the configured
+  item outcome. Exact-node execution uses the selected authenticated node
+  session, or verifies the connected manager's live Node ID before execution.
+  Missing coverage fails closed. Git-backed Swarm Stack plans resolve the configured
   Compose files from one immutable synchronized commit before deriving mounts.
 - Citadel-system policies produce a private PostgreSQL custom-format bundle,
   stream SHA-256 checksums, upload it with Core-local Restic, and remove staging
@@ -165,11 +167,20 @@ Never point either variable at a database containing valuable state.
 
 ## Remaining Phase 7 work
 
-1. Route backup execution and builds through inbound Edge Agent sessions. These
-   unsupported paths continue to fail closed.
-2. Extend exact-node Swarm backup routing beyond the configured regular Agent.
-   Regular-Agent plans now verify the connected Node before execution; other
-   Nodes require the inbound Edge Agent session registry.
+The 2026-09-05 statistics follow-up is tracked separately in
+`runtime-statistics-parity-report.md`. It closes the missing history endpoints
+and Service-history attribution, not the execution/acceptance gates below.
+The Edge follow-up is documented in `phase7-edge-execution-report.md`. It adds
+enrollment, authenticated sessions, Platform-backed builds, exact-node Volume
+backup routing, and protocol/recovery tests. It does not close the full exit gate.
+
+1. Finish Build Agent Pool provisioning/enrollment/execution, node-agent
+   installation/bootstrap management and node-identity rebind recovery.
+   Ordinary Platform-backed Edge builds are wired; pool-backed builds are not.
+2. Finish node inventory/statistics supervision and the complete multi-node
+   backup/restore acceptance matrix, including Citadel-system placement and
+   interrupted operations. Exact-node Volume routing and failure cleanup are
+   implemented, but they are not a substitute for real multi-node acceptance.
 3. Port the remaining product-event Alert producers. Platform stats and
    reachability, managed Swarm Service operation failures, Build failures,
    opted-in Automation failures, license grace/expiry transitions, configuration
@@ -179,3 +190,5 @@ Never point either variable at a database containing valuable state.
 4. Add real Docker/registry/Deno/Shoutrrr/Restic differential acceptance across
    supported connector types. The Phase 7 exit gate remains open until the full
    backup/restore matrix and interrupted-operation recovery pass.
+5. Complete Edge workload Apply/mutation and interactive runtime transport,
+   including logs/terminal compatibility and incremental Build log events.

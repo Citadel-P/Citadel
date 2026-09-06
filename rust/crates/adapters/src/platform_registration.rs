@@ -83,6 +83,75 @@ impl PostgresPlatformRegistrationStore {
 }
 
 impl PlatformRegistrationStore for PostgresPlatformRegistrationStore {
+    fn create_pending_edge<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        input: &'a citadel_platforms::CreatePlatformInput,
+    ) -> BoxFuture<'a, Result<Uuid, PlatformRegistrationError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtext('citadel-platform-registration'))")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            let exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM platforms WHERE lower(name)=lower($1))",
+            )
+            .bind(&input.name)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(storage)?;
+            if exists {
+                return Err(PlatformRegistrationError::Conflict(
+                    "A Platform with this name already exists.".into(),
+                ));
+            }
+            validate_tags(&mut tx, &input.tag_ids).await?;
+            let address = format!("edge://{id}");
+            let descriptor = serde_json::json!({"$type": if input.platform_type == citadel_platforms::PlatformType::DockerSwarm { "DockerSwarm" } else { "DockerStandalone" }, "daemonId": ""});
+            sqlx::query("INSERT INTO platforms(id,name,address,description,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount,prunehistoricalswarmtaskcontainers) VALUES($1,$2,$3,$4,'EdgeAgent',0,0,0,0,$5,'Offline',0,$6)")
+                .bind(id).bind(&input.name).bind(&address).bind(&input.description).bind(&descriptor).bind(input.prune_historical_swarm_task_containers).execute(&mut *tx).await.map_err(database_error)?;
+            crate::resource_tags::insert(&mut tx, "Platform", id, &input.tag_ids, actor_id.value())
+                .await
+                .map_err(|error| match error {
+                    crate::resource_tags::ResourceTagError::Missing => {
+                        PlatformRegistrationError::Validation(
+                            "One or more Tags do not exist.".into(),
+                        )
+                    }
+                    crate::resource_tags::ResourceTagError::Database(error) => storage(error),
+                })?;
+            let event = ActivityEvent::new_platform_event(
+                id,
+                input.name.clone(),
+                actor_id,
+                ActivityEventInfo::platform_created(PlatformActivitySnapshot {
+                    id,
+                    name: input.name.clone(),
+                    address,
+                    description: input.description.clone(),
+                    status: "Offline".into(),
+                    connector_type: "EdgeAgent".into(),
+                    network_count: 0,
+                    volume_count: 0,
+                    image_count: 0,
+                    cpu_count: 0,
+                    mem_total: 0,
+                    server_version: None,
+                    agent_version: None,
+                    platform_descriptor: descriptor,
+                }),
+                Utc::now(),
+            )
+            .map_err(|error| PlatformRegistrationError::Storage(error.to_string()))?;
+            insert_activity(&mut tx, &event)
+                .await
+                .map_err(|error| PlatformRegistrationError::Storage(error.to_string()))?;
+            tx.commit().await.map_err(storage)?;
+            Ok(id)
+        })
+    }
     fn ensure_available<'a>(
         &'a self,
         name: &'a str,

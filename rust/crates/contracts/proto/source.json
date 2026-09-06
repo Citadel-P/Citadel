@@ -2,6 +2,10 @@
   "directory": "../../../src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos",
   "files": [
     {
+      "name": "edge_agent_service.proto",
+      "sha256": "f3280c2f341ad5860ed5b34f2e4371356052aa1b66204957e6f0de177efaff32"
+    },
+    {
       "name": "shared_models.proto",
       "sha256": "1e1622aa981facebf02e3621008d3ae9a4383e18cc0df50c8f853b68b209b596"
     },

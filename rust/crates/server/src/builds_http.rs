@@ -32,13 +32,21 @@ pub fn router(state: BuildsHttpState) -> Router {
             .contract_route(routes::GET_BUILD_RUN, get_run)
             .contract_route(routes::GET_BUILD_RUN_LOGS, get_logs)
             .contract_route(routes::CANCEL_BUILD_RUN, cancel_run)
+            .with_state(state.clone()),
+        "Build",
+    )
+    .merge(crate::realtime::notify_mutations(
+        Router::new()
             .contract_route(routes::LIST_BUILD_AGENT_POOLS, list_pools)
             .contract_route(routes::CREATE_BUILD_AGENT_POOL, create_pool)
             .contract_route(routes::GET_BUILD_AGENT_POOL, get_pool)
             .contract_route(routes::ARCHIVE_BUILD_AGENT_POOL, archive_pool)
+            .contract_route(routes::CREATE_BUILD_POOL_EDGE_ENROLLMENT, enroll_pool)
+            .contract_route(routes::GET_BUILD_POOL_EDGE_STATUS, pool_edge_status)
+            .contract_route(routes::REVOKE_BUILD_POOL_EDGE, revoke_pool_edge)
             .with_state(state),
-        "Build",
-    )
+        "BuildAgentPool",
+    ))
 }
 
 #[derive(Serialize)]
@@ -432,6 +440,94 @@ fn actor(
             .ok_or(IdentityError::Unauthenticated),
         headers,
     )
+}
+
+async fn enroll_pool(
+    State(state): State<BuildsHttpState>,
+    Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_for(
+        &state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    edge.enrollment(
+        citadel_adapters::edge::EdgeTarget::build_pool(id),
+        principal.actor_id.value(),
+        &headers,
+    )
+    .await
+}
+
+async fn pool_edge_status(
+    State(state): State<BuildsHttpState>,
+    Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_for(
+        &state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Read,
+        &headers,
+    )
+    .await?;
+    let status = identity_result(
+        edge.store
+            .status(&citadel_adapters::edge::EdgeTarget::build_pool(id))
+            .await
+            .map_err(crate::platforms_http::EdgeHttpContext::error),
+        &headers,
+    )?;
+    Ok(no_store(Json(status).into_response()))
+}
+
+async fn revoke_pool_edge(
+    State(state): State<BuildsHttpState>,
+    Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_for(
+        &state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    let target = citadel_adapters::edge::EdgeTarget::build_pool(id);
+    identity_result(
+        edge.store
+            .status(&target)
+            .await
+            .map_err(crate::platforms_http::EdgeHttpContext::error),
+        &headers,
+    )?;
+    identity_result(
+        edge.store
+            .revoke(&target)
+            .await
+            .map_err(crate::platforms_http::EdgeHttpContext::error),
+        &headers,
+    )?;
+    edge.registry.disconnect(&target);
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 async fn authorize_global(
     state: &BuildsHttpState,

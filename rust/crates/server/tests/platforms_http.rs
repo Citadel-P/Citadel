@@ -45,10 +45,14 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/edge.rs"]
+mod edge;
 #[path = "platforms_http/lookup.rs"]
 mod lookup;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
+#[path = "platforms_http/statistics.rs"]
+mod statistics;
 
 struct Fixture {
     app: Router,
@@ -489,7 +493,9 @@ async fn fixture() -> Fixture {
         resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
         docker,
         agent: None,
+        edge: citadel_adapters::edge::EdgeRegistry::default(),
         realtime: None,
+        stats_sample_max_age: StdDuration::from_secs(30),
     };
     let lookup_state = citadel_server::lookup_http::LookupHttpState {
         store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
@@ -544,6 +550,9 @@ async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf
             let body = match (method, path) {
                 ("GET", "/version") => {
                     r#"{"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+                }
+                ("GET", "/v1.49/tasks/task-1") => {
+                    r#"{"ID":"task-1","NodeID":"node-1","ServiceID":"service-1","Status":{"State":"running","ContainerStatus":{"ContainerID":"container-1"}},"DesiredState":"running"}"#
                 }
                 ("GET", "/v1.49/networks") => {
                     r#"[{"Name":"frontend","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"swarm","Driver":"overlay","EnableIPv4":true,"Containers":{"container-1":{}},"Labels":{},"Options":{}}]"#

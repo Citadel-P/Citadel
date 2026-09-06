@@ -29,9 +29,30 @@ impl ContainerStatsStore for PostgresContainerStatsStore {
             if stats.is_empty() {
                 return Ok(0);
             }
-            let payload = serde_json::to_value(stats).map_err(storage)?;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let inserted = sqlx::query_scalar::<_, i64>(
+            let inserted = persist_scoped(&mut transaction, platform_id, None, stats).await?;
+            transaction.commit().await.map_err(storage)?;
+            Ok(inserted)
+        }
+        .boxed()
+    }
+}
+
+fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
+    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
+}
+
+pub(crate) async fn persist_scoped(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    platform_id: Uuid,
+    node_id: Option<&str>,
+    stats: &[RuntimeContainerStat],
+) -> Result<usize, RuntimeCapabilityError> {
+    if stats.is_empty() {
+        return Ok(0);
+    }
+    let payload = serde_json::to_value(stats).map_err(storage)?;
+    let inserted = sqlx::query_scalar::<_, i64>(
                 r#"
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
@@ -45,6 +66,7 @@ WITH incoming AS (
     JOIN containers container
       ON container.platformid = $1
      AND container.dockercontainerid = incoming."dockerContainerId"
+     AND container.dockernodeid IS NOT DISTINCT FROM $3
 ), inserted AS (
     INSERT INTO containerstats (
         id, containerid, memoryactive, memorycache, cpuusage,
@@ -61,6 +83,34 @@ WITH incoming AS (
         rxbytes = EXCLUDED.rxbytes,
         txbytes = EXCLUDED.txbytes
     RETURNING 1
+), persisted_service AS (
+    INSERT INTO swarmservicestats (
+        id, platformid, dockerserviceid, dockertaskid, servicename,
+        swarmserviceid, stackid, taskkey, created,
+        memoryactive, memorycache, cpuusage, memorylimit, rxbytes, txbytes)
+    SELECT gen_random_uuid(), $1, service.dockerserviceid, task.dockertaskid,
+           service.name, service.swarmserviceid, service.stackid,
+           CASE WHEN task.slot IS NOT NULL THEN 'slot:' || task.slot::text
+                ELSE 'node:' || task.dockernodeid END,
+           sample.created, sample."memoryActive", sample."memoryCache",
+           sample."cpuUsage", sample."memoryLimit", sample."rxBytes", sample."txBytes"
+    FROM eligible sample
+    JOIN containers container ON container.id = sample.persisted_container_id
+    JOIN platforms platform ON platform.id = container.platformid
+    JOIN swarmtaskprojections task
+      ON task.platformid = container.platformid
+     AND task.dockernodeid = COALESCE(container.dockernodeid,
+         CASE WHEN platform.connectortype IN ('Local','Agent','EdgeAgent') THEN platform.platformdescriptor::jsonb->>'nodeID' END)
+     AND task.dockercontainerid = container.dockercontainerid
+    JOIN swarmserviceprojections service
+      ON service.platformid = task.platformid
+     AND service.dockerserviceid = task.dockerserviceid
+    WHERE container.isswarmtask AND service.ownership <> 'System'
+    ON CONFLICT (platformid, dockertaskid, created) DO UPDATE SET
+        memoryactive = EXCLUDED.memoryactive, memorycache = EXCLUDED.memorycache,
+        cpuusage = EXCLUDED.cpuusage, memorylimit = EXCLUDED.memorylimit,
+        rxbytes = EXCLUDED.rxbytes, txbytes = EXCLUDED.txbytes,
+        swarmserviceid = EXCLUDED.swarmserviceid, stackid = EXCLUDED.stackid
 ), platform_sample AS (
     SELECT COALESCE(SUM("memoryActive"), 0) AS memory_active,
            COALESCE(SUM("cpuUsage"), 0) AS cpu_usage,
@@ -79,7 +129,7 @@ WITH incoming AS (
            sample.rx_bytes, sample.tx_bytes, sample.created
     FROM platform_sample sample
     JOIN platforms platform ON platform.id = $1
-    WHERE sample.created IS NOT NULL
+    WHERE sample.created IS NOT NULL AND $3::text IS NULL
     ON CONFLICT (platformid, created) DO UPDATE SET
         memoryusage = EXCLUDED.memoryusage,
         cpuusage = EXCLUDED.cpuusage,
@@ -91,31 +141,29 @@ SELECT COUNT(*) FROM inserted
             )
             .bind(platform_id)
             .bind(payload)
-            .fetch_one(&mut *transaction)
+            .bind(node_id)
+            .fetch_one(&mut **transaction)
             .await
             .map_err(storage)?;
-            let retention_cutoff = chrono::Utc::now()
-                .timestamp()
-                .saturating_sub(RETENTION_SECONDS);
-            sqlx::query("DELETE FROM containerstats WHERE created < $1")
+    let retention_cutoff = chrono::Utc::now()
+        .timestamp()
+        .saturating_sub(RETENTION_SECONDS);
+    sqlx::query("DELETE FROM containerstats WHERE id IN (SELECT id FROM containerstats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
                 .bind(retention_cutoff)
-                .execute(&mut *transaction)
+                .execute(&mut **transaction)
                 .await
                 .map_err(storage)?;
-            sqlx::query("DELETE FROM platformstats WHERE created < $1")
+    sqlx::query("DELETE FROM platformstats WHERE id IN (SELECT id FROM platformstats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
                 .bind(retention_cutoff)
-                .execute(&mut *transaction)
+                .execute(&mut **transaction)
                 .await
                 .map_err(storage)?;
-            transaction.commit().await.map_err(storage)?;
-            Ok(usize::try_from(inserted).unwrap_or(usize::MAX))
-        }
-        .boxed()
-    }
-}
-
-fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
+    sqlx::query("DELETE FROM swarmservicestats WHERE id IN (SELECT id FROM swarmservicestats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
+                .bind(retention_cutoff)
+                .execute(&mut **transaction)
+                .await
+                .map_err(storage)?;
+    Ok(usize::try_from(inserted).unwrap_or(usize::MAX))
 }
 
 #[cfg(test)]

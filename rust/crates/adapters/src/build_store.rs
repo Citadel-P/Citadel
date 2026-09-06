@@ -276,7 +276,18 @@ ORDER BY project.name,project.id"#
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             recover(&mut tx, stale_before).await?;
-            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND project.currentrunid=run.id ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
+            // Serialize only the short claim transaction, not Build execution.
+            // Otherwise concurrent workers can both observe a free pool slot.
+            let owns_claim = sqlx::query_scalar::<_, bool>(
+                "SELECT pg_try_advisory_xact_lock(hashtext('citadel-build-claim'))",
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(storage)?;
+            if !owns_claim {
+                return Ok(None);
+            }
+            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND project.currentrunid=run.id AND (project.buildagentpoolid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE other.buildagentpoolid=project.buildagentpoolid AND active.status IN ('Preparing','Running')) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=project.buildagentpoolid),1)) ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let project_id: Uuid = row.try_get("buildprojectid").map_err(storage)?;
             sqlx::query("UPDATE buildruns SET status='Preparing',startedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Queued'").bind(run_id).execute(&mut *tx).await.map_err(storage)?;

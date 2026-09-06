@@ -116,6 +116,18 @@ pub trait PlatformRegistrationRuntime: Send + Sync {
 }
 
 pub trait PlatformRegistrationStore: Send + Sync {
+    fn create_pending_edge<'a>(
+        &'a self,
+        _actor_id: ActorId,
+        _id: Uuid,
+        _input: &'a CreatePlatformInput,
+    ) -> BoxFuture<'a, Result<Uuid, PlatformRegistrationError>> {
+        Box::pin(async {
+            Err(PlatformRegistrationError::Storage(
+                "Pending Edge Platform persistence is not configured.".into(),
+            ))
+        })
+    }
     fn ensure_available<'a>(
         &'a self,
         name: &'a str,
@@ -152,18 +164,15 @@ impl PlatformRegistrationService {
     ) -> Result<Uuid, PlatformRegistrationError> {
         let input = validate(input)?;
         let id = Uuid::now_v7();
+        if input.connector_type == PlatformConnectorType::EdgeAgent {
+            return self.store.create_pending_edge(actor_id, id, &input).await;
+        }
         let address = match input.connector_type {
             PlatformConnectorType::Unknown => input.address.clone().unwrap_or_default(),
             PlatformConnectorType::Local => LOCAL_DOCKER_ADDRESS.to_owned(),
             PlatformConnectorType::Agent => validate_agent_address(input.address.as_deref())?,
             PlatformConnectorType::EdgeAgent => {
-                return Err(PlatformRegistrationError::Runtime(
-                    RuntimeCapabilityError::new(
-                        crate::RuntimeErrorKind::Unavailable,
-                        "Edge Agent Platform enrollment has not moved to the Rust Core yet.",
-                        false,
-                    ),
-                ));
+                unreachable!("Edge enrollment creates a pending Platform")
             }
         };
         self.store.ensure_available(&input.name, &address).await?;

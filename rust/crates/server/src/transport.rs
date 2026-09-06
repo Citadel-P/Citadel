@@ -54,9 +54,18 @@ struct ProblemDetails {
 }
 
 pub fn secure_router(
+    router: Router,
+    transport: &TransportConfig,
+    readiness: Arc<Readiness>,
+) -> Result<Router, Box<dyn std::error::Error>> {
+    secure_router_with_grpc(router, transport, readiness, None)
+}
+
+pub fn secure_router_with_grpc(
     mut router: Router,
     transport: &TransportConfig,
     readiness: Arc<Readiness>,
+    grpc: Option<Router>,
 ) -> Result<Router, Box<dyn std::error::Error>> {
     router = router.route("/api/{*path}", any(api_not_found));
 
@@ -100,8 +109,13 @@ pub fn secure_router(
         readiness,
         rate_limit: Arc::new(FixedWindowRateLimit::new(transport.requests_per_minute)),
     };
+    router = router.layer(RequestBodyLimitLayer::new(transport.body_limit_bytes));
+    // gRPC bounds each decoded message, not the aggregate bytes transferred
+    // over a long-lived authenticated bidirectional connection.
+    if let Some(grpc) = grpc {
+        router = router.merge(grpc);
+    }
     let mut router = router
-        .layer(RequestBodyLimitLayer::new(transport.body_limit_bytes))
         .layer(cors)
         .layer(middleware::from_fn_with_state(
             security,
@@ -422,6 +436,38 @@ mod tests {
         assert!(limiter.admit());
         assert!(limiter.admit());
         assert!(!limiter.admit());
+    }
+
+    #[tokio::test]
+    async fn grpc_streams_are_not_subject_to_the_rest_aggregate_body_limit() {
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let transport = fixture_transport();
+        let read_body = || async |body: axum::body::Bytes| body;
+        let rest = Router::new().route("/api/v1/test", axum::routing::post(read_body()));
+        let grpc = Router::new().route(
+            "/citadel.edge.v1.EdgeAgentService/Connect",
+            axum::routing::post(read_body()),
+        );
+        let app = secure_router_with_grpc(rest, &transport, readiness, Some(grpc)).unwrap();
+        for (path, expected) in [
+            ("/api/v1/test", StatusCode::PAYLOAD_TOO_LARGE),
+            ("/citadel.edge.v1.EdgeAgentService/Connect", StatusCode::OK),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(Method::POST)
+                        .uri(path)
+                        .body(Body::from(vec![0; transport.body_limit_bytes + 1]))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected, "{path}");
+        }
     }
 
     #[tokio::test]
