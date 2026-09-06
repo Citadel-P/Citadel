@@ -29,6 +29,7 @@ pub fn router(state: AutomationHttpState) -> Router {
             .contract_route(routes::GET_AUTOMATION_ACTION, get_one)
             .contract_route(routes::RENAME_AUTOMATION_ACTION, rename)
             .contract_route(routes::UPDATE_AUTOMATION_ACTION, update)
+            .contract_route(routes::UPDATE_AUTOMATION_ACTION_METADATA, update_metadata)
             .contract_route(routes::DELETE_AUTOMATION_ACTION, remove)
             .contract_route(routes::RUN_AUTOMATION_ACTION, run_action)
             .contract_route(routes::TEST_AUTOMATION_ACTION, test_action)
@@ -162,7 +163,7 @@ async fn rename(
         state
             .automation
             .store()
-            .rename(input.id, &input.name)
+            .rename(input.id, &input.name, principal.actor_id)
             .await
             .map_err(map_error),
         &headers,
@@ -177,13 +178,46 @@ async fn update(
     headers: HeaderMap,
     Json(patch): Json<Value>,
 ) -> IdentityHttpResult {
+    update_action(state, principal, id, headers, patch, false).await
+}
+
+async fn update_metadata(
+    State(state): State<AutomationHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<Value>,
+) -> IdentityHttpResult {
+    update_action(state, principal, id, headers, patch, true).await
+}
+
+async fn update_action(
+    state: AutomationHttpState,
+    principal: Option<Extension<ActorPrincipal>>,
+    id: Uuid,
+    headers: HeaderMap,
+    patch: Value,
+    metadata_only: bool,
+) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
+    if metadata_only
+        && !patch
+            .as_object()
+            .is_some_and(|fields| fields.keys().all(|key| key == "description"))
+    {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Only description can be changed through Action metadata.".into(),
+            )),
+            &headers,
+        );
+    }
     let current = identity_result(
         state.automation.store().get(id).await.map_err(map_error),
         &headers,
     )?;
-    let mut input = merge_update(current, patch, &headers)?;
+    let mut input = merge_update(current.clone(), patch, &headers)?;
     identity_result(
         input.validate(principal.actor_id).map_err(map_error),
         &headers,
@@ -206,7 +240,7 @@ async fn update(
         state
             .automation
             .store()
-            .update(id, &input)
+            .update(&current, &input, principal.actor_id, metadata_only)
             .await
             .map_err(map_error),
         &headers,
@@ -223,7 +257,12 @@ async fn remove(
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
     identity_result(
-        state.automation.store().delete(id).await.map_err(map_error),
+        state
+            .automation
+            .store()
+            .delete(id, principal.actor_id)
+            .await
+            .map_err(map_error),
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())

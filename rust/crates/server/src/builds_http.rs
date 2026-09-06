@@ -40,6 +40,13 @@ pub fn router(state: BuildsHttpState) -> Router {
             .contract_route(routes::LIST_BUILD_AGENT_POOLS, list_pools)
             .contract_route(routes::CREATE_BUILD_AGENT_POOL, create_pool)
             .contract_route(routes::GET_BUILD_AGENT_POOL, get_pool)
+            .contract_route(routes::UPDATE_BUILD_AGENT_POOL, update_pool)
+            .contract_route(routes::RENAME_BUILD_AGENT_POOL, rename_pool)
+            .contract_route(
+                routes::UPDATE_BUILD_AGENT_POOL_METADATA,
+                update_pool_metadata,
+            )
+            .contract_route(routes::TEST_BUILD_AGENT_POOL, test_pool)
             .contract_route(routes::ARCHIVE_BUILD_AGENT_POOL, archive_pool)
             .contract_route(routes::CREATE_BUILD_POOL_EDGE_ENROLLMENT, enroll_pool)
             .contract_route(routes::GET_BUILD_POOL_EDGE_STATUS, pool_edge_status)
@@ -68,7 +75,14 @@ struct Logs {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Pools {
-    build_agent_pools: Vec<citadel_builds::BuildAgentPoolView>,
+    pools: Vec<AuthorizedPool>,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
+}
+#[derive(Serialize)]
+pub(crate) struct AuthorizedPool {
+    #[serde(flatten)]
+    pool: citadel_builds::BuildAgentPoolView,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
 }
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -349,7 +363,20 @@ async fn list_pools(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(Pools { build_agent_pools }).into_response()))
+    let pools = identity_result(
+        authorized_pools(state.builds.store().as_ref(), &principal, build_agent_pools)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    let capabilities = pool_permissions(&state, &principal, None, &headers).await?;
+    Ok(no_store(
+        Json(Pools {
+            pools,
+            capabilities,
+        })
+        .into_response(),
+    ))
 }
 
 async fn create_pool(
@@ -377,7 +404,7 @@ async fn create_pool(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(pool).into_response()))
+    pool_response(&state, &principal, pool, &headers).await
 }
 
 async fn get_pool(
@@ -400,7 +427,194 @@ async fn get_pool(
         state.builds.store().get_pool(id).await.map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(pool).into_response()))
+    pool_response(&state, &principal, pool, &headers).await
+}
+
+async fn test_pool(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_for(
+        &state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    let pool = identity_result(
+        state
+            .builds
+            .test_pool(id, principal.actor_id)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    pool_response(&state, &principal, pool, &headers).await
+}
+
+async fn update_pool(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
+) -> IdentityHttpResult {
+    save_pool(&state, principal, id, patch, None, false, &headers).await
+}
+
+async fn update_pool_metadata(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
+) -> IdentityHttpResult {
+    save_pool(&state, principal, id, patch, None, true, &headers).await
+}
+
+#[derive(Deserialize)]
+struct RenamePool {
+    id: Uuid,
+    name: String,
+}
+
+async fn rename_pool(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    Json(input): Json<RenamePool>,
+) -> IdentityHttpResult {
+    save_pool(
+        &state,
+        principal,
+        input.id,
+        serde_json::json!({}),
+        Some(input.name),
+        true,
+        &headers,
+    )
+    .await
+}
+
+async fn save_pool(
+    state: &BuildsHttpState,
+    principal: Option<Extension<ActorPrincipal>>,
+    id: Uuid,
+    patch: serde_json::Value,
+    name: Option<String>,
+    metadata_only: bool,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let principal = actor(principal, headers)?;
+    authorize_for(
+        state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Write,
+        headers,
+    )
+    .await?;
+    let current = identity_result(
+        state.builds.store().get_pool(id).await.map_err(map_error),
+        headers,
+    )?;
+    if current.archived_at.is_some() {
+        return identity_result(Err(IdentityError::NotFound), headers);
+    }
+    let mut input = identity_result(
+        current.apply_patch(patch, metadata_only).map_err(map_error),
+        headers,
+    )?;
+    if let Some(name) = name {
+        input.name = name;
+    }
+    identity_result(input.validate().map_err(map_error), headers)?;
+    let pool = identity_result(
+        state
+            .builds
+            .store()
+            .update_pool(&current, &input, principal.actor_id)
+            .await
+            .map_err(map_error),
+        headers,
+    )?;
+    pool_response(state, &principal, pool, headers).await
+}
+
+pub(crate) async fn authorized_pools(
+    store: &dyn citadel_builds::BuildStore,
+    principal: &ActorPrincipal,
+    values: Vec<citadel_builds::BuildAgentPoolView>,
+) -> Result<Vec<AuthorizedPool>, BuildError> {
+    let permissions = if principal.is_administrator() || values.is_empty() {
+        Default::default()
+    } else {
+        let ids = values.iter().map(|pool| pool.id).collect::<Vec<_>>();
+        store.pool_permissions(principal.actor_id, &ids).await?
+    };
+    Ok(values
+        .into_iter()
+        .map(|pool| AuthorizedPool {
+            capabilities: pool_capabilities(if principal.is_administrator() {
+                7
+            } else {
+                permissions.get(&pool.id).copied().unwrap_or(0)
+            }),
+            pool,
+        })
+        .collect())
+}
+
+fn pool_capabilities(level: i32) -> citadel_platforms::ResourceCapabilitiesView {
+    citadel_platforms::ResourceCapabilitiesView {
+        can_read: level >= PermissionLevel::Read as i32,
+        can_write: level >= PermissionLevel::Write as i32,
+        can_execute: level >= PermissionLevel::Execute as i32,
+    }
+}
+async fn pool_permissions(
+    state: &BuildsHttpState,
+    principal: &ActorPrincipal,
+    id: Option<Uuid>,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<citadel_platforms::ResourceCapabilitiesView> {
+    if principal.is_administrator() {
+        return Ok(pool_capabilities(7));
+    }
+    let permission = match id {
+        Some(id) => {
+            state
+                .identity
+                .permission_for_resource(principal, ResourceType::BuildAgentPool, id)
+                .await
+        }
+        None => {
+            state
+                .identity
+                .global_permission(principal, ResourceType::BuildAgentPool)
+                .await
+        }
+    };
+    Ok(pool_capabilities(
+        identity_result(permission, headers)?.map_or(0, |grant| grant.level as i32),
+    ))
+}
+async fn pool_response(
+    state: &BuildsHttpState,
+    principal: &ActorPrincipal,
+    pool: citadel_builds::BuildAgentPoolView,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let capabilities = pool_permissions(state, principal, Some(pool.id), headers).await?;
+    Ok(no_store(
+        Json(AuthorizedPool { pool, capabilities }).into_response(),
+    ))
 }
 
 async fn archive_pool(
@@ -423,7 +637,7 @@ async fn archive_pool(
         state
             .builds
             .store()
-            .archive_pool(id)
+            .archive_pool(id, principal.actor_id)
             .await
             .map_err(map_error),
         &headers,
@@ -507,7 +721,7 @@ async fn revoke_pool_edge(
         &principal,
         ResourceType::BuildAgentPool,
         id,
-        PermissionLevel::Write,
+        PermissionLevel::Execute,
         &headers,
     )
     .await?;

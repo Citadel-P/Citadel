@@ -11,6 +11,49 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AutomationActionActivitySnapshot {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub code: String,
+    pub default_args_json: String,
+    pub enabled: bool,
+    pub schedule_enabled: bool,
+    pub schedule_cron: Option<String>,
+    pub schedule_time_zone: String,
+    pub webhook: Option<Value>,
+    pub timeout_seconds: i32,
+    pub alert_on_failure: bool,
+    pub run_as_actor_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BuildAgentPoolActivitySnapshot {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub provider: String,
+    pub provider_spec: Value,
+    pub architecture: String,
+    pub region: String,
+    pub instance_type: String,
+    pub max_active_builders: i32,
+    pub queue_timeout_seconds: i32,
+    pub provisioning_timeout_seconds: i32,
+    pub registration_timeout_seconds: i32,
+    pub heartbeat_timeout_seconds: i32,
+    pub cleanup_timeout_seconds: i32,
+    pub maximum_instance_lifetime_seconds: i32,
+    pub failure_retention_minutes: i32,
+    pub last_validation_status: String,
+    pub last_validation_message: Option<String>,
+    pub last_validated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IdentityResourceAccessSnapshot {
     #[serde(rename = "ResourceType")]
     pub resource_type: ResourceType,
@@ -802,6 +845,112 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Result")]
         result: GitRepositorySyncActivitySnapshot,
     },
+    ActionCreated {
+        #[serde(rename = "Action")]
+        action: AutomationActionActivitySnapshot,
+    },
+    ActionUpdated {
+        #[serde(rename = "OldAction")]
+        old_action: AutomationActionActivitySnapshot,
+        #[serde(rename = "NewAction")]
+        new_action: AutomationActionActivitySnapshot,
+    },
+    ActionRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    ActionDeleted {
+        #[serde(rename = "Action")]
+        action: AutomationActionActivitySnapshot,
+    },
+    ActionRunQueued {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    ActionRunStarted {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    ActionRunSucceeded {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "ExitCode")]
+        exit_code: Option<i32>,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+    },
+    ActionRunFailed {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "ExitCode")]
+        exit_code: Option<i32>,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ErrorMessage")]
+        error_message: Option<String>,
+    },
+    ActionRunTimedOut {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ErrorMessage")]
+        error_message: Option<String>,
+    },
+    ActionRunCancelled {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    ActionRunRejected {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    BuildAgentPoolCreated {
+        #[serde(rename = "Pool")]
+        pool: BuildAgentPoolActivitySnapshot,
+    },
+    BuildAgentPoolUpdated {
+        #[serde(rename = "OldPool")]
+        old_pool: BuildAgentPoolActivitySnapshot,
+        #[serde(rename = "NewPool")]
+        new_pool: BuildAgentPoolActivitySnapshot,
+    },
+    BuildAgentPoolRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    BuildAgentPoolDeleted {
+        #[serde(rename = "Pool")]
+        pool: BuildAgentPoolActivitySnapshot,
+    },
+    BuildAgentPoolTested {
+        #[serde(rename = "Pool")]
+        pool: BuildAgentPoolActivitySnapshot,
+        #[serde(rename = "Status")]
+        status: String,
+        #[serde(rename = "Message")]
+        message: String,
+    },
 }
 
 impl ActivityEventInfo {
@@ -1362,6 +1511,22 @@ impl ActivityEventInfo {
             Self::GitRepoDeleted { .. } => ActivityEventType::GitRepoDeleted,
             Self::GitRepoPulled { .. } => ActivityEventType::GitRepoPulled,
             Self::GitRepoCloned { .. } => ActivityEventType::GitRepoCloned,
+            Self::ActionCreated { .. } => ActivityEventType::ActionCreated,
+            Self::ActionUpdated { .. } => ActivityEventType::ActionUpdated,
+            Self::ActionRenamed { .. } => ActivityEventType::ActionRenamed,
+            Self::ActionDeleted { .. } => ActivityEventType::ActionDeleted,
+            Self::ActionRunQueued { .. } => ActivityEventType::ActionRunQueued,
+            Self::ActionRunStarted { .. } => ActivityEventType::ActionRunStarted,
+            Self::ActionRunSucceeded { .. } => ActivityEventType::ActionRunSucceeded,
+            Self::ActionRunFailed { .. } => ActivityEventType::ActionRunFailed,
+            Self::ActionRunTimedOut { .. } => ActivityEventType::ActionRunTimedOut,
+            Self::ActionRunCancelled { .. } => ActivityEventType::ActionRunCancelled,
+            Self::ActionRunRejected { .. } => ActivityEventType::ActionRunRejected,
+            Self::BuildAgentPoolTested { .. } => ActivityEventType::BuildAgentPoolTested,
+            Self::BuildAgentPoolCreated { .. } => ActivityEventType::BuildAgentPoolCreated,
+            Self::BuildAgentPoolUpdated { .. } => ActivityEventType::BuildAgentPoolUpdated,
+            Self::BuildAgentPoolRenamed { .. } => ActivityEventType::BuildAgentPoolRenamed,
+            Self::BuildAgentPoolDeleted { .. } => ActivityEventType::BuildAgentPoolDeleted,
         }
     }
 }
@@ -1585,6 +1750,51 @@ impl ActivityEvent {
         Ok(event)
     }
 
+    pub fn new_automation_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let status = match &info {
+            ActivityEventInfo::ActionRunQueued { .. }
+            | ActivityEventInfo::ActionRunStarted { .. } => ActivityStatus::Information,
+            ActivityEventInfo::ActionRunFailed { .. }
+            | ActivityEventInfo::ActionRunTimedOut { .. } => ActivityStatus::Failure,
+            ActivityEventInfo::ActionRunCancelled { .. }
+            | ActivityEventInfo::ActionRunRejected { .. } => ActivityStatus::Warning,
+            _ => ActivityStatus::Success,
+        };
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::AutomationAction,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )
+    }
+
+    pub fn new_build_pool_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::BuildAgentPool,
+            actor_id,
+            info,
+            ActivityStatus::Success,
+            created_at,
+        )
+    }
+
     pub fn new_platform_event(
         resource_id: Uuid,
         resource_name: String,
@@ -1800,6 +2010,65 @@ impl std::error::Error for ActivityInvariantError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn automation_activity_preserves_wire_identity_and_status() {
+        let resource = Uuid::now_v7();
+        let actor = ActorId::new(Uuid::now_v7());
+        let run = Uuid::now_v7();
+        for (info, expected) in [
+            (
+                ActivityEventInfo::ActionRunQueued {
+                    run_id: run,
+                    trigger: "Manual".into(),
+                },
+                ActivityStatus::Information,
+            ),
+            (
+                ActivityEventInfo::ActionRunSucceeded {
+                    run_id: run,
+                    trigger: "Manual".into(),
+                    exit_code: Some(0),
+                    duration_ms: Some(12),
+                },
+                ActivityStatus::Success,
+            ),
+            (
+                ActivityEventInfo::ActionRunFailed {
+                    run_id: run,
+                    trigger: "Manual".into(),
+                    exit_code: Some(7),
+                    duration_ms: Some(12),
+                    error_message: Some("failed".into()),
+                },
+                ActivityStatus::Failure,
+            ),
+            (
+                ActivityEventInfo::ActionRunCancelled {
+                    run_id: run,
+                    trigger: "Manual".into(),
+                },
+                ActivityStatus::Warning,
+            ),
+        ] {
+            let event = ActivityEvent::new_automation_event(
+                resource,
+                "Action".into(),
+                actor,
+                info,
+                Utc::now(),
+            )
+            .unwrap();
+            assert_eq!(event.status(), expected);
+            assert_eq!(
+                event.resource_type(),
+                ActivityResourceType::AutomationAction
+            );
+            let info = serde_json::to_value(event.info()).unwrap();
+            assert_eq!(info["RunId"], run.to_string());
+            assert_eq!(info["Trigger"], "Manual");
+        }
+    }
 
     #[test]
     fn profile_activity_derives_its_discriminators() {

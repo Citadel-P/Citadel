@@ -175,12 +175,36 @@ impl BuildExecutor for PlatformBuildExecutor {
                         "Build has no selected Agent Pool.".into(),
                     ));
                 };
-                let available = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL AND COALESCE(providerspec->>'ConnectionMode',providerspec->>'connectionMode','')='EdgeAgent')")
-                    .bind(id).fetch_one(&self.pool).await;
-                return match (available, &self.edge) {
-                    (Ok(true), Some(edge)) => edge.execute(claim, logs, cancellation).await,
-                    (Err(error), _) => failed(BuildFailure::Io(error.to_string())),
-                    _ => failed(BuildFailure::Validation("The selected Build Agent Pool is unavailable or does not use Edge transport.".into())),
+                let spec = sqlx::query_scalar::<_, Value>("SELECT providerspec FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL")
+                    .bind(id).fetch_optional(&self.pool).await;
+                let target = match spec {
+                    Ok(Some(spec)) => match citadel_builds::pool_target(&spec) {
+                        Ok(target) => target,
+                        Err(error) => return failed(BuildFailure::Validation(error.to_string())),
+                    },
+                    Err(error) => return failed(BuildFailure::Io(error.to_string())),
+                    Ok(None) => {
+                        return failed(BuildFailure::Validation(
+                            "The selected Build Agent Pool is unavailable.".into(),
+                        ));
+                    }
+                };
+                return match target {
+                    citadel_builds::BuildPoolTarget::Edge => match &self.edge {
+                        Some(edge) => edge.execute(claim, logs, cancellation).await,
+                        None => failed(BuildFailure::Validation(
+                            "Edge Build transport is unavailable.".into(),
+                        )),
+                    },
+                    citadel_builds::BuildPoolTarget::Inbound(endpoint) => match &self.agent {
+                        Some(agent) => match agent.for_address(&endpoint, cancellation).await {
+                            Ok(agent) => agent.execute(claim, logs, cancellation).await,
+                            Err(error) => failed(error),
+                        },
+                        None => failed(BuildFailure::Validation(
+                            "Signed Agent transport is not configured.".into(),
+                        )),
+                    },
                 };
             }
             let Some(platform_id) = claim.project.platform_id else {
@@ -250,6 +274,28 @@ enum BuildTransport {
 }
 
 impl AgentDockerBuildExecutor {
+    async fn for_address(
+        &self,
+        endpoint: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Self, BuildFailure> {
+        let BuildTransport::Direct(client) = &self.client else {
+            return Err(BuildFailure::Validation(
+                "An inbound Build Pool requires signed Agent transport.".into(),
+            ));
+        };
+        let client = client
+            .for_address(endpoint, cancellation)
+            .await
+            .map_err(|error| BuildFailure::Validation(error.to_string()))?;
+        Ok(Self::new(
+            self.git_cache_root.clone(),
+            client,
+            self.secrets.clone(),
+            self.registries.clone(),
+            self.maximum_log_bytes,
+        ))
+    }
     #[must_use]
     pub fn new(
         git_cache_root: PathBuf,

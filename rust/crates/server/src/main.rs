@@ -545,6 +545,16 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             realtime_hub.clone(),
             "Build",
         ))
+        .with_pool_change_notifier(citadel_server::realtime::change_callback(
+            realtime_hub.clone(),
+            "BuildAgentPool",
+        ))
+        .with_pool_checker(Arc::new(
+            citadel_adapters::build_pool_checker::AgentBuildPoolChecker {
+                agent: agent.clone(),
+                edge: edge_registry.clone(),
+            },
+        ))
         .with_log_notifier(citadel_server::realtime::build_log_callback(
             realtime_hub.clone(),
         )),

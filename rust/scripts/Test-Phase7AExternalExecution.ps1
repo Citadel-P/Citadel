@@ -67,6 +67,7 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-backups')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--lib')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_build_pool')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_sessions')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'phase7_resources_http', '--', '--ignored', '--test-threads=1')

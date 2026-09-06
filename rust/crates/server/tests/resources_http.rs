@@ -181,6 +181,30 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(automation_response.status(), StatusCode::OK);
     let automation_action = response_json(automation_response).await;
     let automation_id = automation_action["id"].as_str().unwrap();
+    let automation_uuid = Uuid::parse_str(automation_id).unwrap();
+    let metadata_response = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/v1/automation/actions/{automation_id}/_metadata"),
+        Some(administrator.clone()),
+        Some(json!({"description":"metadata only"})),
+    )
+    .await;
+    assert_eq!(metadata_response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(metadata_response).await["description"],
+        "metadata only"
+    );
+    let activity_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
+            .bind(automation_uuid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        activity_count, 1,
+        "metadata must not add a configuration activity"
+    );
     let renamed = request(
         &app,
         Method::POST,
@@ -246,6 +270,39 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .status(),
         StatusCode::NO_CONTENT
     );
+    let deleted = request(
+        &app,
+        Method::DELETE,
+        &format!("/api/v1/automation/actions/{automation_id}"),
+        Some(administrator.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+    let events: Vec<(String, Value)> = sqlx::query_as(
+        "SELECT eventtype,info::jsonb FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
+    )
+    .bind(automation_uuid)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        events
+            .iter()
+            .map(|(kind, _)| kind.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "ActionCreated",
+            "ActionRenamed",
+            "ActionUpdated",
+            "ActionRunQueued",
+            "ActionRunCancelled",
+            "ActionDeleted"
+        ]
+    );
+    assert_eq!(events[1].1["NewName"], format!("phase7-renamed-{suffix}"));
+    assert_eq!(events[2].1["NewAction"]["TimeoutSeconds"], 45);
+    assert_eq!(events[4].1["RunId"], run_id);
     let malformed = request_raw(
         &app,
         Method::POST,
@@ -798,12 +855,21 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Method::POST,
         "/api/v1/resourceBindings/global",
         Some(administrator.clone()),
-        Some(json!({"name":"REGION","kind":"Variable","value":"eu-west"})),
+        Some(json!({"name":format!("REGION_{suffix}").to_uppercase(),"kind":"Variable","value":"eu-west"})),
     )
     .await;
     assert_eq!(binding_response.status(), StatusCode::OK);
     let binding = response_json(binding_response).await;
-    assert_eq!(binding["entries"][0]["value"], "eu-west");
+    assert!(
+        binding["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |entry| entry["name"] == format!("REGION_{suffix}").to_uppercase()
+                    && entry["value"] == "eu-west"
+            )
+    );
 
     let internal_secret_response = request(
         &app,

@@ -121,6 +121,34 @@ pub struct AutomationActionView {
     pub updated_at: DateTime<Utc>,
 }
 
+impl AutomationActionView {
+    pub fn snapshot(&self) -> citadel_domain::AutomationActionActivitySnapshot {
+        let mut webhook = self.webhook.clone();
+        if let Some(Value::Object(fields)) = &mut webhook {
+            for (key, value) in fields {
+                if key.eq_ignore_ascii_case("secret") && !value.is_null() {
+                    *value = Value::String("********".into());
+                }
+            }
+        }
+        citadel_domain::AutomationActionActivitySnapshot {
+            id: self.id,
+            name: self.name.clone(),
+            description: self.description.clone(),
+            code: self.code.clone(),
+            default_args_json: self.default_args_json.clone(),
+            enabled: self.enabled,
+            schedule_enabled: self.schedule_enabled,
+            schedule_cron: self.schedule_cron.clone(),
+            schedule_time_zone: self.schedule_time_zone.clone(),
+            webhook,
+            timeout_seconds: self.timeout_seconds,
+            alert_on_failure: self.alert_on_failure,
+            run_as_actor_id: self.run_as_actor_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunView {
@@ -172,15 +200,19 @@ pub trait AutomationStore: Send + Sync {
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>>;
     fn update<'a>(
         &'a self,
-        id: Uuid,
+        current: &'a AutomationActionView,
         input: &'a AutomationActionInput,
+        actor: ActorId,
+        metadata_only: bool,
     ) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>>;
     fn rename<'a>(
         &'a self,
         id: Uuid,
         name: &'a str,
+        actor: ActorId,
     ) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>>;
-    fn delete<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), AutomationError>>;
+    fn delete<'a>(&'a self, id: Uuid, actor: ActorId)
+    -> BoxFuture<'a, Result<(), AutomationError>>;
     fn enqueue<'a>(
         &'a self,
         actor: ActorId,
@@ -197,7 +229,7 @@ pub trait AutomationStore: Send + Sync {
         &'a self,
         claim: &'a AutomationRunClaim,
         result: &'a AutomationRunResult,
-    ) -> BoxFuture<'a, Result<(), AutomationError>>;
+    ) -> BoxFuture<'a, Result<bool, AutomationError>>;
     fn list_runs<'a>(
         &'a self,
         action_id: Uuid,
@@ -309,9 +341,10 @@ impl AutomationService {
         if let Ok(mut active) = self.active_runs.lock() {
             active.remove(&claim.run.id);
         }
-        self.store.finish(&claim, &result).await?;
-        self.changed();
-        self.raise_failure_alert(&claim, &result).await;
+        if self.store.finish(&claim, &result).await? {
+            self.changed();
+            self.raise_failure_alert(&claim, &result).await;
+        }
         Ok(true)
     }
 
@@ -428,6 +461,21 @@ impl AutomationService {
         if let Err(error) = tokio::fs::create_dir_all(&directory).await {
             return AutomationRunResult::failed(None, format!("Could not prepare run: {error}"));
         }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // The script contains a short-lived credential. Restrict the run
+            // directory before writing it, regardless of the process umask.
+            if let Err(error) =
+                tokio::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).await
+            {
+                let _ = tokio::fs::remove_dir(&directory).await;
+                return AutomationRunResult::failed(
+                    None,
+                    format!("Could not secure run directory: {error}"),
+                );
+            }
+        }
         let script = directory.join("action.ts");
         let source = automation_source(
             &self.internal_base_url,
@@ -461,15 +509,25 @@ impl AutomationService {
         let _ = tokio::fs::remove_dir_all(&directory).await;
         match output {
             Ok(output) => {
-                let logs = redact_logs(&joined_logs(
-                    &output.stdout,
-                    &output.stderr,
-                    output.stdout_truncated || output.stderr_truncated,
-                ));
+                let logs = redact_run_logs(
+                    &joined_logs(
+                        &output.stdout,
+                        &output.stderr,
+                        output.stdout_truncated || output.stderr_truncated,
+                    ),
+                    &token,
+                );
                 if output.succeeded() {
                     AutomationRunResult::success(output.exit_code, logs)
                 } else {
-                    AutomationRunResult::failed(output.exit_code, logs)
+                    let mut result = AutomationRunResult::failed(output.exit_code, logs);
+                    result.error = Some(format!(
+                        "Deno exited with code {}.",
+                        output
+                            .exit_code
+                            .map_or_else(|| "unknown".into(), |code| code.to_string())
+                    ));
+                    result
                 }
             }
             Err(ProcessError::Cancelled) => AutomationRunResult::cancelled(),
@@ -633,6 +691,13 @@ fn allow_net_authority(base_url: &str) -> &str {
         .split_once("://")
         .map_or(base_url, |(_, authority)| authority)
         .trim_end_matches('/')
+}
+
+fn redact_run_logs(value: &str, token: &str) -> String {
+    if token.is_empty() {
+        return redact_logs(value);
+    }
+    redact_logs(&value.replace(token, "[redacted]"))
 }
 
 pub fn redact_logs(value: &str) -> String {

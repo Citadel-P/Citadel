@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
 mod logs;
+mod pools;
 pub use logs::{BuildLogEntry, BuildLogNotifier, BuildLogSink, NoopBuildLogSink};
+pub use pools::{BuildPoolCheck, BuildPoolChecker, BuildPoolTarget, pool_target};
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -348,15 +350,32 @@ impl BuildAgentPoolInput {
                 "Build Agent Pool name must contain between 1 and 128 characters.".to_owned(),
             ));
         }
+        self.description = self
+            .description
+            .take()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+        if self
+            .description
+            .as_ref()
+            .is_some_and(|value| value.chars().count() > 600)
+        {
+            return Err(BuildError::Validation(
+                "Build Agent Pool description cannot exceed 600 characters.".into(),
+            ));
+        }
         let provider = self
             .provider_spec
             .get("$type")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        if !matches!(provider, "HetznerCloud" | "GenericEdge") {
+        if !matches!(provider, "AwsEc2" | "SelfManagedVm") {
             return Err(BuildError::Validation(
                 "Build Agent Pool provider is unsupported.".to_owned(),
             ));
+        }
+        if provider == "SelfManagedVm" {
+            pool_target(&self.provider_spec)?;
         }
         validate_range(
             self.max_active_builders.unwrap_or(1),
@@ -494,7 +513,32 @@ pub trait BuildStore: Send + Sync {
         administrator: bool,
     ) -> BoxFuture<'_, Result<Vec<BuildAgentPoolView>, BuildError>>;
     fn get_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>>;
-    fn archive_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), BuildError>>;
+    fn pool_permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, BuildError>>;
+    fn archive_pool<'a>(
+        &'a self,
+        id: Uuid,
+        actor: ActorId,
+    ) -> BoxFuture<'a, Result<(), BuildError>>;
+    fn update_pool<'a>(
+        &'a self,
+        current: &'a BuildAgentPoolView,
+        input: &'a BuildAgentPoolInput,
+        actor: ActorId,
+    ) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>>;
+    fn claim_pool_test(
+        &self,
+        id: Uuid,
+        actor: ActorId,
+    ) -> BoxFuture<'_, Result<BuildAgentPoolView, BuildError>>;
+    fn finish_pool_test<'a>(
+        &'a self,
+        claim: &'a BuildAgentPoolView,
+        result: &'a BuildPoolCheck,
+    ) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>>;
     fn create<'a>(
         &'a self,
         actor: ActorId,
@@ -568,6 +612,8 @@ pub trait BuildRegistryCredentialResolver: Send + Sync {
 }
 
 pub struct BuildService {
+    pool_change: Option<Arc<dyn Fn() + Send + Sync>>,
+    pool_checker: Option<Arc<dyn BuildPoolChecker>>,
     on_log: Option<BuildLogNotifier>,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BuildStore>,
@@ -599,6 +645,8 @@ impl BuildService {
         stale_after: chrono::Duration,
     ) -> Self {
         Self {
+            pool_change: None,
+            pool_checker: None,
             on_log: None,
             store,
             on_change: None,
@@ -614,6 +662,66 @@ impl BuildService {
     }
     pub fn store(&self) -> &Arc<dyn BuildStore> {
         &self.store
+    }
+    pub fn with_pool_checker(mut self, checker: Arc<dyn BuildPoolChecker>) -> Self {
+        self.pool_checker = Some(checker);
+        self
+    }
+    pub fn with_pool_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.pool_change = Some(notifier);
+        self
+    }
+    pub async fn test_pool(
+        self: &Arc<Self>,
+        id: Uuid,
+        actor: ActorId,
+    ) -> Result<BuildAgentPoolView, BuildError> {
+        let pool = self.store.get_pool(id).await?;
+        if pool.provider != "SelfManagedVm" {
+            return Err(BuildError::Conflict(
+                "Only self-managed Citadel Agent build pools can be tested.".into(),
+            ));
+        }
+        pool_target(&pool.provider_spec)?;
+        let checker = self.pool_checker.clone().ok_or_else(|| {
+            BuildError::Validation("Build Pool capability checks are unavailable.".into())
+        })?;
+        // The bounded task owns both claim and completion. Dropping the HTTP
+        // response cannot leave a successfully claimed pool processing forever.
+        let service = self.clone();
+        tokio::spawn(async move {
+            let claim = service.store.claim_pool_test(id, actor).await?;
+            if let Some(notifier) = &service.pool_change {
+                notifier();
+            }
+            let cancellation = CancellationToken::new();
+            let result = match tokio::time::timeout(
+                std::time::Duration::from_secs(120),
+                checker.check(&claim, &cancellation),
+            )
+            .await
+            {
+                Ok(Ok(result)) => result,
+                Ok(Err(error)) => BuildPoolCheck {
+                    ready: false,
+                    message: format!("Citadel Agent build capability check failed: {error}"),
+                },
+                Err(_) => {
+                    cancellation.cancel();
+                    BuildPoolCheck {
+                        ready: false,
+                        message: "Citadel Agent build capability check timed out.".into(),
+                    }
+                }
+            };
+            let finished = service.store.finish_pool_test(&claim, &result).await;
+            if let Some(notifier) = &service.pool_change {
+                notifier();
+            }
+            finished
+        })
+        .await
+        .map_err(|error| BuildError::Storage(format!("Build Pool check task failed: {error}")))?
     }
     pub async fn process_one(&self, shutdown: &CancellationToken) -> Result<bool, BuildError> {
         let Some(claim) = self.store.claim_next(Utc::now() - self.stale_after).await? else {

@@ -46,6 +46,16 @@ pub struct EdgeBinding {
     pub public_key: VerifyingKey,
     pub daemon_id: String,
     pub cluster_id: Option<String>,
+    rebind: Option<NodeRebind>,
+}
+
+#[derive(Clone)]
+struct NodeRebind {
+    previous_node_id: String,
+    hostname: String,
+    role: String,
+    service_id: String,
+    task_id: String,
 }
 
 #[derive(Clone)]
@@ -161,12 +171,14 @@ impl PostgresEdgeStore {
             target
         };
         let agent_id = Uuid::now_v7();
-        let inserted = sqlx::query("INSERT INTO edgeagentbindings(id,platformid,resourceid,resourcetype,agentid,agentpublickey,agentfingerprint,connectionstatus,protocolversion,profile,dockernodeid,dockerdaemonid,clusterid,lastseenhostname,lastseenversion,capabilitiesjson,firstenrolledatutc) VALUES($1,$2,$3,$4,$5,$6,$7,'Offline',1,$8,$9,$10,$11,$12,$13,$14,now()) ON CONFLICT DO NOTHING")
+        let inserted = sqlx::query("INSERT INTO edgeagentbindings(id,platformid,resourceid,resourcetype,agentid,agentpublickey,agentfingerprint,connectionstatus,protocolversion,profile,dockernodeid,dockerdaemonid,clusterid,lastseenhostname,lastseenversion,capabilitiesjson,firstenrolledatutc,dockerhostname,swarmrole,lastobservedserviceid,lastobservedtaskid) VALUES($1,$2,$3,$4,$5,$6,$7,'Offline',1,$8,$9,$10,$11,$12,$13,$14,now(),$15,$16,$17,$18) ON CONFLICT DO NOTHING")
             .bind(Uuid::now_v7()).bind(target.platform_id).bind(target.resource_id).bind(resource_type(&target))
             .bind(agent_id).bind(STANDARD.encode(key)).bind(fingerprint(&key))
             .bind(if target.node_id.is_some() { "SwarmNode" } else { "Ordinary" })
             .bind(&target.node_id).bind(&request.daemon_id).bind(nonempty(&request.cluster_id))
             .bind(&request.hostname).bind(&request.agent_version).bind(serde_json::from_str::<Value>(&request.capabilities_json).map_err(|_| EdgeStoreError::Unauthorized)?)
+            .bind(nonempty(&request.docker_hostname)).bind(nonempty(&request.swarm_role))
+            .bind(nonempty(&request.service_id)).bind(nonempty(&request.task_id))
             .execute(&mut *transaction).await?.rows_affected();
         if inserted != 1 {
             return Err(EdgeStoreError::Unauthorized);
@@ -178,6 +190,7 @@ impl PostgresEdgeStore {
             public_key,
             daemon_id: request.daemon_id.clone(),
             cluster_id: nonempty(&request.cluster_id).map(str::to_owned),
+            rebind: None,
         })
     }
 
@@ -207,9 +220,24 @@ impl PostgresEdgeStore {
             _ => return Err(EdgeStoreError::Unauthorized),
         };
         let mut transaction = self.pool.begin().await?;
-        let row = sqlx::query("SELECT agentpublickey,agentfingerprint,dockerdaemonid,clusterid FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype=$2 AND agentid=$3 AND dockernodeid IS NOT DISTINCT FROM $4 AND revokedatutc IS NULL")
-            .bind(resource_id).bind(resource_type(&target)).bind(agent_id).bind(&target.node_id)
+        let row = sqlx::query("SELECT agentpublickey,agentfingerprint,dockerdaemonid,clusterid,dockernodeid,profile FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype=$2 AND agentid=$3 AND revokedatutc IS NULL")
+            .bind(resource_id).bind(resource_type(&target)).bind(agent_id)
             .fetch_optional(&mut *transaction).await?.ok_or(EdgeStoreError::Unauthorized)?;
+        let previous_node: Option<String> = row.try_get("dockernodeid")?;
+        if previous_node.is_some() != target.node_id.is_some()
+            || (target.node_id.is_some() && row.try_get::<String, _>("profile")? != "SwarmNode")
+        {
+            return Err(EdgeStoreError::Unauthorized);
+        }
+        let rebind = previous_node
+            .filter(|node| target.node_id.as_ref() != Some(node))
+            .map(|previous_node_id| NodeRebind {
+                previous_node_id,
+                hostname: hello.docker_hostname.clone(),
+                role: hello.swarm_role.clone(),
+                service_id: hello.service_id.clone(),
+                task_id: hello.task_id.clone(),
+            });
         if row.try_get::<String, _>("agentfingerprint")? != hello.agent_fingerprint
             || row
                 .try_get::<Option<String>, _>("dockerdaemonid")?
@@ -233,6 +261,15 @@ impl PostgresEdgeStore {
                 &hello.task_id,
             )
             .await?;
+            if let Some(rebind) = &rebind {
+                validate_rebind(
+                    &mut transaction,
+                    &target,
+                    agent_id,
+                    &rebind.previous_node_id,
+                )
+                .await?;
+            }
         } else {
             validate_target(&mut transaction, &target).await?;
             if target.resource_type == 0 {
@@ -252,6 +289,7 @@ impl PostgresEdgeStore {
             public_key,
             daemon_id: hello.daemon_id.clone(),
             cluster_id: nonempty(&hello.cluster_id).map(str::to_owned),
+            rebind,
         })
     }
 
@@ -260,11 +298,52 @@ impl PostgresEdgeStore {
         binding: &EdgeBinding,
         at: DateTime<Utc>,
     ) -> Result<(), EdgeStoreError> {
-        let updated = sqlx::query("UPDATE edgeagentbindings SET connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
-            .bind(binding.agent_id).bind(at).execute(&self.pool).await?.rows_affected();
+        let mut tx = self.pool.begin().await?;
+        // Rebind only after the inbound transport verifies the nonce signature.
+        // Recheck under the row lock: membership may have changed during proof.
+        if let Some(rebind) = &binding.rebind {
+            sqlx::query("SELECT id FROM edgeagentbindings WHERE agentid=$1 AND revokedatutc IS NULL FOR UPDATE")
+                .bind(binding.agent_id).fetch_optional(&mut *tx).await?.ok_or(EdgeStoreError::Unauthorized)?;
+            validate_rebind(
+                &mut tx,
+                &binding.target,
+                binding.agent_id,
+                &rebind.previous_node_id,
+            )
+            .await?;
+            validate_node(
+                &mut tx,
+                &binding.target,
+                binding
+                    .cluster_id
+                    .as_deref()
+                    .ok_or(EdgeStoreError::Unauthorized)?,
+                &rebind.hostname,
+                &rebind.role,
+                &rebind.service_id,
+                &rebind.task_id,
+            )
+            .await?;
+            let changed = sqlx::query("UPDATE edgeagentbindings SET dockernodeid=$3,dockerhostname=$4,swarmrole=$5,lastobservedserviceid=$6,lastobservedtaskid=$7 WHERE agentid=$1 AND dockernodeid=$2 AND revokedatutc IS NULL")
+                .bind(binding.agent_id).bind(&rebind.previous_node_id).bind(&binding.target.node_id)
+                .bind(&rebind.hostname).bind(&rebind.role).bind(&rebind.service_id).bind(&rebind.task_id)
+                .execute(&mut *tx).await?.rows_affected();
+            if changed != 1 {
+                return Err(EdgeStoreError::Unauthorized);
+            }
+            mark_node_stale(
+                &mut tx,
+                binding.target.platform_id,
+                &rebind.previous_node_id,
+            )
+            .await?;
+        }
+        let updated = sqlx::query("UPDATE edgeagentbindings SET connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
+            .bind(binding.agent_id).bind(at).bind(&binding.target.node_id).execute(&mut *tx).await?.rows_affected();
         if updated != 1 {
             return Err(EdgeStoreError::Unauthorized);
         }
+        tx.commit().await?;
         Ok(())
     }
     pub async fn disconnected(
@@ -475,7 +554,7 @@ async fn validate_target(
             .fetch_optional(&mut **tx)
             .await?
     } else {
-        sqlx::query_scalar("SELECT COALESCE(providerspec->>'ConnectionMode',providerspec->>'connectionMode','') FROM buildagentpools WHERE id=$1 AND archivedat IS NULL AND enabled").bind(target.resource_id).fetch_optional(&mut **tx).await?
+        sqlx::query_scalar("SELECT COALESCE(providerspec->>'ConnectionMode',providerspec->>'connectionMode','') FROM buildagentpools WHERE id=$1 AND provider='SelfManagedVm' AND archivedat IS NULL AND enabled").bind(target.resource_id).fetch_optional(&mut **tx).await?
     };
     match mode.as_deref() {
         None => return Err(EdgeStoreError::NotFound),
@@ -504,6 +583,41 @@ async fn validate_daemon(
     Ok(())
 }
 
+async fn validate_rebind(
+    tx: &mut Transaction<'_, Postgres>,
+    target: &EdgeTarget,
+    agent_id: Uuid,
+    previous: &str,
+) -> Result<(), EdgeStoreError> {
+    let valid: bool = sqlx::query_scalar(
+        r#"
+SELECT EXISTS (
+    SELECT 1 FROM edgeagentbindings b
+    WHERE agentid=$2 AND platformid=$1 AND dockernodeid=$3
+      AND profile='SwarmNode' AND revokedatutc IS NULL
+      AND GREATEST(lastheartbeatatutc,lastdisconnectedatutc,lastauthenticatedatutc,
+                   firstenrolledatutc,createdatutc) < now()-interval '10 minutes'
+      AND NOT EXISTS (SELECT 1 FROM swarmnodeprojections n
+                      WHERE n.platformid=$1 AND (n.dockernodeid=$3 OR n.isstale))
+      AND NOT EXISTS (SELECT 1 FROM edgeagentbindings other
+                      WHERE other.revokedatutc IS NULL AND other.agentid<>b.agentid
+                        AND ((other.platformid=$1 AND other.dockernodeid=$4)
+                             OR other.dockerdaemonid=b.dockerdaemonid))
+)"#,
+    )
+    .bind(target.platform_id)
+    .bind(agent_id)
+    .bind(previous)
+    .bind(&target.node_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if valid {
+        Ok(())
+    } else {
+        Err(EdgeStoreError::Unauthorized)
+    }
+}
+
 async fn validate_node(
     tx: &mut Transaction<'_, Postgres>,
     target: &EdgeTarget,
@@ -513,8 +627,36 @@ async fn validate_node(
     service: &str,
     task: &str,
 ) -> Result<(), EdgeStoreError> {
-    let valid: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM platforms p JOIN swarmnodeagentinstallations i ON i.platformid=p.id JOIN swarmnodeprojections n ON n.platformid=p.id AND n.dockernodeid=$2 JOIN swarmserviceprojections s ON s.platformid=p.id AND s.dockerserviceid=$6 JOIN swarmtaskprojections t ON t.platformid=p.id AND t.dockertaskid=$7 WHERE p.id=$1 AND p.clusterid=$3 AND p.platformdescriptor::jsonb->>'$type'='DockerSwarm' AND p.platformdescriptor::jsonb->>'nodeID'<>$2 AND i.clusterid=$3 AND i.desiredstate='Installed' AND i.dockerserviceid=$6 AND n.isstale=false AND lower(n.status)='ready' AND lower(n.availability)='active' AND lower(n.operatingsystem)='linux' AND n.hostname=$4 AND lower(n.role)=lower($5) AND s.isstale=false AND s.labels->>'com.citadel.system'='true' AND s.labels->>'com.citadel.system-role'='swarm-node-agent' AND s.labels->>'com.citadel.platform-id'=$1::text AND t.isstale=false AND t.dockerserviceid=$6 AND t.dockernodeid=$2 AND lower(t.desiredstate)='running' AND lower(t.state)='running')")
-        .bind(target.platform_id).bind(&target.node_id).bind(cluster).bind(hostname).bind(role).bind(service).bind(task).fetch_one(&mut **tx).await?;
+    let valid: bool = sqlx::query_scalar(
+        r#"
+SELECT EXISTS (
+    SELECT 1 FROM platforms p
+    JOIN swarmnodeagentinstallations i ON i.platformid=p.id
+    JOIN swarmnodeprojections n ON n.platformid=p.id AND n.dockernodeid=$2
+    JOIN swarmserviceprojections s ON s.platformid=p.id AND s.dockerserviceid=$6
+    JOIN swarmtaskprojections t ON t.platformid=p.id AND t.dockertaskid=$7
+    WHERE p.id=$1 AND p.clusterid=$3 AND p.platformdescriptor::jsonb->>'$type'='DockerSwarm'
+      AND p.platformdescriptor::jsonb->>'nodeID'<>$2
+      AND i.clusterid=$3 AND i.desiredstate='Installed' AND i.dockerserviceid=$6
+      AND n.isstale=false AND lower(n.status)='ready' AND lower(n.availability)='active'
+      AND lower(n.operatingsystem)='linux' AND n.hostname=$4 AND lower(n.role)=lower($5)
+      AND s.isstale=false AND lower(s.labels->>'com.citadel.system')='true'
+      AND s.labels->>'com.citadel.system-role'='swarm-node-agent'
+      AND lower(s.labels->>'com.citadel.platform-id')=$1::text
+      AND s.labels->>'com.citadel.swarm-cluster-id'=$3
+      AND t.isstale=false AND t.dockerserviceid=$6 AND t.dockernodeid=$2
+      AND lower(t.desiredstate)='running' AND lower(t.state)='running'
+)"#,
+    )
+    .bind(target.platform_id)
+    .bind(&target.node_id)
+    .bind(cluster)
+    .bind(hostname)
+    .bind(role)
+    .bind(service)
+    .bind(task)
+    .fetch_one(&mut **tx)
+    .await?;
     if !valid {
         return Err(EdgeStoreError::Unauthorized);
     }

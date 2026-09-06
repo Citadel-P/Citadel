@@ -38,6 +38,9 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "phase7_resources_http/build_pools.rs"]
+mod build_pools;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
 async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
@@ -66,6 +69,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let alert_store = Arc::new(PostgresAlertStore::new(pool.clone()));
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
+    let edge = citadel_adapters::edge::EdgeRegistry::default();
     let builds = Arc::new(
         BuildService::new(
             build_store.clone(),
@@ -73,6 +77,13 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             Duration::minutes(5),
         )
         .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
+        .with_pool_checker(Arc::new(
+            citadel_adapters::build_pool_checker::AgentBuildPoolChecker {
+                agent: None,
+                edge: edge.clone(),
+            },
+        ))
+        .with_pool_change_notifier(change_callback(Some(hub.clone()), "BuildAgentPool"))
         .with_log_notifier(citadel_server::realtime::build_log_callback(Some(
             hub.clone(),
         ))),
@@ -106,7 +117,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .layer(axum::Extension(
         citadel_server::platforms_http::EdgeHttpContext {
             store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
-            registry: citadel_adapters::edge::EdgeRegistry::default(),
+            registry: edge.clone(),
             core_url: "https://core.example.test:8001".into(),
             agent_image: "citadel-agent:test".into(),
         },
@@ -134,13 +145,22 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         Some(principal.clone()),
         Some(json!({
             "name":format!("pool-{suffix}"), "enabled":true,
-            "providerSpec":{"$type":"GenericEdge","connectionMode":"EdgeAgent"}
+            "providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}
         })),
     )
     .await;
     assert_eq!(build_pool_response.status(), StatusCode::OK);
     let build_pool = response_json(build_pool_response).await;
     let pool_id = build_pool["id"].as_str().unwrap();
+    build_pools::verify(
+        &app,
+        &pool,
+        &edge,
+        &builds,
+        &principal,
+        Uuid::parse_str(pool_id).unwrap(),
+    )
+    .await;
     let edge_path = format!("/api/v1/buildAgentPools/{pool_id}/edge");
     assert_eq!(
         request(
@@ -217,6 +237,42 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .await
             .unwrap();
     assert!(revoked);
+
+    assert_eq!(
+        request(
+            &app,
+            Method::DELETE,
+            &format!("/api/v1/buildAgentPools/{pool_id}"),
+            Some(principal.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/buildAgentPools/{pool_id}"),
+            Some(principal.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    let archived: bool = sqlx::query_scalar(
+        "SELECT archivedat IS NOT NULL AND NOT enabled FROM buildagentpools WHERE id=$1",
+    )
+    .bind(Uuid::parse_str(pool_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(archived);
+    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='BuildAgentPoolDeleted'")
+        .bind(Uuid::parse_str(pool_id).unwrap()).fetch_one(&pool).await.unwrap();
+    assert_eq!(events, 1);
 
     let before_channel = hub.current_revision();
     let channel = response_json(

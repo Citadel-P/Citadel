@@ -1887,6 +1887,12 @@ route_catalog! {
         request_schema: Some("UpdateAutomationActionInput"), response_schema: Some("AutomationActionView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    UPDATE_AUTOMATION_ACTION_METADATA => {
+        method: Patch, path: "/api/v1/automation/actions/{id}/_metadata", operation_id: "updateAutomationActionMetadata", summary: "Update Automation Action metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("AutomationActionView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     DELETE_AUTOMATION_ACTION => {
         method: Delete, path: "/api/v1/automation/actions/{id}", operation_id: "deleteAutomationAction", summary: "Delete an Automation Action",
         public: true, setup_exempt: false, authentication: Actor,
@@ -2000,6 +2006,30 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("BuildAgentPoolView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_BUILD_AGENT_POOL => {
+        method: Patch, path: "/api/v1/buildAgentPools/{id}", operation_id: "updateBuildAgentPool", summary: "Update a Build Agent Pool",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateBuildAgentPoolInput"), response_schema: Some("BuildAgentPoolView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_BUILD_AGENT_POOL => {
+        method: Post, path: "/api/v1/buildAgentPools/rename", operation_id: "renameBuildAgentPool", summary: "Rename a Build Agent Pool",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("BuildAgentPoolView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_BUILD_AGENT_POOL_METADATA => {
+        method: Patch, path: "/api/v1/buildAgentPools/{id}/_metadata", operation_id: "updateBuildAgentPoolMetadata", summary: "Update Build Agent Pool metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("BuildAgentPoolView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    TEST_BUILD_AGENT_POOL => {
+        method: Post, path: "/api/v1/buildAgentPools/{id}/test", operation_id: "testBuildAgentPool", summary: "Test a Build Agent Pool",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("BuildAgentPoolView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     ARCHIVE_BUILD_AGENT_POOL => {
         method: Delete, path: "/api/v1/buildAgentPools/{id}", operation_id: "archiveBuildAgentPool", summary: "Archive a Build Agent Pool",
