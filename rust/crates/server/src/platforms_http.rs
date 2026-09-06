@@ -65,6 +65,7 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::GET_PLATFORM, get_platform)
         .contract_route(routes::CREATE_EDGE_ENROLLMENT, edge::enroll)
         .contract_route(routes::GET_EDGE_STATUS, edge::status)
+        .contract_route(routes::GET_NODE_AGENT_COVERAGE, edge::node_coverage)
         .contract_route(routes::REVOKE_EDGE, edge::revoke)
         .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
         .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)

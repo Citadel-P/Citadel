@@ -824,6 +824,7 @@ async fn auth(
 fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> IdentityHttpResult<T> {
     identity_result(
         r.map_err(|e| match e {
+            BackupError::LicenseRequired => IdentityError::LicenseRequired("automated-operations"),
             BackupError::Validation(m) => IdentityError::Validation(m),
             BackupError::NotFound => IdentityError::NotFound,
             BackupError::Conflict(m) => IdentityError::Conflict(m),

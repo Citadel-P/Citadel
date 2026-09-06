@@ -15,6 +15,7 @@ use uuid::Uuid;
 mod inventory;
 pub mod jobs;
 mod mutations;
+pub mod node_agents;
 mod read;
 mod registration;
 mod statistics;

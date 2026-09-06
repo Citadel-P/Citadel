@@ -1,10 +1,22 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use citadel_automation::{AutomationError, AutomationService};
 use tokio_util::sync::CancellationToken;
 
 pub async fn automation_runs(
+    cancellation: CancellationToken,
+    service: Arc<AutomationService>,
+) -> Result<(), AutomationError> {
+    let workers = (0..service.options().max_parallel_runs)
+        .map(|_| run_worker(cancellation.clone(), service.clone()));
+    // Each loop awaits its process cleanup; shutdown never drops active runs.
+    for result in futures_util::future::join_all(workers).await {
+        result?;
+    }
+    Ok(())
+}
+
+async fn run_worker(
     cancellation: CancellationToken,
     service: Arc<AutomationService>,
 ) -> Result<(), AutomationError> {
@@ -16,7 +28,7 @@ pub async fn automation_runs(
         }
         tokio::select! {
             () = cancellation.cancelled() => break,
-            () = tokio::time::sleep(Duration::from_secs(2)) => {}
+            () = tokio::time::sleep(service.options().poll_interval) => {}
         }
     }
     Ok(())
@@ -32,7 +44,7 @@ pub async fn automation_scheduler(
         }
         tokio::select! {
             () = cancellation.cancelled() => break,
-            () = tokio::time::sleep(Duration::from_secs(15)) => {}
+            () = tokio::time::sleep(service.options().schedule_poll_interval) => {}
         }
     }
     Ok(())

@@ -11,6 +11,7 @@ chrono-tz.workspace = true
 citadel-alerts = { path = "../alerts" }
 citadel-domain = { path = "../domain" }
 citadel-execution = { path = "../execution" }
+citadel-resources = { path = "../resources" }
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true

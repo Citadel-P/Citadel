@@ -252,17 +252,143 @@ No React feature files or shared Agent protocol files were changed. No Citadel
 images were built. These results do not close the gaps below or constitute a
 complete port of every Phase 7 .NET test.
 
+## Automation streaming and Build lifecycle follow-up (2026-09-06)
+
+- Manual/Test Automation HTTP requests now execute the claimed run and stream
+  the existing JSON progress contract. The scheduler cannot steal that claim.
+  All entry points share a four-run bound. Closed or stalled consumers cancel
+  and reap Deno; terminal progress waits only within a bounded deadline.
+- Action lists include Tags, latest-run summaries and capabilities. Summary
+  queries do not load source snapshots or retained logs. Action, Build Project,
+  Build Pool and Backup Policy tag endpoints reuse the resource-tag handler;
+  action/build/pool filtering accepts the existing tag-name and ID contract.
+- Action configuration and scheduled/executing runs enforce Automated Operations.
+  Enabling paid triggers is denied without the capability; unrelated edits and
+  disabling existing triggers remain possible after license loss.
+- Build Project edit/rename/metadata/archive operations preserve partial-update
+  semantics and row-version fencing. Typed configuration and run Activities
+  commit with their state changes. Failed Activity persistence rolls back a run
+  result; stale completion cannot emit duplicate Activities or failure alerts.
+- Build queue and cancellation require Read plus Apply, matching .NET.
+  External-pool and automated execution recheck their license capabilities
+  before invoking the executor. Webhook configuration uses the shared validator.
+- Pool health monitoring reads keyset batches of 64 with one bounded check at a
+  time. It does not provision capacity or replay builds. Stale claims recover
+  through version-checked writes; unchanged health is refreshed at most every
+  five minutes, and notifications follow successful persistence.
+- A reusable streaming redactor handles split secrets and UTF-8 boundaries for
+  Build and Automation output.
+
+| .NET reference | Added Rust coverage |
+| --- | --- |
+| Automation manual/Test execution and process cancellation | `automation_http_execution`: real Deno, PostgreSQL and Axum; success, exit failure, timeout, authorization, busy rejection, disabled Test, body disconnect, slow-reader cancellation and cleanup |
+| Automation tag/filter and license configuration cases | `resources_http`: tag creation/filter/replacement/rollback, capabilities, denied schedule enablement without mutation; Automation policy unit tests cover disabling after expiry |
+| Build endpoint edit/rename/metadata/archive | `phase7_resources_http`: saved configuration, tag filters, stale edits, active-run conflicts and typed Activities |
+| Build queue/cancel permissions and execution licensing | `phase7_resources_http`: Read without Apply denied, Read+Apply queue/cancel allowed, unlicensed webhook queue/config denied, previously queued automated execution fails before executor output |
+| Build run queue/start/terminal/recovery | `build_execution`: transactional Activities, audit-write rollback, late-completion fencing, interruption history and retained run behavior |
+| Build Pool monitoring/recovery | `phase7_resources_http/build_pools.rs`: stable-result write suppression, refresh interval, stale-version rejection, active-claim exclusion and expired-claim recovery |
+
+Use `Test-Phase7AExternalExecution.ps1 -WorkspaceContainer citadel_devcontainer-workspace-1`
+to reuse the development compiler cache while still creating a separate
+disposable PostgreSQL database. Omitting the option retains the isolated build
+container workflow. Neither mode uses development database data.
+`Test-Phase7AutomationExternal.ps1` also runs the HTTP execution and metadata
+regressions with the real Deno/Shoutrrr tools.
+
+These changes are not completion of Phase 7. The webhook follow-up below
+extends the shared listener beyond repository pulls; Stack/Service dispatch
+and the full external compatibility matrix remain open.
+
+Verified for this follow-up:
+
+- Workspace library tests: 316 passed.
+- Phase 7A PostgreSQL/HTTP/HTTP2 gate: 43 tests passed, including the
+  configuration, persistence, recovery, authorization and Edge suites.
+- Process runner, signed Agent and Edge session suites: 20 passed.
+- Real Deno/Shoutrrr and Automation HTTP execution: both passed; the accompanying
+  metadata and Build/Backup/Alert HTTP suites also passed.
+- Real Local Docker/Restic/PostgreSQL backup and restore: 1 passed.
+- Adapter/server/xtask library and test Clippy, formatting and OpenAPI
+  verification passed (308 full / 256 public operations).
+
+No React feature code, database schema or shared Agent protocol was changed.
+No Citadel image was built. Test scripts removed their disposable databases
+and temporary tool containers; development data was not modified.
+
+## Webhook execution and node coverage follow-up (2026-09-06)
+
+- Shared authentication now serves repository, Automation, Build and Backup
+  Policy dispatch. Provider routing cannot choose a weaker authentication
+  scheme than the saved configuration. Duplicate authentication headers,
+  oversized bodies, invalid signed timestamps and tampered signatures fail
+  before queuing. Branch and repository filters do not mutate resource state.
+- Automation, Build and Backup webhooks queue durable runs. Current webhook
+  configuration (or Build row version) is checked inside the queue transaction,
+  so rotating/disabling a webhook while a request is in flight fences the old
+  request. Duplicate delivery cannot steal the current run. Automated Backup
+  execution also rechecks the current license before source planning.
+- Build execution waits for the normal Git worker to finish a fresh sync and
+  pins its resulting commit across Local, Agent and Edge execution. A failed
+  sync cannot silently use old cached source. A webhook-specified commit stays
+  pinned. Build webhook path filtering can compare the previous successful
+  commit when the provider supplies no paths.
+- Automation execution and scheduling share configured enablement, concurrency
+  and timeout limits. Scheduler scans use keyset batches; one invalid/busy
+  Action does not block subsequent Actions. Deno supports the existing work,
+  cache, log-size and network settings. Filesystem permissions are restricted
+  to each run directory and environment access to `NO_COLOR`/`DENO_DIR`.
+- `getSwarmNodeAgentCoverage` now exposes the existing public response contract,
+  Read authorization and management capability. Its bounded database snapshot
+  joins bindings, node-runtime freshness and latest system-Service tasks.
+  Coverage distinguishes manager-only clusters, down-but-active workers,
+  architecture aliases, protocol incompatibility and system-Service drift.
+  Empty inventory initializes through the selected Local/Agent/Edge manager
+  connector with a 30-second bound. Persistence rechecks cluster/manager identity
+  and only writes if inventory is still empty, preserving concurrent background
+  reconciliation. Transport failure propagates without saving an empty snapshot.
+  Lifecycle mutations are not implemented.
+
+| .NET reference | Rust coverage added |
+| --- | --- |
+| `ReceiveWebhookTests` / `WebhookListenerTests` authentication and filtering | shared `resources::webhooks` unit tests, `resources_http`, `automation_http_execution/webhooks` |
+| Build webhook context relevance, active/lost claim, committed queue | `phase7_resources_http/build_webhooks` through Axum and PostgreSQL; shared matcher unit tests |
+| Backup webhook run-as policy and disabled/busy/license paths | `phase7_resources_http/backup_webhooks`, including entitlement loss after queuing |
+| Build Git synchronization/pinning | real Git and PostgreSQL `git_repository_execution`; executor revision validation |
+| `CronScheduleTests`, Automation sandbox/options | Automation unit tests and real Deno `automation_external_acceptance` |
+| `SwarmNodeAgentLifecycleTests` coverage scenarios | platform policy unit tests and `platforms_http/node_coverage` |
+| `GetSwarmNodeAgentCoverageTests` initialization/error propagation | Axum + Unix Docker fixture + PostgreSQL initialization, repeat read, identity mismatch and concurrent-initialization fence |
+| `SwarmBackupCompatibilityTests.WorkerVolume_ShouldBackupToRustFsAndRestoreOnAnotherNode` S3 storage portion | real Docker/Restic/RustFS/PostgreSQL backup/restore and overwrite rejection; Local connector only, not multi-node routing |
+
+These mappings describe the implemented scenarios, not a complete port of each
+referenced .NET class. Released-Agent/multi-node acceptance and the remaining
+operations below must pass before Phase 7 can be marked complete.
+
+Verification of this follow-up:
+
+- 328 workspace library tests passed.
+- The Phase 7A gate passed, including 45 PostgreSQL/HTTP/HTTP2 tests,
+  process/Agent/session tests, Clippy and OpenAPI verification (309 full /
+  257 public contracts).
+- Real Deno/Shoutrrr execution plus Automation/metadata/Build/Backup HTTP
+  execution passed, including the sandbox restrictions.
+- Server binary and Platform HTTP test Clippy passed.
+- Real RustFS S3 volume backup/restore passed via
+  `Test-Phase7LocalBackup.ps1 -UseRustFs`. It checks restored bytes, persisted
+  snapshots/run results, and overwrite rejection. The fixture uses dedicated
+  PostgreSQL/RustFS containers and UUID-scoped volumes, removed afterwards.
+  Backup acceptance and Automation HTTP test Clippy passed.
+
 ## Still required
 
-- Remaining Build Project/Pool lifecycle and tag-filter parity, automatic Pool
-  health/recovery monitoring, and released-Agent build/push acceptance. AWS
+- Remaining Build execution/source/trigger parity and released-Agent
+  build/push acceptance. AWS
   provisioning is not implemented in the .NET execution reference either.
 - Node-agent installation/bootstrap APIs and the
   remaining node-local detail/mutation/browsing routes.
 - Interactive logs/terminal wiring and its permission/transport acceptance tests.
 - Remaining Git/image update producers.
-- Remaining Automation HTTP progress, tag/filter and configuration/permission
-  parity and their complete .NET integration-test mapping.
+- Stack/Service webhook dispatch, webhook audit-event parity,
+  and the complete .NET test mapping.
 - Real Local/Agent/Edge external-service acceptance, multi-node backup/restore,
   Citadel-system exact-node execution, and interrupted-operation recovery.
 

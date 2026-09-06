@@ -19,6 +19,58 @@ impl PostgresInventoryProjectionStore {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// Initialize a missing Swarm inventory without overwriting a reconciliation
+    /// which completed while Docker was being queried. No network I/O holds this lock.
+    pub async fn initialize_swarm(
+        &self,
+        snapshot: &RuntimeInventorySnapshot,
+    ) -> Result<bool, RuntimeCapabilityError> {
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        let saved = sqlx::query_as::<_, (Option<String>, Value)>(
+            "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR UPDATE",
+        )
+        .bind(snapshot.platform_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| {
+            RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Platform not found", false)
+        })?;
+        let info = snapshot.info.swarm.as_ref().filter(|info| {
+            info.control_available && info.local_node_state.eq_ignore_ascii_case("active")
+        });
+        let manager = saved
+            .1
+            .get("nodeID")
+            .or_else(|| saved.1.get("NodeID"))
+            .and_then(Value::as_str);
+        if !info.is_some_and(|info| {
+            info.cluster_id.as_deref() == saved.0.as_deref()
+                && saved.0.as_deref().is_some_and(|id| !id.is_empty())
+                && manager.is_none_or(|id| id == info.node_id)
+        }) || snapshot.swarm.is_none()
+        {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Conflict,
+                "The connected Docker manager no longer belongs to this Swarm platform.",
+                false,
+            ));
+        }
+        let initialized: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1)",
+        )
+        .bind(snapshot.platform_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?;
+        if initialized {
+            return Ok(false);
+        }
+        persist_snapshot(&mut tx, snapshot).await?;
+        tx.commit().await.map_err(storage)?;
+        Ok(true)
+    }
 }
 
 impl InventoryProjectionStore for PostgresInventoryProjectionStore {

@@ -62,6 +62,7 @@ pub struct Config {
     pub realtime: Option<RealtimeConfig>,
     pub transport: TransportConfig,
     pub identity: IdentityConfig,
+    pub automation: citadel_automation::AutomationOptions,
     database_source: &'static str,
 }
 
@@ -268,6 +269,7 @@ impl Config {
             realtime,
             transport,
             identity,
+            automation: automation_options()?,
             database_source,
         })
     }
@@ -932,6 +934,25 @@ fn validate_database_url(value: &str) -> Result<(), ConfigError> {
         });
     }
     Ok(())
+}
+
+fn automation_options() -> Result<citadel_automation::AutomationOptions, ConfigError> {
+    let options = citadel_automation::AutomationOptions {
+        enabled: parse_env("Automations__Enabled", true)?,
+        max_parallel_runs: parse_env("Automations__MaxParallelRuns", 4)?,
+        default_timeout_seconds: parse_env("Automations__DefaultTimeoutSeconds", 300)?,
+        max_timeout_seconds: parse_env("Automations__MaxTimeoutSeconds", 1800)?,
+        poll_interval: Duration::from_secs(parse_env("Automations__PollIntervalSeconds", 2)?),
+        schedule_poll_interval: Duration::from_secs(parse_env(
+            "Automations__SchedulePollIntervalSeconds",
+            30,
+        )?),
+    };
+    options.validate().map_err(|error| ConfigError::Invalid {
+        name: "Automations",
+        message: error.to_string(),
+    })?;
+    Ok(options)
 }
 
 fn parse_env<T>(name: &'static str, default: T) -> Result<T, ConfigError>

@@ -55,6 +55,30 @@ Runtime files (including Git repository caches and Automation runs) use the
 `CITADEL_DATA_ROOT`. Container initialization makes this private directory
 writable by `vscode`. It survives rebuilds alongside the PostgreSQL volume.
 
+### Automation execution settings
+
+The Rust worker accepts the existing `Automations__...` environment settings.
+Restart the API after changing them. These settings do not grant an Action any
+additional Citadel permissions: its run-as identity is still authorized at execution.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `Automations__Enabled` | `true` | Enable execution and scheduling |
+| `Automations__MaxParallelRuns` | `4` | Shared limit for manual, Test and background runs |
+| `Automations__DefaultTimeoutSeconds` | `300` | Default for newly saved Actions |
+| `Automations__MaxTimeoutSeconds` | `1800` | Maximum allowed Action timeout |
+| `Automations__DenoPath` | `deno` | Deno executable |
+| `Automations__WorkDir` | `<data root>/automations/runs` | Private per-run files, removed after execution |
+| `Automations__DenoCacheDir` | `<data root>/automations/deno-cache` | Persistent Deno dependency cache |
+| `Automations__InternalBaseUrl` | `http://127.0.0.1:8000` | API address reachable from Deno |
+| `Automations__AllowNet` | Internal API host and port | Comma-separated Deno network allow-list; an explicitly empty value denies network access |
+| `Automations__MaxLogBytes` | `1048576` | Captured output limit, bounded between 1 KiB and 16 MiB |
+
+Scripts may read/write their own run directory, not arbitrary host files. Deno
+environment access is limited to `NO_COLOR` and `DENO_DIR`; use Citadel bindings
+for Action inputs and credentials. Add external API hosts to `AllowNet` only
+when the scripts need them.
+
 ## Run Citadel
 
 For normal browser testing, press `Ctrl+Shift+B`. This runs the default

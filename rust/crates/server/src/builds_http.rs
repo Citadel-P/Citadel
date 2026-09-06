@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -26,6 +26,12 @@ pub fn router(state: BuildsHttpState) -> Router {
             .contract_route(routes::LIST_BUILD_PROJECTS, list_projects)
             .contract_route(routes::CREATE_BUILD_PROJECT, create_project)
             .contract_route(routes::GET_BUILD_PROJECT, get_project)
+            .contract_route(routes::UPDATE_BUILD_PROJECT, update_project)
+            .contract_route(routes::RENAME_BUILD_PROJECT, rename_project)
+            .contract_route(
+                routes::UPDATE_BUILD_PROJECT_METADATA,
+                update_project_metadata,
+            )
             .contract_route(routes::ARCHIVE_BUILD_PROJECT, archive_project)
             .contract_route(routes::QUEUE_BUILD_RUN, queue_run)
             .contract_route(routes::LIST_BUILD_RUNS, list_runs)
@@ -59,7 +65,56 @@ pub fn router(state: BuildsHttpState) -> Router {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Projects {
+    projects: Vec<AuthorizedProject>,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
+}
+#[derive(Serialize)]
+pub(crate) struct AuthorizedProject {
+    #[serde(flatten)]
+    project: citadel_builds::BuildProjectView,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
+}
+
+pub(crate) async fn authorized_projects(
+    store: &dyn citadel_builds::BuildStore,
+    principal: &ActorPrincipal,
     projects: Vec<citadel_builds::BuildProjectView>,
+) -> Result<Vec<AuthorizedProject>, BuildError> {
+    let ids: Vec<_> = projects.iter().map(|project| project.id).collect();
+    let permissions = if principal.is_administrator() {
+        Default::default()
+    } else {
+        store.project_permissions(principal.actor_id, &ids).await?
+    };
+    Ok(projects
+        .into_iter()
+        .map(|project| {
+            let level = if principal.is_administrator() {
+                7
+            } else {
+                permissions.get(&project.id).copied().unwrap_or(0)
+            };
+            AuthorizedProject {
+                project,
+                capabilities: pool_capabilities(level),
+            }
+        })
+        .collect())
+}
+
+async fn project_response(
+    state: &BuildsHttpState,
+    principal: &ActorPrincipal,
+    project: citadel_builds::BuildProjectView,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let mut projects = identity_result(
+        authorized_projects(state.builds.store().as_ref(), principal, vec![project])
+            .await
+            .map_err(map_error),
+        headers,
+    )?;
+    Ok(no_store(Json(projects.remove(0)).into_response()))
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,10 +154,15 @@ struct RunFilter {
 async fn list_projects(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
+    RawQuery(query): RawQuery,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
-    let projects = identity_result(
+    let tags = identity_result(
+        crate::resources_http::tags::parse_filters(query.as_deref()),
+        &headers,
+    )?;
+    let mut projects = identity_result(
         state
             .builds
             .store()
@@ -111,7 +171,32 @@ async fn list_projects(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(Projects { projects }).into_response()))
+    projects.retain(|project| crate::resources_http::tags::matches_filters(&project.tags, &tags));
+    let projects = identity_result(
+        authorized_projects(state.builds.store().as_ref(), &principal, projects)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    let permission = identity_result(
+        state
+            .identity
+            .global_permission(&principal, ResourceType::Build)
+            .await,
+        &headers,
+    )?;
+    let capabilities = pool_capabilities(if principal.is_administrator() {
+        7
+    } else {
+        permission.map_or(0, |grant| grant.level as i32)
+    });
+    Ok(no_store(
+        Json(Projects {
+            projects,
+            capabilities,
+        })
+        .into_response(),
+    ))
 }
 async fn create_project(
     State(state): State<BuildsHttpState>,
@@ -123,6 +208,7 @@ async fn create_project(
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
     identity_result(input.validate().map_err(map_error), &headers)?;
     authorize_build_dependencies(&state, &principal, &input, &headers).await?;
+    validate_configuration_entitlements(&state, None, &input, true, &headers).await?;
     let project = identity_result(
         state
             .builds
@@ -132,7 +218,49 @@ async fn create_project(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(project).into_response()))
+    project_response(&state, &principal, project, &headers).await
+}
+
+async fn validate_configuration_entitlements(
+    state: &BuildsHttpState,
+    current: Option<&citadel_builds::BuildProjectView>,
+    input: &BuildProjectInput,
+    updates_webhook: bool,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<()> {
+    if input.builder_kind == "BuildAgentPool"
+        && current.is_none_or(|value| {
+            value.builder_kind != input.builder_kind
+                || value.build_agent_pool_id != input.build_agent_pool_id
+        })
+    {
+        identity_result(
+            state
+                .builds
+                .ensure_entitled(citadel_domain::LicenseCapability::ElasticBuildExecution)
+                .await
+                .map_err(map_error),
+            headers,
+        )?;
+    }
+    if updates_webhook
+        && input
+            .webhook
+            .as_ref()
+            .and_then(|value| value.get("enabled"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    {
+        identity_result(
+            state
+                .builds
+                .ensure_entitled(citadel_domain::LicenseCapability::AutomatedOperations)
+                .await
+                .map_err(map_error),
+            headers,
+        )?;
+    }
+    Ok(())
 }
 
 async fn authorize_build_dependencies(
@@ -209,7 +337,7 @@ async fn get_project(
         state.builds.store().get(id).await.map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(project).into_response()))
+    project_response(&state, &principal, project, &headers).await
 }
 async fn archive_project(
     State(state): State<BuildsHttpState>,
@@ -220,11 +348,102 @@ async fn archive_project(
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
     identity_result(
-        state.builds.store().archive(id).await.map_err(map_error),
+        state
+            .builds
+            .store()
+            .archive(id, principal.actor_id)
+            .await
+            .map_err(map_error),
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+
+async fn update_project(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
+) -> IdentityHttpResult {
+    save_project(&state, principal, id, patch, None, false, &headers).await
+}
+
+async fn update_project_metadata(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
+) -> IdentityHttpResult {
+    save_project(&state, principal, id, patch, None, true, &headers).await
+}
+
+async fn rename_project(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    Json(input): Json<RenamePool>,
+) -> IdentityHttpResult {
+    save_project(
+        &state,
+        principal,
+        input.id,
+        serde_json::json!({}),
+        Some(input.name),
+        false,
+        &headers,
+    )
+    .await
+}
+
+async fn save_project(
+    state: &BuildsHttpState,
+    principal: Option<Extension<ActorPrincipal>>,
+    id: Uuid,
+    patch: serde_json::Value,
+    name: Option<String>,
+    metadata_only: bool,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let updates_webhook = patch.get("webhook").is_some();
+    let principal = actor(principal, headers)?;
+    authorize(state, &principal, id, PermissionLevel::Write, headers).await?;
+    let current = identity_result(
+        state.builds.store().get(id).await.map_err(map_error),
+        headers,
+    )?;
+    let mut input = identity_result(
+        current.apply_patch(patch, metadata_only).map_err(map_error),
+        headers,
+    )?;
+    if let Some(name) = name {
+        input.name = name;
+    }
+    identity_result(input.validate().map_err(map_error), headers)?;
+    if !metadata_only {
+        authorize_build_dependencies(state, &principal, &input, headers).await?;
+        validate_configuration_entitlements(
+            state,
+            Some(&current),
+            &input,
+            updates_webhook,
+            headers,
+        )
+        .await?;
+    }
+    let project = identity_result(
+        state
+            .builds
+            .store()
+            .update(&current, &input, principal.actor_id, metadata_only)
+            .await
+            .map_err(map_error),
+        headers,
+    )?;
+    project_response(state, &principal, project, headers).await
+}
+
 async fn queue_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -233,7 +452,19 @@ async fn queue_run(
     input: Option<Json<QueueInput>>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
-    authorize(&state, &principal, id, PermissionLevel::Execute, &headers).await?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::Build,
+                id,
+                PermissionLevel::Read,
+                Some(citadel_domain::SpecificPermission::Apply),
+            )
+            .await,
+        &headers,
+    )?;
     let trigger = input
         .and_then(|Json(value)| value.trigger)
         .unwrap_or_else(|| "Manual".to_owned());
@@ -243,6 +474,18 @@ async fn queue_run(
             &headers,
         ));
     }
+    let project = identity_result(
+        state.builds.store().get(id).await.map_err(map_error),
+        &headers,
+    )?;
+    identity_result(
+        state
+            .builds
+            .ensure_execution_entitlements(&project, &trigger)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
     let run = identity_result(
         state
             .builds
@@ -337,24 +580,34 @@ async fn cancel_run(
         state.builds.store().get_run(id).await.map_err(map_error),
         &headers,
     )?;
-    authorize(
-        &state,
-        &principal,
-        run.build_project_id,
-        PermissionLevel::Execute,
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::Build,
+                run.build_project_id,
+                PermissionLevel::Read,
+                Some(citadel_domain::SpecificPermission::Apply),
+            )
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     identity_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 async fn list_pools(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
+    RawQuery(query): RawQuery,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
-    let build_agent_pools = identity_result(
+    let tags = identity_result(
+        crate::resources_http::tags::parse_filters(query.as_deref()),
+        &headers,
+    )?;
+    let mut build_agent_pools = identity_result(
         state
             .builds
             .store()
@@ -363,6 +616,8 @@ async fn list_pools(
             .map_err(map_error),
         &headers,
     )?;
+    build_agent_pools
+        .retain(|pool| crate::resources_http::tags::matches_filters(&pool.tags, &tags));
     let pools = identity_result(
         authorized_pools(state.builds.store().as_ref(), &principal, build_agent_pools)
             .await
@@ -795,6 +1050,9 @@ async fn authorize_for(
 }
 fn map_error(error: BuildError) -> IdentityError {
     match error {
+        BuildError::LicenseRequired(capability) => {
+            IdentityError::LicenseRequired(capability.as_license_key())
+        }
         BuildError::Validation(message) => IdentityError::Validation(message),
         BuildError::NotFound => IdentityError::NotFound,
         BuildError::Conflict(message) => IdentityError::Conflict(message),

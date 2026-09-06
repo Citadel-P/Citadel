@@ -42,6 +42,43 @@ impl PostgresBackupStore {
     }
 }
 
+impl PostgresBackupStore {
+    fn enqueue_run<'a>(
+        &'a self,
+        actor: ActorId,
+        policy_id: Uuid,
+        trigger: &str,
+        expected_webhook: Option<&'a Value>,
+    ) -> BoxFuture<'a, Result<BackupRunView, BackupError>> {
+        let trigger = trigger.to_owned();
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let p=sqlx::query("SELECT p.name,p.source,p.backuprepositoryid,p.enabled,p.controlstate,p.runasactorid,p.webhook,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.archivedat IS NULL AND r.archivedat IS NULL FOR UPDATE OF p,r").bind(policy_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BackupError::NotFound)?;
+            if let Some(expected) = expected_webhook {
+                let current: Option<Value> = p.try_get("webhook").map_err(storage)?;
+                if current.as_ref() != Some(expected) {
+                    return Err(BackupError::Conflict(
+                        "Webhook configuration changed.".into(),
+                    ));
+                }
+            }
+            if !p.try_get::<bool, _>("enabled").map_err(storage)?
+                || p.try_get::<String, _>("controlstate").map_err(storage)? != "Idle"
+            {
+                return Err(BackupError::Conflict(
+                    "Backup Policy is disabled or already active.".into(),
+                ));
+            }
+            let id = Uuid::now_v7();
+            let repo: Uuid = p.try_get("backuprepositoryid").map_err(storage)?;
+            sqlx::query("INSERT INTO backupruns(id,backuppolicyid,policynamesnapshot,backuprepositoryid,repositorytypesnapshot,sourcesnapshot,trigger,status,snapshotavailability,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Queued','Pending',$8)").bind(id).bind(policy_id).bind(p.try_get::<String,_>("name").map_err(storage)?).bind(repo).bind(p.try_get::<String,_>("type").map_err(storage)?).bind(p.try_get::<Value,_>("source").map_err(storage)?).bind(trigger).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("UPDATE backuppolicies SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(policy_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            self.get_run(id).await
+        })
+    }
+}
+
 impl BackupStore for PostgresBackupStore {
     fn create_repository<'a>(
         &'a self,
@@ -282,24 +319,20 @@ ORDER BY policy.name,policy.id"#
         policy_id: Uuid,
         trigger: &str,
     ) -> BoxFuture<'_, Result<BackupRunView, BackupError>> {
-        let trigger = trigger.to_owned();
-        Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            let p=sqlx::query("SELECT p.name,p.source,p.backuprepositoryid,p.enabled,p.controlstate,p.runasactorid,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.archivedat IS NULL AND r.archivedat IS NULL FOR UPDATE OF p,r").bind(policy_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BackupError::NotFound)?;
-            if !p.try_get::<bool, _>("enabled").map_err(storage)?
-                || p.try_get::<String, _>("controlstate").map_err(storage)? != "Idle"
-            {
-                return Err(BackupError::Conflict(
-                    "Backup Policy is disabled or already active.".into(),
-                ));
-            }
-            let id = Uuid::now_v7();
-            let repo: Uuid = p.try_get("backuprepositoryid").map_err(storage)?;
-            sqlx::query("INSERT INTO backupruns(id,backuppolicyid,policynamesnapshot,backuprepositoryid,repositorytypesnapshot,sourcesnapshot,trigger,status,snapshotavailability,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Queued','Pending',$8)").bind(id).bind(policy_id).bind(p.try_get::<String,_>("name").map_err(storage)?).bind(repo).bind(p.try_get::<String,_>("type").map_err(storage)?).bind(p.try_get::<Value,_>("source").map_err(storage)?).bind(trigger).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
-            sqlx::query("UPDATE backuppolicies SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(policy_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
-            tx.commit().await.map_err(storage)?;
-            self.get_run(id).await
-        })
+        self.enqueue_run(actor, policy_id, trigger, None)
+    }
+
+    fn enqueue_webhook<'a>(
+        &'a self,
+        policy_id: Uuid,
+        expected_webhook: &'a Value,
+    ) -> BoxFuture<'a, Result<BackupRunView, BackupError>> {
+        self.enqueue_run(
+            ActorId::new(Uuid::from_u128(1)),
+            policy_id,
+            "Webhook",
+            Some(expected_webhook),
+        )
     }
     fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicyView>, BackupError>> {
         Box::pin(async move {

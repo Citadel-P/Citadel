@@ -34,3 +34,26 @@ pub(crate) enum ResourceTagError {
     Missing,
     Database(sqlx::Error),
 }
+
+pub(crate) async fn load(
+    connection: &mut sqlx::PgConnection,
+    kind: &str,
+    ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, Vec<citadel_resources::TagSummary>>, sqlx::Error> {
+    use sqlx::Row;
+    let mut tags = std::collections::HashMap::<Uuid, Vec<_>>::new();
+    if ids.is_empty() {
+        return Ok(tags);
+    }
+    let rows = sqlx::query("SELECT link.resourceid,tag.id,tag.name,tag.color FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$1 AND link.resourceid=ANY($2) ORDER BY tag.name,tag.id").bind(kind).bind(ids).fetch_all(connection).await?;
+    for row in rows {
+        tags.entry(row.try_get("resourceid")?)
+            .or_default()
+            .push(citadel_resources::TagSummary {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                color: row.try_get("color")?,
+            });
+    }
+    Ok(tags)
+}

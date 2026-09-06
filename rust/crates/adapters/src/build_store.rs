@@ -44,7 +44,114 @@ impl PostgresBuildStore {
     }
 }
 
+impl PostgresBuildStore {
+    fn enqueue_run<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        trigger: &'a str,
+        expected_version: Option<i64>,
+        branch: Option<&'a str>,
+        commit: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<BuildRunView, BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let project = sqlx::query("SELECT project.*,repo.name AS gitrepositoryname,platform.name AS platformname,platform.address AS platformaddress,registry.name AS registryname,registry.registryhost AS registryhost FROM buildprojects project JOIN gitrepositories repo ON repo.id=project.gitrepositoryid LEFT JOIN platforms platform ON platform.id=project.platformid JOIN registries registry ON registry.id=project.registryid WHERE project.id=$1 AND project.archivedat IS NULL FOR UPDATE OF project")
+                .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BuildError::NotFound)?;
+            if expected_version.is_some_and(|version| {
+                project.try_get::<i64, _>("rowversion").ok() != Some(version)
+            }) {
+                return Err(BuildError::Conflict(
+                    "Build Project configuration changed.".into(),
+                ));
+            }
+            let branch = branch
+                .map(str::to_owned)
+                .unwrap_or(project.try_get::<String, _>("branch").map_err(storage)?);
+            if !project.try_get::<bool, _>("enabled").map_err(storage)? {
+                return Err(BuildError::Conflict(
+                    "Build Project is disabled.".to_owned(),
+                ));
+            }
+            if project
+                .try_get::<String, _>("controlstate")
+                .map_err(storage)?
+                != "Idle"
+            {
+                return Err(BuildError::Conflict(
+                    "Another Build Run is already active.".to_owned(),
+                ));
+            }
+            let run_id = Uuid::now_v7();
+            let platform = serde_json::json!({"id":project.try_get::<Option<Uuid>,_>("platformid").map_err(storage)?,"name":project.try_get::<Option<String>,_>("platformname").map_err(storage)?,"address":project.try_get::<Option<String>,_>("platformaddress").map_err(storage)?});
+            let registry = serde_json::json!({"id":project.try_get::<Uuid,_>("registryid").map_err(storage)?,"name":project.try_get::<String,_>("registryname").map_err(storage)?,"registryHost":project.try_get::<String,_>("registryhost").map_err(storage)?});
+            let build_secrets: serde_json::Value =
+                project.try_get("buildsecrets").map_err(storage)?;
+            let secret_ids = build_secrets
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.get("secretId").and_then(|id| id.as_str()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            sqlx::query("INSERT INTO buildruns(id,buildprojectid,projectnamesnapshot,gitrepositoryid,gitrepositorynamesnapshot,branch,resolvedcommitsha,contextpath,dockerfilepath,target,buildargssnapshot,buildsecretidssnapshot,platformsnapshot,registrysnapshot,imagerepository,tagtemplatessnapshot,imagereferences,trigger,triggersourceid,status,timeoutseconds,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$19,$7,$8,$9,$10,$11,$12,$13,$14,$15,'[]'::jsonb,$16,CASE WHEN $16='Webhook' THEN $2 ELSE NULL END,'Queued',$17,$18)")
+                .bind(run_id).bind(id).bind(project.try_get::<String,_>("name").map_err(storage)?).bind(project.try_get::<Uuid,_>("gitrepositoryid").map_err(storage)?)
+                .bind(project.try_get::<String,_>("gitrepositoryname").map_err(storage)?).bind(branch)
+                .bind(project.try_get::<String,_>("contextpath").map_err(storage)?).bind(project.try_get::<String,_>("dockerfilepath").map_err(storage)?)
+                .bind(project.try_get::<Option<String>,_>("target").map_err(storage)?).bind(project.try_get::<serde_json::Value,_>("buildargs").map_err(storage)?)
+                .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(project.try_get::<String,_>("imagerepository").map_err(storage)?)
+                .bind(project.try_get::<serde_json::Value,_>("tagtemplates").map_err(storage)?).bind(trigger).bind(project.try_get::<i32,_>("timeoutseconds").map_err(storage)?).bind(actor.value()).bind(commit)
+                .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("UPDATE buildprojects SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
+            record_run_activity(&mut tx, run_id).await?;
+            let run = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
+                .bind(run_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(storage)
+                .and_then(map_run)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(run)
+        })
+    }
+}
+
 impl BuildStore for PostgresBuildStore {
+    fn health_pools(
+        &self,
+        after: Uuid,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<BuildAgentPoolView>, BuildError>> {
+        Box::pin(async move {
+            sqlx::query("SELECT * FROM buildagentpools WHERE id>$1 AND enabled AND archivedat IS NULL AND provider='SelfManagedVm' AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) ORDER BY id LIMIT $2")
+                .bind(after).bind(limit.clamp(1,64) as i64).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(map_pool).collect()
+        })
+    }
+    fn record_pool_health<'a>(
+        &'a self,
+        pool: &'a BuildAgentPoolView,
+        result: &'a citadel_builds::BuildPoolCheck,
+    ) -> BoxFuture<'a, Result<bool, BuildError>> {
+        Box::pin(async move {
+            let message: String = result.message.chars().take(2048).collect();
+            let count = sqlx::query("UPDATE buildagentpools SET lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND enabled AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) AND (lastvalidationstatus IS DISTINCT FROM $3 OR lastvalidationmessage IS DISTINCT FROM $4 OR lastvalidatedat IS NULL OR lastvalidatedat < now()-INTERVAL '5 minutes' OR controlstate<>'Idle')")
+                .bind(pool.id).bind(pool.row_version).bind(if result.ready {"Ready"} else {"Invalid"}).bind(message).execute(&self.pool).await.map_err(storage)?.rows_affected();
+            Ok(count == 1)
+        })
+    }
+    fn project_permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, BuildError>> {
+        Box::pin(async move {
+            crate::resource_permissions::for_resources(&self.pool, actor, ResourceType::Build, ids)
+                .await
+                .map_err(storage)
+        })
+    }
     fn create_pool<'a>(
         &'a self,
         actor: ActorId,
@@ -91,7 +198,7 @@ impl BuildStore for PostgresBuildStore {
             )
             .await?;
             transaction.commit().await.map_err(storage)?;
-            Ok(pool)
+            self.get_pool(pool.id).await
         })
     }
     fn list_pools(
@@ -112,7 +219,7 @@ WHERE pool.archivedat IS NULL
   ))
 ORDER BY pool.name,pool.id"#
             );
-            sqlx::query(AssertSqlSafe(query.as_str()))
+            let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BuildAgentPool as i32)
                 .bind(READ_MASK)
@@ -122,7 +229,13 @@ ORDER BY pool.name,pool.id"#
                 .map_err(storage)?
                 .into_iter()
                 .map(map_pool)
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?;
+            enrich_pools(
+                &mut *self.pool.acquire().await.map_err(storage)?,
+                &mut values,
+            )
+            .await?;
+            Ok(values)
         })
     }
     fn pool_permissions<'a>(
@@ -131,40 +244,32 @@ ORDER BY pool.name,pool.id"#
         ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, BuildError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT ids.id, COALESCE(bit_or(grants.level),0)::int4
-FROM unnest($4::uuid[]) ids(id)
-LEFT JOIN LATERAL (
-    SELECT p.permissionlevel AS level FROM actor_scope scope
-    JOIN actorroles assignment ON assignment.actorid=scope.actorid
-    JOIN permissions p ON p.roleid=assignment.roleid AND p.resourcetype=$2
-    UNION ALL
-    SELECT access.permissionlevel FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid=scope.actorid
-    WHERE access.resourcetype=$2 AND access.resourceid=ids.id
-) grants ON true GROUP BY ids.id"#
-            );
-            let rows: Vec<(Uuid, i32)> = sqlx::query_as(AssertSqlSafe(query.as_str()))
-                .bind(actor.value())
-                .bind(ResourceType::BuildAgentPool as i32)
-                .bind(READ_MASK)
-                .bind(ids)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?;
-            Ok(rows.into_iter().collect())
+            crate::resource_permissions::for_resources(
+                &self.pool,
+                actor,
+                ResourceType::BuildAgentPool,
+                ids,
+            )
+            .await
+            .map_err(storage)
         })
     }
     fn get_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildAgentPoolView, BuildError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM buildagentpools WHERE id=$1 AND archivedat IS NULL")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or(BuildError::NotFound)
-                .and_then(map_pool)
+            let mut value =
+                sqlx::query("SELECT * FROM buildagentpools WHERE id=$1 AND archivedat IS NULL")
+                    .bind(id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(BuildError::NotFound)
+                    .and_then(map_pool)?;
+            enrich_pools(
+                &mut *self.pool.acquire().await.map_err(storage)?,
+                std::slice::from_mut(&mut value),
+            )
+            .await?;
+            Ok(value)
         })
     }
     fn claim_pool_test(
@@ -211,7 +316,7 @@ LEFT JOIN LATERAL (
                 .await
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(pool)
+            self.get_pool(pool.id).await
         })
     }
     fn update_pool<'a>(
@@ -244,7 +349,7 @@ LEFT JOIN LATERAL (
             };
             record_pool_activity(&mut tx, &pool, actor, info).await?;
             tx.commit().await.map_err(storage)?;
-            Ok(pool)
+            self.get_pool(pool.id).await
         })
     }
     fn archive_pool<'a>(
@@ -302,6 +407,21 @@ LEFT JOIN LATERAL (
             resource_tags::insert(&mut transaction, "Build", id, &input.tag_ids, actor.value())
                 .await
                 .map_err(build_tag_error)?;
+            let project = sqlx::query("SELECT * FROM buildprojects WHERE id=$1")
+                .bind(id)
+                .fetch_one(&mut *transaction)
+                .await
+                .map_err(storage)
+                .and_then(map_project)?;
+            record_project_activity(
+                &mut transaction,
+                &project,
+                actor,
+                citadel_domain::ActivityEventInfo::BuildCreated {
+                    build: project.snapshot(),
+                },
+            )
+            .await?;
             transaction.commit().await.map_err(storage)?;
             self.get(id).await
         })
@@ -325,7 +445,7 @@ WHERE project.archivedat IS NULL
   ))
 ORDER BY project.name,project.id"#
             );
-            sqlx::query(AssertSqlSafe(query.as_str()))
+            let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Build as i32)
                 .bind(READ_MASK)
@@ -335,35 +455,100 @@ ORDER BY project.name,project.id"#
                 .map_err(storage)?
                 .into_iter()
                 .map(map_project)
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?;
+            enrich_projects(
+                &mut *self.pool.acquire().await.map_err(storage)?,
+                &mut values,
+            )
+            .await?;
+            Ok(values)
         })
     }
 
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProjectView, BuildError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM buildprojects WHERE id=$1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or(BuildError::NotFound)
-                .and_then(map_project)
+            let mut value =
+                sqlx::query("SELECT * FROM buildprojects WHERE id=$1 AND archivedat IS NULL")
+                    .bind(id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(BuildError::NotFound)
+                    .and_then(map_project)?;
+            enrich_projects(
+                &mut *self.pool.acquire().await.map_err(storage)?,
+                std::slice::from_mut(&mut value),
+            )
+            .await?;
+            Ok(value)
         })
     }
 
-    fn archive<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), BuildError>> {
+    fn update<'a>(
+        &'a self,
+        current: &'a BuildProjectView,
+        input: &'a BuildProjectInput,
+        actor: ActorId,
+        metadata_only: bool,
+    ) -> BoxFuture<'a, Result<BuildProjectView, BuildError>> {
         Box::pin(async move {
-            let affected = sqlx::query("UPDATE buildprojects SET enabled=false,archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND controlstate='Idle'")
-                .bind(id).execute(&self.pool).await.map_err(storage)?.rows_affected();
-            if affected == 1 {
-                Ok(())
-            } else if exists(&self.pool, "buildprojects", id).await? {
-                Err(BuildError::Conflict(
-                    "Build Project has an active Run or is already archived.".to_owned(),
-                ))
-            } else {
-                Err(BuildError::NotFound)
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row = sqlx::query("UPDATE buildprojects SET name=$3,normalizedname=$4,description=$5,enabled=$6,gitrepositoryid=$7,branch=$8,contextpath=$9,dockerfilepath=$10,target=$11,buildargs=$12,buildsecrets=$13,builderkind=$14,platformid=$15,buildagentpoolid=$16,registryid=$17,imagerepository=$18,tagtemplates=$19,webhook=$20,timeoutseconds=$21,retentionruncount=$22,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
+                .bind(current.id).bind(current.row_version).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(input.enabled)
+                .bind(input.git_repository_id).bind(&input.branch).bind(&input.context_path).bind(&input.dockerfile_path).bind(&input.target)
+                .bind(serde_json::to_value(input.build_args.as_deref().unwrap_or(&[])).map_err(storage)?)
+                .bind(serde_json::to_value(input.build_secrets.as_deref().unwrap_or(&[])).map_err(storage)?)
+                .bind(&input.builder_kind).bind(input.platform_id).bind(input.build_agent_pool_id).bind(input.registry_id).bind(&input.image_repository)
+                .bind(serde_json::to_value(input.tag_templates.as_deref().unwrap_or(&[])).map_err(storage)?)
+                .bind(&input.webhook).bind(input.timeout_seconds).bind(input.retention_run_count)
+                .fetch_optional(&mut *tx).await.map_err(database)?.ok_or_else(|| BuildError::Conflict("Build was changed, archived or is processing. Reload before saving.".into()))?;
+            let project = map_project(row)?;
+            if !metadata_only {
+                let info = if current.name != project.name {
+                    citadel_domain::ActivityEventInfo::BuildRenamed {
+                        old_name: current.name.clone(),
+                        new_name: project.name.clone(),
+                    }
+                } else {
+                    citadel_domain::ActivityEventInfo::BuildUpdated {
+                        old_build: current.snapshot(),
+                        new_build: project.snapshot(),
+                    }
+                };
+                record_project_activity(&mut tx, &project, actor, info).await?;
             }
+            tx.commit().await.map_err(storage)?;
+            self.get(project.id).await
+        })
+    }
+
+    fn archive<'a>(&'a self, id: Uuid, actor: ActorId) -> BoxFuture<'a, Result<(), BuildError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let current = sqlx::query(
+                "SELECT * FROM buildprojects WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BuildError::NotFound)
+            .and_then(map_project)?;
+            if current.control_state != "Idle" {
+                return Err(BuildError::Conflict("Build has an active Run.".into()));
+            }
+            sqlx::query("UPDATE buildprojects SET enabled=false,archivedat=now(),updatedat=now(),rowversion=rowversion+1 WHERE id=$1").bind(id).execute(&mut *tx).await.map_err(storage)?;
+            record_project_activity(
+                &mut tx,
+                &current,
+                actor,
+                citadel_domain::ActivityEventInfo::BuildDeleted {
+                    build: current.snapshot(),
+                },
+            )
+            .await?;
+            tx.commit().await.map_err(storage)?;
+            Ok(())
         })
     }
 
@@ -373,50 +558,23 @@ ORDER BY project.name,project.id"#
         id: Uuid,
         trigger: &'a str,
     ) -> BoxFuture<'a, Result<BuildRunView, BuildError>> {
-        Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            let project = sqlx::query("SELECT project.*,repo.name AS gitrepositoryname,platform.name AS platformname,platform.address AS platformaddress,registry.name AS registryname,registry.registryhost AS registryhost FROM buildprojects project JOIN gitrepositories repo ON repo.id=project.gitrepositoryid LEFT JOIN platforms platform ON platform.id=project.platformid JOIN registries registry ON registry.id=project.registryid WHERE project.id=$1 AND project.archivedat IS NULL FOR UPDATE OF project")
-                .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BuildError::NotFound)?;
-            if !project.try_get::<bool, _>("enabled").map_err(storage)? {
-                return Err(BuildError::Conflict(
-                    "Build Project is disabled.".to_owned(),
-                ));
-            }
-            if project
-                .try_get::<String, _>("controlstate")
-                .map_err(storage)?
-                != "Idle"
-            {
-                return Err(BuildError::Conflict(
-                    "Another Build Run is already active.".to_owned(),
-                ));
-            }
-            let run_id = Uuid::now_v7();
-            let platform = serde_json::json!({"id":project.try_get::<Option<Uuid>,_>("platformid").map_err(storage)?,"name":project.try_get::<Option<String>,_>("platformname").map_err(storage)?,"address":project.try_get::<Option<String>,_>("platformaddress").map_err(storage)?});
-            let registry = serde_json::json!({"id":project.try_get::<Uuid,_>("registryid").map_err(storage)?,"name":project.try_get::<String,_>("registryname").map_err(storage)?,"registryHost":project.try_get::<String,_>("registryhost").map_err(storage)?});
-            let build_secrets: serde_json::Value =
-                project.try_get("buildsecrets").map_err(storage)?;
-            let secret_ids = build_secrets
-                .as_array()
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.get("secretId").and_then(|id| id.as_str()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            sqlx::query("INSERT INTO buildruns(id,buildprojectid,projectnamesnapshot,gitrepositoryid,gitrepositorynamesnapshot,branch,resolvedcommitsha,contextpath,dockerfilepath,target,buildargssnapshot,buildsecretidssnapshot,platformsnapshot,registrysnapshot,imagerepository,tagtemplatessnapshot,imagereferences,trigger,triggersourceid,status,timeoutseconds,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,$10,$11,$12,$13,$14,$15,'[]'::jsonb,$16,NULL,'Queued',$17,$18)")
-                .bind(run_id).bind(id).bind(project.try_get::<String,_>("name").map_err(storage)?).bind(project.try_get::<Uuid,_>("gitrepositoryid").map_err(storage)?)
-                .bind(project.try_get::<String,_>("gitrepositoryname").map_err(storage)?).bind(project.try_get::<String,_>("branch").map_err(storage)?)
-                .bind(project.try_get::<String,_>("contextpath").map_err(storage)?).bind(project.try_get::<String,_>("dockerfilepath").map_err(storage)?)
-                .bind(project.try_get::<Option<String>,_>("target").map_err(storage)?).bind(project.try_get::<serde_json::Value,_>("buildargs").map_err(storage)?)
-                .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(project.try_get::<String,_>("imagerepository").map_err(storage)?)
-                .bind(project.try_get::<serde_json::Value,_>("tagtemplates").map_err(storage)?).bind(trigger).bind(project.try_get::<i32,_>("timeoutseconds").map_err(storage)?).bind(actor.value())
-                .execute(&mut *tx).await.map_err(database)?;
-            sqlx::query("UPDATE buildprojects SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
-            tx.commit().await.map_err(storage)?;
-            get_run(&self.pool, run_id).await
-        })
+        self.enqueue_run(actor, id, trigger, None, None, None)
+    }
+
+    fn enqueue_webhook<'a>(
+        &'a self,
+        current: &'a BuildProjectView,
+        branch: &'a str,
+        commit: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<BuildRunView, BuildError>> {
+        self.enqueue_run(
+            ActorId::new(Uuid::from_u128(1)),
+            current.id,
+            "Webhook",
+            Some(current.row_version),
+            Some(branch),
+            commit,
+        )
     }
 
     fn claim_next<'a>(
@@ -442,6 +600,7 @@ ORDER BY project.name,project.id"#
             let project_id: Uuid = row.try_get("buildprojectid").map_err(storage)?;
             sqlx::query("UPDATE buildruns SET status='Preparing',startedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Queued'").bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("UPDATE buildprojects SET controlstate='Processing',controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project_id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
+            record_run_activity(&mut tx, run_id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(Some(BuildClaim {
                 project: self.get(project_id).await?,
@@ -454,12 +613,13 @@ ORDER BY project.name,project.id"#
         &'a self,
         claim: &'a BuildClaim,
         result: &'a BuildExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BuildError>> {
+    ) -> BoxFuture<'a, Result<bool, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let affected = sqlx::query("UPDATE buildruns SET status=$2,completedat=CURRENT_TIMESTAMP,exitcode=$3,imagedigest=$4,imagereferences=$5,errorcode=$6,errormessage=$7,resolvedcommitsha=$8 WHERE id=$1 AND status IN ('Preparing','Running')")
+            let affected = sqlx::query("UPDATE buildruns SET status=$2,completedat=CURRENT_TIMESTAMP,exitcode=$3,imagedigest=$4,imagereferences=$5,errorcode=$6,errormessage=$7,resolvedcommitsha=$8 WHERE id=$1 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id)")
                 .bind(claim.run.id).bind(result.status).bind(result.exit_code).bind(result.image_digest.as_deref()).bind(serde_json::to_value(&result.image_references).map_err(storage)?).bind(result.error_code.as_deref()).bind(result.error_message.as_deref()).bind(result.resolved_commit_sha.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
+                record_run_activity(&mut tx, claim.run.id).await?;
                 for log in &result.logs {
                     sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,message,stream) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)").bind(Uuid::now_v7()).bind(claim.run.id).bind(&log.message).bind(&log.stream).execute(&mut *tx).await.map_err(storage)?;
                 }
@@ -474,7 +634,7 @@ ORDER BY project.name,project.id"#
                 .map_err(storage)?;
             }
             tx.commit().await.map_err(storage)?;
-            Ok(())
+            Ok(affected == 1)
         })
     }
 
@@ -550,6 +710,7 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
             let row=sqlx::query("UPDATE buildruns SET status='Cancelled',completedat=CURRENT_TIMESTAMP,errorcode='build.cancelled',errormessage='Build run cancelled.' WHERE id=$1 AND status='Queued' RETURNING buildprojectid").bind(id).fetch_optional(&mut *tx).await.map_err(storage)?;
             if let Some(row) = row {
                 let project: Uuid = row.try_get("buildprojectid").map_err(storage)?;
+                record_run_activity(&mut tx, id).await?;
                 sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project).bind(id).execute(&mut *tx).await.map_err(storage)?;
                 tx.commit().await.map_err(storage)?;
                 Ok(true)
@@ -607,6 +768,93 @@ async fn record_pool_activity(
         .map_err(storage)
 }
 
+async fn record_project_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    pool: &BuildProjectView,
+    actor: ActorId,
+    info: citadel_domain::ActivityEventInfo,
+) -> Result<(), BuildError> {
+    let activity = citadel_domain::ActivityEvent::new_build_event(
+        pool.id,
+        pool.name.clone(),
+        actor,
+        info,
+        Utc::now(),
+    )
+    .map_err(storage)?;
+    crate::activity_store::insert_activity(tx, &activity)
+        .await
+        .map_err(storage)
+}
+
+async fn record_run_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+) -> Result<(), BuildError> {
+    use citadel_domain::ActivityEventInfo as Info;
+    let row = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(storage)?;
+    let run = map_run(row)?;
+    let duration_ms = run
+        .started_at
+        .zip(run.completed_at)
+        .map(|(start, end)| (end - start).num_milliseconds().max(0));
+    let info = match run.status.as_str() {
+        "Queued" => Info::BuildRunQueued {
+            run_id: id,
+            trigger: run.trigger,
+        },
+        "Preparing" => Info::BuildRunStarted {
+            run_id: id,
+            trigger: run.trigger,
+        },
+        "Succeeded" => Info::BuildRunSucceeded {
+            run_id: id,
+            trigger: run.trigger,
+            exit_code: run.exit_code,
+            duration_ms,
+            image_digest: run.image_digest,
+        },
+        "TimedOut" => Info::BuildRunTimedOut {
+            run_id: id,
+            trigger: run.trigger,
+            duration_ms,
+            error_message: run.error_message,
+        },
+        "Cancelled" => Info::BuildRunCancelled {
+            run_id: id,
+            trigger: run.trigger,
+        },
+        "Failed" | "Interrupted" => Info::BuildRunFailed {
+            run_id: id,
+            trigger: run.trigger,
+            status: run.status,
+            exit_code: run.exit_code,
+            duration_ms,
+            error_message: run.error_message,
+        },
+        _ => {
+            return Err(BuildError::Storage(
+                "Invalid Build Activity transition.".into(),
+            ));
+        }
+    };
+    let activity = citadel_domain::ActivityEvent::new_build_event(
+        run.build_project_id,
+        run.project_name_snapshot,
+        ActorId::new(run.triggered_by_actor_id),
+        info,
+        Utc::now(),
+    )
+    .map_err(storage)?;
+    crate::activity_store::insert_activity(tx, &activity)
+        .await
+        .map_err(storage)
+}
+
 async fn recover(
     tx: &mut Transaction<'_, Postgres>,
     stale_before: DateTime<Utc>,
@@ -615,22 +863,12 @@ async fn recover(
     for row in rows {
         let id: Uuid = row.try_get("id").map_err(storage)?;
         let project: Uuid = row.try_get("buildprojectid").map_err(storage)?;
+        record_run_activity(tx, id).await?;
         sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project).bind(id).execute(&mut **tx).await.map_err(storage)?;
     }
     Ok(())
 }
 
-async fn exists(pool: &PgPool, table: &str, id: Uuid) -> Result<bool, BuildError> {
-    let query = match table {
-        "buildprojects" => "SELECT EXISTS(SELECT 1 FROM buildprojects WHERE id=$1)",
-        _ => return Ok(false),
-    };
-    sqlx::query_scalar(query)
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .map_err(storage)
-}
 async fn exists_run(pool: &PgPool, id: Uuid) -> Result<bool, BuildError> {
     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildruns WHERE id=$1)")
         .bind(id)
@@ -647,8 +885,48 @@ async fn get_run(pool: &PgPool, id: Uuid) -> Result<BuildRunView, BuildError> {
         .ok_or(BuildError::NotFound)
         .and_then(map_run)
 }
+async fn enrich_pools(
+    connection: &mut sqlx::PgConnection,
+    pools: &mut [BuildAgentPoolView],
+) -> Result<(), BuildError> {
+    let ids: Vec<_> = pools.iter().map(|pool| pool.id).collect();
+    let mut tags = resource_tags::load(connection, "BuildAgentPool", &ids)
+        .await
+        .map_err(storage)?;
+    for pool in pools {
+        pool.tags = tags.remove(&pool.id).unwrap_or_default();
+    }
+    Ok(())
+}
+
+async fn enrich_projects(
+    connection: &mut sqlx::PgConnection,
+    projects: &mut [BuildProjectView],
+) -> Result<(), BuildError> {
+    if projects.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<_> = projects.iter().map(|project| project.id).collect();
+    let mut tags = resource_tags::load(&mut *connection, "Build", &ids)
+        .await
+        .map_err(storage)?;
+    let rows = sqlx::query("SELECT run.* FROM unnest($1::uuid[]) ids(id) CROSS JOIN LATERAL (SELECT * FROM buildruns WHERE buildprojectid=ids.id ORDER BY queuedat DESC,id DESC LIMIT 1) run").bind(&ids).fetch_all(connection).await.map_err(storage)?;
+    let mut runs = std::collections::HashMap::new();
+    for row in rows {
+        let run = map_run(row)?;
+        runs.insert(run.build_project_id, run);
+    }
+    for project in projects {
+        project.tags = tags.remove(&project.id).unwrap_or_default();
+        project.latest_run = runs.remove(&project.id);
+    }
+    Ok(())
+}
+
 fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProjectView, BuildError> {
     Ok(BuildProjectView {
+        tags: Vec::new(),
+        latest_run: None,
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         normalized_name: row.try_get("normalizedname").map_err(storage)?,
@@ -685,6 +963,7 @@ fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProjectView, BuildErro
 }
 fn map_pool(row: sqlx::postgres::PgRow) -> Result<BuildAgentPoolView, BuildError> {
     Ok(BuildAgentPoolView {
+        tags: Vec::new(),
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         normalized_name: row.try_get("normalizedname").map_err(storage)?,

@@ -13,6 +13,15 @@ struct SlowStore {
     schedules: AtomicUsize,
 }
 impl GitRepositoryExecutionStore for SlowStore {
+    fn enqueue_webhook<'a>(
+        &'a self,
+        _: citadel_domain::ActorId,
+        _: Uuid,
+        _: &'a str,
+        _: &'a GitRepositoryWebhook,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        unreachable!()
+    }
     fn claim_next(
         &self,
         _: chrono::DateTime<chrono::Utc>,
@@ -56,6 +65,13 @@ impl GitRepositoryExecutionStore for SlowStore {
         _: &'a GitSyncClaim,
         _: &'a str,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        unreachable!()
+    }
+    fn get_ref<'a>(
+        &'a self,
+        _: Uuid,
+        _: &'a str,
+    ) -> BoxFuture<'a, Result<Option<GitRepositoryRefView>, GitRepositoryExecutionError>> {
         unreachable!()
     }
     fn list_refs(

@@ -333,6 +333,41 @@ impl DeploymentEntitlementPort for PostgresLicenseEntitlementService {
     }
 }
 
+impl citadel_builds::BuildEntitlements for PostgresLicenseEntitlementService {
+    fn enabled(
+        &self,
+        capability: LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, citadel_builds::BuildError>> {
+        Box::pin(async move {
+            self.enabled(capability)
+                .await
+                .map_err(|error| citadel_builds::BuildError::Storage(error.to_string()))
+        })
+    }
+}
+
+impl citadel_automation::AutomationEntitlements for PostgresLicenseEntitlementService {
+    fn automated_operations(
+        &self,
+    ) -> BoxFuture<'_, Result<bool, citadel_automation::AutomationError>> {
+        Box::pin(async move {
+            self.enabled(LicenseCapability::AutomatedOperations)
+                .await
+                .map_err(|error| citadel_automation::AutomationError::Storage(error.to_string()))
+        })
+    }
+}
+
+impl citadel_backups::BackupEntitlements for PostgresLicenseEntitlementService {
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, citadel_backups::BackupError>> {
+        Box::pin(async move {
+            self.enabled(LicenseCapability::AutomatedOperations)
+                .await
+                .map_err(|error| citadel_backups::BackupError::Storage(error.to_string()))
+        })
+    }
+}
+
 fn verify_license(
     raw_license: &str,
     instance_id: Uuid,

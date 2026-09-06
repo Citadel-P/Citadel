@@ -18,10 +18,21 @@ use zeroize::Zeroizing;
 
 const IMAGE: &str = "restic/restic:0.18.1";
 const PAYLOAD: &[u8] = b"Citadel restore must preserve the volume root.\n";
+const ACCESS_KEY_ID: Uuid = Uuid::from_u128(710001);
+const SECRET_KEY_ID: Uuid = Uuid::from_u128(710002);
 struct Password;
 impl BackupSecretResolver for Password {
-    fn resolve(&self, _: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
-        Box::pin(async { Ok(Zeroizing::new("disposable-acceptance-password".into())) })
+    fn resolve(&self, id: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
+        Box::pin(async move {
+            Ok(Zeroizing::new(
+                match id {
+                    ACCESS_KEY_ID => "citadel-acceptance-access",
+                    SECRET_KEY_ID => "citadel-acceptance-secret-not-for-production",
+                    _ => "disposable-acceptance-password",
+                }
+                .into(),
+            ))
+        })
     }
 }
 
@@ -49,6 +60,21 @@ async fn docker(args: &[&str], stdin: Option<&[u8]>) -> Vec<u8> {
 #[tokio::test]
 #[ignore = "requires dedicated CITADEL_PHASE7_LOCAL_BACKUP_DATABASE_URL, Docker and restic/restic:0.18.1"]
 async fn local_volume_backup_restores_root_data_and_persists_real_results() {
+    volume_round_trip(None).await;
+}
+
+// Ports the S3/RustFS storage portion of WorkerVolume_ShouldBackupToRustFsAndRestoreOnAnotherNode.
+// Exact-node Agent routing has separate transport tests; this fixture uses Local Docker.
+#[tokio::test]
+#[ignore = "requires the dedicated RustFS/PostgreSQL fixture from Test-Phase7LocalBackup.ps1 -UseRustFs"]
+async fn rustfs_volume_backup_restores_root_data_and_persists_real_results() {
+    volume_round_trip(Some(
+        std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT").expect("RustFS fixture endpoint required"),
+    ))
+    .await;
+}
+
+async fn volume_round_trip(s3_endpoint: Option<String>) {
     let database = std::env::var("CITADEL_PHASE7_LOCAL_BACKUP_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database).await.unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -68,10 +94,20 @@ async fn local_volume_backup_restores_root_data_and_persists_real_results() {
             .bind(platform).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
+        if s3_endpoint.is_some() {
+            for id in [ACCESS_KEY_ID, SECRET_KEY_ID] {
+                sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted') ON CONFLICT(id) DO NOTHING")
+                    .bind(id).bind(format!("acceptance-credential-{id}")).execute(&pool).await.unwrap();
+            }
+        }
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupStore::new(pool.clone());
         let mut input = BackupRepositoryInput { name: format!("repo-{suffix}"), description: None, password_secret_id: secret,
             spec: json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume}) };
+        if let Some(endpoint) = &s3_endpoint {
+            input.spec = json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,
+                "prefix":suffix,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID});
+        }
         input.validate().unwrap();
         let repository = store.create_repository(actor, &input).await.unwrap();
         let executor = DockerResticBackupExecutor::new("docker", IMAGE, Arc::new(Password), 256 * 1024, pool.clone());

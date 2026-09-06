@@ -120,6 +120,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
                 stale_after: Duration::from_secs(600),
             },
         )
+        .with_sandbox(root.join("cache"), None)
         .with_alerts(alerts.clone()),
     );
     let channel = alerts
@@ -166,6 +167,13 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         ),
         ("console.log('x'.repeat(100000));", "Succeeded", 10),
         ("await Deno.readTextFile('/etc/passwd');", "Failed", 10),
+        (
+            "await Deno.writeTextFile('output.txt', 'sandbox'); console.log(await Deno.readTextFile('output.txt'), Deno.env.get('NO_COLOR'));",
+            "Succeeded",
+            10,
+        ),
+        ("Deno.env.get('DATABASE_URL');", "Failed", 10),
+        ("await fetch('http://denied.example.test');", "Failed", 10),
     ] {
         let mut input = AutomationActionInput {
             name: format!("real-deno-{}", Uuid::now_v7()),
@@ -267,6 +275,43 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
                     .count(),
                 1
             );
+            // .NET suppresses failure Alerts for Test runs, while retaining their
+            // failed result and Activity history.
+            let test_run = store
+                .enqueue(actor, action.id, "Test", &json!({}), None)
+                .await
+                .unwrap();
+            assert!(
+                service
+                    .process_one(&CancellationToken::new())
+                    .await
+                    .unwrap()
+            );
+            assert_eq!(
+                store.get_run(action.id, test_run.id).await.unwrap().status,
+                "Failed"
+            );
+            let events = alerts
+                .list_events(
+                    actor,
+                    true,
+                    &AlertEventFilter {
+                        resource_id: Some(action.id),
+                        page: 1,
+                        page_size: 10,
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                events
+                    .items
+                    .iter()
+                    .filter(|event| event.alert_rule_id == rule.id)
+                    .count(),
+                1
+            );
         }
     }
 
@@ -358,5 +403,5 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     shutdown.cancel();
     http.await.unwrap();
-    std::fs::remove_dir(&root).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
 }

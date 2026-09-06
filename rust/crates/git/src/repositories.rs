@@ -7,11 +7,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use citadel_domain::ActorId;
+use citadel_resources::webhooks::{WebhookError, repository_matches, webhook_branch};
 use futures_util::future::BoxFuture;
-use hmac::{Hmac, KeyInit, Mac};
 use serde::Serialize;
-use sha2::Sha256;
-use subtle::ConstantTimeEq;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -151,14 +149,7 @@ pub struct GitRepositoryRefView {
     pub last_synced_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GitRepositoryWebhook {
-    pub enabled: bool,
-    pub provider: String,
-    pub auth_scheme: String,
-    pub secret: Option<String>,
-    pub branch_filter: Option<String>,
-}
+pub use citadel_resources::webhooks::WebhookConfiguration as GitRepositoryWebhook;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitWebhookOutcome {
@@ -176,6 +167,13 @@ pub trait GitRepositoryExecutionStore: Send + Sync {
         actor_id: ActorId,
         id: Uuid,
         branch: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>>;
+    fn enqueue_webhook<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        branch: &'a str,
+        expected: &'a GitRepositoryWebhook,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>>;
     fn enqueue_due<'a>(
         &'a self,
@@ -199,6 +197,11 @@ pub trait GitRepositoryExecutionStore: Send + Sync {
         &'a self,
         id: Uuid,
     ) -> BoxFuture<'a, Result<Vec<GitRepositoryRefView>, GitRepositoryExecutionError>>;
+    fn get_ref<'a>(
+        &'a self,
+        id: Uuid,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Option<GitRepositoryRefView>, GitRepositoryExecutionError>>;
     fn resolve_reference<'a>(
         &'a self,
         id: Uuid,
@@ -282,11 +285,73 @@ impl GitRepositoryExecutionService {
         self.store.enqueue_sync(actor_id, id, branch).await
     }
 
+    /// Reuse the durable repository worker rather than fetching concurrently
+    /// into its cache. The caller's cancellation stops waiting, not other
+    /// consumers of the same repository synchronization.
+    pub async fn synchronize_commit(
+        &self,
+        actor: ActorId,
+        id: Uuid,
+        branch: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<String, GitRepositoryExecutionError> {
+        validate_branch_input(branch)?;
+        if cancellation.is_cancelled() {
+            return Err(GitError::Process(citadel_execution::ProcessError::Cancelled).into());
+        }
+        self.store.enqueue_sync(actor, id, Some(branch)).await?;
+        self.changed();
+        // Enqueue changes Healthy/Failed to Pending under the repository lock,
+        // and a request arriving during Syncing causes another Pending pass.
+        let wait = async {
+            loop {
+                if let Some(reference) = self.store.get_ref(id, branch).await? {
+                    match reference.status.as_str() {
+                        "Healthy" => {
+                            let commit = reference
+                                .resolved_commit_sha
+                                .ok_or(GitRepositoryExecutionError::NotSynchronized)?;
+                            if !is_full_object_id(&commit) {
+                                return Err(GitRepositoryExecutionError::Validation(
+                                    "Repository returned an invalid commit ID.".into(),
+                                ));
+                            }
+                            return Ok(commit);
+                        }
+                        "Failed" | "Degraded" => {
+                            return Err(GitRepositoryExecutionError::Validation(
+                                "Repository synchronization failed. See its activity for details."
+                                    .into(),
+                            ));
+                        }
+                        _ => {}
+                    }
+                } else {
+                    return Err(GitRepositoryExecutionError::NotFound);
+                }
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        };
+        tokio::select! {
+            () = cancellation.cancelled() => Err(GitError::Process(citadel_execution::ProcessError::Cancelled).into()),
+            result = tokio::time::timeout(Duration::from_secs(300), wait) => {
+                result.unwrap_or_else(|_| Err(GitError::Process(citadel_execution::ProcessError::Timeout(Duration::from_secs(300))).into()))
+            }
+        }
+    }
+
     pub async fn list_refs(
         &self,
         id: Uuid,
     ) -> Result<Vec<GitRepositoryRefView>, GitRepositoryExecutionError> {
         self.store.list_refs(id).await
+    }
+
+    pub async fn source(
+        &self,
+        id: Uuid,
+    ) -> Result<GitRepositorySource, GitRepositoryExecutionError> {
+        self.store.get_source(id).await
     }
 
     pub async fn discover_branches(
@@ -346,37 +411,45 @@ impl GitRepositoryExecutionService {
                 "Webhook payload exceeds the 1 MiB limit.".to_owned(),
             ));
         }
-        let webhook = self
+        let original_webhook = self
             .store
             .get_webhook(id)
             .await?
             .filter(|configuration| configuration.enabled)
             .ok_or(GitRepositoryExecutionError::NotFound)?;
-        if !webhook.provider.eq_ignore_ascii_case(auth_type) {
-            return Err(GitRepositoryExecutionError::Authentication);
-        }
-        authenticate_webhook(&webhook, headers, body)?;
-        let (supported_event, payload_branch) = webhook_branch(&webhook.provider, headers, body)?;
-        if !supported_event {
-            return Ok(GitWebhookOutcome::Ignored);
-        }
+        let mut webhook = original_webhook.clone();
+        let source = self.store.get_source(id).await?;
         if webhook
             .branch_filter
             .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_some_and(|filter| {
-                payload_branch
-                    .as_deref()
-                    .is_some_and(|branch| branch != filter)
-            })
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            webhook.branch_filter = Some(source.default_branch.clone());
+        }
+        if webhook
+            .evaluate(auth_type, headers, body)
+            .map_err(map_webhook_error)?
+            .is_some()
         {
             return Ok(GitWebhookOutcome::Ignored);
         }
+        let payload = serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
+        if !repository_matches(&source.url, &payload) {
+            return Ok(GitWebhookOutcome::Ignored);
+        }
+        let (_, payload_branch) =
+            webhook_branch(&webhook.provider, headers, body).map_err(map_webhook_error)?;
         let branch = payload_branch
             .as_deref()
             .or(webhook.branch_filter.as_deref());
-        self.store.enqueue_sync(actor_id, id, branch).await?;
+        self.store
+            .enqueue_webhook(
+                actor_id,
+                id,
+                branch.unwrap_or(&source.default_branch),
+                &original_webhook,
+            )
+            .await?;
         self.changed();
         Ok(GitWebhookOutcome::Queued)
     }
@@ -785,132 +858,6 @@ impl GitRepositoryExecutionService {
     }
 }
 
-fn authenticate_webhook(
-    webhook: &GitRepositoryWebhook,
-    headers: &[(String, String)],
-    body: &[u8],
-) -> Result<(), GitRepositoryExecutionError> {
-    let secret = webhook.secret.as_deref().unwrap_or_default();
-    let authenticated = match webhook.auth_scheme.as_str() {
-        "BearerToken" => header(headers, "authorization")
-            .and_then(|value| {
-                value
-                    .strip_prefix("Bearer ")
-                    .or_else(|| value.strip_prefix("bearer "))
-            })
-            .is_some_and(|value| fixed_time(value.trim().as_bytes(), secret.as_bytes())),
-        "GitLabLegacyToken" => header(headers, "x-gitlab-token")
-            .is_some_and(|value| fixed_time(value.as_bytes(), secret.as_bytes())),
-        "GitLabSignedToken" => validate_gitlab_signed(headers, body, secret),
-        "GitHubHmacSha256" if secret.is_empty() => true,
-        "GitHubHmacSha256" => {
-            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-                .map_err(|_| GitRepositoryExecutionError::Authentication)?;
-            mac.update(body);
-            let expected = hex_lower(&mac.finalize().into_bytes());
-            header(headers, "x-hub-signature-256")
-                .and_then(|value| value.strip_prefix("sha256="))
-                .or_else(|| header(headers, "x-gitea-signature"))
-                .or_else(|| header(headers, "x-forgejo-signature"))
-                .is_some_and(|value| fixed_time(value.as_bytes(), expected.as_bytes()))
-        }
-        _ => false,
-    };
-    if authenticated {
-        Ok(())
-    } else {
-        Err(GitRepositoryExecutionError::Authentication)
-    }
-}
-
-fn webhook_branch(
-    provider: &str,
-    headers: &[(String, String)],
-    body: &[u8],
-) -> Result<(bool, Option<String>), GitRepositoryExecutionError> {
-    if provider.eq_ignore_ascii_case("Generic") {
-        return Ok((true, None));
-    }
-    if provider.eq_ignore_ascii_case("GitHub") {
-        let event = header(headers, "x-github-event")
-            .or_else(|| header(headers, "x-gitea-event"))
-            .or_else(|| header(headers, "x-forgejo-event"));
-        if event.is_some_and(|event| !event.eq_ignore_ascii_case("push")) {
-            return Ok((false, None));
-        }
-    }
-    let payload: serde_json::Value = serde_json::from_slice(body).map_err(|_| {
-        GitRepositoryExecutionError::Validation("Webhook payload must be valid JSON.".to_owned())
-    })?;
-    let reference = payload
-        .get("ref")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| payload.get("ref_name").and_then(serde_json::Value::as_str));
-    Ok((
-        true,
-        reference.map(|value| {
-            value
-                .strip_prefix("refs/heads/")
-                .unwrap_or(value)
-                .to_owned()
-        }),
-    ))
-}
-
-fn validate_gitlab_signed(headers: &[(String, String)], body: &[u8], secret: &str) -> bool {
-    let Some(webhook_id) = header(headers, "webhook-id") else {
-        return false;
-    };
-    let Some(timestamp) = header(headers, "webhook-timestamp") else {
-        return false;
-    };
-    let Some(signatures) = header(headers, "webhook-signature") else {
-        return false;
-    };
-    let Ok(timestamp_value) = timestamp.parse::<i64>() else {
-        return false;
-    };
-    if (Utc::now().timestamp() - timestamp_value).unsigned_abs() > 5 * 60 {
-        return false;
-    }
-    let Some(encoded_key) = secret.strip_prefix("whsec_") else {
-        return false;
-    };
-    let Ok(key) = STANDARD.decode(encoded_key) else {
-        return false;
-    };
-    let mut mac = match Hmac::<Sha256>::new_from_slice(&key) {
-        Ok(mac) => mac,
-        Err(_) => return false,
-    };
-    mac.update(format!("{webhook_id}.{timestamp}.").as_bytes());
-    mac.update(body);
-    let expected = format!("v1,{}", STANDARD.encode(mac.finalize().into_bytes()));
-    signatures
-        .split_ascii_whitespace()
-        .any(|candidate| fixed_time(candidate.as_bytes(), expected.as_bytes()))
-}
-
-fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    headers
-        .iter()
-        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
-}
-
-fn fixed_time(actual: &[u8], expected: &[u8]) -> bool {
-    actual.len() == expected.len() && bool::from(actual.ct_eq(expected))
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[(byte >> 4) as usize]));
-        output.push(char::from(HEX[(byte & 0x0f) as usize]));
-    }
-    output
-}
-
 fn map_entry_type(entry_type: GitEntryType) -> GitEntryTypeView {
     match entry_type {
         GitEntryType::Directory => GitEntryTypeView::Directory,
@@ -1246,16 +1193,6 @@ fn bounded_error(message: &str) -> String {
 mod tests {
     use super::*;
 
-    fn webhook(provider: &str, scheme: &str, secret: &str) -> GitRepositoryWebhook {
-        GitRepositoryWebhook {
-            enabled: true,
-            provider: provider.to_owned(),
-            auth_scheme: scheme.to_owned(),
-            secret: Some(secret.to_owned()),
-            branch_filter: Some("main".to_owned()),
-        }
-    }
-
     fn entry(path: &str) -> GitTreeEntry {
         GitTreeEntry {
             name: path
@@ -1317,59 +1254,11 @@ mod tests {
         assert_eq!(projects[1].working_directory, "apps/api");
         assert_eq!(projects[1].suggested_watch_paths, ["apps/api/**"]);
     }
+}
 
-    #[test]
-    fn webhook_authentication_supports_bearer_and_provider_hmac_without_path_authority() {
-        let generic = webhook("Generic", "BearerToken", "shared-secret");
-        assert!(
-            authenticate_webhook(
-                &generic,
-                &[(
-                    "Authorization".to_owned(),
-                    "Bearer shared-secret".to_owned()
-                )],
-                b"{}"
-            )
-            .is_ok()
-        );
-        assert!(authenticate_webhook(&generic, &[], b"{}").is_err());
-
-        let github = webhook("GitHub", "GitHubHmacSha256", "secret");
-        let body = br#"{"ref":"refs/heads/main"}"#;
-        let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
-        mac.update(body);
-        let signature = format!("sha256={}", hex_lower(&mac.finalize().into_bytes()));
-        assert!(
-            authenticate_webhook(
-                &github,
-                &[("X-Hub-Signature-256".to_owned(), signature)],
-                body
-            )
-            .is_ok()
-        );
-        assert!(
-            authenticate_webhook(
-                &github,
-                &[("X-Hub-Signature-256".to_owned(), "sha256=bad".to_owned())],
-                body
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn webhook_branch_is_extracted_without_accepting_invalid_json() {
-        assert_eq!(
-            webhook_branch(
-                "GitHub",
-                &[("X-GitHub-Event".to_owned(), "push".to_owned())],
-                br#"{"ref":"refs/heads/release"}"#
-            )
-            .unwrap()
-            .1
-            .as_deref(),
-            Some("release")
-        );
-        assert!(webhook_branch("GitHub", &[], b"not-json").is_err());
+fn map_webhook_error(error: WebhookError) -> GitRepositoryExecutionError {
+    match error {
+        WebhookError::Authentication => GitRepositoryExecutionError::Authentication,
+        WebhookError::Validation(message) => GitRepositoryExecutionError::Validation(message),
     }
 }

@@ -1,5 +1,10 @@
 #![forbid(unsafe_code)]
 
+mod options;
+mod progress;
+pub use options::AutomationOptions;
+pub use progress::{AutomationProgress, AutomationProgressError};
+
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -16,6 +21,7 @@ use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -71,20 +77,43 @@ impl AutomationActionInput {
                 "Default arguments must be a JSON object.".to_owned(),
             ));
         }
-        let timeout = self.timeout_seconds.unwrap_or(60);
+        let timeout = self.timeout_seconds.unwrap_or(300);
         if !(1..=86_400).contains(&timeout) {
             return Err(AutomationError::Validation(
                 "Automation timeout must be between 1 and 86400 seconds.".to_owned(),
             ));
         }
         if self.schedule_enabled
-            && (self.schedule_cron.as_deref().is_none_or(str::is_empty)
-                || self.schedule_time_zone.as_deref().is_none_or(str::is_empty))
+            && self
+                .schedule_cron
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
         {
             return Err(AutomationError::Validation(
-                "Enabled schedules require both a cron expression and a time zone.".to_owned(),
+                "Enabled schedules require a cron expression.".to_owned(),
             ));
         }
+        if self.tag_ids.len() > 100 {
+            return Err(AutomationError::Validation(
+                "At most 100 tags can be assigned.".into(),
+            ));
+        }
+        self.tag_ids.sort_unstable();
+        self.tag_ids.dedup();
+        if self
+            .schedule_cron
+            .as_ref()
+            .is_some_and(|value| value.len() > 128)
+            || self
+                .schedule_time_zone
+                .as_ref()
+                .is_some_and(|value| value.len() > 128)
+            || self.run_as_actor_id.is_some_and(|id| id.is_nil())
+        {
+            return Err(AutomationError::Validation("Schedule fields must be at most 128 characters and Run-as Actor must not be empty.".into()));
+        }
+        citadel_resources::validate_webhook(self.webhook.as_ref())
+            .map_err(|error| AutomationError::Validation(error.to_string()))?;
         self.default_args_json = Some(args.to_owned());
         self.timeout_seconds = Some(timeout);
         self.schedule_time_zone = Some(
@@ -119,6 +148,9 @@ pub struct AutomationActionView {
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_scheduled_run_at: Option<DateTime<Utc>>,
+    pub tags: Vec<citadel_resources::TagSummary>,
+    pub latest_run: Option<AutomationRunView>,
 }
 
 impl AutomationActionView {
@@ -160,7 +192,7 @@ pub struct AutomationRunView {
     pub run_as_actor_id: Uuid,
     pub triggered_by_actor_id: Option<Uuid>,
     pub args_json: String,
-    pub code_snapshot: String,
+    pub code_snapshot: Option<String>,
     pub code_hash: String,
     pub timeout_seconds: i32,
     pub queued_at: DateTime<Utc>,
@@ -186,7 +218,42 @@ pub trait AutomationRunTokenIssuer: Send + Sync {
     ) -> BoxFuture<'a, Result<String, AutomationError>>;
 }
 
+pub trait AutomationEntitlements: Send + Sync {
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, AutomationError>>;
+}
+
+/// Match .NET's expansion policy: code/description edits and disabling paid
+/// triggers remain possible after license expiry.
+pub fn changes_paid_trigger(
+    current: Option<&AutomationActionView>,
+    proposed: &AutomationActionInput,
+) -> bool {
+    let webhook_enabled = |value: Option<&Value>| {
+        value
+            .and_then(|v| v.get("enabled").or_else(|| v.get("Enabled")))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    };
+    let webhook = webhook_enabled(proposed.webhook.as_ref());
+    let Some(current) = current else {
+        return proposed.schedule_enabled || webhook;
+    };
+    proposed.enabled
+        && ((!current.enabled && (proposed.schedule_enabled || webhook))
+            || (proposed.schedule_enabled
+                && (!current.schedule_enabled
+                    || proposed.schedule_cron != current.schedule_cron
+                    || proposed.schedule_time_zone.as_deref().unwrap_or("UTC")
+                        != current.schedule_time_zone))
+            || (webhook && proposed.webhook != current.webhook))
+}
+
 pub trait AutomationStore: Send + Sync {
+    fn permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, AutomationError>>;
     fn create<'a>(
         &'a self,
         actor: ActorId,
@@ -221,6 +288,20 @@ pub trait AutomationStore: Send + Sync {
         args: &'a Value,
         timeout_seconds: Option<i32>,
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>>;
+    fn enqueue_for_execution<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        trigger: &'a str,
+        args: &'a Value,
+        timeout_seconds: Option<i32>,
+    ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>>;
+    fn enqueue_webhook<'a>(
+        &'a self,
+        id: Uuid,
+        expected_webhook: &'a Value,
+        args: &'a Value,
+    ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>>;
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
@@ -242,6 +323,8 @@ pub trait AutomationStore: Send + Sync {
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>>;
     fn list_scheduled<'a>(
         &'a self,
+        after: Option<Uuid>,
+        limit: usize,
     ) -> BoxFuture<'a, Result<Vec<AutomationActionView>, AutomationError>>;
     fn enqueue_scheduled<'a>(
         &'a self,
@@ -261,12 +344,17 @@ pub struct AutomationService {
     alerts: Option<Arc<dyn AlertEventSink>>,
     deno_path: OsString,
     work_root: PathBuf,
+    cache_directory: Option<PathBuf>,
+    allow_net: Option<String>,
     internal_base_url: String,
     endpoint_catalog_json: Arc<str>,
     token_issuer: Arc<dyn AutomationRunTokenIssuer>,
     maximum_log_bytes: usize,
     stale_after: Duration,
     active_runs: Mutex<HashMap<Uuid, CancellationToken>>,
+    slots: Arc<Semaphore>,
+    options: AutomationOptions,
+    entitlements: Option<Arc<dyn AutomationEntitlements>>,
 }
 
 pub struct AutomationRuntimeConfig {
@@ -301,12 +389,17 @@ impl AutomationService {
             alerts: None,
             deno_path: config.deno_path,
             work_root: config.work_root,
+            cache_directory: None,
+            allow_net: None,
             internal_base_url: config.internal_base_url,
             endpoint_catalog_json: Arc::from(config.endpoint_catalog_json),
             token_issuer,
             maximum_log_bytes: config.maximum_log_bytes,
             stale_after: config.stale_after,
             active_runs: Mutex::new(HashMap::new()),
+            slots: Arc::new(Semaphore::new(4)),
+            options: AutomationOptions::default(),
+            entitlements: None,
         }
     }
 
@@ -315,20 +408,153 @@ impl AutomationService {
         self
     }
 
+    pub fn with_sandbox(mut self, cache_directory: PathBuf, allow_net: Option<String>) -> Self {
+        self.cache_directory = Some(cache_directory);
+        self.allow_net = allow_net;
+        self
+    }
+
+    pub fn with_options(mut self, options: AutomationOptions) -> Result<Self, AutomationError> {
+        options.validate()?;
+        self.slots = Arc::new(Semaphore::new(options.max_parallel_runs));
+        self.options = options;
+        Ok(self)
+    }
+
+    pub fn options(&self) -> AutomationOptions {
+        self.options
+    }
+
+    pub fn validate_input(
+        &self,
+        input: &mut AutomationActionInput,
+        actor: ActorId,
+    ) -> Result<(), AutomationError> {
+        let timeout = input
+            .timeout_seconds
+            .unwrap_or(self.options.default_timeout_seconds);
+        self.options.validate_timeout(timeout)?;
+        input.timeout_seconds = Some(timeout);
+        input.validate(actor)
+    }
+
+    pub fn with_entitlements(mut self, entitlements: Arc<dyn AutomationEntitlements>) -> Self {
+        self.entitlements = Some(entitlements);
+        self
+    }
+
+    pub async fn ensure_paid_trigger(&self) -> Result<(), AutomationError> {
+        if let Some(entitlements) = &self.entitlements
+            && entitlements.automated_operations().await?
+        {
+            return Ok(());
+        }
+        Err(AutomationError::LicenseRequired)
+    }
+
     pub fn store(&self) -> &Arc<dyn AutomationStore> {
         &self.store
+    }
+
+    pub async fn queue_webhook(
+        &self,
+        id: Uuid,
+        expected_webhook: &Value,
+        args: &Value,
+    ) -> Result<(), AutomationError> {
+        let action = self.store.get(id).await?;
+        self.options.validate_execution(action.timeout_seconds)?;
+        self.ensure_paid_trigger().await?;
+        self.store
+            .enqueue_webhook(id, expected_webhook, args)
+            .await?;
+        self.changed();
+        Ok(())
     }
 
     pub async fn process_one(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<bool, AutomationError> {
+        if !self.options.enabled {
+            return Ok(false);
+        }
+        let Ok(_permit) = self.slots.clone().try_acquire_owned() else {
+            return Ok(false);
+        };
         let stale_before = Utc::now()
             - chrono::Duration::from_std(self.stale_after)
                 .map_err(|error| AutomationError::Storage(error.to_string()))?;
         let Some(claim) = self.store.claim_next(stale_before).await? else {
             return Ok(false);
         };
+        self.execute_claim(&claim, cancellation, None).await?;
+        Ok(true)
+    }
+
+    pub async fn run(
+        self: &Arc<Self>,
+        actor: ActorId,
+        id: Uuid,
+        trigger: &str,
+        args: &Value,
+        timeout_seconds: Option<i32>,
+    ) -> Result<mpsc::Receiver<AutomationProgress>, AutomationError> {
+        let configured = match timeout_seconds {
+            Some(seconds) => seconds,
+            None => self.store.get(id).await?.timeout_seconds,
+        };
+        self.options.validate_execution(configured)?;
+        let permit = self.slots.clone().try_acquire_owned().map_err(|_| {
+            AutomationError::Conflict(
+                "Automation execution slots are busy. Try again later.".into(),
+            )
+        })?;
+        let claim = self
+            .store
+            .enqueue_for_execution(actor, id, trigger, args, timeout_seconds)
+            .await?;
+        let (sender, receiver) = mpsc::channel(16);
+        let _ = sender.try_send(AutomationProgress::state(&claim.run, "Queued"));
+        let service = self.clone();
+        tokio::spawn(async move {
+            let _permit = permit;
+            let cancellation = CancellationToken::new();
+            let execution = service.execute_claim(&claim, &cancellation, Some(&sender));
+            tokio::pin!(execution);
+            let outcome = tokio::select! {
+                value = &mut execution => value,
+                () = sender.closed() => {
+                    cancellation.cancel();
+                    execution.await
+                }
+            };
+            if let Err(error) = outcome {
+                tracing::error!(%error, run_id=%claim.run.id, "Automation completion failed");
+                // The durable claim is recovered by the worker; do not report success.
+                progress::send(
+                    &sender,
+                    AutomationProgress::completed(
+                        &claim.run,
+                        &AutomationRunResult::failed(
+                            None,
+                            "Automation completion could not be persisted.".into(),
+                        ),
+                    ),
+                    &cancellation,
+                )
+                .await;
+            }
+        });
+        Ok(receiver)
+    }
+
+    async fn execute_claim(
+        &self,
+        claim: &AutomationRunClaim,
+        cancellation: &CancellationToken,
+        progress: Option<&mpsc::Sender<AutomationProgress>>,
+    ) -> Result<(), AutomationError> {
         self.changed();
         let run_cancellation = cancellation.child_token();
         self.active_runs
@@ -337,19 +563,36 @@ impl AutomationService {
                 AutomationError::Storage("Automation cancellation state is poisoned.".to_owned())
             })?
             .insert(claim.run.id, run_cancellation.clone());
-        let result = self.execute(&claim, &run_cancellation).await;
+        if let Some(sender) = progress {
+            progress::send(
+                sender,
+                AutomationProgress::state(&claim.run, "Running"),
+                &run_cancellation,
+            )
+            .await;
+        }
+        let result = self.execute(claim, &run_cancellation, progress).await;
         if let Ok(mut active) = self.active_runs.lock() {
             active.remove(&claim.run.id);
         }
-        if self.store.finish(&claim, &result).await? {
+        if self.store.finish(claim, &result).await? {
             self.changed();
-            self.raise_failure_alert(&claim, &result).await;
+            self.raise_failure_alert(claim, &result).await;
+            if let Some(sender) = progress {
+                // Preserve the terminal item even when the bounded queue is full.
+                // An abandoned viewer must not hold this task or its slot forever.
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    sender.send(AutomationProgress::completed(&claim.run, &result)),
+                )
+                .await;
+            }
         }
-        Ok(true)
+        Ok(())
     }
 
     async fn raise_failure_alert(&self, claim: &AutomationRunClaim, result: &AutomationRunResult) {
-        if !matches!(result.status, "Failed" | "TimedOut") {
+        if claim.run.trigger == "Test" || !matches!(result.status, "Failed" | "TimedOut") {
             return;
         }
         let Some(alerts) = &self.alerts else {
@@ -410,6 +653,14 @@ impl AutomationService {
     }
 
     pub async fn queue_due_scheduled(&self, now: DateTime<Utc>) -> Result<usize, AutomationError> {
+        if !self.options.enabled {
+            return Ok(0);
+        }
+        match self.ensure_paid_trigger().await {
+            Ok(()) => {}
+            Err(AutomationError::LicenseRequired) => return Ok(0),
+            Err(error) => return Err(error),
+        }
         let minute = now
             .with_second(0)
             .and_then(|value| value.with_nanosecond(0))
@@ -417,19 +668,39 @@ impl AutomationService {
                 AutomationError::Storage("Could not normalize scheduler time.".to_owned())
             })?;
         let mut queued = 0;
-        for action in self.store.list_scheduled().await? {
-            if cron_is_due(
-                action.schedule_cron.as_deref(),
-                &action.schedule_time_zone,
-                minute,
-            ) && self
-                .store
-                .enqueue_scheduled(action.id, minute)
-                .await?
-                .is_some()
-            {
-                queued += 1;
-                self.changed();
+        let mut after = None;
+        loop {
+            let actions = self.store.list_scheduled(after, 64).await?;
+            if actions.is_empty() {
+                break;
+            }
+            for action in actions {
+                after = Some(action.id);
+                if self
+                    .options
+                    .validate_timeout(action.timeout_seconds)
+                    .is_err()
+                {
+                    tracing::warn!(action_id=%action.id, "Scheduled Action exceeds the configured timeout limit");
+                    continue;
+                }
+                if !cron_is_due(
+                    action.schedule_cron.as_deref(),
+                    &action.schedule_time_zone,
+                    minute,
+                ) {
+                    continue;
+                }
+                match self.store.enqueue_scheduled(action.id, minute).await {
+                    Ok(Some(_)) => {
+                        queued += 1;
+                        self.changed();
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(%error, action_id=%action.id, "Scheduled Action could not be queued")
+                    }
+                }
             }
         }
         Ok(queued)
@@ -439,7 +710,19 @@ impl AutomationService {
         &self,
         claim: &AutomationRunClaim,
         cancellation: &CancellationToken,
+        progress: Option<&mpsc::Sender<AutomationProgress>>,
     ) -> AutomationRunResult {
+        if let Err(error) = self.options.validate_execution(claim.run.timeout_seconds) {
+            return AutomationRunResult::failed(None, error.to_string());
+        }
+        if matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook")
+            && let Err(error) = self.ensure_paid_trigger().await
+        {
+            return AutomationRunResult::failed(None, error.to_string());
+        }
+        if claim.run.code_snapshot.is_none() {
+            return AutomationRunResult::failed(None, "Execution claim has no source code.".into());
+        }
         let token = match self
             .token_issuer
             .issue(
@@ -458,6 +741,14 @@ impl AutomationService {
             }
         };
         let directory = self.work_root.join(claim.run.id.to_string());
+        if let Some(cache) = &self.cache_directory
+            && let Err(error) = tokio::fs::create_dir_all(cache).await
+        {
+            return AutomationRunResult::failed(
+                None,
+                format!("Could not prepare Deno cache: {error}"),
+            );
+        }
         if let Err(error) = tokio::fs::create_dir_all(&directory).await {
             return AutomationRunResult::failed(None, format!("Could not prepare run: {error}"));
         }
@@ -487,17 +778,26 @@ impl AutomationService {
             let _ = tokio::fs::remove_dir_all(&directory).await;
             return AutomationRunResult::failed(None, format!("Could not write action: {error}"));
         }
-        let request = ProcessRequest::new(self.deno_path.clone())
-            .args([
-                OsString::from("run"),
-                OsString::from("--no-prompt"),
-                OsString::from(format!(
-                    "--allow-net={}",
-                    allow_net_authority(&self.internal_base_url)
-                )),
-                script.as_os_str().to_owned(),
-            ])
+        let mut args = vec![
+            OsString::from("run"),
+            OsString::from("--no-prompt"),
+            OsString::from(format!("--allow-read={}", directory.display())),
+            OsString::from(format!("--allow-write={}", directory.display())),
+            OsString::from("--allow-env=NO_COLOR,DENO_DIR"),
+        ];
+        let allow_net = self
+            .allow_net
+            .as_deref()
+            .unwrap_or_else(|| allow_net_authority(&self.internal_base_url))
+            .trim();
+        if !allow_net.is_empty() {
+            args.push(format!("--allow-net={allow_net}").into());
+        }
+        args.push(script.as_os_str().to_owned());
+        let mut request = ProcessRequest::new(self.deno_path.clone())
+            .args(args)
             .current_dir(&directory)
+            .env("NO_COLOR", "1")
             .env("CITADEL_ACTION_ARGS", &claim.run.args_json)
             .limits(ProcessLimits {
                 timeout: Duration::from_secs(claim.run.timeout_seconds as u64),
@@ -505,7 +805,59 @@ impl AutomationService {
                 maximum_stderr_bytes: self.maximum_log_bytes,
                 output_limit_policy: OutputLimitPolicy::Truncate,
             });
-        let output = run(request, cancellation).await;
+        if let Some(cache) = &self.cache_directory {
+            request = request.env("DENO_DIR", cache.as_os_str());
+        }
+        let output = if let Some(sender) = progress {
+            let (chunks, mut receiver) = mpsc::channel(8);
+            let consume = async {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                while let Some(chunk) = receiver.recv().await {
+                    let chunk: citadel_execution::ProcessChunk = chunk;
+                    let pending = if chunk.stream == "stderr" {
+                        &mut stderr
+                    } else {
+                        &mut stdout
+                    };
+                    pending.extend_from_slice(&chunk.bytes);
+                    if let Some(end) = pending.iter().rposition(|byte| *byte == b'\n') {
+                        let text =
+                            redact_run_logs(&String::from_utf8_lossy(&pending[..=end]), &token);
+                        pending.drain(..=end);
+                        progress::send(
+                            sender,
+                            AutomationProgress {
+                                run_id: Some(claim.run.id),
+                                stream: Some(text),
+                                ..Default::default()
+                            },
+                            cancellation,
+                        )
+                        .await;
+                    }
+                }
+                for pending in [stdout, stderr] {
+                    if !pending.is_empty() {
+                        let text = redact_run_logs(&String::from_utf8_lossy(&pending), &token);
+                        progress::send(
+                            sender,
+                            AutomationProgress {
+                                run_id: Some(claim.run.id),
+                                stream: Some(text),
+                                ..Default::default()
+                            },
+                            cancellation,
+                        )
+                        .await;
+                    }
+                }
+            };
+            let (output, ()) = tokio::join!(run(request.output(chunks), cancellation), consume);
+            output
+        } else {
+            run(request, cancellation).await
+        };
         let _ = tokio::fs::remove_dir_all(&directory).await;
         match output {
             Ok(output) => {
@@ -621,7 +973,10 @@ const citadel = Object.freeze({{
 {code}
 "#,
         args = run.args_json,
-        code = run.code_snapshot,
+        code = run
+            .code_snapshot
+            .as_deref()
+            .expect("Execution claims include code"),
     )
 }
 
@@ -697,7 +1052,7 @@ fn redact_run_logs(value: &str, token: &str) -> String {
     if token.is_empty() {
         return redact_logs(value);
     }
-    redact_logs(&value.replace(token, "[redacted]"))
+    redact_logs(&citadel_execution::SecretRedactor::new(&[token]).push(value.as_bytes(), true))
 }
 
 pub fn redact_logs(value: &str) -> String {
@@ -783,6 +1138,8 @@ fn cron_matches(field: &str, value: u32, minimum: u32, maximum: u32) -> bool {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AutomationError {
+    #[error("Automated operations require an active license entitlement.")]
+    LicenseRequired,
     #[error("{0}")]
     Validation(String),
     #[error("Automation Action was not found")]
@@ -836,6 +1193,75 @@ mod tests {
     }
 
     #[test]
+    fn paid_trigger_policy_matches_dotnet_expansion_and_disable_cases() {
+        let mut proposed = input();
+        proposed.schedule_enabled = true;
+        proposed.schedule_cron = Some("*/5 * * * *".into());
+        proposed.validate(ActorId::new(Uuid::now_v7())).unwrap();
+        assert_eq!(proposed.schedule_time_zone.as_deref(), Some("UTC"));
+        assert!(changes_paid_trigger(None, &proposed));
+        let current = AutomationActionView {
+            id: Uuid::now_v7(),
+            name: proposed.name.clone(),
+            description: None,
+            code: proposed.code.clone(),
+            default_args_json: "{}".into(),
+            enabled: true,
+            schedule_enabled: true,
+            schedule_cron: proposed.schedule_cron.clone(),
+            schedule_time_zone: "UTC".into(),
+            webhook: None,
+            timeout_seconds: 30,
+            alert_on_failure: true,
+            run_as_actor_id: proposed.run_as_actor_id.unwrap(),
+            control_state: "Idle".into(),
+            current_run_id: None,
+            row_version: 1,
+            created_by_actor_id: Uuid::now_v7(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_scheduled_run_at: None,
+            tags: vec![],
+            latest_run: None,
+        };
+        proposed.code = "console.log('changed');".into();
+        assert!(!changes_paid_trigger(Some(&current), &proposed));
+        proposed.schedule_cron = Some("*/10 * * * *".into());
+        assert!(changes_paid_trigger(Some(&current), &proposed));
+        proposed.schedule_enabled = false;
+        assert!(!changes_paid_trigger(Some(&current), &proposed));
+        proposed.webhook = Some(serde_json::json!({"enabled":true}));
+        let with_webhook = AutomationActionView {
+            webhook: proposed.webhook.clone(),
+            ..current
+        };
+        assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
+        proposed.webhook = Some(serde_json::json!({"enabled":true,"secret":"changed"}));
+        assert!(changes_paid_trigger(Some(&with_webhook), &proposed));
+        proposed.enabled = false;
+        assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
+    }
+
+    #[test]
+    fn validates_webhook_authentication_and_bounded_configuration() {
+        let actor = ActorId::new(Uuid::now_v7());
+        let mut proposed = input();
+        proposed.webhook = Some(
+            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken"}),
+        );
+        assert!(proposed.validate(actor).is_err());
+        proposed.webhook = Some(
+            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"webhook-shared-secret"}),
+        );
+        proposed.validate(actor).unwrap();
+        proposed.schedule_cron = Some("*".repeat(129));
+        assert!(proposed.validate(actor).is_err());
+        proposed.schedule_cron = None;
+        proposed.run_as_actor_id = Some(Uuid::nil());
+        assert!(proposed.validate(actor).is_err());
+    }
+
+    #[test]
     fn cron_supports_steps_ranges_lists_and_time_zones() {
         let now = DateTime::parse_from_rfc3339("2026-07-14T08:30:00Z")
             .unwrap()
@@ -844,6 +1270,30 @@ mod tests {
         assert!(cron_is_due(Some("*/15 8-10 * * 1,2"), "UTC", now));
         assert!(!cron_is_due(Some("31 10 * * *"), "Europe/Paris", now));
         assert!(!cron_is_due(Some("* * *"), "UTC", now));
+    }
+
+    #[test]
+    fn cron_restricted_days_match_dotnet_cron_schedule_tests() {
+        for (expression, timestamp, expected) in [
+            ("0 9 1 * 1", "2026-07-01T09:00:00Z", true),
+            ("0 9 1 * 1", "2026-06-08T09:00:00Z", true),
+            ("0 9 1 * 1", "2026-06-09T09:00:00Z", false),
+            ("0 9 * * 1", "2026-06-08T09:00:00Z", true),
+            ("0 9 * * 1", "2026-06-09T09:00:00Z", false),
+            ("0 9 8 * *", "2026-06-08T09:00:00Z", true),
+            ("0 9 8 * *", "2026-06-09T09:00:00Z", false),
+            ("0 9 * * 0", "2026-06-07T09:00:00Z", true),
+            ("0 9 * * 7", "2026-06-07T09:00:00Z", true),
+        ] {
+            let now = DateTime::parse_from_rfc3339(timestamp)
+                .unwrap()
+                .with_timezone(&Utc);
+            assert_eq!(
+                cron_is_due(Some(expression), "UTC", now),
+                expected,
+                "{expression} at {timestamp}"
+            );
+        }
     }
 
     #[test]
@@ -872,7 +1322,7 @@ mod tests {
             run_as_actor_id: Uuid::now_v7(),
             triggered_by_actor_id: None,
             args_json: r#"{"value":1}"#.to_owned(),
-            code_snapshot: "console.log(args.value);".to_owned(),
+            code_snapshot: Some("console.log(args.value);".to_owned()),
             code_hash: "hash".to_owned(),
             timeout_seconds: 30,
             queued_at: now,

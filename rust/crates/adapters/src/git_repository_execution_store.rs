@@ -24,31 +24,29 @@ impl PostgresGitRepositoryExecutionStore {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
-
-impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
-    fn get_source<'a>(
-        &'a self,
-        id: Uuid,
-    ) -> BoxFuture<'a, Result<GitRepositorySource, GitRepositoryExecutionError>> {
-        Box::pin(async move { get_source(&self.pool, id).await })
-    }
-
-    fn enqueue_sync<'a>(
+    fn enqueue<'a>(
         &'a self,
         actor_id: ActorId,
         id: Uuid,
         branch: Option<&'a str>,
+        expected: Option<&'a GitRepositoryWebhook>,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let row =
-                sqlx::query("SELECT defaultbranch FROM gitrepositories WHERE id=$1 FOR UPDATE")
-                    .bind(id)
-                    .fetch_optional(&mut *transaction)
-                    .await
-                    .map_err(storage)?
-                    .ok_or(GitRepositoryExecutionError::NotFound)?;
+            let row = sqlx::query(
+                "SELECT defaultbranch,webhook FROM gitrepositories WHERE id=$1 FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(storage)?
+            .ok_or(GitRepositoryExecutionError::NotFound)?;
+            if let Some(expected) = expected {
+                let value: Option<Value> = row.try_get("webhook").map_err(storage)?;
+                if value.as_ref().map(map_webhook).transpose()?.as_ref() != Some(expected) {
+                    return Err(GitRepositoryExecutionError::Conflict);
+                }
+            }
             let branch = branch
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
@@ -83,6 +81,32 @@ impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
             }
             transaction.commit().await.map_err(storage)
         })
+    }
+}
+
+impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
+    fn get_source<'a>(
+        &'a self,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<GitRepositorySource, GitRepositoryExecutionError>> {
+        Box::pin(async move { get_source(&self.pool, id).await })
+    }
+    fn enqueue_sync<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        branch: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        self.enqueue(actor_id, id, branch, None)
+    }
+    fn enqueue_webhook<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        branch: &'a str,
+        expected: &'a GitRepositoryWebhook,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        self.enqueue(actor_id, id, Some(branch), Some(expected))
     }
 
     fn enqueue_due<'a>(
@@ -224,6 +248,23 @@ LIMIT 1
         message: &'a str,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         Box::pin(async move { finish_sync(&self.pool, claim, None, Some(message)).await })
+    }
+
+    fn get_ref<'a>(
+        &'a self,
+        id: Uuid,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<Option<GitRepositoryRefView>, GitRepositoryExecutionError>> {
+        Box::pin(async move {
+            sqlx::query("SELECT * FROM gitrepositoryrefs WHERE gitrepositoryid=$1 AND branch=$2")
+                .bind(id)
+                .bind(branch)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .map(map_ref)
+                .transpose()
+        })
     }
 
     fn list_refs<'a>(

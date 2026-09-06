@@ -174,6 +174,11 @@ Manual runs require the action to be enabled.
 
 If the same action is already running, Citadel rejects the new run instead of running the same action twice.
 
+Manual and test runs show live output in the progress sheet. Keep the connection
+open until the run finishes; disconnecting from an interactive run requests
+cancellation. Cancellation does not undo operations the script has already
+completed. Check the Runs tab before retrying.
+
 ## Schedule
 
 Schedules require Team's `Automated Operations` capability.

@@ -4,6 +4,7 @@ mod bindings;
 mod catalog;
 mod lookup;
 mod tags;
+pub mod webhooks;
 
 use std::sync::Arc;
 

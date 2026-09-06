@@ -1086,6 +1086,14 @@ fn schemas() -> Value {
             }
         },
         "PlatformCapabilities": platform_capabilities(),
+        "SwarmNodeAgentCoverageView": {"type":"object","required":["state","isInstalled","coveredNodes","eligibleNodes","totalNodes","connectedNodes","offlineNodes","enrollingNodes","missingNodes","incompatibleNodes","unsupportedNodes","unschedulableNodes","staleNodes","reasons","nodes","canManageNodeAgents"],"properties":{
+            "state":string(),"isInstalled":{"type":"boolean"},"coveredNodes":{"type":"integer"},"eligibleNodes":{"type":"integer"},"totalNodes":{"type":"integer"},"connectedNodes":{"type":"integer"},"offlineNodes":{"type":"integer"},"enrollingNodes":{"type":"integer"},"missingNodes":{"type":"integer"},"incompatibleNodes":{"type":"integer"},"unsupportedNodes":{"type":"integer"},"unschedulableNodes":{"type":"integer"},"staleNodes":{"type":"integer"},
+            "lastMembershipReconciliationAtUtc":nullable_string(),"agentImageReference":nullable_string(),"agentImageDigest":nullable_string(),"enrollmentExpiresAtUtc":nullable_string(),"operation":{"anyOf":[{"$ref":"#/components/schemas/SwarmNodeAgentOperationResult"},{"type":"null"}]},"reasons":{"type":"array","items":string()},"nodes":{"type":"array","items":{"$ref":"#/components/schemas/SwarmNodeAgentNodeCoverageResult"}},"canManageNodeAgents":{"type":"boolean"}
+        }},
+        "SwarmNodeAgentOperationResult":{"type":"object","required":["operationId","kind","state","startedAtUtc"],"properties":{"operationId":uuid(),"kind":string(),"state":string(),"startedAtUtc":{"type":"string","format":"date-time"},"error":nullable_string()}},
+        "SwarmNodeAgentNodeCoverageResult":{"type":"object","required":["dockerNodeId","hostname","role","availability","nodeStatus","architecture","dataSource","eligible","supported","schedulable","agentConnectionState","dockerReachable","compatible","projectionStale","reasons"],"properties":{
+            "dockerNodeId":string(),"hostname":string(),"role":string(),"availability":string(),"nodeStatus":string(),"architecture":string(),"dataSource":string(),"eligible":{"type":"boolean"},"supported":{"type":"boolean"},"schedulable":{"type":"boolean"},"serviceTaskState":nullable_string(),"agentConnectionState":string(),"dockerReachable":{"type":"boolean"},"compatible":{"type":"boolean"},"projectionStale":{"type":"boolean"},"lastHeartbeatAtUtc":nullable_string(),"lastSuccessfulReconciliationAt":nullable_string(),"staleSince":nullable_string(),"staleReason":nullable_string(),"reasons":{"type":"array","items":string()}
+        }},
         "ImageCapabilities": image_capabilities(),
         "NetworkCapabilities": network_capabilities(),
         "VolumeCapabilities": volume_capabilities(),
@@ -1592,21 +1600,32 @@ fn phase5_schemas() -> Map<String, Value> {
         json!({"type":"object","properties":{"description":nullable_string(),"tags":string_array()}}),
     );
 
-    let automation_action = json!({"type":"object","required":["id","name","code","defaultArgsJson","enabled","scheduleEnabled","scheduleTimeZone","timeoutSeconds","alertOnFailure","runAsActorId","controlState","rowVersion","createdByActorId","createdAt","updatedAt"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":"integer","format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":uuid(),"controlState":string(),"currentRunId":nullable_uuid(),"rowVersion":{"type":"integer","format":"int64"},"createdByActorId":uuid(),"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}}});
+    let mut automation_action = json!({"type":"object","required":["id","name","code","defaultArgsJson","enabled","scheduleEnabled","scheduleTimeZone","timeoutSeconds","alertOnFailure","runAsActorId","controlState","rowVersion","createdByActorId","createdAt","updatedAt"],"properties":{"id":uuid(),"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":"integer","format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":uuid(),"controlState":string(),"currentRunId":nullable_uuid(),"rowVersion":{"type":"integer","format":"int64"},"createdByActorId":uuid(),"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}}});
+    automation_action["properties"]["tags"] =
+        json!({"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}});
+    automation_action["properties"]["lastScheduledRunAt"] =
+        json!({"type":["string","null"],"format":"date-time"});
+    automation_action["properties"]["latestRun"] =
+        json!({"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/AutomationActionRunView"}]});
+    automation_action["properties"]["capabilities"] =
+        json!({"$ref":"#/components/schemas/ResourceCapabilities"});
     schemas.insert("AutomationActionView".into(), automation_action);
-    schemas.insert("AutomationActionsView".into(), json!({"type":"object","required":["actions"],"properties":{"actions":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionView"}}}}));
+    schemas.insert(
+        "AutomationActionsView".into(),
+        collection_view("actions", "AutomationActionView", "ResourceCapabilities"),
+    );
     schemas.insert("AutomationActionInput".into(), json!({"type":"object","required":["name","code","enabled","scheduleEnabled","alertOnFailure"],"properties":{"name":string(),"description":nullable_string(),"code":string(),"defaultArgsJson":nullable_string(),"enabled":{"type":"boolean"},"scheduleEnabled":{"type":"boolean"},"scheduleCron":nullable_string(),"scheduleTimeZone":nullable_string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":"boolean"},"runAsActorId":nullable_uuid(),"tagIds":uuid_array()}}));
     schemas.insert("UpdateAutomationActionInput".into(), json!({"type":"object","additionalProperties":false,"properties":{"description":nullable_string(),"code":nullable_string(),"defaultArgsJson":nullable_string(),"enabled":{"type":["boolean","null"]},"scheduleEnabled":{"type":["boolean","null"]},"scheduleCron":nullable_string(),"scheduleTimeZone":nullable_string(),"webhook":{"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/RepoWebhookConfig"}]},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":["boolean","null"]},"runAsActorId":nullable_uuid()}}));
     schemas.insert(
         "RunAutomationActionInput".into(),
-        json!({"type":"object","properties":{"argsJson":{"type":"object"},"timeoutSeconds":{"type":["integer","null"],"format":"int32"}}}),
+        json!({"type":"object","properties":{"argsJson":{"type":["string","null"],"maxLength":65536},"timeoutSeconds":{"type":["integer","null"],"format":"int32"}}}),
     );
     schemas.insert(
         "TestAutomationActionInput".into(),
-        json!({"type":"object","properties":{"argsJson":{"type":"object"}}}),
+        json!({"type":"object","properties":{"argsJson":{"type":["string","null"],"maxLength":65536}}}),
     );
-    schemas.insert("AutomationActionRunView".into(), json!({"type":"object","required":["id","actionId","actionName","trigger","status","runAsActorId","argsJson","codeSnapshot","codeHash","timeoutSeconds","queuedAt"],"properties":{"id":uuid(),"actionId":uuid(),"actionName":string(),"trigger":string(),"status":string(),"runAsActorId":uuid(),"triggeredByActorId":nullable_uuid(),"argsJson":{"type":"object"},"codeSnapshot":string(),"codeHash":string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"finishedAt":{"type":["string","null"],"format":"date-time"},"durationMs":{"type":["integer","null"],"format":"int64"},"exitCode":{"type":["integer","null"],"format":"int32"},"logs":nullable_string(),"errorMessage":nullable_string()}}));
-    schemas.insert("AutomationActionRunStreamItem".into(), json!({"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string()}}));
+    schemas.insert("AutomationActionRunView".into(), json!({"type":"object","required":["id","actionId","actionName","trigger","status","runAsActorId","argsJson","codeSnapshot","codeHash","timeoutSeconds","queuedAt"],"properties":{"id":uuid(),"actionId":uuid(),"actionName":string(),"trigger":string(),"status":string(),"runAsActorId":uuid(),"triggeredByActorId":nullable_uuid(),"argsJson":string(),"codeSnapshot":nullable_string(),"codeHash":string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"finishedAt":{"type":["string","null"],"format":"date-time"},"durationMs":{"type":["integer","null"],"format":"int64"},"exitCode":{"type":["integer","null"],"format":"int32"},"logs":nullable_string(),"errorMessage":nullable_string()}}));
+    schemas.insert("AutomationActionRunStreamItem".into(), json!({"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string(),"error":{"oneOf":[{"type":"null"},{"type":"object","properties":{"code":{"type":"integer"},"message":string()}}]}}}));
     schemas.insert("AutomationActionRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/AutomationActionRunView"}}}}));
     schemas.insert("AutomationActionRunLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":string()}}));
 
@@ -1626,6 +1645,28 @@ fn phase5_schemas() -> Map<String, Value> {
     schemas.insert("BuildLogsView".into(), json!({"type":"object","required":["runId","logs"],"properties":{"runId":uuid(),"logs":{"type":"array","items":{"$ref":"#/components/schemas/BuildLogEntry"}}}}));
     schemas.insert("BuildAgentPoolInput".into(), json!({"type":"object","required":["name","enabled","providerSpec"],"properties":{"name":string(),"description":nullable_string(),"enabled":{"type":"boolean"},"providerSpec":{"type":"object"},"maxActiveBuilders":{"type":["integer","null"],"format":"int32"},"queueTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"provisioningTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"registrationTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"heartbeatTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"cleanupTimeoutSeconds":{"type":["integer","null"],"format":"int32"},"maximumInstanceLifetimeSeconds":{"type":["integer","null"],"format":"int32"},"failureRetentionMinutes":{"type":["integer","null"],"format":"int32"},"tagIds":uuid_array()}}));
     schemas.insert("BuildAgentPoolView".into(), json!({"allOf":[{"$ref":"#/components/schemas/BuildAgentPoolInput"},{"type":"object","required":["id","normalizedName","provider","lastValidationStatus","controlState","createdByActorId","createdAt","updatedAt","rowVersion"],"properties":{"id":uuid(),"normalizedName":string(),"provider":string(),"lastValidationStatus":string(),"lastValidationMessage":nullable_string(),"lastValidatedAt":nullable_date_time(),"controlState":string(),"controlTriggeredBy":nullable_uuid(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}]}));
+    let mut project_update = schemas["BuildProjectInput"]["properties"]
+        .as_object()
+        .expect("project properties")
+        .clone();
+    project_update.remove("name");
+    project_update.remove("tagIds");
+    schemas.insert(
+        "UpdateBuildProjectInput".into(),
+        json!({"type":"object","properties":project_update,"additionalProperties":false}),
+    );
+    schemas["BuildProjectView"]["properties"]["tags"] =
+        json!({"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}});
+    schemas["BuildProjectView"]["properties"]["latestRun"] =
+        json!({"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/BuildRunView"}]});
+    schemas["BuildProjectView"]["properties"]["capabilities"] =
+        json!({"$ref":"#/components/schemas/ResourceCapabilities"});
+    schemas.insert(
+        "BuildProjectsView".into(),
+        collection_view("projects", "BuildProjectView", "ResourceCapabilities"),
+    );
+    schemas["BuildAgentPoolView"]["allOf"][1]["properties"]["tags"] =
+        json!({"type":"array","items":{"$ref":"#/components/schemas/TagSummaryView"}});
     let mut pool_update = schemas["BuildAgentPoolInput"]["properties"]
         .as_object()
         .expect("pool properties")

@@ -97,7 +97,11 @@ pub fn register(
     );
     supervisor.spawn(
         "build-runs",
-        super::builds::build_runs(cancellation.child_token(), builds),
+        super::builds::build_runs(cancellation.child_token(), Arc::clone(&builds)),
+    );
+    supervisor.spawn(
+        "build-pool-health",
+        super::builds::pool_health(cancellation.child_token(), builds),
     );
     supervisor.spawn(
         "backup-runs",

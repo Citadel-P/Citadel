@@ -109,6 +109,30 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .unwrap()
             .is_none()
     );
+    // A failed audit write rolls back the result and leaves the claim active.
+    // The constraint is scoped to this unique Project in the disposable DB.
+    let constraint = format!("reject_build_audit_{}", project.id.simple());
+    let ddl = format!(
+        "ALTER TABLE activityevents ADD CONSTRAINT {constraint} CHECK (resourceid <> '{}' OR eventtype <> 'BuildRunSucceeded') NOT VALID",
+        project.id
+    );
+    // Both substitutions are locally generated, canonical UUIDs, never input.
+    sqlx::raw_sql(sqlx::AssertSqlSafe(ddl.as_str()))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(store.finish(&claim, &success_result('a')).await.is_err());
+    assert_eq!(store.get_run(queued.id).await.unwrap().status, "Preparing");
+    assert_eq!(
+        store.get(project.id).await.unwrap().current_run_id,
+        Some(queued.id)
+    );
+    sqlx::raw_sql(sqlx::AssertSqlSafe(
+        format!("ALTER TABLE activityevents DROP CONSTRAINT {constraint}").as_str(),
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
     store
         .finish(
             &claim,
@@ -126,6 +150,25 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .await
         .unwrap();
     assert_eq!(store.get_run(queued.id).await.unwrap().status, "Succeeded");
+    // Port the .NET queued/started/terminal Activity contract. Late completion
+    // must neither alter the result nor duplicate the terminal Activity.
+    assert!(!store.finish(&claim, &success_result('a')).await.unwrap());
+    let events: Vec<String> = sqlx::query_scalar(
+        "SELECT eventtype FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
+    )
+    .bind(project.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        events,
+        [
+            "BuildCreated",
+            "BuildRunQueued",
+            "BuildRunStarted",
+            "BuildRunSucceeded"
+        ]
+    );
     let stack_image = PostgresStackBuildImageResolver::new(pool.clone())
         .resolve(&[StackBuildImageBinding {
             service_name: "api".to_owned(),
@@ -174,6 +217,14 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         store.get_run(interrupted.id).await.unwrap().status,
         "Interrupted"
     );
+    let interrupted_activity: serde_json::Value = sqlx::query_scalar(
+        "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='BuildRunFailed'",
+    )
+    .bind(project.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(interrupted_activity["Status"], "Interrupted");
     for marker in ['c', 'd'] {
         let run = store.enqueue(actor, project.id, "Manual").await.unwrap();
         let claim = store
@@ -206,6 +257,28 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     for _ in 0..2 {
         input.name = format!("pool-build-{}", Uuid::now_v7());
         let project = store.create(actor, &input).await.unwrap();
+        let patched = project
+            .apply_patch(
+                serde_json::json!({"dockerfilePath":"docker/Production"}),
+                false,
+            )
+            .unwrap();
+        assert_eq!(patched.git_repository_id, project.git_repository_id);
+        assert_eq!(patched.branch.as_deref(), Some(project.branch.as_str()));
+        assert_eq!(
+            patched.dockerfile_path.as_deref(),
+            Some("docker/Production")
+        );
+        assert!(
+            project
+                .apply_patch(serde_json::json!({"name":"wrong-route"}), false)
+                .is_err()
+        );
+        assert!(
+            project
+                .apply_patch(serde_json::json!({"enabled":false}), true)
+                .is_err()
+        );
         store.enqueue(actor, project.id, "Manual").await.unwrap();
         pool_projects.push(project.id);
     }

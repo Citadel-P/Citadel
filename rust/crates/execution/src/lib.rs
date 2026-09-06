@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod redaction;
+pub use redaction::SecretRedactor;
+
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};

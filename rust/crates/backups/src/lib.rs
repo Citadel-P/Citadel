@@ -478,6 +478,11 @@ pub trait BackupStore: Send + Sync {
         policy_id: Uuid,
         trigger: &str,
     ) -> BoxFuture<'_, Result<BackupRunView, BackupError>>;
+    fn enqueue_webhook<'a>(
+        &'a self,
+        policy_id: Uuid,
+        expected_webhook: &'a Value,
+    ) -> BoxFuture<'a, Result<BackupRunView, BackupError>>;
     fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicyView>, BackupError>>;
     fn enqueue_scheduled_backup(
         &self,
@@ -577,6 +582,10 @@ pub trait BackupRunAuthorizer: Send + Sync {
     ) -> BoxFuture<'a, Result<(), BackupError>>;
 }
 
+pub trait BackupEntitlements: Send + Sync {
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, BackupError>>;
+}
+
 pub struct BackupService {
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BackupStore>,
@@ -586,6 +595,7 @@ pub struct BackupService {
     active_restores: Mutex<HashMap<Uuid, CancellationToken>>,
     stale_after: chrono::Duration,
     authorizer: Arc<dyn BackupRunAuthorizer>,
+    entitlements: Option<Arc<dyn BackupEntitlements>>,
 }
 impl BackupService {
     pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
@@ -615,10 +625,35 @@ impl BackupService {
             active_restores: Mutex::new(HashMap::new()),
             stale_after,
             authorizer,
+            entitlements: None,
         }
     }
     pub fn store(&self) -> &Arc<dyn BackupStore> {
         &self.store
+    }
+    pub fn with_entitlements(mut self, entitlements: Arc<dyn BackupEntitlements>) -> Self {
+        self.entitlements = Some(entitlements);
+        self
+    }
+
+    async fn ensure_automated_operations(&self) -> Result<(), BackupError> {
+        if let Some(entitlements) = &self.entitlements
+            && entitlements.automated_operations().await?
+        {
+            return Ok(());
+        }
+        Err(BackupError::LicenseRequired)
+    }
+
+    pub async fn queue_webhook(
+        &self,
+        id: Uuid,
+        expected_webhook: &Value,
+    ) -> Result<(), BackupError> {
+        self.ensure_automated_operations().await?;
+        self.store.enqueue_webhook(id, expected_webhook).await?;
+        self.changed();
+        Ok(())
     }
     pub async fn repository_operation(
         &self,
@@ -693,7 +728,16 @@ impl BackupService {
             .lock()
             .map_err(poison)?
             .insert(claim.run.id, token.clone());
-        let result = match self.authorizer.authorize_backup(&claim).await {
+        let authorization = if matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook") {
+            self.ensure_automated_operations().await
+        } else {
+            Ok(())
+        };
+        let authorization = match authorization {
+            Ok(()) => self.authorizer.authorize_backup(&claim).await,
+            Err(error) => Err(error),
+        };
+        let result = match authorization {
             Ok(()) => match self.planner.plan(&claim, &token).await {
                 Ok(plan) => match self.store.prepare_backup_items(&claim, &plan).await {
                     Ok(()) => self.executor.backup(&claim, &plan, &token).await,
@@ -722,6 +766,11 @@ impl BackupService {
         Ok(true)
     }
     pub async fn queue_due_scheduled(&self, now: DateTime<Utc>) -> Result<usize, BackupError> {
+        match self.ensure_automated_operations().await {
+            Ok(()) => {}
+            Err(BackupError::LicenseRequired) => return Ok(0),
+            Err(error) => return Err(error),
+        }
         let minute = now
             .with_second(0)
             .and_then(|value| value.with_nanosecond(0))
@@ -852,6 +901,8 @@ fn rejected_restore(message: String) -> RestoreExecutionResult {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BackupError {
+    #[error("Automated operations require an active license entitlement.")]
+    LicenseRequired,
     #[error("{0}")]
     Validation(String),
     #[error("Backup resource was not found")]

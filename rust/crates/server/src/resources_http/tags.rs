@@ -25,6 +25,14 @@ pub(super) fn router(state: ResourcesHttpState) -> Router {
         .contract_route(routes::PATCH_TAG, patch_tag)
         .contract_route(routes::DELETE_TAG, delete_tag)
         .contract_route(routes::GET_PLATFORM_TAGS, get_platform_tags)
+        .contract_route(routes::GET_AUTOMATION_ACTION_TAGS, get_action_tags)
+        .contract_route(routes::REPLACE_AUTOMATION_ACTION_TAGS, replace_action_tags)
+        .contract_route(routes::GET_BUILD_PROJECT_TAGS, get_build_tags)
+        .contract_route(routes::REPLACE_BUILD_PROJECT_TAGS, replace_build_tags)
+        .contract_route(routes::GET_BUILD_AGENT_POOL_TAGS, get_pool_tags)
+        .contract_route(routes::REPLACE_BUILD_AGENT_POOL_TAGS, replace_pool_tags)
+        .contract_route(routes::GET_BACKUP_POLICY_TAGS, get_policy_tags)
+        .contract_route(routes::REPLACE_BACKUP_POLICY_TAGS, replace_policy_tags)
         .contract_route(routes::REPLACE_PLATFORM_TAGS, replace_platform_tags)
         .contract_route(routes::GET_REGISTRY_TAGS, get_registry_tags)
         .contract_route(routes::REPLACE_REGISTRY_TAGS, replace_registry_tags)
@@ -254,6 +262,31 @@ resource_tag_handlers!(
     ResourceType::GitRepository
 );
 
+resource_tag_handlers!(
+    get_action_tags,
+    replace_action_tags,
+    TaggableResourceType::AutomationAction,
+    ResourceType::AutomationAction
+);
+resource_tag_handlers!(
+    get_build_tags,
+    replace_build_tags,
+    TaggableResourceType::Build,
+    ResourceType::Build
+);
+resource_tag_handlers!(
+    get_pool_tags,
+    replace_pool_tags,
+    TaggableResourceType::BuildAgentPool,
+    ResourceType::BuildAgentPool
+);
+resource_tag_handlers!(
+    get_policy_tags,
+    replace_policy_tags,
+    TaggableResourceType::BackupPolicy,
+    ResourceType::BackupPolicy
+);
+
 async fn resource_tags(
     state: ResourcesHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -332,4 +365,31 @@ async fn replace_resource_tags(
 
 fn invalid_path(message: String) -> citadel_identity::IdentityError {
     citadel_identity::IdentityError::Validation(message)
+}
+
+pub(crate) fn parse_filters(
+    query: Option<&str>,
+) -> Result<Vec<String>, citadel_identity::IdentityError> {
+    let mut tags = Vec::new();
+    for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
+        if key != "tags" {
+            continue;
+        }
+        if tags.len() >= 100 || value.len() > 128 || value.trim().is_empty() {
+            return Err(citadel_identity::IdentityError::Validation(
+                "Tag filters must contain at most 100 non-empty tag names or IDs.".into(),
+            ));
+        }
+        tags.push(value.into_owned());
+    }
+    Ok(tags)
+}
+
+pub(crate) fn matches_filters(tags: &[TagSummary], filters: &[String]) -> bool {
+    filters.iter().all(|filter| {
+        tags.iter().any(|tag| {
+            tag.name.eq_ignore_ascii_case(filter)
+                || Uuid::parse_str(filter).is_ok_and(|id| id == tag.id)
+        })
+    })
 }

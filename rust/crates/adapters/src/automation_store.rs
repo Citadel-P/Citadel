@@ -35,13 +35,115 @@ pub struct PostgresAutomationStore {
     pool: PgPool,
 }
 
+enum EnqueueMode<'a> {
+    Queue,
+    Execute,
+    Webhook(&'a serde_json::Value),
+}
+
 impl PostgresAutomationStore {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
+impl PostgresAutomationStore {
+    fn enqueue_run<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        trigger: &'a str,
+        args: &'a serde_json::Value,
+        timeout_seconds: Option<i32>,
+        mode: EnqueueMode<'a>,
+    ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
+        Box::pin(async move {
+            if !args.is_object() || args.to_string().len() > 64 * 1024 {
+                return Err(AutomationError::Validation(
+                    "Action arguments must be a JSON object of at most 64 KiB.".to_owned(),
+                ));
+            }
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let action = sqlx::query("SELECT * FROM actions WHERE id=$1 FOR UPDATE")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(storage)?
+                .ok_or(AutomationError::NotFound)?;
+            let enabled: bool = action.try_get("enabled").map_err(storage)?;
+            if let EnqueueMode::Webhook(expected) = mode {
+                let current: Option<serde_json::Value> =
+                    action.try_get("webhook").map_err(storage)?;
+                if current.as_ref() != Some(expected) {
+                    return Err(AutomationError::Conflict(
+                        "Webhook configuration changed. Retry with the current configuration."
+                            .into(),
+                    ));
+                }
+            }
+            if !enabled && trigger != "Test" {
+                return Err(AutomationError::Conflict(
+                    "Automation Action is disabled.".to_owned(),
+                ));
+            }
+            let state: String = action.try_get("controlstate").map_err(storage)?;
+            let run_id = Uuid::now_v7();
+            let code: String = action.try_get("code").map_err(storage)?;
+            let name: String = action.try_get("name").map_err(storage)?;
+            let run_as: Uuid = action.try_get("runasactorid").map_err(storage)?;
+            let triggered_by = (trigger != "Webhook").then_some(actor.value());
+            let configured_timeout: i32 = action.try_get("timeoutseconds").map_err(storage)?;
+            let timeout = timeout_seconds.unwrap_or(configured_timeout);
+            if !(1..=86_400).contains(&timeout) {
+                return Err(AutomationError::Validation(
+                    "Automation timeout must be between 1 and 86400 seconds.".to_owned(),
+                ));
+            }
+            if state != "Idle" {
+                let reason = "Another run for this Action is already queued or running.";
+                let row = sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,finishedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid,errormessage) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$7,'Rejected',$8,$9,$10,$11) RETURNING *")
+                    .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
+                    .bind(run_as).bind(timeout).bind(trigger).bind(triggered_by).bind(reason)
+                    .fetch_one(&mut *tx).await.map_err(database)?;
+                add_run_activity(&mut tx, &map_run(row)?).await?;
+                tx.commit().await.map_err(storage)?;
+                return Err(AutomationError::Conflict(reason.into()));
+            }
+            sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Queued',$9,$10,$11)")
+                .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
+                .bind(Utc::now()).bind(run_as).bind(timeout).bind(trigger).bind(triggered_by)
+                .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
+            let run = get_run_tx(&mut tx, run_id).await?;
+            add_run_activity(&mut tx, &run).await?;
+            let run = if matches!(mode, EnqueueMode::Execute) {
+                start_run(&mut tx, id, run_id).await?
+            } else {
+                run
+            };
+            tx.commit().await.map_err(storage)?;
+            Ok(run)
+        })
+    }
+}
+
 impl AutomationStore for PostgresAutomationStore {
+    fn permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, AutomationError>> {
+        Box::pin(async move {
+            crate::resource_permissions::for_resources(
+                &self.pool,
+                actor,
+                ResourceType::AutomationAction,
+                ids,
+            )
+            .await
+            .map_err(storage)
+        })
+    }
     fn create<'a>(
         &'a self,
         actor: ActorId,
@@ -59,6 +161,20 @@ impl AutomationStore for PostgresAutomationStore {
                 .bind(input.schedule_time_zone.as_deref().unwrap_or("UTC"))
                 .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref())
                 .execute(&mut *tx).await.map_err(database)?;
+            crate::resource_tags::insert(
+                &mut tx,
+                "AutomationAction",
+                id,
+                &input.tag_ids,
+                actor.value(),
+            )
+            .await
+            .map_err(|error| match error {
+                crate::resource_tags::ResourceTagError::Missing => {
+                    AutomationError::Validation("One or more tags were not found.".into())
+                }
+                crate::resource_tags::ResourceTagError::Database(error) => storage(error),
+            })?;
             let action = get_action_tx(&mut tx, id).await?;
             add_activity(
                 &mut tx,
@@ -91,7 +207,7 @@ WHERE $4 OR (SELECT allowed FROM global_access) OR EXISTS (
 )
 ORDER BY action.name,action.id"#
             );
-            sqlx::query(AssertSqlSafe(query.as_str()))
+            let mut actions = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::AutomationAction as i32)
                 .bind(READ_MASK)
@@ -101,19 +217,20 @@ ORDER BY action.name,action.id"#
                 .map_err(storage)?
                 .into_iter()
                 .map(map_action)
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?;
+            enrich_actions(
+                &mut *self.pool.acquire().await.map_err(storage)?,
+                &mut actions,
+            )
+            .await?;
+            Ok(actions)
         })
     }
 
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<AutomationActionView, AutomationError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM actions WHERE id=$1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or(AutomationError::NotFound)
-                .and_then(map_action)
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            get_action_tx(&mut tx, id).await
         })
     }
 
@@ -232,57 +349,52 @@ ORDER BY action.name,action.id"#
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
+        self.enqueue_run(
+            actor,
+            id,
+            trigger,
+            args,
+            timeout_seconds,
+            EnqueueMode::Queue,
+        )
+    }
+
+    fn enqueue_for_execution<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        trigger: &'a str,
+        args: &'a serde_json::Value,
+        timeout_seconds: Option<i32>,
+    ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
         Box::pin(async move {
-            if !args.is_object() {
-                return Err(AutomationError::Validation(
-                    "Action arguments must be a JSON object.".to_owned(),
-                ));
-            }
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            let action = sqlx::query("SELECT * FROM actions WHERE id=$1 FOR UPDATE")
-                .bind(id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(storage)?
-                .ok_or(AutomationError::NotFound)?;
-            let enabled: bool = action.try_get("enabled").map_err(storage)?;
-            if !enabled && trigger != "Test" {
-                return Err(AutomationError::Conflict(
-                    "Automation Action is disabled.".to_owned(),
-                ));
-            }
-            let state: String = action.try_get("controlstate").map_err(storage)?;
-            let run_id = Uuid::now_v7();
-            let code: String = action.try_get("code").map_err(storage)?;
-            let name: String = action.try_get("name").map_err(storage)?;
-            let run_as: Uuid = action.try_get("runasactorid").map_err(storage)?;
-            let configured_timeout: i32 = action.try_get("timeoutseconds").map_err(storage)?;
-            let timeout = timeout_seconds.unwrap_or(configured_timeout);
-            if !(1..=86_400).contains(&timeout) {
-                return Err(AutomationError::Validation(
-                    "Automation timeout must be between 1 and 86400 seconds.".to_owned(),
-                ));
-            }
-            if state != "Idle" {
-                let reason = "Another run for this Action is already queued or running.";
-                let row = sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,finishedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid,errormessage) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$7,'Rejected',$8,$9,$10,$11) RETURNING *")
-                    .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
-                    .bind(run_as).bind(timeout).bind(trigger).bind(actor.value()).bind(reason)
-                    .fetch_one(&mut *tx).await.map_err(database)?;
-                add_run_activity(&mut tx, &map_run(row)?).await?;
-                tx.commit().await.map_err(storage)?;
-                return Err(AutomationError::Conflict(reason.into()));
-            }
-            sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Queued',$9,$10,$11)")
-                .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
-                .bind(Utc::now()).bind(run_as).bind(timeout).bind(trigger).bind(actor.value())
-                .execute(&mut *tx).await.map_err(database)?;
-            sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
-            let run = get_run_tx(&mut tx, run_id).await?;
-            add_run_activity(&mut tx, &run).await?;
-            tx.commit().await.map_err(storage)?;
-            Ok(run)
+            self.enqueue_run(
+                actor,
+                id,
+                trigger,
+                args,
+                timeout_seconds,
+                EnqueueMode::Execute,
+            )
+            .await
+            .map(|run| AutomationRunClaim { run })
         })
+    }
+
+    fn enqueue_webhook<'a>(
+        &'a self,
+        id: Uuid,
+        expected_webhook: &'a serde_json::Value,
+        args: &'a serde_json::Value,
+    ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
+        self.enqueue_run(
+            ActorId::new(Uuid::from_u128(1)),
+            id,
+            "Webhook",
+            args,
+            None,
+            EnqueueMode::Webhook(expected_webhook),
+        )
     }
 
     fn claim_next<'a>(
@@ -299,11 +411,7 @@ ORDER BY action.name,action.id"#
             };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let action_id: Uuid = row.try_get("actionid").map_err(storage)?;
-            let started = Utc::now();
-            sqlx::query("UPDATE actionruns SET status='Running',startedat=$2 WHERE id=$1 AND status='Queued'").bind(run_id).bind(started).execute(&mut *tx).await.map_err(storage)?;
-            sqlx::query("UPDATE actions SET controlstate='Processing',controlstartedat=$2,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$3").bind(action_id).bind(started.timestamp()).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
-            let run = get_run_tx(&mut tx, run_id).await?;
-            add_run_activity(&mut tx, &run).await?;
+            let run = start_run(&mut tx, action_id, run_id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(Some(AutomationRunClaim { run }))
         })
@@ -335,7 +443,18 @@ ORDER BY action.name,action.id"#
         limit: usize,
     ) -> BoxFuture<'a, Result<Vec<AutomationRunView>, AutomationError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM actionruns WHERE actionid=$1 ORDER BY queuedat DESC,id DESC LIMIT $2").bind(action_id).bind(i64::try_from(limit.clamp(1,100)).unwrap_or(100)).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(map_run).collect()
+            let query = format!(
+                "SELECT {RUN_SUMMARY_COLUMNS} FROM actionruns WHERE actionid=$1 ORDER BY queuedat DESC,id DESC LIMIT $2"
+            );
+            sqlx::query(AssertSqlSafe(query.as_str()))
+                .bind(action_id)
+                .bind(i64::try_from(limit.clamp(1, 100)).unwrap_or(100))
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?
+                .into_iter()
+                .map(map_run)
+                .collect()
         })
     }
 
@@ -349,9 +468,12 @@ ORDER BY action.name,action.id"#
 
     fn list_scheduled<'a>(
         &'a self,
+        after: Option<Uuid>,
+        limit: usize,
     ) -> BoxFuture<'a, Result<Vec<AutomationActionView>, AutomationError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM actions WHERE enabled=true AND scheduleenabled=true AND schedulecron IS NOT NULL ORDER BY id")
+            sqlx::query("SELECT * FROM actions WHERE enabled=true AND scheduleenabled=true AND schedulecron IS NOT NULL AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT $2")
+                .bind(after).bind(i64::try_from(limit.clamp(1, 64)).unwrap_or(64))
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?
@@ -431,6 +553,26 @@ ORDER BY action.name,action.id"#
     }
 }
 
+async fn start_run(
+    tx: &mut Transaction<'_, Postgres>,
+    action_id: Uuid,
+    run_id: Uuid,
+) -> Result<AutomationRunView, AutomationError> {
+    let started = Utc::now();
+    sqlx::query(
+        "UPDATE actionruns SET status='Running',startedat=$2 WHERE id=$1 AND status='Queued'",
+    )
+    .bind(run_id)
+    .bind(started)
+    .execute(&mut **tx)
+    .await
+    .map_err(storage)?;
+    sqlx::query("UPDATE actions SET controlstate='Processing',controlstartedat=$2,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$3").bind(action_id).bind(started.timestamp()).bind(run_id).execute(&mut **tx).await.map_err(storage)?;
+    let run = get_run_tx(tx, run_id).await?;
+    add_run_activity(tx, &run).await?;
+    Ok(run)
+}
+
 async fn recover_interrupted(
     tx: &mut Transaction<'_, Postgres>,
     stale_before: DateTime<Utc>,
@@ -463,13 +605,60 @@ async fn get_action_tx(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<AutomationActionView, AutomationError> {
-    sqlx::query("SELECT * FROM actions WHERE id=$1")
+    let mut action = sqlx::query("SELECT * FROM actions WHERE id=$1")
         .bind(id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(storage)?
         .ok_or(AutomationError::NotFound)
-        .and_then(map_action)
+        .and_then(map_action)?;
+    enrich_actions(&mut *tx, std::slice::from_mut(&mut action)).await?;
+    Ok(action)
+}
+
+// List and latest-run projections deliberately do not load retained source/log payloads.
+const RUN_SUMMARY_COLUMNS: &str = "id,actionid,actionname,trigger,status,runasactorid,triggeredbyactorid,argsjson,NULL::text AS codesnapshot,codehash,timeoutseconds,queuedat,startedat,finishedat,durationms,exitcode,NULL::text AS logs,errormessage";
+
+async fn enrich_actions(
+    connection: &mut sqlx::PgConnection,
+    actions: &mut [AutomationActionView],
+) -> Result<(), AutomationError> {
+    if actions.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<_> = actions.iter().map(|action| action.id).collect();
+    let mut positions: std::collections::HashMap<_, _> = ids
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (*id, index))
+        .collect();
+    let tags = sqlx::query("SELECT link.resourceid,tag.id,tag.name,tag.color FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype='AutomationAction' AND link.resourceid=ANY($1) ORDER BY tag.name,tag.id")
+        .bind(&ids).fetch_all(&mut *connection).await.map_err(storage)?;
+    for row in tags {
+        let id: Uuid = row.try_get("resourceid").map_err(storage)?;
+        if let Some(index) = positions.get(&id) {
+            actions[*index].tags.push(citadel_resources::TagSummary {
+                id: row.try_get("id").map_err(storage)?,
+                name: row.try_get("name").map_err(storage)?,
+                color: row.try_get("color").map_err(storage)?,
+            });
+        }
+    }
+    let query = format!(
+        "SELECT summary.* FROM unnest($1::uuid[]) ids(id) CROSS JOIN LATERAL (SELECT {RUN_SUMMARY_COLUMNS} FROM actionruns WHERE actionid=ids.id ORDER BY queuedat DESC,id DESC LIMIT 1) summary"
+    );
+    let runs = sqlx::query(AssertSqlSafe(query.as_str()))
+        .bind(&ids)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(storage)?;
+    for row in runs {
+        let run = map_run(row)?;
+        if let Some(index) = positions.remove(&run.action_id) {
+            actions[index].latest_run = Some(run);
+        }
+    }
+    Ok(())
 }
 
 async fn get_run_tx(
@@ -605,6 +794,9 @@ fn map_action(row: sqlx::postgres::PgRow) -> Result<AutomationActionView, Automa
         created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
         created_at: row.try_get("createdat").map_err(storage)?,
         updated_at: row.try_get("updatedat").map_err(storage)?,
+        last_scheduled_run_at: row.try_get("lastscheduledrunat").map_err(storage)?,
+        tags: Vec::new(),
+        latest_run: None,
     })
 }
 fn map_run(row: sqlx::postgres::PgRow) -> Result<AutomationRunView, AutomationError> {
