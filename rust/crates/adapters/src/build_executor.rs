@@ -137,6 +137,7 @@ pub struct PlatformBuildExecutor {
     local: Arc<dyn BuildExecutor>,
     agent: Option<AgentDockerBuildExecutor>,
     edge: Option<AgentDockerBuildExecutor>,
+    git: Option<Arc<citadel_git::GitRepositoryExecutionService>>,
 }
 
 impl PlatformBuildExecutor {
@@ -151,12 +152,18 @@ impl PlatformBuildExecutor {
             local,
             agent,
             edge: None,
+            git: None,
         }
     }
 
     #[must_use]
     pub fn with_edge(mut self, edge: AgentDockerBuildExecutor) -> Self {
         self.edge = Some(edge);
+        self
+    }
+
+    pub fn with_git_source(mut self, git: Arc<citadel_git::GitRepositoryExecutionService>) -> Self {
+        self.git = Some(git);
         self
     }
 }
@@ -169,6 +176,39 @@ impl BuildExecutor for PlatformBuildExecutor {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
+            let mut prepared;
+            let claim = if let Some(git) = &self.git {
+                if let Err(error) = logs
+                    .append("system", "Synchronizing Build Git source...")
+                    .await
+                {
+                    return failed(BuildFailure::Io(error.to_string()));
+                }
+                let commit = match git
+                    .synchronize_commit(
+                        citadel_domain::ActorId::new(claim.run.triggered_by_actor_id),
+                        claim.run.git_repository_id,
+                        &claim.run.branch,
+                        cancellation,
+                    )
+                    .await
+                {
+                    Ok(commit) => commit,
+                    Err(citadel_git::GitRepositoryExecutionError::Git(
+                        citadel_git::GitError::Process(error),
+                    )) => return failed(BuildFailure::Process(error)),
+                    Err(error) => return failed(BuildFailure::Validation(error.to_string())),
+                };
+                prepared = claim.clone();
+                // Webhook-pinned commits remain pinned even when the branch has
+                // advanced again. Synchronization only ensures objects are local.
+                if prepared.run.resolved_commit_sha.is_none() {
+                    prepared.run.resolved_commit_sha = Some(commit);
+                }
+                &prepared
+            } else {
+                claim
+            };
             if claim.project.builder_kind == "BuildAgentPool" {
                 let Some(id) = claim.project.build_agent_pool_id else {
                     return failed(BuildFailure::Validation(
@@ -350,6 +390,7 @@ impl AgentDockerBuildExecutor {
         let commit = resolve_build_commit(
             &repository,
             &claim.run.branch,
+            claim.run.resolved_commit_sha.as_deref(),
             self.maximum_log_bytes,
             cancellation,
         )
@@ -528,7 +569,7 @@ impl LocalDockerBuildExecutor {
         let repository = tokio::fs::canonicalize(&repository)
             .await
             .map_err(|error| BuildFailure::Io(format!("Git cache is unavailable: {error}")))?;
-        let revision = format!("refs/remotes/origin/{}^{{commit}}", claim.run.branch);
+        let revision = build_revision(&claim.run.branch, claim.run.resolved_commit_sha.as_deref())?;
         let commit_output = run(
             ProcessRequest::new("git")
                 .args([
@@ -811,10 +852,11 @@ fn failed(error: BuildFailure) -> BuildExecutionResult {
 async fn resolve_build_commit(
     repository: &Path,
     branch: &str,
+    pinned: Option<&str>,
     maximum_log_bytes: usize,
     cancellation: &CancellationToken,
 ) -> Result<String, BuildFailure> {
-    let revision = format!("refs/remotes/origin/{branch}^{{commit}}");
+    let revision = build_revision(branch, pinned)?;
     let output = run(
         ProcessRequest::new("git")
             .args([
@@ -844,6 +886,21 @@ async fn resolve_build_commit(
         ));
     }
     Ok(commit)
+}
+
+fn build_revision(branch: &str, pinned: Option<&str>) -> Result<String, BuildFailure> {
+    match pinned {
+        Some(commit)
+            if matches!(commit.len(), 40 | 64)
+                && commit.bytes().all(|byte| byte.is_ascii_hexdigit()) =>
+        {
+            Ok(format!("{commit}^{{commit}}"))
+        }
+        Some(_) => Err(BuildFailure::Validation(
+            "Pinned Build source must be a full commit ID.".into(),
+        )),
+        None => Ok(format!("refs/remotes/origin/{branch}^{{commit}}")),
+    }
 }
 
 async fn archive_build_context(
@@ -1117,6 +1174,22 @@ mod tests {
             redact_values("step one\nsecret-value\nstep two", &["secret-value"]),
             "step one\n[redacted]\nstep two"
         );
+    }
+
+    #[test]
+    fn pinned_build_revision_does_not_follow_a_later_branch_update() {
+        let commit = "a".repeat(40);
+        assert_eq!(
+            build_revision("main", Some(&commit)).unwrap(),
+            format!("{commit}^{{commit}}")
+        );
+        assert_eq!(
+            build_revision("main", None).unwrap(),
+            "refs/remotes/origin/main^{commit}"
+        );
+        for invalid in ["main", "--all", "HEAD", "aaaa", "../config"] {
+            assert!(build_revision("main", Some(invalid)).is_err());
+        }
     }
 
     #[test]

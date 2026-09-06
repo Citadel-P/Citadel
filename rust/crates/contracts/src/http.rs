@@ -1429,6 +1429,13 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
+    GET_NODE_AGENT_COVERAGE => {
+        method: Get, path: "/api/v1/platforms/{id}/node-agent-coverage", operation_id: "getSwarmNodeAgentCoverage", summary: "Get Docker Swarm node-agent coverage",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNodeAgentCoverageView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
+    },
     REVOKE_EDGE => {
         method: Post, path: "/api/v1/platforms/{id}/edge/revoke", operation_id: "revokeEdgeAgent", summary: "Revoke an Edge Agent binding",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1857,6 +1864,54 @@ route_catalog! {
         request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    GET_AUTOMATION_ACTION_TAGS => {
+        method: Get, path: "/api/v1/automation/actions/{id}/tags", operation_id: "getAutomationActionTags", summary: "Get AutomationAction tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_AUTOMATION_ACTION_TAGS => {
+        method: Put, path: "/api/v1/automation/actions/{id}/tags", operation_id: "replaceAutomationActionTags", summary: "Replace AutomationAction tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BUILD_PROJECT_TAGS => {
+        method: Get, path: "/api/v1/buildProjects/{id}/tags", operation_id: "getBuildTags", summary: "Get BuildProject tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_BUILD_PROJECT_TAGS => {
+        method: Put, path: "/api/v1/buildProjects/{id}/tags", operation_id: "replaceBuildTags", summary: "Replace BuildProject tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BUILD_AGENT_POOL_TAGS => {
+        method: Get, path: "/api/v1/buildAgentPools/{id}/tags", operation_id: "getBuildAgentPoolTags", summary: "Get BuildAgentPool tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_BUILD_AGENT_POOL_TAGS => {
+        method: Put, path: "/api/v1/buildAgentPools/{id}/tags", operation_id: "replaceBuildAgentPoolTags", summary: "Replace BuildAgentPool tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BACKUP_POLICY_TAGS => {
+        method: Get, path: "/api/v1/backupPolicies/{id}/tags", operation_id: "getBackupPolicyTags", summary: "Get BackupPolicy tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_BACKUP_POLICY_TAGS => {
+        method: Put, path: "/api/v1/backupPolicies/{id}/tags", operation_id: "replaceBackupPolicyTags", summary: "Replace BackupPolicy tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     LIST_AUTOMATION_ACTIONS => {
         method: Get, path: "/api/v1/automation/actions", operation_id: "listAutomationActions", summary: "List Automation Actions",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1952,6 +2007,24 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("BuildProjectView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_BUILD_PROJECT => {
+        method: Patch, path: "/api/v1/buildProjects/{id}", operation_id: "updateBuildProject", summary: "Update Build Project",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateBuildProjectInput"), response_schema: Some("BuildProjectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_BUILD_PROJECT => {
+        method: Post, path: "/api/v1/buildProjects/rename", operation_id: "renameBuild", summary: "Update Build Project",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("BuildProjectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_BUILD_PROJECT_METADATA => {
+        method: Patch, path: "/api/v1/buildProjects/{id}/_metadata", operation_id: "updateBuildMetadata", summary: "Update Build Project",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("BuildProjectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     ARCHIVE_BUILD_PROJECT => {
         method: Delete, path: "/api/v1/buildProjects/{id}", operation_id: "archiveBuildProject", summary: "Archive a Build Project",

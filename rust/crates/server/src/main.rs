@@ -423,15 +423,37 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(PostgresAutomationStore::new(pool.clone())),
             Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
             AutomationRuntimeConfig {
-                deno_path: std::env::var_os("CITADEL_DENO_PATH").unwrap_or_else(|| "deno".into()),
-                work_root: data_root.join("automations/runs"),
-                internal_base_url: std::env::var("CITADEL_INTERNAL_BASE_URL")
+                deno_path: std::env::var_os("Automations__DenoPath")
+                    .or_else(|| std::env::var_os("CITADEL_DENO_PATH"))
+                    .unwrap_or_else(|| "deno".into()),
+                work_root: std::path::absolute(
+                    std::env::var_os("Automations__WorkDir")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| data_root.join("automations/runs")),
+                )?,
+                internal_base_url: std::env::var("Automations__InternalBaseUrl")
+                    .or_else(|_| std::env::var("CITADEL_INTERNAL_BASE_URL"))
                     .unwrap_or_else(|_| "http://127.0.0.1:8000".to_owned()),
                 endpoint_catalog_json: citadel_server::automation_endpoint_catalog_json(),
-                maximum_log_bytes: 1024 * 1024,
+                maximum_log_bytes: std::env::var("Automations__MaxLogBytes")
+                    .ok()
+                    .map(|value| value.parse::<usize>())
+                    .transpose()?
+                    .unwrap_or(1024 * 1024)
+                    .clamp(1024, 16 * 1024 * 1024),
                 stale_after: Duration::from_secs(10 * 60),
             },
         )
+        .with_options(config.automation)?
+        .with_sandbox(
+            std::path::absolute(
+                std::env::var_os("Automations__DenoCacheDir")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| data_root.join("automations/deno-cache")),
+            )?,
+            std::env::var("Automations__AllowNet").ok(),
+        )
+        .with_entitlements(entitlements.clone())
         .with_alerts(alert_store.clone())
         .with_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
@@ -472,6 +494,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             chrono::Duration::minutes(10),
             Arc::new(IdentityBackupRunAuthorizer::new(Arc::clone(&identity))),
         )
+        .with_entitlements(entitlements.clone())
         .with_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
             "BackupPolicy",
@@ -528,15 +551,15 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         BuildService::new(
             Arc::new(PostgresBuildStore::new(pool.clone())),
             Arc::new(
-                PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds).with_edge(
-                    AgentDockerBuildExecutor::new_edge(
+                PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds)
+                    .with_git_source(git_execution.clone())
+                    .with_edge(AgentDockerBuildExecutor::new_edge(
                         data_root.join("git-repositories"),
                         edge_registry.clone(),
                         build_secrets,
                         build_registries,
                         4 * 1024 * 1024,
-                    ),
-                ),
+                    )),
             ),
             chrono::Duration::minutes(10),
         )
@@ -545,6 +568,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             realtime_hub.clone(),
             "Build",
         ))
+        .with_entitlements(entitlements.clone())
         .with_pool_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
             "BuildAgentPool",
@@ -802,6 +826,9 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         ))
         .merge(webhooks_http::router(webhooks_http::WebhooksHttpState {
             git: Arc::clone(&git_execution),
+            automation: Arc::clone(&automation),
+            backups: Some(backups.clone()),
+            builds: Some(builds.clone()),
             alerts: Some(alert_store.clone()),
         }))
         .merge(automation_http::router(

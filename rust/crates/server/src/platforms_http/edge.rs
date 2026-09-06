@@ -9,6 +9,97 @@ pub struct EdgeHttpContext {
     pub agent_image: String,
 }
 
+pub(super) async fn node_coverage(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    let capabilities =
+        authorize_platform_level(&state, &principal, id, PermissionLevel::Read, &headers).await?;
+    let mut platform = required(
+        state
+            .platforms
+            .get_platform(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    if platform.platform_type != "DockerSwarm" {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Node Agent coverage is available only for Docker Swarm platforms.".into(),
+            )),
+            &headers,
+        );
+    }
+    let mut coverage = identity_result(
+        citadel_adapters::node_agent_coverage::read(&state.pool, &state.edge, &platform)
+            .await
+            .map_err(|error| IdentityError::Storage(error.to_string())),
+        &headers,
+    )?;
+    if coverage.total_nodes == 0 {
+        let initialized = async {
+            let runtime = runtime_for(&state, id).await?;
+            let port: &dyn PlatformInventoryPort = match &runtime {
+                RuntimeRef::Local(port) => *port,
+                RuntimeRef::Agent(port) => *port,
+                RuntimeRef::Edge(port) => port,
+            };
+            let cancellation = CancellationToken::new();
+            let _cancel_on_drop = cancellation.clone().drop_guard();
+            let target = citadel_platforms::jobs::InventoryCollectionTarget {
+                platform_id: id,
+                platform_type: platform.platform_type.clone(),
+            };
+            let snapshot = tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                citadel_platforms::jobs::collect_inventory(port, &target, &cancellation),
+            )
+            .await
+            .map_err(|_| {
+                RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Timeout,
+                    "Swarm inventory initialization timed out.",
+                    true,
+                )
+            })??;
+            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+                state.pool.clone(),
+            )
+            .initialize_swarm(&snapshot)
+            .await
+        }
+        .await;
+        let changed = match initialized {
+            Ok(changed) => changed,
+            Err(error) => return Ok(runtime_error_response(error, &headers)),
+        };
+        if changed {
+            publish_runtime_change(&state, id, "platform", "update", &id.to_string());
+        }
+        platform = required(
+            state
+                .platforms
+                .get_platform(id)
+                .await
+                .map_err(platform_error),
+            &headers,
+        )?;
+        coverage = identity_result(
+            citadel_adapters::node_agent_coverage::read(&state.pool, &state.edge, &platform)
+                .await
+                .map_err(|error| IdentityError::Storage(error.to_string())),
+            &headers,
+        )?;
+    }
+    coverage.can_manage_node_agents = capabilities.can_manage_node_agents;
+    Ok(no_store(Json(coverage).into_response()))
+}
+
 pub(super) async fn enroll(
     State(state): State<PlatformsHttpState>,
     Extension(edge): Extension<EdgeHttpContext>,

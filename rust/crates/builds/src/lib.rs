@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+mod jobs;
+mod project;
 
 mod logs;
 mod pools;
@@ -64,6 +66,8 @@ fn platform_builder() -> String {
 
 impl BuildProjectInput {
     pub fn validate(&mut self) -> Result<(), BuildError> {
+        citadel_resources::validate_webhook(self.webhook.as_ref())
+            .map_err(|error| BuildError::Validation(error.to_string()))?;
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(BuildError::Validation(
@@ -251,7 +255,11 @@ fn valid_git_branch(branch: &str) -> bool {
 
 fn normalize_path(value: Option<String>, fallback: &str) -> Result<String, BuildError> {
     let value = normalize_required(value, fallback)?.replace('\\', "/");
-    let value = value.trim_start_matches('/').to_owned();
+    if value.starts_with('/') || value.as_bytes().get(1) == Some(&b':') {
+        return Err(BuildError::Validation(
+            "Build paths must be relative to the repository.".into(),
+        ));
+    }
     if value.split('/').any(|part| matches!(part, ".." | ".git")) {
         return Err(BuildError::Validation(
             "Build paths cannot traverse or access Git metadata.".to_owned(),
@@ -263,6 +271,8 @@ fn normalize_path(value: Option<String>, fallback: &str) -> Result<String, Build
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectView {
+    pub tags: Vec<citadel_resources::TagSummary>,
+    pub latest_run: Option<BuildRunView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
@@ -448,6 +458,7 @@ fn validate_range(value: i32, min: i32, max: i32, label: &str) -> Result<(), Bui
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAgentPoolView {
+    pub tags: Vec<citadel_resources::TagSummary>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
@@ -502,6 +513,21 @@ pub struct BuildLog {
 }
 
 pub trait BuildStore: Send + Sync {
+    fn health_pools(
+        &self,
+        after: Uuid,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<BuildAgentPoolView>, BuildError>>;
+    fn record_pool_health<'a>(
+        &'a self,
+        pool: &'a BuildAgentPoolView,
+        result: &'a BuildPoolCheck,
+    ) -> BoxFuture<'a, Result<bool, BuildError>>;
+    fn project_permissions<'a>(
+        &'a self,
+        actor: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<std::collections::BTreeMap<Uuid, i32>, BuildError>>;
     fn create_pool<'a>(
         &'a self,
         actor: ActorId,
@@ -550,12 +576,25 @@ pub trait BuildStore: Send + Sync {
         administrator: bool,
     ) -> BoxFuture<'_, Result<Vec<BuildProjectView>, BuildError>>;
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProjectView, BuildError>>;
-    fn archive<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), BuildError>>;
+    fn update<'a>(
+        &'a self,
+        current: &'a BuildProjectView,
+        input: &'a BuildProjectInput,
+        actor: ActorId,
+        metadata_only: bool,
+    ) -> BoxFuture<'a, Result<BuildProjectView, BuildError>>;
+    fn archive<'a>(&'a self, id: Uuid, actor: ActorId) -> BoxFuture<'a, Result<(), BuildError>>;
     fn enqueue<'a>(
         &'a self,
         actor: ActorId,
         id: Uuid,
         trigger: &'a str,
+    ) -> BoxFuture<'a, Result<BuildRunView, BuildError>>;
+    fn enqueue_webhook<'a>(
+        &'a self,
+        current: &'a BuildProjectView,
+        branch: &'a str,
+        commit: Option<&'a str>,
     ) -> BoxFuture<'a, Result<BuildRunView, BuildError>>;
     fn claim_next<'a>(
         &'a self,
@@ -565,7 +604,7 @@ pub trait BuildStore: Send + Sync {
         &'a self,
         claim: &'a BuildClaim,
         result: &'a BuildExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BuildError>>;
+    ) -> BoxFuture<'a, Result<bool, BuildError>>;
     fn list_runs<'a>(
         &'a self,
         actor: ActorId,
@@ -611,7 +650,15 @@ pub trait BuildRegistryCredentialResolver: Send + Sync {
     ) -> BoxFuture<'_, Result<Option<BuildRegistryCredentials>, BuildError>>;
 }
 
+pub trait BuildEntitlements: Send + Sync {
+    fn enabled(
+        &self,
+        capability: citadel_domain::LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, BuildError>>;
+}
+
 pub struct BuildService {
+    entitlements: Option<Arc<dyn BuildEntitlements>>,
     pool_change: Option<Arc<dyn Fn() + Send + Sync>>,
     pool_checker: Option<Arc<dyn BuildPoolChecker>>,
     on_log: Option<BuildLogNotifier>,
@@ -645,6 +692,7 @@ impl BuildService {
         stale_after: chrono::Duration,
     ) -> Self {
         Self {
+            entitlements: None,
             pool_change: None,
             pool_checker: None,
             on_log: None,
@@ -659,6 +707,49 @@ impl BuildService {
     pub fn with_alerts(mut self, alerts: Arc<dyn AlertEventSink>) -> Self {
         self.alerts = Some(alerts);
         self
+    }
+    pub fn with_entitlements(mut self, entitlements: Arc<dyn BuildEntitlements>) -> Self {
+        self.entitlements = Some(entitlements);
+        self
+    }
+    pub async fn ensure_entitled(
+        &self,
+        capability: citadel_domain::LicenseCapability,
+    ) -> Result<(), BuildError> {
+        if let Some(entitlements) = &self.entitlements
+            && entitlements.enabled(capability).await?
+        {
+            return Ok(());
+        }
+        Err(BuildError::LicenseRequired(capability))
+    }
+    pub async fn ensure_execution_entitlements(
+        &self,
+        project: &BuildProjectView,
+        trigger: &str,
+    ) -> Result<(), BuildError> {
+        if trigger != "Manual" {
+            self.ensure_entitled(citadel_domain::LicenseCapability::AutomatedOperations)
+                .await?;
+        }
+        if project.builder_kind == "BuildAgentPool" {
+            self.ensure_entitled(citadel_domain::LicenseCapability::ElasticBuildExecution)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn queue_webhook(
+        &self,
+        project: &BuildProjectView,
+        branch: &str,
+        commit: Option<&str>,
+    ) -> Result<(), BuildError> {
+        self.ensure_execution_entitlements(project, "Webhook")
+            .await?;
+        self.store.enqueue_webhook(project, branch, commit).await?;
+        self.changed();
+        Ok(())
     }
     pub fn store(&self) -> &Arc<dyn BuildStore> {
         &self.store
@@ -735,7 +826,24 @@ impl BuildService {
             .insert(claim.run.id, cancellation.clone());
         let logs =
             logs::PersistedBuildLogs::new(self.store.clone(), claim.run.id, self.on_log.clone());
-        let execution = self.executor.execute(&claim, &logs, &cancellation);
+        let execution = async {
+            if let Err(error) = self
+                .ensure_execution_entitlements(&claim.project, &claim.run.trigger)
+                .await
+            {
+                return BuildExecutionResult {
+                    status: "Failed",
+                    exit_code: None,
+                    image_digest: None,
+                    resolved_commit_sha: None,
+                    image_references: vec![],
+                    error_code: Some("build.entitlement".into()),
+                    error_message: Some(error.to_string()),
+                    logs: vec![],
+                };
+            }
+            self.executor.execute(&claim, &logs, &cancellation).await
+        };
         tokio::pin!(execution);
         let result = tokio::select! {
             result = &mut execution => result,
@@ -762,7 +870,9 @@ impl BuildService {
         if let Ok(mut active) = self.active.lock() {
             active.remove(&claim.run.id);
         }
-        self.store.finish(&claim, &result).await?;
+        if !self.store.finish(&claim, &result).await? {
+            return Ok(true);
+        }
         self.changed();
         if matches!(result.status, "Failed" | "TimedOut")
             && let Some(alerts) = &self.alerts
@@ -816,6 +926,8 @@ impl BuildService {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    #[error("This Build operation requires license capability {0:?}.")]
+    LicenseRequired(citadel_domain::LicenseCapability),
     #[error("{0}")]
     Validation(String),
     #[error("Build resource was not found")]
@@ -862,6 +974,35 @@ mod tests {
         assert_eq!(value.name, "demo");
         assert_eq!(value.context_path.as_deref(), Some("."));
         assert_eq!(value.timeout_seconds, Some(1800));
+    }
+
+    #[test]
+    fn build_paths_reject_absolute_paths_and_repository_metadata() {
+        for path in [
+            "/tmp/context",
+            r"C:\work\context",
+            r"\\server\context",
+            "../context",
+            ".git/config",
+        ] {
+            assert!(normalize_path(Some(path.into()), ".").is_err(), "{path}");
+        }
+        assert_eq!(
+            normalize_path(Some("services/api".into()), ".").unwrap(),
+            "services/api"
+        );
+    }
+
+    #[test]
+    fn build_webhook_uses_the_shared_authentication_validation() {
+        let mut value = input();
+        value.webhook =
+            Some(serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"None"}));
+        assert!(value.validate().is_err());
+        value.webhook = Some(
+            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"test-shared-secret"}),
+        );
+        value.validate().unwrap();
     }
 
     #[test]

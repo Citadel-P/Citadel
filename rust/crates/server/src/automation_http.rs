@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, State};
+use axum::body::Body;
+use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_automation::{AutomationActionInput, AutomationError, AutomationService};
+use citadel_automation::{
+    AutomationActionInput, AutomationError, AutomationProgress, AutomationProgressError,
+    AutomationService,
+};
 use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
@@ -45,7 +49,65 @@ pub fn router(state: AutomationHttpState) -> Router {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ActionList {
+    actions: Vec<AuthorizedAction>,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
+}
+
+#[derive(Serialize)]
+pub(crate) struct AuthorizedAction {
+    #[serde(flatten)]
+    action: citadel_automation::AutomationActionView,
+    capabilities: citadel_platforms::ResourceCapabilitiesView,
+}
+
+pub(crate) async fn authorized_actions(
+    store: &dyn citadel_automation::AutomationStore,
+    principal: &ActorPrincipal,
     actions: Vec<citadel_automation::AutomationActionView>,
+) -> Result<Vec<AuthorizedAction>, AutomationError> {
+    let ids: Vec<_> = actions.iter().map(|action| action.id).collect();
+    let permissions = if principal.is_administrator() {
+        Default::default()
+    } else {
+        store.permissions(principal.actor_id, &ids).await?
+    };
+    Ok(actions
+        .into_iter()
+        .map(|action| {
+            let level = if principal.is_administrator() {
+                7
+            } else {
+                permissions.get(&action.id).copied().unwrap_or(0)
+            };
+            AuthorizedAction {
+                action,
+                capabilities: capabilities(level),
+            }
+        })
+        .collect())
+}
+
+fn capabilities(level: i32) -> citadel_platforms::ResourceCapabilitiesView {
+    citadel_platforms::ResourceCapabilitiesView {
+        can_read: level >= 1,
+        can_write: level >= 2,
+        can_execute: level >= 4,
+    }
+}
+
+async fn action_response(
+    state: &AutomationHttpState,
+    principal: &ActorPrincipal,
+    action: citadel_automation::AutomationActionView,
+    headers: &HeaderMap,
+) -> IdentityHttpResult {
+    let mut actions = identity_result(
+        authorized_actions(state.automation.store().as_ref(), principal, vec![action])
+            .await
+            .map_err(map_error),
+        headers,
+    )?;
+    Ok(no_store(Json(actions.remove(0)).into_response()))
 }
 
 #[derive(Serialize)]
@@ -76,10 +138,15 @@ struct LimitQuery {
 async fn list(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
+    RawQuery(query): RawQuery,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
-    let actions = identity_result(
+    let tags = identity_result(
+        crate::resources_http::tags::parse_filters(query.as_deref()),
+        &headers,
+    )?;
+    let mut actions = identity_result(
         state
             .automation
             .store()
@@ -88,7 +155,32 @@ async fn list(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(ActionList { actions }).into_response()))
+    actions.retain(|action| crate::resources_http::tags::matches_filters(&action.tags, &tags));
+    let actions = identity_result(
+        authorized_actions(state.automation.store().as_ref(), &principal, actions)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    let level = if principal.is_administrator() {
+        7
+    } else {
+        identity_result(
+            state
+                .identity
+                .global_permission(&principal, ResourceType::AutomationAction)
+                .await,
+            &headers,
+        )?
+        .map_or(0, |grant| grant.level as i32)
+    };
+    Ok(no_store(
+        Json(ActionList {
+            actions,
+            capabilities: capabilities(level),
+        })
+        .into_response(),
+    ))
 }
 
 async fn create(
@@ -100,7 +192,10 @@ async fn create(
     let principal = actor(principal, &headers)?;
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
     identity_result(
-        input.validate(principal.actor_id).map_err(map_error),
+        state
+            .automation
+            .validate_input(&mut input, principal.actor_id)
+            .map_err(map_error),
         &headers,
     )?;
     identity_result(
@@ -117,6 +212,16 @@ async fn create(
             .await,
         &headers,
     )?;
+    if citadel_automation::changes_paid_trigger(None, &input) {
+        identity_result(
+            state
+                .automation
+                .ensure_paid_trigger()
+                .await
+                .map_err(map_error),
+            &headers,
+        )?;
+    }
     let action = identity_result(
         state
             .automation
@@ -126,7 +231,7 @@ async fn create(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(action).into_response()))
+    action_response(&state, &principal, action, &headers).await
 }
 
 async fn get_one(
@@ -141,7 +246,7 @@ async fn get_one(
         state.automation.store().get(id).await.map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(action).into_response()))
+    action_response(&state, &principal, action, &headers).await
 }
 
 async fn rename(
@@ -168,7 +273,7 @@ async fn rename(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(action).into_response()))
+    action_response(&state, &principal, action, &headers).await
 }
 
 async fn update(
@@ -219,7 +324,10 @@ async fn update_action(
     )?;
     let mut input = merge_update(current.clone(), patch, &headers)?;
     identity_result(
-        input.validate(principal.actor_id).map_err(map_error),
+        state
+            .automation
+            .validate_input(&mut input, principal.actor_id)
+            .map_err(map_error),
         &headers,
     )?;
     identity_result(
@@ -236,6 +344,16 @@ async fn update_action(
             .await,
         &headers,
     )?;
+    if citadel_automation::changes_paid_trigger(Some(&current), &input) {
+        identity_result(
+            state
+                .automation
+                .ensure_paid_trigger()
+                .await
+                .map_err(map_error),
+            &headers,
+        )?;
+    }
     let action = identity_result(
         state
             .automation
@@ -245,7 +363,7 @@ async fn update_action(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(action).into_response()))
+    action_response(&state, &principal, action, &headers).await
 }
 
 async fn remove(
@@ -306,29 +424,74 @@ async fn enqueue(
             &headers,
         )?,
         Some(value) => value,
-        None => serde_json::json!({}),
+        None => {
+            let action = identity_result(
+                state.automation.store().get(id).await.map_err(map_error),
+                &headers,
+            )?;
+            identity_result(
+                serde_json::from_str(&action.default_args_json).map_err(|_| {
+                    IdentityError::Storage("Stored Automation arguments are invalid.".into())
+                }),
+                &headers,
+            )?
+        }
     };
-    let run = identity_result(
-        state
-            .automation
-            .store()
-            .enqueue(
-                principal.actor_id,
-                id,
-                trigger,
-                &args,
-                input.timeout_seconds,
-            )
-            .await
-            .map_err(map_error),
-        &headers,
-    )?;
-    Ok(Json(vec![serde_json::json!({
-        "runId": run.id,
-        "status": "Queued",
-        "progressMessage": "Automation Action run queued."
-    })])
-    .into_response())
+    let mut receiver = match state
+        .automation
+        .run(
+            principal.actor_id,
+            id,
+            trigger,
+            &args,
+            if trigger == "Test" {
+                None
+            } else {
+                input.timeout_seconds
+            },
+        )
+        .await
+    {
+        Ok(receiver) => receiver,
+        Err(error) => {
+            let code = match error {
+                AutomationError::Validation(_) => 400,
+                AutomationError::NotFound => 404,
+                AutomationError::Conflict(_) => 409,
+                _ => 500,
+            };
+            let message = if code == 500 {
+                "Automation could not be started.".to_owned()
+            } else {
+                error.to_string()
+            };
+            return Ok(no_store(
+                Json(vec![AutomationProgress {
+                    error_message: Some(message.clone()),
+                    error: Some(AutomationProgressError { code, message }),
+                    ..Default::default()
+                }])
+                .into_response(),
+            ));
+        }
+    };
+    let stream = async_stream::stream! {
+        yield Ok::<_, std::convert::Infallible>(bytes::Bytes::from_static(b"["));
+        let mut first = true;
+        while let Some(item) = receiver.recv().await {
+            if !first { yield Ok(bytes::Bytes::from_static(b",")); }
+            first = false;
+            // These DTOs contain only strings, integers and UUIDs.
+            yield Ok(bytes::Bytes::from(serde_json::to_vec(&item).expect("Automation progress serializes")));
+        }
+        yield Ok(bytes::Bytes::from_static(b"]"));
+    };
+    let mut response = no_store(Body::from_stream(stream).into_response());
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    Ok(response)
 }
 
 async fn list_runs(
@@ -518,6 +681,7 @@ async fn authorize(
 }
 fn map_error(error: AutomationError) -> IdentityError {
     match error {
+        AutomationError::LicenseRequired => IdentityError::LicenseRequired("automated-operations"),
         AutomationError::Validation(message) => IdentityError::Validation(message),
         AutomationError::NotFound => IdentityError::NotFound,
         AutomationError::Conflict(message) => IdentityError::Conflict(message),

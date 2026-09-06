@@ -39,8 +39,9 @@ try {
     if (-not $healthy) { throw 'Disposable PostgreSQL did not become healthy.' }
     Invoke-Docker @('exec', '--user', 'vscode', '--workdir', '/workspace/rust',
         '--env', "CITADEL_PHASE7_DATABASE_URL=postgres://citadel_phase7:citadel_phase7@${postgres}:5432/citadel_phase7",
+        '--env', "CITADEL_PHASE5_DATABASE_URL=postgres://citadel_phase7:citadel_phase7@${postgres}:5432/citadel_phase7",
         '--env', "CITADEL_DENO_PATH=$toolsDirectory/deno", '--env', "CITADEL_SHOUTRRR_PATH=$toolsDirectory/shoutrrr",
-        $WorkspaceContainer, 'cargo', 'test', '--locked', '-p', 'citadel-adapters', '--test', 'automation_external_acceptance',
+        $WorkspaceContainer, 'cargo', 'test', '--locked', '-p', 'citadel-adapters', '--test', 'automation_external_acceptance', '-p', 'citadel-server', '--test', 'automation_http_execution', '--test', 'resources_http', '--test', 'phase7_resources_http',
         '--', '--ignored', '--test-threads=1')
 }
 finally {

@@ -1,21 +1,37 @@
 param(
-    [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44'
+    [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44',
+    [string]$WorkspaceContainer
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'BuildCache.ps1')
-$buildCacheVolume = New-CitadelBuildCacheName
+$buildCacheVolume = if (-not $WorkspaceContainer) { New-CitadelBuildCacheName }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "citadel-rust-phase7a-$suffix"
 $postgres = "citadel-rust-phase7a-postgres-$suffix"
 $database = 'citadel_phase7a'
 $rustImage = 'rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'
+if ($WorkspaceContainer) {
+    $inspection = & docker inspect $WorkspaceContainer
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the development workspace.' }
+    $workspace = ($inspection | ConvertFrom-Json)[0]
+    if (-not $workspace.State.Running) { throw 'Start the development workspace first.' }
+    $network = @($workspace.NetworkSettings.Networks.PSObject.Properties.Name)[0]
+    if (-not $network) { throw 'The development workspace has no Docker network.' }
+}
 
 function Invoke-Rust {
     param([string[]]$CargoArguments)
 
-    & docker run --rm --network $network `
+    if ($WorkspaceContainer) {
+        & docker exec --user vscode --workdir /workspace/rust `
+            --env "CITADEL_PHASE5_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+            --env "CITADEL_PHASE4_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+            --env "CITADEL_PHASE7_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+            --env 'SQLX_OFFLINE=true' $WorkspaceContainer cargo @CargoArguments
+    } else {
+        & docker run --rm --network $network `
         --volume "${repoRoot}:/source" `
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `
         --volume 'citadel-rust-git:/usr/local/cargo/git' `
@@ -28,16 +44,20 @@ function Invoke-Rust {
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
         cargo @CargoArguments
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "Rust Phase 7A test failed: cargo $($CargoArguments -join ' ')"
     }
 }
 
 try {
-    & docker network create $network | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Could not create the Phase 7A test network.' }
+    if (-not $WorkspaceContainer) {
+        & docker network create $network | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create the Phase 7A test network.' }
+    }
 
     & docker run --detach --name $postgres --network $network `
+        --tmpfs /var/lib/postgresql `
         --env 'POSTGRES_USER=citadel_phase7a' `
         --env 'POSTGRES_PASSWORD=citadel_phase7a' `
         --env "POSTGRES_DB=$database" `
@@ -78,6 +98,8 @@ try {
 }
 finally {
     & docker rm --force $postgres 2>$null | Out-Null
-    & docker network rm $network 2>$null | Out-Null
-    Remove-CitadelBuildCache -Name $buildCacheVolume
+    if (-not $WorkspaceContainer) {
+        & docker network rm $network 2>$null | Out-Null
+        Remove-CitadelBuildCache -Name $buildCacheVolume
+    }
 }

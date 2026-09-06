@@ -424,12 +424,24 @@ impl ApplicationGroupReader {
             ),
             "automation-actions" => rows(
                 "AutomationActionInfoUpdated",
-                self.automation.list(actor, admin).await.map_err(failure)?,
+                crate::automation_http::authorized_actions(
+                    self.automation.as_ref(),
+                    p,
+                    self.automation.list(actor, admin).await.map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "automation-action" => rows(
                 "AutomationActionInfoUpdated",
-                vec![self.automation.get(id.unwrap()).await.map_err(failure)?],
+                crate::automation_http::authorized_actions(
+                    self.automation.as_ref(),
+                    p,
+                    vec![self.automation.get(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "backup-repositories" => rows(
@@ -501,12 +513,24 @@ impl ApplicationGroupReader {
             ),
             "build-projects" => rows(
                 "BuildProjectInfoUpdated",
-                self.builds.list(actor, admin).await.map_err(failure)?,
+                crate::builds_http::authorized_projects(
+                    self.builds.as_ref(),
+                    p,
+                    self.builds.list(actor, admin).await.map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "build-project" => rows(
                 "BuildProjectInfoUpdated",
-                vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
+                crate::builds_http::authorized_projects(
+                    self.builds.as_ref(),
+                    p,
+                    vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
                 RowStyle::Update,
             ),
             "build-agent-pools" => rows(

@@ -14,7 +14,7 @@ use citadel_adapters::git_account_store::PostgresGitAccountStore;
 use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
-use citadel_automation::{AutomationRuntimeConfig, AutomationService};
+use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
@@ -107,6 +107,9 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     }))
     .merge(webhooks_http::router(WebhooksHttpState {
         git: Arc::clone(&git_execution),
+        automation: Arc::clone(&automation),
+        backups: None,
+        builds: None,
         alerts: None,
     }))
     .merge(automation_http::router(AutomationHttpState {
@@ -156,6 +159,21 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     };
     let suffix = Uuid::now_v7().simple().to_string();
 
+    // Port AutomationActionTags_ShouldCreateFilterByTagNameAndReplace.
+    let mut action_tags = Vec::new();
+    for color in ["blue", "green"] {
+        let response = request(
+            &app,
+            Method::POST,
+            "/api/v1/tags",
+            Some(administrator.clone()),
+            Some(json!({"name":format!("automation-{color}-{suffix}"),"color":"#3366FF"})),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        action_tags.push(response_json(response).await);
+    }
+
     let automation_response = request(
         &app,
         Method::POST,
@@ -174,7 +192,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "timeoutSeconds":30,
             "alertOnFailure":true,
             "runAsActorId":administrator_actor_id,
-            "tagIds":[]
+            "tagIds":[action_tags[0]["id"]]
         })),
     )
     .await;
@@ -182,6 +200,87 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let automation_action = response_json(automation_response).await;
     let automation_id = automation_action["id"].as_str().unwrap();
     let automation_uuid = Uuid::parse_str(automation_id).unwrap();
+    assert_eq!(automation_action["tags"][0]["id"], action_tags[0]["id"]);
+    assert_eq!(automation_action["capabilities"]["canExecute"], true);
+    assert!(automation_action["latestRun"].is_null());
+    // .NET configuration policy: paid triggers cannot be enabled by an
+    // unlicensed administrator; ordinary manual Actions remain available.
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/automation/actions/{automation_id}"),
+            Some(administrator.clone()),
+            Some(
+                json!({"scheduleEnabled":true,"scheduleCron":"* * * * *","scheduleTimeZone":"UTC"})
+            )
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    let schedule: bool = sqlx::query_scalar("SELECT scheduleenabled FROM actions WHERE id=$1")
+        .bind(automation_uuid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(!schedule);
+    for (index, expected) in [(0, 1), (1, 0)] {
+        let response = request(
+            &app,
+            Method::GET,
+            &format!(
+                "/api/v1/automation/actions?tags={}",
+                action_tags[index]["name"].as_str().unwrap()
+            ),
+            Some(administrator.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(response).await["actions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            expected
+        );
+    }
+    let tags_path = format!("/api/v1/automation/actions/{automation_id}/tags");
+    let response = request(
+        &app,
+        Method::PUT,
+        &tags_path,
+        Some(administrator.clone()),
+        Some(json!({"tagIds":[action_tags[1]["id"]]})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await["tags"][0]["id"],
+        action_tags[1]["id"]
+    );
+    let response = request(
+        &app,
+        Method::PUT,
+        &tags_path,
+        Some(administrator.clone()),
+        Some(json!({"tagIds":[Uuid::now_v7()]})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response = request(
+        &app,
+        Method::GET,
+        &tags_path,
+        Some(administrator.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(
+        response_json(response).await["tags"][0]["id"],
+        action_tags[1]["id"]
+    );
     let metadata_response = request(
         &app,
         Method::PATCH,
@@ -235,17 +334,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     )
     .await;
     assert_eq!(unsupported_update.status(), StatusCode::BAD_REQUEST);
-    let queued_response = request(
-        &app,
-        Method::POST,
-        &format!("/api/v1/automation/actions/{automation_id}/run"),
-        Some(administrator.clone()),
-        Some(json!({"argsJson":"{\"mode\":\"manual\"}"})),
-    )
-    .await;
-    assert_eq!(queued_response.status(), StatusCode::OK);
-    let queued = response_json(queued_response).await;
-    let run_id = queued[0]["runId"].as_str().unwrap();
+    // Keep this fixture's run queued for the cancellation endpoint. Actual HTTP
+    // execution/progress is covered with real Deno by automation_http_execution.
+    let queued = PostgresAutomationStore::new(pool.clone())
+        .enqueue(
+            administrator.actor_id,
+            automation_uuid,
+            "Manual",
+            &json!({"mode":"manual"}),
+            None,
+        )
+        .await
+        .unwrap();
+    let run_id = queued.id.to_string();
     let persisted_run = response_json(
         request(
             &app,
@@ -766,6 +867,38 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     )
     .await;
     assert_eq!(webhook_response.status(), StatusCode::ACCEPTED);
+    let repository_uuid = Uuid::parse_str(repository_id).unwrap();
+    let version_before: i64 =
+        sqlx::query_scalar("SELECT rowversion FROM gitrepositories WHERE id=$1")
+            .bind(repository_uuid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    for payload in [
+        json!({"branch":"unrelated"}),
+        json!({"repository":"https://example.test/not-this-repository.git"}),
+    ] {
+        let ignored = request_with_header(
+            &app,
+            Method::POST,
+            &format!("/listener/generic/repo/{repository_id}/pull"),
+            "authorization",
+            "Bearer phase7-shared-secret",
+            Some(payload),
+        )
+        .await;
+        assert_eq!(ignored.status(), StatusCode::ACCEPTED);
+        assert_eq!(response_json(ignored).await["status"], "noop");
+        let version: i64 = sqlx::query_scalar("SELECT rowversion FROM gitrepositories WHERE id=$1")
+            .bind(repository_uuid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            version, version_before,
+            "ignored delivery cannot enqueue or change repository state"
+        );
+    }
     assert_eq!(
         request(
             &app,

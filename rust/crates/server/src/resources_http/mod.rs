@@ -1,6 +1,6 @@
 mod bindings;
 mod catalog;
-mod tags;
+pub(crate) mod tags;
 
 use std::sync::Arc;
 

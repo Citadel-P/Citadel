@@ -38,8 +38,12 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "phase7_resources_http/backup_webhooks.rs"]
+mod backup_webhooks;
 #[path = "phase7_resources_http/build_pools.rs"]
 mod build_pools;
+#[path = "phase7_resources_http/build_webhooks.rs"]
+mod build_webhooks;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
@@ -65,7 +69,10 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         Duration::days(30),
     ));
     let build_store = Arc::new(PostgresBuildStore::new(pool.clone()));
+    let build_entitlement = Arc::new(build_webhooks::Entitlement::default());
     let backup_store = Arc::new(PostgresBackupStore::new(pool.clone()));
+    let backup_entitlement = Arc::new(backup_webhooks::Entitlement::default());
+    let backup_planner = Arc::new(FakeBackupPlanner::default());
     let alert_store = Arc::new(PostgresAlertStore::new(pool.clone()));
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
@@ -76,6 +83,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             Arc::new(FakeBuildExecutor { pool: pool.clone() }),
             Duration::minutes(5),
         )
+        .with_entitlements(build_entitlement.clone())
         .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
         .with_pool_checker(Arc::new(
             citadel_adapters::build_pool_checker::AgentBuildPoolChecker {
@@ -92,27 +100,49 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         BackupService::new(
             backup_store,
             Arc::new(FakeBackupExecutor),
-            Arc::new(FakeBackupPlanner),
+            backup_planner.clone(),
             Duration::minutes(5),
             Arc::new(AllowBackupExecution),
         )
-        .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy")),
+        .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy"))
+        .with_entitlements(backup_entitlement.clone()),
     );
     let cancellation = CancellationToken::new();
+    let webhook_router = backup_webhooks::router(
+        pool.clone(),
+        identity.clone(),
+        backups.clone(),
+        builds.clone(),
+    );
     let app = builds_http::router(BuildsHttpState {
         identity: Arc::clone(&identity),
         builds: builds.clone(),
     })
+    .merge(webhook_router)
     .merge(backups_http::router(BackupsHttpState {
         identity: Arc::clone(&identity),
         backups: backups.clone(),
         cancellation,
     }))
     .merge(alerts_http::router(AlertsHttpState {
-        identity,
+        identity: identity.clone(),
         store: alert_store,
         delivery: Arc::new(FakeAlertDelivery),
     }))
+    .merge(citadel_server::resources_http::router(
+        citadel_server::resources_http::ResourcesHttpState {
+            identity,
+            resources: Arc::new(citadel_resources::ResourceMetadataService::new(
+                Arc::new(
+                    citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore::new(
+                        pool.clone(),
+                    ),
+                ),
+                Arc::new(citadel_adapters::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
+            )),
+            realtime: None,
+        },
+    ))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
         citadel_server::platforms_http::EdgeHttpContext {
@@ -274,7 +304,9 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .bind(Uuid::parse_str(pool_id).unwrap()).fetch_one(&pool).await.unwrap();
     assert_eq!(events, 1);
 
-    let before_channel = hub.current_revision();
+    // A cancelled Pool Test completes in the background. Check the Alert
+    // subscription, not the global revision shared with that independent job.
+    let mut alert_changes = hub.subscribe();
     let channel = response_json(
         request(
             &app,
@@ -293,8 +325,8 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     let channel_id = channel["id"].as_str().unwrap();
     assert_eq!(
-        hub.current_revision(),
-        before_channel + 1,
+        drain_resource_changes(&mut alert_changes, "Alert"),
+        1,
         "successful persisted mutations notify"
     );
     let invalid_rule = request(
@@ -307,8 +339,8 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     assert_eq!(invalid_rule.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
-        hub.current_revision(),
-        before_channel + 1,
+        drain_resource_changes(&mut alert_changes, "Alert"),
+        0,
         "rejected writes must not notify"
     );
     let rule = response_json(
@@ -347,6 +379,136 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let project_id = project["id"].as_str().unwrap();
+    assert_eq!(project["capabilities"]["canWrite"], true);
+    let project_path = format!("/api/v1/buildProjects/{project_id}");
+    let tag = response_json(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/tags",
+            Some(principal.clone()),
+            Some(json!({"name":format!("build-tag-{suffix}"),"color":"#3366FF"})),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        request(
+            &app,
+            Method::PUT,
+            &format!("{project_path}/tags"),
+            Some(principal.clone()),
+            Some(json!({"tagIds":[tag["id"]]}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let filtered = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!(
+                "/api/v1/buildProjects?tags={}",
+                tag["name"].as_str().unwrap()
+            ),
+            Some(principal.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(filtered["projects"].as_array().unwrap().len(), 1);
+    let response = request(
+        &app,
+        Method::PATCH,
+        &project_path,
+        Some(principal.clone()),
+        Some(json!({"description":"edited Build","dockerfilePath":"src/Dockerfile"})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await["dockerfilePath"],
+        "src/Dockerfile"
+    );
+    let renamed = request(
+        &app,
+        Method::POST,
+        "/api/v1/buildProjects/rename",
+        Some(principal.clone()),
+        Some(json!({"id":project_id,"name":format!("renamed-{suffix}")})),
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::OK);
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("{project_path}/_metadata"),
+            Some(principal.clone()),
+            Some(json!({"description":"metadata Build"}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("{project_path}/_metadata"),
+            Some(principal.clone()),
+            Some(json!({"enabled":false}))
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let stored = build_store
+        .get(Uuid::parse_str(project_id).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(stored.description.as_deref(), Some("metadata Build"));
+    assert_eq!(stored.tags[0].id.to_string(), tag["id"]);
+    let mut stale_edit = stored
+        .apply_patch(json!({"description":"stale"}), false)
+        .unwrap();
+    stale_edit.validate().unwrap();
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &project_path,
+            Some(principal.clone()),
+            Some(json!({"description":"newest"}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert!(matches!(
+        build_store
+            .update(&stored, &stale_edit, principal.actor_id, false)
+            .await,
+        Err(citadel_builds::BuildError::Conflict(_))
+    ));
+    let events: Vec<String> = sqlx::query_scalar(
+        "SELECT eventtype FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
+    )
+    .bind(stored.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        events,
+        [
+            "BuildCreated",
+            "BuildUpdated",
+            "BuildRenamed",
+            "BuildUpdated"
+        ]
+    );
     let run = response_json(
         request(
             &app,
@@ -360,6 +522,18 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     let build_run_id = run["id"].as_str().unwrap();
     assert_eq!(run["status"], "Queued");
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &project_path,
+            Some(principal.clone()),
+            Some(json!({"enabled":false}))
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
     assert_eq!(
         request(
             &app,
@@ -454,6 +628,23 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
 
     let reader = seed_regular_user(&pool).await;
+    build_webhooks::verify(
+        &app,
+        &pool,
+        &builds,
+        &build_entitlement,
+        &principal,
+        &fixture,
+    )
+    .await;
+    backup_webhooks::verify(
+        &app,
+        &pool,
+        &backups,
+        &backup_entitlement,
+        Uuid::parse_str(policy_id).unwrap(),
+    )
+    .await;
     for (method, suffix) in [
         (Method::GET, "status"),
         (Method::POST, "enrollments"),
@@ -529,6 +720,46 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(visible_builds["projects"].as_array().unwrap().len(), 1);
+    let queue_path = format!("/api/v1/buildProjects/{project_id}/runs");
+    assert_eq!(
+        request(&app, Method::POST, &queue_path, Some(reader.clone()), None)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2 AND resourcetype=$4")
+        .bind(reader.actor_id.value()).bind(Uuid::parse_str(project_id).unwrap())
+        .bind(citadel_domain::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
+        .execute(&pool).await.unwrap();
+    let queued = request(&app, Method::POST, &queue_path, Some(reader.clone()), None).await;
+    assert_eq!(queued.status(), StatusCode::OK);
+    let queued = response_json(queued).await;
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!(
+                "/api/v1/buildRuns/{}/cancel",
+                queued["id"].as_str().unwrap()
+            ),
+            Some(reader.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    let denied_trigger = request(
+        &app,
+        Method::POST,
+        &queue_path,
+        Some(reader.clone()),
+        Some(json!({"trigger":"Webhook"})),
+    )
+    .await;
+    assert_eq!(denied_trigger.status(), StatusCode::FORBIDDEN);
+    assert_eq!(request(&app, Method::PATCH, &format!("/api/v1/buildProjects/{project_id}"), Some(seed_administrator(&pool).await),
+        Some(json!({"webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"fixture-shared-secret"}}))).await.status(), StatusCode::FORBIDDEN);
     let visible_repositories = response_json(
         request(
             &app,
@@ -577,6 +808,24 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let before = hub.current_revision();
     assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
     assert_eq!(hub.current_revision(), before + 3);
+    // A webhook run already queued before license loss must fail before the
+    // executor runs (the fake executor would persist "live output").
+    let denied = build_store
+        .enqueue(
+            principal.actor_id,
+            Uuid::parse_str(project_id).unwrap(),
+            "Webhook",
+        )
+        .await
+        .unwrap();
+    assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
+    let denied_result = build_store.get_run(denied.id).await.unwrap();
+    assert_eq!(denied_result.status, "Failed");
+    assert_eq!(
+        denied_result.error_code.as_deref(),
+        Some("build.entitlement")
+    );
+    assert!(build_store.logs(denied.id).await.unwrap().is_empty());
     let status: String = sqlx::query_scalar("SELECT status FROM buildruns WHERE id=$1")
         .bind(Uuid::parse_str(run["id"].as_str().unwrap()).unwrap())
         .fetch_one(&pool)
@@ -615,6 +864,9 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .is_err(),
         "A terminal run must reject late log writes"
     );
+    backup_planner
+        .fail
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     let run = response_json(
         request(
             &app,
@@ -741,6 +993,22 @@ fn alert_rule_json(suffix: &str, channel_id: Uuid) -> Value {
     })
 }
 
+fn drain_resource_changes(
+    receiver: &mut tokio::sync::broadcast::Receiver<
+        Arc<citadel_server::realtime::PublishedRuntimeEvent>,
+    >,
+    resource_type: &str,
+) -> usize {
+    let mut count = 0;
+    loop {
+        match receiver.try_recv() {
+            Ok(event) => count += usize::from(event.resource_type() == resource_type),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return count,
+            Err(error) => panic!("Realtime fixture lost events: {error}"),
+        }
+    }
+}
+
 async fn request(
     app: &Router,
     method: Method,
@@ -748,10 +1016,11 @@ async fn request(
     principal: Option<ActorPrincipal>,
     body: Option<Value>,
 ) -> axum::response::Response {
-    let mut request = Request::builder()
-        .method(method)
-        .uri(uri)
-        .header("content-type", "application/json")
+    let mut builder = Request::builder().method(method).uri(uri);
+    if body.is_some() {
+        builder = builder.header("content-type", "application/json");
+    }
+    let mut request = builder
         .body(Body::from(body.map_or_else(Vec::new, |value| {
             serde_json::to_vec(&value).unwrap()
         })))
@@ -807,15 +1076,34 @@ impl BuildExecutor for FakeBuildExecutor {
 }
 
 struct FakeBackupExecutor;
-struct FakeBackupPlanner;
+#[derive(Default)]
+struct FakeBackupPlanner {
+    fail: std::sync::atomic::AtomicBool,
+}
 struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
     fn plan<'a>(
         &'a self,
-        _: &'a BackupClaim,
+        claim: &'a BackupClaim,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<BackupSourcePlan, BackupError>> {
-        Box::pin(async { Err(BackupError::Validation("unused fixture".into())) })
+        Box::pin(async move {
+            if self.fail.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(BackupError::Validation("fixture source unavailable".into()));
+            }
+            let source = &claim.policy.source;
+            Ok(BackupSourcePlan {
+                display_name: "data".into(),
+                items: vec![citadel_backups::BackupSourceItem::new(
+                    Uuid::parse_str(source["platformId"].as_str().unwrap()).unwrap(),
+                    source["volumeName"].as_str().unwrap().into(),
+                    None,
+                    None,
+                )],
+                warnings: vec![],
+                local_directory: None,
+            })
+        })
     }
 }
 impl BackupRunAuthorizer for AllowBackupExecution {

@@ -329,7 +329,7 @@ fn configuration_value<'a>(configuration: &'a Value, name: &str) -> Option<&'a V
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
 }
 
-fn validate_webhook(webhook: Option<&Value>) -> Result<(), ResourceMetadataError> {
+pub fn validate_webhook(webhook: Option<&Value>) -> Result<(), ResourceMetadataError> {
     let Some(webhook) = webhook else {
         return Ok(());
     };

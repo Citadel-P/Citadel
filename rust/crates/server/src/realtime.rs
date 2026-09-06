@@ -182,6 +182,13 @@ pub struct PublishedRuntimeEvent {
     pub(crate) payload: Value,
 }
 
+impl PublishedRuntimeEvent {
+    #[must_use]
+    pub fn resource_type(&self) -> &'static str {
+        self.resource_type
+    }
+}
+
 #[derive(Clone)]
 pub struct RealtimeHub {
     inner: Arc<RealtimeHubInner>,

@@ -12,6 +12,37 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "PascalCase")]
+pub struct BuildProjectActivitySnapshot {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub git_repository_id: Uuid,
+    pub branch: String,
+    pub context_path: String,
+    pub dockerfile_path: String,
+    pub target: Option<String>,
+    pub builder_kind: String,
+    pub platform_id: Option<Uuid>,
+    pub build_agent_pool_id: Option<Uuid>,
+    pub registry_id: Uuid,
+    pub image_repository: String,
+    pub tag_templates: Vec<String>,
+    pub webhook: Option<Value>,
+    pub timeout_seconds: i32,
+    pub retention_run_count: i32,
+    pub build_secrets: Vec<BuildSecretActivitySnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BuildSecretActivitySnapshot {
+    pub id: String,
+    pub secret_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct AutomationActionActivitySnapshot {
     pub id: Uuid,
     pub name: String,
@@ -923,6 +954,80 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Reason")]
         reason: String,
     },
+    BuildRunQueued {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    BuildRunStarted {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    BuildRunSucceeded {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "ExitCode")]
+        exit_code: Option<i32>,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ImageDigest")]
+        image_digest: Option<String>,
+    },
+    BuildRunFailed {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "Status")]
+        status: String,
+        #[serde(rename = "ExitCode")]
+        exit_code: Option<i32>,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ErrorMessage")]
+        error_message: Option<String>,
+    },
+    BuildRunTimedOut {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ErrorMessage")]
+        error_message: Option<String>,
+    },
+    BuildRunCancelled {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    BuildCreated {
+        #[serde(rename = "Build")]
+        build: BuildProjectActivitySnapshot,
+    },
+    BuildUpdated {
+        #[serde(rename = "OldBuild")]
+        old_build: BuildProjectActivitySnapshot,
+        #[serde(rename = "NewBuild")]
+        new_build: BuildProjectActivitySnapshot,
+    },
+    BuildRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    BuildDeleted {
+        #[serde(rename = "Build")]
+        build: BuildProjectActivitySnapshot,
+    },
     BuildAgentPoolCreated {
         #[serde(rename = "Pool")]
         pool: BuildAgentPoolActivitySnapshot,
@@ -1523,6 +1628,16 @@ impl ActivityEventInfo {
             Self::ActionRunCancelled { .. } => ActivityEventType::ActionRunCancelled,
             Self::ActionRunRejected { .. } => ActivityEventType::ActionRunRejected,
             Self::BuildAgentPoolTested { .. } => ActivityEventType::BuildAgentPoolTested,
+            Self::BuildCreated { .. } => ActivityEventType::BuildCreated,
+            Self::BuildRunQueued { .. } => ActivityEventType::BuildRunQueued,
+            Self::BuildRunStarted { .. } => ActivityEventType::BuildRunStarted,
+            Self::BuildRunSucceeded { .. } => ActivityEventType::BuildRunSucceeded,
+            Self::BuildRunFailed { .. } => ActivityEventType::BuildRunFailed,
+            Self::BuildRunTimedOut { .. } => ActivityEventType::BuildRunTimedOut,
+            Self::BuildRunCancelled { .. } => ActivityEventType::BuildRunCancelled,
+            Self::BuildUpdated { .. } => ActivityEventType::BuildUpdated,
+            Self::BuildRenamed { .. } => ActivityEventType::BuildRenamed,
+            Self::BuildDeleted { .. } => ActivityEventType::BuildDeleted,
             Self::BuildAgentPoolCreated { .. } => ActivityEventType::BuildAgentPoolCreated,
             Self::BuildAgentPoolUpdated { .. } => ActivityEventType::BuildAgentPoolUpdated,
             Self::BuildAgentPoolRenamed { .. } => ActivityEventType::BuildAgentPoolRenamed,
@@ -1791,6 +1906,29 @@ impl ActivityEvent {
             actor_id,
             info,
             ActivityStatus::Success,
+            created_at,
+        )
+    }
+
+    pub fn new_build_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let status = match &info {
+            ActivityEventInfo::BuildRunFailed { .. }
+            | ActivityEventInfo::BuildRunTimedOut { .. } => ActivityStatus::Failure,
+            _ => ActivityStatus::Success,
+        };
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::Build,
+            actor_id,
+            info,
+            status,
             created_at,
         )
     }

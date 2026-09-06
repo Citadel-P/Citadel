@@ -49,6 +49,8 @@ static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 mod edge;
 #[path = "platforms_http/lookup.rs"]
 mod lookup;
+#[path = "platforms_http/node_coverage.rs"]
+mod node_coverage;
 #[path = "platforms_http/node_resources.rs"]
 mod node_resources;
 #[path = "platforms_http/realtime_groups.rs"]
@@ -524,10 +526,16 @@ async fn fixture() -> Fixture {
 }
 
 async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
+    docker_fixture_with_limit(7).await
+}
+
+async fn docker_fixture_with_limit(
+    request_limit: usize,
+) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
     let socket = std::env::temp_dir().join(format!("citadel-phase4-http-{}.sock", Uuid::now_v7()));
     let listener = UnixListener::bind(&socket).unwrap();
     let server = tokio::spawn(async move {
-        for _ in 0..7 {
+        for _ in 0..request_limit {
             let (mut connection, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -548,10 +556,25 @@ async fn docker_fixture() -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf
                 .to_owned();
             let mut parts = request_line.split_whitespace();
             let method = parts.next().unwrap();
-            let path = parts.next().unwrap();
+            let path = parts.next().unwrap().split('?').next().unwrap();
             let body = match (method, path) {
                 ("GET", "/version") => {
                     r#"{"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+                }
+                ("GET", "/v1.49/info") => {
+                    r#"{"ID":"daemon-test","NCPU":1,"MemTotal":1048576,"OSType":"linux","Architecture":"x86_64","Swarm":{"NodeID":"node-1","LocalNodeState":"active","ControlAvailable":true,"Nodes":1,"Managers":1,"Cluster":{"ID":"cluster-test"}}}"#
+                }
+                (
+                    "GET",
+                    "/v1.49/containers/json"
+                    | "/v1.49/images/json"
+                    | "/v1.49/services"
+                    | "/v1.49/tasks"
+                    | "/v1.49/configs"
+                    | "/v1.49/secrets",
+                ) => "[]",
+                ("GET", "/v1.49/nodes") => {
+                    r#"[{"ID":"node-1","Spec":{"Role":"manager","Availability":"active","Labels":{}},"Description":{"Hostname":"manager","Platform":{"OS":"linux","Architecture":"x86_64"}},"Status":{"State":"ready"},"ManagerStatus":{"Leader":true,"Reachability":"reachable"}}]"#
                 }
                 ("GET", "/v1.49/tasks/task-1") => {
                     r#"{"ID":"task-1","NodeID":"node-1","ServiceID":"service-1","Status":{"State":"running","ContainerStatus":{"ContainerID":"container-1"}},"DesiredState":"running"}"#

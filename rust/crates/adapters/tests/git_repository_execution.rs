@@ -84,6 +84,35 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .unwrap()
         .unwrap();
     store.fail(&repeated, "fixture completed").await.unwrap();
+    let webhook = serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"old-key"});
+    sqlx::query("UPDATE gitrepositories SET webhook=$2 WHERE id=$1")
+        .bind(race_id)
+        .bind(webhook)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let authenticated = store.get_webhook(race_id).await.unwrap().unwrap();
+    sqlx::query("UPDATE gitrepositories SET webhook=NULL WHERE id=$1")
+        .bind(race_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        store
+            .enqueue_webhook(ActorId::new(actor), race_id, "main", &authenticated)
+            .await,
+        Err(citadel_git::GitRepositoryExecutionError::Conflict)
+    ));
+    let control: String =
+        sqlx::query_scalar("SELECT controlstate FROM gitrepositories WHERE id=$1")
+            .bind(race_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        control, "Idle",
+        "a revoked webhook cannot queue after authenticating against an old snapshot"
+    );
 
     let root = std::env::temp_dir().join(format!("citadel-phase7-git-{}", Uuid::now_v7()));
     let remote = root.join("remote");
@@ -217,6 +246,68 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     .await
     .unwrap();
     assert_eq!(activity_count, 1);
+
+    // Build execution must refresh the remote branch, not silently reuse the
+    // previous successful cache. The same worker owns all cache mutations.
+    std::fs::write(remote.join("config/app.conf"), b"mode=updated\n").unwrap();
+    git(&remote, &["add", "config/app.conf"]);
+    git(&remote, &["commit", "-m", "update"]);
+    let updated = command_output(&remote, &["rev-parse", "HEAD"]);
+    let token = CancellationToken::new();
+    let wait = service.synchronize_commit(ActorId::new(actor), repository_id, "main", &token);
+    let worker = async {
+        while !service.process_one(&token).await.unwrap() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    let (resolved, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(wait, worker)
+    })
+    .await
+    .unwrap();
+    assert_eq!(resolved.unwrap(), updated.trim());
+    assert_ne!(updated.trim(), expected.trim());
+    let pinned = service
+        .stack_snapshot(repository_id, Some(expected.trim()), &token)
+        .await
+        .unwrap();
+    assert_eq!(pinned.resolved_commit_sha, expected.trim());
+
+    // Cancellation before a request must not enqueue new shared work.
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    assert!(
+        service
+            .synchronize_commit(ActorId::new(actor), repository_id, "main", &cancelled)
+            .await
+            .is_err()
+    );
+    assert!(!service.process_one(&token).await.unwrap());
+
+    // A failed synchronization is terminal for this waiter, never a fallback to
+    // the last good commit and never a five-minute wait after the failure.
+    let wait =
+        service.synchronize_commit(ActorId::new(actor), repository_id, "missing-branch", &token);
+    let worker = async {
+        loop {
+            match service.process_one(&token).await {
+                Ok(false) => tokio::time::sleep(Duration::from_millis(10)).await,
+                result => {
+                    assert!(
+                        result.unwrap(),
+                        "the worker persists the Git failure as a completed iteration"
+                    );
+                    break;
+                }
+            }
+        }
+    };
+    let (resolved, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(wait, worker)
+    })
+    .await
+    .unwrap();
+    assert!(resolved.is_err());
 
     sqlx::query("DELETE FROM gitrepositories WHERE id=ANY($1::uuid[])")
         .bind(vec![race_id, repository_id])

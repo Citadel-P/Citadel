@@ -290,15 +290,28 @@ running; it uses disposable fixtures and extracts tools from `-CoreImage`.
 Automation lifecycle Activities commit with their state changes, mask webhook
 secrets, and reject stale edits/completions. Metadata-only edits do not create
 configuration Activities. HTTP progress streaming and tag/filter parity are
-still pending.
+covered by the follow-up tests below.
 
-Remaining Build lifecycle/health/tag-filter parity, node installation, remaining node-local
+Automation manual/Test progress and Build lifecycle/tag filtering/Pool health
+are now covered by HTTP and persistence tests, including real Deno execution.
+The shared webhook listener also dispatches Automation, Build and Backup Policy
+runs. It verifies the saved authentication scheme and fences configuration
+changes before committing a queued run. Build execution synchronizes and pins
+its Git source; Automation workers share configurable concurrency and timeout
+limits, and Backup automated execution rechecks its license entitlement.
+The node-agent coverage endpoint reports manager/satellite coverage, stale
+runtime data, unsupported nodes and system-Service drift without exposing
+enrollment credentials. Installation/repair/upgrade/removal are still pending.
+Remaining Build execution/trigger parity, node installation, remaining node-local
 endpoints, interactive logs/terminal transport, remaining product-specific
 Alert producers and the complete external-service acceptance matrix remain
 open Phase 7 work. Unsupported connector paths fail closed and never fall back
 to Core's Docker daemon. See `reports/phase7-edge-execution-report.md`; run
 `./rust/scripts/Test-Phase7AExternalExecution.ps1` for the database/contract gate
 and `./rust/scripts/Test-Phase7LocalBackup.ps1` for the real Local volume test.
+Add `-UseRustFs` to run the same persisted backup/restore round trip against
+a disposable RustFS S3 repository. This proves S3 storage, not multi-node Agent
+routing; the latter remains an acceptance requirement.
 
 ## Interactive development
 

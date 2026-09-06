@@ -18,6 +18,7 @@ pub(super) async fn verify(
 ) {
     verify_capabilities(app, db, principal, id).await;
     verify_edits(app, db, builds, principal, id).await;
+    verify_health_persistence(db, builds, id).await;
     let uri = format!("/api/v1/buildAgentPools/{id}/test");
     assert_eq!(
         request(app, Method::POST, &uri, None, None).await.status(),
@@ -158,6 +159,105 @@ pub(super) async fn verify(
         StatusCode::CONFLICT
     );
     sqlx::query("UPDATE buildagentpools SET provider='SelfManagedVm',providerspec='{\"$type\":\"SelfManagedVm\",\"connectionMode\":\"EdgeAgent\"}' WHERE id=$1").bind(id).execute(db).await.unwrap();
+}
+
+async fn verify_health_persistence(db: &sqlx::PgPool, builds: &Arc<BuildService>, id: Uuid) {
+    let healthy = citadel_builds::BuildPoolCheck {
+        ready: true,
+        message: "health-ready".into(),
+    };
+    let initial = builds.store().get_pool(id).await.unwrap();
+    assert!(
+        builds
+            .store()
+            .record_pool_health(&initial, &healthy)
+            .await
+            .unwrap()
+    );
+    let fresh = builds.store().get_pool(id).await.unwrap();
+    assert!(
+        !builds
+            .store()
+            .record_pool_health(&fresh, &healthy)
+            .await
+            .unwrap(),
+        "Stable checks should not rewrite every 30 seconds"
+    );
+    assert!(
+        !builds
+            .store()
+            .record_pool_health(&initial, &healthy)
+            .await
+            .unwrap(),
+        "Stale checks must not overwrite a new row version"
+    );
+    let activities: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
+            .bind(id)
+            .fetch_one(db)
+            .await
+            .unwrap();
+    sqlx::query(
+        "UPDATE buildagentpools SET lastvalidatedat=now()-INTERVAL '6 minutes' WHERE id=$1",
+    )
+    .bind(id)
+    .execute(db)
+    .await
+    .unwrap();
+    assert!(
+        builds
+            .store()
+            .record_pool_health(&fresh, &healthy)
+            .await
+            .unwrap()
+    );
+    let fresh = builds.store().get_pool(id).await.unwrap();
+    sqlx::query("UPDATE buildagentpools SET controlstate='Processing',controlstartedat=EXTRACT(EPOCH FROM now())::bigint WHERE id=$1").bind(id).execute(db).await.unwrap();
+    assert!(
+        !builds
+            .store()
+            .record_pool_health(&fresh, &healthy)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !builds
+            .store()
+            .health_pools(Uuid::nil(), 64)
+            .await
+            .unwrap()
+            .iter()
+            .any(|pool| pool.id == id)
+    );
+    sqlx::query("UPDATE buildagentpools SET controlstartedat=EXTRACT(EPOCH FROM now())::bigint-181 WHERE id=$1").bind(id).execute(db).await.unwrap();
+    let interrupted = builds
+        .store()
+        .health_pools(Uuid::nil(), 64)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|pool| pool.id == id)
+        .unwrap();
+    assert!(
+        builds
+            .store()
+            .record_pool_health(&interrupted, &healthy)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        builds.store().get_pool(id).await.unwrap().control_state,
+        "Idle"
+    );
+    let after: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
+        .bind(id)
+        .fetch_one(db)
+        .await
+        .unwrap();
+    assert_eq!(
+        after, activities,
+        "Background health checks do not create manual Test activities"
+    );
 }
 
 async fn verify_capabilities(

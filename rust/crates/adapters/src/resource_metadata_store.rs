@@ -1431,7 +1431,15 @@ async fn ensure_resource_exists_tx(
         TaggableResourceType::BuildAgentPool => "buildagentpools",
         TaggableResourceType::SwarmService => "swarmservices",
     };
-    let q = format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=$1)");
+    let active = if matches!(
+        t,
+        TaggableResourceType::Build | TaggableResourceType::BuildAgentPool
+    ) {
+        " AND archivedat IS NULL"
+    } else {
+        ""
+    };
+    let q = format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=$1{active})");
     if !sqlx::query_scalar::<_, bool>(AssertSqlSafe(q.as_str()))
         .bind(id)
         .fetch_one(&mut **tx)
