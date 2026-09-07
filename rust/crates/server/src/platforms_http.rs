@@ -40,12 +40,18 @@ const ALL_PLATFORM_SPECIFIC: i32 = SpecificPermission::Logs as i32
     | SpecificPermission::ManageNodeAgents as i32;
 const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
+mod container_mutations;
 mod edge;
+mod images;
+mod logs;
 mod statistics;
+mod volume_content;
 pub use edge::EdgeHttpContext;
 
 #[derive(Clone)]
 pub struct PlatformsHttpState {
+    pub volume_content: Arc<citadel_adapters::volume_content::VolumeContentAdapter>,
+    pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
     pub registrations: Arc<PlatformRegistrationService>,
@@ -60,6 +66,8 @@ pub struct PlatformsHttpState {
 
 pub fn router(state: PlatformsHttpState) -> Router {
     Router::new()
+        .contract_route(routes::LIST_VOLUME_DIRECTORY, volume_content::list)
+        .contract_route(routes::DOWNLOAD_VOLUME_PATH, volume_content::download)
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
         .contract_route(routes::CREATE_PLATFORM, create_platform)
         .contract_route(routes::GET_PLATFORM, get_platform)
@@ -74,13 +82,27 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
         .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)
         .contract_route(routes::GET_CONTAINER, get_container)
+        .contract_route(routes::START_CONTAINERS, container_mutations::start)
+        .contract_route(routes::STOP_CONTAINERS, container_mutations::stop)
+        .contract_route(routes::RESTART_CONTAINERS, container_mutations::restart)
+        .contract_route(routes::PAUSE_CONTAINERS, container_mutations::pause)
+        .contract_route(routes::UNPAUSE_CONTAINERS, container_mutations::unpause)
+        .contract_route(routes::DELETE_CONTAINERS, container_mutations::delete)
         .contract_route(routes::GET_CONTAINER_STATS, statistics::container)
         .contract_route(routes::GET_PLATFORM_STATS, statistics::platform)
         .contract_route(routes::GET_DEPLOYMENT_STATS, statistics::deployment)
         .contract_route(routes::GET_STACK_STATS, statistics::stack)
         .contract_route(routes::GET_SWARM_SERVICE_STATS, statistics::service)
         .contract_route(routes::GET_SWARM_TASK_STATS, statistics::task)
+        .contract_route(routes::GET_SWARM_SERVICE_LOGS, logs::service)
+        .contract_route(routes::GET_SWARM_TASK_LOGS, logs::task)
+        .contract_route(
+            routes::GET_MANAGED_SWARM_SERVICE_LOGS,
+            logs::managed_service,
+        )
         .contract_route(routes::LIST_PLATFORM_IMAGES, list_images)
+        .contract_route(routes::GET_PLATFORM_IMAGE, images::inspect)
+        .contract_route(routes::GET_IMAGE_EXPOSED_PORTS, images::exposed_ports)
         .contract_route(routes::LIST_PLATFORM_NETWORKS, list_networks)
         .contract_route(routes::GET_PLATFORM_NETWORK, get_network)
         .contract_route(routes::CREATE_NETWORK, create_network)
@@ -1389,7 +1411,7 @@ async fn volume_capabilities(
     })
 }
 
-enum RuntimeRef<'a> {
+pub(crate) enum RuntimeRef<'a> {
     Local(&'a DockerClient),
     Agent(&'a AgentClient),
     Edge(EdgeRuntime),
@@ -1498,7 +1520,7 @@ pub(crate) async fn realtime_daemon_snapshot(
     })
 }
 
-async fn runtime_for_node<'a>(
+pub(crate) async fn runtime_for_node<'a>(
     state: &'a PlatformsHttpState,
     platform_id: Uuid,
     node_id: Option<&str>,

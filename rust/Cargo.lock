@@ -623,6 +623,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
  "zeroize",
 ]
@@ -764,6 +765,7 @@ dependencies = [
  "subtle",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite",
  "tokio-util",
  "tonic",
@@ -772,6 +774,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "urlencoding",
  "uuid",
  "zeroize",
 ]
@@ -783,6 +786,7 @@ dependencies = [
  "chrono",
  "citadel-alerts",
  "citadel-domain",
+ "citadel-resources",
  "futures-util",
  "serde",
  "serde_json",
@@ -810,6 +814,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
  "zeroize",
 ]

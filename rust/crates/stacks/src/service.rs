@@ -8,6 +8,9 @@ use futures_util::future::BoxFuture;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+#[path = "update_checks.rs"]
+mod update_checks;
+pub use update_checks::StackUpdateScanner;
 
 use crate::{
     ApplyStackInput, ComposeModel, ComposeProjectImportDraftView, ComposeProjectImportSourceView,
@@ -24,6 +27,57 @@ use crate::{
 };
 
 pub trait StackStore: Send + Sync {
+    fn update_check_candidates(
+        &self,
+        after: Uuid,
+        images: bool,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
+        let _ = (after, images, limit);
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn save_update_check<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a StackView,
+        state: &'a crate::StackUpdateState,
+    ) -> BoxFuture<'a, Result<(), StackError>> {
+        let _ = (actor, administrator, expected, state);
+        Box::pin(async {
+            Err(StackError::Runtime(
+                "Stack update persistence is unavailable.".into(),
+            ))
+        })
+    }
+    fn claim_apply_versioned(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        rollback: Option<Uuid>,
+        webhook: Option<Uuid>,
+        options: crate::StackApplyOptions,
+    ) -> BoxFuture<'_, Result<StackOperationClaim, StackError>> {
+        if options.expected_version.is_some() || !options.service_names.is_empty() {
+            return Box::pin(async {
+                Err(StackError::Conflict(
+                    "Versioned Stack Apply is unavailable.".into(),
+                ))
+            });
+        }
+        self.claim_apply(actor, administrator, id, rollback, webhook)
+    }
+    fn enqueue_webhook<'a>(
+        &'a self,
+        expected: &'a StackView,
+        commit: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), StackError>>;
+    fn ready_webhooks(
+        &self,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<crate::StackWebhookJob>, StackError>>;
+    fn discard_webhook(&self, id: Uuid) -> BoxFuture<'_, Result<(), StackError>>;
     fn drift_monitor_candidates(
         &self,
         after: Option<Uuid>,
@@ -82,6 +136,7 @@ pub trait StackStore: Send + Sync {
         administrator: bool,
         id: Uuid,
         rollback_release_id: Option<Uuid>,
+        webhook_job_id: Option<Uuid>,
     ) -> BoxFuture<'_, Result<StackOperationClaim, StackError>>;
     fn complete_apply<'a>(
         &'a self,
@@ -240,14 +295,16 @@ impl StackChangeNotifier for NoopStackChangeNotifier {
 }
 
 pub struct StackService {
-    store: Arc<dyn StackStore>,
+    update_scanner: Option<Arc<dyn StackUpdateScanner>>,
+    pub(crate) store: Arc<dyn StackStore>,
     runtime: Arc<dyn StackRuntimePort>,
     source_materializer: Option<Arc<dyn StackSourceMaterializerPort>>,
     bindings: Arc<dyn StackBindingResolverPort>,
     build_images: Option<Arc<dyn StackBuildImageResolverPort>>,
     notifier: Arc<dyn StackChangeNotifier>,
     operations: Arc<Semaphore>,
-    shutdown: CancellationToken,
+    pub(crate) shutdown: CancellationToken,
+    pub(crate) entitlements: Option<Arc<dyn crate::StackEntitlements>>,
     timeout: Duration,
     alerts: Option<Arc<dyn AlertEventSink>>,
 }
@@ -262,6 +319,7 @@ impl StackService {
         shutdown: CancellationToken,
     ) -> Self {
         Self {
+            update_scanner: None,
             store,
             runtime,
             source_materializer: None,
@@ -272,6 +330,7 @@ impl StackService {
             shutdown,
             timeout: Duration::from_secs(15 * 60),
             alerts: None,
+            entitlements: None,
         }
     }
 
@@ -502,6 +561,13 @@ impl StackService {
     ) -> Result<crate::StackDuplicateDraftView, StackError> {
         let stack = self.store.get_authorized(actor, administrator, id).await?;
         let mut spec = stack.spec.clone().ok_or(StackError::NotFound)?.for_create();
+        if let StackSpec::Git {
+            webhook: Some(webhook),
+            ..
+        } = &mut spec
+        {
+            webhook.secret = None;
+        }
         spec.common_mut().project_name = None;
         Ok(crate::StackDuplicateDraftView {
             draft: serde_json::json!({
@@ -528,7 +594,8 @@ impl StackService {
         administrator: bool,
         input: ApplyStackInput,
     ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
-        self.start_apply(actor, administrator, input.id, None).await
+        self.start_apply(actor, administrator, input.id, None, None)
+            .await
     }
 
     pub async fn rollback(
@@ -537,23 +604,80 @@ impl StackService {
         administrator: bool,
         input: RollbackStackInput,
     ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
-        self.start_apply(actor, administrator, input.stack_id, Some(input.release_id))
-            .await
+        self.start_apply(
+            actor,
+            administrator,
+            input.stack_id,
+            Some(input.release_id),
+            None,
+        )
+        .await
     }
 
-    async fn start_apply(
+    pub(crate) async fn start_apply(
         &self,
         actor: ActorId,
         administrator: bool,
         id: Uuid,
         rollback: Option<Uuid>,
+        webhook_job_id: Option<Uuid>,
+    ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
+        self.start_apply_versioned(
+            actor,
+            administrator,
+            id,
+            rollback,
+            webhook_job_id,
+            Default::default(),
+        )
+        .await
+    }
+
+    pub async fn apply_versioned(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        expected_version: i64,
+    ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
+        self.apply_selected(
+            actor,
+            administrator,
+            id,
+            crate::StackApplyOptions {
+                expected_version: Some(expected_version),
+                service_names: Vec::new(),
+            },
+        )
+        .await
+    }
+
+    pub async fn apply_selected(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        options: crate::StackApplyOptions,
+    ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
+        self.start_apply_versioned(actor, administrator, id, None, None, options)
+            .await
+    }
+
+    async fn start_apply_versioned(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        rollback: Option<Uuid>,
+        webhook_job_id: Option<Uuid>,
+        options: crate::StackApplyOptions,
     ) -> Result<mpsc::Receiver<StackStreamItem>, StackError> {
         let permit = self.operations.clone().try_acquire_owned().map_err(|_| {
             StackError::Conflict("Too many Stack operations are already running.".to_owned())
         })?;
         let claim = self
             .store
-            .claim_apply(actor, administrator, id, rollback)
+            .claim_apply_versioned(actor, administrator, id, rollback, webhook_job_id, options)
             .await?;
         let runtime = Arc::clone(&self.runtime);
         let source_materializer = self.source_materializer.clone();
@@ -991,6 +1115,7 @@ impl StackService {
                             row_version: 0,
                             actor_id: Uuid::nil(),
                             operation: "ValidateImport".to_owned(),
+                            service_names: Vec::new(),
                         },
                         &cancellation,
                     )
@@ -1412,6 +1537,21 @@ async fn execute_apply(
             return;
         }
     };
+    if claim
+        .service_names
+        .iter()
+        .any(|name| !model.services.iter().any(|service| service.name == *name))
+    {
+        fail_apply_before_runtime(
+            &store,
+            actor,
+            &claim,
+            &sender,
+            "A selected Service does not exist in the materialized Stack configuration.",
+        )
+        .await;
+        return;
+    }
     let release_source = match (&claim.spec, source.resolved_commit_sha.as_deref()) {
         (
             StackSpec::Git {
@@ -1522,13 +1662,22 @@ async fn execute_apply(
     )
     .await
     {
-        Ok(Ok(result)) => {
+        Ok(Ok(mut result)) => {
+            redact_runtime_messages(&mut result, &redactions);
             for item in &result.messages {
                 let _ = sender.send(item.clone()).await;
             }
             if result.status == StackReleaseStatus::Healthy {
                 let applied_at = chrono::Utc::now();
                 for binding in &mut claim.spec.common_mut().build_image_bindings {
+                    if !claim.service_names.is_empty()
+                        && !claim
+                            .service_names
+                            .iter()
+                            .any(|name| name == &binding.service_name)
+                    {
+                        continue;
+                    }
                     if let Some(resolved) = resolved_build_images.iter().find(|resolved| {
                         resolved
                             .service_name
@@ -1726,6 +1875,16 @@ fn redact(mut message: String, secrets: &[String]) -> String {
     message
 }
 
+fn redact_runtime_messages(result: &mut StackRuntimeResult, secrets: &[String]) {
+    for item in &mut result.messages {
+        item.message = item.message.take().map(|message| redact(message, secrets));
+        item.severity = item
+            .severity
+            .take()
+            .map(|severity| redact(severity, secrets));
+    }
+}
+
 fn orchestration(platform_type: &str) -> Result<StackOrchestrationMode, StackError> {
     match platform_type {
         "Docker" => Ok(StackOrchestrationMode::DockerCompose),
@@ -1887,6 +2046,40 @@ mod tests {
 
     use super::*;
     use crate::{RecreateStackOnNewImageState, StackDriftPolicy, StackSource, StackUpdateState};
+
+    #[test]
+    fn runtime_output_is_redacted_before_progress_and_failure_persistence() {
+        for status in [StackReleaseStatus::Healthy, StackReleaseStatus::Failed] {
+            let mut result = StackRuntimeResult {
+                status,
+                messages: vec![
+                    StackStreamItem::system("pre-deploy: secret-value"),
+                    StackStreamItem {
+                        event_type: crate::StackApplyEventType::StdErr,
+                        message: Some("error: secret-value".into()),
+                        exit_code: Some(1),
+                        stack_status: None,
+                        severity: Some("secret-value".into()),
+                    },
+                ],
+            };
+            redact_runtime_messages(&mut result, &["secret-value".into()]);
+            assert_eq!(result.status, status);
+            assert_eq!(result.messages[1].exit_code, Some(1));
+            assert!(
+                !serde_json::to_string(&result.messages)
+                    .unwrap()
+                    .contains("secret-value")
+            );
+            assert!(
+                result.messages[0]
+                    .message
+                    .as_ref()
+                    .unwrap()
+                    .contains("********")
+            );
+        }
+    }
 
     fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> StackView {
         let id = Uuid::now_v7();

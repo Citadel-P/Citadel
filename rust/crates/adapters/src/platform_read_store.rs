@@ -285,6 +285,31 @@ GROUP BY requested.id
         })
     }
 
+    fn resolve_container_reference<'a>(
+        &'a self,
+        reference: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>> {
+        Box::pin(async move {
+            if let Ok(id) = Uuid::parse_str(reference) {
+                return Ok(Some(id));
+            }
+            if !matches!(reference.len(), 12 | 64)
+                || !reference.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Ok(None);
+            }
+            let ids: Vec<Uuid> = sqlx::query_scalar(
+                "SELECT id FROM containers WHERE dockercontainerid LIKE $1 || '%' LIMIT 2",
+            )
+            .bind(reference.to_ascii_lowercase())
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?;
+            // Docker IDs are daemon-local. Never choose an arbitrary Platform or node.
+            Ok(if ids.len() == 1 { Some(ids[0]) } else { None })
+        })
+    }
+
     fn list_images(
         &self,
         platform_id: Uuid,

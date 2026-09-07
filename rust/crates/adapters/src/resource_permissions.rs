@@ -1,11 +1,10 @@
 use citadel_domain::{ActorId, ResourceType};
-use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// Grants for a list response, without a database round trip for every row.
-pub(crate) async fn for_resources(
-    pool: &PgPool,
+pub(crate) async fn for_resources<'e>(
+    executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
     actor: ActorId,
     kind: ResourceType,
     ids: &[Uuid],
@@ -40,7 +39,7 @@ LEFT JOIN LATERAL (
     .bind(actor.value())
     .bind(kind as i32)
     .bind(ids)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows.into_iter().collect())
 }

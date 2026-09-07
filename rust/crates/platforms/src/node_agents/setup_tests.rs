@@ -110,6 +110,7 @@ struct Fixture {
     snapshots: AtomicUsize,
     manager_only: bool,
     paused: bool,
+    update_state: Option<&'static str>,
     stale_binding: bool,
     cancel_apply: bool,
     cancel_cleanup: bool,
@@ -301,7 +302,12 @@ impl NodeAgentSetupRuntime for Fixture {
             if iteration > 0 {
                 swarm.services.push(RuntimeSwarmService {
                     id: "service".into(),
-                    update_state: if self.paused { "paused" } else { "completed" }.into(),
+                    update_state: if self.paused {
+                        "paused"
+                    } else {
+                        self.update_state.unwrap_or("completed")
+                    }
+                    .into(),
                     ..Default::default()
                 });
                 swarm.tasks.push(RuntimeSwarmTask {
@@ -423,6 +429,18 @@ async fn setup_persists_identity_before_waiting_for_current_task_coverage() {
     assert_eq!(calls.last().unwrap(), "finish:completed");
     assert!(p.iter().all(|p| !p.message.contains("sensitive-bootstrap")));
 }
+#[tokio::test(start_paused = true)]
+async fn initial_install_accepts_both_docker_empty_and_agent_none_update_states() {
+    for state in ["", "None", "none", "Completed"] {
+        let fixture = Arc::new(Fixture {
+            update_state: Some(state),
+            ..Default::default()
+        });
+        let progress = run(fixture).await;
+        assert_eq!(progress.last().unwrap().stage, "completed", "{state}");
+    }
+}
+
 #[tokio::test]
 async fn paused_rollout_and_cancellation_persist_failure() {
     for f in [

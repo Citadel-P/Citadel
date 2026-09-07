@@ -1,7 +1,16 @@
 use std::fs;
 
+#[path = "agent_containers.rs"]
+mod containers;
+
+#[path = "agent_images.rs"]
+pub(crate) mod images;
+#[path = "agent_logs.rs"]
+mod logs;
 #[path = "agent_node_agents.rs"]
 mod node_agents;
+#[path = "agent_terminal.rs"]
+mod terminal;
 #[path = "agent_workloads.rs"]
 pub(crate) mod workloads;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -10,7 +19,7 @@ use async_stream::stream;
 use base64::Engine;
 use citadel_contracts::citadel::containers::v1::{
     ContainerIds, CreateContainerRequest, DeleteContainerRequest, ExecBinaryRequest,
-    ListContainersRequest, StreamContainersStatsRequest,
+    ExecServerMessage, ListContainersRequest, StreamContainersStatsRequest,
     container_service_client::ContainerServiceClient, exec_server_message,
 };
 use citadel_contracts::citadel::deployments::v1::{
@@ -485,6 +494,24 @@ impl AgentClient {
         id: &str,
         cancellation: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
+        self.delete_container_with_options(
+            id,
+            citadel_platforms::containers::DeleteContainerOptions {
+                v: true,
+                force: true,
+                link: false,
+            },
+            cancellation,
+        )
+        .await
+    }
+
+    pub async fn delete_container_with_options(
+        &self,
+        id: &str,
+        options: citadel_platforms::containers::DeleteContainerOptions,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
         if id.trim().is_empty() || id.len() > 256 {
             return Err(RuntimeCapabilityError::new(
                 RuntimeErrorKind::InvalidRequest,
@@ -495,9 +522,9 @@ impl AgentClient {
         let request = self.signer.sign(
             DeleteContainerRequest {
                 ids: vec![id.to_owned()],
-                v: Some(true),
-                force: Some(true),
-                link: Some(false),
+                v: Some(options.v),
+                force: Some(options.force),
+                link: Some(options.link),
             },
             DELETE_CONTAINER_METHOD,
             Some(self.operation_timeout),
@@ -549,6 +576,39 @@ impl AgentClient {
             ));
         }
         Ok(id)
+    }
+
+    pub(crate) async fn exec_binary_stream(
+        &self,
+        request: ExecBinaryRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        futures_util::stream::BoxStream<'static, Result<ExecServerMessage, tonic::Status>>,
+        RuntimeCapabilityError,
+    > {
+        use futures_util::StreamExt;
+        let signed =
+            self.signer
+                .sign(request, EXEC_BINARY_METHOD, Some(Duration::from_secs(1800)))?;
+        let mut client = self.container_client();
+        let response = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, client.exec_binary(signed)) => {
+                result.map_err(|_| timeout_error("opening Agent binary execution"))?.map_err(normalize_status)?
+            }
+        };
+        let mut stream = response.into_inner();
+        let cancellation = cancellation.clone();
+        Ok(Box::pin(async_stream::stream! {
+            loop {
+                tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => { yield Err(tonic::Status::cancelled("Binary execution canceled.")); break; }
+                    item = stream.next() => match item { Some(item) => yield item, None => break }
+                }
+            }
+        }))
     }
 
     pub async fn exec_binary(

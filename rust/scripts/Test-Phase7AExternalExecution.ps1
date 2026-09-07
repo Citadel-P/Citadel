@@ -29,6 +29,7 @@ function Invoke-Rust {
             --env "CITADEL_PHASE5_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
             --env "CITADEL_PHASE4_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
             --env "CITADEL_PHASE7_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+            --env "CITADEL_PHASE6_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
             --env 'SQLX_OFFLINE=true' $WorkspaceContainer cargo @CargoArguments
     } else {
         & docker run --rm --network $network `
@@ -41,6 +42,7 @@ function Invoke-Rust {
         --env "CITADEL_PHASE5_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
         --env "CITADEL_PHASE4_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
         --env "CITADEL_PHASE7_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
+        --env "CITADEL_PHASE6_DATABASE_URL=postgres://citadel_phase7a:citadel_phase7a@${postgres}:5432/$database" `
         --env 'SQLX_OFFLINE=true' `
         $rustImage `
         cargo @CargoArguments
@@ -86,6 +88,11 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-alerts')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-backups')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-platforms', '--lib')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-platforms', '--test', 'container_commands')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-platforms', '--test', 'volume_content')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-stacks', '--lib')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-swarm-services', '--lib')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'swarm_services_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--lib')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'docker_transport')
@@ -94,6 +101,9 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'phase7_resources_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_transport', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'stack_webhooks', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'stack_persistence', '--test', 'deployment_apply_persistence', '--test', 'swarm_service_persistence', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'deployments_http', '--test', 'stacks_http', '--test', 'swarm_services_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'platforms_http', '--test', 'platform_creation_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'platform_inventory_persistence', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('run', '--locked', '-p', 'xtask', '--', 'openapi', '--check')

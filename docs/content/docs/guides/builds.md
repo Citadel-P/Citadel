@@ -440,6 +440,14 @@ If a deployment or stack does not update after a successful build:
 - confirm `Redeploy On Build` is enabled if you expected an automatic redeploy
 - check the build run log for consumer update messages
 
+A queued build keeps the build settings selected when it was queued. Editing
+the project does not change a build that is already waiting to run.
+
+A successful build and a successful redeployment are separate outcomes. If the
+image builds successfully but Apply fails, the build remains successful; check
+the Deployment or Stack activity for the Apply error. For Stack bindings with
+**Redeploy On Build**, only the selected services are redeployed.
+
 If secrets appear masked in logs, that is expected. Citadel redacts configured secret values before storing or streaming log output.
 
 

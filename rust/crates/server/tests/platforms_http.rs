@@ -45,8 +45,14 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/container_mutations.rs"]
+mod container_mutations;
 #[path = "platforms_http/edge.rs"]
 mod edge;
+#[path = "platforms_http/images.rs"]
+mod images;
+#[path = "platforms_http/logs.rs"]
+mod logs;
 #[path = "platforms_http/lookup.rs"]
 mod lookup;
 #[path = "platforms_http/node_agent_lifecycle.rs"]
@@ -61,6 +67,8 @@ mod node_resources;
 mod realtime_groups;
 #[path = "platforms_http/statistics.rs"]
 mod statistics;
+#[path = "platforms_http/volume_content.rs"]
+mod volume_content;
 
 struct Fixture {
     app: Router,
@@ -497,7 +505,24 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
         Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
     ));
+    let edge = citadel_adapters::edge::EdgeRegistry::default();
     let platform_state = PlatformsHttpState {
+        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+            pool.clone(),
+            docker.clone(),
+            None,
+            edge.clone(),
+            "citadel-agent:test".into(),
+        )),
+        containers: Arc::new(
+            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                None,
+                edge.clone(),
+            )
+            .into_service(),
+        ),
         identity,
         platforms,
         registrations,
@@ -505,7 +530,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
         docker,
         agent: None,
-        edge: citadel_adapters::edge::EdgeRegistry::default(),
+        edge,
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
     };
@@ -589,6 +614,12 @@ async fn docker_fixture_for_cluster(
                 }
                 ("GET", "/v1.49/tasks/task-1") => {
                     r#"{"ID":"task-1","NodeID":"node-1","ServiceID":"service-1","Status":{"State":"running","ContainerStatus":{"ContainerID":"container-1"}},"DesiredState":"running"}"#
+                }
+                ("GET", "/v1.49/services/service-1") => {
+                    r#"{"Spec":{"TaskTemplate":{"ContainerSpec":{"TTY":true}}}}"#
+                }
+                ("GET", "/v1.49/services/service-1/logs") => {
+                    "2026-09-06T12:00:00Z task.name=web.1 héllo\n"
                 }
                 ("GET", "/v1.49/networks") => {
                     r#"[{"Name":"frontend","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"swarm","Driver":"overlay","EnableIPv4":true,"Containers":{"container-1":{}},"Labels":{},"Options":{}}]"#

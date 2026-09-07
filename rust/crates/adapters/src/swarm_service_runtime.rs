@@ -19,6 +19,7 @@ use crate::agent::AgentClient;
 use crate::docker::{DockerClient, DockerError};
 
 const MANAGED_LABEL: &str = "com.citadel.managed";
+mod updates;
 const SERVICE_LABEL: &str = "com.citadel.service-id";
 const OPERATION_LABEL: &str = "com.citadel.operation-id";
 

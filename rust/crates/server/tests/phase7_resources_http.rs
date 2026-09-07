@@ -40,10 +40,16 @@ use uuid::Uuid;
 
 #[path = "phase7_resources_http/backup_webhooks.rs"]
 mod backup_webhooks;
+#[path = "phase7_resources_http/build_completion.rs"]
+mod build_completion;
 #[path = "phase7_resources_http/build_pools.rs"]
 mod build_pools;
 #[path = "phase7_resources_http/build_webhooks.rs"]
 mod build_webhooks;
+#[path = "phase7_resources_http/git_webhooks.rs"]
+mod git_webhooks;
+#[path = "phase7_resources_http/stack_webhooks.rs"]
+mod stack_webhooks;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
@@ -108,11 +114,13 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_entitlements(backup_entitlement.clone()),
     );
     let cancellation = CancellationToken::new();
+    let (stacks, stack_entitlement) = stack_webhooks::service(pool.clone());
     let webhook_router = backup_webhooks::router(
         pool.clone(),
         identity.clone(),
         backups.clone(),
         builds.clone(),
+        stacks.clone(),
     );
     let app = builds_http::router(BuildsHttpState {
         identity: Arc::clone(&identity),
@@ -183,6 +191,70 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     assert_eq!(build_pool_response.status(), StatusCode::OK);
     let build_pool = response_json(build_pool_response).await;
     let pool_id = build_pool["id"].as_str().unwrap();
+    // Port the BuildAgentPool endpoint lifecycle's tag persistence, and cover
+    // the existing table's positive/negative tag-name filters.
+    let pool_tag_response = request(
+        &app,
+        Method::POST,
+        "/api/v1/tags",
+        Some(principal.clone()),
+        Some(json!({"name":format!("pool-tag-{suffix}"),"color":"#3366FF"})),
+    )
+    .await;
+    assert_eq!(pool_tag_response.status(), StatusCode::OK);
+    let pool_tag = response_json(pool_tag_response).await;
+    let pool_tags_path = format!("/api/v1/buildAgentPools/{pool_id}/tags");
+    assert_eq!(
+        request(
+            &app,
+            Method::PUT,
+            &pool_tags_path,
+            Some(principal.clone()),
+            Some(json!({"tagIds":[pool_tag["id"]]}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let persisted_tags = response_json(
+        request(
+            &app,
+            Method::GET,
+            &pool_tags_path,
+            Some(principal.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        persisted_tags
+            .to_string()
+            .contains(pool_tag["id"].as_str().unwrap())
+    );
+    for (filter, expected) in [
+        (pool_tag["name"].as_str().unwrap().to_owned(), true),
+        (format!("absent-{suffix}"), false),
+    ] {
+        let response = request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/buildAgentPools?tags={filter}"),
+            Some(principal.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let filtered = response_json(response).await;
+        assert_eq!(
+            filtered["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|pool| pool["id"] == pool_id),
+            expected
+        );
+    }
     build_pools::verify(
         &app,
         &pool,
@@ -629,6 +701,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
 
     let reader = seed_regular_user(&pool).await;
+    git_webhooks::verify(&app, &pool, &fixture).await;
     build_webhooks::verify(
         &app,
         &pool,
@@ -646,6 +719,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         Uuid::parse_str(policy_id).unwrap(),
     )
     .await;
+    stack_webhooks::verify(&app, &pool, &stacks, &stack_entitlement).await;
     for (method, suffix) in [
         (Method::GET, "status"),
         (Method::POST, "enrollments"),
@@ -1062,9 +1136,9 @@ impl BuildExecutor for FakeBuildExecutor {
             BuildExecutionResult {
                 status: "Succeeded",
                 exit_code: Some(0),
-                image_digest: None,
+                image_digest: Some(format!("sha256:{}", "b".repeat(64))),
                 resolved_commit_sha: None,
-                image_references: vec![],
+                image_references: vec!["registry.test/project:latest".into()],
                 error_code: None,
                 error_message: None,
                 logs: vec![BuildLog {

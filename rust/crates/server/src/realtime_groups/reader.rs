@@ -12,12 +12,17 @@ use citadel_stacks::StackStore;
 use citadel_swarm_services::SwarmServiceStore;
 use std::sync::Arc;
 
+#[path = "logs.rs"]
+mod logs;
+#[path = "terminal.rs"]
+mod terminal;
 #[cfg(test)]
 #[path = "reader_tests.rs"]
 mod tests;
 
 // Reuse the same authorized read models as HTTP. No internal HTTP requests,
 // browser query policy, copied SQL schema, or second resource cache.
+#[derive(Clone)]
 pub struct ApplicationGroupReader {
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
@@ -95,6 +100,14 @@ impl ApplicationGroupReader {
         g: &Group,
         e: Option<&PublishedRuntimeEvent>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
+        if g.kind.ends_with("-exec") {
+            self.terminal_target(p, g).await?;
+            return Ok(GroupSnapshot::default());
+        }
+        if g.kind.ends_with("-log") {
+            self.log_targets(p, g).await?;
+            return Ok(GroupSnapshot::default());
+        }
         use ResourceType::*;
         let id = g.id;
         let actor = p.actor_id;
@@ -664,6 +677,39 @@ impl ApplicationGroupReader {
 }
 
 impl GroupReadPort for ApplicationGroupReader {
+    fn terminal_invocation<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        method: &'a str,
+        args: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<TerminalInvocation>, RealtimeReadError>> {
+        Box::pin(self.resolve_terminal_invocation(p, method, args))
+    }
+    fn terminal<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        group: &'a Group,
+        shell: citadel_platforms::terminal::TerminalShell,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<GroupTerminal, RealtimeReadError>> {
+        Box::pin(self.open_terminal(p, group, shell, cancel))
+    }
+    fn stream<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
+        Box::pin(self.logs(p, g, cancel))
+    }
+    fn invocation_group<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        target: &'a str,
+        args: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<Group>, RealtimeReadError>> {
+        Box::pin(self.log_invocation(p, target, args))
+    }
     fn read<'a>(
         &'a self,
         p: &'a ActorPrincipal,

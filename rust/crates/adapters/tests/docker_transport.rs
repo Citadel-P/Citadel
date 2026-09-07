@@ -10,8 +10,146 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use uuid::Uuid;
 
+#[path = "docker_transport/container_mutations.rs"]
+mod container_mutations;
+#[path = "docker_transport/distribution.rs"]
+mod distribution;
+
+#[tokio::test]
+async fn image_inspect_combines_generated_details_history_and_filtered_containers() {
+    use citadel_platforms::images::ImageInspectionPort;
+    use tokio_util::sync::CancellationToken;
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for _ in 0..4 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = vec![];
+            let mut buffer = [0; 4096];
+            while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 16384);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            let body = if request.starts_with("GET /version ") {
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+            } else if request.starts_with("GET /v1.49/images/sha256%3Aabc/json ") {
+                r#"{"Id":"sha256:abc","RepoTags":["registry:5000/app:v1"],"Config":{"Env":null,"Cmd":null,"Volumes":{"/data":{}},"ExposedPorts":{"80/tcp":{}},"Labels":null}}"#
+            } else if request.starts_with("GET /v1.49/images/sha256%3Aabc/history ") {
+                r#"[{"Id":"layer","Created":123,"CreatedBy":"COPY","Size":42,"Comment":"base"}]"#
+            } else {
+                assert!(
+                    request.starts_with("GET /v1.49/containers/json?all=true&filters="),
+                    "{request}"
+                );
+                assert!(
+                    urlencoding::decode(&request)
+                        .unwrap()
+                        .contains(r#""ancestor":["sha256:abc"]"#)
+                );
+                r#"[{"Id":"container","Names":["/web"],"State":"running","Mounts":[{"Name":"data"},{"Source":"/bind"}],"NetworkSettings":{"Networks":{"bridge":{"NetworkID":"network-id"}}},"Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]"#
+            };
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let image =
+        ImageInspectionPort::inspect_image(&client, "sha256:abc", &CancellationToken::new())
+            .await
+            .unwrap();
+    assert_eq!(image.name, "registry:5000/app");
+    assert_eq!(image.tag, "v1");
+    assert!(image.env.is_empty() && image.labels.is_empty());
+    assert_eq!(image.layers[0].size, 42);
+    assert_eq!(image.containers[0].volumes, vec!["data"]);
+    assert_eq!(image.containers[0].networks["bridge"], "network-id");
+    assert_eq!(image.containers[0].ports["80/tcp"][0]["hostIP"], "::");
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn container_logs_negotiate_inspect_tty_and_decode_the_generated_stream_route() {
+    use citadel_platforms::logs::ContainerLogPort;
+    use tokio_util::sync::CancellationToken;
+    for tty in [false, true] {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            for step in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut bytes = vec![];
+                let mut buffer = [0; 4096];
+                while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let n = socket.read(&mut buffer).await.unwrap();
+                    assert!(n > 0 && bytes.len() < 16384);
+                    bytes.extend_from_slice(&buffer[..n]);
+                }
+                let request = String::from_utf8(bytes).unwrap();
+                let body = match step {
+                    0 => {
+                        assert!(request.starts_with("GET /version "));
+                        br#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#.to_vec()
+                    }
+                    1 => {
+                        assert!(request.starts_with("GET /v1.49/containers/container-1/json "));
+                        format!(r#"{{"Config":{{"Tty":{tty}}}}}"#).into_bytes()
+                    }
+                    _ => {
+                        assert!(request.starts_with("GET /v1.49/containers/container-1/logs?stdout=true&stderr=true&timestamps=true&follow=true&tail=100&details=false "));
+                        let log = b"2026-09-06T12:00:00Z hello\n";
+                        if tty {
+                            log.to_vec()
+                        } else {
+                            let mut b = vec![1, 0, 0, 0];
+                            b.extend_from_slice(&(log.len() as u32).to_be_bytes());
+                            b.extend_from_slice(log);
+                            b
+                        }
+                    }
+                };
+                socket
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+                socket.write_all(&body).await.unwrap();
+                socket.shutdown().await.unwrap();
+            }
+        });
+        let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+        let mut logs = client
+            .container_logs("container-1", &CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(
+            logs.next().await.unwrap().unwrap(),
+            b"2026-09-06T12:00:00Z hello\n"
+        );
+        assert!(logs.next().await.is_none());
+        server.await.unwrap();
+        std::fs::remove_file(path).unwrap();
+    }
+}
+
 #[tokio::test]
 async fn cancelled_task_inspection_does_not_open_the_docker_socket() {
+    use citadel_platforms::terminal::{ContainerTerminalPort, TerminalShell};
     use citadel_platforms::{RuntimeErrorKind, SwarmTaskRuntimePort};
     let socket = temp_socket();
     let client = DockerClient::new(&socket, Duration::from_secs(1)).unwrap();
@@ -24,6 +162,10 @@ async fn cancelled_task_inspection_does_not_open_the_docker_socket() {
             .unwrap_err()
             .kind,
         RuntimeErrorKind::Cancelled
+    );
+    assert!(
+        matches!(client.container_terminal("container", TerminalShell::Sh, &cancellation).await,
+        Err(error) if error.kind == RuntimeErrorKind::Cancelled)
     );
 }
 
@@ -491,4 +633,108 @@ fn response_for(path: &str) -> Vec<u8> {
 
 fn temp_socket() -> PathBuf {
     std::env::temp_dir().join(format!("citadel-phase0-{}.sock", Uuid::now_v7()))
+}
+
+#[tokio::test]
+async fn terminal_hijacks_generated_exec_route_streams_stdin_resizes_and_closes_on_drop() {
+    use citadel_platforms::terminal::*;
+    use tokio_util::sync::CancellationToken;
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for step in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (request, body) = read_terminal_request(&mut socket).await;
+            let response = if step == 0 {
+                assert!(request.starts_with("GET /version "));
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+            } else {
+                assert!(request.starts_with("POST /v1.49/containers/container-1/exec "));
+                let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                assert_eq!(body["Cmd"], serde_json::json!(["/bin/sh"]));
+                assert_eq!(body["Tty"], true);
+                assert_eq!(body["AttachStdin"], true);
+                r#"{"Id":"exec-1"}"#
+            };
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",response.len()).as_bytes()).await.unwrap();
+        }
+        let (mut terminal, _) = listener.accept().await.unwrap();
+        let (request, body) = read_terminal_request(&mut terminal).await;
+        assert!(request.starts_with("POST /v1.49/exec/exec-1/start "));
+        assert!(request.to_ascii_lowercase().contains("upgrade: tcp"));
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+            serde_json::json!({"Detach":false,"Tty":true})
+        );
+        terminal
+            .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+            .await
+            .unwrap();
+        let mut input = [0; 3];
+        terminal.read_exact(&mut input).await.unwrap();
+        assert_eq!(&input, b"ls\n");
+        terminal.write_all(b"hello\n").await.unwrap();
+        let (mut resize, _) = listener.accept().await.unwrap();
+        let (request, _) = read_terminal_request(&mut resize).await;
+        assert!(request.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
+        resize
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        terminal.write_all(b"resized").await.unwrap();
+        assert_eq!(terminal.read(&mut input).await.unwrap(), 0);
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let mut terminal = client
+        .container_terminal("container-1", TerminalShell::Sh, &CancellationToken::new())
+        .await
+        .unwrap();
+    terminal
+        .input
+        .try_send(TerminalInput::Stdin(b"ls\n".to_vec()))
+        .unwrap();
+    assert!(
+        matches!(terminal.output.next().await.unwrap().unwrap(),TerminalOutput::Data(bytes) if bytes==b"hello\n")
+    );
+    terminal
+        .input
+        .try_send(TerminalInput::Resize {
+            cols: 100,
+            rows: 30,
+        })
+        .unwrap();
+    assert!(
+        matches!(terminal.output.next().await.unwrap().unwrap(),TerminalOutput::Data(bytes) if bytes==b"resized")
+    );
+    drop(terminal.output);
+    assert!(terminal.input.is_closed());
+    tokio::time::timeout(Duration::from_secs(2), server)
+        .await
+        .unwrap()
+        .unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+async fn read_terminal_request(socket: &mut tokio::net::UnixStream) -> (String, Vec<u8>) {
+    // Read headers and the complete JSON body before switching this fixture to raw I/O.
+    let mut bytes = Vec::new();
+    let mut one = [0; 1];
+    while !bytes.ends_with(b"\r\n\r\n") {
+        socket.read_exact(&mut one).await.unwrap();
+        bytes.push(one[0]);
+        assert!(bytes.len() < 16384);
+    }
+    let headers = String::from_utf8(bytes).unwrap();
+    let length = headers
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length: ")
+                .and_then(|value| value.parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+    assert!(length < 16384);
+    let mut body = vec![0; length];
+    socket.read_exact(&mut body).await.unwrap();
+    (headers, body)
 }

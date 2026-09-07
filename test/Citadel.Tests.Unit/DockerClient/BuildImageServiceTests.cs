@@ -14,6 +14,22 @@ namespace Tests.Unit.DockerClient;
 
 public sealed class BuildImageServiceTests
 {
+    [Theory]
+    [InlineData(null, "e30=")]
+    [InlineData("", "e30=")]
+    [InlineData("eyJ1c2VybmFtZSI6ImNpIn0=", "eyJ1c2VybmFtZSI6ImNpIn0=")]
+    public async Task StreamPushImage_ShouldSendAuthObjectEvenForAnonymousRegistry(string? auth, string expected)
+    {
+        var connection = new FakeDockerConnection(new MemoryStream(Encoding.UTF8.GetBytes("{\"status\":\"pushed\"}\n")));
+        var service = new ImageService(Mock.Of<IDockerClient>(), new StreamService(), connection);
+        var messages = await service.StreamPushImage(
+            new PushImageStreamCommand("registry.example.test/team/app:latest", auth),
+            TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("pushed", Assert.Single(messages).Status);
+        Assert.Equal(expected, Assert.Single(connection.Request.Headers.GetValues("X-Registry-Auth")));
+    }
+
     [Fact]
     public async Task ChunkedReadStream_ShouldDecodeDockerApiChunkedJsonStream()
     {

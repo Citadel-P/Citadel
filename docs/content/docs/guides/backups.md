@@ -315,6 +315,11 @@ Backup policies can alert on failure when **Alert on failure** is enabled. Deliv
 
 Use S3-compatible storage for remote platforms, edge agents, and Docker Swarm. It keeps the backup path independent from where Citadel Core is running and avoids requiring shared host folders.
 
+For Swarm, volume names alone do not identify the data: two nodes can have
+different local volumes with the same name. Citadel uses the selected node for
+backup and restore. If that node's Agent is unavailable, the operation fails
+instead of reading or restoring a same-named volume on another node.
+
 Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.
 
 

@@ -263,7 +263,7 @@ impl ExternalSecretPatch {
     }
 }
 
-fn validate_external_secret(
+pub(crate) fn validate_external_secret(
     name: &str,
     provider_id: Uuid,
     path: &str,

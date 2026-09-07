@@ -278,6 +278,8 @@ CREATE TABLE serviceaccounts (
 
 CREATE TABLE stacks (
     id uuid NOT NULL,
+    applyservices text[] NOT NULL DEFAULT '{}',
+    containeroperationid uuid,
     controlstartedat bigint,
     controlstate text DEFAULT 'Idle',
     controltriggeredby uuid,
@@ -346,6 +348,8 @@ CREATE TABLE activityevents (
 
 CREATE TABLE deployments (
     id uuid NOT NULL,
+    containeroperationid uuid,
+    updatecheckid uuid,
     autoupdatestate_currentdigest text,
     autoupdatestate_lastcheckedat timestamp with time zone,
     autoupdatestate_lasterror text,
@@ -561,6 +565,7 @@ CREATE TABLE swarmsecretprojections (
 
 CREATE TABLE swarmservices (
     id uuid NOT NULL,
+    updatecheckid uuid,
     appliedimagedigest text,
     attemptedat timestamp with time zone,
     autoupdatestate_currentdigest text,
@@ -1154,6 +1159,7 @@ CREATE TABLE stackwebhookdeployqueue (
 
 CREATE TABLE containers (
     id uuid NOT NULL,
+    containeroperationid uuid,
     controlstartedat bigint,
     controlstate text DEFAULT 'Idle',
     controltriggeredby uuid,
@@ -1275,6 +1281,7 @@ CREATE TABLE buildruns (
     buildargssnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
     buildprojectid uuid NOT NULL,
     buildsecretidssnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    buildsecretssnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
     completedat timestamp with time zone,
     contextpath text NOT NULL,
     dockerfilepath text NOT NULL,
@@ -1358,6 +1365,20 @@ CREATE TABLE buildrunlogs (
     CONSTRAINT pk_buildrunlogs PRIMARY KEY (id),
     CONSTRAINT fk_buildrunlogs_buildruns_buildrunid FOREIGN KEY (buildrunid) REFERENCES buildruns (id) ON DELETE CASCADE
 );
+
+CREATE TABLE buildcompletionqueue (
+    id uuid PRIMARY KEY,
+    buildrunid uuid NOT NULL REFERENCES buildruns(id) ON DELETE RESTRICT,
+    buildprojectid uuid NOT NULL REFERENCES buildprojects(id) ON DELETE RESTRICT,
+    resourceid uuid NOT NULL,
+    resourcetype text NOT NULL CHECK (resourcetype IN ('Deployment','Stack')),
+    status text NOT NULL DEFAULT 'Queued' CHECK (status IN ('Queued','Processing')),
+    queuedat timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    startedat timestamp with time zone
+);
+CREATE UNIQUE INDEX ix_buildcompletionqueue_pending ON buildcompletionqueue(resourceid,resourcetype,buildprojectid) WHERE status='Queued';
+CREATE UNIQUE INDEX ix_buildcompletionqueue_active ON buildcompletionqueue(resourceid,resourcetype) WHERE status='Processing';
+CREATE INDEX ix_buildcompletionqueue_ready ON buildcompletionqueue(status,queuedat,id);
 
 CREATE TABLE backuprunitems (
     id uuid NOT NULL,
@@ -1841,6 +1862,7 @@ CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid ON containers (d
 CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid_dockernodeid ON containers (dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL;
 
 CREATE INDEX ix_containers_controltriggeredby ON containers (controltriggeredby);
+CREATE INDEX ix_containers_containeroperationid ON containers (containeroperationid, controlstartedat) WHERE containeroperationid IS NOT NULL;
 
 CREATE INDEX ix_containers_deploymentid ON containers (deploymentid);
 
@@ -1859,6 +1881,8 @@ CREATE UNIQUE INDEX ix_containerstats_containerid_created ON containerstats (con
 CREATE INDEX ix_containerstats_created ON containerstats (created);
 
 CREATE INDEX ix_deployments_controltriggeredby ON deployments (controltriggeredby);
+CREATE INDEX ix_deployments_containeroperationid ON deployments (containeroperationid, controlstartedat) WHERE containeroperationid IS NOT NULL;
+CREATE INDEX ix_deployments_updatecheckid ON deployments (controlstartedat, id) WHERE updatecheckid IS NOT NULL;
 
 CREATE INDEX ix_deployments_createdbyactorid ON deployments (createdbyactorid);
 
@@ -2021,6 +2045,7 @@ CREATE INDEX ix_stackreleasevolumebindings_platform_volumename ON stackreleasevo
 CREATE UNIQUE INDEX ix_stackreleasevolumebindings_release_volumename ON stackreleasevolumebindings (stackreleaseid, volumename);
 
 CREATE INDEX ix_stacks_controltriggeredby ON stacks (controltriggeredby);
+CREATE INDEX ix_stacks_containeroperationid ON stacks (containeroperationid, controlstartedat) WHERE containeroperationid IS NOT NULL;
 
 CREATE INDEX ix_stacks_createdbyactorid ON stacks (createdbyactorid);
 

@@ -151,9 +151,9 @@ pub struct GitRepositoryRefView {
 
 pub use citadel_resources::webhooks::WebhookConfiguration as GitRepositoryWebhook;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitWebhookOutcome {
-    Queued,
+    Queued { branch: String },
     Ignored,
 }
 
@@ -451,7 +451,9 @@ impl GitRepositoryExecutionService {
             )
             .await?;
         self.changed();
-        Ok(GitWebhookOutcome::Queued)
+        Ok(GitWebhookOutcome::Queued {
+            branch: branch.unwrap_or(&source.default_branch).to_owned(),
+        })
     }
 
     pub async fn resolve_commit(

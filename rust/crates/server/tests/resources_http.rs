@@ -58,10 +58,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Duration::days(30),
     ));
     let secret_protector = Arc::new(AesGcmSecretProtector::new(&[29_u8; 32]).unwrap());
-    let resources = Arc::new(ResourceMetadataService::new(
-        Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
-        secret_protector.clone(),
-    ));
+    let resources = Arc::new(
+        ResourceMetadataService::new(
+            Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+            secret_protector.clone(),
+        )
+        .with_secret_provider_tester(Arc::new(
+            citadel_adapters::secret_value_resolver::PostgresSecretValueResolver::new(
+                pool.clone(),
+                secret_protector.clone(),
+            )
+            .unwrap(),
+        )),
+    );
     let git_accounts = Arc::new(GitAccountService::new(
         Arc::new(PostgresGitAccountStore::new(pool.clone())),
         secret_protector,
@@ -110,6 +119,9 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         automation: Arc::clone(&automation),
         backups: None,
         builds: None,
+        stacks: None,
+        services: None,
+        audit: None,
         alerts: None,
     }))
     .merge(automation_http::router(AutomationHttpState {
@@ -1032,6 +1044,62 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(provider_response.status(), StatusCode::OK);
     let provider = response_json(provider_response).await;
     let provider_id = provider["id"].as_str().unwrap();
+    // .NET Vault connection/reference commands require Binding.Write even though
+    // they do not persist anything. Authorization must precede provider access.
+    for uri in [
+        "/api/v1/resourceBindings/secret-providers/vault-kv2/test",
+        "/api/v1/resourceBindings/secrets/external/test",
+    ] {
+        assert_eq!(
+            request(&app, Method::POST, uri, None, Some(json!({})))
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request(
+                &app,
+                Method::POST,
+                uri,
+                Some(resource_actor.clone()),
+                Some(json!({}))
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            request(
+                &app,
+                Method::POST,
+                uri,
+                Some(administrator.clone()),
+                Some(json!({}))
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let no_token = request(
+        &app,
+        Method::POST,
+        "/api/v1/resourceBindings/secret-providers/vault-kv2/test",
+        Some(administrator.clone()),
+        Some(json!({"address":"https://vault.example.test","mountPath":"secret"})),
+    )
+    .await;
+    assert_eq!(no_token.status(), StatusCode::OK);
+    assert_eq!(response_json(no_token).await["success"], false);
+    let missing_provider = request(
+        &app,
+        Method::POST,
+        "/api/v1/resourceBindings/secrets/external/test",
+        Some(administrator.clone()),
+        Some(json!({"providerId":Uuid::now_v7(),"externalPath":"apps/test","externalKey":"token"})),
+    )
+    .await;
+    assert_eq!(missing_provider.status(), StatusCode::NOT_FOUND);
     assert_eq!(provider["address"], "https://vault.example.test");
     assert!(provider.get("token").is_none());
 
@@ -1040,7 +1108,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Method::PATCH,
         &format!("/api/v1/resourceBindings/secret-providers/vault-kv2/{provider_id}"),
         Some(administrator.clone()),
-        Some(json!({"name":format!("provider-updated-{suffix}")})),
+        Some(json!({"name":format!("provider-updated-{suffix}"),"token":""})),
     )
     .await;
     assert_eq!(provider_patch.status(), StatusCode::OK);

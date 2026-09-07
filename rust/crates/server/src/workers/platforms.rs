@@ -39,6 +39,8 @@ pub struct WorkerSettings {
 }
 
 pub struct WorkerDependencies {
+    pub volume_content: Arc<citadel_adapters::volume_content::VolumeContentAdapter>,
+    pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
     pub docker: DockerClient,
     pub pool: PgPool,
     pub readiness: Arc<Readiness>,
@@ -63,6 +65,8 @@ pub fn register(
     settings: WorkerSettings,
 ) {
     let WorkerDependencies {
+        volume_content,
+        containers,
         docker,
         pool,
         readiness,
@@ -79,6 +83,14 @@ pub fn register(
         alerts,
         alert_deliveries,
     } = dependencies;
+    supervisor.spawn(
+        "volume-helper-recovery",
+        super::volume_helpers::reconcile(cancellation.child_token(), volume_content),
+    );
+    supervisor.spawn(
+        "container-operation-reconciliation",
+        super::containers::reconcile(cancellation.child_token(), containers),
+    );
     supervisor.spawn(
         "git-repository-sync",
         super::git::git_repository_sync(cancellation.child_token(), git),
@@ -100,6 +112,25 @@ pub fn register(
         super::builds::build_runs(cancellation.child_token(), Arc::clone(&builds)),
     );
     supervisor.spawn(
+        "build-consumers",
+        super::builds::build_consumers(
+            cancellation.child_token(),
+            citadel_builds::BuildCompletionService::new(
+                Arc::new(
+                    citadel_adapters::build_completion_store::PostgresBuildCompletionStore::new(
+                        pool.clone(),
+                    ),
+                ),
+                Arc::new(super::build_consumers::BuildConsumers {
+                    deployments: deployments.clone(),
+                    stacks: stacks.clone(),
+                    realtime: realtime.clone(),
+                }),
+                builds.clone(),
+            ),
+        ),
+    );
+    supervisor.spawn(
         "build-pool-health",
         super::builds::pool_health(cancellation.child_token(), builds),
     );
@@ -119,12 +150,23 @@ pub fn register(
         "deployment-apply-reconciliation",
         super::deployments::deployment_apply_reconciliation(
             cancellation.child_token(),
-            deployments,
+            Arc::clone(&deployments),
         ),
+    );
+    supervisor.spawn(
+        "deployment-image-updates",
+        super::deployments::image_updates(cancellation.child_token(), deployments),
     );
     supervisor.spawn(
         "swarm-service-operation-reconciliation",
         super::swarm_services::swarm_service_operation_reconciliation(
+            cancellation.child_token(),
+            Arc::clone(&swarm_services),
+        ),
+    );
+    supervisor.spawn(
+        "swarm-service-image-updates",
+        super::swarm_services::swarm_service_image_updates(
             cancellation.child_token(),
             swarm_services,
         ),
@@ -138,7 +180,15 @@ pub fn register(
     );
     supervisor.spawn(
         "stack-drift-monitor",
-        super::stacks::stack_drift_monitor(cancellation.child_token(), stacks),
+        super::stacks::stack_drift_monitor(cancellation.child_token(), Arc::clone(&stacks)),
+    );
+    supervisor.spawn(
+        "stack-webhooks",
+        super::stacks::stack_webhooks(cancellation.child_token(), stacks.clone()),
+    );
+    supervisor.spawn(
+        "stack-updates",
+        super::stacks::stack_updates(cancellation.child_token(), stacks.clone()),
     );
     let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
     let (local_reconcile_sender, local_reconcile_receiver) =

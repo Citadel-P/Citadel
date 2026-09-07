@@ -346,6 +346,36 @@ impl citadel_builds::BuildEntitlements for PostgresLicenseEntitlementService {
     }
 }
 
+impl citadel_stacks::StackEntitlements for PostgresLicenseEntitlementService {
+    fn operational_guardrails(&self) -> BoxFuture<'_, Result<bool, citadel_stacks::StackError>> {
+        Box::pin(async move {
+            self.enabled(LicenseCapability::OperationalGuardrails)
+                .await
+                .map_err(|error| citadel_stacks::StackError::Storage(error.to_string()))
+        })
+    }
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, citadel_stacks::StackError>> {
+        Box::pin(async move {
+            self.enabled(LicenseCapability::AutomatedOperations)
+                .await
+                .map_err(|error| citadel_stacks::StackError::Storage(error.to_string()))
+        })
+    }
+}
+
+impl citadel_swarm_services::ServiceAutomationEntitlements for PostgresLicenseEntitlementService {
+    fn enabled(
+        &self,
+        capability: LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, citadel_swarm_services::SwarmServiceError>> {
+        Box::pin(async move {
+            self.enabled(capability).await.map_err(|error| {
+                citadel_swarm_services::SwarmServiceError::Storage(error.to_string())
+            })
+        })
+    }
+}
+
 impl citadel_automation::AutomationEntitlements for PostgresLicenseEntitlementService {
     fn automated_operations(
         &self,

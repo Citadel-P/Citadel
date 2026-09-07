@@ -12,13 +12,18 @@ use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+pub mod containers;
+pub mod images;
 mod inventory;
 pub mod jobs;
+pub mod logs;
 mod mutations;
 pub mod node_agents;
 mod read;
 mod registration;
 mod statistics;
+pub mod terminal;
+pub mod volume_content;
 
 pub use inventory::*;
 pub use mutations::*;

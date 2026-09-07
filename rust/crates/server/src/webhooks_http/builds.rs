@@ -30,20 +30,22 @@ pub(super) async fn receive(
         .evaluate(auth_type, headers, body)
         .map_err(webhook_auth_error)?
     {
-        return Ok(Some(reason));
+        return Ok(WebhookDispatch::noop(reason));
     }
     if !project.enabled {
-        return Ok(Some("Build Project is disabled."));
+        return Ok(WebhookDispatch::noop("Build Project is disabled."));
     }
     if project.control_state != "Idle" {
-        return Ok(Some("Build Project already has an active run."));
+        return Ok(WebhookDispatch::noop(
+            "Build Project already has an active run.",
+        ));
     }
     if let Err(error) = builds
         .ensure_execution_entitlements(&project, "Webhook")
         .await
     {
         return match error {
-            BuildError::LicenseRequired(_) => Ok(Some(
+            BuildError::LicenseRequired(_) => Ok(WebhookDispatch::noop(
                 "Build webhook requires an active license entitlement.",
             )),
             error => Err(build_error(error)),
@@ -61,7 +63,7 @@ pub(super) async fn receive(
             )
         })?;
     if !repository_matches(&source.url, &payload) {
-        return Ok(Some("Repository identity mismatch"));
+        return Ok(WebhookDispatch::noop("Repository identity mismatch"));
     }
     let (_, payload_branch) =
         citadel_resources::webhooks::webhook_branch(&webhook.provider, headers, body)
@@ -85,38 +87,13 @@ pub(super) async fn receive(
             "Webhook commit must be a full commit ID.",
         ));
     }
-    let paths: Vec<&str> = payload
-        .get("changedPaths")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .chain(
-            payload
-                .get("commits")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .flat_map(|commit| {
-                    ["added", "modified", "removed"]
-                        .into_iter()
-                        .flat_map(move |field| {
-                            commit
-                                .get(field)
-                                .and_then(Value::as_array)
-                                .into_iter()
-                                .flatten()
-                                .filter_map(Value::as_str)
-                        })
-                }),
-        )
-        .collect();
+    let paths = super::changed_paths(&payload);
     if !paths.is_empty() {
         if !paths
             .iter()
             .any(|path| relevant_path(&project.context_path, &project.dockerfile_path, path))
         {
-            return Ok(Some("No relevant path changes"));
+            return Ok(WebhookDispatch::noop("No relevant path changes"));
         }
     } else if let Some(previous) = &project.latest_run
         && previous.status == "Succeeded"
@@ -139,7 +116,7 @@ pub(super) async fn receive(
                 )
             })?;
         if head == base {
-            return Ok(Some("No new commit"));
+            return Ok(WebhookDispatch::noop("No new commit"));
         }
         if let Ok(changes) = state
             .git
@@ -153,7 +130,7 @@ pub(super) async fn receive(
                     })
             })
         {
-            return Ok(Some("No relevant path changes"));
+            return Ok(WebhookDispatch::noop("No relevant path changes"));
         }
         commit = Some(head);
     }
@@ -161,11 +138,11 @@ pub(super) async fn receive(
         .queue_webhook(&project, branch, commit.as_deref())
         .await
     {
-        Ok(()) => Ok(None),
-        Err(BuildError::Conflict(_)) => {
-            Ok(Some("Build Project is busy or its configuration changed."))
-        }
-        Err(BuildError::LicenseRequired(_)) => Ok(Some(
+        Ok(()) => Ok(WebhookDispatch::queued(branch, commit.as_deref())),
+        Err(BuildError::Conflict(_)) => Ok(WebhookDispatch::noop(
+            "Build Project is busy or its configuration changed.",
+        )),
+        Err(BuildError::LicenseRequired(_)) => Ok(WebhookDispatch::noop(
             "Build webhook requires an active license entitlement.",
         )),
         Err(error) => Err(build_error(error)),

@@ -21,9 +21,6 @@ namespace Infrastructure.Repositories.Security.Grpc;
 /// </remarks>
 public sealed class HubSigningInterceptor : Interceptor
 {
-    private readonly SignatureAlgorithm algorithm =
-        SignatureAlgorithm.Ed25519;
-
     public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
         TRequest request,
         ClientInterceptorContext<TRequest, TResponse> context,
@@ -54,6 +51,14 @@ public sealed class HubSigningInterceptor : Interceptor
             throw new InvalidOperationException(
                 "TRequest must implement IMessage");
 
+        var headers = SignHeaders(proto, context.Method.FullName, context.Options.Headers);
+        return new ClientInterceptorContext<TRequest, TResponse>(
+            context.Method, context.Host, context.Options.WithHeaders(headers));
+    }
+
+    // Duplex calls authenticate their first message before opening the stream.
+    internal static Metadata SignHeaders(IMessage proto, string method, Metadata? headers = null)
+    {
         long timestamp =
             DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -67,14 +72,14 @@ public sealed class HubSigningInterceptor : Interceptor
             Helpers.RequestSigning.BuildSignedPayload(
                 timestamp,
                 nonce,
-                context.Method.FullName,
+                method,
                 bodyHash);
 
         using var privateKey = Helpers.GetOrCreatePrivateKey();
         byte[] signature =
-            algorithm.Sign(privateKey, signedPayload);
+            SignatureAlgorithm.Ed25519.Sign(privateKey, signedPayload);
 
-        var headers = context.Options.Headers ?? new Metadata();
+        headers ??= new Metadata();
 
         Span<byte> timestampBytes = stackalloc byte[Constants.GrpcRequestMetadata.TimestampSize];
 
@@ -87,13 +92,8 @@ public sealed class HubSigningInterceptor : Interceptor
         headers.Add(Constants.GrpcRequestMetadata.ContentHashHeaderKey, bodyHash);
         headers.Add(Constants.GrpcRequestMetadata.SignatureHeaderKey, signature);
 
-        var options = context.Options.WithHeaders(headers);
-
         CryptographicOperations.ZeroMemory(signedPayload);
 
-        return new ClientInterceptorContext<TRequest, TResponse>(
-            context.Method,
-            context.Host,
-            options);
+        return headers;
     }
 }

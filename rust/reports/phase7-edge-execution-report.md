@@ -1,6 +1,9 @@
-# Phase 7: Edge execution follow-up
+# Phase 7: external execution completion report
 
-Status: implemented portions below; **Phase 7 remains open**.
+Status: **Phase 7 implementation and defined exit checks complete (2026-09-07)**.
+The current closure record is **Completion pass (2026-09-07)** below. Earlier
+checkpoint notes are retained as history, not outstanding work. This is not a
+release-readiness claim: Phase 8's full-image/browser/security/soak gates remain.
 
 ## Implemented
 
@@ -464,20 +467,399 @@ passed. Generated Docker API 1.49 and OpenAPI checks passed (313 full / 261 publ
 contracts). The disposable PostgreSQL fixture was removed; no user workloads,
 database volumes or node-agent installations were modified during verification.
 
+## Container, Deployment and Stack live-log follow-up
+
+The existing `container-log` and `stack-log` groups and `StartContainerLogs`,
+`StartDeploymentLogs` and `StartStackLogs` invocations now stream through Local
+Docker, signed Agent RPC and exact-node Edge commands. The frontend is unchanged.
+Docker's TTY mode is inspected before decoding its raw or multiplexed response;
+headers are not rendered as log text. Split UTF-8 lines, timestamps, Stack
+container-filter prefixes and the final unterminated line are preserved.
+
+Access requires Read plus Logs on the Platform or owning workload, not Read
+alone. Subscriptions recheck access, cancel upstream work when left/disconnected,
+reject stale node data and never route an unavailable worker to the manager.
+Repeated starts are idempotent. Docker IDs resolve only when unambiguous; the
+Deployment viewer's short-Docker-ID group remains compatible. Stack streams
+follow committed inventory changes and replace only changed container streams.
+
+The implementation limits each connection to four log groups, each Stack to
+32 container streams, and the process to 128 upstream log streams. Frames and
+partial lines are bounded to 1 MiB. Startup and WebSocket sends are timed out;
+there is no unbounded log history or detached log-pump task in Core.
+
+Additional .NET scenario mapping:
+
+| .NET reference | Rust coverage |
+| --- | --- |
+| `StartContainerLogs_FullDockerId_UsesNormalizedSubscriberGroup` | PostgreSQL reference resolution and normalized invocation-group assertions |
+| `StartContainerLogs_ResourceId_RoutesToPersistedOwningNode` | Actual WebSocket + PostgreSQL + Edge command-peer test, asserting full Docker ID, selected node and no commands to another node |
+| Log subscription permission and lifecycle requirements | Read-without-Logs rejection, join-before-start, duplicate start, leave cancellation and permission-revocation disconnect |
+| Existing Stack viewer framing and runtime membership | UTF-8/timestamp/prefix unit tests and committed container-replacement test without reopening unchanged streams |
+| Local/Agent transport parity | Unix-socket TTY/non-TTY route test, multiplex-frame bound/cancellation tests, signed HTTP/2 stream and cancellation test |
+
+This completes this live-log slice, not interactive terminal support, Swarm
+Service/Task log endpoints, volume browsing/mutations or all remaining Phase 7
+work. Released-Agent multi-node acceptance remains a separate required gate.
+
+Verification: all 351 Rust workspace library tests pass. The Phase 7A gate
+passes, including both new PostgreSQL/live-WebSocket log tests and the new
+Unix-socket log transport test. Targeted test Clippy, generated Docker/OpenAPI
+checks and the two existing frontend log-viewer tests pass. The disposable
+PostgreSQL fixtures were removed; user databases and Docker workloads were not
+modified.
+
+### Terminal transport and authentication foundation
+
+Code review found a pre-existing regular-Agent security gap: Core's
+`HubSigningInterceptor` and Agent's `AgentVerificationInterceptor` previously only overrode
+unary and server-streaming calls. `ContainerGrpcService.Exec` is bidirectional
+and directly opens the Docker exec session; the inspected service registration
+adds no authorization policy and direct TLS configures a server certificate,
+not required client authentication. An Agent reachable by an untrusted client
+therefore appeared to allow unsigned terminal requests. This was strongly inferred
+from code, not a live exploit against an installed Agent.
+
+The following implementation now closes that prerequisite in source:
+
+- .NET Core signs the exact initial `ExecClientMessage.Open` using its existing
+  signature algorithm and metadata. A failed initial write disposes the call.
+- Regular Agent verifies that first message before entering the Docker handler,
+  including nonce replay protection. Empty streams and signed non-Open messages
+  are rejected. Opening is limited to ten seconds; this deadline does not apply
+  to the authenticated interactive session.
+- Rust signs the same opening message and uses the existing duplex protobuf RPC.
+  Edge sends `ContainerExec` and `StreamInput` over the selected authenticated
+  session. Reconnect never forwards old input to a replacement Agent session.
+- Local Docker uses generated Exec routes and an upgraded Unix-socket connection,
+  not a buffered process output or a polling loop.
+- Input queues hold at most eight messages, each at most 16 KiB; dimensions are
+  1–1000. Agent output frames are limited to 1 MiB. Local reads use 16 KiB buffers.
+  Input backpressure is explicit, and dropping output cancels/releases transport
+  resources. Raw Agent execution errors are not exposed to terminal viewers.
+
+Core and regular Agent must be upgraded together for signed terminals. Old Core
+terminal calls are deliberately rejected by the updated Agent; there is no
+unsigned compatibility fallback. No protobuf or frontend change is necessary.
+
+Coverage for this foundation:
+
+| Reference / requirement | Tests |
+| --- | --- |
+| Agent signature and replay policy | .NET Agent: valid Open, tampering, missing headers, wrong key/method, replay, signed Resize before Open, empty stream, cancellation and silent-client opening timeout |
+| `EdgeAgentConnectorTests` interactive command contract | Rust Edge: exact node/command, Open/stdin/resize/output, cancellation on disposal, reconnect isolation |
+| `ExecSessionManagerTests` transport disposal requirement | Rust Local/Agent/Edge: socket/stream closure and closed input after disposal/cancellation |
+| Local/Agent protocol equivalence | Unix-socket HTTP upgrade/resize test and real HTTP/2 fixture verifying the Ed25519 signature over the initial Open |
+| Memory bounds | Input queue and frame bounds, invalid dimensions, closed-input rejection and safe error framing |
+
+This is **not yet browser terminal parity**: WebSocket start/input/resize routing,
+join-before-start, per-connection session ownership and resource permission
+revocation tests remain to be connected and ported. Existing Rust exec groups
+remain unavailable until that authorization layer is implemented. Released-Agent
+multi-node acceptance has not been run for terminals.
+
+Foundation verification: 354 Rust workspace library tests pass, as do the
+Phase 7A gate (including PostgreSQL and WebSocket integration tests), the Local/
+Agent/Edge transport tests, targeted Clippy and generated Docker/OpenAPI checks.
+All 23 .NET Agent security tests pass, including ten new duplex-authentication
+cases. The .NET Core Infrastructure project builds with existing warnings and
+no errors. No frontend changes or live workload/database mutations were made.
+
+### Browser terminal and bounded Swarm logs
+
+The existing Container, Deployment, Stack and Swarm Task terminal invocations
+now use the authenticated Rust WebSocket connection. Joining is required before
+starting; input belongs to the connection that opened the session, not merely
+to anyone who knows its group name. Read plus Terminal permissions are checked,
+then revalidated during the session. Target replacement, stale node data,
+revocation, leave and disconnect terminate the old command. Input does not
+perform a live Docker Task inspection for each keystroke. The legacy output
+event has no session discriminator, so each WebSocket may own one terminal.
+
+Swarm Service, Task and managed Service log HTTP endpoints now preserve the
+existing operation IDs and response shape. Tail is limited to 1–200, retained
+log bytes to 1 MiB, and the request has a deadline. Task logs inspect the live
+Task identity and route to its exact node's container. Local Docker, signed
+Agent and Edge share frame/UTF-8 handling; no frontend workaround is required.
+
+Additional .NET test mapping:
+
+| Reference | Rust evidence |
+| --- | --- |
+| `ExecSessionManagerTests` session ownership/lifecycle | PostgreSQL + real WebSocket tests for join-before-start, another connection's input, duplicate start, permission revocation and container replacement |
+| `SwarmEndpointTests.LogsEndpoint_ShouldRejectOutOfRangeTail` | Both Service and Task log routes reject invalid tail values |
+| `LogsEndpoint_ShouldRequirePlatformLogsPermission` | Read-only access is denied before a runtime command |
+| `LogsEndpoints_ShouldReturnBoundedConnectorResultsForProjectedResources` | Local Service and exact-node Edge Task HTTP results, UTF-8 split across frames |
+| `LogsEndpoint_ShouldRejectAnIdOutsideTheSelectedPlatformBeforeCallingConnector` | Foreign Service ID returns 404 |
+| `EdgeAgentConnectorTests.SwarmLogs_ShouldRouteBoundedServiceAndTaskCommands` | Canonical Service log protobuf request, tail and truncation preservation, oversized response rejection |
+
+The Phase 7A gate passed with 33 platform HTTP tests, including these additions,
+and 316 full/264 public OpenAPI contracts. `Test-Phase7AgentCandidate.ps1` also
+passed against the locally built, published .NET Agent image (not a command
+peer): wrong signing keys are rejected and logs, terminal input, resize and
+cancellation work. This is direct-Agent acceptance, not multi-node acceptance.
+
+The real Local Docker/Restic/RustFS round trip passed again. Inspection while
+extending this to the actual Agent found two remaining remote-execution gaps:
+repository operations still required Local, and retention unconditionally ran
+Core's Docker CLI. S3 repository operations and retention now use the selected
+Agent/Edge runtime; repository-only helpers mount no source volume. The added
+Agent backup acceptance case deliberately configures an unusable Core Docker
+executable, so hidden local execution cannot satisfy it.
+
+Useful targeted commands:
+
+```powershell
+.\rust\scripts\Test-Phase7AgentCandidate.ps1 -AgentImage citadel-agent-phase7:local
+.\rust\scripts\Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage citadel-agent-phase7:local
+```
+
 ## Still required
 
-- Remaining Build execution/source/trigger parity and released-Agent
-  build/push acceptance. AWS
-  provisioning is not implemented in the .NET execution reference either.
-- Remaining node-local detail/mutation/browsing routes and released-Agent
-  installation/repair/upgrade acceptance.
-- Interactive logs/terminal wiring and its permission/transport acceptance tests.
-- Remaining Git/image update producers.
-- Stack/Service webhook dispatch, webhook audit-event parity,
-  and the complete .NET test mapping.
-- Real Local/Agent/Edge external-service acceptance, multi-node backup/restore,
-  Citadel-system exact-node execution, and interrupted-operation recovery.
+### Current completion pass
 
-The pre-existing local `citadel-rust-phase7:local` image lacks the Restic binary;
-it predates the current Dockerfile's Restic installation. It cannot serve as a
-passing candidate for the external-service acceptance matrix without rebuilding.
+The real published-Agent and Edge-Agent S3 backup/restore/retention cases now
+pass with Core's Docker executable deliberately unavailable. The Edge case
+exposed a protocol mismatch masked by command-peer tests: the shared .NET
+contract is version 2, not version 1. Enrollment now validates the shared
+constant, persists the negotiated version and rejects incompatible enrollment
+without consuming its credential.
+
+Git Stack webhook dispatch now uses the existing durable Stack queue. Reception
+authenticates before dispatch, validates repository/branch/path filters and
+honors the automated-operations entitlement. Queue claims and Stack Apply claims
+are atomic, configuration changes invalidate queued work, duplicate pushes
+coalesce, retries are bounded to three attempts, and unknown Docker outcomes
+wait for reconciliation. Successful completion and known failure settle the
+queue in the same transaction as the Stack result/activity. Notify-only still
+depends on the remaining Git update producer; it is not an end-to-end completed
+notification feature yet.
+
+The added PostgreSQL tests also exposed two pre-existing Stack persistence
+bugs: Git repository validation queried a nonexistent archive column, and
+successful Apply mixed `jsonb` parameters with `json` columns in `COALESCE`.
+Both have been corrected without changing the baseline schema.
+
+Image inspection now uses the existing HTTP response and capability shape,
+with Local, signed Agent and exact-node Edge implementations. Generated Docker
+contracts cover details/history and container usage. Registry ports are
+preserved in display references, null Docker collections are normalized, and
+stale or unknown nodes cannot fall back to another daemon. Docker transport
+tests, HTTP/persistence tests and the actual-Agent case passed. The subsequent
+exposed-ports endpoint preserves the UI's image UUID and resolves it to the
+Docker ID on the correct node. The gate passed with 35 platform HTTP tests and
+318 full / 266 public contracts before adding Service update checks.
+
+The opt-in three-node backup fixture uses isolated Docker-in-Docker daemons and
+the actual Agent candidate as a global Swarm service. It targets the .NET
+`WorkerVolume_ShouldBackupToRustFsAndRestoreOnAnotherNode` scenario, including
+same-named volumes on different nodes, persisted source/target identity,
+cleanup and failure when source-node coverage disappears. It passed against
+the published Agent candidate `sha256:5239b06a2e5cb38002bba80299c4e7812cd8b96e6270e2196c45485bfac9da23`.
+This is three real Swarm nodes, real worker Edge Agents and RustFS, with restored
+bytes verified on the other worker. The fixture seeds node-agent installation
+metadata; it does not prove the installation/repair API lifecycle.
+
+That real-node run exposed restrictions which ordinary Edge command-peer tests
+missed: repository-only backup helpers must allow no source mount, and their
+Restic execution allowlist must include init/check/snapshots/forget. These are
+now supported without permitting arbitrary shell, mount or dump commands.
+All 41 Agent command-dispatch tests passed, and the actual candidate was rebuilt.
+
+Service image update checks now have a separate persisted lease rather than
+overwriting the last Docker operation. Cancellation and restart release only
+that lease; stale deletion recovery explicitly excludes it. The schema source
+was updated and `0001_initial.sql` regenerated using xtask (no manual migration).
+The Service check route brings the generated catalog to 319 full / 267 public
+contracts. The HTTP/concurrency tests and the complete Phase 7A gate passed.
+
+Service webhooks now authenticate through the existing listener and use the
+same update-check policy as scheduled checks. Notify-only does not Apply;
+automatic Apply rechecks both license capabilities and claims the checked
+configuration version atomically. Secret rotation invalidates old requests.
+The two-hour scheduled scan uses bounded keyset pages. HTTP/PostgreSQL tests
+cover authentication, licenses, digest equality/change, stale configuration,
+automatic Apply, pagination, and disabled Services.
+
+Git, Stack, Build and Service webhook reception records shared, typed activity
+metadata without request bodies, authorization headers or credentials. An audit
+write failure does not turn an already accepted dispatch into a retryable HTTP
+failure. Provider-specific Git branch/commit audit fields still need parity work.
+
+The three-node fixture also passed worker-local logs and interactive terminal
+input/resize/cancellation, with a negative check against the other worker.
+
+Container action endpoints now retain the existing UUID/short Docker ID contract
+and claim selected containers plus managed parents atomically. A separate
+container-operation lease fences late results from inventory updates and newer
+commands. Parent recovery excludes these claims, so a timed-out container action
+cannot be mistaken for Stack deletion. Unknown outcomes are inspected, never
+replayed. Batches and active operations are bounded; HTTP disconnect does not
+abandon committed work. The initial schema was regenerated through xtask.
+The catalog now contains 325 full / 273 public routes. Local Docker route/304
+tests, HTTP/persistence/parent-fencing tests and cancellation/capacity unit tests
+passed. The real three-node Agent/Edge fixture also passed the container actions,
+logs and terminal checks. The latest complete gate is being rerun after the
+additional volume routes.
+
+Volume directory listing and download now preserve the existing frontend API
+and permission bits across Local Docker, signed Agent and exact-node Edge.
+Helpers use a read-only volume mount, no network, bounded memory/PIDs and a
+bounded execution lifetime. Metadata and Docker multiplex frames are bounded;
+downloads remain streaming. Cancellation and unconsumed response bodies retain
+cleanup ownership, and only successfully completed downloads record a success
+activity. The generated catalog checks pass at 327 full / 275 public routes.
+
+The HTTP/PostgreSQL tests cover permission denial before helper creation, node
+identity, missing coverage, invalid paths, symlinks, binary contents, interrupted
+streams and cleanup without deleting the source volume. The actual three-node
+fixture passed again (191.95 seconds), including Local, manager Agent and worker
+Edge volume reads, same-named volumes with different contents, streamed directory
+archives and worker-to-worker RustFS restore. This run used Agent candidate
+`sha256:497239d27239bba37c7d9a3db9996cfe432eb4fd80dc9c9a50eb8a06a3c50bbc`.
+The shared helper now exits after 31 minutes rather than idling forever.
+
+`Test-Phase7AgentBuild.ps1` passes against an isolated Docker daemon and Registry
+through signed Direct Agent (25.40 seconds) and Edge Agent (24.12 seconds). It
+verifies committed-source archiving, build/push, Registry digest, container
+contents and persisted Build result/logs. Candidate:
+`sha256:a2740eb3c3c0778edf203f8018799f79a07cdb034492861ae9cbe706e9aad086`.
+The Docker 400 was caused by missing anonymous `X-Registry-Auth`; the shared push
+path now sends encoded `{}` without credentials. Both Agent/Core shared-contract
+copies were updated. Rejected hijacks dispose connections and retain bounded
+diagnostics. Selected .NET helper, Build image and transport tests pass (18).
+
+The complete Phase 7A gate passed before the latest Deployment producer work.
+Frontend unit tests passed: 105 files / 368 tests, without frontend source edits.
+Deployment HTTP/PostgreSQL checks pass for digest comparison, authorization,
+cancellation, concurrent claims, stale lease recovery, configuration fencing and
+Notify/license behavior. Automatic Apply outcome coverage, durable Build consumer
+propagation and provider audit metadata are being verified; those gates remain open.
+
+Volume security follow-up remains: the inherited helper checks symlinks before
+opening paths, which does not yet prove safety against concurrent replacement.
+Also, an ambiguous helper creation followed by a disconnected Edge session can
+leave a never-started helper; its process lifetime limit cannot clean that case.
+
+```powershell
+.\rust\scripts\Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage citadel-agent-phase7:local -UseEdgeAgent
+.\rust\scripts\Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage citadel-agent-phase7:local -MultiNode
+```
+
+### Completion pass (2026-09-07)
+
+This section supersedes the historical open-item lists above. The database and
+transport gate, actual node-agent lifecycle/multi-node backup matrix, and real
+external-service acceptance below passed. Ignored acceptance tests were explicitly
+executed with disposable infrastructure; their presence alone is not evidence.
+
+- Deployment and Stack image/Git update producers now emit update-available,
+  successful automatic Apply and failed automatic Apply Alerts. Notification
+  does not mutate Docker. Automatic operations recheck entitlements and the
+  checked configuration version. Service-only Stack updates select only the
+  changed services, without bringing down unrelated services. A partial Apply
+  cannot advance the whole Git Stack baseline.
+- Build completion uses a durable, per-consumer/per-project queue. A second
+  Build project on the same Stack cannot overwrite the first project's receipt.
+  Resolved provenance advances independently of applied provenance; only
+  opted-in services are redeployed. Interrupted claims are fenced rather than
+  replayed blindly. Queued builds retain their builder target, build arguments,
+  secret references and tag templates when the project is edited later.
+- Git repository, Build, Stack and managed Service webhooks use the shared
+  authentication and audit path. Audit fields describe the dispatched branch
+  and known commit; request bodies and credentials are never audit payloads.
+- Node-local browsing/mutations and logs/terminal use existing HTTP/realtime
+  contracts and permissions. No frontend feature edits were needed.
+- Linux volume reads now walk and hold directory descriptors without following
+  symlinks. FIFO/device paths fail without blocking. A bounded cleanup worker
+  removes expired, ownership-verified volume helpers on their exact node,
+  including helpers whose ambiguous creation left them never started.
+- The three-node fixture now invokes the real Install, Repair and Upgrade
+  workflow, instead of seeding installation records. It uses an actual signed
+  manager Agent, global worker Edge Agents and an isolated Registry. This
+  exposed missing optional OCI platform normalization in the Agent and the
+  initial `None` rollout-state mismatch. Repair additionally exposed a stale
+  binding Task ID; authenticated reconnect now revalidates and records a new
+  Task on the same Node without requiring node-ID rebind grace.
+- Real Forgejo/Vault acceptance exposed a stale-cache Apply: Git-backed Apply
+  now synchronizes unpinned branches through the existing repository worker and
+  materializes the resulting immutable commit. Pinned releases do not move.
+- Vault provider connection/reference test endpoints retain the .NET routes,
+  permissions and response shapes. Empty token edits preserve stored credentials.
+  Successful runtime output is redacted before streaming or failure persistence;
+  webhook credentials are masked in all persisted configuration activity snapshots.
+
+The schema source was extended and `0001_initial.sql` regenerated through
+xtask: 84 tables. There is no handwritten `0002` migration. Development databases
+created from an older unreleased baseline must be recreated. Generated contract
+checks cover 331 full / 279 public operations.
+
+#### Additional .NET scenario mapping
+
+These are scenario ports, not a claim that every .NET test file has been
+translated line-for-line. The earlier tables cover permissions, API lifecycles,
+realtime, cancellation, webhook validation and inventory ordering.
+
+| .NET reference | Rust test / additional regression |
+| --- | --- |
+| `DeploymentAutoUpdateJobTests` | `server/tests/deployments_http/updates.rs`: Notify, entitlement fallback, automatic success/failure Alerts, leases and stale-version rejection |
+| `ManualStackAutoUpdateTests`, `GitStackWatchPathMatcherTests` | `stacks/src/updates.rs`, `server/tests/stacks_http/updates.rs`, `adapters/tests/git_repository_execution/stack_updates.rs`: image baselines, selected-service Apply, real Git changed paths, pinned commits |
+| `BuildRunStartTests.ExecuteQueuedBuildRun_ShouldUseQueuedRunTargetSnapshot_WhenProjectBuilderChangesAfterQueue` | `server/tests/phase7_resources_http/build_completion.rs`: queue-time target/arguments/secret-reference/tag snapshot survives project edits |
+| `BuildRunCoordinatorTests`, `BuildRunCleanupServiceTests`, Build-image resolver tests | `builds/src/jobs/completion_tests.rs`, `server/tests/phase7_resources_http/build_completion.rs`: two projects/one Stack, coalescing, retained artifacts, Apply failure and interrupted-claim fencing |
+| `StackApplyRecoveryTests` | `adapters/tests/stack_persistence.rs`, `server/tests/stacks_http/updates.rs`: persisted partial selection, stale completion rejection and inspection-based recovery |
+| `ReceiveWebhookTests`, `WebhookListenerTests`, `StackWebhookDeployQueueRepositoryTests` | `server/tests/phase7_resources_http/{git_webhooks,build_webhooks,stack_webhooks}.rs`, `server/tests/swarm_services_http/webhooks.rs`, `adapters/tests/stack_webhooks.rs`: authentication, dispatch/audit metadata, licenses, coalescing and recovery |
+| `SwarmNodeAgentLifecycleServiceTests`, `SwarmNodeAgentLifecycleTests`, `SwarmNodeAgentCompatibilityTests` | `platforms/src/node_agents/setup_tests.rs`, `adapters/tests/edge_transport.rs`, `adapters/tests/backup_restic_acceptance/node_setup.rs`: initial rollout state, signed same-node Task replacement, install/repair/upgrade and bootstrap rotation |
+| `VolumeHelperCommandTests` | shared helper's real non-root Linux tests (9 passed), plus Rust volume HTTP/transport tests: traversal, concurrent symlink replacement, FIFO and descriptor cleanup |
+| `SwarmBackupCompatibilityTests.WorkerVolume_ShouldBackupToRustFsAndRestoreOnAnotherNode` | `adapters/tests/backup_restic_acceptance/multinode.rs`: same-named volumes, exact-worker bytes, missing coverage, logs/terminal and expired helper cleanup |
+| `ControlPlaneRecoveryTests` database-state recovery | `adapters/tests/citadel_system_recovery.rs`: real private bundle, `pg_dump`/`pg_restore` into a separate clean database, restored state; full release-image restart remains Phase 8 |
+| `BuildAgentPoolEndpoints_ShouldPersistLifecycleAndEdgeEnrollment` tag follow-up | `server/tests/phase7_resources_http.rs`: create/replace/read persisted Pool tags and positive/negative tag-name filters; passed with the complete resource lifecycle and lint |
+| `ForgejoPush_ShouldUpdateAndDeployGitStack`, `VaultKvV2_ShouldValidateResolveInjectAndRedactSecret` | `server/tests/external_integrations_acceptance.rs`, `external_integrations/vault.rs`: real private Forgejo repository and signed delivery, current-commit Docker Apply, Vault valid/invalid/stored tokens, missing path/key/version, encrypted persistence, runtime injection and audit/progress redaction |
+
+#### Verification
+
+- Complete Phase 7A gate **passed** with the node reconnect, Git synchronization,
+  provider validation and audit/progress redaction fixes, including all 39
+  Platform HTTP tests. Generated contracts verified: 331 full / 279 public.
+- Additional Resources/Contracts unit tests: **34 passed**. Clippy passed for
+  Resources, Server and Adapters across all targets; formatting and diff checks
+  passed.
+- Frontend unit tests: **105 files / 368 tests passed**, no frontend feature edits.
+- Actual current Agent candidate:
+  `sha256:790469de9028060d0acc3868946dc6a8a896553599e5275d2c81c1dff00c5c53`.
+  Signed Direct-Agent logs/terminal passed; real Direct and Edge build/push
+  passed against an isolated Docker daemon and Registry.
+- Real Git Stack changed-path/pinned-commit scanner passed.
+- Real private Forgejo push → Stack Apply with Vault KV v2 resolution:
+  **passed (25.13 seconds)**. This includes the provider/reference HTTP tests,
+  stored-token preservation, runtime secret injection, current-commit container
+  contents, and credential-free progress/audit records. The earlier failures
+  exposed and fixed stale Git materialization and two redaction gaps.
+- Real Deno execution and Shoutrrr HTTP retry delivery, with the accompanying
+  Automation/Build/Backup HTTP and PostgreSQL suites, passed.
+- Real PostgreSQL control-plane backup/restore passed through
+  `Test-Phase7SystemRecovery.ps1`, as an unprivileged runner with separate source
+  and target databases. Citadel-system bundles are Core-local by design; worker
+  data volumes are backed up through their exact node, not by moving Core's
+  database credentials to a satellite.
+- Real three-node Install/Repair/Upgrade plus exact-worker browsing and
+  worker-to-worker RustFS backup/restore: **passed (296.36 seconds)**. This also
+  verifies bootstrap revocation, immutable helper image selection, streaming
+  logs/terminal and expired-helper cleanup on the intended Node.
+
+AWS Build Pool provisioning is excluded because the .NET reference also rejects
+it; it is not an implemented feature being silently dropped. Full release-image
+installation/restart, exhaustive browser acceptance, packaging/security review
+and multi-day memory soak remain Phase 8, not evidence supplied by this gate.
+
+Repeatable commands (all test infrastructure is disposable):
+
+```powershell
+.\rust\scripts\Test-Phase7AExternalExecution.ps1 -WorkspaceContainer citadel_devcontainer-workspace-1
+.\rust\scripts\Test-Phase7AutomationExternal.ps1
+.\rust\scripts\Test-Phase7AgentCandidate.ps1 -AgentImage citadel-agent-phase7:local
+.\rust\scripts\Test-Phase7AgentBuild.ps1 -AgentImage citadel-agent-phase7:local
+.\rust\scripts\Test-Phase7AgentBuild.ps1 -AgentImage citadel-agent-phase7:local -UseEdgeAgent
+.\rust\scripts\Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage citadel-agent-phase7:local -MultiNode
+.\rust\scripts\Test-Phase7SystemRecovery.ps1
+.\rust\scripts\Test-Phase7Integrations.ps1
+```

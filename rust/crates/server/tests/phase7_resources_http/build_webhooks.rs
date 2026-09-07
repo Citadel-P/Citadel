@@ -31,6 +31,7 @@ pub async fn verify(
         "imageRepository":"citadel/webhook-test","tagTemplates":["{branch}-{shortSha}"],"timeoutSeconds":60,"retentionRunCount":5
     }))).await).await;
     let id = Uuid::parse_str(project["id"].as_str().unwrap()).unwrap();
+    let consumers = super::build_completion::create(pool, fixture, id).await;
     let config = json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"build-hook-test"});
     sqlx::query("UPDATE buildprojects SET webhook=$2 WHERE id=$1")
         .bind(id)
@@ -85,6 +86,14 @@ pub async fn verify(
     assert_eq!(run.trigger, "Webhook");
     assert_eq!(run.branch, "main");
     assert_eq!(run.resolved_commit_sha, Some("a".repeat(40)));
+    let audit: Value = sqlx::query_scalar("SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='BuildWebhookReceived' AND info::jsonb->>'Status'='queued' ORDER BY createdat DESC LIMIT 1")
+        .bind(id).fetch_one(pool).await.unwrap();
+    assert_eq!(audit["Branch"], "main");
+    assert_eq!(audit["DispatchedBranch"], run.branch);
+    assert_eq!(
+        audit["DispatchedCommitSha"],
+        run.resolved_commit_sha.clone().unwrap()
+    );
     let triggered_by: Uuid =
         sqlx::query_scalar("SELECT triggeredbyactorid FROM buildruns WHERE id=$1")
             .bind(run.id)
@@ -106,6 +115,7 @@ pub async fn verify(
         builds.store().get_run(run.id).await.unwrap().status,
         "Succeeded"
     );
+    super::build_completion::verify(pool, run.id, &consumers).await;
     let events: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='BuildRunQueued'",
     )
@@ -130,6 +140,7 @@ pub async fn verify(
             .status(),
         StatusCode::NOT_FOUND
     );
+    super::build_completion::verify_lifecycle(pool, builds, fixture, id, run.id, &consumers).await;
     entitlement.0.store(false, Ordering::Relaxed);
 }
 

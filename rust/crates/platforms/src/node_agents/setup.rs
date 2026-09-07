@@ -380,6 +380,7 @@ impl NodeAgentSetupService {
                 swarm.services.iter().any(|s| {
                     s.id == service_id
                         && (s.update_state.is_empty()
+                            || s.update_state.eq_ignore_ascii_case("none")
                             || s.update_state.eq_ignore_ascii_case("completed"))
                 }) && eligible.iter().all(|(node, _)| {
                     swarm.tasks.iter().any(|t| {
@@ -481,19 +482,27 @@ pub fn pin_image(
     distribution: &AgentDistribution,
     required: &BTreeSet<String>,
 ) -> Result<String, RuntimeCapabilityError> {
-    let hash = distribution
-        .digest
-        .strip_prefix("sha256:")
-        .filter(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(|| fail("Agent registry returned an invalid immutable digest."))?;
     if !required.is_subset(&distribution.linux_architectures) {
         return Err(fail(
             "The Agent image does not support all eligible node architectures.",
         ));
     }
+    pin_image_reference(reference, &distribution.digest)
+}
+
+/// Use the installed digest for helpers too: Swarm pulls digest references,
+/// which need not leave the user's mutable tag in every worker's image store.
+pub fn pin_image_reference(
+    reference: &str,
+    digest: &str,
+) -> Result<String, RuntimeCapabilityError> {
+    let hash = digest
+        .strip_prefix("sha256:")
+        .filter(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+        .ok_or_else(|| fail("Agent registry returned an invalid immutable digest."))?;
     if reference
         .split_once('@')
-        .is_some_and(|(_, digest)| digest != distribution.digest)
+        .is_some_and(|(_, pinned)| pinned != digest)
     {
         return Err(fail(
             "Agent registry digest does not match the configured pinned image.",

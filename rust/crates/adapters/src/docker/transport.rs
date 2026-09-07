@@ -12,6 +12,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
+#[path = "binary_exec.rs"]
+mod binary_exec;
+
 use super::generated::{
     CONFIG_LIST, CONTAINER_CREATE, CONTAINER_DELETE, CONTAINER_INSPECT, CONTAINER_LIST,
     CONTAINER_START, CONTAINER_STATS, ContainerInspect, ContainerStats, ContainerSummary,
@@ -162,6 +165,117 @@ impl DockerClient {
         &self.socket_path
     }
 
+    pub(crate) async fn open_logs(
+        &self,
+        id: &str,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::logs::RuntimeLogStream, DockerError> {
+        self.open_resource_logs(
+            citadel_platforms::logs::LogResource::Container(id),
+            true,
+            100,
+            cancel,
+        )
+        .await
+    }
+
+    pub(crate) async fn open_resource_logs(
+        &self,
+        resource: citadel_platforms::logs::LogResource<'_>,
+        follow: bool,
+        tail: u16,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::logs::RuntimeLogStream, DockerError> {
+        use citadel_platforms::logs::LogResource;
+        let (id, endpoint, inspect, tty_path, details) = match resource {
+            LogResource::Container(id) => (
+                id,
+                &super::generated::CONTAINER_LOGS,
+                &CONTAINER_INSPECT,
+                "/Config/Tty",
+                false,
+            ),
+            LogResource::Service(id) => (
+                id,
+                &super::generated::SERVICE_LOGS,
+                &super::generated::SERVICE_INSPECT,
+                "/Spec/TaskTemplate/ContainerSpec/TTY",
+                true,
+            ),
+        };
+        validate_identifier(id)?;
+        let version = self.negotiated_version().await?;
+        let path = inspect.path.replace("{id}", &urlencoding::encode(id));
+        let inspection: serde_json::Value = self.get_json(inspect, &path, None).await?;
+        let tty = inspection
+            .pointer(tty_path)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let path = endpoint.path.replace("{id}", &urlencoding::encode(id));
+        let response=self.client.get(format!("http://localhost/v{version}{path}?stdout=true&stderr=true&timestamps=true&follow={follow}&tail={tail}&details={details}")).send().await?;
+        if !response.status().is_success() {
+            return Err(DockerError::Api {
+                status: response.status(),
+                message: String::from_utf8_lossy(&bounded_body(response, 64 * 1024).await?)
+                    .into_owned(),
+            });
+        }
+        Ok(crate::container_logs::decode_frames(
+            Box::pin(
+                response
+                    .bytes_stream()
+                    .map(|r| r.map_err(DockerError::from)),
+            ),
+            tty,
+            cancel.clone(),
+        ))
+    }
+
+    pub(crate) async fn open_terminal(
+        &self,
+        id: &str,
+        shell: citadel_platforms::terminal::TerminalShell,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::terminal::TerminalSession, DockerError> {
+        use super::generated::{CONTAINER_EXEC, EXEC_RESIZE, EXEC_START};
+        validate_identifier(id)?;
+        let path = CONTAINER_EXEC
+            .path
+            .replace("{id}", &urlencoding::encode(id));
+        let created: ContainerCreateResponse = self.request_json(&CONTAINER_EXEC, &path, None,
+            Some(&serde_json::json!({"AttachStdin":true,"AttachStdout":true,"AttachStderr":true,"Tty":true,"Cmd":[shell.command()]}))).await?;
+        validate_identifier(&created.id)?;
+        let version = self.negotiated_version().await?;
+        let start = EXEC_START
+            .path
+            .replace("{id}", &urlencoding::encode(&created.id));
+        let response = self
+            .client
+            .post(format!("http://localhost/v{version}{start}"))
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "tcp")
+            .json(&serde_json::json!({"Detach":false,"Tty":true}))
+            .send()
+            .await?;
+        if response.status() != StatusCode::SWITCHING_PROTOCOLS {
+            return Err(DockerError::Api {
+                status: response.status(),
+                message: "Docker did not upgrade the terminal connection.".into(),
+            });
+        }
+        let socket = response.upgrade().await?;
+        let resize = EXEC_RESIZE
+            .path
+            .replace("{id}", &urlencoding::encode(&created.id));
+        Ok(crate::container_terminal::local_session(
+            socket,
+            self.client.clone(),
+            format!("http://localhost/v{version}{resize}"),
+            self.request_timeout,
+            cancel.clone(),
+        ))
+    }
+
     #[must_use]
     pub const fn request_timeout(&self) -> Duration {
         self.request_timeout
@@ -242,11 +356,22 @@ impl DockerClient {
         remove_volumes: bool,
         force: bool,
     ) -> Result<(), DockerError> {
+        self.delete_container_with_options(id, remove_volumes, force, false)
+            .await
+    }
+
+    pub async fn delete_container_with_options(
+        &self,
+        id: &str,
+        remove_volumes: bool,
+        force: bool,
+        link: bool,
+    ) -> Result<(), DockerError> {
         validate_identifier(id)?;
         let path = CONTAINER_DELETE
             .path
             .replace("{id}", &urlencoding::encode(id));
-        let query = format!("v={remove_volumes}&force={force}&link=false");
+        let query = format!("v={remove_volumes}&force={force}&link={link}");
         self.send_request::<()>(&CONTAINER_DELETE, &path, Some(&query), None)
             .await?;
         Ok(())
@@ -279,6 +404,40 @@ impl DockerClient {
             .send_request::<()>(&CONTAINER_START, &path, None, None)
             .await
         {
+            Ok(_)
+            | Err(DockerError::Api {
+                status: StatusCode::NOT_MODIFIED,
+                ..
+            }) => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn change_container_state(
+        &self,
+        id: &str,
+        action: citadel_platforms::containers::ContainerAction,
+    ) -> Result<(), DockerError> {
+        use super::generated::{
+            CONTAINER_PAUSE, CONTAINER_RESTART, CONTAINER_STOP, CONTAINER_UNPAUSE,
+        };
+        use citadel_platforms::containers::ContainerAction::*;
+        let endpoint = match action {
+            Start => return self.start_container(id).await,
+            Stop => &CONTAINER_STOP,
+            Restart => &CONTAINER_RESTART,
+            Pause => &CONTAINER_PAUSE,
+            Unpause => &CONTAINER_UNPAUSE,
+            Delete(options) => {
+                return self
+                    .delete_container_with_options(id, options.v, options.force, options.link)
+                    .await;
+            }
+        };
+        validate_identifier(id)?;
+        let path = endpoint.path.replace("{id}", &urlencoding::encode(id));
+        let query = matches!(action, Stop | Restart).then_some("t=10");
+        match self.send_request::<()>(endpoint, &path, query, None).await {
             Ok(_)
             | Err(DockerError::Api {
                 status: StatusCode::NOT_MODIFIED,
@@ -324,6 +483,51 @@ impl DockerClient {
     pub async fn list_images(&self) -> Result<Vec<ImageSummary>, DockerError> {
         self.get_json(&IMAGE_LIST, IMAGE_LIST.path, Some("all=true"))
             .await
+    }
+
+    pub async fn inspect_image(
+        &self,
+        id: &str,
+    ) -> Result<super::generated::ImageInspect, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::IMAGE_INSPECT;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{name}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+
+    pub async fn image_history(
+        &self,
+        id: &str,
+    ) -> Result<Vec<super::generated::ImageHistoryItem>, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::IMAGE_HISTORY;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{name}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+
+    pub async fn image_containers(
+        &self,
+        id: &str,
+    ) -> Result<Vec<super::generated::ImageUsageContainer>, DockerError> {
+        validate_identifier(id)?;
+        let filters = serde_json::json!({"ancestor": [id]}).to_string();
+        self.get_json(
+            &CONTAINER_LIST,
+            CONTAINER_LIST.path,
+            Some(&format!(
+                "all=true&filters={}",
+                urlencoding::encode(&filters)
+            )),
+        )
+        .await
     }
 
     pub async fn list_volumes(&self) -> Result<Vec<DockerVolume>, DockerError> {
@@ -479,14 +683,36 @@ impl DockerClient {
         &self,
         image: &str,
     ) -> Result<serde_json::Value, DockerError> {
+        self.distribution_inspect_authenticated(image, None).await
+    }
+
+    pub async fn distribution_inspect_authenticated(
+        &self,
+        image: &str,
+        registry_auth: Option<&str>,
+    ) -> Result<serde_json::Value, DockerError> {
         validate_identifier(image)?;
+        self.ensure_supported()?;
         let endpoint = &super::generated::DISTRIBUTION_INSPECT;
-        self.get_json(
-            endpoint,
-            &endpoint.path.replace("{name}", &urlencoding::encode(image)),
-            None,
-        )
-        .await
+        let path = endpoint.path.replace("{name}", &urlencoding::encode(image));
+        let version = self.negotiated_version().await?;
+        let mut request = self
+            .client
+            .get(format!("http://localhost/v{version}{path}"))
+            .timeout(self.request_timeout);
+        if let Some(auth) = registry_auth {
+            request = request.header("X-Registry-Auth", auth);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+        let body = bounded_body(response, MAX_JSON_BODY_BYTES).await?;
+        if !status.is_success() {
+            return Err(DockerError::Api {
+                status,
+                message: "Registry inspection failed.".into(),
+            });
+        }
+        Ok(serde_json::from_slice(&body)?)
     }
     pub async fn create_swarm_material(
         &self,

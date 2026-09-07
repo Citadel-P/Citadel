@@ -290,6 +290,22 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     ));
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let app = platforms_http::router(PlatformsHttpState {
+        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+            pool.clone(),
+            DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
+            None,
+            citadel_adapters::edge::EdgeRegistry::default(),
+            "citadel-agent:test".into(),
+        )),
+        containers: Arc::new(
+            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+                pool.clone(),
+                DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
+                None,
+                citadel_adapters::edge::EdgeRegistry::default(),
+            )
+            .into_service(),
+        ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
             PostgresPlatformReadStore::new(pool.clone()),
@@ -811,6 +827,22 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
     let realtime = RealtimeHub::new(16, Arc::new(Metrics::default()));
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let app = platforms_http::router(PlatformsHttpState {
+        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+            pool.clone(),
+            DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
+            None,
+            citadel_adapters::edge::EdgeRegistry::default(),
+            "citadel-agent:test".into(),
+        )),
+        containers: Arc::new(
+            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+                pool.clone(),
+                DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
+                None,
+                citadel_adapters::edge::EdgeRegistry::default(),
+            )
+            .into_service(),
+        ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
             PostgresPlatformReadStore::new(pool.clone()),

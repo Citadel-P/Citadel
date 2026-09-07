@@ -55,7 +55,46 @@ pub fn router(state: SwarmServicesHttpState) -> Router {
         .contract_route(routes::APPLY_SWARM_SERVICE, apply)
         .contract_route(routes::SCALE_SWARM_SERVICE, scale)
         .contract_route(routes::FORCE_UPDATE_SWARM_SERVICE, force_update)
+        .contract_route(routes::CHECK_SWARM_SERVICE_UPDATES, check_updates)
         .with_state(state)
+}
+
+async fn check_updates(
+    State(state): State<SwarmServicesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize(
+        &state,
+        &principal,
+        id,
+        PermissionLevel::Write,
+        None,
+        &headers,
+    )
+    .await?;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    let value = identity_result(
+        state
+            .services
+            .check_updates(
+                principal.actor_id,
+                principal.is_administrator(),
+                id,
+                &cancel,
+            )
+            .await
+            .map_err(|error| match error {
+                SwarmServiceError::Runtime(message) => IdentityError::External(message),
+                other => service_error(other),
+            }),
+        &headers,
+    )?;
+    Ok(no_store(Json(value).into_response()))
 }
 
 async fn list(
@@ -369,7 +408,7 @@ fn parse_filter(query: Option<&str>) -> Result<SwarmServiceFilter, IdentityError
     }
     Ok(filter)
 }
-fn service_error(error: SwarmServiceError) -> IdentityError {
+pub(crate) fn service_error(error: SwarmServiceError) -> IdentityError {
     match error {
         SwarmServiceError::Validation(value) => IdentityError::Validation(value),
         SwarmServiceError::NotFound => IdentityError::NotFound,

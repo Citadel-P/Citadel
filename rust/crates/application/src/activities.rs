@@ -9,6 +9,15 @@ use uuid::Uuid;
 pub const DEFAULT_ACTIVITY_PAGE_SIZE: i32 = 50;
 pub const MAXIMUM_ACTIVITY_PAGE_SIZE: i32 = 500;
 
+pub trait WebhookActivitySink: Send + Sync {
+    fn record_webhook(
+        &self,
+        resource_type: ActivityResourceType,
+        id: Uuid,
+        details: citadel_domain::WebhookActivityDetails,
+    ) -> BoxFuture<'_, Result<(), IdentityError>>;
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ActivityFilter {
     pub resource_id: Option<Uuid>,

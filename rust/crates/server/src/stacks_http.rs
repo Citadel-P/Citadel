@@ -63,6 +63,7 @@ pub fn router(state: StacksHttpState) -> Router {
         .contract_route(routes::RESUME_STACKS, resume)
         .contract_route(routes::RESTART_STACKS, restart)
         .contract_route(routes::GET_STACK, get)
+        .contract_route(routes::CHECK_STACK_UPDATES, check_updates)
         .contract_route(routes::GET_STACK_CONFIG, get_config)
         .contract_route(routes::GET_STACK_DUPLICATE_DRAFT, duplicate_draft)
         .contract_route(routes::LIST_STACK_RELEASES, releases)
@@ -75,6 +76,42 @@ pub fn router(state: StacksHttpState) -> Router {
         .contract_route(routes::VALIDATE_COMPOSE_IMPORT_DRAFT, validate_import_draft)
         .contract_route(routes::IMPORT_COMPOSE_PROJECT, import)
         .with_state(state)
+}
+
+async fn check_updates(
+    State(state): State<StacksHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let (principal, id) = actor_and_id(
+        &state,
+        principal,
+        path,
+        PermissionLevel::Write,
+        None,
+        &headers,
+    )
+    .await?;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    let value = identity_result(
+        state
+            .stacks
+            .check_updates(
+                principal.actor_id,
+                principal.is_administrator(),
+                id,
+                &cancel,
+            )
+            .await
+            .map_err(|error| match error {
+                StackError::Runtime(message) => IdentityError::External(message),
+                other => stack_error(other),
+            }),
+        &headers,
+    )?;
+    Ok(no_store(Json(value).into_response()))
 }
 
 async fn list(

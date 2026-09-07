@@ -54,6 +54,7 @@ pub fn router(state: DeploymentsHttpState) -> Router {
         .contract_route(routes::DELETE_DEPLOYMENTS, delete_deployments)
         .contract_route(routes::RENAME_DEPLOYMENT, rename_deployment)
         .contract_route(routes::GET_DEPLOYMENT, get_deployment)
+        .contract_route(routes::CHECK_DEPLOYMENT_UPDATES, check_deployment_updates)
         .contract_route(routes::GET_DEPLOYMENT_CONFIG, get_deployment_config)
         .contract_route(
             routes::GET_DEPLOYMENT_DUPLICATE_DRAFT,
@@ -65,6 +66,44 @@ pub fn router(state: DeploymentsHttpState) -> Router {
             update_deployment_metadata,
         )
         .with_state(state)
+}
+
+async fn check_deployment_updates(
+    State(state): State<DeploymentsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_resource(
+        &state,
+        &principal,
+        id,
+        PermissionLevel::Write,
+        None,
+        &headers,
+    )
+    .await?;
+    let cancellation = tokio_util::sync::CancellationToken::new();
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let checked = identity_result(
+        state
+            .deployments
+            .check_updates(
+                principal.actor_id,
+                principal.is_administrator(),
+                id,
+                &cancellation,
+            )
+            .await
+            .map_err(|error| match error {
+                DeploymentError::Runtime(message) => IdentityError::External(message),
+                other => deployment_error(other),
+            }),
+        &headers,
+    )?;
+    Ok(no_store(Json(checked).into_response()))
 }
 
 async fn apply_deployment(

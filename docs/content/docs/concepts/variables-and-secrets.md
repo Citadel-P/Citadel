@@ -137,6 +137,11 @@ Provider fields:
 
 Do not include `/v1` or `/data` in the mount path.
 
+Use **Test connection** before saving. When editing a provider, leave the token
+empty to keep its stored token. Test an external secret reference as well: a valid
+token does not necessarily have permission to read every path. The test reports
+whether the reference resolves without displaying its value.
+
 Correct:
 
 ```text

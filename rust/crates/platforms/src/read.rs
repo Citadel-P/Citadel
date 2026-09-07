@@ -412,6 +412,13 @@ pub trait PlatformReadStore: Send + Sync {
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ContainerView>, AuthorizedReadError>>;
 
+    fn resolve_container_reference<'a>(
+        &'a self,
+        reference: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>> {
+        Box::pin(async move { Ok(Uuid::parse_str(reference).ok()) })
+    }
+
     fn list_images(
         &self,
         platform_id: Uuid,
@@ -552,6 +559,16 @@ impl PlatformReadService {
         &self,
         id: Uuid,
     ) -> Result<Option<ContainerView>, AuthorizedReadError> {
+        self.store.get_container(id).await
+    }
+
+    pub async fn get_container_by_reference(
+        &self,
+        reference: &str,
+    ) -> Result<Option<ContainerView>, AuthorizedReadError> {
+        let Some(id) = self.store.resolve_container_reference(reference).await? else {
+            return Ok(None);
+        };
         self.store.get_container(id).await
     }
 
