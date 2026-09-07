@@ -1,10 +1,10 @@
 import { ContainerStatView } from '@/api/generated/api.types';
 import { StatsWindowHours } from '@/components/custom/common';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { appendBoundedLiveStat, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useMemo, useState } from 'react';
 
 export type SwarmTaskStatsQueryState = StatsQueryState & {
@@ -58,15 +58,15 @@ export const useTaskStatsStream = (platformId: string, containerProjectionId?: s
     [containerProjectionId],
   );
   const setupEventListeners = useCallback(
-    (connection: HubConnection) => connection.on('ContainersStatsUpdated', handleStats),
+    (connection: RealtimeConnection) => connection.on('ContainersStatsUpdated', handleStats),
     [handleStats],
   );
   const removeEventListeners = useCallback(
-    (connection: HubConnection) => connection.off('ContainersStatsUpdated', handleStats),
+    (connection: RealtimeConnection) => connection.off('ContainersStatsUpdated', handleStats),
     [handleStats],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: platformId && containerProjectionId ? `containers:${platformId}` : undefined,
     setupEventListeners,
     removeEventListeners,

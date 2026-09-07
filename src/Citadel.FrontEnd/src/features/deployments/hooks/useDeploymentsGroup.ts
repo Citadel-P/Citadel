@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { DeploymentView, ResourceCapabilities } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useResourcePlatformFilter } from '@/features/platforms/platform-filter';
@@ -66,20 +66,20 @@ export const useDeploymentsGroup = () => {
   }, [matchesActiveFilters]);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('DeploymentInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('DeploymentInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'deployments',
     setupEventListeners,
     removeEventListeners,

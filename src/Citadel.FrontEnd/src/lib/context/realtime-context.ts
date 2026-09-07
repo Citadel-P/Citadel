@@ -1,18 +1,18 @@
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { createContext } from 'react';
 import { useRequiredContext } from '../../hooks/useRequiredContext';
 
 export type LiveConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'offline';
 
-type SignalRGroupTransport = {
-  connection: HubConnection | null;
-  connectionState: HubConnectionState;
-  joinGroup: (groupName: string, setup?: (hub: HubConnection) => void) => Promise<void>;
-  leaveGroup: (groupName: string, remove?: (hub: HubConnection) => void) => Promise<void>;
+type RealtimeGroupTransport = {
+  connection: RealtimeConnection | null;
+  connectionState: RealtimeConnectionState;
+  joinGroup: (groupName: string, setup?: (hub: RealtimeConnection) => void) => Promise<void>;
+  leaveGroup: (groupName: string, remove?: (hub: RealtimeConnection) => void) => Promise<void>;
 };
 
 export type RealtimeContextType = {
-  signalR?: SignalRGroupTransport;
+  groups?: RealtimeGroupTransport;
   liveConnectionState: LiveConnectionState;
   interruptedAt?: number;
   lastConnectedAt?: number;

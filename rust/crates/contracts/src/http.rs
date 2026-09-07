@@ -1408,12 +1408,24 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::query("tags", ParameterSchema::ArrayString)]
     },
+    GET_AGENT_SETUP => {
+        method: Get, path: "/api/v1/platforms/agent/setup", operation_id: "getAgentSetup", summary: "Get regular Agent setup instructions",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AgentSetupView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
     CREATE_PLATFORM => {
         method: Post, path: "/api/v1/platforms", operation_id: "createPlatform", summary: "Create a Platform",
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: Some("CreatePlatformInput"), response_schema: Some("PlatformView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[]
+    },
+    DELETE_PLATFORMS => {
+        method: Delete, path: "/api/v1/platforms", operation_id: "deletePlatforms", summary: "Delete Platform registrations",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeletePlatformsInput"), response_schema: None, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
     },
     GET_PLATFORM => {
         method: Get, path: "/api/v1/platforms/{id}", operation_id: "getPlatfom", summary: "Get a Platform",
@@ -2596,6 +2608,18 @@ route_catalog! {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn regular_agent_setup_preserves_the_existing_frontend_operation() {
+        use super::routes::GET_AGENT_SETUP;
+
+        assert_eq!(GET_AGENT_SETUP.path, "/api/v1/platforms/agent/setup");
+        assert_eq!(GET_AGENT_SETUP.method, HttpMethod::Get);
+        assert_eq!(GET_AGENT_SETUP.operation_id, "getAgentSetup");
+        assert_eq!(GET_AGENT_SETUP.authentication, RouteAuthentication::Actor);
+        assert_eq!(GET_AGENT_SETUP.success_status, 200);
+        assert!(GET_AGENT_SETUP.public);
+    }
 
     #[test]
     fn operation_ids_and_method_paths_are_unique() {

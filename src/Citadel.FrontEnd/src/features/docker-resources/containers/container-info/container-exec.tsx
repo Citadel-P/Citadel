@@ -1,8 +1,8 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import { nanoid } from 'nanoid';
@@ -181,7 +181,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const hubRef = useRef<HubConnection | null>(null);
+  const hubRef = useRef<RealtimeConnection | null>(null);
   const execStartedRef = useRef(false);
 
   useEffect(() => {
@@ -205,7 +205,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
 
     const dataDisposable = term.onData((data) => {
       if (!execStartedRef.current) return;
-      if (hubRef.current?.state !== HubConnectionState.Connected) return;
+      if (hubRef.current?.state !== RealtimeConnectionState.Connected) return;
       if (!groupId || targetIds.some((targetId) => !targetId)) return;
 
       const bytes = new TextEncoder().encode(data);
@@ -216,7 +216,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
       fitAddon.fit();
 
       if (!execStartedRef.current) return;
-      if (hubRef.current?.state !== HubConnectionState.Connected) return;
+      if (hubRef.current?.state !== RealtimeConnectionState.Connected) return;
       if (!groupId || targetIds.some((targetId) => !targetId) || !termRef.current) return;
 
       hubRef.current
@@ -254,7 +254,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hubRef.current = hub;
       hub.on('SendContainerExec', handleExecOutput);
     },
@@ -262,7 +262,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
   );
 
   const removeEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hub.off('SendContainerExec', handleExecOutput);
       hubRef.current = null;
     },
@@ -270,7 +270,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
   );
 
   const onJoinedGroup = useCallback(
-    async (hub: HubConnection) => {
+    async (hub: RealtimeConnection) => {
       if (!groupId || targetIds.some((targetId) => !targetId)) return;
 
       try {
@@ -287,7 +287,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
     [groupId, targetIds, sessionId, shell, startExecProcess, resizeExec],
   );
 
-  const { isLoading, isConnected } = useSignalRGroup({
+  const { isLoading, isConnected } = useRealtimeGroup({
     groupName: groupId,
     enabled: isActive && !disabled,
     skip: !groupId || disabled,

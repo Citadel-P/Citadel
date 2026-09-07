@@ -6,8 +6,8 @@ const { logViewerMock } = vi.hoisted(() => ({
   logViewerMock: vi.fn(),
 }));
 
-vi.mock('@/hooks/useSignalRGroup', () => ({
-  useSignalRGroup: vi.fn(() => ({ isLoading: false })),
+vi.mock('@/hooks/useRealtimeGroup', () => ({
+  useRealtimeGroup: vi.fn(() => ({ isLoading: false })),
 }));
 
 vi.mock('@/components/custom/common', () => ({

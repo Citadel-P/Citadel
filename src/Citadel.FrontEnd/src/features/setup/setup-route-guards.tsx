@@ -1,8 +1,9 @@
 import Loader from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
+import { getPostLoginRedirect, REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
 import { useAuthContext } from '@/features/auth/auth-context';
+import { hasMfaFlowStep } from '@/features/auth/mfa/mfa-flow';
 import { SetupError, useSetupContext } from './setup-context';
 
 function SetupUnavailable({ error, retry }: { error: SetupError; retry: () => void }) {
@@ -28,8 +29,11 @@ export function RequireSetup() {
   if (requiresSetup) return <Outlet />;
   if (!isAuthReady) return <Loader />;
 
-  const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
-  return <Navigate to={isAuthenticated ? redirectTo : '/login'} replace />;
+  const redirectTo = getPostLoginRedirect();
+  if (isAuthenticated) return <Navigate to={redirectTo} replace />;
+  if (hasMfaFlowStep('setup')) return <Navigate to="/login/mfa/setup" replace />;
+  if (hasMfaFlowStep('verify')) return <Navigate to="/login/mfa" replace />;
+  return <Navigate to="/login" replace />;
 }
 
 export function RequireSetupComplete() {
@@ -42,7 +46,7 @@ export function RequireSetupComplete() {
   if (requiresSetup) {
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;
     if (currentUrl !== '/setup') {
-      sessionStorage.setItem(REDIRECT_TO_KEY, currentUrl || '/');
+      sessionStorage.setItem(REDIRECT_TO_KEY, getPostLoginRedirect(currentUrl || '/'));
     }
     return <Navigate to="/setup" replace />;
   }

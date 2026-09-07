@@ -41,6 +41,7 @@ const ALL_PLATFORM_SPECIFIC: i32 = SpecificPermission::Logs as i32
 const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
 mod container_mutations;
+mod deletion;
 mod edge;
 mod images;
 mod logs;
@@ -70,6 +71,8 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::DOWNLOAD_VOLUME_PATH, volume_content::download)
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
         .contract_route(routes::CREATE_PLATFORM, create_platform)
+        .contract_route(routes::DELETE_PLATFORMS, deletion::delete)
+        .contract_route(routes::GET_AGENT_SETUP, get_agent_setup)
         .contract_route(routes::GET_PLATFORM, get_platform)
         .contract_route(routes::CREATE_EDGE_ENROLLMENT, edge::enroll)
         .contract_route(routes::GET_EDGE_STATUS, edge::status)
@@ -131,6 +134,37 @@ pub fn router(state: PlatformsHttpState) -> Router {
 struct PlatformsResponse {
     platforms: Vec<PlatformView>,
     capabilities: ResourceCapabilitiesView,
+}
+
+async fn get_agent_setup(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    setup: Option<Extension<Arc<citadel_platforms::agent_setup::AgentSetupView>>>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(
+        principal
+            .map(|Extension(actor)| actor)
+            .ok_or(IdentityError::Unauthenticated),
+        &headers,
+    )?;
+    identity_result(
+        state
+            .identity
+            .authorize(
+                &principal,
+                ResourceType::Platform,
+                PermissionLevel::Write,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let Extension(setup) = identity_result(
+        setup.ok_or_else(|| IdentityError::Storage("Agent setup is not configured.".into())),
+        &headers,
+    )?;
+    Ok(no_store(Json(setup.as_ref()).into_response()))
 }
 
 #[derive(Debug, Default, Deserialize)]

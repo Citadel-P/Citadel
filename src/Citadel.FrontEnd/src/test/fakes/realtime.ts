@@ -1,4 +1,4 @@
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { vi } from 'vitest';
 
 type ReconnectingHandler = (error?: Error) => void;
@@ -6,15 +6,15 @@ type ReconnectedHandler = (connectionId?: string) => void;
 type CloseHandler = (error?: Error) => void;
 type EventHandler = (...args: any[]) => void;
 
-export class FakeHubConnection {
-  state = HubConnectionState.Disconnected;
+export class FakeRealtimeConnection implements RealtimeConnection {
+  state: RealtimeConnectionState = RealtimeConnectionState.Disconnected;
 
   readonly start = vi.fn(async () => {
-    this.state = HubConnectionState.Connected;
+    this.state = RealtimeConnectionState.Connected;
   });
 
   readonly stop = vi.fn(async () => {
-    this.state = HubConnectionState.Disconnected;
+    this.state = RealtimeConnectionState.Disconnected;
     this.closeHandlers.forEach((handler) => handler());
   });
 
@@ -57,22 +57,22 @@ export class FakeHubConnection {
     }
   });
 
-  asHubConnection() {
-    return this as unknown as HubConnection;
+  asRealtimeConnection() {
+    return this;
   }
 
   reconnecting(error?: Error) {
-    this.state = HubConnectionState.Reconnecting;
+    this.state = RealtimeConnectionState.Reconnecting;
     this.reconnectingHandlers.forEach((handler) => handler(error));
   }
 
   reconnected(connectionId = 'test-connection') {
-    this.state = HubConnectionState.Connected;
+    this.state = RealtimeConnectionState.Connected;
     this.reconnectedHandlers.forEach((handler) => handler(connectionId));
   }
 
   closed(error?: Error) {
-    this.state = HubConnectionState.Disconnected;
+    this.state = RealtimeConnectionState.Disconnected;
     this.closeHandlers.forEach((handler) => handler(error));
   }
 

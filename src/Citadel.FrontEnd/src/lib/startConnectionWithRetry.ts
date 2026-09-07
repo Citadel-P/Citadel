@@ -1,10 +1,10 @@
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 
 /**
- * Starts a SignalR connection with a retry mechanism in case of failure.
+ * Starts a Realtime connection with a retry mechanism in case of failure.
  * Implements exponential backoff with jitter to prevent overwhelming the server.
  *
- * @param connection The SignalR hub connection to start.
+ * @param connection The Realtime hub connection to start.
  * @param isCanceled A ref object to signal cancellation of the retry process.
  * @param options Optional configuration for the retry mechanism.
  * @param {number} [options.maxRetries=10] The maximum number of retry attempts.
@@ -15,7 +15,7 @@ import { HubConnection } from '@microsoft/signalr';
  * @param currentRetryAttempt The current retry attempt number (used for recursion).
  */
 export const startConnectionWithRetry = async (
-  connection: HubConnection,
+  connection: RealtimeConnection,
   isCanceled: { current: boolean },
   options?: {
     maxRetries?: number;
@@ -53,7 +53,7 @@ export const startConnectionWithRetry = async (
 
     // If the maximum number of retries has been reached, log the error and exit.
     if (currentRetryAttempt >= maxRetries) {
-      console.error('Maximum number of SignalR connection retries reached. Aborting.', error);
+      console.error('Maximum number of Realtime connection retries reached. Aborting.', error);
       throw error;
     }
 
@@ -71,7 +71,7 @@ export const startConnectionWithRetry = async (
     }
 
     console.warn(
-      `SignalR connection failed. Retrying in ${(retryDelay / 1000).toFixed(1)}s (Attempt ${currentRetryAttempt + 1})`,
+      `Realtime connection failed. Retrying in ${(retryDelay / 1000).toFixed(1)}s (Attempt ${currentRetryAttempt + 1})`,
       error,
     );
 

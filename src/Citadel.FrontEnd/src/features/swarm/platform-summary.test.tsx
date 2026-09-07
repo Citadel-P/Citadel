@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
@@ -11,8 +11,8 @@ import { applySwarmInventoryToOverview, SwarmPlatformSummary } from './platform-
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('SwarmPlatformSummary', () => {
-  it('keeps an early SignalR snapshot instead of allowing an older HTTP response to replace it', async () => {
-    const fake = new FakeHubConnection();
+  it('keeps an early realtime snapshot instead of allowing an older HTTP response to replace it', async () => {
+    const fake = new FakeRealtimeConnection();
     let releaseResponse!: () => void;
     const responseGate = new Promise<void>((resolve) => {
       releaseResponse = resolve;
@@ -34,8 +34,8 @@ describe('SwarmPlatformSummary', () => {
     renderCitadel(
       <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />,
       {
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -123,7 +123,7 @@ describe('SwarmPlatformSummary', () => {
     expect(calculateSwarmQuorum(nodes).state).toBe(SwarmQuorumState.Unknown);
   });
 
-  it('updates service state counts from a SignalR inventory snapshot', () => {
+  it('updates service state counts from a realtime inventory snapshot', () => {
     const inventory = emptyInventory();
     inventory.services.items = [
       service('healthy', 2, 2),

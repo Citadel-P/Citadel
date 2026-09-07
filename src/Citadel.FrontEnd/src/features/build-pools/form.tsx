@@ -29,14 +29,14 @@ import { Button } from '@/components/ui/button';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor, ResourceTagSelector } from '@/features/tags/components';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { Constants } from '@/lib/constants';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { MonacoEditor } from '@/lib/monaco';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { CheckCheck, Clipboard, KeyRound, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
@@ -158,20 +158,20 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       );
 
       const setupEventListeners = useCallback(
-        (hubConnection: HubConnection) => {
+        (hubConnection: RealtimeConnection) => {
           hubConnection.on('BuildAgentPoolInfoUpdated', handleBuildAgentPoolInfoUpdated);
         },
         [handleBuildAgentPoolInfoUpdated],
       );
 
       const removeEventListeners = useCallback(
-        (hubConnection: HubConnection) => {
+        (hubConnection: RealtimeConnection) => {
           hubConnection.off('BuildAgentPoolInfoUpdated', handleBuildAgentPoolInfoUpdated);
         },
         [handleBuildAgentPoolInfoUpdated],
       );
 
-      useSignalRGroup({
+      useRealtimeGroup({
         groupName: `build-agent-pool:${id}`,
         setupEventListeners,
         removeEventListeners,

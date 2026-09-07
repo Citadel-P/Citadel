@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { createResourceCapabilities, createStack } from '@/test/factories/resources';
 import { useNavigate } from 'react-router';
 import { useStacksGroup } from './useStacksGroup';
@@ -27,7 +27,7 @@ function StacksProbe() {
 
 describe('useStacksGroup', () => {
   it('applies create, update, and delete events without duplicating list items', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const initialStack = createStack();
     server.use(
       http.get('http://localhost/api/v1/stacks', () =>
@@ -39,8 +39,8 @@ describe('useStacksGroup', () => {
     );
 
     renderCitadel(<StacksProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });
@@ -74,7 +74,7 @@ describe('useStacksGroup', () => {
   });
 
   it('ignores events outside the active platform filter and removes listeners on unmount', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const platformId = '00000000-0000-0000-0000-000000000200';
     const nextPlatformId = '00000000-0000-0000-0000-000000000300';
     server.use(
@@ -95,8 +95,8 @@ describe('useStacksGroup', () => {
 
     const view = renderCitadel(<StacksProbe />, {
       route: `/?platformId=${platformId}`,
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });

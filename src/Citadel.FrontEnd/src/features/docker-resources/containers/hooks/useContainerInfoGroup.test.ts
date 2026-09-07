@@ -14,7 +14,7 @@ const { useReadMock } = vi.hoisted(() => ({ useReadMock: vi.fn() }));
 vi.mock('@/lib/hooks', () => ({ useRead: useReadMock }));
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
 vi.mock('@/features/platforms/hooks/useDockerDaemonGroup', () => ({ useDockerDaemonGroup: vi.fn() }));
-vi.mock('@/hooks/useSignalRGroup', () => ({ useSignalRGroup: vi.fn() }));
+vi.mock('@/hooks/useRealtimeGroup', () => ({ useRealtimeGroup: vi.fn() }));
 
 beforeEach(() => {
   useReadMock.mockReset();

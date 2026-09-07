@@ -1,5 +1,5 @@
 import { SwarmNodeView } from '@/api/generated/api.types';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -19,8 +19,8 @@ const CapabilitiesProbe = () => {
 };
 
 describe('useNodesGroup', () => {
-  it('applies a SignalR snapshot without refetching', async () => {
-    const fake = new FakeHubConnection();
+  it('applies a realtime snapshot without refetching', async () => {
+    const fake = new FakeRealtimeConnection();
     let requestCount = 0;
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes`, () => {
@@ -31,8 +31,8 @@ describe('useNodesGroup', () => {
     );
 
     renderCitadel(<NodesProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });
@@ -48,8 +48,8 @@ describe('useNodesGroup', () => {
     expect(requestCount).toBe(1);
   });
 
-  it('keeps a newer SignalR snapshot when the initial request completes late', async () => {
-    const fake = new FakeHubConnection();
+  it('keeps a newer realtime snapshot when the initial request completes late', async () => {
+    const fake = new FakeRealtimeConnection();
     let releaseResponse!: () => void;
     const responseGate = new Promise<void>((resolve) => {
       releaseResponse = resolve;
@@ -65,8 +65,8 @@ describe('useNodesGroup', () => {
     );
 
     renderCitadel(<NodesProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });
@@ -74,22 +74,22 @@ describe('useNodesGroup', () => {
     await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(2));
 
     act(() => {
-      fake.emit('SwarmInventoryUpdated', inventory([createNode({ hostname: 'newer-signalr-state' })]));
+      fake.emit('SwarmInventoryUpdated', inventory([createNode({ hostname: 'newer-realtime-state' })]));
     });
-    expect(await screen.findByText('newer-signalr-state:false')).toBeVisible();
+    expect(await screen.findByText('newer-realtime-state:false')).toBeVisible();
 
     await act(async () => {
       releaseResponse();
       await responseGate;
     });
 
-    await waitFor(() => expect(screen.getByText('newer-signalr-state:false')).toBeVisible());
+    await waitFor(() => expect(screen.getByText('newer-realtime-state:false')).toBeVisible());
     expect(screen.queryByText('older-http-state:false')).not.toBeInTheDocument();
     expect(requestCount).toBe(1);
   });
 
-  it('preserves caller capabilities when SignalR replaces collection items', async () => {
-    const fake = new FakeHubConnection();
+  it('preserves caller capabilities when realtime replaces collection items', async () => {
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes`, () =>
         HttpResponse.json({
@@ -101,8 +101,8 @@ describe('useNodesGroup', () => {
     );
 
     renderCitadel(<CapabilitiesProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });

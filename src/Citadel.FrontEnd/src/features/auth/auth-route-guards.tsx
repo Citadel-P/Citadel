@@ -5,6 +5,11 @@ import { useAuthContext } from './auth-context';
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
+export function getPostLoginRedirect(target = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/') {
+  // Authentication/setup pages cannot be destinations for a signed-in user.
+  return /^\/(?:login|setup)(?:[/?#]|$)/i.test(target) ? '/' : target;
+}
+
 export const RequireAuth = () => {
   const { isAuthenticated, isAuthReady, accessToken } = useAuthContext();
   const location = useLocation();
@@ -36,7 +41,7 @@ export const RequireNoAuth = () => {
   }
 
   if (isAuthenticated) {
-    const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+    const redirectTo = getPostLoginRedirect();
     return <Navigate to={redirectTo} replace />;
   }
 

@@ -5,7 +5,7 @@ import { LoginNextStep, ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
+import { getPostLoginRedirect } from '@/features/auth/auth-route-guards';
 import { useAuthContext } from '@/features/auth/auth-context';
 import { MfaAuthShell } from '@/features/auth/mfa/components';
 import { clearMfaFlowStep, markMfaFlowStep } from '@/features/auth/mfa/mfa-flow';
@@ -104,7 +104,7 @@ export default function InitialSetup() {
     markSetupComplete();
     if (response.data.nextStep === LoginNextStep.Completed && response.data.accessToken) {
       completeLogin(response.data.accessToken);
-      const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+      const redirectTo = getPostLoginRedirect();
       navigate(redirectTo, { replace: true });
       return;
     }

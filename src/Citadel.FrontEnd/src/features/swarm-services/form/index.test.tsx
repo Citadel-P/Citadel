@@ -6,7 +6,7 @@ import {
   SwarmServiceSchedulingMode,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { server } from '@/test/server';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
@@ -386,12 +386,12 @@ describe('SwarmServiceFormComponents', () => {
 });
 
 const renderRuntime = (ui: React.ReactElement) => {
-  const fake = new FakeHubConnection();
+  const fake = new FakeRealtimeConnection();
   return {
     fake,
     ...renderCitadel(ui, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     }),

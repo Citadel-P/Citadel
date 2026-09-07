@@ -1,12 +1,12 @@
 import { useState, useCallback, useMemo } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { ImagesView, ImageView } from '@/api/generated/api.types';
 import {
   useDockerDaemonGroup,
   ImageEvent,
   SwarmNodeLocalResourcesUpdate,
 } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useImagesGroup = (platformId?: string) => {
@@ -116,7 +116,7 @@ export const useImagesGroup = (platformId?: string) => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('ImageInfoUpdated', handleImageInfoUpdated);
 
       hubConnection.on('ImagesInfoUpdated', handleImagesInfoUpdated);
@@ -125,7 +125,7 @@ export const useImagesGroup = (platformId?: string) => {
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('ImagesInfoUpdated', handleImagesInfoUpdated);
 
       hubConnection.off('ImageInfoUpdated', handleImageInfoUpdated);
@@ -133,7 +133,7 @@ export const useImagesGroup = (platformId?: string) => {
     [handleImagesInfoUpdated, handleImageInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `images:${platformId}`,
     setupEventListeners,
     removeEventListeners,

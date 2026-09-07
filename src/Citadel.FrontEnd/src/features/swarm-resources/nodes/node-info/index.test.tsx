@@ -1,5 +1,5 @@
 import { ResourceInfoView } from '@/pages/resource-info';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen } from '@testing-library/react';
@@ -15,7 +15,7 @@ const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('NodeInfoComponents', () => {
   it('shows minimal node metadata and tasks using the standard info page', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes/node-1`, () => HttpResponse.json(node)),
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
@@ -46,8 +46,8 @@ describe('NodeInfoComponents', () => {
       </Routes>,
       {
         route: `/platforms/${platformId}/nodes/node-1`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },

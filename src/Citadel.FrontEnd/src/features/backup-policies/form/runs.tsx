@@ -27,12 +27,12 @@ import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
 import { byteTransform } from '@/lib/bytes.helper';
 import type { DateTimeFormatter } from '@/lib/date-time';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { Ban, FileText, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -117,40 +117,40 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BackupRunInfoUpdated', handleBackupRunInfoUpdated);
     },
     [handleBackupRunInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BackupRunInfoUpdated', handleBackupRunInfoUpdated);
     },
     [handleBackupRunInfoUpdated],
   );
 
   const setupRestoreEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BackupRestoreRunInfoUpdated', handleBackupRestoreRunInfoUpdated);
     },
     [handleBackupRestoreRunInfoUpdated],
   );
 
   const removeRestoreEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BackupRestoreRunInfoUpdated', handleBackupRestoreRunInfoUpdated);
     },
     [handleBackupRestoreRunInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `backup-runs:${resource.id}`,
     setupEventListeners,
     removeEventListeners,
   });
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `backup-restore-runs:${resource.id}`,
     setupEventListeners: setupRestoreEventListeners,
     removeEventListeners: removeRestoreEventListeners,

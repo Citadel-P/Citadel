@@ -81,6 +81,15 @@ when the scripts need them.
 
 ## Run Citadel
 
+The platform form loads regular Agent installation instructions from
+`GET /api/v1/platforms/agent/setup` (Platform Write permission required).
+These instructions expose only the public signing key. If configured,
+`CITADEL_RUST_AGENT_PRIVATE_KEY_PATH` supplies the same key used by the Agent
+transport; otherwise startup creates a persistent key at
+`<CITADEL_DATA_ROOT>/agent/signing-key` with owner-only permissions on Unix.
+Preserve this private file across restarts and never share it with Agents.
+Installation instructions do not install an Agent or configure its connection.
+
 For normal browser testing, press `Ctrl+Shift+B`. This runs the default
 **Citadel: Run application (API + UI)** task. The task waits for the API to be
 ready before starting Vite.

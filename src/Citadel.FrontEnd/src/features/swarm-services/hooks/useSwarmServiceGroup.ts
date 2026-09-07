@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { ManagedSwarmServiceView, SwarmServiceSynchronizationState } from '@/api/generated/api.types';
 import { ResourceResponse } from '@/api/types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const normalizeManagedSwarmService = (
@@ -60,13 +60,13 @@ export const useSwarmServiceGroup = (id: string) => {
     [id, queryClient],
   );
   const setupEventListeners = useCallback(
-    (connection: HubConnection) => connection.on('SwarmServiceInfoUpdated', onUpdated),
+    (connection: RealtimeConnection) => connection.on('SwarmServiceInfoUpdated', onUpdated),
     [onUpdated],
   );
   const removeEventListeners = useCallback(
-    (connection: HubConnection) => connection.off('SwarmServiceInfoUpdated', onUpdated),
+    (connection: RealtimeConnection) => connection.off('SwarmServiceInfoUpdated', onUpdated),
     [onUpdated],
   );
-  useSignalRGroup({ groupName: `swarm-service:${id}`, skip: !id, setupEventListeners, removeEventListeners });
+  useRealtimeGroup({ groupName: `swarm-service:${id}`, skip: !id, setupEventListeners, removeEventListeners });
   return { service: data?.data, isLoading };
 };

@@ -290,7 +290,7 @@ const ContainerNameCell = ({
         }
       />
       <Link to={`./${row.id}`} className="table-link truncate" title={row.name}>
-        {row.name ? truncate(row.name?.slice(1), 24) : ''}
+        {truncate(getDisplayName(row), 24)}
       </Link>
       {row.isSystem ? (
         <SystemContainerBadge role={row.systemRole} />
@@ -486,7 +486,7 @@ const toNumber = (value: number | string | null | undefined) => {
 };
 
 const getDisplayName = (row: ContainerTableRow) =>
-  isContainerStackGroup(row) ? row.name : row.name ? row.name.slice(1) : '';
+  isContainerStackGroup(row) ? row.name : (row.name?.replace(/^\//, '') ?? '');
 
 const countDistinctImages = (row: ContainerStackGroupResource) =>
   new Set(row.containers.map((container) => container.imageView?.name ?? container.dockerImageId).filter(Boolean)).size;

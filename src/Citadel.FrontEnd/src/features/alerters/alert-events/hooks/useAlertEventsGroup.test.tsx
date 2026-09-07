@@ -7,7 +7,7 @@ import {
   AlertType,
   type AlertEventView,
 } from '@/api/generated/api.types';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { useAlertEventsGroup } from './useAlertEventsGroup';
@@ -25,7 +25,7 @@ function AlertEventsProbe() {
 
 describe('useAlertEventsGroup', () => {
   it('refills the unresolved alert list after a visible alert is resolved', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const alerts = Array.from({ length: 6 }, (_, index) => createAlert(index + 1));
     let requestCount = 0;
 
@@ -45,8 +45,8 @@ describe('useAlertEventsGroup', () => {
     );
 
     renderCitadel(<AlertEventsProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });

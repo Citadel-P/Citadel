@@ -5,6 +5,21 @@ The current closure record is **Completion pass (2026-09-07)** below. Earlier
 checkpoint notes are retained as history, not outstanding work. This is not a
 release-readiness claim: Phase 8's full-image/browser/security/soak gates remain.
 
+## Browser parity follow-up (2026-09-07)
+
+Browser testing exposed a missing regular Agent setup route after Platform
+creation. `GET /api/v1/platforms/agent/setup` now retains the .NET response
+contract and Platform Write authorization, with public-key-only installation
+instructions. Regression coverage lives in `agent_setup` unit tests,
+`platform_creation_http`, and the signing-key persistence tests.
+This does not port `POST /api/v1/platforms/agent/setup/rotate-key`; regular
+Agent key rotation remains an API parity gap and needs coordinated signer
+replacement before that existing UI action can work.
+
+Verification: 6 PostgreSQL Platform-creation HTTP tests, 4 setup/key unit tests,
+and 19 HTTP-contract tests passed. Server/adapter/platform Clippy checks passed;
+OpenAPI regeneration and verification cover 332 full / 280 public operations.
+
 ## Implemented
 
 - The existing Edge protobuf is generated from its pinned Contracts-submodule
@@ -850,6 +865,24 @@ AWS Build Pool provisioning is excluded because the .NET reference also rejects
 it; it is not an implemented feature being silently dropped. Full release-image
 installation/restart, exhaustive browser acceptance, packaging/security review
 and multi-day memory soak remain Phase 8, not evidence supplied by this gate.
+
+### Platform deletion parity follow-up
+
+The Rust router now implements the existing `DELETE /api/v1/platforms`
+contract (`deletePlatforms`, body `{ "ids": [...] }`), without changing the
+frontend. Execute permission is required for every selected Platform. Deletion
+is atomic, retains typed `PlatformDeleted` audit snapshots, and rejects retained
+workload/build/restore references. It deletes Citadel registrations and cascading
+inventory, never Docker workloads. Edge credentials are revoked in the same
+transaction; sessions close and the existing realtime groups refresh after commit.
+
+The two .NET `PlatformDeleteTests` scenarios are ported in
+`crates/server/tests/platform_creation_http/deletion.rs`, including backup-item
+cascade and missing-ID batch rollback. Additional cases cover permissions,
+invalid/duplicate IDs, dependency conflicts, concurrent deletion and Edge cleanup.
+Verification: 12 Platform HTTP/PostgreSQL tests, the deletion input unit test,
+and all 11 Edge session tests passed. Test databases and runners were disposable;
+no live Platform or Docker workload was deleted.
 
 Repeatable commands (all test infrastructure is disposable):
 

@@ -1,29 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
 
-type UseSignalRGroupOpts = {
+type UseRealtimeGroupOpts = {
   groupName?: string | readonly string[];
-  setupEventListeners: (hub: HubConnection) => void;
-  removeEventListeners?: (hub: HubConnection) => void;
-  onJoinedGroup?: (hub: HubConnection) => void;
+  setupEventListeners: (hub: RealtimeConnection) => void;
+  removeEventListeners?: (hub: RealtimeConnection) => void;
+  onJoinedGroup?: (hub: RealtimeConnection) => void;
   skip?: boolean;
   enabled?: boolean;
 };
 
-export const useSignalRGroup = ({
+export const useRealtimeGroup = ({
   groupName,
   setupEventListeners,
   removeEventListeners,
   onJoinedGroup,
   skip,
   enabled = true,
-}: UseSignalRGroupOpts) => {
-  const { signalR } = useRealtimeContext();
-  const connection = signalR?.connection;
-  const connectionState = signalR?.connectionState ?? HubConnectionState.Disconnected;
-  const joinGroup = signalR?.joinGroup;
-  const leaveGroup = signalR?.leaveGroup;
+}: UseRealtimeGroupOpts) => {
+  const { groups } = useRealtimeContext();
+  const connection = groups?.connection;
+  const connectionState = groups?.connectionState ?? RealtimeConnectionState.Disconnected;
+  const joinGroup = groups?.joinGroup;
+  const leaveGroup = groups?.leaveGroup;
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -51,7 +51,7 @@ export const useSignalRGroup = ({
       }
     };
 
-    const groupNames = typeof groupName === 'string' ? [groupName] : groupName ?? [];
+    const groupNames = typeof groupName === 'string' ? [groupName] : (groupName ?? []);
     if (
       skip ||
       !enabled ||
@@ -59,7 +59,7 @@ export const useSignalRGroup = ({
       !connection ||
       !joinGroup ||
       !leaveGroup ||
-      state !== HubConnectionState.Connected
+      state !== RealtimeConnectionState.Connected
     ) {
       setLoading(false);
       setConnected(false);
@@ -104,7 +104,7 @@ export const useSignalRGroup = ({
 
         onJoinedRef.current?.(connection);
       } catch (err) {
-        console.error('[SignalR] join failed', err);
+        console.error('[Realtime] join failed', err);
         await leaveJoinedGroups();
         removeListeners();
         setConnected(false);
@@ -119,17 +119,7 @@ export const useSignalRGroup = ({
       removeListeners();
       leaveJoinedGroups().catch(console.warn);
     };
-  }, [
-    groupName,
-    skip,
-    enabled,
-    state,
-    connection,
-    joinGroup,
-    leaveGroup,
-    setupEventListeners,
-    removeEventListeners,
-  ]);
+  }, [groupName, skip, enabled, state, connection, joinGroup, leaveGroup, setupEventListeners, removeEventListeners]);
 
   return { isLoading, isConnected };
 };

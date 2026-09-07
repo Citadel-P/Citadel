@@ -41,6 +41,7 @@ pub mod node_agent_runtime;
 mod node_inventory_store;
 pub mod oidc_protocol;
 pub mod oidc_store;
+pub mod platform_deletion;
 pub mod platform_read_store;
 pub mod platform_registration;
 mod postgres;

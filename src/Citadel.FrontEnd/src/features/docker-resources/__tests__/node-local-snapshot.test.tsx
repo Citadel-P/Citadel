@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { ImageView, DockerNetworkResultView, DockerVolumeResultView } from '@/api/generated/api.types';
 import { SwarmNodeLocalResourcesUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { renderCitadel } from '@/test/render-citadel';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { server } from '@/test/server';
 import { useImagesGroup } from '../images/hooks/useImagesGroup';
 import { useNetworksGroup } from '../networks/hooks/useNetworksGroup';
@@ -12,8 +12,8 @@ import { useVolumesGroup } from '../volumes/hooks/useVolumesGroup';
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('node-local Docker resource snapshots', () => {
-  it('keeps a SignalR snapshot received before the initial HTTP responses', async () => {
-    const fake = new FakeHubConnection();
+  it('keeps a realtime snapshot received before the initial HTTP responses', async () => {
+    const fake = new FakeRealtimeConnection();
     let releaseResponses!: () => void;
     const responseGate = new Promise<void>((resolve) => {
       releaseResponses = resolve;
@@ -34,8 +34,8 @@ describe('node-local Docker resource snapshots', () => {
     );
 
     renderCitadel(<ResourceProbe />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });

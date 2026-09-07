@@ -1,19 +1,19 @@
 import { act, renderHook } from '@testing-library/react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useServiceStatsStream } from './useServiceStats';
 
-const { useSignalRGroupMock } = vi.hoisted(() => ({ useSignalRGroupMock: vi.fn() }));
+const { useRealtimeGroupMock } = vi.hoisted(() => ({ useRealtimeGroupMock: vi.fn() }));
 
-vi.mock('@/hooks/useSignalRGroup', () => ({ useSignalRGroup: useSignalRGroupMock }));
+vi.mock('@/hooks/useRealtimeGroup', () => ({ useRealtimeGroup: useRealtimeGroupMock }));
 
 describe('useServiceStatsStream', () => {
-  beforeEach(() => useSignalRGroupMock.mockReset());
+  beforeEach(() => useRealtimeGroupMock.mockReset());
 
   it('joins the Platform stream before task container projections are available', () => {
     renderHook(() => useServiceStatsStream('platform-1', []));
 
-    expect(useSignalRGroupMock).toHaveBeenCalledWith(
+    expect(useRealtimeGroupMock).toHaveBeenCalledWith(
       expect.objectContaining({
         groupName: 'containers:platform-1',
         skip: false,
@@ -23,12 +23,12 @@ describe('useServiceStatsStream', () => {
 
   it('streams matching statistics without registering an HTTP refresh listener', () => {
     const { result } = renderHook(() => useServiceStatsStream('platform-1', ['container-1']));
-    const options = useSignalRGroupMock.mock.calls[0][0];
+    const options = useRealtimeGroupMock.mock.calls[0][0];
     const listeners = new Map<string, (...args: any[]) => void>();
     const connection = {
       on: vi.fn((event: string, handler: (...args: any[]) => void) => listeners.set(event, handler)),
       off: vi.fn(),
-    } as unknown as HubConnection;
+    } as unknown as RealtimeConnection;
     options.setupEventListeners(connection);
 
     act(() => {

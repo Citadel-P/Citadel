@@ -673,7 +673,7 @@ export const DockerContainerCell = ({
   <div className="flex flex-wrap gap-1 items-center">
     <StateIndicator value={state ?? ContainerStateStatus.Exited} kind="container" />
     <Link to={`/platforms/${platformId}/containers/${normalizeDockerId(id)}`} className="table-link" title={name}>
-      {truncate(name?.slice(1), 24)}
+      {truncate(name?.replace(/^\//, ''), 24)}
     </Link>
   </div>
 );

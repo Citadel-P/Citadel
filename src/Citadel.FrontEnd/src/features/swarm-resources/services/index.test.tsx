@@ -9,7 +9,7 @@ import {
   UpdateBehavior,
 } from '@/api/generated/api.types';
 import { RegularResourceView } from '@/pages/regular-resource';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { LayoutContext } from '@/lib/context/layout-context';
@@ -33,8 +33,8 @@ const layoutContext = {
 };
 
 describe('ServiceComponents', () => {
-  it('expands service tasks and keeps them synchronized through SignalR', async () => {
-    const fake = new FakeHubConnection();
+  it('expands service tasks and keeps them synchronized through realtime', async () => {
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
         HttpResponse.json({
@@ -71,8 +71,8 @@ describe('ServiceComponents', () => {
       </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -123,7 +123,7 @@ describe('ServiceComponents', () => {
   }, 10_000);
 
   it('shows a managed Service before its first deployment', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
         HttpResponse.json({ items: [] }),
@@ -148,8 +148,8 @@ describe('ServiceComponents', () => {
       </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -164,7 +164,7 @@ describe('ServiceComponents', () => {
   });
 
   it('uses the persisted Docker Service link before ownership labels are applied', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
         HttpResponse.json({ items: [service()] }),
@@ -189,8 +189,8 @@ describe('ServiceComponents', () => {
       </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -213,7 +213,7 @@ describe('ServiceComponents', () => {
   });
 
   it('offers namespace import for an external Docker Stack Service', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/services`, () =>
         HttpResponse.json({
@@ -248,8 +248,8 @@ describe('ServiceComponents', () => {
       </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/services`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
