@@ -1,8 +1,8 @@
 import { BuildProjectView, ResourceCapabilities } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectBuildProjectLatestRun } from '../build-run-state';
 
@@ -68,20 +68,20 @@ export const useBuildsGroup = () => {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
     },
     [handleBuildProjectInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
     },
     [handleBuildProjectInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'build-projects',
     setupEventListeners,
     removeEventListeners,

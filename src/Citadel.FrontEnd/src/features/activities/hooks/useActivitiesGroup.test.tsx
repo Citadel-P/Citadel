@@ -17,7 +17,7 @@ vi.mock('@/lib/atoms', () => ({
     },
   ],
 }));
-vi.mock('@/hooks/useSignalRGroup', () => ({ useSignalRGroup: vi.fn() }));
+vi.mock('@/hooks/useRealtimeGroup', () => ({ useRealtimeGroup: vi.fn() }));
 
 describe('useActivitiesGroup', () => {
   it('passes the resource tab type to the activities endpoint', () => {

@@ -9,7 +9,14 @@ Removed the frontend `realtime-queries.ts` policy, extra Platform statistics
 subscription manager, and Rust-specific feature-hook branches. The migration
 boundary is now `createWebSocketConnection.ts` plus provider transport selection.
 The existing provider owns group reference counts, token replacement, reconnect,
-and disposal for both transports. Existing feature hooks remain unchanged.
+and disposal for both transports. Feature-hook event handling remains unchanged.
+
+The shared frontend API uses transport-neutral `RealtimeConnection` types,
+`useRealtimeGroup`, and `RealtimeContext.groups`. Rust's WebSocket adapter
+implements that interface directly, without importing or casting to SignalR
+types. SignalR-specific construction is confined to the negotiated .NET
+compatibility adapter; Rust selects `WebSocketV1`. Resource event names and
+payloads are unchanged, and consumer edits are mechanical naming/type updates.
 
 Rust's `realtime_groups` reads authorized application/store projections and emits
 existing named events rather than browser instructions to refetch queries:

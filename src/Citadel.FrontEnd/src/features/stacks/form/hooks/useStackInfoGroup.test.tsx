@@ -6,7 +6,7 @@ import {
   ContainerView,
   ResourceControlState,
 } from '@/api/generated/api.types';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { AppContext } from '@/lib/context/app-context';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
@@ -32,7 +32,7 @@ function StackContainersProbe() {
 
 describe('useStackInfoGroup', () => {
   it('keeps a Docker lifecycle event when a stale stats snapshot follows it', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const initial = createContainer(ContainerStateStatus.Running);
     server.use(
       http.get(`http://localhost/api/v1/stacks/${stackId}/data`, () => HttpResponse.json({ containers: [initial] })),
@@ -51,8 +51,8 @@ describe('useStackInfoGroup', () => {
         <StackContainersProbe />
       </AppContext.Provider>,
       {
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },

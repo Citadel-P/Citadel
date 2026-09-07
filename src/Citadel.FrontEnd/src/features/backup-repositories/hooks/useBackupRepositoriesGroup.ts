@@ -1,7 +1,7 @@
 import { BackupRepositoryView, ResourceCapabilities } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const useBackupRepositoriesGroup = () => {
@@ -37,20 +37,20 @@ export const useBackupRepositoriesGroup = () => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BackupRepositoryInfoUpdated', handleBackupRepositoryInfoUpdated);
     },
     [handleBackupRepositoryInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BackupRepositoryInfoUpdated', handleBackupRepositoryInfoUpdated);
     },
     [handleBackupRepositoryInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'backup-repositories',
     setupEventListeners,
     removeEventListeners,

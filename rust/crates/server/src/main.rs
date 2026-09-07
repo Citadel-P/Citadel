@@ -398,12 +398,23 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             "GitRepository",
         )),
     );
+    let agent_signer = if let Some(agent) = &config.agent {
+        AgentRequestSigner::from_file(&agent.private_key_path)?
+    } else {
+        AgentRequestSigner::load_or_create(&data_root.join("agent/signing-key"))?
+    };
+    let agent_image = std::env::var("CITADEL_EDGE_AGENT_IMAGE")
+        .unwrap_or_else(|_| "ghcr.io/citadel-p/citadel.agent:latest".into());
+    let agent_setup = Arc::new(citadel_platforms::agent_setup::AgentSetupView::new(
+        agent_signer.public_key_base64(),
+        agent_image.clone(),
+        !citadel_server::config::agent_allows_insecure()?,
+    ));
     let agent = if let Some(agent) = &config.agent {
-        let signer = AgentRequestSigner::from_file(&agent.private_key_path)?;
         Some(
             AgentClient::connect(
                 &agent.address,
-                signer,
+                agent_signer,
                 agent.operation_timeout,
                 agent.allow_insecure,
             )
@@ -933,15 +944,17 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             realtime: realtime_hub.clone(),
         }))
         .merge({
-            platforms_http::router(platform_state.clone()).merge(
-                citadel_server::lookup_http::router(citadel_server::lookup_http::LookupHttpState {
-                    store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
-                        pool.clone(),
-                    )),
-                    entitlements: entitlements.clone(),
-                    platforms: platform_state,
-                }),
-            )
+            platforms_http::router(platform_state.clone())
+                .layer(axum::Extension(agent_setup))
+                .merge(citadel_server::lookup_http::router(
+                    citadel_server::lookup_http::LookupHttpState {
+                        store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
+                            pool.clone(),
+                        )),
+                        entitlements: entitlements.clone(),
+                        platforms: platform_state,
+                    },
+                ))
         })
         .merge(profile_http::router(profile_http::ProfileHttpState {
             profiles,
@@ -989,8 +1002,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             .to_string()
             .trim_end_matches('/')
             .to_owned(),
-        agent_image: std::env::var("CITADEL_EDGE_AGENT_IMAGE")
-            .unwrap_or_else(|_| "ghcr.io/citadel-p/citadel.agent:latest".into()),
+        agent_image,
     }));
     let mut edge_transport = config.transport.clone();
     edge_transport.static_root = None;

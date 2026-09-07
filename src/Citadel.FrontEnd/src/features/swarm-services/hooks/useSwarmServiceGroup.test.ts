@@ -41,7 +41,7 @@ describe('normalizeManagedSwarmService', () => {
     expect(result.tasks).toEqual([]);
   });
 
-  it('preserves the current image when an incomplete SignalR union is received', () => {
+  it('preserves the current image when an incomplete realtime union is received', () => {
     const image = {
       $type: 'External',
       registryId: 'registry-id',

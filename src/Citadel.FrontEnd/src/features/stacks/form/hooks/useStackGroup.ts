@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { StackView } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useStackGroup = (stackId: string) => {
@@ -41,20 +41,20 @@ export const useStackGroup = (stackId: string) => {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('StackInfoUpdated', handleStackInfoUpdated);
     },
     [handleStackInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('StackInfoUpdated', handleStackInfoUpdated);
     },
     [handleStackInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'stack:' + stackId,
     skip: !stackId,
     setupEventListeners,

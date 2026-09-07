@@ -1,6 +1,6 @@
 import { SwarmNodeView, SwarmTaskView } from '@/api/generated/api.types';
 import { RegularResourceView } from '@/pages/regular-resource';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen } from '@testing-library/react';
@@ -25,7 +25,7 @@ const layoutContext = {
 
 describe('NodeComponents', () => {
   it('uses expandable task rows without duplicating the indicated node status', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes`, () =>
         HttpResponse.json({ items: [node({ availability: 'Pause' })] }),
@@ -46,8 +46,8 @@ describe('NodeComponents', () => {
       </LayoutContext.Provider>,
       {
         route: `/platforms/${platformId}/nodes`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },

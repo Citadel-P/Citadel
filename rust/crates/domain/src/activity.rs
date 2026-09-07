@@ -923,6 +923,10 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Platform")]
         platform: PlatformActivitySnapshot,
     },
+    PlatformDeleted {
+        #[serde(rename = "Platform")]
+        platform: PlatformActivitySnapshot,
+    },
     PlatformNodeAgentLifecycle {
         #[serde(rename = "OperationId")]
         operation_id: Uuid,
@@ -1704,6 +1708,7 @@ impl ActivityEventInfo {
                 ActivityEventType::SwarmServiceOperationFailed
             }
             Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
+            Self::PlatformDeleted { .. } => ActivityEventType::PlatformDeleted,
             Self::PlatformNodeAgentLifecycle { .. } => {
                 ActivityEventType::PlatformNodeAgentLifecycle
             }

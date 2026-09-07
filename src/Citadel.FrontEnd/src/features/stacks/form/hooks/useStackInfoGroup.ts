@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { ContainerDataView, PlatformStatus, ProblemDetails } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { normalizeDockerId } from '@/lib/utils';
@@ -150,20 +150,20 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('ReceiveStackContainersInfo', handleStackContainersInfoUpdated);
     },
     [handleStackContainersInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('ReceiveStackContainersInfo', handleStackContainersInfoUpdated);
     },
     [handleStackContainersInfoUpdated],
   );
 
-  const { isLoading: isStreamLoading } = useSignalRGroup({
+  const { isLoading: isStreamLoading } = useRealtimeGroup({
     groupName: `stack-info:${stackId}`,
     setupEventListeners,
     removeEventListeners,

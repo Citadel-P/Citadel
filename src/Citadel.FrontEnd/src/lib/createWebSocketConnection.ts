@@ -1,12 +1,11 @@
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
-import { SignalRConnectionFactoryOptions } from './createSignalRConnection';
+import { RealtimeConnection, RealtimeConnectionState, RealtimeConnectionOptions } from './realtime-connection';
 
 // Transport-only compatibility boundary. Resource hooks retain their existing
 // on/off/invoke contract; event names and payloads are owned by the server.
 export function createWebSocketConnection(
-  { baseUrl, accessTokenFactory }: SignalRConnectionFactoryOptions,
+  { baseUrl, accessTokenFactory }: RealtimeConnectionOptions,
   socketFactory: (url: string) => WebSocket = (url) => new WebSocket(url),
-): HubConnection {
+): RealtimeConnection {
   type Handler = (...args: any[]) => void;
   const handlers = new Map<string, Set<Handler>>();
   const pending = new Map<
@@ -17,7 +16,7 @@ export function createWebSocketConnection(
     reconnected: Handler[] = [],
     closed: Handler[] = [];
   let socket: WebSocket | undefined;
-  let state = HubConnectionState.Disconnected;
+  let state: RealtimeConnectionState = RealtimeConnectionState.Disconnected;
   let stopped = false;
   let nextId = 0;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -32,7 +31,7 @@ export function createWebSocketConnection(
   const emit = (callbacks: Handler[], ...args: unknown[]) => callbacks.forEach((callback) => callback(...args));
   const start = (): Promise<void> => {
     stopped = false;
-    state = HubConnectionState.Connecting;
+    state = RealtimeConnectionState.Connecting;
     const url = new URL('/api/v1/realtime', baseUrl || window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     const current = socketFactory(url.toString());
@@ -71,7 +70,7 @@ export function createWebSocketConnection(
           connected = true;
           clearTimeout(deadline);
           rejectStart = undefined;
-          state = HubConnectionState.Connected;
+          state = RealtimeConnectionState.Connected;
           resolve();
         } else if (value.kind === 'completion') {
           const invocation = pending.get(value.invocationId);
@@ -91,12 +90,12 @@ export function createWebSocketConnection(
         failPending();
         rejectStart = undefined;
         if (!connected) {
-          state = HubConnectionState.Disconnected;
+          state = RealtimeConnectionState.Disconnected;
           reject(new Error('Realtime subscription failed'));
           return;
         }
         if (stopped) return;
-        state = HubConnectionState.Reconnecting;
+        state = RealtimeConnectionState.Reconnecting;
         emit(reconnecting);
         let attempt = 0;
         const retry = () => {
@@ -107,7 +106,7 @@ export function createWebSocketConnection(
               .then(() => emit(reconnected))
               .catch(() => {
                 if (stopped) return;
-                state = HubConnectionState.Reconnecting;
+                state = RealtimeConnectionState.Reconnecting;
                 attempt++;
                 retry();
               });
@@ -117,7 +116,7 @@ export function createWebSocketConnection(
       });
     });
   };
-  const adapter = {
+  const adapter: RealtimeConnection = {
     get state() {
       return state;
     },
@@ -131,7 +130,7 @@ export function createWebSocketConnection(
       socket = undefined;
       current?.close();
       failPending();
-      state = HubConnectionState.Disconnected;
+      state = RealtimeConnectionState.Disconnected;
       emit(closed);
     },
     on(name: string, handler: Handler) {
@@ -154,8 +153,8 @@ export function createWebSocketConnection(
     onclose(handler: Handler) {
       closed.push(handler);
     },
-    invoke(target: string, ...args: unknown[]) {
-      if (state !== HubConnectionState.Connected || !socket)
+    invoke(target: string, ...args: unknown[]): Promise<unknown> {
+      if (state !== RealtimeConnectionState.Connected || !socket)
         return Promise.reject(new Error('Realtime connection is not ready'));
       if (pending.size >= 128) return Promise.reject(new Error('Too many pending realtime invocations'));
       const invocationId = String(++nextId);
@@ -175,7 +174,5 @@ export function createWebSocketConnection(
       });
     },
   };
-  // The existing hooks use only this subset of HubConnection. Keep that legacy
-  // type at this boundary instead of changing every feature for a backend port.
-  return adapter as unknown as HubConnection;
+  return adapter;
 }

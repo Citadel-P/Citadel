@@ -35,11 +35,11 @@ type RenderCitadelOptions = Omit<RenderOptions, 'wrapper'> & {
   auth?: Partial<AuthContextValue>;
   setup?: Partial<SetupContextValue>;
   queryClient?: QueryClient;
-  signalR?: Omit<ComponentProps<typeof RealtimeProvider>, 'children'>;
+  groups?: Omit<ComponentProps<typeof RealtimeProvider>, 'children'>;
 };
 
 export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = {}) {
-  const { route = '/', auth, setup, queryClient = createQueryClient(), signalR, ...renderOptions } = options;
+  const { route = '/', auth, setup, queryClient = createQueryClient(), groups, ...renderOptions } = options;
   const apiClient = createApiClient('http://localhost');
   const authValue = { ...defaultAuth, ...auth };
   const setupValue = { ...defaultSetup, ...setup };
@@ -50,8 +50,8 @@ export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = 
         <ApiClientContext.Provider value={{ apiClient }}>
           <SetupContext.Provider value={setupValue}>
             <AuthContext.Provider value={authValue}>
-              {signalR ? (
-                <RealtimeProvider realtimeTransport="SignalR" {...signalR}>
+              {groups ? (
+                <RealtimeProvider realtimeTransport="SignalR" {...groups}>
                   {children}
                 </RealtimeProvider>
               ) : (

@@ -12,6 +12,34 @@ use prost::Message;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[test]
+fn disconnect_platform_closes_manager_and_nodes_but_preserves_other_targets() {
+    let registry = EdgeRegistry::default();
+    let platform = Uuid::now_v7();
+    let (manager, _) = registry
+        .register(EdgeTarget::platform(platform), Uuid::now_v7())
+        .unwrap();
+    let (node, _) = registry
+        .register(
+            EdgeTarget::node(platform, "worker-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (other, _) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let (builder, _) = registry
+        .register(EdgeTarget::build_pool(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    registry.disconnect_platform(platform);
+    registry.disconnect_platform(platform);
+    assert!(manager.is_closed());
+    assert!(node.is_closed());
+    assert!(!other.is_closed());
+    assert!(!builder.is_closed());
+    assert_eq!(registry.current_sessions().len(), 2);
+}
+
 #[tokio::test]
 async fn service_log_reads_preserve_tail_truncation_and_reject_oversized_agent_output() {
     use citadel_contracts::citadel::swarm::v1::{SwarmLogsRequest, SwarmLogsResponse};

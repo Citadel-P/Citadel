@@ -34,7 +34,7 @@ it('uses the unchanged Deployment hook to apply a named event without refetching
   }
   const socket = new FakeWebSocket();
   const rendered = renderCitadel(<Probe />, {
-    signalR: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
+    groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
   });
   expect(await screen.findByText('Applying')).toBeVisible();
   connect(socket);
@@ -65,7 +65,7 @@ it('uses existing daemon handlers to remove Volumes and Networks without refetch
   }
   const socket = new FakeWebSocket();
   const rendered = renderCitadel(<Probe />, {
-    signalR: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
+    groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
   });
   expect(await screen.findByText('volumes: 1')).toBeVisible();
   expect(await screen.findByText('networks: 1')).toBeVisible();
@@ -94,7 +94,7 @@ it('delivers Platform statistics through the existing PlatformStatsUpdated handl
   }
   const socket = new FakeWebSocket();
   const rendered = renderCitadel(<Probe />, {
-    signalR: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
+    groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
   });
   expect(await screen.findByText('cpu: 10')).toBeVisible();
   connect(socket);

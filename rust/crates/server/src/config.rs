@@ -826,7 +826,7 @@ fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
         (None, None) => Ok(None),
         (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
             let timeout = required_nonzero_seconds("CITADEL_RUST_AGENT_TIMEOUT_SECONDS")?;
-            let allow_insecure = parse_env("AgentTransport__AllowInsecure", true)?;
+            let allow_insecure = agent_allows_insecure()?;
             Ok(Some(AgentConfig {
                 address,
                 private_key_path: PathBuf::from(private_key_path),
@@ -841,6 +841,10 @@ fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
                 .to_owned(),
         }),
     }
+}
+
+pub fn agent_allows_insecure() -> Result<bool, ConfigError> {
+    parse_env("AgentTransport__AllowInsecure", true)
 }
 
 fn database_url() -> Result<(String, &'static str), ConfigError> {

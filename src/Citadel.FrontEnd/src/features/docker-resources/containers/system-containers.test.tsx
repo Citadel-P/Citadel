@@ -26,6 +26,7 @@ import { AppContext } from '@/lib/context/app-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { ReactNode } from 'react';
 import { ContainersTable } from './table';
+import { DockerContainerCell } from '@/components/custom/common';
 
 vi.mock('@/lib/monaco', () => ({
   MonacoEditor: () => null,
@@ -184,6 +185,20 @@ describe('unmanaged container import actions', () => {
     containers: [composeContainer, composeSibling],
     isStackGroup: true,
   } as ContainerStackGroupResource;
+
+  it.each(['nginx', '/nginx', 'n', '/n'])('preserves the container name in the table: %s', (name) => {
+    renderActions(<ContainersTable items={[{ ...standalone, name }]} isLoading={false} actions={{}} />);
+
+    expect(screen.getByRole('link', { name: name.replace(/^\//, '') })).toHaveAttribute('title', name);
+  });
+
+  it.each(['nginx', '/nginx', 'n', '/n'])('preserves the shared container cell name: %s', (name) => {
+    renderActions(
+      <DockerContainerCell name={name} id="docker-id" state={ContainerStateStatus.Running} platformId="platform-id" />,
+    );
+
+    expect(screen.getByRole('link', { name: name.replace(/^\//, '') })).toHaveAttribute('title', name);
+  });
 
   it('shows only adoption for a standalone unmanaged container', () => {
     expect(isAdoptableContainer(standalone)).toBe(true);

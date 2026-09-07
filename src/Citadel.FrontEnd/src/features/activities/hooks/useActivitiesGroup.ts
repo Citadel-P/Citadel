@@ -3,8 +3,8 @@ import { ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api
 import { useRead } from '@/lib/hooks';
 import { useActivityQuery } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
-import { HubConnection } from '@microsoft/signalr';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 
 export const useActivitiesGroup = (
   resourceId?: string | undefined,
@@ -52,20 +52,20 @@ export const useActivitiesGroup = (
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('ActivityEventReceived', handleActivityEventReceived);
     },
     [handleActivityEventReceived],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('ActivityEventReceived', handleActivityEventReceived);
     },
     [handleActivityEventReceived],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: resourceId && resourceType ? `activity:${resourceType}:${resourceId}` : undefined,
     setupEventListeners,
     removeEventListeners,

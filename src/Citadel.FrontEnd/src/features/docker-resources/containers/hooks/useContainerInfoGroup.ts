@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import {
   type ContainerDataView,
@@ -140,20 +140,20 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('ReceiveContainerInfo', handleContainerInfoUpdated);
     },
     [handleContainerInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('ReceiveContainerInfo', handleContainerInfoUpdated);
     },
     [handleContainerInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: containerInfo?.resourceId ? `container-info:${containerInfo.resourceId}` : undefined,
     setupEventListeners,
     removeEventListeners,

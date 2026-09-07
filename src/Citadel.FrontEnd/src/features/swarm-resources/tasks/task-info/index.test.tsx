@@ -1,5 +1,5 @@
 import { ResourceInfoView } from '@/pages/resource-info';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -41,7 +41,7 @@ describe('TaskInfoComponents', () => {
   beforeEach(() => localStorage.clear());
 
   it('uses resource capabilities and streams stats through the standard info page', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     let statsRequests = 0;
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks/task-1`, () => HttpResponse.json(task())),
@@ -89,8 +89,8 @@ describe('TaskInfoComponents', () => {
       </Routes>,
       {
         route: `/platforms/${platformId}/tasks/task-1`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -139,7 +139,7 @@ describe('TaskInfoComponents', () => {
   });
 
   it('opens a terminal for a running task on the connected manager with terminal permission', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const terminalTaskId = 'task-terminal';
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks/${terminalTaskId}`, () =>
@@ -184,8 +184,8 @@ describe('TaskInfoComponents', () => {
       </Routes>,
       {
         route: `/platforms/${platformId}/tasks/${terminalTaskId}`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },

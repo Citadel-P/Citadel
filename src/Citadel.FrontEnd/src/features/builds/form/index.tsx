@@ -3,11 +3,11 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useRead } from '@/lib/hooks';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BuildInfoActions } from '../actions';
 import { isActiveBuildRun, isBuildProjectActive, selectBuildProjectLatestRun } from '../build-run-state';
@@ -87,20 +87,20 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       );
 
       const setupEventListeners = useCallback(
-        (hubConnection: HubConnection) => {
+        (hubConnection: RealtimeConnection) => {
           hubConnection.on('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
         },
         [handleBuildProjectInfoUpdated],
       );
 
       const removeEventListeners = useCallback(
-        (hubConnection: HubConnection) => {
+        (hubConnection: RealtimeConnection) => {
           hubConnection.off('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
         },
         [handleBuildProjectInfoUpdated],
       );
 
-      useSignalRGroup({
+      useRealtimeGroup({
         groupName: `build-project:${id}`,
         setupEventListeners,
         removeEventListeners,

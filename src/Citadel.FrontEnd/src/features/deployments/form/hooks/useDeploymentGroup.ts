@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { DeploymentView } from '@/api/generated/api.types';
 import { ResourceResponse } from '@/api/types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useDeploymentGroup = (deploymentId: string) => {
@@ -27,20 +27,20 @@ export const useDeploymentGroup = (deploymentId: string) => {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('DeploymentInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('DeploymentInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'deployment:' + deploymentId,
     skip: !deploymentId,
     setupEventListeners,

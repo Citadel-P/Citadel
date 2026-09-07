@@ -1,14 +1,9 @@
-import { HubConnection, HubConnectionBuilder, HttpTransportType, IHttpConnectionOptions } from '@microsoft/signalr';
+import { HubConnectionBuilder, HttpTransportType, IHttpConnectionOptions } from '@microsoft/signalr';
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 
-export type SignalRConnectionFactoryOptions = {
-  baseUrl: string;
-  accessTokenFactory: () => string;
-};
+import { RealtimeConnectionFactory } from './realtime-connection';
 
-export type SignalRConnectionFactory = (options: SignalRConnectionFactoryOptions) => HubConnection;
-
-export const createSignalRConnection: SignalRConnectionFactory = ({ baseUrl, accessTokenFactory }) =>
+export const createSignalRConnection: RealtimeConnectionFactory = ({ baseUrl, accessTokenFactory }) =>
   new HubConnectionBuilder()
     .withUrl(`${baseUrl}/hubs/global`, {
       accessTokenFactory,

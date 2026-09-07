@@ -1,7 +1,7 @@
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
+import { getPostLoginRedirect, REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
 import { useMutate } from '@/lib/hooks';
 import { ArrowLeft, KeyRound, LoaderCircle, ShieldCheck, Smartphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -32,7 +32,7 @@ export default function MfaVerify() {
   const enterApp = (accessToken: string) => {
     completeLogin(accessToken);
     clearMfaFlowStep();
-    const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+    const redirectTo = getPostLoginRedirect();
     sessionStorage.removeItem(REDIRECT_TO_KEY);
     navigate(redirectTo, { replace: true });
   };

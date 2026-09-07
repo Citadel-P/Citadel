@@ -1,5 +1,5 @@
 import { ManagedSwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -10,7 +10,7 @@ const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('useSwarmServicesGroup', () => {
   it('keeps managed Service tasks synchronized from the Swarm inventory stream', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get('http://localhost/api/v1/swarmServices', () =>
         HttpResponse.json({
@@ -21,8 +21,8 @@ describe('useSwarmServicesGroup', () => {
     );
 
     renderCitadel(<TaskNames />, {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });

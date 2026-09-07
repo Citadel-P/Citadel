@@ -40,6 +40,9 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "platform_creation_http/deletion.rs"]
+mod deletion;
+
 struct StaticInventory {
     calls: AtomicUsize,
     info: InfoOutcome,
@@ -289,6 +292,13 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         runtime.clone(),
     ));
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
+    let public_key =
+        citadel_adapters::agent::AgentRequestSigner::from_bytes(&[71; 32]).public_key_base64();
+    let setup = Arc::new(citadel_platforms::agent_setup::AgentSetupView::new(
+        public_key.clone(),
+        "citadel-agent:test".into(),
+        false,
+    ));
     let app = platforms_http::router(PlatformsHttpState {
         volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
             pool.clone(),
@@ -318,7 +328,15 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         edge: citadel_adapters::edge::EdgeRegistry::default(),
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
-    });
+    })
+    .layer(axum::Extension(setup));
+
+    for (principal, status) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some(denied.clone()), StatusCode::FORBIDDEN),
+    ] {
+        assert_eq!(agent_setup_request(&app, principal).await.status(), status);
+    }
 
     let input = json!({
         "name": format!("local-{}", Uuid::now_v7().simple()),
@@ -366,6 +384,32 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     .await
     .unwrap();
     assert_eq!(persisted, (1, 1, 1));
+    // The unchanged Platform form requests this endpoint after creation. It
+    // must not touch Docker, rotate keys or expose private signing material.
+    for _ in 0..2 {
+        let setup = agent_setup_request(&app, Some(administrator.clone())).await;
+        assert_eq!(setup.status(), StatusCode::OK);
+        assert!(
+            setup.headers()["cache-control"]
+                .to_str()
+                .unwrap()
+                .contains("no-store")
+        );
+        let data: Value =
+            serde_json::from_slice(&to_bytes(setup.into_body(), 64 * 1024).await.unwrap()).unwrap();
+        assert_eq!(data["hubPublicKey"], public_key);
+        assert_eq!(data["environment"]["HUB_PUBLIC_KEY"], public_key);
+        assert_eq!(data["agentImage"], "citadel-agent:test");
+        assert_eq!(data["requiresTls"], false);
+        assert!(
+            data["dockerRunCommand"]
+                .as_str()
+                .unwrap()
+                .contains("-p 9000:9000")
+        );
+        assert!(!data.to_string().contains("PRIVATE_KEY="));
+    }
+    assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 5);
     let activity_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='PlatformCreated' AND status='Success'",
     )
@@ -410,6 +454,20 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         .execute(&pool)
         .await
         .unwrap();
+}
+
+async fn agent_setup_request(
+    app: &Router,
+    actor: Option<ActorPrincipal>,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .uri("/api/v1/platforms/agent/setup")
+        .body(Body::empty())
+        .unwrap();
+    if let Some(actor) = actor {
+        request.extensions_mut().insert(actor);
+    }
+    app.clone().oneshot(request).await.unwrap()
 }
 
 #[tokio::test]
@@ -791,6 +849,7 @@ struct TestHarness {
     administrator: ActorPrincipal,
     runtime: Arc<StaticRegistrationRuntime>,
     realtime: RealtimeHub,
+    edge: citadel_adapters::edge::EdgeRegistry,
 }
 
 async fn harness(inventory: StaticInventory) -> TestHarness {
@@ -825,6 +884,7 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         runtime.clone(),
     ));
     let realtime = RealtimeHub::new(16, Arc::new(Metrics::default()));
+    let edge = citadel_adapters::edge::EdgeRegistry::default();
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let app = platforms_http::router(PlatformsHttpState {
         volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
@@ -853,7 +913,7 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
         realtime: Some(realtime.clone()),
-        edge: citadel_adapters::edge::EdgeRegistry::default(),
+        edge: edge.clone(),
         stats_sample_max_age: StdDuration::from_secs(30),
     });
     TestHarness {
@@ -862,6 +922,7 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         administrator,
         runtime,
         realtime,
+        edge,
     }
 }
 

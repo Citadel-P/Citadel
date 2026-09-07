@@ -405,7 +405,12 @@ export const PlatformForm = ({
         original={original}
         update={update}
         setUpdate={setUpdate}
-        onSave={save}
+        onSave={(input) => {
+          // Creating Local changes the list's default to Agent before navigation.
+          // Preserve the submitted connector across realtime/cache updates.
+          setUpdate((prev) => ({ ...prev, connectorType: input.connectorType ?? PlatformConnectorType.Local }));
+          return save(input);
+        }}
         pending={isPending}
         disabled={formDisabled}
         draftKey={isEdit ? `platform:${resource?.id}:config` : 'platform:new'}

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { GitRepositoryView } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useGitRepoGroup = (id: string | undefined) => {
@@ -17,7 +17,7 @@ export const useGitRepoGroup = (id: string | undefined) => {
   }, [data?.data]);
 
   const handleDeploymentInfoUpdated = useCallback((repo: GitRepositoryView) => {
-    const info = (repo.latestActivityView?.info as any)?.[1]; // SignalR poly mapping
+    const info = (repo.latestActivityView?.info as any)?.[1]; // realtime poly mapping
     if (info) info.$type = (repo.latestActivityView?.info as any)?.[0];
 
     setGitRepo((prev) => {
@@ -31,20 +31,20 @@ export const useGitRepoGroup = (id: string | undefined) => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('GitRepositoryInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('GitRepositoryInfoUpdated', handleDeploymentInfoUpdated);
     },
     [handleDeploymentInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'git-repo:' + id,
     skip: !id,
     setupEventListeners,

@@ -1162,6 +1162,21 @@ fn schemas() -> Value {
         "SwarmSecretView": swarm_secret_view(),
         "SwarmSecretsView": collection_view("items", "SwarmSecretView", "PlatformCapabilities")
     });
+    schemas["DeletePlatformsInput"] = json!({
+        "type": "object", "required": ["ids"], "additionalProperties": false,
+        "properties": {"ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}}}
+    });
+    schemas["AgentSetupView"] = json!({
+        "type": "object",
+        "required": ["hubPublicKey", "environment", "agentImage", "dockerRunCommand", "requiresTls"],
+        "properties": {
+            "hubPublicKey": string(),
+            "environment": {"type": "object", "additionalProperties": string()},
+            "agentImage": string(),
+            "dockerRunCommand": string(),
+            "requiresTls": {"type": "boolean"}
+        }
+    });
     schemas["InspectImageView"] = image_inspection();
     schemas["ExposedPortsResult"] = json!({"type":"object","required":["ports"],"properties":{"ports":{"type":"array","items":{"type":"string"}}}});
     schemas

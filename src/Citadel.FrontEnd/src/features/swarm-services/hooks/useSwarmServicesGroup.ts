@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { ManagedSwarmServiceView, ResourceCapabilities } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useResourcePlatformFilter } from '@/features/platforms/platform-filter';
@@ -86,14 +86,14 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (connection: HubConnection) => {
+    (connection: RealtimeConnection) => {
       connection.on('SwarmServiceInfoUpdated', onUpdated);
       if (listenForInventory) connection.on('SwarmInventoryUpdated', onSwarmInventoryUpdated);
     },
     [listenForInventory, onSwarmInventoryUpdated, onUpdated],
   );
   const removeEventListeners = useCallback(
-    (connection: HubConnection) => {
+    (connection: RealtimeConnection) => {
       connection.off('SwarmServiceInfoUpdated', onUpdated);
       if (listenForInventory) connection.off('SwarmInventoryUpdated', onSwarmInventoryUpdated);
     },
@@ -115,7 +115,7 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
         : [],
     [listenForInventory, platformGroupKey],
   );
-  useSignalRGroup({ groupName: groupNames, setupEventListeners, removeEventListeners });
+  useRealtimeGroup({ groupName: groupNames, setupEventListeners, removeEventListeners });
 
   return { services, capabilities, isLoading };
 };

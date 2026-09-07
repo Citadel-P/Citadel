@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import {
   ContainerView,
   DockerNetworkResultView,
@@ -12,7 +12,7 @@ import {
   SwarmServicesView,
   SwarmTasksView,
 } from '@/api/generated/api.types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 
 export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaemonListeners) => {
   const listenersRef = useRef(listeners);
@@ -55,7 +55,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
   }, []);
 
   const setupEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hub.on('ImageEventReceived', handleImageEventReceived);
       hub.on('VolumeEventReceived', handleVolumeEventReceived);
       hub.on('NetworkEventReceived', handleNetworkEventReceived);
@@ -76,7 +76,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
   );
 
   const removeEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hub.off('ImageEventReceived', handleImageEventReceived);
       hub.off('VolumeEventReceived', handleVolumeEventReceived);
       hub.off('NetworkEventReceived', handleNetworkEventReceived);
@@ -96,7 +96,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     ],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `docker-daemon:${platformId}`,
     setupEventListeners,
     removeEventListeners,

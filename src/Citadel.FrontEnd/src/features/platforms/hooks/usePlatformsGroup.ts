@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { PlatformStatsBatchView } from '@/api/types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
@@ -137,7 +137,7 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
   const platformsMessage = useMemo(() => platforms?.filter(matchesActiveFilters), [platforms, matchesActiveFilters]);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('PlatformsUpdated', handlePlatformsUpdated);
       hubConnection.on('PlatformUpdated', handlePlatformUpdated);
       hubConnection.on('PlatformsDeleted', handlePlatformDeleted);
@@ -147,7 +147,7 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('PlatformsUpdated', handlePlatformsUpdated);
       hubConnection.off('PlatformUpdated', handlePlatformUpdated);
       hubConnection.off('PlatformsDeleted', handlePlatformDeleted);
@@ -156,7 +156,7 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'platforms',
     setupEventListeners,
     removeEventListeners,

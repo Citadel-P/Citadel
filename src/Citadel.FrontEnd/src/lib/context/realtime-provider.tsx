@@ -1,9 +1,8 @@
-import { HubConnection, HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnection, RealtimeConnectionState, RealtimeConnectionFactory } from '../realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/auth-context';
-import { createSignalRConnection, SignalRConnectionFactory } from '../createSignalRConnection';
-import { createWebSocketConnection } from '../createWebSocketConnection';
+import { createRealtimeConnection, isRealtimeTransportEnabled } from '../createRealtimeConnection';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
 import { LiveConnectionState, RealtimeContext } from './realtime-context';
 
@@ -11,7 +10,7 @@ type StartConnection = typeof startConnectionWithRetry;
 
 type RealtimeProviderProps = {
   children?: React.ReactNode;
-  connectionFactory?: SignalRConnectionFactory;
+  connectionFactory?: RealtimeConnectionFactory;
   startConnection?: StartConnection;
   realtimeTransport?: string;
   webSocketFactory?: (url: string) => WebSocket;
@@ -20,7 +19,7 @@ type RealtimeProviderProps = {
 type GroupState = {
   state: 'pending' | 'joining' | 'joined';
   references: number;
-  joinPromise?: Promise<void>;
+  joinPromise?: Promise<unknown>;
 };
 
 type CancellationRef = { current: boolean };
@@ -66,37 +65,35 @@ const createWebSocket = (url: string) => new WebSocket(url);
 
 export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   children,
-  connectionFactory = createSignalRConnection,
+  connectionFactory,
   startConnection = startConnectionWithRetry,
   realtimeTransport,
   webSocketFactory = createWebSocket,
 }) => {
-  const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
-  const [liveConnectionState, setLiveConnectionState] = useState<LiveConnectionState>(
-    realtimeTransport === 'SignalR' || realtimeTransport === 'WebSocketV1' ? 'connecting' : 'disconnected',
-  );
+  const [connectionState, setConnectionState] = useState<RealtimeConnectionState>(RealtimeConnectionState.Disconnected);
+  const [liveConnectionState, setLiveConnectionState] = useState<LiveConnectionState>('connecting');
   const [interruptedAt, setInterruptedAt] = useState<number>();
   const [lastConnectedAt, setLastConnectedAt] = useState<number>();
-  const [connection, setConnection] = useState<HubConnection | null>(null);
+  const [connection, setConnection] = useState<RealtimeConnection | null>(null);
   const { accessToken } = useAuthContext();
   const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  const signalREnabled = realtimeTransport === 'SignalR' || realtimeTransport === 'WebSocketV1';
+  const realtimeEnabled = isRealtimeTransportEnabled(realtimeTransport);
   const webSocketEnabled = realtimeTransport === 'WebSocketV1';
 
   const tokenRef = useRef<string | undefined>(accessToken);
   const prevTokenRef = useRef<string | undefined>(accessToken);
   const activeCancelRef = useRef<CancellationRef | null>(null);
-  const activeConnectionRef = useRef<HubConnection | null>(null);
-  const readyPromiseRef = useRef<Promise<HubConnection> | null>(null);
-  const rebuildPromiseRef = useRef<Promise<HubConnection> | null>(null);
+  const activeConnectionRef = useRef<RealtimeConnection | null>(null);
+  const readyPromiseRef = useRef<Promise<RealtimeConnection> | null>(null);
+  const rebuildPromiseRef = useRef<Promise<RealtimeConnection> | null>(null);
   const retryPromiseRef = useRef<Promise<void> | null>(null);
   const startInProgressRef = useRef(false);
   const rebuildGenerationRef = useRef(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
 
   const markConnected = useCallback(() => {
-    setConnectionState(HubConnectionState.Connected);
+    setConnectionState(RealtimeConnectionState.Connected);
     setLiveConnectionState('connected');
     setInterruptedAt(undefined);
     setLastConnectedAt(Date.now());
@@ -121,8 +118,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
   const buildConnection = useCallback(
     (reconcileAfterConnect = false) => {
-      if (!signalREnabled) {
-        return Promise.reject(new Error('SignalR transport is not enabled'));
+      if (!realtimeEnabled) {
+        return Promise.reject(new Error('Realtime transport is not enabled'));
       }
 
       if (activeCancelRef.current) {
@@ -133,11 +130,14 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       activeCancelRef.current = cancelRef;
 
       const options = { baseUrl, accessTokenFactory: () => tokenRef.current ?? '' };
-      const conn = webSocketEnabled ? createWebSocketConnection(options, webSocketFactory) : connectionFactory(options);
+      const conn =
+        connectionFactory && !webSocketEnabled
+          ? connectionFactory(options)
+          : createRealtimeConnection(realtimeTransport, options, webSocketFactory);
 
       activeConnectionRef.current = conn;
       startInProgressRef.current = true;
-      setConnectionState(HubConnectionState.Connecting);
+      setConnectionState(RealtimeConnectionState.Connecting);
       if (isBrowserOffline()) {
         markInterrupted('offline');
       } else {
@@ -154,13 +154,13 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           return;
         }
 
-        setConnectionState(HubConnectionState.Reconnecting);
+        setConnectionState(RealtimeConnectionState.Reconnecting);
         markInterrupted(isBrowserOffline() ? 'offline' : 'reconnecting');
       });
 
       const rejoinGroup = async (groupName: string) => {
         const group = groupStates.current.get(groupName);
-        if (!group || activeConnectionRef.current !== conn || conn.state !== HubConnectionState.Connected) {
+        if (!group || activeConnectionRef.current !== conn || conn.state !== RealtimeConnectionState.Connected) {
           return;
         }
 
@@ -191,7 +191,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
               const pendingGroup = groupStates.current.get(groupName);
               if (
                 activeConnectionRef.current === conn &&
-                conn.state === HubConnectionState.Connected &&
+                conn.state === RealtimeConnectionState.Connected &&
                 pendingGroup?.state === 'pending'
               ) {
                 void rejoinGroup(groupName);
@@ -223,7 +223,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           return;
         }
 
-        setConnectionState(HubConnectionState.Disconnected);
+        setConnectionState(RealtimeConnectionState.Disconnected);
         markInterrupted(isBrowserOffline() ? 'offline' : 'disconnected');
       });
 
@@ -239,11 +239,11 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
           if (cancelRef.current || activeConnectionRef.current !== conn) {
             await conn.stop().catch(() => {});
-            throw new Error('SignalR connection was replaced before it became ready');
+            throw new Error('Realtime connection was replaced before it became ready');
           }
 
-          if (conn.state !== HubConnectionState.Connected) {
-            throw new Error('SignalR connection did not reach the connected state');
+          if (conn.state !== RealtimeConnectionState.Connected) {
+            throw new Error('Realtime connection did not reach the connected state');
           }
 
           setConnection(conn);
@@ -256,12 +256,12 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           return conn;
         } catch (err) {
           if (!cancelRef.current && activeConnectionRef.current === conn) {
-            console.error('[SignalR] final connection failure', err);
+            console.error('[Realtime] final connection failure', err);
           }
 
           await conn.stop().catch(() => {});
           if (activeConnectionRef.current === conn) {
-            setConnectionState(HubConnectionState.Disconnected);
+            setConnectionState(RealtimeConnectionState.Disconnected);
             setConnection(null);
             markInterrupted(isBrowserOffline() ? 'offline' : 'disconnected');
           }
@@ -280,13 +280,14 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     [
       baseUrl,
       connectionFactory,
+      realtimeTransport,
       webSocketEnabled,
       webSocketFactory,
       markConnected,
       markInterrupted,
       queryClient,
       reconcileLiveQueries,
-      signalREnabled,
+      realtimeEnabled,
       startConnection,
     ],
   );
@@ -308,7 +309,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       readyPromiseRef.current = null;
       startInProgressRef.current = false;
       setConnection(null);
-      setConnectionState(HubConnectionState.Connecting);
+      setConnectionState(RealtimeConnectionState.Connecting);
       if (isBrowserOffline()) {
         markInterrupted('offline');
       } else {
@@ -318,12 +319,12 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       const rebuildPromise = (async () => {
         if (currentConnection) {
           await currentConnection.stop().catch((err) => {
-            console.warn('[SignalR] failed to stop replaced connection', err);
+            console.warn('[Realtime] failed to stop replaced connection', err);
           });
         }
 
         if (rebuildGenerationRef.current !== rebuildGeneration) {
-          throw new Error('SignalR connection rebuild was canceled');
+          throw new Error('Realtime connection rebuild was canceled');
         }
 
         return buildConnection(reconcileAfterConnect);
@@ -342,7 +343,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   );
 
   const retryConnection = useCallback(() => {
-    if (!signalREnabled) {
+    if (!realtimeEnabled) {
       return Promise.reject(new Error('Realtime transport is not enabled'));
     }
 
@@ -356,7 +357,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     }
 
     const activeConnection = activeConnectionRef.current;
-    if (activeConnection?.state === HubConnectionState.Connected) {
+    if (activeConnection?.state === RealtimeConnectionState.Connected) {
       markConnected();
       return Promise.resolve();
     }
@@ -375,7 +376,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     };
     void retryPromise.then(clearRetry, clearRetry);
     return retryPromise;
-  }, [markConnected, markInterrupted, rebuildConnection, signalREnabled]);
+  }, [markConnected, markInterrupted, rebuildConnection, realtimeEnabled]);
 
   useEffect(() => {
     tokenRef.current = accessToken;
@@ -387,21 +388,21 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     }
 
     prevTokenRef.current = accessToken;
-    if (!signalREnabled) {
+    if (!realtimeEnabled) {
       return;
     }
 
     // Replacing the authenticated external connection is this effect's synchronization responsibility.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void rebuildConnection(interruptedAt !== undefined).catch(() => {});
-  }, [accessToken, interruptedAt, rebuildConnection, signalREnabled]);
+  }, [accessToken, interruptedAt, rebuildConnection, realtimeEnabled]);
 
   useEffect(() => {
-    if (!signalREnabled) {
+    if (!realtimeEnabled) {
       return;
     }
 
-    // Establishing the external HubConnection is this effect's synchronization responsibility.
+    // Establishing the external RealtimeConnection is this effect's synchronization responsibility.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void buildConnection().catch(() => {});
 
@@ -422,10 +423,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     // Connection inputs other than the negotiated transport are handled by the explicit
     // token-rebuild path or are fixed for the lifetime of the provider.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signalREnabled]);
+  }, [realtimeEnabled]);
 
   useEffect(() => {
-    if (!signalREnabled && !webSocketEnabled) {
+    if (!realtimeEnabled) {
       return;
     }
 
@@ -435,15 +436,15 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
     const handleOnline = () => {
       const activeConnection = activeConnectionRef.current;
-      if (activeConnection?.state === HubConnectionState.Connected) {
+      if (activeConnection?.state === RealtimeConnectionState.Connected) {
         markConnected();
         return;
       }
 
       if (
         startInProgressRef.current ||
-        activeConnection?.state === HubConnectionState.Connecting ||
-        activeConnection?.state === HubConnectionState.Reconnecting
+        activeConnection?.state === RealtimeConnectionState.Connecting ||
+        activeConnection?.state === RealtimeConnectionState.Reconnecting
       ) {
         markInterrupted('reconnecting');
         return;
@@ -458,24 +459,24 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [markConnected, markInterrupted, retryConnection, signalREnabled, webSocketEnabled]);
+  }, [markConnected, markInterrupted, retryConnection, realtimeEnabled]);
 
   const ensureConnectionReady = useCallback(async () => {
     const activeConnection = activeConnectionRef.current;
-    if (activeConnection?.state === HubConnectionState.Connected) {
+    if (activeConnection?.state === RealtimeConnectionState.Connected) {
       return activeConnection;
     }
 
     const readyConnection = await readyPromiseRef.current;
-    if (readyConnection?.state === HubConnectionState.Connected) {
+    if (readyConnection?.state === RealtimeConnectionState.Connected) {
       return readyConnection;
     }
 
-    throw new Error('SignalR connection not available');
+    throw new Error('Realtime connection not available');
   }, []);
 
   const joinGroup = useCallback(
-    async (groupName: string, setup?: (hub: HubConnection) => void) => {
+    async (groupName: string, setup?: (hub: RealtimeConnection) => void) => {
       if (!groupName) {
         return;
       }
@@ -518,7 +519,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   );
 
   const leaveGroup = useCallback(
-    async (groupName: string, remove?: (hub: HubConnection) => void) => {
+    async (groupName: string, remove?: (hub: RealtimeConnection) => void) => {
       if (!groupName) {
         return;
       }
@@ -543,7 +544,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
       groupStates.current.delete(groupName);
 
-      if (connection?.state === HubConnectionState.Connected) {
+      if (connection?.state === RealtimeConnectionState.Connected) {
         try {
           await connection.invoke('LeaveGroup', groupName);
         } catch (err) {
@@ -557,8 +558,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   return (
     <RealtimeContext.Provider
       value={{
-        signalR: signalREnabled ? { connection, connectionState, joinGroup, leaveGroup } : undefined,
-        liveConnectionState,
+        groups: realtimeEnabled ? { connection, connectionState, joinGroup, leaveGroup } : undefined,
+        // Application-info discovery is startup, not a failed connection.
+        liveConnectionState:
+          realtimeTransport === undefined ? 'connecting' : realtimeEnabled ? liveConnectionState : 'disconnected',
         interruptedAt,
         lastConnectedAt,
         retryConnection,

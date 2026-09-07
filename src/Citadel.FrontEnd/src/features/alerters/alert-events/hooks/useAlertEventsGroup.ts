@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { AlertEventStatus, AlertEventView, UnresolvedAlertsCountView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
-import { HubConnection } from '@microsoft/signalr';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function useAlertEventsGroup() {
@@ -62,7 +62,7 @@ export function useAlertEventsGroup() {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('AlertEventReceived', handleAlertEventReceived);
       hubConnection.on('AlertEventsUpdated', handleAlertEventsUpdated);
       hubConnection.on('UnresolvedAlertCount', handleUnresolvedAlertCount);
@@ -71,7 +71,7 @@ export function useAlertEventsGroup() {
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('AlertEventReceived', handleAlertEventReceived);
       hubConnection.off('AlertEventsUpdated', handleAlertEventsUpdated);
       hubConnection.off('UnresolvedAlertCount', handleUnresolvedAlertCount);
@@ -79,7 +79,7 @@ export function useAlertEventsGroup() {
     [handleAlertEventReceived, handleAlertEventsUpdated, handleUnresolvedAlertCount],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'alert-events',
     setupEventListeners,
     removeEventListeners,

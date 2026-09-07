@@ -214,6 +214,50 @@ pub struct AgentRequestSigner {
 }
 
 impl AgentRequestSigner {
+    /// Initialize the instance identity once, publishing only a fully written key.
+    /// Existing or malformed files are never replaced automatically.
+    pub fn load_or_create(path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
+        use std::io::Write;
+        if path.try_exists()? {
+            return Ok(Self::from_file(path)?);
+        }
+        let parent = path
+            .parent()
+            .ok_or("Agent key path has no parent directory")?;
+        let mut directories = fs::DirBuilder::new();
+        directories.recursive(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            directories.mode(0o700);
+        }
+        directories.create(parent)?;
+        let temporary = parent.join(format!(".agent-key-{}", uuid::Uuid::now_v7()));
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary)?;
+        let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+            let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
+            getrandom::fill(bytes.as_mut()).map_err(|error| error.to_string())?;
+            file.write_all(bytes.as_ref())?;
+            file.sync_all()?;
+            drop(file);
+            match fs::hard_link(&temporary, path) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+                Err(error) => Err(error.into()),
+            }
+        })();
+        fs::remove_file(&temporary)?;
+        result?;
+        Ok(Self::from_file(path)?)
+    }
+
     pub fn from_file(path: &std::path::Path) -> Result<Self, RuntimeCapabilityError> {
         let bytes = fs::read(path).map_err(|error| {
             RuntimeCapabilityError::new(
@@ -2234,6 +2278,57 @@ mod tests {
     use citadel_contracts::citadel::swarm::v1::SwarmServiceMessage;
     use ed25519_dalek::{Signature, Verifier};
     use uuid::Uuid;
+
+    #[test]
+    fn instance_signing_key_is_private_persistent_and_initialized_atomically() {
+        let root = std::env::temp_dir().join(format!("citadel-agent-key-{}", Uuid::now_v7()));
+        let path = root.join("signing-key");
+        let workers = (0..4)
+            .map(|_| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    AgentRequestSigner::load_or_create(&path)
+                        .unwrap()
+                        .public_key_base64()
+                })
+            })
+            .collect::<Vec<_>>();
+        let keys = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect::<Vec<_>>();
+        assert!(keys.iter().all(|key| key == &keys[0]));
+        assert_eq!(
+            AgentRequestSigner::from_file(&path)
+                .unwrap()
+                .public_key_base64(),
+            keys[0]
+        );
+        assert_eq!(fs::read(&path).unwrap().len(), 32);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn malformed_existing_signing_key_is_not_silently_replaced() {
+        let root = std::env::temp_dir().join(format!("citadel-agent-key-{}", Uuid::now_v7()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("signing-key");
+        fs::write(&path, b"invalid").unwrap();
+        assert!(AgentRequestSigner::load_or_create(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"invalid");
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&root).unwrap();
+    }
 
     #[test]
     fn signs_the_exact_dotnet_payload_shape() {

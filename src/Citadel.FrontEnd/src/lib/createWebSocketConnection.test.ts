@@ -1,4 +1,4 @@
-import { HubConnectionState } from '@microsoft/signalr';
+import { RealtimeConnectionState } from '@/lib/realtime-connection';
 import { FakeWebSocket } from '@/test/fakes/websocket';
 import { createWebSocketConnection } from './createWebSocketConnection';
 
@@ -83,11 +83,11 @@ it('rejects pending invocations and cancels reconnection on disposal', async () 
   const pending = expect(f.connection.invoke('JoinGroup', 'platforms')).rejects.toThrow('closed');
   socket.emit('close', new Event('close'));
   await pending;
-  expect(f.connection.state).toBe(HubConnectionState.Reconnecting);
+  expect(f.connection.state).toBe(RealtimeConnectionState.Reconnecting);
   await f.connection.stop();
   await vi.runAllTimersAsync();
   expect(f.sockets).toHaveLength(1);
-  expect(f.connection.state).toBe(HubConnectionState.Disconnected);
+  expect(f.connection.state).toBe(RealtimeConnectionState.Disconnected);
 });
 
 it('reconnects with a fresh token and ignores events from the previous socket', async () => {

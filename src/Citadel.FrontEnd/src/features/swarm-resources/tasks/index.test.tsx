@@ -1,6 +1,6 @@
 import { SwarmTaskView } from '@/api/generated/api.types';
 import { RegularResourceView } from '@/pages/regular-resource';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -15,7 +15,7 @@ const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('TaskComponents', () => {
   it('filters tasks by their displayed name', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () =>
         HttpResponse.json({
@@ -33,8 +33,8 @@ describe('TaskComponents', () => {
       </Routes>,
       {
         route: `/platforms/${platformId}/tasks`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },
@@ -49,8 +49,8 @@ describe('TaskComponents', () => {
     expect(screen.getByRole('link', { name: 'web.7' })).toBeVisible();
   });
 
-  it('applies SignalR additions, updates, and removals without refetching', async () => {
-    const fake = new FakeHubConnection();
+  it('applies realtime additions, updates, and removals without refetching', async () => {
+    const fake = new FakeRealtimeConnection();
     let requestCount = 0;
     server.use(
       http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => {
@@ -70,8 +70,8 @@ describe('TaskComponents', () => {
       </Routes>,
       {
         route: `/platforms/${platformId}/tasks`,
-        signalR: {
-          connectionFactory: () => fake.asHubConnection(),
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
           startConnection: (connection) => connection.start(),
         },
       },

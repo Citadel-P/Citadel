@@ -7,13 +7,13 @@ import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { parseCitadelDate } from '@/lib/date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import {
   Ban,
   Clock,
@@ -129,14 +129,14 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BuildRunInfoUpdated', handleBuildRunInfoUpdated);
     },
     [handleBuildRunInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BuildRunInfoUpdated', handleBuildRunInfoUpdated);
     },
     [handleBuildRunInfoUpdated],
@@ -155,14 +155,14 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   );
 
   const setupLogEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BuildRunLogsAppended', handleBuildRunLogsAppended);
     },
     [handleBuildRunLogsAppended],
   );
 
   const removeLogEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BuildRunLogsAppended', handleBuildRunLogsAppended);
     },
     [handleBuildRunLogsAppended],
@@ -176,13 +176,13 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
     queryClient.invalidateQueries({ queryKey: ['listBuildRuns', readArgs] });
   }, [logRunId, queryClient, readArgs]);
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `build-runs:${resource.id}`,
     setupEventListeners,
     removeEventListeners,
   });
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: logRunId ? `build-run:${logRunId}` : undefined,
     setupEventListeners: setupLogEventListeners,
     removeEventListeners: removeLogEventListeners,

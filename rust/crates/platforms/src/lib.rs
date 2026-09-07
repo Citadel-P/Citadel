@@ -12,7 +12,9 @@ use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+pub mod agent_setup;
 pub mod containers;
+pub mod deletion;
 pub mod images;
 mod inventory;
 pub mod jobs;

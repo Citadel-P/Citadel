@@ -1,10 +1,10 @@
 import { useRead } from '@/lib/hooks';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { normalizePlatform } from '../../hooks/usePlatformsGroup';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
 import { PlatformStatsBatchView } from '@/api/types';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 
 export const usePlatformGroup = (id: string) => {
   const args = useMemo(() => ({ id }), [id]);
@@ -65,7 +65,7 @@ export const usePlatformGroup = (id: string) => {
   );
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('PlatformUpdated', handlePlatformUpdated);
       hubConnection.on('PlatformStatsUpdated', handlePlatformStatsUpdated);
     },
@@ -73,14 +73,14 @@ export const usePlatformGroup = (id: string) => {
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('PlatformUpdated', handlePlatformUpdated);
       hubConnection.off('PlatformStatsUpdated', handlePlatformStatsUpdated);
     },
     [handlePlatformUpdated, handlePlatformStatsUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'platforms',
     skip: !id,
     setupEventListeners,

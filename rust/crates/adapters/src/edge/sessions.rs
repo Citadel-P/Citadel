@@ -69,6 +69,20 @@ impl Default for EdgeRegistry {
     }
 }
 impl EdgeRegistry {
+    pub fn disconnect_platform(&self, id: Uuid) {
+        self.sessions
+            .lock()
+            .expect("Edge registry lock poisoned")
+            .retain(|target, session| {
+                if target.resource_type == 0 && target.platform_id == id {
+                    session.close();
+                    false
+                } else {
+                    true
+                }
+            });
+    }
+
     pub fn current_sessions(&self) -> Vec<Arc<EdgeSession>> {
         self.sessions
             .lock()

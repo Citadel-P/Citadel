@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, memo } from 'react';
-import { HubConnection } from '@microsoft/signalr';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { RealtimeConnection } from '@/lib/realtime-connection';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { LogViewer } from '@/components/custom/common';
 import { normalizeContainerReference } from '@/lib/utils';
 
@@ -240,7 +240,7 @@ export const useContainerLogGroup = ({
   );
 
   const startLogs = useCallback(
-    async (hub: HubConnection) => {
+    async (hub: RealtimeConnection) => {
       try {
         await hub.invoke(hubMethodName, hubMethodArg);
       } catch (error) {
@@ -251,7 +251,7 @@ export const useContainerLogGroup = ({
   );
 
   const setupEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hub.on(logEventName, handleLogs);
       hub.on(logBatchEventName, handleLogs);
     },
@@ -259,14 +259,14 @@ export const useContainerLogGroup = ({
   );
 
   const removeEventListeners = useCallback(
-    (hub: HubConnection) => {
+    (hub: RealtimeConnection) => {
       hub.off(logEventName, handleLogs);
       hub.off(logBatchEventName, handleLogs);
     },
     [handleLogs, logBatchEventName, logEventName],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName,
     setupEventListeners,
     removeEventListeners,

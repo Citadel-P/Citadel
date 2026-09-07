@@ -10,7 +10,7 @@ import {
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
-import { FakeHubConnection } from '@/test/fakes/signalr';
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { getDeploymentUpdateCheckDisabledReason } from '../../update-status';
@@ -26,7 +26,7 @@ const DeploymentUpdateCheckProbe = () => {
 
 describe('useDeploymentGroup', () => {
   it('enables update checks from the successful redeploy notification without refetching', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const beforeRedeploy = createExternalDeployment(null);
     const afterRedeploy = withMessagePackImage(createExternalDeployment('sha256:applied'));
     let requestCount = 0;
@@ -39,8 +39,8 @@ describe('useDeploymentGroup', () => {
     );
 
     const { queryClient } = renderCitadel(createElement(DeploymentUpdateCheckProbe), {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });
@@ -59,7 +59,7 @@ describe('useDeploymentGroup', () => {
   });
 
   it('keeps update checks enabled when a later container status notification omits the spec', async () => {
-    const fake = new FakeHubConnection();
+    const fake = new FakeRealtimeConnection();
     const beforeRedeploy = createExternalDeployment(null);
     const afterRedeploy = withMessagePackImage(createExternalDeployment('sha256:applied'));
     const containerStatusUpdate = {
@@ -72,8 +72,8 @@ describe('useDeploymentGroup', () => {
     );
 
     renderCitadel(createElement(DeploymentUpdateCheckProbe), {
-      signalR: {
-        connectionFactory: () => fake.asHubConnection(),
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
         startConnection: (connection) => connection.start(),
       },
     });
@@ -159,7 +159,7 @@ describe('mergeDeploymentInfo', () => {
     });
   });
 
-  it('normalizes activity info without mutating the SignalR payload', () => {
+  it('normalizes activity info without mutating the realtime payload', () => {
     const serializedInfo = ['DeploymentApplied', { result: { containerIds: ['container-id'] } }];
     const deployment = {
       ...createExternalDeployment(null),

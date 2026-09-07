@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { ContainersView, ContainerStatView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { reconcileContainerOrder } from './container-order';
 
@@ -100,7 +100,7 @@ export const useContainersGroup = (platformId?: string) => {
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
     },
@@ -108,14 +108,14 @@ export const useContainersGroup = (platformId?: string) => {
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.off('ContainersStatsUpdated', handleContainersStatsUpdated);
     },
     [handleContainersInfoUpdated, handleContainersStatsUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: `containers:${platformId}`,
     setupEventListeners,
     removeEventListeners,

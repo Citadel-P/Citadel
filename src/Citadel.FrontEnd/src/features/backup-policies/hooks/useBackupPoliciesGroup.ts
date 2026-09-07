@@ -1,8 +1,8 @@
 import { BackupPolicyView, ResourceCapabilities } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { HubConnection } from '@microsoft/signalr';
+import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export const useBackupPoliciesGroup = () => {
@@ -64,20 +64,20 @@ export const useBackupPoliciesGroup = () => {
   }, [matchesActiveFilters]);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.on('BackupPolicyInfoUpdated', handleBackupPolicyInfoUpdated);
     },
     [handleBackupPolicyInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
+    (hubConnection: RealtimeConnection) => {
       hubConnection.off('BackupPolicyInfoUpdated', handleBackupPolicyInfoUpdated);
     },
     [handleBackupPolicyInfoUpdated],
   );
 
-  useSignalRGroup({
+  useRealtimeGroup({
     groupName: 'backup-policies',
     setupEventListeners,
     removeEventListeners,
