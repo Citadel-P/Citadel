@@ -99,7 +99,16 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
     assert_eq!(updated.spec.replicas, Some(2));
 
     let claim = store
-        .claim_operation(actor, true, created.id, ServiceOperationKind::Apply, None)
+        .claim_operation(
+            actor,
+            true,
+            citadel_swarm_services::ServiceOperationRequest {
+                id: created.id,
+                kind: ServiceOperationKind::Apply,
+                replicas: None,
+                expected_version: None,
+            },
+        )
         .await
         .unwrap();
     store.mark_attempted(&claim).await.unwrap();

@@ -369,10 +369,15 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         pool.clone(),
     ))));
     let resource_metadata = Arc::new(PostgresResourceMetadataStore::new(pool.clone()));
-    let resources = Arc::new(ResourceMetadataService::new(
-        resource_metadata.clone(),
-        secret_protector.clone(),
-    ));
+    let resources = Arc::new(
+        ResourceMetadataService::new(resource_metadata.clone(), secret_protector.clone())
+            .with_secret_provider_tester(Arc::new(
+                citadel_adapters::secret_value_resolver::PostgresSecretValueResolver::new(
+                    pool.clone(),
+                    secret_protector.clone(),
+                )?,
+            )),
+    );
     let git_accounts = Arc::new(GitAccountService::new(
         Arc::new(PostgresGitAccountStore::new(pool.clone())),
         secret_protector.clone(),
@@ -618,6 +623,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             ),
             cancellation.clone(),
         )
+        .with_image_digests(Arc::new(
+            SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                .with_edge(edge_registry.clone()),
+        ))
+        .with_entitlements(entitlements.clone())
         .with_notifier(Arc::new(
             swarm_services_http::SwarmServicesRealtimeNotifier::new(realtime_hub.clone()),
         ))
@@ -647,9 +657,54 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             &git_execution,
         ))))
         .with_build_image_resolver(Arc::new(PostgresStackBuildImageResolver::new(pool.clone())))
+        .with_update_scanner(Arc::new(
+            citadel_adapters::stack_runtime::StackUpdateRuntime::new(
+                StackRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+                git_execution.clone(),
+            ),
+        ))
+        .with_entitlements(entitlements.clone())
         .with_alerts(alert_store.clone()),
     );
+    let container_hub = realtime_hub.clone();
+    let container_mutations = Arc::new(
+        citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+            pool.clone(),
+            docker.clone(),
+            agent.clone(),
+            edge_registry.clone(),
+        )
+        .into_service()
+        .with_notifier(move |claim| {
+            if let Some(hub) = &container_hub {
+                for target in &claim.targets {
+                    hub.publish_runtime_change(
+                        target.platform_id,
+                        "container",
+                        "update",
+                        &target.docker_id,
+                    );
+                }
+                for id in &claim.deployment_ids {
+                    hub.publish_resource_change("Deployment", *id, "updated");
+                }
+                for id in &claim.stack_ids {
+                    hub.publish_resource_change("Stack", *id, "updated");
+                }
+            }
+        }),
+    );
     let platform_state = platforms_http::PlatformsHttpState {
+        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+            pool.clone(),
+            docker.clone(),
+            agent.clone(),
+            edge_registry.clone(),
+            std::env::var("CITADEL_VOLUME_HELPER_IMAGE")
+                .unwrap_or_else(|_| "ghcr.io/citadel-p/citadel.agent:latest".into()),
+        )),
+        containers: container_mutations.clone(),
         identity: Arc::clone(&identity),
         platforms: Arc::clone(&platform_reads),
         registrations: platform_registrations,
@@ -728,6 +783,8 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         &mut supervisor,
         &cancellation,
         workers::WorkerDependencies {
+            volume_content: platform_state.volume_content.clone(),
+            containers: container_mutations,
             docker: docker.clone(),
             pool: pool.clone(),
             readiness: Arc::clone(&readiness),
@@ -829,6 +886,9 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             automation: Arc::clone(&automation),
             backups: Some(backups.clone()),
             builds: Some(builds.clone()),
+            stacks: Some(stacks.clone()),
+            services: Some(swarm_services.clone()),
+            audit: Some(Arc::new(PostgresActivityStore::new(pool.clone()))),
             alerts: Some(alert_store.clone()),
         }))
         .merge(automation_http::router(

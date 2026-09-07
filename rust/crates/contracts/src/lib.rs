@@ -2,6 +2,9 @@
 
 pub mod http;
 
+// Mirrors Hosting.Common.Constants while .NET Agents share this wire contract.
+pub const EDGE_AGENT_PROTOCOL_VERSION: i32 = 2;
+
 pub mod citadel {
     pub mod edge {
         pub mod v1 {

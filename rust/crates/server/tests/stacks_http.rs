@@ -29,12 +29,17 @@ use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
+#[path = "fixtures/alert_sink.rs"]
+mod alert_sink;
+#[path = "stacks_http/updates.rs"]
+mod updates;
 
 #[derive(Debug, Clone)]
 struct ApplyCall {
     platform_type: String,
     compose: String,
     environment: Vec<String>,
+    service_names: Vec<String>,
 }
 
 #[derive(Default)]
@@ -42,6 +47,7 @@ struct CompletingStackRuntime {
     apply_calls: Mutex<Vec<ApplyCall>>,
     import_claim: Mutex<Option<StackImportClaim>>,
     state_failure: AtomicU8,
+    apply_failure: AtomicU8,
 }
 
 impl StackRuntimePort for CompletingStackRuntime {
@@ -53,10 +59,30 @@ impl StackRuntimePort for CompletingStackRuntime {
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         Box::pin(async move {
+            if self.apply_failure.load(Ordering::Relaxed) != 0 {
+                return Err(StackError::RuntimeRejected("private-runtime-error".into()));
+            }
             self.apply_calls.lock().unwrap().push(ApplyCall {
                 platform_type: claim.platform_type.clone(),
-                compose: source.compose_contents()?.join("\n"),
+                compose: source
+                    .compose_contents()?
+                    .into_iter()
+                    .chain(source.labels_override_path.iter().map(|path| {
+                        String::from_utf8(
+                            source
+                                .files
+                                .iter()
+                                .find(|file| &file.relative_path == path)
+                                .unwrap()
+                                .content
+                                .clone(),
+                        )
+                        .unwrap()
+                    }))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
                 environment: environment.to_vec(),
+                service_names: claim.service_names.clone(),
             });
             Ok(healthy())
         })
@@ -183,14 +209,21 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         Duration::days(30),
     ));
     let runtime = Arc::new(CompletingStackRuntime::default());
-    let stacks = Arc::new(StackService::new(
-        Arc::new(PostgresStackStore::new(pool.clone())),
-        runtime.clone(),
-        Arc::new(EmptyBindings),
-        Arc::new(NoopStackChangeNotifier),
-        CancellationToken::new(),
-    ));
-    let app = stacks_http::router(StacksHttpState { identity, stacks });
+    let scanner = Arc::new(updates::Scanner::new(pool.clone()));
+    let stacks = Arc::new(
+        StackService::new(
+            Arc::new(PostgresStackStore::new(pool.clone())),
+            runtime.clone(),
+            Arc::new(EmptyBindings),
+            Arc::new(NoopStackChangeNotifier),
+            CancellationToken::new(),
+        )
+        .with_update_scanner(scanner.clone()),
+    );
+    let app = stacks_http::router(StacksHttpState {
+        identity,
+        stacks: stacks.clone(),
+    });
     assert_eq!(
         request(&app, Method::GET, "/api/v1/stacks", None, None)
             .await
@@ -309,6 +342,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     )
     .await;
     assert_eq!(detail["status"], "Healthy");
+    updates::verify(&app, &pool, &stacks, &admin, id, &scanner).await;
     assert_eq!(
         request(
             &app,

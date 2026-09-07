@@ -14,6 +14,46 @@ const MAXIMUM_BATCH: i64 = 25;
 const DRIFT_MONITOR_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const DRIFT_MONITOR_BATCH: i64 = 100;
 
+pub(super) async fn stack_updates(
+    cancellation: CancellationToken,
+    stacks: Arc<StackService>,
+) -> Result<(), std::convert::Infallible> {
+    let mut ticker = tokio::time::interval(Duration::from_secs(30));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut last_images = None;
+    loop {
+        tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
+        let images = last_images.is_none_or(|last: tokio::time::Instant| {
+            last.elapsed() >= Duration::from_secs(2 * 60 * 60)
+        });
+        if images {
+            last_images = Some(tokio::time::Instant::now());
+        }
+        // Git checks consume newly synchronized refs; image scans run every two
+        // hours. Both query bounded keyset pages, without retaining an inventory.
+        if let Err(error) = stacks.run_update_checks(images, &cancellation).await {
+            tracing::warn!(%error,"Stack update monitoring failed");
+        }
+    }
+}
+
+pub(super) async fn stack_webhooks(
+    cancellation: CancellationToken,
+    stacks: Arc<StackService>,
+) -> Result<(), std::convert::Infallible> {
+    let mut ticker = tokio::time::interval(Duration::from_secs(5));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            () = cancellation.cancelled() => return Ok(()),
+            _ = ticker.tick() => {}
+        }
+        if let Err(error) = stacks.process_webhooks().await {
+            tracing::warn!(%error,"Stack webhook dispatch failed");
+        }
+    }
+}
+
 pub(super) async fn stack_operation_reconciliation(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,

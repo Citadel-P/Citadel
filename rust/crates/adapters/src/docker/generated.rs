@@ -70,6 +70,48 @@ pub const CONTAINER_CREATE: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const CONTAINER_LOGS: Endpoint = Endpoint {
+    operation_id: "ContainerLogs",
+    method: "GET",
+    path: "/containers/{id}/logs",
+    versioned: true,
+    streaming: true,
+};
+pub const SERVICE_LOGS: Endpoint = Endpoint {
+    operation_id: "ServiceLogs",
+    method: "GET",
+    path: "/services/{id}/logs",
+    versioned: true,
+    streaming: true,
+};
+pub const CONTAINER_EXEC: Endpoint = Endpoint {
+    operation_id: "ContainerExec",
+    method: "POST",
+    path: "/containers/{id}/exec",
+    versioned: true,
+    streaming: false,
+};
+pub const EXEC_START: Endpoint = Endpoint {
+    operation_id: "ExecStart",
+    method: "POST",
+    path: "/exec/{id}/start",
+    versioned: true,
+    streaming: true,
+};
+pub const EXEC_RESIZE: Endpoint = Endpoint {
+    operation_id: "ExecResize",
+    method: "POST",
+    path: "/exec/{id}/resize",
+    versioned: true,
+    streaming: false,
+};
+pub const EXEC_INSPECT: Endpoint = Endpoint {
+    operation_id: "ExecInspect",
+    method: "GET",
+    path: "/exec/{id}/json",
+    versioned: true,
+    streaming: false,
+};
 pub const CONTAINER_START: Endpoint = Endpoint {
     operation_id: "ContainerStart",
     method: "POST",
@@ -81,6 +123,34 @@ pub const CONTAINER_DELETE: Endpoint = Endpoint {
     operation_id: "ContainerDelete",
     method: "DELETE",
     path: "/containers/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const CONTAINER_STOP: Endpoint = Endpoint {
+    operation_id: "ContainerStop",
+    method: "POST",
+    path: "/containers/{id}/stop",
+    versioned: true,
+    streaming: false,
+};
+pub const CONTAINER_RESTART: Endpoint = Endpoint {
+    operation_id: "ContainerRestart",
+    method: "POST",
+    path: "/containers/{id}/restart",
+    versioned: true,
+    streaming: false,
+};
+pub const CONTAINER_PAUSE: Endpoint = Endpoint {
+    operation_id: "ContainerPause",
+    method: "POST",
+    path: "/containers/{id}/pause",
+    versioned: true,
+    streaming: false,
+};
+pub const CONTAINER_UNPAUSE: Endpoint = Endpoint {
+    operation_id: "ContainerUnpause",
+    method: "POST",
+    path: "/containers/{id}/unpause",
     versioned: true,
     streaming: false,
 };
@@ -118,6 +188,20 @@ pub const IMAGE_CREATE: Endpoint = Endpoint {
     path: "/images/create",
     versioned: true,
     streaming: true,
+};
+pub const IMAGE_INSPECT: Endpoint = Endpoint {
+    operation_id: "ImageInspect",
+    method: "GET",
+    path: "/images/{name}/json",
+    versioned: true,
+    streaming: false,
+};
+pub const IMAGE_HISTORY: Endpoint = Endpoint {
+    operation_id: "ImageHistory",
+    method: "GET",
+    path: "/images/{name}/history",
+    versioned: true,
+    streaming: false,
 };
 pub const VOLUME_LIST: Endpoint = Endpoint {
     operation_id: "VolumeList",
@@ -607,6 +691,112 @@ pub struct ImageSummary {
     pub labels: HashMap<String, String>,
     #[serde(rename = "Containers", default)]
     pub containers: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageInspect {
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(
+        rename = "RepoTags",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub repo_tags: Vec<String>,
+    #[serde(rename = "Size", default)]
+    pub size: i64,
+    #[serde(rename = "Created", default)]
+    pub created: String,
+    #[serde(rename = "Os", default)]
+    pub os: String,
+    #[serde(rename = "Architecture", default)]
+    pub architecture: String,
+    #[serde(
+        rename = "Config",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub config: ImageConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageConfig {
+    #[serde(rename = "Env", default, deserialize_with = "deserialize_null_default")]
+    pub env: Vec<String>,
+    #[serde(rename = "Cmd", default, deserialize_with = "deserialize_null_default")]
+    pub cmd: Vec<String>,
+    #[serde(
+        rename = "Volumes",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub volumes: HashMap<String, Value>,
+    #[serde(
+        rename = "ExposedPorts",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub exposed_ports: HashMap<String, Value>,
+    #[serde(
+        rename = "Labels",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub labels: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageHistoryItem {
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(rename = "Created", default)]
+    pub created: i64,
+    #[serde(rename = "CreatedBy", default)]
+    pub created_by: String,
+    #[serde(rename = "Size", default)]
+    pub size: i64,
+    #[serde(rename = "Comment", default)]
+    pub comment: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageContainer {
+    #[serde(flatten)]
+    pub summary: ContainerSummary,
+    #[serde(
+        rename = "Mounts",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub mounts: Vec<ImageUsageMount>,
+    #[serde(
+        rename = "NetworkSettings",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub network_settings: ImageUsageNetworks,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageMount {
+    #[serde(rename = "Name", default)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageNetworks {
+    #[serde(
+        rename = "Networks",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub networks: HashMap<String, ImageUsageNetwork>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageNetwork {
+    #[serde(rename = "NetworkID", default)]
+    pub network_id: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

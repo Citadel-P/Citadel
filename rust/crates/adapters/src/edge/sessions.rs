@@ -162,6 +162,7 @@ struct Pending {
     output: mpsc::Sender<QueuedOutput>,
     failed: CancellationToken,
     streaming: bool,
+    interactive: bool,
     _request_budget: OwnedSemaphorePermit,
 }
 
@@ -255,6 +256,7 @@ impl EdgeSession {
                 output,
                 failed: failed.clone(),
                 streaming,
+                interactive: kind == EdgeCommandKind::ContainerExec,
                 _request_budget: request_budget,
             },
         );
@@ -350,6 +352,34 @@ pub struct EdgeCommandStream {
     finished: bool,
 }
 impl EdgeCommandStream {
+    pub(crate) fn send_input(&self, payload: Vec<u8>) -> Result<(), EdgeError> {
+        // Bound protobuf overhead as well as stdin. No user-supplied command/session IDs.
+        if payload.len() > citadel_platforms::terminal::MAX_TERMINAL_INPUT + 32 {
+            return Err(EdgeError("Terminal input exceeds the limit."));
+        }
+        let pending = self
+            .session
+            .pending
+            .lock()
+            .expect("Edge pending lock poisoned");
+        if self.finished
+            || self.failed.is_cancelled()
+            || self.session.is_closed()
+            || tokio::time::Instant::now() >= self.deadline
+            || !pending.get(&self.id).is_some_and(|p| p.interactive)
+        {
+            return Err(EdgeError("Interactive command is no longer active."));
+        }
+        self.session
+            .outbound
+            .try_send(self.session.envelope(
+                self.id,
+                core_envelope::Body::StreamInput(
+                    citadel_contracts::citadel::edge::v1::StreamInput { payload },
+                ),
+            ))
+            .map_err(|_| EdgeError("Edge terminal input queue is full or disconnected."))
+    }
     pub fn id(&self) -> Uuid {
         self.id
     }

@@ -13,6 +13,9 @@ use uuid::Uuid;
 
 const MAXIMUM_ACTIVITY_INFO_BYTES: usize = 256 * 1024;
 
+mod volumes;
+mod webhooks;
+
 const AUTHORIZED_ACTIVITY_CTES: &str = r#"
 WITH actor_scope AS (
     SELECT actor.id AS actorid
@@ -188,7 +191,9 @@ pub(crate) async fn insert_activity(
     transaction: &mut Transaction<'_, Postgres>,
     activity: &ActivityEvent,
 ) -> Result<(), IdentityError> {
-    let info_json = serde_json::to_string(activity.info()).map_err(storage)?;
+    let mut info = serde_json::to_value(activity.info()).map_err(storage)?;
+    redact_webhook_credentials(&mut info);
+    let info_json = serde_json::to_string(&info).map_err(storage)?;
     if info_json.len() > MAXIMUM_ACTIVITY_INFO_BYTES {
         return Err(IdentityError::Storage(
             "Activity info exceeded the persisted size limit.".to_owned(),
@@ -227,6 +232,54 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 
 pub(crate) fn invalid_activity(error: ActivityInvariantError) -> IdentityError {
     IdentityError::Storage(format!("Invalid Activity event: {error}"))
+}
+
+// Configuration snapshots are audit data, not a second credential store. Apply
+// this once at the persistence boundary for old/new Stack, Service, Build and
+// Automation snapshots; leave the actual resource configuration untouched.
+fn redact_webhook_credentials(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            for (name, value) in fields {
+                if name.eq_ignore_ascii_case("webhook")
+                    && let Value::Object(webhook) = value
+                {
+                    for (key, value) in webhook {
+                        if key.eq_ignore_ascii_case("secret")
+                            && value.as_str().is_some_and(|s| !s.is_empty())
+                        {
+                            *value = Value::String("********".into());
+                        }
+                    }
+                } else {
+                    redact_webhook_credentials(value);
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(redact_webhook_credentials),
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod credential_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn audit_snapshots_mask_webhook_credentials_without_losing_configuration_metadata() {
+        let mut snapshot = json!({"Old":{"StackRelease":{"Spec":{"Webhook":{"Enabled":true,"Provider":"Generic","Secret":"old-secret"}}}},
+            "New":{"spec":{"webhook":{"enabled":true,"secret":"new-secret"}}},"references":[{"Webhook":{"Secret":null}}]});
+        redact_webhook_credentials(&mut snapshot);
+        assert!(!snapshot.to_string().contains("old-secret"));
+        assert!(!snapshot.to_string().contains("new-secret"));
+        assert_eq!(
+            snapshot["Old"]["StackRelease"]["Spec"]["Webhook"]["Provider"],
+            "Generic"
+        );
+        assert_eq!(snapshot["New"]["spec"]["webhook"]["enabled"], true);
+        assert!(snapshot["references"][0]["Webhook"]["Secret"].is_null());
+    }
 }
 
 fn map_activity(row: sqlx::postgres::PgRow) -> Result<ActivityRecord, IdentityError> {

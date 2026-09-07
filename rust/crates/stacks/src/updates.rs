@@ -74,6 +74,7 @@ pub fn build_manual_stack_checks(
             StackReleaseStatus::Healthy
                 | StackReleaseStatus::Degraded
                 | StackReleaseStatus::Stopped
+                | StackReleaseStatus::Paused
         )
     };
     if !allowed {

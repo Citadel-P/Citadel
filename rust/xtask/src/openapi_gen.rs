@@ -1152,6 +1152,7 @@ fn schemas() -> Value {
             "oldestSampleAt":nullable_date_time(),"newestSampleAt":nullable_date_time(),"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}},
         "SwarmServicesView": collection_view("items", "SwarmServiceView", "PlatformCapabilities"),
         "SwarmTaskView": swarm_task_view(),
+        "SwarmLogsView": {"type":"object","required":["lines","truncated"],"properties":{"lines":{"type":"array","items":string()},"truncated":{"type":"boolean"}}},
         "SwarmTaskStatsView": {"type":"object","required":["containerProjectionId","dockerContainerId","stats"],"properties":{"containerProjectionId":uuid(),"dockerContainerId":string(),"stats":{"type":"array","items":{"$ref":"#/components/schemas/ContainerStatView"}}}},
         "SwarmTasksView": collection_view("items", "SwarmTaskView", "PlatformCapabilities"),
         "SwarmNetworkView": swarm_network_view(),
@@ -1161,6 +1162,8 @@ fn schemas() -> Value {
         "SwarmSecretView": swarm_secret_view(),
         "SwarmSecretsView": collection_view("items", "SwarmSecretView", "PlatformCapabilities")
     });
+    schemas["InspectImageView"] = image_inspection();
+    schemas["ExposedPortsResult"] = json!({"type":"object","required":["ports"],"properties":{"ports":{"type":"array","items":{"type":"string"}}}});
     schemas
         .as_object_mut()
         .expect("schema catalog is an object")
@@ -1763,6 +1766,10 @@ fn phase5_schemas() -> Map<String, Value> {
         json!({"type":"object","required":["platformId","names"],"properties":{"platformId":uuid(),"names":string_array(),"force":{"type":["boolean","null"]}}}),
     );
 
+    schemas.insert("ContainerIdsInput".into(), string_array());
+    schemas.insert("DeleteContainersRequest".into(), json!({"type":"object","required":["containerIds"],"properties":{"containerIds":{"$ref":"#/components/schemas/ContainerIdsInput"},"v":{"type":"boolean","default":false},"force":{"type":"boolean","default":false},"link":{"type":"boolean","default":false}}}));
+    schemas.insert("VolumeDirectoryView".into(), json!({"type":"object","required":["platformId","volumeName","path","entries","isTruncated"],"properties":{"platformId":uuid(),"volumeName":string(),"path":string(),"entries":{"type":"array","items":{"$ref":"#/components/schemas/VolumeFileEntryView"}},"isTruncated":{"type":"boolean"}}}));
+    schemas.insert("VolumeFileEntryView".into(), json!({"type":"object","required":["name","path","type"],"properties":{"name":string(),"path":string(),"type":{"type":"string","enum":["File","Directory","Symlink","Other"]},"size":{"type":["integer","null"],"format":"int64"},"modifiedAt":{"type":["string","null"],"format":"date-time"},"linkTarget":nullable_string()}}));
     schemas.extend(binding_schemas());
     schemas
 }
@@ -1840,6 +1847,14 @@ fn binding_schemas() -> Map<String, Value> {
         "UpdateVaultKvV2SecretProviderInput".into(),
         provider_schema(true),
     );
+    schemas.insert("TestVaultKvV2SecretProviderConnectionInput".into(), json!({"type":"object","required":["address","mountPath"],"properties":{"providerId":nullable_uuid(),"name":nullable_string(),"address":string(),"mountPath":string(),"token":nullable_string()}}));
+    schemas.insert("TestExternalSecretInput".into(), json!({"type":"object","required":["providerId","externalPath","externalKey"],"properties":{"providerId":uuid(),"externalPath":string(),"externalKey":string(),"externalVersion":{"type":["integer","null"],"minimum":1}}}));
+    for name in [
+        "SecretProviderConnectionTestResultView",
+        "ExternalSecretTestResultView",
+    ] {
+        schemas.insert(name.into(), json!({"type":"object","required":["success","message"],"properties":{"success":{"type":"boolean"},"message":string()}}));
+    }
     schemas
 }
 
@@ -1998,6 +2013,18 @@ fn image_view() -> Value {
             "nodeHostname":nullable_string(), "isStale":{"type":"boolean"},
             "staleReason":nullable_string(),
             "capabilities":nullable(json!({"$ref":"#/components/schemas/ImageCapabilities"}))
+        }
+    })
+}
+
+fn image_inspection() -> Value {
+    json!({"type":"object","required":["id","name","tag","size","os","created","architecture","env","cmd","repoTags","volumes","exposedPorts","layers","labels","containers"],
+        "properties":{
+            "id":string(),"name":string(),"tag":string(),"size":integer(),"os":string(),"created":string(),"architecture":string(),
+            "env":string_array(),"cmd":string_array(),"repoTags":string_array(),"volumes":string_array(),"exposedPorts":string_array(),"labels":string_map(),
+            "layers":{"type":"array","items":{"type":"object","properties":{"id":string(),"created":integer(),"createdBy":string(),"size":integer(),"comment":string()}}},
+            "containers":{"type":"array","items":{"type":"object","properties":{"id":string(),"name":string(),"state":string(),"volumes":string_array(),"networks":string_map(),"ports":{"type":"object"}}}},
+            "registry":nullable(json!({"type":"object"})),"dockerNodeId":nullable_string(),"capabilities":nullable(json!({"$ref":"#/components/schemas/ImageCapabilities"}))
         }
     })
 }

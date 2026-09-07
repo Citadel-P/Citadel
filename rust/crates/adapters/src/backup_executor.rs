@@ -114,6 +114,41 @@ impl BackupExecutor for DockerResticBackupExecutor {
                     .await
                     .map_err(BackupError::Storage);
             }
+            let platform_id = platform_id.ok_or_else(|| {
+                BackupError::Validation("A Platform is required for this operation.".into())
+            })?;
+            if let BackupExecutionTarget::Agent(agent) = self
+                .execution_target(platform_id, None, cancellation)
+                .await
+                .map_err(BackupError::Validation)?
+            {
+                let arguments = match operation {
+                    "Validate" | "Check" => vec!["check".into(), "--read-data-subset=1/100".into()],
+                    "Initialize" => vec!["init".into()],
+                    "Prune" => vec![
+                        "forget".into(),
+                        "--prune".into(),
+                        "--keep-last".into(),
+                        "14".into(),
+                    ],
+                    _ => {
+                        return Err(BackupError::Validation(
+                            "Backup Repository operation is invalid.".into(),
+                        ));
+                    }
+                };
+                return self
+                    .run_agent_repository(
+                        &agent,
+                        platform_id,
+                        repository,
+                        arguments,
+                        Duration::from_secs(900),
+                        cancellation,
+                    )
+                    .await
+                    .map_err(BackupError::Storage);
+            }
             let name = format!("citadel-repository-{}", Uuid::now_v7().simple());
             let (mut args, env) = self
                 .base_args(&name, repository)
@@ -155,9 +190,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
         Box::pin(async move {
             match self.run_backup(claim, plan, cancellation).await {
                 Ok((snapshot, mut logs, items, summary, mut warnings)) => {
-                    let retention = self
-                        .run_retention(claim, plan.local_directory.is_some(), cancellation)
-                        .await;
+                    let retention = self.run_retention(claim, plan, cancellation).await;
                     let status = match retention {
                         Ok(retention_logs) => {
                             logs.extend(retention_logs);
@@ -551,8 +584,7 @@ impl DockerResticBackupExecutor {
             .create_agent_helper(
                 agent,
                 item.platform_id,
-                &item.volume_name,
-                true,
+                Some((&item.volume_name, true)),
                 timeout,
                 cancellation,
             )
@@ -625,14 +657,101 @@ impl DockerResticBackupExecutor {
             .await;
         result
     }
+    async fn run_agent_repository(
+        &self,
+        agent: &AgentExecutionClient,
+        platform_id: Uuid,
+        repository: &BackupRepositoryView,
+        arguments: Vec<String>,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BackupLog>, String> {
+        // Repository checks and retention need no source-volume mount, but must
+        // run on the selected Agent, not accidentally on Core's Docker socket.
+        let environment = self.agent_repository_environment(repository).await?;
+        let container_id = self
+            .create_agent_helper(agent, platform_id, None, timeout, cancellation)
+            .await?;
+        let result = async {
+            agent
+                .change_containers_state(
+                    std::slice::from_ref(&container_id),
+                    AgentContainerAction::Start,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let mut command = vec!["restic".to_owned()];
+            command.extend(arguments);
+            let output = agent
+                .exec_binary(
+                    ExecBinaryRequest {
+                        container_id: container_id.clone(),
+                        cmd: command,
+                        env: environment,
+                        attach_stdout: Some(true),
+                        attach_stderr: Some(true),
+                        tty: false,
+                    },
+                    timeout,
+                    self.maximum_output,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            if output.exit_code != 0 {
+                return Err(redact(&String::from_utf8_lossy(&output.stderr)));
+            }
+            Ok(agent_output_logs(&output.stdout, &output.stderr))
+        }
+        .await;
+        let _ = agent
+            .delete_container(&container_id, &CancellationToken::new())
+            .await;
+        result
+    }
+
     async fn run_retention(
         &self,
         claim: &BackupClaim,
-        run_on_core: bool,
+        plan: &BackupSourcePlan,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
-        if run_on_core {
+        if plan.local_directory.is_some() {
             return self.run_direct_retention(claim, cancellation).await;
+        }
+        let item = plan
+            .items
+            .first()
+            .ok_or_else(|| "Backup plan has no source items.".to_owned())?;
+        if let BackupExecutionTarget::Agent(agent) = self
+            .execution_target(
+                item.platform_id,
+                item.docker_node_id.as_deref(),
+                cancellation,
+            )
+            .await?
+        {
+            return self
+                .run_agent_repository(
+                    &agent,
+                    item.platform_id,
+                    &claim.repository,
+                    vec![
+                        "forget".into(),
+                        "--json".into(),
+                        "--tag".into(),
+                        policy_tag(claim.policy.id),
+                        "--keep-last".into(),
+                        claim.policy.keep_last_successful.to_string(),
+                        "--prune".into(),
+                    ],
+                    Duration::from_secs(
+                        u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400),
+                    ),
+                    cancellation,
+                )
+                .await;
         }
         let name = format!("citadel-retention-{}", claim.run.id.simple());
         let (mut args, env) = self.base_args(&name, &claim.repository).await?;
@@ -832,8 +951,7 @@ impl DockerResticBackupExecutor {
             .create_agent_helper(
                 agent,
                 claim.run.target_platform_id,
-                &claim.run.target_volume_name,
-                false,
+                Some((&claim.run.target_volume_name, false)),
                 timeout,
                 cancellation,
             )
@@ -1011,13 +1129,11 @@ impl DockerResticBackupExecutor {
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
-        volume: &str,
-        read_only: bool,
+        volume: Option<(&str, bool)>,
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<String, String> {
         let lifetime = timeout.as_secs().saturating_add(300).clamp(300, 86_700);
-        let target = if read_only { "/source" } else { "/target" };
         agent
             .create_container(
                 CreateContainerRequest {
@@ -1034,6 +1150,9 @@ impl DockerResticBackupExecutor {
                     labels: [
                         ("citadel.backup-helper".to_owned(), "true".to_owned()),
                         ("citadel.platform-id".to_owned(), platform_id.to_string()),
+                        ("com.citadel.system".to_owned(), "true".to_owned()),
+                        ("com.citadel.system-role".to_owned(), "backup-helper".to_owned()),
+                        ("com.citadel.platform-id".to_owned(), platform_id.to_string()),
                     ]
                     .into_iter()
                     .collect(),
@@ -1050,15 +1169,15 @@ impl DockerResticBackupExecutor {
                     pids_limit: Some(128),
                     privileged: Some(false),
                     readonly_rootfs: Some(false),
-                    mounts: vec![Mount {
-                        target: Some(target.to_owned()),
-                        source: Some(volume.to_owned()),
+                    mounts: volume.into_iter().map(|(name, read_only)| Mount {
+                        target: Some(if read_only { "/source" } else { "/target" }.to_owned()),
+                        source: Some(name.to_owned()),
                         r#type: Some("volume".to_owned()),
                         read_only: Some(read_only),
                         consistency: None,
                         bind_options: None,
                         volume_options: None,
-                    }],
+                    }).collect(),
                     cap_add: vec!["DAC_READ_SEARCH".to_owned(), "FOWNER".to_owned()],
                     cap_drop: vec!["ALL".to_owned()],
                     security_opt: vec!["no-new-privileges".to_owned()],
@@ -1154,6 +1273,10 @@ impl DockerResticBackupExecutor {
             "--rm".into(),
             "--name".into(),
             name.into(),
+            "--label".into(),
+            "com.citadel.system=true".into(),
+            "--label".into(),
+            "com.citadel.system-role=backup-helper".into(),
             "--env".into(),
             "RESTIC_PASSWORD".into(),
             "--env".into(),
@@ -1283,7 +1406,9 @@ impl DockerResticBackupExecutor {
             "Platform" => {
                 let platform_id = platform_id
                     .ok_or_else(|| "A Platform is required for this operation.".to_owned())?;
-                self.targets.require_local(platform_id).await?;
+                if repository.repository_type != "S3Compatible" {
+                    self.targets.require_local(platform_id).await?;
+                }
             }
             _ => return Err("Backup Repository operation location is invalid.".to_owned()),
         }

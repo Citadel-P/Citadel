@@ -66,6 +66,558 @@ async fn cleanup(f: Fixture) {
     std::fs::remove_file(f.docker_socket).unwrap();
 }
 
+// Ports ExecSessionManagerTests and the Terminal-specific Swarm permission contract.
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session() {
+    use citadel_adapters::edge::EdgeTarget;
+    use citadel_contracts::citadel::{
+        containers::v1::*,
+        edge::v1::{EdgeCommandKind, core_envelope},
+    };
+    use citadel_domain::SpecificPermission;
+    use prost::Message as _;
+    let f = fixture().await;
+    let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
+        .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
+    let principal = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        principal.actor_id.value(),
+        ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    let group = format!("container-exec:{id}:browser-session");
+    let reader = reader(&f);
+    assert!(
+        reader
+            .read(&principal, &Group::parse(&group).unwrap(), None)
+            .await
+            .is_err()
+    );
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
+        .bind(SpecificPermission::Terminal as i32)
+        .bind(principal.actor_id.value())
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let registry = f.lookup_state.platforms.edge.clone();
+    let (session, mut commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (_, mut other_node) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "other-node".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let cancellation = CancellationToken::new();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_millis(100),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap()
+    });
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    receive(&mut socket).await;
+    let start = json!([id, "browser-session", "sh"]);
+    assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_string());
+    assert!(commands.try_recv().is_err());
+    assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+    assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_null());
+    let command = commands.recv().await.unwrap();
+    let command_id = Uuid::parse_str(&command.command_id).unwrap();
+    let Some(core_envelope::Body::Command(open)) = command.body else {
+        panic!("exec command")
+    };
+    assert_eq!(open.kind, EdgeCommandKind::ContainerExec as i32);
+    assert_eq!(open.node_id, "node-1");
+    assert!(
+        matches!(ExecClientMessage::decode(open.payload.as_slice()).unwrap().msg,Some(exec_client_message::Msg::Open(open)) if open.cmd==["/bin/sh"])
+    );
+    assert!(invoke_args(&mut socket, "StartExecProcess", start).await["error"].is_null());
+    assert!(commands.try_recv().is_err());
+    assert!(
+        invoke_args(
+            &mut socket,
+            "SendExecInput",
+            json!([id, "different-session", [65]])
+        )
+        .await["error"]
+            .is_string()
+    );
+    // Knowing another connection's group/session name does not grant control.
+    let (mut second, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    receive(&mut second).await;
+    assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_null());
+    assert!(
+        invoke_args(
+            &mut second,
+            "SendExecInput",
+            json!([id, "browser-session", [66]])
+        )
+        .await["error"]
+            .is_string()
+    );
+    assert!(commands.try_recv().is_err());
+    second.close(None).await.unwrap();
+    assert!(
+        invoke_args(
+            &mut socket,
+            "SendExecInput",
+            json!([id,"browser-session",{"0":65,"1":10}])
+        )
+        .await["error"]
+            .is_null()
+    );
+    let input = tokio::time::timeout(StdDuration::from_secs(2), commands.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(input.command_id, command.command_id);
+    assert!(matches!(
+        input.body,
+        Some(core_envelope::Body::StreamInput(_))
+    ));
+    session.output(
+        command_id,
+        ExecServerMessage {
+            msg: Some(exec_server_message::Msg::Output(ExecOutput {
+                data: b"hello".to_vec(),
+                stream: 0,
+            })),
+        }
+        .encode_to_vec(),
+    );
+    let event = receive(&mut socket).await;
+    assert_eq!(event["target"], "SendContainerExec");
+    assert_eq!(event["arguments"][0], json!(b"hello".to_vec()));
+    assert!(other_node.try_recv().is_err());
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1")
+        .bind(principal.actor_id.value())
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let closed = tokio::time::timeout(StdDuration::from_secs(3), socket.next())
+        .await
+        .unwrap();
+    assert!(matches!(closed, Some(Ok(Message::Close(_))) | None));
+    assert!(matches!(
+        tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
+            .await
+            .unwrap()
+            .unwrap()
+            .body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+    registry.remove(&session);
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn terminal_cancels_when_the_container_identity_changes_without_retargeting() {
+    use citadel_adapters::edge::EdgeTarget;
+    use citadel_contracts::citadel::edge::v1::core_envelope;
+    use citadel_platforms::terminal::TerminalShell;
+    let f = fixture().await;
+    let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
+        .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
+    let registry = &f.lookup_state.platforms.edge;
+    let (session, mut commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let hub = citadel_server::realtime::RealtimeHub::new(32, Arc::new(Metrics::default()));
+    let mut reader = reader(&f);
+    reader.docker.realtime = Some(hub.clone());
+    let group = Group::parse(&format!("container-exec:{id}:identity-fence")).unwrap();
+    let cancel = CancellationToken::new();
+    let mut terminal = reader
+        .terminal(&f.administrator, &group, TerminalShell::Sh, &cancel)
+        .await
+        .unwrap();
+    let open = commands.recv().await.unwrap();
+    sqlx::query("UPDATE containers SET dockercontainerid=$2 WHERE id=$1")
+        .bind(id)
+        .bind("b4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750")
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "container", "update", id.to_string());
+    assert!(
+        tokio::time::timeout(StdDuration::from_secs(3), terminal.output.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err()
+    );
+    drop(terminal);
+    let canceled = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(canceled.command_id, open.command_id);
+    assert!(matches!(
+        canceled.body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+    assert!(commands.try_recv().is_err());
+    registry.remove(&session);
+    cleanup(f).await;
+}
+
+async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"1","target":target,"arguments":args}).to_string().into())).await.unwrap();
+    let result = receive(socket).await;
+    assert_eq!(result["kind"], "completion");
+    result
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn stack_logs_follow_committed_container_replacement_without_replaying_unchanged_streams() {
+    use citadel_adapters::edge::EdgeTarget;
+    use citadel_contracts::citadel::{
+        containers::v1::{ContainerLogRequest, ContainerLogResponse},
+        edge::v1::core_envelope,
+    };
+    use prost::Message as _;
+    let f = fixture().await;
+    let stack = Uuid::now_v7();
+    let release = Uuid::now_v7();
+    let spec: citadel_stacks::StackSpec =
+        serde_json::from_value(json!({"$type":"WebEditor","composeFile":"services: {}"})).unwrap();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate,controlstate) VALUES($1,$2,$3,'WebEditor',$5,$4,'Idle')").bind(stack).bind(format!("logs-{stack}")).bind(SYSTEM_ACTOR_ID).bind(citadel_stacks::StackUpdateState::new(&spec).to_storage_value().unwrap()).bind(citadel_stacks::StackDriftPolicy::default().to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,$5,'Healthy','1')").bind(release).bind(stack).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).bind(spec.to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE containers SET stackid=$1,dockernodeid='node-1' WHERE platformid=$2")
+        .bind(stack)
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let (session, mut commands) = f
+        .lookup_state
+        .platforms
+        .edge
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let hub = citadel_server::realtime::RealtimeHub::new(32, Arc::new(Metrics::default()));
+    let mut reader = reader(&f);
+    reader.docker.realtime = Some(hub.clone());
+    let cancellation = CancellationToken::new();
+    let group = Group::parse(&format!("stack-log:{stack}")).unwrap();
+    let mut logs = reader
+        .stream(&f.administrator, &group, &cancellation)
+        .await
+        .unwrap()
+        .unwrap();
+    let command = commands.recv().await.unwrap();
+    let original = Uuid::parse_str(&command.command_id).unwrap();
+    session.output(
+        original,
+        ContainerLogResponse {
+            log: b"2026-09-06T12:00:00Z first\n".to_vec(),
+        }
+        .encode_to_vec(),
+    );
+    let event = logs.next().await.unwrap().unwrap();
+    assert_eq!(event.target, "SendStackLogs");
+    assert_eq!(
+        event.arguments[0],
+        json!(b"2026-09-06T12:00:00Z [web] first\n".to_vec())
+    );
+    hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
+    session.output(
+        original,
+        ContainerLogResponse {
+            log: b"2026-09-06T12:00:00Z unchanged\n".to_vec(),
+        }
+        .encode_to_vec(),
+    );
+    logs.next().await.unwrap().unwrap();
+    assert!(commands.try_recv().is_err());
+    sqlx::query("UPDATE containers SET dockercontainerid='replacement' WHERE platformid=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
+    let (event, ()) = tokio::join!(logs.next(), async {
+        let cancel = commands.recv().await.unwrap();
+        assert_eq!(cancel.command_id, original.to_string());
+        assert!(matches!(
+            cancel.body,
+            Some(core_envelope::Body::CancelCommand(_))
+        ));
+        let command = commands.recv().await.unwrap();
+        let id = Uuid::parse_str(&command.command_id).unwrap();
+        let Some(core_envelope::Body::Command(request)) = command.body else {
+            panic!("expected replacement command")
+        };
+        assert_eq!(
+            ContainerLogRequest::decode(request.payload.as_slice())
+                .unwrap()
+                .container_id,
+            "replacement"
+        );
+        session.output(
+            id,
+            ContainerLogResponse {
+                log: b"2026-09-06T12:00:01Z replaced\n".to_vec(),
+            }
+            .encode_to_vec(),
+        );
+    });
+    assert_eq!(
+        event.unwrap().unwrap().arguments[0],
+        json!(b"2026-09-06T12:00:01Z [web] replaced\n".to_vec())
+    );
+    drop(logs);
+    assert!(matches!(
+        commands.recv().await.unwrap().body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+    f.lookup_state.platforms.edge.remove(&session);
+    cleanup(f).await;
+}
+
+// Ports ContainerLogStreamManagerTests' resource-ID/exact-node cases through
+// the actual WebSocket protocol, PostgreSQL projections and Edge command queue.
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permission_revocation() {
+    use citadel_adapters::edge::EdgeTarget;
+    use citadel_contracts::citadel::{
+        containers::v1::{ContainerLogRequest, ContainerLogResponse},
+        edge::v1::{EdgeCommandKind, core_envelope},
+    };
+    use citadel_domain::SpecificPermission;
+    use prost::Message as _;
+    let f = fixture().await;
+    let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
+        .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
+    let principal = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        principal.actor_id.value(),
+        ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    let group = format!("container-log:{id}");
+    let reader = reader(&f);
+    assert!(
+        reader
+            .read(&principal, &Group::parse(&group).unwrap(), None)
+            .await
+            .is_err(),
+        "Read alone must not permit logs"
+    );
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
+        .bind(SpecificPermission::Logs as i32)
+        .bind(principal.actor_id.value())
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let resolved = reader
+        .invocation_group(
+            &principal,
+            "StartContainerLogs",
+            &[json!(
+                "a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750"
+            )],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.name, "container-log:a4c05df3937c");
+    reader.read(&principal, &resolved, None).await.unwrap();
+    let deployment = Uuid::now_v7();
+    let spec:citadel_deployments::DeploymentSpec=serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("logs-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$1 WHERE id=$2")
+        .bind(deployment)
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let deployment_group = reader
+        .invocation_group(
+            &f.administrator,
+            "StartDeploymentLogs",
+            &[json!(deployment)],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        deployment_group.name, "container-log:a4c05df3937c",
+        "the unchanged Deployment viewer joins a short Docker-ID group"
+    );
+    let registry = &f.lookup_state.platforms.edge;
+    let (session, mut commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (_other, mut other_commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "other-node".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let cancellation = CancellationToken::new();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_millis(100),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap()
+    });
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    assert!(
+        invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_string(),
+        "must join an authorized group first"
+    );
+    for revoke in [false, true] {
+        assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+        assert!(
+            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+        );
+        let command = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let command_id = Uuid::parse_str(&command.command_id).unwrap();
+        let Some(core_envelope::Body::Command(request)) = command.body else {
+            panic!("expected log command")
+        };
+        assert_eq!(request.kind, EdgeCommandKind::ContainerLogsStream as i32);
+        let request = ContainerLogRequest::decode(request.payload.as_slice()).unwrap();
+        assert_eq!(
+            request.container_id,
+            "a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750"
+        );
+        assert_eq!(request.tail, 100);
+        assert_eq!(request.follow, Some(true));
+        assert!(other_commands.try_recv().is_err());
+        assert!(
+            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+        );
+        assert!(
+            commands.try_recv().is_err(),
+            "idempotent start must not duplicate a daemon subscription"
+        );
+        let bytes = b"2026-09-06T12:00:00Z hello\n".to_vec();
+        session.output(
+            command_id,
+            ContainerLogResponse { log: bytes.clone() }.encode_to_vec(),
+        );
+        let output = receive(&mut socket).await;
+        assert_eq!(output["target"], "SendContainerLogs");
+        assert_eq!(output["arguments"][0], json!(bytes));
+        if revoke {
+            sqlx::query("UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1")
+                .bind(principal.actor_id.value())
+                .execute(&f.pool)
+                .await
+                .unwrap();
+            let closed = tokio::time::timeout(StdDuration::from_secs(3), socket.next())
+                .await
+                .unwrap();
+            assert!(matches!(closed, Some(Ok(Message::Close(_))) | None));
+        } else {
+            assert!(invoke(&mut socket, "LeaveGroup", &group).await["error"].is_null());
+        }
+        let cancel = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancel.command_id, command_id.to_string());
+        assert!(matches!(
+            cancel.body,
+            Some(core_envelope::Body::CancelCommand(_))
+        ));
+    }
+    registry.remove(&session);
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn managed_service_group_requires_parent_platform_and_preserves_persisted_spec() {

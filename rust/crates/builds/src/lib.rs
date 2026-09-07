@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 mod jobs;
+pub use jobs::completion::{
+    BuildCompletionService, BuildCompletionStore, BuildConsumerClaim, BuildConsumerRuntime,
+    BuildConsumerType,
+};
 mod project;
 
 mod logs;
@@ -921,6 +925,20 @@ impl BuildService {
         } else {
             Err(BuildError::Conflict("Build Run is not active.".to_owned()))
         }
+    }
+}
+
+impl BuildEntitlements for BuildService {
+    fn enabled(
+        &self,
+        capability: citadel_domain::LicenseCapability,
+    ) -> BoxFuture<'_, Result<bool, BuildError>> {
+        Box::pin(async move {
+            match &self.entitlements {
+                Some(entitlements) => entitlements.enabled(capability).await,
+                None => Ok(false),
+            }
+        })
     }
 }
 

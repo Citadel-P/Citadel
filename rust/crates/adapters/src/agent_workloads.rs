@@ -31,7 +31,8 @@ pub(crate) fn stack_request(
         registry_auth: registry.map(|value| value.auth.to_string()),
         registry_name: registry.map(|value| value.name.clone()),
         registry_host: registry.map(|value| value.host.clone()),
-        destroy_before_deploy: claim.spec.common().destroy_before_deploy,
+        destroy_before_deploy: claim.spec.common().destroy_before_deploy
+            && claim.service_names.is_empty(),
         environment_variables: environment.to_vec(),
         pre_deploy: claim
             .spec
@@ -51,7 +52,7 @@ pub(crate) fn stack_request(
                 commands: command.commands.clone(),
                 path: command.path.clone(),
             }),
-        service_names: Vec::new(),
+        service_names: claim.service_names.clone(),
         pull_images: true,
         source_working_directory: Some(source.working_directory.clone()),
         source_compose_file_paths: source.compose_paths.clone(),

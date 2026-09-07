@@ -43,7 +43,17 @@ impl StackSourceMaterializerPort for GitStackSourceMaterializer {
                     "Only Git Stack sources require Git materialization.".to_owned(),
                 ));
             };
-            let revision = commit_sha.as_deref().unwrap_or(branch);
+            // A webhook can arrive before the repository's periodic sync. Resolve
+            // an unpinned branch through the existing serialized worker, then
+            // materialize that exact commit rather than a moving cached ref.
+            let synchronized;
+            let revision = if let Some(commit) = commit_sha.as_deref().filter(|sha| !sha.trim().is_empty()) {
+                commit
+            } else {
+                synchronized = self.git.synchronize_commit(citadel_domain::ActorId::new(claim.actor_id), *git_repo_id, branch, cancellation)
+                    .await.map_err(|error| StackError::Validation(error.to_string()))?;
+                &synchronized
+            };
             let snapshot = self
                 .git
                 .stack_snapshot(*git_repo_id, Some(revision), cancellation)

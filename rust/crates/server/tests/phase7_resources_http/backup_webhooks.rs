@@ -15,6 +15,7 @@ pub fn router(
     identity: Arc<IdentityService>,
     backups: Arc<BackupService>,
     builds: Arc<BuildService>,
+    stacks: Arc<citadel_stacks::StackService>,
 ) -> Router {
     use citadel_adapters::{
         automation_store::PostgresAutomationStore,
@@ -33,7 +34,7 @@ pub fn router(
         std::time::Duration::from_secs(60),
     ));
     let automation = Arc::new(citadel_automation::AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool)),
+        Arc::new(PostgresAutomationStore::new(pool.clone())),
         Arc::new(IdentityAutomationRunTokenIssuer::new(identity)),
         citadel_automation::AutomationRuntimeConfig {
             deno_path: "deno".into(),
@@ -49,6 +50,11 @@ pub fn router(
         automation,
         backups: Some(backups),
         builds: Some(builds),
+        stacks: Some(stacks),
+        services: None,
+        audit: Some(Arc::new(
+            citadel_adapters::activity_store::PostgresActivityStore::new(pool),
+        )),
         alerts: None,
     })
 }

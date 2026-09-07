@@ -1,3 +1,4 @@
+mod images;
 mod inventory;
 mod mutations;
 pub(crate) mod runtime;

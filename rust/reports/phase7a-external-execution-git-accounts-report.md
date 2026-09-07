@@ -165,7 +165,14 @@ Never point either variable at a database containing valuable state.
   that creates a bundle from one dedicated PostgreSQL database, restores it
   into a different clean database, and verifies persisted Citadel state.
 
-## Remaining Phase 7 work
+## Historical Phase 7 handoff (superseded)
+
+The list below records the earlier handoff, not the current implementation
+status. See **Completion pass (2026-09-07)** in
+`phase7-edge-execution-report.md` for the current test mapping and exit gates.
+AWS Build Pool provisioning is not a .NET parity requirement: the existing
+implementation rejects that provider for execution. Citadel-system backup stays
+Core-local; exact-node routing applies to worker data volumes.
 
 The 2026-09-05 statistics follow-up is tracked separately in
 `runtime-statistics-parity-report.md`. It closes the missing history endpoints

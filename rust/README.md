@@ -314,18 +314,22 @@ credential mounted as a Docker Secret. An optional
 `CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH` supplies the Core CA bundle (up to 1 MiB).
 Completion requires the current Service Tasks and their live satellite connections;
 paused rollouts, cancellation and timeout persist failure and revoke bootstrap access.
-A manager-only cluster needs no satellite Service. Released-Agent/multi-node setup
-acceptance remains a required gate.
-Remaining Build execution/trigger parity, remaining node-local
-endpoints, interactive logs/terminal transport, remaining product-specific
-Alert producers and the complete external-service acceptance matrix remain
-open Phase 7 work. Unsupported connector paths fail closed and never fall back
-to Core's Docker daemon. See `reports/phase7-edge-execution-report.md`; run
-`./rust/scripts/Test-Phase7AExternalExecution.ps1` for the database/contract gate
-and `./rust/scripts/Test-Phase7LocalBackup.ps1` for the real Local volume test.
-Add `-UseRustFs` to run the same persisted backup/restore round trip against
-a disposable RustFS S3 repository. This proves S3 storage, not multi-node Agent
-routing; the latter remains an acceptance requirement.
+A manager-only cluster needs no satellite Service. The real three-node
+Install/Repair/Upgrade workflow and exact-worker RustFS backup/restore now pass
+against the signed Agent candidate recorded in
+[`reports/phase7-edge-execution-report.md`](reports/phase7-edge-execution-report.md).
+That report is the current Phase 7 implementation, test-port and exit-gate record;
+the earlier paragraphs describe chronological migration checkpoints.
+
+Node-local endpoints, logs/terminal, Build consumer queues, update producers and
+Stack/Service webhooks use the existing HTTP/realtime contracts. Unsupported
+connector paths fail closed and never fall back to Core's Docker daemon.
+Repeat the database/contract gate with `./rust/scripts/Test-Phase7AExternalExecution.ps1`;
+use `Test-Phase7LocalBackup.ps1 -UseRustFs -MultiNode` for actual worker routing,
+`Test-Phase7Integrations.ps1` for real Forgejo/Vault execution, and
+`Test-Phase7SystemRecovery.ps1` for PostgreSQL bundle restore. These fixtures are
+disposable. Full release-image installation, browser acceptance and memory soak
+remain Phase 8.
 
 ## Interactive development
 

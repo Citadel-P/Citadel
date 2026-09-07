@@ -489,6 +489,80 @@ impl ActivityChangedField {
     }
 }
 
+/// Safe webhook audit metadata. Authentication headers, credentials and request
+/// bodies are deliberately not representable in the persisted event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct WebhookActivityDetails {
+    pub request_id: Uuid,
+    pub auth_type: String,
+    pub execution: String,
+    pub status: &'static str,
+    pub reason: Option<&'static str>,
+    #[serde(flatten)]
+    pub source: WebhookActivitySource,
+    pub dispatched_branch: Option<String>,
+    pub dispatched_commit_sha: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct WebhookActivitySource {
+    pub delivery_id: Option<String>,
+    pub event_type: Option<String>,
+    pub branch: Option<String>,
+    pub commit_sha: Option<String>,
+    pub repository_full_name: Option<String>,
+}
+
+impl ActivityEvent {
+    pub fn new_webhook_event(
+        id: Uuid,
+        name: String,
+        platform_id: Option<Uuid>,
+        resource_type: ActivityResourceType,
+        details: WebhookActivityDetails,
+        now: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let status = match details.status {
+            "queued" => ActivityStatus::Success,
+            "noop" => ActivityStatus::Information,
+            _ => ActivityStatus::Failure,
+        };
+        let info = match resource_type {
+            ActivityResourceType::GitRepository => {
+                ActivityEventInfo::GitRepoWebhookReceived(details)
+            }
+            ActivityResourceType::Stack => ActivityEventInfo::StackWebhookReceived(details),
+            ActivityResourceType::Build => ActivityEventInfo::BuildWebhookReceived(details),
+            ActivityResourceType::SwarmService => {
+                ActivityEventInfo::SwarmServiceWebhookReceived(details)
+            }
+            _ => return Err(ActivityInvariantError::MismatchedResourceType),
+        };
+        let mut event = Self::new_resource_event(
+            id,
+            name,
+            resource_type,
+            ActorId::new(Uuid::from_u128(1)),
+            info,
+            status,
+            now,
+        )?;
+        event.platform_id = platform_id;
+        Ok(event)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct VolumeContentDownloaded {
+    pub volume_name: String,
+    pub path: String,
+    pub is_directory: bool,
+    pub file_name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "$type")]
 // This closed compatibility enum is serialized immediately at mutation
@@ -496,6 +570,11 @@ impl ActivityChangedField {
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
+    VolumeContentDownloaded(VolumeContentDownloaded),
+    GitRepoWebhookReceived(WebhookActivityDetails),
+    StackWebhookReceived(WebhookActivityDetails),
+    BuildWebhookReceived(WebhookActivityDetails),
+    SwarmServiceWebhookReceived(WebhookActivityDetails),
     UserProfileUpdated {
         #[serde(rename = "Changes")]
         changes: Vec<ActivityChangedField>,
@@ -1539,6 +1618,11 @@ impl ActivityEventInfo {
     #[must_use]
     pub const fn event_type(&self) -> ActivityEventType {
         match self {
+            Self::VolumeContentDownloaded(_) => ActivityEventType::VolumeContentDownloaded,
+            Self::GitRepoWebhookReceived(_) => ActivityEventType::GitRepoWebhookReceived,
+            Self::StackWebhookReceived(_) => ActivityEventType::StackWebhookReceived,
+            Self::BuildWebhookReceived(_) => ActivityEventType::BuildWebhookReceived,
+            Self::SwarmServiceWebhookReceived(_) => ActivityEventType::SwarmServiceWebhookReceived,
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
             Self::UserPreferencesUpdated { .. } => ActivityEventType::UserPreferencesUpdated,
             Self::UserPasswordChanged => ActivityEventType::UserPasswordChanged,
@@ -1963,6 +2047,25 @@ impl ActivityEvent {
             created_at,
         )?;
         event.platform_id = Some(resource_id);
+        Ok(event)
+    }
+
+    pub fn volume_downloaded(
+        platform_id: Uuid,
+        actor_id: ActorId,
+        details: VolumeContentDownloaded,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        let mut event = Self::new_resource_event(
+            platform_id,
+            details.volume_name.clone(),
+            ActivityResourceType::Volume,
+            actor_id,
+            ActivityEventInfo::VolumeContentDownloaded(details),
+            ActivityStatus::Success,
+            created_at,
+        )?;
+        event.platform_id = Some(platform_id);
         Ok(event)
     }
 
@@ -2401,6 +2504,49 @@ mod tests {
         assert_eq!(json["OperationId"], operation_id.to_string());
         assert_eq!(json["Replicas"], 3);
         assert_eq!(json["Warnings"], serde_json::json!(["warning"]));
+    }
+
+    #[test]
+    fn webhook_activities_keep_dotnet_discriminators_and_safe_shared_metadata() {
+        for (resource, discriminator) in [
+            (
+                ActivityResourceType::GitRepository,
+                "GitRepoWebhookReceived",
+            ),
+            (ActivityResourceType::Stack, "StackWebhookReceived"),
+            (ActivityResourceType::Build, "BuildWebhookReceived"),
+            (
+                ActivityResourceType::SwarmService,
+                "SwarmServiceWebhookReceived",
+            ),
+        ] {
+            let request = Uuid::now_v7();
+            let event = ActivityEvent::new_webhook_event(
+                Uuid::now_v7(),
+                "resource".into(),
+                None,
+                resource,
+                WebhookActivityDetails {
+                    request_id: request,
+                    auth_type: "generic".into(),
+                    execution: "update".into(),
+                    status: "queued",
+                    reason: None,
+                    source: WebhookActivitySource::default(),
+                    dispatched_branch: None,
+                    dispatched_commit_sha: None,
+                },
+                Utc::now(),
+            )
+            .unwrap();
+            let json = serde_json::to_value(event.info()).unwrap();
+            assert_eq!(json["$type"], discriminator);
+            assert_eq!(json["RequestId"], request.to_string());
+            assert_eq!(json["Status"], "queued");
+            assert_eq!(event.status(), ActivityStatus::Success);
+            assert_eq!(event.resource_type(), resource);
+            assert!(json.get("Headers").is_none() && json.get("Body").is_none());
+        }
     }
 
     #[test]

@@ -112,11 +112,11 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     assert!(!capabilities.can_write);
 
     let first_claim = store
-        .claim_apply(actor, true, created.id, None)
+        .claim_apply(actor, true, created.id, None, None)
         .await
         .unwrap();
     assert!(matches!(
-        store.claim_apply(actor, true, created.id, None).await,
+        store.claim_apply(actor, true, created.id, None, None).await,
         Err(citadel_stacks::StackError::Conflict(_))
     ));
     store
@@ -204,7 +204,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     );
 
     let rollback = store
-        .claim_apply(actor, true, created.id, Some(releases[0].id))
+        .claim_apply(actor, true, created.id, Some(releases[0].id), None)
         .await
         .unwrap();
     store
@@ -494,7 +494,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .await
         .unwrap();
     let git_claim = store
-        .claim_apply(actor, true, git_stack.id, None)
+        .claim_apply(actor, true, git_stack.id, None, None)
         .await
         .unwrap();
     let resolved_commit = "a".repeat(40);

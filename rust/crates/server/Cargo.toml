@@ -9,6 +9,7 @@ publish = false
 axum.workspace = true
 axum-server.workspace = true
 async-stream.workspace = true
+tokio-stream.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -46,6 +47,7 @@ tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
+urlencoding.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 

@@ -17,7 +17,44 @@ use crate::{
     SwarmServiceProgressItem, UpdateSwarmServiceInput,
 };
 
+#[path = "updates.rs"]
+mod updates;
+pub use updates::*;
+#[path = "jobs/image_updates.rs"]
+mod image_updates;
+
+/// The optional version fences an automated action to the configuration that
+/// was authenticated and checked, without changing ordinary interactive Apply.
+#[derive(Clone, Copy)]
+pub struct ServiceOperationRequest {
+    pub id: Uuid,
+    pub kind: ServiceOperationKind,
+    pub replicas: Option<i32>,
+    pub expected_version: Option<i64>,
+}
+
 pub trait SwarmServiceStore: Send + Sync {
+    fn update_check_candidates(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, SwarmServiceError>>;
+    fn begin_update_check<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a ManagedSwarmServiceView,
+    ) -> BoxFuture<'a, Result<ServiceUpdateCheck, SwarmServiceError>>;
+    fn complete_update_check<'a>(
+        &'a self,
+        claim: &'a ServiceUpdateCheck,
+        state: Option<&'a crate::AutoUpdateState>,
+    ) -> BoxFuture<'a, Result<(), SwarmServiceError>>;
+    fn recover_update_checks(
+        &self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, SwarmServiceError>>;
     fn list_authorized<'a>(
         &'a self,
         actor_id: ActorId,
@@ -73,9 +110,7 @@ pub trait SwarmServiceStore: Send + Sync {
         &self,
         actor_id: ActorId,
         administrator: bool,
-        id: Uuid,
-        kind: ServiceOperationKind,
-        replicas: Option<i32>,
+        request: ServiceOperationRequest,
     ) -> BoxFuture<'_, Result<ServiceOperationClaim, SwarmServiceError>>;
     fn mark_attempted<'a>(
         &'a self,
@@ -188,6 +223,8 @@ pub struct ManagedSwarmServiceService {
     operation_timeout: Duration,
     slots: Arc<Semaphore>,
     alerts: Option<Arc<dyn AlertEventSink>>,
+    image_digests: Option<Arc<dyn ServiceImageDigestPort>>,
+    entitlements: Option<Arc<dyn ServiceAutomationEntitlements>>,
 }
 
 impl ManagedSwarmServiceService {
@@ -206,6 +243,8 @@ impl ManagedSwarmServiceService {
             operation_timeout: Duration::from_secs(10 * 60),
             slots: Arc::new(Semaphore::new(4)),
             alerts: None,
+            image_digests: None,
+            entitlements: None,
         }
     }
 
@@ -443,11 +482,40 @@ impl ManagedSwarmServiceService {
         kind: ServiceOperationKind,
         replicas: Option<i32>,
     ) -> mpsc::Receiver<SwarmServiceProgressItem> {
+        self.run_requested_operation(
+            actor_id,
+            administrator,
+            ServiceOperationRequest {
+                id,
+                kind,
+                replicas,
+                expected_version: None,
+            },
+        )
+    }
+
+    fn run_requested_operation(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        request: ServiceOperationRequest,
+    ) -> mpsc::Receiver<SwarmServiceProgressItem> {
         let (sender, receiver) = mpsc::channel(32);
+        // Reject overload before spawning: a semaphore wait inside each spawned
+        // task would retain an unbounded number of requests.
+        let Ok(permit) = self.slots.clone().try_acquire_owned() else {
+            let _ = sender.try_send(SwarmServiceProgressItem::failed(
+                request.id,
+                None,
+                "Service operations are busy. Try again shortly.",
+            ));
+            return receiver;
+        };
         let service = self.clone();
         tokio::spawn(async move {
+            let _permit = permit;
             service
-                .execute_operation(sender, actor_id, administrator, id, kind, replicas)
+                .execute_operation(sender, actor_id, administrator, request)
                 .await;
         });
         receiver
@@ -458,10 +526,11 @@ impl ManagedSwarmServiceService {
         sender: mpsc::Sender<SwarmServiceProgressItem>,
         actor_id: ActorId,
         administrator: bool,
-        id: Uuid,
-        kind: ServiceOperationKind,
-        replicas: Option<i32>,
+        request: ServiceOperationRequest,
     ) {
+        let ServiceOperationRequest {
+            id, kind, replicas, ..
+        } = request;
         if kind == ServiceOperationKind::Scale && replicas.is_some_and(|value| value < 0) {
             let _ = sender
                 .send(SwarmServiceProgressItem::failed(
@@ -472,12 +541,9 @@ impl ManagedSwarmServiceService {
                 .await;
             return;
         }
-        let Ok(_permit) = self.slots.clone().acquire_owned().await else {
-            return;
-        };
         let claim = match self
             .store
-            .claim_operation(actor_id, administrator, id, kind, replicas)
+            .claim_operation(actor_id, administrator, request)
             .await
         {
             Ok(value) => value,
@@ -735,6 +801,13 @@ impl ManagedSwarmServiceService {
         older_than: Duration,
         limit: i64,
     ) -> Result<usize, SwarmServiceError> {
+        let recovered_checks = self
+            .store
+            .recover_update_checks(chrono::Utc::now().timestamp() - 60, limit)
+            .await?;
+        for id in recovered_checks {
+            self.notifier.changed(id, "update");
+        }
         let cutoff = chrono::Utc::now().timestamp()
             - i64::try_from(older_than.as_secs()).unwrap_or(i64::MAX);
         let claims = self

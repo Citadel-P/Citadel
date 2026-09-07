@@ -1215,6 +1215,13 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("deploymentId")]
     },
+    CHECK_DEPLOYMENT_UPDATES => {
+        method: Post, path: "/api/v1/deployments/{deploymentId}/check-updates", operation_id: "checkDeploymentUpdates", summary: "Check the applied Deployment image for updates",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
     GET_DEPLOYMENT_CONFIG => {
         method: Get, path: "/api/v1/deployments/{deploymentId}/_cfg", operation_id: "getDeploymentConfig", summary: "Get Deployment configuration",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1266,6 +1273,13 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("StackView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    CHECK_STACK_UPDATES => {
+        method: Post, path: "/api/v1/stacks/{stackId}/check-updates", operation_id: "checkStackUpdates", summary: "Check a Stack source for updates",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("StackView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("stackId")]
     },
     GET_STACK_CONFIG => {
         method: Get, path: "/api/v1/stacks/{stackId}/_cfg", operation_id: "getStackConfig", summary: "Get Stack configuration",
@@ -1527,12 +1541,54 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
     },
+    GET_SWARM_SERVICE_LOGS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs", operation_id: "getSwarmServiceLogs", summary: "Read bounded Service logs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("tail",ParameterSchema::Integer {format: IntegerFormat::Int32, minimum: Some(1), maximum: Some(200), default: Some(100)})]
+    },
+    GET_SWARM_TASK_LOGS => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs", operation_id: "getSwarmTaskLogs", summary: "Read current Task logs on its owning node",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("tail",ParameterSchema::Integer {format: IntegerFormat::Int32, minimum: Some(1), maximum: Some(200), default: Some(100)})]
+    },
+    GET_MANAGED_SWARM_SERVICE_LOGS => {
+        method: Get, path: "/api/v1/swarmServices/{id}/logs", operation_id: "getManagedSwarmServiceLogs", summary: "Read managed Service logs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id"),ParameterContract::query("tail",ParameterSchema::Integer {format: IntegerFormat::Int32, minimum: Some(1), maximum: Some(200), default: Some(100)})]
+    },
     LIST_PLATFORM_IMAGES => {
         method: Get, path: "/api/v1/images/{platformId}", operation_id: "listImages", summary: "List Platform Images",
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ImagesView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_PLATFORM_IMAGE => {
+        method: Get, path: "/api/v1/images/{platformId}/{imageId}", operation_id: "inspectImage", summary: "Inspect an Image on its owning Docker node",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("InspectImageView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("imageId"),ParameterContract::query("dockerNodeId",ParameterSchema::String)]
+    },
+    GET_IMAGE_EXPOSED_PORTS => {
+        method: Get, path: "/api/v1/images/{platformId}/{imageId}/_ports", operation_id: "getExposedPorts", summary: "Read exposed ports using the Citadel Image ID",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ExposedPortsResult"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_uuid("imageId")]
+    },
+    CHECK_SWARM_SERVICE_UPDATES => {
+        method: Post, path: "/api/v1/swarmServices/{id}/check-updates", operation_id: "checkSwarmServiceUpdates", summary: "Check the applied Service image for updates",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
     },
     LIST_PLATFORM_NETWORKS => {
         method: Get, path: "/api/v1/networks/{platformId}", operation_id: "listNetworks", summary: "List Platform Networks",
@@ -1561,6 +1617,20 @@ route_catalog! {
         request_schema: None, response_schema: Some("DockerVolumeResultView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("name"), ParameterContract::query("dockerNodeId", ParameterSchema::String)]
+    },
+    LIST_VOLUME_DIRECTORY => {
+        method: Get, path: "/api/v1/platforms/{platformId}/volumes/{name}/files", operation_id: "listVolumeDirectory", summary: "Browse a Volume directory",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("VolumeDirectoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("name"), ParameterContract::query("path", ParameterSchema::String), ParameterContract::query("dockerNodeId", ParameterSchema::String)]
+    },
+    DOWNLOAD_VOLUME_PATH => {
+        method: Get, path: "/api/v1/platforms/{platformId}/volumes/{name}/files/download", operation_id: "downloadVolumePath", summary: "Download a Volume file or directory",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("name"), ParameterContract::query("path", ParameterSchema::String), ParameterContract::query("dockerNodeId", ParameterSchema::String)]
     },
     LIST_SWARM_NODES => {
         method: Get, path: "/api/v1/platforms/{platformId}/swarm/nodes", operation_id: "listSwarmNodes", summary: "List Swarm Nodes",
@@ -2346,6 +2416,42 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    START_CONTAINERS => {
+        method: Patch, path: "/api/v1/containers/start", operation_id: "startContainers", summary: "Start Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ContainerIdsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    STOP_CONTAINERS => {
+        method: Patch, path: "/api/v1/containers/stop", operation_id: "stopContainers", summary: "Stop Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ContainerIdsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    RESTART_CONTAINERS => {
+        method: Patch, path: "/api/v1/containers/restart", operation_id: "restartContainers", summary: "Restart Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ContainerIdsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    PAUSE_CONTAINERS => {
+        method: Patch, path: "/api/v1/containers/pause", operation_id: "pauseContainers", summary: "Pause Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ContainerIdsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    UNPAUSE_CONTAINERS => {
+        method: Patch, path: "/api/v1/containers/unpause", operation_id: "unpauseContainers", summary: "Unpause Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ContainerIdsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    DELETE_CONTAINERS => {
+        method: Delete, path: "/api/v1/containers", operation_id: "deleteContainers", summary: "Delete Containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteContainersRequest"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
     CREATE_NETWORK => {
         method: Post, path: "/api/v1/networks", operation_id: "createNetwork", summary: "Create a Network",
         public: true, setup_exempt: false, authentication: Actor,
@@ -2453,6 +2559,18 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("SecretProvidersView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    TEST_VAULT_KV2_SECRET_PROVIDER_CONNECTION => {
+        method: Post, path: "/api/v1/resourceBindings/secret-providers/vault-kv2/test", operation_id: "testVaultKvV2SecretProviderConnection", summary: "Test a Vault-compatible KV v2 Secret provider connection",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("TestVaultKvV2SecretProviderConnectionInput"), response_schema: Some("SecretProviderConnectionTestResultView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    TEST_EXTERNAL_SECRET => {
+        method: Post, path: "/api/v1/resourceBindings/secrets/external/test", operation_id: "testExternalSecret", summary: "Test an external Secret reference",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("TestExternalSecretInput"), response_schema: Some("ExternalSecretTestResultView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[]
     },
     CREATE_VAULT_KV2_SECRET_PROVIDER => {
         method: Post, path: "/api/v1/resourceBindings/secret-providers/vault-kv2", operation_id: "createVaultKvV2SecretProvider", summary: "Create a Vault-compatible KV v2 Secret provider",

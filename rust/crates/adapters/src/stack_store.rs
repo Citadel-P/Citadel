@@ -8,7 +8,7 @@ use citadel_stacks::{
     StackDeletionClaim, StackDriftPolicy, StackError, StackFilter, StackImportClaim,
     StackOperationClaim, StackReleaseSource, StackReleaseStatus, StackReleaseView,
     StackRuntimeResult, StackSource, StackSpec, StackStateClaim, StackStore, StackUpdateState,
-    StackView, TagSummary,
+    StackView, TagSummary, normalize_project_name,
 };
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
@@ -17,6 +17,8 @@ use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
+mod update_checks;
+mod webhooks;
 
 const READ: i32 = 1;
 const WRITE: i32 = 2;
@@ -86,6 +88,52 @@ impl PostgresStackStore {
 }
 
 impl StackStore for PostgresStackStore {
+    fn update_check_candidates(
+        &self,
+        after: Uuid,
+        images: bool,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
+        Box::pin(update_checks::candidates(&self.pool, after, images, limit))
+    }
+    fn save_update_check<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a StackView,
+        state: &'a StackUpdateState,
+    ) -> BoxFuture<'a, Result<(), StackError>> {
+        Box::pin(update_checks::save(
+            self,
+            actor,
+            administrator,
+            expected,
+            state,
+        ))
+    }
+    fn enqueue_webhook<'a>(
+        &'a self,
+        expected: &'a StackView,
+        commit: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), StackError>> {
+        Box::pin(self.enqueue_stack_webhook(expected, commit))
+    }
+    fn ready_webhooks(
+        &self,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<citadel_stacks::StackWebhookJob>, StackError>> {
+        webhooks::ready(&self.pool, limit)
+    }
+    fn discard_webhook(&self, id: Uuid) -> BoxFuture<'_, Result<(), StackError>> {
+        Box::pin(async move {
+            sqlx::query("DELETE FROM stackwebhookdeployqueue WHERE id=$1 AND status='Queued'")
+                .bind(id)
+                .execute(&self.pool)
+                .await
+                .map_err(storage)?;
+            Ok(())
+        })
+    }
     fn drift_monitor_candidates(
         &self,
         after: Option<Uuid>,
@@ -96,7 +144,7 @@ impl StackStore for PostgresStackStore {
                 r#"{AUTHORIZED_CTES}{PROJECTION}
 WHERE s.controlstate='Idle'
   AND r.status IN ('Healthy','Degraded')
-  AND COALESCE(s.driftpolicy->>'mode','Disabled') <> 'Disabled'
+  AND COALESCE(s.driftpolicy->>'Mode','Disabled') <> 'Disabled'
   AND ($3::uuid IS NULL OR s.id > $3)
 ORDER BY s.id
 LIMIT $4"#
@@ -467,6 +515,26 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         administrator: bool,
         id: Uuid,
         rollback_release_id: Option<Uuid>,
+        webhook_job_id: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<StackOperationClaim, StackError>> {
+        self.claim_apply_versioned(
+            actor,
+            administrator,
+            id,
+            rollback_release_id,
+            webhook_job_id,
+            Default::default(),
+        )
+    }
+
+    fn claim_apply_versioned(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        rollback_release_id: Option<Uuid>,
+        webhook_job_id: Option<Uuid>,
+        mut options: citadel_stacks::StackApplyOptions,
     ) -> BoxFuture<'_, Result<StackOperationClaim, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
@@ -474,6 +542,14 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let row=sqlx::query("SELECT s.*,r.platformid,r.status release_status,r.version,r.spec,p.status platform_status,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR UPDATE OF s,r")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
             ensure_idle(&row)?;
+            if options
+                .expected_version
+                .is_some_and(|expected| row.try_get::<i64, _>("rowversion").ok() != Some(expected))
+            {
+                return Err(StackError::Conflict(
+                    "The Stack changed before automatic Apply.".into(),
+                ));
+            }
             if row
                 .try_get::<String, _>("platform_status")
                 .map_err(storage)?
@@ -486,6 +562,12 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let current_release: Uuid = row.try_get("currentstackreleaseid").map_err(storage)?;
             let mut release_id = current_release;
             let mut spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
+            if let Some(job_id) = webhook_job_id {
+                if rollback_release_id.is_some() {
+                    return Err(StackError::NotFound);
+                }
+                webhooks::claim(&mut tx, job_id, id, current_release, &spec).await?;
+            }
             let mut platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
             let operation = if let Some(selected) = rollback_release_id {
                 let rollback=sqlx::query("SELECT platformid,spec FROM stackreleases WHERE id=$1 AND stackid=$2 AND status='Healthy'")
@@ -532,9 +614,32 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                     id,
                 )
             });
+            if !options.service_names.is_empty() {
+                if platform_type != "Docker"
+                    || rollback_release_id.is_some()
+                    || webhook_job_id.is_some()
+                    || options.service_names.len() > 256
+                {
+                    return Err(StackError::Validation("Service-scoped Apply requires a Standalone Stack and at most 256 Services.".into()));
+                }
+                if let StackSpec::WebEditor { compose_file, .. } = &spec {
+                    let model = citadel_stacks::parse_compose(std::slice::from_ref(compose_file))?;
+                    if options
+                        .service_names
+                        .iter()
+                        .any(|name| !model.services.iter().any(|service| service.name == *name))
+                    {
+                        return Err(StackError::Validation(
+                            "A selected Service does not exist in the Stack configuration.".into(),
+                        ));
+                    }
+                }
+                options.service_names.sort_unstable();
+                options.service_names.dedup();
+            }
             let now = Utc::now().timestamp();
-            sqlx::query("UPDATE stacks SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,rowversion=rowversion+1 WHERE id=$1")
-                .bind(id).bind(now).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("UPDATE stacks SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,applyservices=$4,rowversion=rowversion+1 WHERE id=$1")
+                .bind(id).bind(now).bind(actor.value()).bind(&options.service_names).execute(&mut *tx).await.map_err(storage)?;
             let claim = StackOperationClaim {
                 stack_id: id,
                 release_id,
@@ -546,6 +651,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 row_version: row.try_get::<i64, _>("rowversion").map_err(storage)? + 1,
                 actor_id: actor.value(),
                 operation: operation.to_owned(),
+                service_names: options.service_names,
             };
             tx.commit().await.map_err(storage)?;
             Ok(claim)
@@ -562,8 +668,9 @@ ORDER BY s.createdat DESC,s.name,s.id"#
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.stackupdatestate,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' FOR UPDATE OF s,r")
-                .bind(claim.stack_id).bind(claim.release_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Conflict("The Stack operation was superseded.".to_owned()))?;
+            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.stackupdatestate,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' AND s.rowversion=$3 FOR UPDATE OF s,r")
+                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Conflict("The Stack operation was superseded.".to_owned()))?;
+            let source = source.filter(|_| claim.service_names.is_empty());
             let update_state = if let Some(source) =
                 source.filter(|source| source.source_type == StackSource::Git)
             {
@@ -580,15 +687,15 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let source = source
                 .map(StackReleaseSource::to_storage_value)
                 .transpose()?;
-            let changed=sqlx::query("UPDATE stackreleases SET status=$3,resourcebindings=$4,source=COALESCE($5,source) WHERE id=$1 AND stackid=$2 AND status='Applying'")
-                .bind(claim.release_id).bind(claim.stack_id).bind(result.status.as_str()).bind(ResourceBindingSnapshot::list_to_storage_value(bindings)?).bind(source)
+            let changed=sqlx::query("UPDATE stackreleases SET status=$3,resourcebindings=$4,source=COALESCE($5::json,source),spec=$6 WHERE id=$1 AND stackid=$2 AND status='Applying'")
+                .bind(claim.release_id).bind(claim.stack_id).bind(result.status.as_str()).bind(ResourceBindingSnapshot::list_to_storage_value(bindings)?).bind(source).bind(claim.spec.to_storage_value()?)
                 .execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed != 1 {
                 return Err(StackError::Conflict(
                     "The Stack operation was superseded.".to_owned(),
                 ));
             }
-            sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,stackupdatestate=COALESCE($3,stackupdatestate),rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
+            sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,applyservices='{}',stackupdatestate=COALESCE($3::json,stackupdatestate),rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
                 .bind(claim.stack_id).bind(claim.release_id).bind(update_state).execute(&mut *tx).await.map_err(storage)?;
             let snapshot = stack_snapshot(
                 claim.stack_id,
@@ -597,7 +704,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 parse_stack_source(row.try_get("stacksource").map_err(storage)?)?,
                 StackDriftPolicy::from_storage_value(row.try_get("driftpolicy").map_err(storage)?)?,
                 claim.platform_id,
-                &StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?,
+                &claim.spec,
                 actor,
                 row.try_get("version").map_err(storage)?,
             );
@@ -631,6 +738,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 ActivityStatus::Success,
             )
             .await?;
+            webhooks::settle(&mut tx, claim, None).await?;
             tx.commit().await.map_err(storage)?;
             Ok(())
         })
@@ -647,8 +755,12 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let status = if unknown { "Applying" } else { "Failed" };
             let control = if unknown { "Processing" } else { "Idle" };
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND rowversion=$3 AND controlstate='Processing' FOR UPDATE")
+                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?.is_none() {
+                return Err(StackError::Conflict("The Stack operation was superseded.".into()));
+            }
             let release_changed=sqlx::query("UPDATE stackreleases SET status=$3 WHERE id=$1 AND stackid=$2 AND status='Applying'").bind(claim.release_id).bind(claim.stack_id).bind(status).execute(&mut *tx).await.map_err(storage)?.rows_affected();
-            let stack_changed=sqlx::query("UPDATE stacks SET controlstate=$3,controlstartedat=CASE WHEN $4 THEN controlstartedat ELSE NULL END,controltriggeredby=CASE WHEN $4 THEN controltriggeredby ELSE NULL END,rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
+            let stack_changed=sqlx::query("UPDATE stacks SET controlstate=$3,controlstartedat=CASE WHEN $4 THEN controlstartedat ELSE NULL END,controltriggeredby=CASE WHEN $4 THEN controltriggeredby ELSE NULL END,applyservices=CASE WHEN $4 THEN applyservices ELSE '{}'::text[] END,rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
                 .bind(claim.stack_id).bind(claim.release_id).bind(control).bind(unknown).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if release_changed != 1 || stack_changed != 1 {
                 return Err(StackError::Conflict(
@@ -656,6 +768,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 ));
             }
             if !unknown {
+                webhooks::settle(&mut tx, claim, Some("Stack webhook Apply failed.")).await?;
                 let info = ActivityEventInfo::StackApplied {
                     stack: None,
                     result: StackResultActivitySnapshot {
@@ -686,7 +799,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, StackOperationClaim)>, StackError>> {
         Box::pin(async move {
-            sqlx::query("SELECT s.id,s.name,s.rowversion,s.controltriggeredby,s.currentstackreleaseid,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.controlstartedat <= $1 AND r.status='Applying' AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
+            sqlx::query("SELECT s.id,s.name,s.rowversion,s.applyservices,s.controltriggeredby,s.currentstackreleaseid,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.containeroperationid IS NULL AND s.controlstartedat <= $1 AND r.status='Applying' AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
                 .bind(started_before).bind(limit).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(|row| {
                     let id:Uuid=row.try_get("id").map_err(storage)?;
                     let spec=StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -694,7 +807,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                     let platform_type=descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker").to_owned();
                     let name:String=row.try_get("name").map_err(storage)?;
                     let actor=ActorId::new(row.try_get("controltriggeredby").map_err(storage)?);
-                    Ok((actor,StackOperationClaim { stack_id:id,release_id:row.try_get("currentstackreleaseid").map_err(storage)?,platform_id:row.try_get("platformid").map_err(storage)?,project_name:spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name,id)),platform_type,spec,row_version:row.try_get("rowversion").map_err(storage)?,actor_id:actor.value(),name,operation:"Apply".to_owned() }))
+                    Ok((actor,StackOperationClaim { stack_id:id,release_id:row.try_get("currentstackreleaseid").map_err(storage)?,platform_id:row.try_get("platformid").map_err(storage)?,project_name:spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name,id)),platform_type,spec,row_version:row.try_get("rowversion").map_err(storage)?,actor_id:actor.value(),name,operation:"Apply".to_owned(),service_names:row.try_get("applyservices").map_err(storage)? }))
                 }).collect()
         })
     }
@@ -705,7 +818,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, StackDeletionClaim)>, StackError>> {
         Box::pin(async move {
-            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.controlstartedat <= $1 AND r.status NOT IN ('Applying','Pending') AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
+            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.containeroperationid IS NULL AND s.controlstartedat <= $1 AND r.status NOT IN ('Applying','Pending') AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
                 .bind(started_before).bind(limit).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(|row| {
                     let id:Uuid=row.try_get("id").map_err(storage)?;
                     let spec=StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -1006,7 +1119,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, StackStateClaim)>, StackError>> {
         Box::pin(async move {
-            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,s.currentstackreleaseid,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.controlstartedat <= $1 AND r.status='Pending' AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
+            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,s.currentstackreleaseid,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.containeroperationid IS NULL AND s.controlstartedat <= $1 AND r.status='Pending' AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
                 .bind(started_before)
                 .bind(limit)
                 .fetch_all(&self.pool)
@@ -1338,7 +1451,7 @@ async fn validate_references(
     }
     if let StackSpec::Git { git_repo_id, .. } = spec {
         let exists = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM gitrepositories WHERE id=$1 AND archivedat IS NULL)",
+            "SELECT EXISTS(SELECT 1 FROM gitrepositories WHERE id=$1)",
         )
         .bind(git_repo_id)
         .fetch_one(&mut **tx)
@@ -1435,26 +1548,6 @@ fn parse_stack_source(value: &str) -> Result<StackSource, StackError> {
         _ => Err(StackError::Storage(format!(
             "invalid Stack source '{value}'"
         ))),
-    }
-}
-fn normalize_project_name(name: &str, id: Uuid) -> String {
-    let value = name
-        .to_ascii_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_owned();
-    if value.is_empty() {
-        format!("stack-{}", id.simple())
-    } else {
-        value
     }
 }
 fn next_version(value: &str) -> String {

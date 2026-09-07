@@ -21,6 +21,9 @@ use uuid::Uuid;
 
 use crate::agent::{AgentClient, AgentContainerAction, AgentStackRegistry};
 use crate::docker::DockerClient;
+#[path = "stack_update_scanner.rs"]
+mod update_scanner;
+pub use update_scanner::StackUpdateRuntime;
 
 const MAX_PROCESS_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_STACK_MESSAGES_BYTES: usize = 512 * 1024;
@@ -196,7 +199,7 @@ impl StackRuntimeRouter {
                     messages,
                 })
             } else {
-                if claim.spec.common().destroy_before_deploy {
+                if claim.spec.common().destroy_before_deploy && claim.service_names.is_empty() {
                     let down = compose_args(
                         &compose_paths,
                         labels_override.as_deref(),
@@ -219,8 +222,14 @@ impl StackRuntimeRouter {
                     labels_override.as_deref(),
                     &env_paths,
                     &claim.project_name,
-                    &["up", "-d", "--remove-orphans"],
+                    &["up", "-d", "--pull", "always"],
                 );
+                if claim.service_names.is_empty() {
+                    up.push("--remove-orphans".into());
+                } else {
+                    up.push("--no-deps".into());
+                    up.extend(claim.service_names.iter().cloned());
+                }
                 prepend_docker_config(&mut up, docker_config.as_deref());
                 let mut result =
                     run_docker(&up, &working_directory, environment, cancellation).await?;
@@ -1250,6 +1259,7 @@ mod tests {
             row_version: 1,
             actor_id: Uuid::nil(),
             operation: "Apply".to_owned(),
+            service_names: Vec::new(),
         };
 
         assert!(matches!(

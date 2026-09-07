@@ -46,11 +46,11 @@ pub struct EdgeBinding {
     pub public_key: VerifyingKey,
     pub daemon_id: String,
     pub cluster_id: Option<String>,
-    rebind: Option<NodeRebind>,
+    node_reconnect: Option<NodeReconnect>,
 }
 
 #[derive(Clone)]
-struct NodeRebind {
+struct NodeReconnect {
     previous_node_id: String,
     hostname: String,
     role: String,
@@ -171,7 +171,7 @@ impl PostgresEdgeStore {
             target
         };
         let agent_id = Uuid::now_v7();
-        let inserted = sqlx::query("INSERT INTO edgeagentbindings(id,platformid,resourceid,resourcetype,agentid,agentpublickey,agentfingerprint,connectionstatus,protocolversion,profile,dockernodeid,dockerdaemonid,clusterid,lastseenhostname,lastseenversion,capabilitiesjson,firstenrolledatutc,dockerhostname,swarmrole,lastobservedserviceid,lastobservedtaskid) VALUES($1,$2,$3,$4,$5,$6,$7,'Offline',1,$8,$9,$10,$11,$12,$13,$14,now(),$15,$16,$17,$18) ON CONFLICT DO NOTHING")
+        let inserted = sqlx::query("INSERT INTO edgeagentbindings(id,platformid,resourceid,resourcetype,agentid,agentpublickey,agentfingerprint,connectionstatus,protocolversion,profile,dockernodeid,dockerdaemonid,clusterid,lastseenhostname,lastseenversion,capabilitiesjson,firstenrolledatutc,dockerhostname,swarmrole,lastobservedserviceid,lastobservedtaskid) VALUES($1,$2,$3,$4,$5,$6,$7,'Offline',$19,$8,$9,$10,$11,$12,$13,$14,now(),$15,$16,$17,$18) ON CONFLICT DO NOTHING")
             .bind(Uuid::now_v7()).bind(target.platform_id).bind(target.resource_id).bind(resource_type(&target))
             .bind(agent_id).bind(STANDARD.encode(key)).bind(fingerprint(&key))
             .bind(if target.node_id.is_some() { "SwarmNode" } else { "Ordinary" })
@@ -179,6 +179,7 @@ impl PostgresEdgeStore {
             .bind(&request.hostname).bind(&request.agent_version).bind(serde_json::from_str::<Value>(&request.capabilities_json).map_err(|_| EdgeStoreError::Unauthorized)?)
             .bind(nonempty(&request.docker_hostname)).bind(nonempty(&request.swarm_role))
             .bind(nonempty(&request.service_id)).bind(nonempty(&request.task_id))
+            .bind(request.protocol_version)
             .execute(&mut *transaction).await?.rows_affected();
         if inserted != 1 {
             return Err(EdgeStoreError::Unauthorized);
@@ -190,7 +191,7 @@ impl PostgresEdgeStore {
             public_key,
             daemon_id: request.daemon_id.clone(),
             cluster_id: nonempty(&request.cluster_id).map(str::to_owned),
-            rebind: None,
+            node_reconnect: None,
         })
     }
 
@@ -229,15 +230,13 @@ impl PostgresEdgeStore {
         {
             return Err(EdgeStoreError::Unauthorized);
         }
-        let rebind = previous_node
-            .filter(|node| target.node_id.as_ref() != Some(node))
-            .map(|previous_node_id| NodeRebind {
-                previous_node_id,
-                hostname: hello.docker_hostname.clone(),
-                role: hello.swarm_role.clone(),
-                service_id: hello.service_id.clone(),
-                task_id: hello.task_id.clone(),
-            });
+        let node_reconnect = previous_node.map(|previous_node_id| NodeReconnect {
+            previous_node_id,
+            hostname: hello.docker_hostname.clone(),
+            role: hello.swarm_role.clone(),
+            service_id: hello.service_id.clone(),
+            task_id: hello.task_id.clone(),
+        });
         if row.try_get::<String, _>("agentfingerprint")? != hello.agent_fingerprint
             || row
                 .try_get::<Option<String>, _>("dockerdaemonid")?
@@ -261,7 +260,9 @@ impl PostgresEdgeStore {
                 &hello.task_id,
             )
             .await?;
-            if let Some(rebind) = &rebind {
+            if let Some(rebind) = &node_reconnect
+                && target.node_id.as_ref() != Some(&rebind.previous_node_id)
+            {
                 validate_rebind(
                     &mut transaction,
                     &target,
@@ -289,7 +290,7 @@ impl PostgresEdgeStore {
             public_key,
             daemon_id: hello.daemon_id.clone(),
             cluster_id: nonempty(&hello.cluster_id).map(str::to_owned),
-            rebind,
+            node_reconnect,
         })
     }
 
@@ -299,18 +300,21 @@ impl PostgresEdgeStore {
         at: DateTime<Utc>,
     ) -> Result<(), EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
-        // Rebind only after the inbound transport verifies the nonce signature.
-        // Recheck under the row lock: membership may have changed during proof.
-        if let Some(rebind) = &binding.rebind {
+        // Record the current Task only after signature proof, including a rollout
+        // on the same Node. Recheck membership under the binding row lock.
+        if let Some(rebind) = &binding.node_reconnect {
             sqlx::query("SELECT id FROM edgeagentbindings WHERE agentid=$1 AND revokedatutc IS NULL FOR UPDATE")
                 .bind(binding.agent_id).fetch_optional(&mut *tx).await?.ok_or(EdgeStoreError::Unauthorized)?;
-            validate_rebind(
-                &mut tx,
-                &binding.target,
-                binding.agent_id,
-                &rebind.previous_node_id,
-            )
-            .await?;
+            let changed_node = binding.target.node_id.as_ref() != Some(&rebind.previous_node_id);
+            if changed_node {
+                validate_rebind(
+                    &mut tx,
+                    &binding.target,
+                    binding.agent_id,
+                    &rebind.previous_node_id,
+                )
+                .await?;
+            }
             validate_node(
                 &mut tx,
                 &binding.target,
@@ -331,12 +335,14 @@ impl PostgresEdgeStore {
             if changed != 1 {
                 return Err(EdgeStoreError::Unauthorized);
             }
-            mark_node_stale(
-                &mut tx,
-                binding.target.platform_id,
-                &rebind.previous_node_id,
-            )
-            .await?;
+            if changed_node {
+                mark_node_stale(
+                    &mut tx,
+                    binding.target.platform_id,
+                    &rebind.previous_node_id,
+                )
+                .await?;
+            }
         }
         let updated = sqlx::query("UPDATE edgeagentbindings SET connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
             .bind(binding.agent_id).bind(at).bind(&binding.target.node_id).execute(&mut *tx).await?.rows_affected();
@@ -509,7 +515,10 @@ pub(crate) fn validate_capabilities(
     profile: i32,
     build: bool,
 ) -> Result<(), EdgeStoreError> {
-    if version != 1 || !(0..=1).contains(&profile) || capabilities.len() > 16 * 1024 {
+    if version != citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION
+        || !(0..=1).contains(&profile)
+        || capabilities.len() > 16 * 1024
+    {
         return Err(EdgeStoreError::Unauthorized);
     }
     let value: Value =
@@ -672,21 +681,22 @@ mod tests {
     fn capabilities_require_the_protocol_and_profile_specific_commands() {
         let ordinary =
             r#"{"commands":["platform.checkHealth","containers.list","containers.logs"]}"#;
-        assert!(validate_capabilities(1, ordinary, 0, false).is_ok());
-        assert!(validate_capabilities(2, ordinary, 0, false).is_err());
-        assert!(validate_capabilities(1, ordinary, 2, false).is_err());
-        assert!(validate_capabilities(1, ordinary, 1, false).is_err());
-        assert!(validate_capabilities(1, ordinary, 0, true).is_err());
+        assert!(validate_capabilities(2, ordinary, 0, false).is_ok());
+        assert!(validate_capabilities(1, ordinary, 0, false).is_err());
+        assert!(validate_capabilities(3, ordinary, 0, false).is_err());
+        assert!(validate_capabilities(2, ordinary, 2, false).is_err());
+        assert!(validate_capabilities(2, ordinary, 1, false).is_err());
+        assert!(validate_capabilities(2, ordinary, 0, true).is_err());
         assert!(
             validate_capabilities(
-                1,
+                2,
                 r#"{"commands":["containers.list","containers.logs"]}"#,
                 0,
                 false
             )
             .is_err()
         );
-        assert!(validate_capabilities(1, "not-json", 0, false).is_err());
-        assert!(validate_capabilities(1, &" ".repeat(16 * 1024 + 1), 0, false).is_err());
+        assert!(validate_capabilities(2, "not-json", 0, false).is_err());
+        assert!(validate_capabilities(2, &" ".repeat(16 * 1024 + 1), 0, false).is_err());
     }
 }

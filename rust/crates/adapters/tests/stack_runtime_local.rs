@@ -206,6 +206,7 @@ impl Fixture {
             row_version: 1,
             actor_id: Uuid::nil(),
             operation: "Apply".to_owned(),
+            service_names: Vec::new(),
         }
     }
 

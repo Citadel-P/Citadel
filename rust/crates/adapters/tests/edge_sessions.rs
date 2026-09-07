@@ -1,9 +1,182 @@
 use std::{sync::Arc, time::Duration};
 
+use citadel_adapters::edge::EdgeRuntime;
 use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+use citadel_contracts::citadel::containers::v1::{
+    ExecClientMessage, ExecOutput, ExecServerMessage, exec_client_message, exec_server_message,
+};
 use citadel_contracts::citadel::edge::v1::{EdgeCommandKind, core_envelope};
+use citadel_platforms::terminal::*;
+use futures_util::StreamExt;
+use prost::Message;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+#[tokio::test]
+async fn service_log_reads_preserve_tail_truncation_and_reject_oversized_agent_output() {
+    use citadel_contracts::citadel::swarm::v1::{SwarmLogsRequest, SwarmLogsResponse};
+    use citadel_platforms::logs::{LogReadPort, LogResource, MAX_LOG_FRAME};
+    let registry = EdgeRegistry::default();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    for oversized in [false, true] {
+        let (result, ()) = tokio::join!(
+            runtime.read_logs(LogResource::Service("service-1"), 25, &cancel),
+            async {
+                let envelope = outbound.recv().await.unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("logs command")
+                };
+                assert_eq!(command.kind, EdgeCommandKind::SwarmServiceLogs as i32);
+                let request = SwarmLogsRequest::decode(command.payload.as_slice()).unwrap();
+                assert_eq!(request.resource_id, "service-1");
+                assert_eq!(request.tail, 25);
+                let id = Uuid::parse_str(&command.command_id).unwrap();
+                session.output(
+                    id,
+                    SwarmLogsResponse {
+                        lines: vec![if oversized {
+                            "x".repeat(MAX_LOG_FRAME + 1)
+                        } else {
+                            "service output".into()
+                        }],
+                        truncated: true,
+                    }
+                    .encode_to_vec(),
+                );
+                session.complete(id, true);
+            }
+        );
+        if oversized {
+            assert!(result.is_err());
+        } else {
+            let result = result.unwrap();
+            assert_eq!(result.lines, ["service output"]);
+            assert!(result.truncated);
+        }
+    }
+}
+
+// Ports the .NET EdgeAgentConnectorTests interactive-session contract and
+// ExecSessionManagerTests disposal requirement; no manager fallback is possible.
+#[tokio::test]
+async fn terminal_routes_open_input_resize_to_exact_node_and_drop_cancels() {
+    let registry = EdgeRegistry::default();
+    let platform = Uuid::now_v7();
+    let (session, mut outbound) = registry
+        .register(
+            EdgeTarget::node(platform, "worker-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (_, mut other) = registry
+        .register(
+            EdgeTarget::node(platform, "worker-2".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let mut terminal = EdgeRuntime {
+        session: session.clone(),
+    }
+    .container_terminal(
+        "task-container",
+        TerminalShell::Sh,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    let command = outbound.recv().await.unwrap();
+    let command_id = Uuid::parse_str(&command.command_id).unwrap();
+    let Some(core_envelope::Body::Command(open)) = command.body else {
+        panic!("command")
+    };
+    assert_eq!(open.node_id, "worker-1");
+    assert_eq!(open.kind, EdgeCommandKind::ContainerExec as i32);
+    let open = ExecClientMessage::decode(open.payload.as_slice()).unwrap();
+    let Some(exec_client_message::Msg::Open(open)) = open.msg else {
+        panic!("Open")
+    };
+    assert_eq!(open.container_id, "task-container");
+    assert_eq!(open.cmd, ["/bin/sh"]);
+    for input in [
+        TerminalInput::Stdin(b"ls\n".to_vec()),
+        TerminalInput::Resize { cols: 80, rows: 24 },
+    ] {
+        let resize = matches!(input, TerminalInput::Resize { .. });
+        terminal.input.try_send(input).unwrap();
+        let peer = async {
+            let sent = outbound.recv().await.unwrap();
+            assert_eq!(sent.command_id, command.command_id);
+            let Some(core_envelope::Body::StreamInput(bytes)) = sent.body else {
+                panic!("StreamInput")
+            };
+            let message = ExecClientMessage::decode(bytes.payload.as_slice()).unwrap();
+            if resize {
+                assert!(
+                    matches!(message.msg,Some(exec_client_message::Msg::Resize(r)) if r.cols==80 && r.rows==24)
+                );
+            } else {
+                assert!(
+                    matches!(message.msg,Some(exec_client_message::Msg::Stdin(s)) if s.data==b"ls\n")
+                );
+            }
+            session.output(
+                command_id,
+                ExecServerMessage {
+                    msg: Some(exec_server_message::Msg::Output(ExecOutput {
+                        data: b"ok".to_vec(),
+                        stream: 0,
+                    })),
+                }
+                .encode_to_vec(),
+            );
+        };
+        let (_, output) = tokio::time::timeout(Duration::from_secs(2), async {
+            tokio::join!(peer, terminal.output.next())
+        })
+        .await
+        .unwrap();
+        assert!(matches!(output.unwrap().unwrap(),TerminalOutput::Data(bytes) if bytes==b"ok"));
+    }
+    assert!(other.try_recv().is_err());
+    drop(terminal.output);
+    assert!(matches!(
+        outbound.recv().await.unwrap().body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+    assert_eq!(session.pending_count(), 0);
+    assert!(
+        terminal
+            .input
+            .try_send(TerminalInput::Stdin(vec![1]))
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn terminal_reconnect_cancels_old_command_without_sending_input_to_replacement() {
+    let registry = EdgeRegistry::default();
+    let target = EdgeTarget::node(Uuid::now_v7(), "worker".into());
+    let agent = Uuid::now_v7();
+    let (old, mut outbound) = registry.register(target.clone(), agent).unwrap();
+    let mut terminal = EdgeRuntime { session: old }
+        .container_terminal("task", TerminalShell::Bash, &CancellationToken::new())
+        .await
+        .unwrap();
+    outbound.recv().await.unwrap();
+    let (_, mut replacement) = registry.register(target, agent).unwrap();
+    terminal
+        .input
+        .try_send(TerminalInput::Stdin(vec![1]))
+        .unwrap();
+    assert!(terminal.output.next().await.unwrap().is_err());
+    assert!(replacement.try_recv().is_err());
+}
 
 #[tokio::test]
 async fn concurrency_limits_and_full_cancel_queue_close_the_session() {

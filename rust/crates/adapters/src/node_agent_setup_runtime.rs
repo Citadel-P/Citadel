@@ -311,6 +311,17 @@ fn docker_distribution(value: &Value) -> AgentDistribution {
     }
 }
 
+fn system_docker_spec(spec: &SystemAgentSpec) -> Value {
+    let configs:Vec<_>=spec.ca_config_id.iter().map(|id|json!({"ConfigID":id,"ConfigName":spec.ca_config_name,"File":{"Name":"citadel-core-ca.crt","UID":"0","GID":"0","Mode":292}})).collect();
+    json!({"Name":spec.name,"Labels":spec.labels,"Mode":{"Global":{}},"EndpointSpec":{"Mode":"vip","Ports":[]},"Networks":[],
+        "TaskTemplate":{"ContainerSpec":{"Image":spec.image,"Env":spec.environment,"Labels":spec.labels,"User":"0","ReadOnly":true,"Init":true,"Privileges":{"NoNewPrivileges":true},"CapabilityDrop":["ALL"],"StopGracePeriod":30_000_000_000i64,
+            "Mounts":[{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock","ReadOnly":false},{"Type":"volume","Source":spec.volume_name,"Target":"/app/data"},{"Type":"tmpfs","Target":"/tmp","TmpfsOptions":{"SizeBytes":67108864,"Mode":448}}],
+            "Secrets":[{"SecretID":spec.secret_id,"SecretName":spec.secret_name,"File":{"Name":"citadel-edge-bootstrap","UID":"0","GID":"0","Mode":256}}],"Configs":configs,
+            "Healthcheck":{"Test":["CMD-SHELL","wget -q -O - http://127.0.0.1:9000/health >/dev/null || exit 1"],"Interval":30_000_000_000i64,"Timeout":5_000_000_000i64,"Retries":3,"StartPeriod":10_000_000_000i64}},
+            "Resources":{"Limits":{"NanoCPUs":500_000_000,"MemoryBytes":536870912,"Pids":256}},"Placement":{"Constraints":["node.platform.os == linux",format!("node.id != {}",spec.manager_node_id)],"Platforms":spec.architectures.iter().map(|a|json!({"OS":"linux","Architecture":a})).collect::<Vec<_>>()},"RestartPolicy":{"Condition":"any","Delay":5_000_000_000i64},"LogDriver":{"Name":"json-file","Options":{"max-size":"10m","max-file":"3"}}},
+        "UpdateConfig":{"Parallelism":1,"FailureAction":"rollback","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"},"RollbackConfig":{"Parallelism":1,"FailureAction":"pause","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"}})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,15 +379,4 @@ mod tests {
         assert_eq!(value["UpdateConfig"]["Order"], "stop-first");
         assert_eq!(value["EndpointSpec"]["Ports"], json!([]));
     }
-}
-
-fn system_docker_spec(spec: &SystemAgentSpec) -> Value {
-    let configs:Vec<_>=spec.ca_config_id.iter().map(|id|json!({"ConfigID":id,"ConfigName":spec.ca_config_name,"File":{"Name":"citadel-core-ca.crt","UID":"0","GID":"0","Mode":292}})).collect();
-    json!({"Name":spec.name,"Labels":spec.labels,"Mode":{"Global":{}},"EndpointSpec":{"Mode":"vip","Ports":[]},"Networks":[],
-        "TaskTemplate":{"ContainerSpec":{"Image":spec.image,"Env":spec.environment,"Labels":spec.labels,"User":"0","ReadOnly":true,"Init":true,"Privileges":{"NoNewPrivileges":true},"CapabilityDrop":["ALL"],"StopGracePeriod":30_000_000_000i64,
-            "Mounts":[{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock","ReadOnly":false},{"Type":"volume","Source":spec.volume_name,"Target":"/app/data"},{"Type":"tmpfs","Target":"/tmp","TmpfsOptions":{"SizeBytes":67108864,"Mode":448}}],
-            "Secrets":[{"SecretID":spec.secret_id,"SecretName":spec.secret_name,"File":{"Name":"citadel-edge-bootstrap","UID":"0","GID":"0","Mode":256}}],"Configs":configs,
-            "Healthcheck":{"Test":["CMD-SHELL","wget -q -O - http://127.0.0.1:9000/health >/dev/null || exit 1"],"Interval":30_000_000_000i64,"Timeout":5_000_000_000i64,"Retries":3,"StartPeriod":10_000_000_000i64}},
-            "Resources":{"Limits":{"NanoCPUs":500_000_000,"MemoryBytes":536870912,"Pids":256}},"Placement":{"Constraints":["node.platform.os == linux",format!("node.id != {}",spec.manager_node_id)],"Platforms":spec.architectures.iter().map(|a|json!({"OS":"linux","Architecture":a})).collect::<Vec<_>>()},"RestartPolicy":{"Condition":"any","Delay":5_000_000_000i64},"LogDriver":{"Name":"json-file","Options":{"max-size":"10m","max-file":"3"}}},
-        "UpdateConfig":{"Parallelism":1,"FailureAction":"rollback","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"},"RollbackConfig":{"Parallelism":1,"FailureAction":"pause","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"}})
 }

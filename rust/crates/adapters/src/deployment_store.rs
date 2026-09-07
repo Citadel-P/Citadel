@@ -19,6 +19,9 @@ use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
 
+#[path = "deployment_updates_store.rs"]
+mod updates;
+
 const DEPLOYMENT_RESOURCE_TYPE: i32 = 1;
 const PLATFORM_RESOURCE_TYPE: i32 = 0;
 const READ_LEVEL: i32 = 1;
@@ -120,6 +123,35 @@ impl PostgresDeploymentStore {
 }
 
 impl DeploymentStore for PostgresDeploymentStore {
+    fn begin_update_check<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a DeploymentView,
+    ) -> BoxFuture<'a, Result<citadel_deployments::DeploymentUpdateCheck, DeploymentError>> {
+        Box::pin(updates::begin(self, actor, administrator, expected))
+    }
+    fn complete_update_check<'a>(
+        &'a self,
+        claim: &'a citadel_deployments::DeploymentUpdateCheck,
+        state: Option<&'a AutoUpdateState>,
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        Box::pin(updates::finish(self, claim, state))
+    }
+    fn recover_update_checks(
+        &self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        Box::pin(updates::recover(self, started_before, limit))
+    }
+    fn scheduled_update_candidates(
+        &self,
+        after: Uuid,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        Box::pin(updates::candidates(self, after, limit))
+    }
     fn list_authorized<'a>(
         &'a self,
         actor_id: ActorId,
@@ -639,6 +671,16 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         administrator: bool,
         id: Uuid,
     ) -> BoxFuture<'a, Result<ApplyClaim, DeploymentError>> {
+        self.claim_apply_versioned(actor_id, administrator, id, None)
+    }
+
+    fn claim_apply_versioned(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+        expected_version: Option<i64>,
+    ) -> BoxFuture<'_, Result<ApplyClaim, DeploymentError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_specific_access(
@@ -667,6 +709,13 @@ ORDER BY d.createdat DESC, d.name, d.id"#
             .await
             .map_err(storage)?
             .ok_or(DeploymentError::NotFound)?;
+            if expected_version
+                .is_some_and(|version| row.try_get::<i64, _>("rowversion").ok() != Some(version))
+            {
+                return Err(DeploymentError::Conflict(
+                    "The Deployment changed before automatic Apply.".into(),
+                ));
+            }
             ensure_idle(&row)?;
             let platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
             let descriptor: Value = row.try_get("platformdescriptor").map_err(storage)?;
@@ -746,12 +795,13 @@ ORDER BY d.createdat DESC, d.name, d.id"#
             }
             let spec_value = spec.to_storage_value()?;
             let affected = sqlx::query(
-                "UPDATE deployments SET status='Healthy',spec=$4,controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
+                "UPDATE deployments SET status='Healthy',spec=$4,controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1,autoupdatestate_status=CASE WHEN $5::text IS NOT NULL THEN 'UpToDate' ELSE autoupdatestate_status END,autoupdatestate_currentdigest=COALESCE($5,autoupdatestate_currentdigest),autoupdatestate_remotedigest=COALESCE($5,autoupdatestate_remotedigest),autoupdatestate_lasterror=CASE WHEN $5 IS NOT NULL THEN NULL ELSE autoupdatestate_lasterror END WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
             )
             .bind(claim.id)
             .bind(claim.row_version)
             .bind(actor_id.value())
             .bind(&spec_value)
+            .bind(digest.filter(|_| matches!(spec.image, DeploymentImageInfo::External { .. })))
             .execute(&mut *tx)
             .await
             .map_err(storage)?
@@ -801,11 +851,12 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                 upsert_apply_container(&mut tx, claim, result).await?;
             }
             let affected = sqlx::query(
-                "UPDATE deployments SET status='Failed',controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
+                "UPDATE deployments SET status='Failed',controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1,autoupdatestate_status=CASE WHEN $4 THEN 'Failed' ELSE autoupdatestate_status END,autoupdatestate_lasterror=CASE WHEN $4 THEN 'Deployment Apply failed. Review its activity for details.' ELSE autoupdatestate_lasterror END WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
             )
             .bind(claim.id)
             .bind(claim.row_version)
             .bind(actor_id.value())
+            .bind(claim.spec.update_behavior == citadel_deployments::UpdateBehavior::AutoDeploy)
             .execute(&mut *tx)
             .await
             .map_err(storage)?
@@ -850,7 +901,7 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                        WHERE deploymentid=d.id ORDER BY updated DESC,id DESC LIMIT 1
                    ) c ON TRUE
                    WHERE d.controlstate='Processing' AND d.status='Applying'
-                     AND d.controlstartedat IS NOT NULL AND d.controlstartedat < $1
+                     AND d.containeroperationid IS NULL AND d.updatecheckid IS NULL AND d.controlstartedat IS NOT NULL AND d.controlstartedat < $1
                      AND d.controltriggeredby IS NOT NULL
                    ORDER BY d.controlstartedat,d.id LIMIT $2"#,
             )

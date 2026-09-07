@@ -360,6 +360,32 @@ fn observed_container_state(
 }
 
 impl DeploymentRuntimePort for DeploymentRuntimeRouter {
+    fn remote_image_digest<'a>(
+        &'a self,
+        platform: Uuid,
+        registry: Uuid,
+        reference: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<String, DeploymentError>> {
+        Box::pin(async move {
+            let target = self.platform(platform).await?;
+            let agent = if target.connector.eq_ignore_ascii_case("Local") {
+                None
+            } else {
+                Some(self.agent_for(&target)?)
+            };
+            crate::registry_digest::inspect(
+                &self.pool,
+                &self.docker,
+                agent,
+                registry,
+                reference,
+                cancel,
+            )
+            .await
+            .map_err(|message| DeploymentError::Runtime(message.into()))
+        })
+    }
     fn prepare_image<'a>(
         &'a self,
         platform_id: Uuid,
@@ -551,7 +577,7 @@ struct RegistryPull {
     auth: Option<Zeroizing<String>>,
 }
 
-fn qualify_image_reference(host: &str, image: &str) -> Result<String, DeploymentError> {
+pub(crate) fn qualify_image_reference(host: &str, image: &str) -> Result<String, DeploymentError> {
     let image = image.trim();
     if image.is_empty() || image.len() > 2048 {
         return Err(DeploymentError::Validation(
@@ -580,7 +606,7 @@ fn qualify_image_reference(host: &str, image: &str) -> Result<String, Deployment
     Ok(qualified)
 }
 
-fn registry_auth(
+pub(crate) fn registry_auth(
     registry_id: Uuid,
     host: &str,
     configuration: &Value,

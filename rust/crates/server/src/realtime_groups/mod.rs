@@ -76,6 +76,26 @@ impl Group {
             ["container-info", reference] if !reference.is_empty() && reference.len() <= 128 => {
                 group.reference = Some((*reference).into());
             }
+            ["container-log", reference]
+                if Uuid::parse_str(reference).is_ok_and(|id| !id.is_nil())
+                    || (matches!(reference.len(), 12 | 64)
+                        && reference.bytes().all(|b| b.is_ascii_hexdigit())) =>
+            {
+                group.reference = Some((*reference).into());
+            }
+            ["stack-log", id] => {
+                group.id = Some(Uuid::parse_str(id).ok()?);
+            }
+            ["container-exec", reference, session] if valid_session(session) => {
+                Group::parse(&format!("container-log:{reference}"))?;
+                group.reference = Some((*reference).into());
+            }
+            ["swarm-task-exec", platform, task, session]
+                if valid_session(session) && !task.is_empty() && task.len() <= 128 =>
+            {
+                group.id = Some(Uuid::parse_str(platform).ok()?);
+                group.reference = Some((*task).into());
+            }
             ["activity", kind, id] => {
                 group.id = Some(Uuid::parse_str(id).ok()?);
                 group.reference = Some((*kind).into());
@@ -89,6 +109,9 @@ impl Group {
     }
 
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if self.kind.ends_with("-log") || self.kind.ends_with("-exec") {
+            return false;
+        }
         if event.event_kind == "buildLogs" {
             return self.kind == "build-run" && self.id == Some(event.resource_id);
         }
@@ -145,6 +168,27 @@ impl Group {
     }
 }
 
+fn valid_session(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+}
+
+pub struct TerminalInvocation {
+    pub group: Group,
+    pub action: TerminalAction,
+}
+pub enum TerminalAction {
+    Start(citadel_platforms::terminal::TerminalShell),
+    Input(citadel_platforms::terminal::TerminalInput),
+}
+pub struct GroupTerminal {
+    pub input: citadel_platforms::terminal::TerminalInputSender,
+    pub output: GroupStream,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ClientEvent {
     #[serde(rename = "protocolVersion")]
@@ -184,13 +228,48 @@ pub struct GroupSnapshot {
     pub events: Vec<ClientEvent>,
 }
 pub trait GroupReadPort: Send + Sync {
+    fn terminal_invocation<'a>(
+        &'a self,
+        _p: &'a ActorPrincipal,
+        _method: &'a str,
+        _args: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<TerminalInvocation>, RealtimeReadError>> {
+        Box::pin(async { Ok(None) })
+    }
+    fn terminal<'a>(
+        &'a self,
+        _p: &'a ActorPrincipal,
+        _group: &'a Group,
+        _shell: citadel_platforms::terminal::TerminalShell,
+        _cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<GroupTerminal, RealtimeReadError>> {
+        Box::pin(async { Err(RealtimeReadError::Authorization) })
+    }
     fn read<'a>(
         &'a self,
         principal: &'a ActorPrincipal,
         group: &'a Group,
         event: Option<&'a PublishedRuntimeEvent>,
     ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>>;
+    fn stream<'a>(
+        &'a self,
+        _principal: &'a ActorPrincipal,
+        _group: &'a Group,
+        _cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
+        Box::pin(async { Ok(None) })
+    }
+    fn invocation_group<'a>(
+        &'a self,
+        _principal: &'a ActorPrincipal,
+        _target: &'a str,
+        _arguments: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<Group>, RealtimeReadError>> {
+        Box::pin(async { Ok(None) })
+    }
 }
+pub type GroupStream =
+    futures_util::stream::BoxStream<'static, Result<ClientEvent, RealtimeReadError>>;
 
 pub struct GroupSubscription {
     pub group: Group,

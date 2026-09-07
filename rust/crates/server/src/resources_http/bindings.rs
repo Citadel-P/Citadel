@@ -56,7 +56,50 @@ pub(super) fn router(state: ResourcesHttpState) -> Router {
             update_secret_provider,
         )
         .contract_route(routes::DELETE_SECRET_PROVIDER, delete_secret_provider)
+        .contract_route(
+            routes::TEST_VAULT_KV2_SECRET_PROVIDER_CONNECTION,
+            test_secret_provider,
+        )
+        .contract_route(routes::TEST_EXTERNAL_SECRET, test_external_secret)
         .with_state(state)
+}
+
+async fn test_secret_provider(
+    State(state): State<ResourcesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<citadel_resources::TestSecretProviderInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    global_authorization(&state, principal, PermissionLevel::Write, &headers).await?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let result = identity_result(
+        state
+            .resources
+            .test_secret_provider(input)
+            .await
+            .map_err(metadata_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(result).into_response()))
+}
+
+async fn test_external_secret(
+    State(state): State<ResourcesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<citadel_resources::TestExternalSecretInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    global_authorization(&state, principal, PermissionLevel::Write, &headers).await?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let result = identity_result(
+        state
+            .resources
+            .test_external_secret(input)
+            .await
+            .map_err(metadata_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(result).into_response()))
 }
 
 #[derive(Serialize)]

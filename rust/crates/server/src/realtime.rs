@@ -679,6 +679,10 @@ async fn run_group_connection(
         .as_ref()
         .ok_or(RealtimeError::Authorization)?;
     let mut groups: BTreeMap<String, GroupSubscription> = BTreeMap::new();
+    let mut streams = tokio_stream::StreamMap::<String, crate::realtime_groups::GroupStream>::new();
+    let mut stream_guards = BTreeMap::new();
+    let mut terminal_inputs: BTreeMap<String, citadel_platforms::terminal::TerminalInputSender> =
+        BTreeMap::new();
     let mut receiver = service.inner.hub.subscribe();
     send_group_message(
         socket,
@@ -709,7 +713,7 @@ async fn run_group_connection(
                 let name=request.arguments.as_ref().and_then(|args|(args.len()==1).then(||args[0].as_str()).flatten());
                 let mut updates=vec![];
                 let error=match (request.target.as_deref(),name) {
-                    (Some("LeaveGroup"),Some(name))=>{groups.remove(name);None},
+                    (Some("LeaveGroup"),Some(name))=>{groups.remove(name);streams.remove(name);stream_guards.remove(name);terminal_inputs.remove(name);None},
                     (Some("JoinGroup"),Some(name))=>{
                         if !groups.contains_key(name) && groups.len()>=MAX_GROUPS {Some("Realtime group limit exceeded")}
                         else if let Some(group)=Group::parse(name) {
@@ -730,6 +734,62 @@ async fn run_group_connection(
                             }
                         } else {Some("Not authorized to join this group.")}
                     },
+                    (Some(target),_)=>{
+                        let args=request.arguments.as_deref().unwrap_or_default();
+                        let terminal=tokio::time::timeout(service.inner.subscribe_timeout,reader.terminal_invocation(&subscription.principal,target,args)).await;
+                        let terminal_error=match terminal {
+                            Ok(Ok(Some(command)))=>{
+                                use crate::realtime_groups::TerminalAction;
+                                let error=if !groups.contains_key(&command.group.name) {Some("Join the terminal group before starting or sending input.")}
+                                else {match command.action {
+                                    TerminalAction::Input(input)=>match terminal_inputs.get(&command.group.name) {
+                                        Some(sender)=>sender.try_send(input).err().map(|_|"Terminal input is closed, invalid or overloaded."),
+                                        None=>Some("This connection does not own an active terminal session."),
+                                    },
+                                    TerminalAction::Start(shell)=>{
+                                        if terminal_inputs.contains_key(&command.group.name) {None}
+                                        // The legacy SendContainerExec event has no session discriminator.
+                                        else if !terminal_inputs.is_empty() || stream_guards.len()>=4 {Some("An active terminal already exists on this connection.")}
+                                        else {
+                                            let token=cancellation.child_token(); let guard=token.clone().drop_guard();
+                                            match tokio::time::timeout(service.inner.subscribe_timeout,reader.terminal(&subscription.principal,&command.group,shell,&token)).await {
+                                                Ok(Ok(session))=>{
+                                                    terminal_inputs.insert(command.group.name.clone(),session.input);
+                                                    streams.insert(command.group.name.clone(),session.output);
+                                                    stream_guards.insert(command.group.name,guard);None
+                                                },
+                                                _=>Some("Terminal target is unauthorized, unavailable or timed out."),
+                                            }
+                                        }
+                                    }
+                                }};
+                                Some(error)
+                            },
+                            Ok(Ok(None))=>None,
+                            _=>Some(Some("Terminal request is invalid, unauthorized or unavailable.")),
+                        };
+                        if let Some(error)=terminal_error {
+                            send_group_message(socket,service,&json!({"protocolVersion":1,"kind":"completion","invocationId":invocation,"error":error})).await?;
+                            continue;
+                        }
+                        match tokio::time::timeout(service.inner.subscribe_timeout,reader.invocation_group(&subscription.principal,target,args)).await {
+                            Ok(Ok(Some(group))) if groups.contains_key(&group.name)=>{
+                                if stream_guards.contains_key(&group.name) { None }
+                                else if stream_guards.len()>=4 {Some("Realtime stream limit exceeded")}
+                                else {
+                                    let token=cancellation.child_token();
+                                    let guard=token.clone().drop_guard();
+                                    match tokio::time::timeout(service.inner.subscribe_timeout,reader.stream(&subscription.principal,&group,&token)).await {
+                                        Ok(Ok(Some(stream)))=>{streams.insert(group.name.clone(),stream);stream_guards.insert(group.name,guard);None},
+                                        Ok(Ok(None))=>Some("This resource does not support streaming."),
+                                        Ok(Err(_))=>Some("Not authorized to stream this resource, or the resource is unavailable."),
+                                        Err(_)=>Some("Realtime stream initialization timed out"),
+                                    }
+                                }
+                            },
+                            _=>Some("Not authorized to invoke this method, or its resource group has not been joined."),
+                        }
+                    },
                     _=>Some("This realtime method is not available in the Rust backend."),
                 };
                 send_group_message(socket,service,&json!({"protocolVersion":1,"kind":"completion","invocationId":invocation,"error":error})).await?;
@@ -737,6 +797,16 @@ async fn run_group_connection(
             },
             _=recheck.tick()=>{
                 subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
+                for name in stream_guards.keys() {
+                    if let Some(joined)=groups.get(name) {
+                        tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,None)).await
+                            .map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?;
+                    }
+                }
+            },
+            Some((_,item))=streams.next(),if !streams.is_empty()=>{
+                let update=item.map_err(map_realtime_read_error)?;
+                send_group_message(socket,service,&update).await?;
             },
             event=receiver.recv()=>{
                 let event=match event {

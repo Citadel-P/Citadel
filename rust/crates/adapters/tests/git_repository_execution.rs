@@ -21,6 +21,8 @@ use citadel_stacks::{
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+#[path = "git_repository_execution/stack_updates.rs"]
+mod git_stack_updates;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL and Git"]
@@ -229,6 +231,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
                 row_version: 1,
                 actor_id: actor,
                 operation: "Apply".to_owned(),
+                service_names: Vec::new(),
             },
             &CancellationToken::new(),
         )
@@ -272,6 +275,15 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .await
         .unwrap();
     assert_eq!(pinned.resolved_commit_sha, expected.trim());
+    git_stack_updates::verify(
+        &pool,
+        service.clone(),
+        ActorId::new(actor),
+        repository_id,
+        expected.trim(),
+        updated.trim(),
+    )
+    .await;
 
     // Cancellation before a request must not enqueue new shared work.
     let cancelled = CancellationToken::new();

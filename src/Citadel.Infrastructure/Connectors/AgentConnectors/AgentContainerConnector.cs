@@ -8,6 +8,7 @@ using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
+using Infrastructure.Repositories.Security.Grpc;
 using LightResults;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -182,8 +183,6 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
     public async Task<IExecSession> ExecAsync(string platformAddress, string containerId, string cmd, CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(platformAddress);
-        var call = containerClient.Exec(cancellationToken: cancellationToken);
-
         var open = new ExecClientMessage
         {
             Open = new ExecOpen
@@ -194,9 +193,18 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
             }
         };
 
-        await call.RequestStream.WriteAsync(open, cancellationToken).ConfigureAwait(false);
-
-        return new AgentExecSession(call);
+        var headers = HubSigningInterceptor.SignHeaders(open, "/citadel.containers.v1.ContainerService/Exec");
+        var call = containerClient.Exec(headers: headers, cancellationToken: cancellationToken);
+        try
+        {
+            await call.RequestStream.WriteAsync(open, cancellationToken).ConfigureAwait(false);
+            return new AgentExecSession(call);
+        }
+        catch
+        {
+            call.Dispose();
+            throw;
+        }
     }
 
     public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(string platformAddress, ContainerBinaryExecRequest request, CancellationToken cancellationToken)

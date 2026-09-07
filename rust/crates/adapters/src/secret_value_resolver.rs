@@ -1,8 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use citadel_resources::ResourceSecretProtector;
+use citadel_resources::{
+    ResourceMetadataError, ResourceSecretProtector, SecretProviderTester, SecretTestResult,
+    TestExternalSecretInput, TestSecretProviderInput,
+};
 use futures_util::StreamExt;
+use futures_util::future::BoxFuture;
 use reqwest::redirect::Policy;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
@@ -10,6 +14,152 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 const MAX_PROVIDER_RESPONSE_BYTES: usize = 1024 * 1024;
+
+impl SecretProviderTester for PostgresSecretValueResolver {
+    fn test_connection<'a>(
+        &'a self,
+        input: &'a TestSecretProviderInput,
+    ) -> BoxFuture<'a, Result<SecretTestResult, ResourceMetadataError>> {
+        Box::pin(async move {
+            input.validate()?;
+            let existing = match input.provider_id {
+                Some(id) => Some(self.provider_configuration(id).await?),
+                None => None,
+            };
+            let supplied = input
+                .token
+                .as_deref()
+                .filter(|token| !token.trim().is_empty());
+            let stored;
+            let token = if let Some(token) = supplied {
+                token
+            } else if let Some(config) = existing.as_ref() {
+                stored = match self.provider_token(config) {
+                    Ok(token) => token,
+                    Err(_) => {
+                        return Ok(SecretTestResult::new(
+                            false,
+                            "Secret provider token could not be decrypted.",
+                        ));
+                    }
+                };
+                &stored
+            } else {
+                return Ok(SecretTestResult::new(
+                    false,
+                    "Vault token is required to test the connection.",
+                ));
+            };
+            let mut url = provider_url(&input.address).map_err(|_| {
+                ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
+            })?;
+            let mut health_url = url.clone();
+            health_url
+                .path_segments_mut()
+                .map_err(|_| {
+                    ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
+                })?
+                .pop_if_empty()
+                .extend(["v1", "sys", "health"]);
+            let health = match self.client.get(health_url).send().await {
+                Ok(response) => response.status().as_u16(),
+                Err(_) => {
+                    return Ok(SecretTestResult::new(
+                        false,
+                        "Vault could not be reached within the connection timeout.",
+                    ));
+                }
+            };
+            if health >= 500 {
+                return Ok(SecretTestResult::new(
+                    false,
+                    format!("Vault endpoint is reachable but not ready: HTTP {health}."),
+                ));
+            }
+            url.path_segments_mut()
+                .map_err(|_| {
+                    ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
+                })?
+                .pop_if_empty()
+                .extend(["v1", "auth", "token", "lookup-self"]);
+            let response = self
+                .client
+                .get(url)
+                .header("X-Vault-Token", token)
+                .send()
+                .await;
+            Ok(match response {
+                Ok(response) if response.status().is_success() => SecretTestResult::new(
+                    true,
+                    if supplied.is_some() {
+                        "Connection successful. Vault is reachable and the token is valid."
+                    } else {
+                        "Connection successful using the stored token. Vault is reachable and the token is valid."
+                    },
+                ),
+                Ok(response)
+                    if matches!(response.status().as_u16(), 404 | 405)
+                        && matches!(health, 200 | 429 | 472 | 473) =>
+                {
+                    SecretTestResult::new(
+                        true,
+                        "Vault is reachable. Token lookup is not supported by this provider; test a secret reference to verify token and KV access.",
+                    )
+                }
+                Ok(response) => SecretTestResult::new(
+                    false,
+                    format!(
+                        "Vault connection test failed: HTTP {}.",
+                        response.status().as_u16()
+                    ),
+                ),
+                Err(_) => SecretTestResult::new(
+                    false,
+                    "Vault could not be reached within the connection timeout.",
+                ),
+            })
+        })
+    }
+
+    fn test_external<'a>(
+        &'a self,
+        input: &'a TestExternalSecretInput,
+    ) -> BoxFuture<'a, Result<SecretTestResult, ResourceMetadataError>> {
+        Box::pin(async move {
+            input.validate()?;
+            let config = self.provider_configuration(input.provider_id).await?;
+            let token = match self.provider_token(&config) {
+                Ok(token) => token,
+                Err(_) => {
+                    return Ok(SecretTestResult::new(
+                        false,
+                        "Secret provider token could not be decrypted.",
+                    ));
+                }
+            };
+            let result = self
+                .resolve_vault(VaultSecretRequest {
+                    name: "EXTERNAL_SECRET_TEST",
+                    address: json_string(&config, &["Address", "address"]).unwrap_or_default(),
+                    mount: json_string(&config, &["MountPath", "mountPath"]).unwrap_or_default(),
+                    path: &input.external_path,
+                    key: &input.external_key,
+                    version: input.external_version,
+                    token: &token,
+                })
+                .await;
+            // Never return provider response bodies, tokens, or the resolved value.
+            Ok(SecretTestResult::new(
+                result.is_ok(),
+                if result.is_ok() {
+                    "External secret reference resolved successfully."
+                } else {
+                    "External secret reference could not be resolved. Check the provider, path, key, version and token permissions."
+                },
+            ))
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct PostgresSecretValueResolver {
@@ -29,6 +179,34 @@ struct VaultSecretRequest<'a> {
 }
 
 impl PostgresSecretValueResolver {
+    async fn provider_configuration(&self, id: Uuid) -> Result<Value, ResourceMetadataError> {
+        let row = sqlx::query("SELECT providertype,configuration FROM secretproviders WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?
+            .ok_or(ResourceMetadataError::NotFound)?;
+        let kind: String = row
+            .try_get("providertype")
+            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?;
+        if kind != "VaultCompatibleKvV2" {
+            return Err(ResourceMetadataError::Validation(
+                "The Secret provider is not supported.".into(),
+            ));
+        }
+        let configuration: String = row
+            .try_get("configuration")
+            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?;
+        serde_json::from_str(&configuration).map_err(|_| ResourceMetadataError::Credential)
+    }
+
+    fn provider_token(&self, config: &Value) -> Result<Zeroizing<String>, SecretValueError> {
+        self.decrypt(
+            json_string(config, &["ProtectedToken", "protectedToken"]).unwrap_or_default(),
+            "provider token",
+        )
+    }
+
     pub fn new(
         pool: PgPool,
         protector: Arc<dyn ResourceSecretProtector>,
@@ -143,17 +321,7 @@ impl PostgresSecretValueResolver {
         &self,
         request: VaultSecretRequest<'_>,
     ) -> Result<Zeroizing<String>, SecretValueError> {
-        let mut url = reqwest::Url::parse(request.address)
-            .map_err(|_| SecretValueError::Validation("Secret provider URL is invalid.".into()))?;
-        if !matches!(url.scheme(), "http" | "https")
-            || url.host_str().is_none()
-            || url.query().is_some()
-            || url.fragment().is_some()
-        {
-            return Err(SecretValueError::Validation(
-                "Secret provider URL is invalid.".into(),
-            ));
-        }
+        let mut url = provider_url(request.address)?;
         let mount = safe_segments(request.mount)?;
         let path = safe_segments(request.path)?;
         {
@@ -233,6 +401,23 @@ impl PostgresSecretValueResolver {
     }
 }
 
+fn provider_url(address: &str) -> Result<reqwest::Url, SecretValueError> {
+    let url = reqwest::Url::parse(address)
+        .map_err(|_| SecretValueError::Validation("Secret provider URL is invalid.".into()))?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(SecretValueError::Validation(
+            "Secret provider URL is invalid.".into(),
+        ));
+    }
+    Ok(url)
+}
+
 fn safe_segments(value: &str) -> Result<Vec<&str>, SecretValueError> {
     let segments = value
         .trim_matches('/')
@@ -286,5 +471,18 @@ mod tests {
     fn provider_paths_reject_traversal() {
         assert_eq!(safe_segments("apps/citadel").unwrap(), ["apps", "citadel"]);
         assert!(safe_segments("apps/../admin").is_err());
+    }
+
+    #[test]
+    fn provider_urls_reject_embedded_credentials_and_non_http_targets() {
+        for address in [
+            "file:///etc/passwd",
+            "https://user:password@vault.test",
+            "https://vault.test?token=secret",
+            "https://vault.test#fragment",
+        ] {
+            assert!(provider_url(address).is_err());
+        }
+        assert!(provider_url("https://vault.test/prefix").is_ok());
     }
 }

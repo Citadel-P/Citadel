@@ -3,6 +3,7 @@
 mod bindings;
 mod catalog;
 mod lookup;
+mod secret_provider_tests;
 mod tags;
 pub mod webhooks;
 
@@ -16,6 +17,7 @@ use zeroize::Zeroizing;
 pub use bindings::*;
 pub use catalog::*;
 pub use lookup::*;
+pub use secret_provider_tests::*;
 pub use tags::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,6 +204,7 @@ pub trait ResourceMetadataStore: Send + Sync {
 pub struct ResourceMetadataService {
     store: Arc<dyn ResourceMetadataStore>,
     protector: Arc<dyn ResourceSecretProtector>,
+    provider_tester: Option<Arc<dyn SecretProviderTester>>,
 }
 
 impl ResourceMetadataService {
@@ -210,7 +213,44 @@ impl ResourceMetadataService {
         store: Arc<dyn ResourceMetadataStore>,
         protector: Arc<dyn ResourceSecretProtector>,
     ) -> Self {
-        Self { store, protector }
+        Self {
+            store,
+            protector,
+            provider_tester: None,
+        }
+    }
+
+    pub fn with_secret_provider_tester(mut self, tester: Arc<dyn SecretProviderTester>) -> Self {
+        self.provider_tester = Some(tester);
+        self
+    }
+
+    pub async fn test_secret_provider(
+        &self,
+        input: TestSecretProviderInput,
+    ) -> Result<SecretTestResult, ResourceMetadataError> {
+        input.validate()?;
+        self.provider_tester
+            .as_ref()
+            .ok_or_else(|| {
+                ResourceMetadataError::Storage("Secret provider testing is not configured.".into())
+            })?
+            .test_connection(&input)
+            .await
+    }
+
+    pub async fn test_external_secret(
+        &self,
+        input: TestExternalSecretInput,
+    ) -> Result<SecretTestResult, ResourceMetadataError> {
+        input.validate()?;
+        self.provider_tester
+            .as_ref()
+            .ok_or_else(|| {
+                ResourceMetadataError::Storage("Secret provider testing is not configured.".into())
+            })?
+            .test_external(&input)
+            .await
     }
 
     #[must_use]
@@ -259,11 +299,6 @@ impl ResourceMetadataService {
         id: Uuid,
         input: SecretProviderPatch,
     ) -> Result<SecretProviderView, ResourceMetadataError> {
-        if input.token.as_deref().is_some_and(str::is_empty) {
-            return Err(ResourceMetadataError::Validation(
-                "Secret provider token cannot be empty when it is replaced.".to_owned(),
-            ));
-        }
         let current = self.store.get_secret_provider(id).await?;
         validate_provider(
             input.name.as_deref().unwrap_or(&current.name),
@@ -280,6 +315,7 @@ impl ResourceMetadataService {
                 .map(|value| value.trim_matches('/').to_owned()),
             protected_token: input
                 .token
+                .filter(|value| !value.trim().is_empty())
                 .map(|value| self.protector.protect(value.as_bytes()))
                 .transpose()?,
         };

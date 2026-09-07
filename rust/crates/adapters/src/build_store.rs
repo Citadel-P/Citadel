@@ -83,7 +83,7 @@ impl PostgresBuildStore {
                 ));
             }
             let run_id = Uuid::now_v7();
-            let platform = serde_json::json!({"id":project.try_get::<Option<Uuid>,_>("platformid").map_err(storage)?,"name":project.try_get::<Option<String>,_>("platformname").map_err(storage)?,"address":project.try_get::<Option<String>,_>("platformaddress").map_err(storage)?});
+            let platform = serde_json::json!({"id":project.try_get::<Option<Uuid>,_>("platformid").map_err(storage)?,"name":project.try_get::<Option<String>,_>("platformname").map_err(storage)?,"address":project.try_get::<Option<String>,_>("platformaddress").map_err(storage)?,"builderKind":project.try_get::<String,_>("builderkind").map_err(storage)?,"buildAgentPoolId":project.try_get::<Option<Uuid>,_>("buildagentpoolid").map_err(storage)?});
             let registry = serde_json::json!({"id":project.try_get::<Uuid,_>("registryid").map_err(storage)?,"name":project.try_get::<String,_>("registryname").map_err(storage)?,"registryHost":project.try_get::<String,_>("registryhost").map_err(storage)?});
             let build_secrets: serde_json::Value =
                 project.try_get("buildsecrets").map_err(storage)?;
@@ -104,6 +104,13 @@ impl PostgresBuildStore {
                 .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(project.try_get::<String,_>("imagerepository").map_err(storage)?)
                 .bind(project.try_get::<serde_json::Value,_>("tagtemplates").map_err(storage)?).bind(trigger).bind(project.try_get::<i32,_>("timeoutseconds").map_err(storage)?).bind(actor.value()).bind(commit)
                 .execute(&mut *tx).await.map_err(database)?;
+            // Preserve BuildKit IDs with their secret references, never secret values.
+            sqlx::query("UPDATE buildruns SET buildsecretssnapshot=$2 WHERE id=$1")
+                .bind(run_id)
+                .bind(build_secrets)
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             sqlx::query("UPDATE buildprojects SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             record_run_activity(&mut tx, run_id).await?;
             let run = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
@@ -595,17 +602,42 @@ ORDER BY project.name,project.id"#
             if !owns_claim {
                 return Ok(None);
             }
-            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND project.currentrunid=run.id AND (project.buildagentpoolid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE other.buildagentpoolid=project.buildagentpoolid AND active.status IN ('Preparing','Running')) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=project.buildagentpoolid),1)) ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
+            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND project.currentrunid=run.id AND ((run.platformsnapshot->>'buildAgentPoolId')::uuid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE (active.platformsnapshot->>'buildAgentPoolId')::uuid=(run.platformsnapshot->>'buildAgentPoolId')::uuid AND active.status IN ('Preparing','Running')) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=(run.platformsnapshot->>'buildAgentPoolId')::uuid),1)) ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let project_id: Uuid = row.try_get("buildprojectid").map_err(storage)?;
             sqlx::query("UPDATE buildruns SET status='Preparing',startedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Queued'").bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("UPDATE buildprojects SET controlstate='Processing',controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project_id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             record_run_activity(&mut tx, run_id).await?;
+            let mut project = map_project(
+                sqlx::query("SELECT * FROM buildprojects WHERE id=$1")
+                    .bind(project_id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(storage)?,
+            )?;
+            let row = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
+                .bind(run_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(storage)?;
+            let target: serde_json::Value = row.try_get("platformsnapshot").map_err(storage)?;
+            project.builder_kind =
+                serde_json::from_value(target["builderKind"].clone()).map_err(storage)?;
+            project.platform_id = serde_json::from_value(target["id"].clone()).map_err(storage)?;
+            project.build_agent_pool_id =
+                serde_json::from_value(target["buildAgentPoolId"].clone()).map_err(storage)?;
+            project.build_args =
+                serde_json::from_value(row.try_get("buildargssnapshot").map_err(storage)?)
+                    .map_err(storage)?;
+            project.build_secrets =
+                serde_json::from_value(row.try_get("buildsecretssnapshot").map_err(storage)?)
+                    .map_err(storage)?;
+            project.tag_templates =
+                serde_json::from_value(row.try_get("tagtemplatessnapshot").map_err(storage)?)
+                    .map_err(storage)?;
+            let run = map_run(row)?;
             tx.commit().await.map_err(storage)?;
-            Ok(Some(BuildClaim {
-                project: self.get(project_id).await?,
-                run: get_run(&self.pool, run_id).await?,
-            }))
+            Ok(Some(BuildClaim { project, run }))
         })
     }
 
@@ -619,13 +651,22 @@ ORDER BY project.name,project.id"#
             let affected = sqlx::query("UPDATE buildruns SET status=$2,completedat=CURRENT_TIMESTAMP,exitcode=$3,imagedigest=$4,imagereferences=$5,errorcode=$6,errormessage=$7,resolvedcommitsha=$8 WHERE id=$1 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id)")
                 .bind(claim.run.id).bind(result.status).bind(result.exit_code).bind(result.image_digest.as_deref()).bind(serde_json::to_value(&result.image_references).map_err(storage)?).bind(result.error_code.as_deref()).bind(result.error_message.as_deref()).bind(result.resolved_commit_sha.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
+                if result.status == "Succeeded"
+                    && result
+                        .image_references
+                        .first()
+                        .is_some_and(|reference| !reference.trim().is_empty())
+                {
+                    crate::build_completion_store::enqueue(&mut tx, claim.project.id, claim.run.id)
+                        .await?;
+                }
                 record_run_activity(&mut tx, claim.run.id).await?;
                 for log in &result.logs {
                     sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,message,stream) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)").bind(Uuid::now_v7()).bind(claim.run.id).bind(&log.message).bind(&log.stream).execute(&mut *tx).await.map_err(storage)?;
                 }
                 sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND currentrunid=$2").bind(claim.project.id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
                 sqlx::query(
-                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained)",
+                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns b WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=b.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE d.spec->'Image'->>'ResolvedBuildRunId'=b.id::text OR d.spec->'Image'->>'AppliedBuildRunId'=b.id::text) AND NOT EXISTS(SELECT 1 FROM stackreleases r, jsonb_array_elements(COALESCE(r.spec::jsonb->'BuildImageBindings','[]'::jsonb)) binding WHERE binding->>'ResolvedBuildRunId'=b.id::text OR binding->>'AppliedBuildRunId'=b.id::text)",
                 )
                 .bind(claim.project.id)
                 .bind(i64::from(claim.project.retention_run_count.max(1)))

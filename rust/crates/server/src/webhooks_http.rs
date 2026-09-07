@@ -15,7 +15,10 @@ use citadel_resources::webhooks::{WebhookConfiguration, WebhookError};
 use serde::Serialize;
 use uuid::Uuid;
 
+mod audit;
 mod builds;
+mod services;
+mod stacks;
 
 const SYSTEM_ACTOR_ID: ActorId = ActorId::new(Uuid::from_u128(1));
 
@@ -25,7 +28,10 @@ pub struct WebhooksHttpState {
     pub automation: Arc<AutomationService>,
     pub backups: Option<Arc<citadel_backups::BackupService>>,
     pub builds: Option<Arc<citadel_builds::BuildService>>,
+    pub stacks: Option<Arc<citadel_stacks::StackService>>,
+    pub services: Option<Arc<citadel_swarm_services::ManagedSwarmServiceService>>,
     pub alerts: Option<Arc<dyn AlertEventSink>>,
+    pub audit: Option<Arc<dyn citadel_application::WebhookActivitySink>>,
 }
 
 pub fn router(state: WebhooksHttpState) -> Router {
@@ -97,8 +103,54 @@ async fn receive(
         &body,
     )
     .await;
+    if let (Some(audit), Some(resource)) = (&state.audit, audit_resource(&resource_type)) {
+        let (status, reason) = match &result {
+            Ok(outcome) => (
+                if outcome.reason.is_some() {
+                    "noop"
+                } else {
+                    "queued"
+                },
+                outcome.reason,
+            ),
+            Err((_, reason)) => ("rejected", Some(*reason)),
+        };
+        let details = citadel_domain::WebhookActivityDetails {
+            request_id,
+            auth_type: auth_type.chars().take(32).collect(),
+            execution: execution.chars().take(32).collect(),
+            status,
+            reason,
+            source: if result.is_ok() {
+                audit::source(&headers, &body)
+            } else {
+                Default::default()
+            },
+            dispatched_branch: result
+                .as_ref()
+                .ok()
+                .and_then(|outcome| outcome.branch.clone()),
+            dispatched_commit_sha: result
+                .as_ref()
+                .ok()
+                .and_then(|outcome| outcome.commit.clone()),
+        };
+        // Dispatch may already have committed a durable job or Apply claim.
+        // An audit outage must not return a failure that asks the sender to
+        // replay that mutation. Bound audit latency independently of execution.
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            audit.record_webhook(resource, id, details),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            _ => tracing::warn!(%request_id, "Webhook audit persistence failed after dispatch"),
+        }
+    }
     match result {
-        Ok(reason) => {
+        Ok(outcome) => {
+            let reason = outcome.reason;
             resolve_webhook_alerts(state.alerts.as_ref(), id, request_id).await;
             (
                 StatusCode::ACCEPTED,
@@ -126,7 +178,77 @@ async fn receive(
     }
 }
 
-type DispatchResult = Result<Option<&'static str>, (StatusCode, &'static str)>;
+type DispatchResult = Result<WebhookDispatch, (StatusCode, &'static str)>;
+
+#[derive(Default)]
+struct WebhookDispatch {
+    reason: Option<&'static str>,
+    branch: Option<String>,
+    commit: Option<String>,
+}
+impl WebhookDispatch {
+    fn noop(reason: &'static str) -> Self {
+        Self {
+            reason: Some(reason),
+            ..Self::default()
+        }
+    }
+    fn queued(branch: &str, commit: Option<&str>) -> Self {
+        Self {
+            reason: None,
+            branch: Some(branch.into()),
+            commit: commit.map(str::to_owned),
+        }
+    }
+}
+
+fn audit_resource(resource: &str) -> Option<citadel_domain::ActivityResourceType> {
+    use citadel_domain::ActivityResourceType;
+    if resource.eq_ignore_ascii_case("repo") {
+        Some(ActivityResourceType::GitRepository)
+    } else if resource.eq_ignore_ascii_case("stack") {
+        Some(ActivityResourceType::Stack)
+    } else if resource.eq_ignore_ascii_case("swarm-service") {
+        Some(ActivityResourceType::SwarmService)
+    } else if ["build", "build-project", "buildProject"]
+        .iter()
+        .any(|name| resource.eq_ignore_ascii_case(name))
+    {
+        Some(ActivityResourceType::Build)
+    } else {
+        None
+    }
+}
+
+fn changed_paths(payload: &serde_json::Value) -> Vec<&str> {
+    use serde_json::Value;
+    payload
+        .get("changedPaths")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .chain(
+            payload
+                .get("commits")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .flat_map(|commit| {
+                    ["added", "modified", "removed"]
+                        .into_iter()
+                        .flat_map(move |field| {
+                            commit
+                                .get(field)
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                                .filter_map(Value::as_str)
+                        })
+                }),
+        )
+        .collect()
+}
 
 async fn dispatch(
     state: &WebhooksHttpState,
@@ -143,15 +265,17 @@ async fn dispatch(
             .receive_webhook(SYSTEM_ACTOR_ID, id, auth_type, headers, body)
             .await
         {
-            Ok(GitWebhookOutcome::Queued) => Ok(None),
-            Ok(GitWebhookOutcome::Ignored) => Ok(Some("Branch filter did not match")),
+            Ok(GitWebhookOutcome::Queued { branch }) => Ok(WebhookDispatch::queued(&branch, None)),
+            Ok(GitWebhookOutcome::Ignored) => {
+                Ok(WebhookDispatch::noop("Branch filter did not match"))
+            }
             Err(GitRepositoryExecutionError::NotFound) => {
                 Err((StatusCode::NOT_FOUND, "Webhook not found."))
             }
             Err(GitRepositoryExecutionError::Authentication) => {
                 Err((StatusCode::UNAUTHORIZED, "Webhook authentication failed."))
             }
-            Err(GitRepositoryExecutionError::Conflict) => Ok(Some(
+            Err(GitRepositoryExecutionError::Conflict) => Ok(WebhookDispatch::noop(
                 "Repository webhook configuration changed during dispatch.",
             )),
             Err(GitRepositoryExecutionError::Validation(_)) => Err((
@@ -181,7 +305,7 @@ async fn dispatch(
             .evaluate(auth_type, headers, body)
             .map_err(webhook_auth_error)?
         {
-            return Ok(Some(reason));
+            return Ok(WebhookDispatch::noop(reason));
         }
         let args = normalize_payload(body);
         // Queue durably, using the configured run-as Actor, not the caller's token.
@@ -191,11 +315,11 @@ async fn dispatch(
             .queue_webhook(id, action.webhook.as_ref().unwrap(), &args)
             .await
         {
-            Ok(()) => Ok(None),
-            Err(AutomationError::Conflict(_)) => Ok(Some(
+            Ok(()) => Ok(WebhookDispatch::default()),
+            Err(AutomationError::Conflict(_)) => Ok(WebhookDispatch::noop(
                 "Action is disabled, busy, or its webhook configuration changed.",
             )),
-            Err(AutomationError::LicenseRequired) => Ok(Some(
+            Err(AutomationError::LicenseRequired) => Ok(WebhookDispatch::noop(
                 "Automated operations require an active license entitlement.",
             )),
             Err(error) => Err(automation_error(error)),
@@ -217,17 +341,17 @@ async fn dispatch(
             .evaluate(auth_type, headers, body)
             .map_err(webhook_auth_error)?
         {
-            return Ok(Some(reason));
+            return Ok(WebhookDispatch::noop(reason));
         }
         return match backups
             .queue_webhook(id, policy.webhook.as_ref().unwrap())
             .await
         {
-            Ok(()) => Ok(None),
-            Err(citadel_backups::BackupError::Conflict(_)) => Ok(Some(
+            Ok(()) => Ok(WebhookDispatch::default()),
+            Err(citadel_backups::BackupError::Conflict(_)) => Ok(WebhookDispatch::noop(
                 "Backup Policy is disabled, busy, or its webhook configuration changed.",
             )),
-            Err(citadel_backups::BackupError::LicenseRequired) => Ok(Some(
+            Err(citadel_backups::BackupError::LicenseRequired) => Ok(WebhookDispatch::noop(
                 "Automated operations require an active license entitlement.",
             )),
             Err(error) => Err(backup_error(error)),
@@ -239,6 +363,12 @@ async fn dispatch(
         && execution.eq_ignore_ascii_case("run")
     {
         return builds::receive(state, id, auth_type, headers, body).await;
+    }
+    if resource.eq_ignore_ascii_case("stack") && execution.eq_ignore_ascii_case("deploy") {
+        return stacks::receive(state, id, auth_type, headers, body).await;
+    }
+    if resource.eq_ignore_ascii_case("swarm-service") && execution.eq_ignore_ascii_case("update") {
+        return services::receive(state, id, auth_type, headers, body).await;
     }
     Err((StatusCode::BAD_REQUEST, "Unsupported webhook target."))
 }

@@ -574,12 +574,15 @@ pub(crate) async fn unary<T: Message, R: Message + Default + 'static>(
     }
 }
 
-fn stream<'a, T: Message, R: Message + Default + Send + 'a>(
+pub(crate) fn stream<T: Message, R: Message + Default + Send + 'static>(
     session: &Arc<EdgeSession>,
     kind: EdgeCommandKind,
     request: T,
-    cancellation: &'a CancellationToken,
-) -> Result<futures_util::stream::BoxStream<'a, Result<R, tonic::Status>>, RuntimeCapabilityError> {
+    cancellation: &CancellationToken,
+) -> Result<
+    futures_util::stream::BoxStream<'static, Result<R, tonic::Status>>,
+    RuntimeCapabilityError,
+> {
     if cancellation.is_cancelled() {
         return Err(remote("Edge command canceled."));
     }
@@ -591,9 +594,10 @@ fn stream<'a, T: Message, R: Message + Default + Send + 'a>(
             true,
         )
         .map_err(edge_error)?;
+    let cancellation = cancellation.clone();
     Ok(Box::pin(async_stream::stream! {
         loop {
-            match pending.next(cancellation).await {
+            match pending.next(&cancellation).await {
                 Ok(Some(payload)) => yield R::decode(payload.as_slice()).map_err(|_| tonic::Status::data_loss("Invalid Edge response.")),
                 Ok(None) => break,
                 Err(error) => { yield Err(tonic::Status::unavailable(error.to_string())); break; }

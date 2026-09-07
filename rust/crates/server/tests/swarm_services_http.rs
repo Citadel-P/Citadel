@@ -27,6 +27,11 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "swarm_services_http/updates.rs"]
+mod updates;
+#[path = "swarm_services_http/webhooks.rs"]
+mod webhooks;
+
 struct CompletingRuntime;
 impl SwarmServiceRuntimePort for CompletingRuntime {
     fn apply<'a>(
@@ -108,12 +113,19 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let services = Arc::new(ManagedSwarmServiceService::new(
-        Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
-        Arc::new(CompletingRuntime),
-        CancellationToken::new(),
-    ));
-    let app = swarm_services_http::router(SwarmServicesHttpState { identity, services });
+    let digests = Arc::new(updates::DigestFixture::default());
+    let services = Arc::new(
+        ManagedSwarmServiceService::new(
+            Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+            Arc::new(CompletingRuntime),
+            CancellationToken::new(),
+        )
+        .with_image_digests(digests.clone()),
+    );
+    let app = swarm_services_http::router(SwarmServicesHttpState {
+        identity: identity.clone(),
+        services: services.clone(),
+    });
     assert_eq!(
         request(&app, Method::GET, "/api/v1/swarmServices", None, None)
             .await
@@ -143,7 +155,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
         .await
         .unwrap();
     sqlx::query(r#"INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
-        VALUES($1,'local','Local',1,0,1,$2,0,'{"$type":"DockerSwarm","clusterId":"fixture","controlAvailable":true}'::json,'Online',0)"#)
+        VALUES($1,$2,'Local',1,0,1,$2,0,'{"$type":"DockerSwarm","clusterId":"fixture","controlAvailable":true}'::json,'Online',0)"#)
         .bind(platform_id).bind(format!("swarm-{suffix}")).execute(&mut *tx).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}'::json,$2,$3,'docker.io','Enabled')")
         .bind(registry_id).bind(SYSTEM_ACTOR_ID).bind(format!("registry-{suffix}"))
@@ -173,6 +185,19 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            &format!("/api/v1/swarmServices/{id}/check-updates"),
+            Some(admin.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT,
+        "a saved image is not an applied baseline"
+    );
 
     let apply = request(
         &app,
@@ -204,6 +229,9 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
             .unwrap()
             >= 2
     );
+
+    updates::exercise_update_checks(&app, &services, &pool, &admin, id, &digests).await;
+    webhooks::verify(&pool, identity, &admin, id).await;
 
     let deleted = request(
         &app,

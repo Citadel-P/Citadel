@@ -10,6 +10,10 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[path = "updates.rs"]
+mod updates;
+pub use updates::*;
+
 use crate::{
     ApplyClaim, CreateDeploymentInput, DeletionClaim, DeploymentBindingSnapshot,
     DeploymentConfigView, DeploymentDuplicateDraftView, DeploymentError, DeploymentFilter,
@@ -19,6 +23,63 @@ use crate::{
 };
 
 pub trait DeploymentStore: Send + Sync {
+    fn begin_update_check<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a DeploymentView,
+    ) -> BoxFuture<'a, Result<DeploymentUpdateCheck, DeploymentError>> {
+        let _ = (actor, administrator, expected);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Image update checks are unavailable.".into(),
+            ))
+        })
+    }
+    fn complete_update_check<'a>(
+        &'a self,
+        claim: &'a DeploymentUpdateCheck,
+        state: Option<&'a crate::AutoUpdateState>,
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        let _ = (claim, state);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Image update checks are unavailable.".into(),
+            ))
+        })
+    }
+    fn recover_update_checks(
+        &self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        let _ = (started_before, limit);
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn scheduled_update_candidates(
+        &self,
+        after: Uuid,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        let _ = (after, limit);
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn claim_apply_versioned(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        expected_version: Option<i64>,
+    ) -> BoxFuture<'_, Result<ApplyClaim, DeploymentError>> {
+        if expected_version.is_some() {
+            return Box::pin(async {
+                Err(DeploymentError::Runtime(
+                    "Versioned Apply is unavailable.".into(),
+                ))
+            });
+        }
+        self.claim_apply(actor, administrator, id)
+    }
     fn list_authorized<'a>(
         &'a self,
         actor_id: ActorId,
@@ -147,6 +208,20 @@ pub trait DeploymentStore: Send + Sync {
 }
 
 pub trait DeploymentRuntimePort: Send + Sync {
+    fn remote_image_digest<'a>(
+        &'a self,
+        platform: Uuid,
+        registry: Uuid,
+        reference: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<String, DeploymentError>> {
+        let _ = (platform, registry, reference, cancellation);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Image update checking is unavailable.".into(),
+            ))
+        })
+    }
     fn delete_container<'a>(
         &'a self,
         platform_id: Uuid,
@@ -516,6 +591,18 @@ impl DeploymentService {
         id: Uuid,
         recreate: bool,
     ) -> Result<mpsc::Receiver<DeploymentStreamItem>, DeploymentError> {
+        self.apply_versioned(actor_id, administrator, id, recreate, None)
+            .await
+    }
+
+    pub async fn apply_versioned(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+        recreate: bool,
+        expected_version: Option<i64>,
+    ) -> Result<mpsc::Receiver<DeploymentStreamItem>, DeploymentError> {
         if id.is_nil() {
             return Err(DeploymentError::Validation(
                 "A Deployment must be selected.".to_owned(),
@@ -532,7 +619,10 @@ impl DeploymentService {
             )
         })?
         .map_err(|_| DeploymentError::Runtime("Deployment Apply is shutting down.".to_owned()))?;
-        let claim = self.store.claim_apply(actor_id, administrator, id).await?;
+        let claim = self
+            .store
+            .claim_apply_versioned(actor_id, administrator, id, expected_version)
+            .await?;
         self.notifier.changed(id, "updated");
         let (sender, receiver) = mpsc::channel(32);
         let operation = ApplyOperation {

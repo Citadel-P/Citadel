@@ -46,6 +46,7 @@ use citadel_deployments::{
     DeploymentImageInfo, DeploymentSpec, RuntimeContainerState, RuntimeDeploymentCommand,
     UpdateBehavior,
 };
+use citadel_platforms::terminal::*;
 use citadel_platforms::{
     CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
 };
@@ -53,7 +54,9 @@ use citadel_stacks::{
     StackApplySource, StackOperationClaim, StackSourceFile, StackSpec, StackSpecCommon,
     StackUpdateBehavior,
 };
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt};
+use prost::Message;
+use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
@@ -163,9 +166,50 @@ impl ContainerService for MutationFixture {
 
     async fn exec(
         &self,
-        _: Request<tonic::Streaming<ExecClientMessage>>,
+        request: Request<tonic::Streaming<ExecClientMessage>>,
     ) -> Result<Response<Self::ExecStream>, Status> {
-        Err(Status::unimplemented("not used"))
+        let (metadata, _, mut input) = request.into_parts();
+        let open = input
+            .message()
+            .await?
+            .ok_or_else(|| Status::unauthenticated("missing open"))?;
+        let hash = Sha256::digest(open.encode_to_vec());
+        let header = |name| {
+            metadata
+                .get_bin(name)
+                .ok_or_else(|| Status::unauthenticated("missing signature header"))?
+                .to_bytes()
+                .map_err(|_| Status::unauthenticated("invalid header"))
+        };
+        assert_eq!(header("x-content-sha256-bin")?.as_ref(), hash.as_slice());
+        let mut payload = header("x-timestamp-bin")?.to_vec();
+        payload.extend_from_slice(&header("x-nonce-bin")?);
+        payload.extend_from_slice(b"/citadel.containers.v1.ContainerService/Exec");
+        payload.extend_from_slice(&hash);
+        let signature = ed25519_dalek::Signature::from_slice(&header("x-signature-bin")?).unwrap();
+        ed25519_dalek::SigningKey::from_bytes(&[31; 32])
+            .verifying_key()
+            .verify_strict(&payload, &signature)
+            .unwrap();
+        let Some(citadel_contracts::citadel::containers::v1::exec_client_message::Msg::Open(open)) =
+            open.msg
+        else {
+            panic!("expected signed Open")
+        };
+        assert_eq!(open.container_id, "container-1");
+        assert_eq!(open.cmd, ["/bin/sh"]);
+        assert!(open.tty);
+        Ok(Response::new(Box::pin(async_stream::try_stream! {
+            while let Some(message) = input.message().await? {
+                use citadel_contracts::citadel::containers::v1::exec_client_message::Msg;
+                let data = match message.msg.unwrap() {
+                    Msg::Stdin(stdin)=>stdin.data,
+                    Msg::Resize(resize)=>format!("{}x{}",resize.cols,resize.rows).into_bytes(),
+                    Msg::Open(_)=>panic!("Open sent twice"),
+                };
+                yield ExecServerMessage {msg:Some(exec_server_message::Msg::Output(ExecOutput {data,stream:0}))};
+            }
+        })))
     }
 
     type ExecBinaryStream = TestStream<ExecServerMessage>;
@@ -193,9 +237,29 @@ impl ContainerService for MutationFixture {
 
     async fn stream_container_logs(
         &self,
-        _: Request<ContainerLogRequest>,
+        request: Request<ContainerLogRequest>,
     ) -> Result<Response<Self::StreamContainerLogsStream>, Status> {
-        Err(Status::unimplemented("not used"))
+        require_signature(&request)?;
+        let request = request.into_inner();
+        assert_eq!(request.container_id, "container-1");
+        if request.follow == Some(false) {
+            assert_eq!(request.tail, 12);
+            return Ok(Response::new(Box::pin(futures_util::stream::iter([Ok(
+                ContainerLogResponse {
+                    log: b"bounded logs\n".to_vec(),
+                },
+            )]))));
+        }
+        assert_eq!(request.tail, 100);
+        assert_eq!(request.follow, Some(true));
+        Ok(Response::new(Box::pin(
+            futures_util::stream::once(async {
+                Ok(ContainerLogResponse {
+                    log: b"2026-09-06T12:00:00Z hello\n".to_vec(),
+                })
+            })
+            .chain(futures_util::stream::pending()),
+        )))
     }
 
     type StreamContainersStatsStream = TestStream<ContainersStatsResponse>;
@@ -236,6 +300,12 @@ impl AgentStackService for MutationFixture {
             b"services:\n  web:\n    image: nginx\n"
         );
         assert_eq!(request.environment_variables, ["TOKEN=resolved"]);
+        assert_eq!(request.service_names, ["web"]);
+        assert!(request.pull_images);
+        assert!(
+            !request.destroy_before_deploy,
+            "a scoped Apply must not stop unrelated Services"
+        );
         assert_eq!(
             request.pre_deploy.as_ref().unwrap().commands,
             ["echo preparing"]
@@ -437,6 +507,90 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
     assert_eq!(deployment_calls.load(Ordering::Relaxed), 1);
     assert_eq!(action_calls.load(Ordering::Relaxed), 1);
     assert_eq!(stack_calls.load(Ordering::Relaxed), 1);
+    use citadel_platforms::logs::ContainerLogPort;
+    use citadel_platforms::logs::{LogReadPort, LogResource};
+    let snapshot = client
+        .read_logs(LogResource::Container("container-1"), 12, &cancellation)
+        .await
+        .unwrap();
+    assert_eq!(snapshot.lines, ["bounded logs\n"]);
+    assert!(!snapshot.truncated);
+    let log_cancel = CancellationToken::new();
+    let mut logs = client
+        .container_logs("container-1", &log_cancel)
+        .await
+        .unwrap();
+    assert_eq!(
+        logs.next().await.unwrap().unwrap(),
+        b"2026-09-06T12:00:00Z hello\n"
+    );
+    log_cancel.cancel();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), logs.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    shutdown.cancel();
+}
+
+#[tokio::test]
+async fn terminal_signs_exact_open_and_streams_input_resize_and_cancellation() {
+    let (address, shutdown) = start_fixture(MutationFixture {
+        fail_network_create: false,
+        network_create_calls: Arc::default(),
+        container_delete_calls: Arc::default(),
+        deployment_apply_calls: Arc::default(),
+        container_action_calls: Arc::default(),
+        stack_apply_calls: Arc::default(),
+    })
+    .await;
+    let client = connect(&address).await;
+    let cancel = CancellationToken::new();
+    let mut session = client
+        .container_terminal("container-1", TerminalShell::Sh, &cancel)
+        .await
+        .unwrap();
+    for (input, expected) in [
+        (
+            TerminalInput::Stdin(b"echo hello\n".to_vec()),
+            b"echo hello\n".as_slice(),
+        ),
+        (
+            TerminalInput::Resize {
+                cols: 100,
+                rows: 30,
+            },
+            b"100x30".as_slice(),
+        ),
+    ] {
+        session.input.try_send(input).unwrap();
+        let output = tokio::time::timeout(Duration::from_secs(2), session.output.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(output,TerminalOutput::Data(bytes) if bytes==expected));
+    }
+    cancel.cancel();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), session.output.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    drop(session.output);
+    // The request-body task must also terminate, not keep stdin alive after disconnect.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if session.input.is_closed() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
     shutdown.cancel();
 }
 
@@ -602,7 +756,7 @@ fn stack_claim() -> StackOperationClaim {
             compose_file: "services:\n  web:\n    image: nginx\n".to_owned(),
             update_behavior: StackUpdateBehavior::Disabled,
             common: StackSpecCommon {
-                destroy_before_deploy: false,
+                destroy_before_deploy: true,
                 pre_deploy: Some(citadel_stacks::StackCommand {
                     commands: vec!["echo preparing".to_owned()],
                     path: ".".to_owned(),
@@ -617,6 +771,7 @@ fn stack_claim() -> StackOperationClaim {
         row_version: 1,
         actor_id: uuid::Uuid::now_v7(),
         operation: "Apply".to_owned(),
+        service_names: vec!["web".into()],
     }
 }
 

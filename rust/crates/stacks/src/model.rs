@@ -5,6 +5,27 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub fn normalize_project_name(name: &str, id: Uuid) -> String {
+    let value = name
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_owned();
+    if value.is_empty() {
+        format!("stack-{}", id.simple())
+    } else {
+        value
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StackSource {
     #[serde(alias = "webEditor", alias = "webeditor")]
@@ -230,8 +251,9 @@ pub enum WebhookProvider {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WebhookAuthScheme {
     GitHubHmacSha256,
-    GitLabToken,
-    SharedSecret,
+    GitLabSignedToken,
+    GitLabLegacyToken,
+    BearerToken,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -409,6 +431,7 @@ impl StackSpec {
                 compose_env_files_from_repo,
                 watch_paths,
                 additional_env_file_from_repo,
+                webhook,
                 ..
             } => {
                 if git_repo_id.is_nil() || branch.trim().is_empty() || branch.len() > 255 {
@@ -426,6 +449,13 @@ impl StackSpec {
                     validate_relative(path, "Repository path")?;
                 }
                 validate_relative_optional(working_directory.as_deref(), "Working directory")?;
+                let webhook = webhook
+                    .as_ref()
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(json_storage)?;
+                citadel_resources::validate_webhook(webhook.as_ref())
+                    .map_err(|error| validation(&error.to_string()))?;
             }
         }
         Ok(())
@@ -440,13 +470,6 @@ impl StackSpec {
             .into_iter()
             .map(StackBuildImageBinding::without_provenance)
             .collect();
-        if let Self::Git {
-            webhook: Some(value),
-            ..
-        } = &mut self
-        {
-            value.secret = None;
-        }
         self
     }
 
@@ -960,6 +983,12 @@ pub(crate) fn normalize_description(value: &mut Option<String>) -> Result<(), St
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StackApplyOptions {
+    pub expected_version: Option<i64>,
+    pub service_names: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackOperationClaim {
     pub stack_id: Uuid,
@@ -972,6 +1001,8 @@ pub struct StackOperationClaim {
     pub row_version: i64,
     pub actor_id: Uuid,
     pub operation: String,
+    /// Empty means the whole Stack; persisted with the operation for recovery.
+    pub service_names: Vec<String>,
 }
 
 /// An immutable, bounded Stack source snapshot prepared for one Apply attempt.

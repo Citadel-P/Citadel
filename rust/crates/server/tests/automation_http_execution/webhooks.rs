@@ -35,6 +35,9 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
         automation,
         backups: None,
         builds: None,
+        stacks: None,
+        services: None,
+        audit: None,
         alerts: None,
     })
 }

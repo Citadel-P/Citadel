@@ -29,13 +29,28 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "fixtures/alert_sink.rs"]
+mod alert_sink;
+#[path = "deployments_http/updates.rs"]
+mod updates;
+
 struct RecordingRuntime {
     deleted: Arc<Mutex<Vec<String>>>,
     fail: Arc<AtomicBool>,
     applied: Arc<AtomicBool>,
+    digests: Arc<updates::Digests>,
 }
 
 impl DeploymentRuntimePort for RecordingRuntime {
+    fn remote_image_digest<'a>(
+        &'a self,
+        _: Uuid,
+        _: Uuid,
+        _: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<String, DeploymentError>> {
+        self.digests.read(cancel)
+    }
     fn delete_container<'a>(
         &'a self,
         _platform_id: Uuid,
@@ -60,13 +75,14 @@ impl DeploymentRuntimePort for RecordingRuntime {
     fn prepare_image<'a>(
         &'a self,
         _platform_id: Uuid,
-        _image: &'a DeploymentImageInfo,
+        image: &'a DeploymentImageInfo,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<PreparedDeploymentImage, DeploymentError>> {
-        async {
+        async move {
             Ok(PreparedDeploymentImage {
                 docker_image_id: "sha256:applied".to_owned(),
-                digest: None,
+                digest: matches!(image, DeploymentImageInfo::External { .. })
+                    .then(|| format!("sha256:{}", "b".repeat(64))),
                 resolved_build: None,
             })
         }
@@ -124,19 +140,26 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let deleted = Arc::new(Mutex::new(Vec::new()));
     let fail_runtime = Arc::new(AtomicBool::new(false));
     let applied = Arc::new(AtomicBool::new(false));
-    let service = Arc::new(DeploymentService::new(
-        Arc::new(PostgresDeploymentStore::new(pool.clone())),
-        Arc::new(RecordingRuntime {
-            deleted: Arc::clone(&deleted),
-            fail: Arc::clone(&fail_runtime),
-            applied: Arc::clone(&applied),
-        }),
-        Arc::new(StaticEntitlementService::new(true)),
-        CancellationToken::new(),
-    ));
+    let digests = Arc::new(updates::Digests::default());
+    let entitlements = Arc::new(updates::Entitlements::new());
+    let alerts = Arc::new(alert_sink::RecordedAlerts::default());
+    let service = Arc::new(
+        DeploymentService::new(
+            Arc::new(PostgresDeploymentStore::new(pool.clone())),
+            Arc::new(RecordingRuntime {
+                deleted: Arc::clone(&deleted),
+                fail: Arc::clone(&fail_runtime),
+                applied: Arc::clone(&applied),
+                digests: digests.clone(),
+            }),
+            entitlements.clone(),
+            CancellationToken::new(),
+        )
+        .with_alerts(alerts.clone()),
+    );
     let app = deployments_http::router(DeploymentsHttpState {
         identity,
-        deployments: service,
+        deployments: service.clone(),
     });
 
     assert_eq!(
@@ -369,6 +392,16 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let external = response_json(external_response).await;
     assert!(external.get("description").is_none());
     assert!(external["spec"]["image"].get("resolvedDigest").is_none());
+    updates::verify(
+        &app,
+        &service,
+        &pool,
+        &admin,
+        defaulted_id,
+        &digests,
+        &entitlements,
+    )
+    .await;
 
     for invalid in [
         json!({
@@ -846,6 +879,23 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .await
         .unwrap();
 
+    updates::verify_automatic_apply(&service, &pool, &admin, defaulted_id, &fail_runtime).await;
+    {
+        let observations = alerts.0.lock().unwrap();
+        for kind in ["DeploymentAutoUpdated", "DeploymentAutoDeployFailed"] {
+            let alert = observations
+                .iter()
+                .find(|a| a.resource_id == defaulted_id && a.alert_type == kind)
+                .expect(kind);
+            assert_eq!(alert.resource_type, "Deployment");
+            assert!(
+                !alert
+                    .info
+                    .to_string()
+                    .contains("upstream-secret-must-not-leak")
+            );
+        }
+    }
     sqlx::query("DELETE FROM deployments WHERE platformid=$1")
         .bind(platform_id)
         .execute(&pool)

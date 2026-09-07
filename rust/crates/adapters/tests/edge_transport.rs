@@ -36,7 +36,7 @@ fn enrollment(token: String, key: &SigningKey, daemon: String) -> EnrollmentRequ
     EnrollmentRequest {
         enrollment_token: token,
         public_key: key.verifying_key().to_bytes().to_vec(),
-        protocol_version: 1,
+        protocol_version: 2,
         capabilities_json: CAPABILITIES.into(),
         daemon_id: daemon,
         ..Default::default()
@@ -89,7 +89,7 @@ async fn build_pool_enrollment_requires_build_capabilities_and_preserves_pool_id
         resource_id: target.resource_id.to_string(),
         resource_type: 1,
         daemon_id: request.daemon_id,
-        protocol_version: 1,
+        protocol_version: 2,
         capabilities_json: request.capabilities_json,
         ..Default::default()
     };
@@ -171,6 +171,7 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
         store.enroll(&request).await.is_err(),
         "duplicate active node identity"
     );
+    verify_same_node_task_replacement(&pool, &store, &binding, &request).await;
     verify_node_projection_isolation(&pool, &store, &binding).await;
     let rebound = verify_node_rebind(&pool, &store, &binding, &request).await;
     store.revoke(&rebound).await.unwrap();
@@ -183,6 +184,102 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
     .unwrap();
     assert_eq!(count, 0);
     pool.close().await;
+}
+
+// Repair/Upgrade replaces the Task while preserving the Node's state volume/key.
+async fn verify_same_node_task_replacement(
+    pool: &PgPool,
+    store: &PostgresEdgeStore,
+    binding: &citadel_adapters::edge::EdgeBinding,
+    request: &EnrollmentRequest,
+) {
+    let mut hello = AgentHello {
+        agent_id: binding.agent_id.to_string(),
+        agent_fingerprint: sqlx::query_scalar(
+            "SELECT agentfingerprint FROM edgeagentbindings WHERE agentid=$1",
+        )
+        .bind(binding.agent_id)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        platform_id: binding.target.platform_id.to_string(),
+        resource_id: binding.target.resource_id.to_string(),
+        profile: 1,
+        protocol_version: 2,
+        capabilities_json: request.capabilities_json.clone(),
+        daemon_id: request.daemon_id.clone(),
+        cluster_id: request.cluster_id.clone(),
+        node_id: request.node_id.clone(),
+        docker_hostname: request.docker_hostname.clone(),
+        swarm_role: request.swarm_role.clone(),
+        service_id: request.service_id.clone(),
+        task_id: "replacement-task".into(),
+        ..Default::default()
+    };
+    assert!(
+        store.reconnect(&hello).await.is_err(),
+        "unknown Tasks cannot reconnect"
+    );
+    sqlx::query("UPDATE swarmtaskprojections SET dockertaskid='replacement-task' WHERE platformid=$1 AND dockertaskid='agent-task'")
+        .bind(binding.target.platform_id).execute(pool).await.unwrap();
+    let candidate = store.reconnect(&hello).await.unwrap();
+    let persisted: String =
+        sqlx::query_scalar("SELECT lastobservedtaskid FROM edgeagentbindings WHERE agentid=$1")
+            .bind(binding.agent_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(persisted, "agent-task", "Hello is not signature proof");
+    sqlx::query("UPDATE swarmtaskprojections SET isstale=true WHERE platformid=$1")
+        .bind(binding.target.platform_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .connected(&candidate, chrono::Utc::now())
+            .await
+            .is_err(),
+        "membership must be rechecked after proof"
+    );
+    sqlx::query("UPDATE swarmtaskprojections SET isstale=false WHERE platformid=$1")
+        .bind(binding.target.platform_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    let connected_at = chrono::Utc::now();
+    store.connected(&candidate, connected_at).await.unwrap();
+    let persisted: (String, String) = sqlx::query_as(
+        "SELECT dockernodeid,lastobservedtaskid FROM edgeagentbindings WHERE agentid=$1",
+    )
+    .bind(binding.agent_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("worker".into(), "replacement-task".into()));
+    assert!(
+        store
+            .connected(&candidate, connected_at - chrono::Duration::seconds(1))
+            .await
+            .is_err(),
+        "old sessions cannot overwrite a newer connection"
+    );
+
+    // Restore the fixture's task name through the same authenticated path.
+    sqlx::query("UPDATE swarmtaskprojections SET dockertaskid='agent-task' WHERE platformid=$1 AND dockertaskid='replacement-task'")
+        .bind(binding.target.platform_id).execute(pool).await.unwrap();
+    assert!(
+        store
+            .connected(&candidate, chrono::Utc::now())
+            .await
+            .is_err(),
+        "a superseded Task cannot reconnect"
+    );
+    hello.task_id = request.task_id.clone();
+    store
+        .connected(&store.reconnect(&hello).await.unwrap(), chrono::Utc::now())
+        .await
+        .unwrap();
 }
 
 // Ports SwarmNodeAgentLifecycleTests.Reconnect_ShouldRebindPersistedIdentity_WhenNodeRejoinsAfterRemovalGrace.
@@ -210,7 +307,7 @@ async fn verify_node_rebind(
         resource_id: platform.to_string(),
         resource_type: 0,
         profile: 1,
-        protocol_version: 1,
+        protocol_version: 2,
         capabilities_json: request.capabilities_json.clone(),
         daemon_id: request.daemon_id.clone(),
         cluster_id: request.cluster_id.clone(),
@@ -635,8 +732,25 @@ async fn enrollment_is_hashed_atomic_expiring_and_revocable() {
     );
     let key = SigningKey::from_bytes(&[29; 32]);
     let request = enrollment(token, &key, Uuid::now_v7().to_string());
+    let mut incompatible = request.clone();
+    incompatible.protocol_version = 1;
+    assert!(store.enroll(&incompatible).await.is_err());
+    let unused: bool =
+        sqlx::query_scalar("SELECT usedatutc IS NULL FROM edgeagentenrollments WHERE id=$1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(unused, "an incompatible Agent must not consume enrollment");
     let (a, b) = tokio::join!(store.enroll(&request), store.enroll(&request));
     assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
+    let persisted_version: i32 =
+        sqlx::query_scalar("SELECT protocolversion FROM edgeagentbindings WHERE platformid=$1")
+            .bind(target.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(persisted_version, 2);
     store.revoke(&target).await.unwrap();
     assert!(store.enroll(&request).await.is_err());
     assert!(
@@ -732,7 +846,7 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
         agent_id: accepted.agent_id.clone(),
         agent_fingerprint: format!("SHA256:{hex}"),
         daemon_id: daemon,
-        protocol_version: 1,
+        protocol_version: 2,
         capabilities_json: CAPABILITIES.into(),
         ..Default::default()
     };

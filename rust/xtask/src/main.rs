@@ -111,6 +111,48 @@ const OPERATIONS: &[OperationSpec] = &[
         streaming: false,
     },
     OperationSpec {
+        operation_id: "ContainerLogs",
+        method: "get",
+        path: "/containers/{id}/logs",
+        versioned: true,
+        streaming: true,
+    },
+    OperationSpec {
+        operation_id: "ServiceLogs",
+        method: "get",
+        path: "/services/{id}/logs",
+        versioned: true,
+        streaming: true,
+    },
+    OperationSpec {
+        operation_id: "ContainerExec",
+        method: "post",
+        path: "/containers/{id}/exec",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ExecStart",
+        method: "post",
+        path: "/exec/{id}/start",
+        versioned: true,
+        streaming: true,
+    },
+    OperationSpec {
+        operation_id: "ExecResize",
+        method: "post",
+        path: "/exec/{id}/resize",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ExecInspect",
+        method: "get",
+        path: "/exec/{id}/json",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
         operation_id: "ContainerStart",
         method: "post",
         path: "/containers/{id}/start",
@@ -121,6 +163,34 @@ const OPERATIONS: &[OperationSpec] = &[
         operation_id: "ContainerDelete",
         method: "delete",
         path: "/containers/{id}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ContainerStop",
+        method: "post",
+        path: "/containers/{id}/stop",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ContainerRestart",
+        method: "post",
+        path: "/containers/{id}/restart",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ContainerPause",
+        method: "post",
+        path: "/containers/{id}/pause",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ContainerUnpause",
+        method: "post",
+        path: "/containers/{id}/unpause",
         versioned: true,
         streaming: false,
     },
@@ -158,6 +228,20 @@ const OPERATIONS: &[OperationSpec] = &[
         path: "/images/create",
         versioned: true,
         streaming: true,
+    },
+    OperationSpec {
+        operation_id: "ImageInspect",
+        method: "get",
+        path: "/images/{name}/json",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ImageHistory",
+        method: "get",
+        path: "/images/{name}/history",
+        versioned: true,
+        streaming: false,
     },
     OperationSpec {
         operation_id: "VolumeList",
@@ -474,6 +558,18 @@ const MODEL_FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
     ("VolumeListResponse", &["Volumes", "Warnings"]),
+    (
+        "ImageInspect",
+        &[
+            "Id",
+            "RepoTags",
+            "Size",
+            "Created",
+            "Os",
+            "Architecture",
+            "Config",
+        ],
+    ),
     (
         "VolumeCreateOptions",
         &["Name", "Driver", "DriverOpts", "Labels"],
@@ -955,6 +1051,57 @@ pub struct ImageSummary {{
     #[serde(rename = "Size", default)] pub size: i64,
     #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
     #[serde(rename = "Containers", default)] pub containers: i64,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageInspect {{
+    #[serde(rename = "Id", default)] pub id: String,
+    #[serde(rename = "RepoTags", default, deserialize_with = "deserialize_null_default")] pub repo_tags: Vec<String>,
+    #[serde(rename = "Size", default)] pub size: i64,
+    #[serde(rename = "Created", default)] pub created: String,
+    #[serde(rename = "Os", default)] pub os: String,
+    #[serde(rename = "Architecture", default)] pub architecture: String,
+    #[serde(rename = "Config", default, deserialize_with = "deserialize_null_default")] pub config: ImageConfig,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageConfig {{
+    #[serde(rename = "Env", default, deserialize_with = "deserialize_null_default")] pub env: Vec<String>,
+    #[serde(rename = "Cmd", default, deserialize_with = "deserialize_null_default")] pub cmd: Vec<String>,
+    #[serde(rename = "Volumes", default, deserialize_with = "deserialize_null_default")] pub volumes: HashMap<String, Value>,
+    #[serde(rename = "ExposedPorts", default, deserialize_with = "deserialize_null_default")] pub exposed_ports: HashMap<String, Value>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageHistoryItem {{
+    #[serde(rename = "Id", default)] pub id: String,
+    #[serde(rename = "Created", default)] pub created: i64,
+    #[serde(rename = "CreatedBy", default)] pub created_by: String,
+    #[serde(rename = "Size", default)] pub size: i64,
+    #[serde(rename = "Comment", default)] pub comment: String,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageContainer {{
+    #[serde(flatten)] pub summary: ContainerSummary,
+    #[serde(rename = "Mounts", default, deserialize_with = "deserialize_null_default")] pub mounts: Vec<ImageUsageMount>,
+    #[serde(rename = "NetworkSettings", default, deserialize_with = "deserialize_null_default")] pub network_settings: ImageUsageNetworks,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageMount {{
+    #[serde(rename = "Name", default)] pub name: Option<String>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageNetworks {{
+    #[serde(rename = "Networks", default, deserialize_with = "deserialize_null_default")] pub networks: HashMap<String, ImageUsageNetwork>,
+}}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ImageUsageNetwork {{
+    #[serde(rename = "NetworkID", default)] pub network_id: String,
 }}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
