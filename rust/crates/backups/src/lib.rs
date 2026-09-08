@@ -1,5 +1,12 @@
 #![forbid(unsafe_code)]
 
+pub mod policy_metadata;
+pub mod policy_update;
+pub mod progress;
+pub mod repository_patch;
+pub mod source_preview;
+pub mod summaries;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -438,6 +445,11 @@ pub trait BackupStore: Send + Sync {
         administrator: bool,
     ) -> BoxFuture<'_, Result<Vec<BackupRepositoryView>, BackupError>>;
     fn get_repository(&self, id: Uuid) -> BoxFuture<'_, Result<BackupRepositoryView, BackupError>>;
+    fn update_repository<'a>(
+        &'a self,
+        id: Uuid,
+        patch: &'a Value,
+    ) -> BoxFuture<'a, Result<BackupRepositoryView, BackupError>>;
     fn archive_repository(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>>;
     fn record_repository_operation<'a>(
         &'a self,
@@ -471,6 +483,30 @@ pub trait BackupStore: Send + Sync {
         administrator: bool,
     ) -> BoxFuture<'_, Result<Vec<BackupPolicyView>, BackupError>>;
     fn get_policy(&self, id: Uuid) -> BoxFuture<'_, Result<BackupPolicyView, BackupError>>;
+    fn update_policy<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        row_version: i64,
+        input: &'a BackupPolicyInput,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>>;
+    fn platform_summaries<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<Vec<summaries::PlatformBackupSummary>, BackupError>>;
+    fn rename_policy<'a>(
+        &'a self,
+        actor: ActorId,
+        input: &'a policy_metadata::RenameBackupPolicyInput,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>>;
+    fn update_policy_description<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        description: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>>;
     fn archive_policy(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>>;
     fn enqueue_backup(
         &self,
@@ -539,6 +575,23 @@ pub trait BackupStore: Send + Sync {
     fn cancel_restore(&self, id: Uuid) -> BoxFuture<'_, Result<bool, BackupError>>;
 }
 pub trait BackupExecutor: Send + Sync {
+    fn backup_with_progress<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+        plan: &'a BackupSourcePlan,
+        cancellation: &'a CancellationToken,
+        _progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
+    ) -> BoxFuture<'a, BackupExecutionResult> {
+        self.backup(claim, plan, cancellation)
+    }
+    fn restore_with_progress<'a>(
+        &'a self,
+        claim: &'a RestoreClaim,
+        cancellation: &'a CancellationToken,
+        _progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
+    ) -> BoxFuture<'a, RestoreExecutionResult> {
+        self.restore(claim, cancellation)
+    }
     fn repository<'a>(
         &'a self,
         repository: &'a BackupRepositoryView,
@@ -561,6 +614,20 @@ pub trait BackupExecutor: Send + Sync {
 }
 
 pub trait BackupSourcePlanner: Send + Sync {
+    fn preview<'a>(
+        &'a self,
+        kind: source_preview::BackupPreviewKind,
+        id: Uuid,
+        actor: ActorId,
+        administrator: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<source_preview::BackupSourcePreview, BackupError>>;
+    fn validate_source<'a>(
+        &'a self,
+        source: &'a Value,
+        repository: &'a BackupRepositoryView,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), BackupError>>;
     fn plan<'a>(
         &'a self,
         claim: &'a BackupClaim,
@@ -587,6 +654,7 @@ pub trait BackupEntitlements: Send + Sync {
 }
 
 pub struct BackupService {
+    progress: tokio::sync::broadcast::Sender<Arc<progress::BackupRunStreamItem>>,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BackupStore>,
     executor: Arc<dyn BackupExecutor>,
@@ -617,6 +685,7 @@ impl BackupService {
         authorizer: Arc<dyn BackupRunAuthorizer>,
     ) -> Self {
         Self {
+            progress: tokio::sync::broadcast::channel(256).0,
             store,
             on_change: None,
             executor,
@@ -631,12 +700,39 @@ impl BackupService {
     pub fn store(&self) -> &Arc<dyn BackupStore> {
         &self.store
     }
+    pub fn planner(&self) -> &Arc<dyn BackupSourcePlanner> {
+        &self.planner
+    }
+    pub fn subscribe_progress(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<Arc<progress::BackupRunStreamItem>> {
+        self.progress.subscribe()
+    }
+    fn progress(&self, id: Uuid, status: &str, message: &str) {
+        let _ = self
+            .progress
+            .send(Arc::new(progress::BackupRunStreamItem::message(
+                id, status, message,
+            )));
+    }
+    fn log_progress(&self, id: Uuid) -> Arc<dyn Fn(BackupLog) + Send + Sync> {
+        let sender = self.progress.clone();
+        Arc::new(move |log| {
+            let _ = sender.send(Arc::new(progress::BackupRunStreamItem {
+                run_id: id,
+                status: None,
+                message: Some(log.message),
+                stream: Some(log.stream),
+                exit_code: None,
+            }));
+        })
+    }
     pub fn with_entitlements(mut self, entitlements: Arc<dyn BackupEntitlements>) -> Self {
         self.entitlements = Some(entitlements);
         self
     }
 
-    async fn ensure_automated_operations(&self) -> Result<(), BackupError> {
+    pub async fn ensure_automated_operations(&self) -> Result<(), BackupError> {
         if let Some(entitlements) = &self.entitlements
             && entitlements.automated_operations().await?
         {
@@ -668,7 +764,6 @@ impl BackupService {
                 "Backup Repository operation is invalid.".into(),
             ));
         }
-        let repository = self.store.get_repository(id).await?;
         let operation_id = Uuid::now_v7();
         if !self
             .store
@@ -684,6 +779,16 @@ impl BackupService {
                 "Backup Repository is already in use.".into(),
             ));
         }
+        // Read the location only after acquisition prevents configuration edits.
+        let repository = match self.store.get_repository(id).await {
+            Ok(repository) => repository,
+            Err(error) => {
+                self.store
+                    .release_repository_operation(id, operation_id)
+                    .await?;
+                return Err(error);
+            }
+        };
         let result = self
             .executor
             .repository(&repository, operation, location, platform_id, cancellation)
@@ -724,6 +829,11 @@ impl BackupService {
         };
         self.changed();
         let token = shutdown.child_token();
+        self.progress(
+            claim.run.id,
+            "Running",
+            "Checking Backup permissions and resolving source volumes...",
+        );
         self.active_backups
             .lock()
             .map_err(poison)?
@@ -740,7 +850,21 @@ impl BackupService {
         let result = match authorization {
             Ok(()) => match self.planner.plan(&claim, &token).await {
                 Ok(plan) => match self.store.prepare_backup_items(&claim, &plan).await {
-                    Ok(()) => self.executor.backup(&claim, &plan, &token).await,
+                    Ok(()) => {
+                        self.progress(
+                            claim.run.id,
+                            "Running",
+                            "Source volumes reserved. Running Backup and retention...",
+                        );
+                        self.executor
+                            .backup_with_progress(
+                                &claim,
+                                &plan,
+                                &token,
+                                self.log_progress(claim.run.id),
+                            )
+                            .await
+                    }
                     Err(error) => {
                         let mut message = error.to_string();
                         if let Some(directory) = plan.local_directory.as_deref()
@@ -762,6 +886,14 @@ impl BackupService {
             active.remove(&claim.run.id);
         }
         self.store.finish_backup(&claim, &result).await?;
+        self.progress(
+            claim.run.id,
+            result.status,
+            result
+                .error_message
+                .as_deref()
+                .unwrap_or("Backup run completed."),
+        );
         self.changed();
         Ok(true)
     }
@@ -801,19 +933,36 @@ impl BackupService {
             return Ok(false);
         };
         self.changed();
+        self.progress(
+            claim.run.id,
+            "Running",
+            "Checking restore permissions and preparing the target volume...",
+        );
         let token = shutdown.child_token();
         self.active_restores
             .lock()
             .map_err(poison)?
             .insert(claim.run.id, token.clone());
         let result = match self.authorizer.authorize_restore(&claim).await {
-            Ok(()) => self.executor.restore(&claim, &token).await,
+            Ok(()) => {
+                self.executor
+                    .restore_with_progress(&claim, &token, self.log_progress(claim.run.id))
+                    .await
+            }
             Err(error) => rejected_restore(error.to_string()),
         };
         if let Ok(mut active) = self.active_restores.lock() {
             active.remove(&claim.run.id);
         }
         self.store.finish_restore(&claim, &result).await?;
+        self.progress(
+            claim.run.id,
+            result.status,
+            result
+                .error_message
+                .as_deref()
+                .unwrap_or("Restore run completed."),
+        );
         self.changed();
         Ok(true)
     }
@@ -829,6 +978,8 @@ impl BackupService {
             return Ok(());
         }
         if self.store.cancel_backup(id).await? {
+            self.progress(id, "Cancelled", "Backup cancelled.");
+            self.changed();
             Ok(())
         } else {
             Err(BackupError::Conflict("Backup Run is not active.".into()))
@@ -846,6 +997,8 @@ impl BackupService {
             return Ok(());
         }
         if self.store.cancel_restore(id).await? {
+            self.progress(id, "Cancelled", "Restore cancelled.");
+            self.changed();
             Ok(())
         } else {
             Err(BackupError::Conflict("Restore Run is not active.".into()))

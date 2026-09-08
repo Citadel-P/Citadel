@@ -2,6 +2,13 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Citadel: Prepare development environment",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "prepare"],
+      "problemMatcher": []
+    },
+    {
       "label": "Citadel: Maintain Rust build cache",
       "type": "process",
       "command": "bash",
@@ -30,10 +37,10 @@
     },
     {
       "label": "Citadel: Run Rust API",
-      "dependsOn": "Citadel: Maintain Rust build cache",
+      "dependsOn": "Citadel: Prepare development environment",
       "type": "process",
-      "command": "cargo",
-      "args": ["run", "--locked", "-p", "citadel-server", "--", "serve"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "cargo", "run", "--locked", "-p", "citadel-server", "--", "serve"],
       "options": {
         "cwd": "${workspaceFolder}/rust"
       },
@@ -60,10 +67,11 @@
     },
     {
       "label": "Citadel: Run UI only",
+      "dependsOn": "Citadel: Prepare development environment",
       "detail": "Starts Vite without the API; use the Debug application launch configuration instead for breakpoints.",
       "type": "process",
-      "command": "npm",
-      "args": ["run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
       "options": {
         "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
       },
@@ -79,9 +87,10 @@
     },
     {
       "label": "Citadel: Check Rust workspace",
-      "dependsOn": "Citadel: Maintain Rust build cache",
-      "type": "shell",
-      "command": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast",
+      "dependsOn": "Citadel: Prepare development environment",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "bash", "-c", "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast"],
       "options": {
         "cwd": "${workspaceFolder}/rust"
       },

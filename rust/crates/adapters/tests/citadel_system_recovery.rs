@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use citadel_adapters::citadel_system_backup::{
     CitadelSystemRestoreOptions, PostgresCitadelSystemBackupBuilder, restore_citadel_system,
 };
+use citadel_adapters::crypto::AesGcmSecretProtector;
 use citadel_backups::CitadelSystemBackupBuilder;
 use citadel_database::MigrationRunner;
 use citadel_identity::SYSTEM_ACTOR_ID;
@@ -13,6 +14,9 @@ use uuid::Uuid;
 #[tokio::test]
 #[ignore = "requires dedicated CITADEL_PHASE7_RECOVERY_SOURCE_DATABASE_URL and CITADEL_PHASE7_RECOVERY_TARGET_DATABASE_URL databases plus pg_dump and pg_restore"]
 async fn system_bundle_restores_state_into_a_clean_database() {
+    // ControlPlaneRecoveryTests.Candidate_ShouldRestoreControlPlaneAndOperateInCleanEnvironment:
+    // database/instance/encrypted-state assertions. Packaged process + HTTP work
+    // remain a separate acceptance boundary, not implied by this adapter test.
     let source_url = std::env::var("CITADEL_PHASE7_RECOVERY_SOURCE_DATABASE_URL").unwrap();
     let target_url = std::env::var("CITADEL_PHASE7_RECOVERY_TARGET_DATABASE_URL").unwrap();
     assert_ne!(
@@ -40,6 +44,18 @@ async fn system_bundle_restores_state_into_a_clean_database() {
     .await
     .unwrap();
 
+    let secret_id = Uuid::now_v7();
+    let protector = AesGcmSecretProtector::new(&[7; 32]).unwrap();
+    let protected = protector.protect(b"recovery-secret-value").unwrap();
+    sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,'RECOVERY_SECRET','Internal')")
+        .bind(secret_id).execute(&source).await.unwrap();
+    sqlx::query("INSERT INTO internalsecretvalues(secretid,encryptedvalue) VALUES($1,$2)")
+        .bind(secret_id)
+        .bind(&protected)
+        .execute(&source)
+        .await
+        .unwrap();
+
     let staging = std::env::temp_dir().join(format!(
         "citadel-phase7-recovery-{}",
         Uuid::now_v7().simple()
@@ -53,6 +69,16 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         256 * 1024,
     );
     let bundle = builder.build(Uuid::now_v7(), &cancellation).await.unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&tokio::fs::read(bundle.join("manifest.json")).await.unwrap())
+            .unwrap();
+    let instance = Uuid::parse_str(manifest["instanceId"].as_str().unwrap()).unwrap();
+    assert!(
+        !tokio::fs::read_to_string(bundle.join("manifest.json"))
+            .await
+            .unwrap()
+            .contains("recovery-secret-value")
+    );
     source.close().await;
 
     let target = PgPoolOptions::new()
@@ -61,6 +87,43 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .await
         .unwrap();
     target.close().await;
+    // ControlPlaneRecoveryTests.Restore_ShouldRejectDatabaseArchiveWithoutSecretEncryptionKey:
+    // Rust keeps key material in external configuration, not a .NET key file.
+    // Reject before pg_restore can alter the target, even with a valid bundle.
+    let sentinel = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&target_url)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE recovery_untouched(marker text); INSERT INTO recovery_untouched VALUES('untouched')")
+        .execute(&sentinel).await.unwrap();
+    for key in [None, Some(zeroize::Zeroizing::new(vec![7; 31]))] {
+        let error = restore_citadel_system(
+            &CitadelSystemRestoreOptions {
+                bundle: bundle.clone(),
+                database_url: target_url.clone(),
+                pg_restore: "pg_restore".into(),
+                maximum_output: 256 * 1024,
+                secret_encryption_key: key,
+            },
+            &cancellation,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("Secrets__EncryptionKey"));
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT marker FROM recovery_untouched")
+                .fetch_one(&sentinel)
+                .await
+                .unwrap(),
+            "untouched"
+        );
+    }
+    sqlx::query("DROP TABLE recovery_untouched")
+        .execute(&sentinel)
+        .await
+        .unwrap();
+    sentinel.close().await;
     restore_citadel_system(
         &CitadelSystemRestoreOptions {
             bundle: bundle.clone(),
@@ -68,6 +131,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
             pg_restore: std::env::var_os("CITADEL_PG_RESTORE")
                 .unwrap_or_else(|| "pg_restore".into()),
             maximum_output: 256 * 1024,
+            secret_encryption_key: Some(zeroize::Zeroizing::new(vec![7; 32])),
         },
         &cancellation,
     )
@@ -85,10 +149,52 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .await
         .unwrap();
     assert_eq!(restored_name, marker_name);
+    let restored_instance: Option<Uuid> =
+        sqlx::query_scalar("SELECT instanceid FROM citadelinstanceidentity WHERE id=1")
+            .fetch_optional(&restored)
+            .await
+            .unwrap();
+    assert_eq!(
+        restored_instance,
+        Some(instance),
+        "the manifest identity must be included in the dump, including the first backup"
+    );
+    let encrypted: String =
+        sqlx::query_scalar("SELECT encryptedvalue FROM internalsecretvalues WHERE secretid=$1")
+            .bind(secret_id)
+            .fetch_one(&restored)
+            .await
+            .unwrap();
+    assert_eq!(encrypted, protected);
+    // Construct a fresh protector, as after a restart with the retained external key.
+    let restored_protector = AesGcmSecretProtector::new(&[7; 32]).unwrap();
+    assert_eq!(
+        restored_protector.unprotect(&encrypted).unwrap().as_slice(),
+        b"recovery-secret-value"
+    );
+    assert!(
+        AesGcmSecretProtector::new(&[8; 32])
+            .unwrap()
+            .unprotect(&encrypted)
+            .is_err()
+    );
     restored.close().await;
 
     cleanup_marker(&source_url, marker_id).await;
     cleanup_marker(&target_url, marker_id).await;
+    for url in [&source_url, &target_url] {
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM secretdefinitions WHERE id=$1")
+            .bind(secret_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
     remove_directory(bundle).await;
     remove_directory(staging).await;
 }

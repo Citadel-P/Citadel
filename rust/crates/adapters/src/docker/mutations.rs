@@ -29,11 +29,15 @@ impl PlatformResourceMutationPort for DockerClient {
                 ipam: input.ipam.as_ref().map(|ipam| {
                     serde_json::json!({
                         "Driver": ipam.driver,
-                        "Config": ipam.config.iter().map(|config| serde_json::json!({
-                            "Subnet": config.subnet,
-                            "IPRange": config.ip_range,
-                            "Gateway": config.gateway,
-                        })).collect::<Vec<_>>(),
+                        "Config": ipam.config.iter().filter_map(|config| {
+                            let fields: serde_json::Map<String, serde_json::Value> = [
+                                ("Subnet", &config.subnet), ("IPRange", &config.ip_range), ("Gateway", &config.gateway),
+                            ].into_iter().filter_map(|(key, value)| {
+                                value.as_ref().filter(|value| !value.is_empty())
+                                    .map(|value| (key.to_owned(), serde_json::Value::String(value.clone())))
+                            }).collect();
+                            (!fields.is_empty()).then_some(serde_json::Value::Object(fields))
+                        }).collect::<Vec<_>>(),
                         "Options": ipam.options,
                     })
                 }),

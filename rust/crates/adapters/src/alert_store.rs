@@ -42,14 +42,26 @@ WITH actor_scope AS (
 pub struct PostgresAlertStore {
     pool: PgPool,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
+    entitlements: Arc<dyn citadel_alerts::AlertEntitlements>,
 }
 
 impl PostgresAlertStore {
     pub fn new(pool: PgPool) -> Self {
         Self {
+            entitlements: Arc::new(crate::license::PostgresLicenseEntitlementService::new(
+                pool.clone(),
+            )),
             pool,
             on_change: None,
         }
+    }
+
+    pub fn with_entitlements(
+        mut self,
+        entitlements: Arc<dyn citadel_alerts::AlertEntitlements>,
+    ) -> Self {
+        self.entitlements = entitlements;
+        self
     }
 
     pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
@@ -232,15 +244,25 @@ ORDER BY channel.name,channel.id"#
     fn update_channel<'a>(
         &'a self,
         id: Uuid,
-        input: &'a AlertChannelInput,
+        patch: &'a Value,
     ) -> BoxFuture<'a, Result<AlertChannelView, AlertError>> {
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row = sqlx::query("SELECT * FROM alertchannels WHERE id=$1 FOR UPDATE")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(storage)?
+                .ok_or(AlertError::NotFound)?;
+            let input =
+                citadel_alerts::configuration_patch::apply_channel(&map_channel(row)?, patch)?;
             let changed = sqlx::query("UPDATE alertchannels SET name=$2,alertdestination=$3,url=$4,isactive=$5 WHERE id=$1")
                 .bind(id).bind(&input.name).bind(&input.alert_destination).bind(&input.url).bind(input.is_active)
-                .execute(&self.pool).await.map_err(storage)?.rows_affected();
+                .execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed == 0 {
                 return Err(AlertError::NotFound);
             }
+            tx.commit().await.map_err(storage)?;
             self.get_channel(id).await
         })
     }
@@ -295,7 +317,7 @@ GROUP BY r.id"#
                 .fetch_optional(&self.pool)
                 .await
                 .map_err(storage)?
-                .ok_or(AlertError::NotFound)?;
+                .ok_or(AlertError::RuleNotFound)?;
             map_rule(row)
         })
     }
@@ -305,19 +327,36 @@ GROUP BY r.id"#
         input: &'a AlertRuleInput,
     ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>> {
         Box::pin(async move {
+            if !self.entitlements.advanced_alerting().await? {
+                return Err(AlertError::LicenseRequired);
+            }
             let id = Uuid::now_v7();
             let mut tx = self.pool.begin().await.map_err(storage)?;
             write_rule(&mut tx, id, actor.value(), input, true).await?;
+            write_rule_activity(
+                &mut tx,
+                id,
+                &input.name,
+                actor,
+                citadel_domain::ActivityEventInfo::AlertRuleCreated {
+                    alert_rule: input.snapshot(id),
+                },
+            )
+            .await?;
             tx.commit().await.map_err(storage)?;
             self.get_rule(id).await
         })
     }
     fn update_rule<'a>(
         &'a self,
+        request_actor: ActorId,
         id: Uuid,
-        input: &'a AlertRuleInput,
+        patch: &'a Value,
     ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>> {
         Box::pin(async move {
+            // Evaluate before taking a connection/row lock; the entitlement
+            // provider may query the same bounded pool.
+            let advanced_allowed = self.entitlements.advanced_alerting().await?;
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let actor: Option<Uuid> = sqlx::query_scalar(
                 "SELECT createdbyactorid FROM alertrules WHERE id=$1 FOR UPDATE",
@@ -326,8 +365,30 @@ GROUP BY r.id"#
             .fetch_optional(&mut *tx)
             .await
             .map_err(storage)?;
-            let actor = actor.ok_or(AlertError::NotFound)?;
-            write_rule(&mut tx, id, actor, input, false).await?;
+            let actor = actor.ok_or(AlertError::RuleNotFound)?;
+            // Read child-channel state only after acquiring the parent lock.
+            // Merging before the lock would lose disjoint concurrent patches.
+            let row = sqlx::query("SELECT r.*,COALESCE(array_agg(c.alertchannelid) FILTER (WHERE c.alertchannelid IS NOT NULL),'{}') AS channelids FROM alertrules r LEFT JOIN alertrulechannels c ON c.alertruleid=r.id WHERE r.id=$1 GROUP BY r.id")
+                .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
+            let current = map_rule(row)?;
+            let input = citadel_alerts::configuration_patch::apply_rule(&current, patch)?;
+            if !advanced_allowed
+                && citadel_alerts::configuration_patch::requires_advanced_alerting(&current, &input)
+            {
+                return Err(AlertError::LicenseRequired);
+            }
+            write_rule(&mut tx, id, actor, &input, false).await?;
+            write_rule_activity(
+                &mut tx,
+                id,
+                &input.name,
+                request_actor,
+                citadel_domain::ActivityEventInfo::AlertRuleUpdated {
+                    old_rule: current.snapshot(),
+                    new_rule: input.snapshot(id),
+                },
+            )
+            .await?;
             tx.commit().await.map_err(storage)?;
             self.get_rule(id).await
         })
@@ -350,6 +411,65 @@ GROUP BY r.id"#
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(())
+        })
+    }
+    fn rename_rule<'a>(
+        &'a self,
+        actor: ActorId,
+        input: &'a citadel_alerts::RenameAlertRuleInput,
+    ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let old_name: String =
+                sqlx::query_scalar("SELECT name FROM alertrules WHERE id=$1 FOR UPDATE")
+                    .bind(input.id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(AlertError::RuleNotFound)?;
+            sqlx::query("UPDATE alertrules SET name=$2 WHERE id=$1")
+                .bind(input.id)
+                .bind(&input.name)
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            let activity = citadel_domain::ActivityEvent::new_alert_rule_event(
+                input.id,
+                input.name.clone(),
+                actor,
+                citadel_domain::ActivityEventInfo::AlertRuleRenamed {
+                    old_name,
+                    new_name: input.name.clone(),
+                },
+                Utc::now(),
+            )
+            .map_err(|error| AlertError::Storage(error.to_string()))?;
+            crate::activity_store::insert_activity(&mut tx, &activity)
+                .await
+                .map_err(|error| AlertError::Storage(error.to_string()))?;
+            tx.commit().await.map_err(storage)?;
+            self.get_rule(input.id).await
+        })
+    }
+    fn update_rule_description<'a>(
+        &'a self,
+        id: Uuid,
+        description: Option<Option<&'a str>>,
+    ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>> {
+        Box::pin(async move {
+            if let Some(description) = description {
+                let count = sqlx::query("UPDATE alertrules SET description=$2 WHERE id=$1")
+                    .bind(id)
+                    .bind(description)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .rows_affected();
+                if count == 0 {
+                    return Err(AlertError::RuleNotFound);
+                }
+            }
+            self.get_rule(id).await
         })
     }
     fn list_events<'a>(
@@ -544,21 +664,34 @@ ORDER BY CASE rule.severity WHEN 'Critical' THEN 3 WHEN 'Warning' THEN 2 ELSE 1 
             let rules = rows
                 .into_iter()
                 .map(map_rule)
-                .collect::<Result<Vec<_>, _>>()?
+                .collect::<Result<Vec<_>, _>>()?;
+            let advanced_alerting = !rules
+                .iter()
+                .any(|rule| rule.created_by_actor_id != Uuid::from_u128(1))
+                || self.entitlements.advanced_alerting().await?;
+            let rules = rules
                 .into_iter()
                 .filter(|rule| {
-                    rule_applies(rule, observation.resource_id)
+                    (advanced_alerting || rule.created_by_actor_id == Uuid::from_u128(1))
+                        && rule_applies(rule, observation.resource_id)
                         && !is_in_quiet_hours(&rule.quiet_hours, observation.observed_at)
                 })
                 .collect::<Vec<_>>();
-            let mut first_event = None;
+            // Rules are ordered by severity above. Select before cooldown so a
+            // suppressed winner cannot fall through to a less severe duplicate.
+            // Non-matches still reset their counters and resolve old incidents.
+            let mut winner = None;
             for rule in &rules {
-                let event = self.process_rule(rule, observation).await?;
-                if first_event.is_none() {
-                    first_event = event;
+                if observation_matches(rule, observation) {
+                    winner.get_or_insert(rule);
+                } else {
+                    self.process_rule(rule, observation).await?;
                 }
             }
-            Ok(first_event)
+            match winner {
+                Some(rule) => self.process_rule(rule, observation).await,
+                None => Ok(None),
+            }
         })
     }
 
@@ -728,6 +861,26 @@ async fn write_rule(
             .map_err(storage)?;
     }
     Ok(())
+}
+
+async fn write_rule_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    name: &str,
+    actor: ActorId,
+    info: citadel_domain::ActivityEventInfo,
+) -> Result<(), AlertError> {
+    let activity = citadel_domain::ActivityEvent::new_alert_rule_event(
+        id,
+        name.to_owned(),
+        actor,
+        info,
+        Utc::now(),
+    )
+    .map_err(|error| AlertError::Storage(error.to_string()))?;
+    crate::activity_store::insert_activity(tx, &activity)
+        .await
+        .map_err(|error| AlertError::Storage(error.to_string()))
 }
 
 fn rule_applies(rule: &AlertRuleView, resource_id: Uuid) -> bool {

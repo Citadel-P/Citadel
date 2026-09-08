@@ -33,6 +33,8 @@ const PASSWORD: &str = "CitadelAcceptance2026";
 const TOKEN: &str = "citadel-vault-acceptance-root-token";
 const VALUE: &str = "citadel-vault-acceptance-value-7b8d6e9c";
 const HOOK: &str = "citadel-forgejo-acceptance-webhook-secret";
+#[path = "external_integrations/inspection.rs"]
+mod inspection_tests;
 #[path = "external_integrations/vault.rs"]
 mod vault_tests;
 struct Entitlements;
@@ -190,7 +192,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         let provider = vault_tests::verify(&pool,protector.clone(),&vault).await;
         let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'citadel/acceptance','api_key',1)")
-            .bind(secret).bind(secret.to_string()).bind(provider).execute(&pool).await.unwrap();
+            .bind(secret).bind(secret.to_string()).bind(provider.id).execute(&pool).await.unwrap();
         let stacks = Arc::new(StackService::new(Arc::new(PostgresStackStore::new(pool.clone())),
             Arc::new(StackRuntimeRouter::new(pool.clone(),docker.clone(),None)),
             Arc::new(PostgresStackBindingResolver::new(pool.clone(),protector).unwrap()),
@@ -216,6 +218,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         let initial_view=PostgresStackStore::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
         assert_eq!(initial_view.status,citadel_stacks::StackReleaseStatus::Healthy,"Initial Stack Apply failed: {output:?}");
         assert_runtime(&docker,stack.id,"one").await;
+        inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "one").await;
 
         let automation=Arc::new(AutomationService::new(Arc::new(PostgresAutomationStore::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
             deno_path:"deno".into(),work_root:root.join("automation"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
@@ -242,6 +245,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         assert_eq!(applied.status,citadel_stacks::StackReleaseStatus::Healthy);
         assert_eq!(applied.source.unwrap().resolved_commit_sha,updated_commit);
         assert_runtime(&docker,stack.id,"two").await;
+        inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "two").await;
         let audits:Vec<String>=sqlx::query_scalar("SELECT row_to_json(a)::text FROM activityevents a WHERE resourceid=ANY($1)")
             .bind(vec![stack.id,repository]).fetch_all(&pool).await.unwrap();
         assert!(audits.iter().any(|a|a.contains("StackWebhookReceived")));

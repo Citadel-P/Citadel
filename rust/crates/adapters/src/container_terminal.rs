@@ -87,6 +87,7 @@ pub(crate) fn local_session(
                 },
                 Ok(None)=>break,
                 Ok(Some(input))=>{
+                    let is_resize = matches!(&input, TerminalInput::Resize { .. });
                     let write=async {
                         match input {
                             TerminalInput::Stdin(data)=>socket.write_all(&data).await.map_err(|_|failure("Docker terminal write failed.")),
@@ -101,7 +102,16 @@ pub(crate) fn local_session(
                         ()=cancel.cancelled()=>break,
                         result=tokio::time::timeout(timeout,write)=>result,
                     };
-                    result.map_err(|_|failure("Docker terminal input timed out."))??;
+                    let result = result.map_err(|_|failure("Docker terminal input timed out.")).and_then(|result| result);
+                    if let Err(error) = result {
+                        if is_resize {
+                            // Match .NET ExecAsync: a rejected/failed resize is
+                            // best-effort and must not tear down the shell.
+                            tracing::warn!(%error, "Docker terminal resize failed");
+                        } else {
+                            Err(error)?;
+                        }
+                    }
                 }
             }
         }

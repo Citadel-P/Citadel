@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
 pub mod activities_http;
+pub mod actors_http;
 pub mod alerts_http;
 pub mod application_info_http;
 pub mod automation_http;
 pub mod backups_http;
+pub mod bootstrap;
 pub mod builds_http;
 mod capabilities;
 pub mod config;
@@ -26,6 +28,7 @@ pub mod realtime;
 pub mod realtime_groups;
 pub mod resources_http;
 pub mod roles_http;
+pub mod search_http;
 pub mod service_accounts_http;
 pub mod stacks_http;
 pub mod swarm_services_http;

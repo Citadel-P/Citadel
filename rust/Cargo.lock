@@ -608,6 +608,8 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

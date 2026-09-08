@@ -54,15 +54,59 @@ impl ContainerMutationStore for PostgresContainerMutationStore {
             Ok(resolved)
         })
     }
-    fn claim<'a>(
+    fn claim_selection<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         ids: &'a [Uuid],
         action: ContainerAction,
+        selection: ContainerSelectionKind,
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let selected_deployments = if selection == ContainerSelectionKind::Deployments {
+                ids
+            } else {
+                &[]
+            };
+            let container_ids;
+            let ids = if selection == ContainerSelectionKind::Deployments {
+                let deployments = sqlx::query("SELECT d.id,p.platformdescriptor FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=ANY($1) ORDER BY d.id FOR UPDATE OF d")
+                    .bind(ids).fetch_all(&mut *tx).await.map_err(storage)?;
+                if deployments.len() != ids.len() {
+                    return Err(error(
+                        RuntimeErrorKind::NotFound,
+                        "No deployments found for the provided deployment ID(s).",
+                    ));
+                }
+                if deployments.iter().any(|row| {
+                    row.get::<serde_json::Value, _>("platformdescriptor")["$type"] == "DockerSwarm"
+                }) {
+                    return Err(error(
+                        RuntimeErrorKind::InvalidRequest,
+                        "Container state actions are not available for Docker Swarm deployments.",
+                    ));
+                }
+                let matches: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT c.id,c.deploymentid FROM containers c JOIN deployments d ON d.id=c.deploymentid AND d.platformid=c.platformid WHERE d.id=ANY($1) AND NOT c.isswarmtask ORDER BY c.id LIMIT $2")
+                    .bind(ids).bind(ids.len() as i64 + 1).fetch_all(&mut *tx).await.map_err(storage)?;
+                if matches.len() != ids.len()
+                    || matches
+                        .iter()
+                        .map(|(_, id)| id)
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                        != ids.len()
+                {
+                    return Err(error(
+                        RuntimeErrorKind::Conflict,
+                        "Each selected Deployment must have exactly one current Container.",
+                    ));
+                }
+                container_ids = matches.into_iter().map(|(id, _)| id).collect::<Vec<_>>();
+                container_ids.as_slice()
+            } else {
+                ids
+            };
             // Every writer locks parents before children. Stable ordering also avoids inverse batch locks.
             let parents = sqlx::query("SELECT deploymentid,stackid FROM containers WHERE id=ANY($1::uuid[]) AND NOT isswarmtask")
                 .bind(ids).fetch_all(&mut *tx).await.map_err(storage)?;
@@ -103,20 +147,28 @@ impl ContainerMutationStore for PostgresContainerMutationStore {
                 .into_iter()
                 .collect();
             if !administrator {
+                let (resource_type, resource_ids) =
+                    if selection == ContainerSelectionKind::Deployments {
+                        (ResourceType::Deployment, selected_deployments)
+                    } else {
+                        (ResourceType::Platform, platform_ids.as_slice())
+                    };
                 let grants = crate::resource_permissions::for_resources(
                     &mut *tx,
                     actor,
-                    ResourceType::Platform,
-                    &platform_ids,
+                    resource_type,
+                    resource_ids,
                 )
                 .await
                 .map_err(storage)?;
-                let required = if matches!(action, ContainerAction::Delete(_)) {
+                let required = if selection == ContainerSelectionKind::Deployments {
+                    PermissionLevel::Write as i32
+                } else if matches!(action, ContainerAction::Delete(_)) {
                     PermissionLevel::Execute as i32
                 } else {
                     PermissionLevel::Write as i32 | PermissionLevel::Execute as i32
                 };
-                if platform_ids
+                if resource_ids
                     .iter()
                     .any(|id| grants.get(id).copied().unwrap_or(0) & required == 0)
                 {
@@ -127,6 +179,13 @@ impl ContainerMutationStore for PostgresContainerMutationStore {
                 }
             }
             for row in &rows {
+                if selection == ContainerSelectionKind::Deployments
+                    && !row
+                        .get::<Option<Uuid>, _>("deploymentid")
+                        .is_some_and(|id| selected_deployments.contains(&id))
+                {
+                    return Err(conflict());
+                }
                 if row.get::<Option<String>, _>("controlstate").as_deref() != Some("Idle") {
                     return Err(conflict());
                 }

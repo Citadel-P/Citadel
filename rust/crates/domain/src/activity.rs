@@ -394,6 +394,24 @@ pub struct ActivitySourceResource {
     pub resource_name: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AlertRuleActivitySnapshot {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(rename = "Type")]
+    pub alert_type: String,
+    pub severity: String,
+    pub cooldown_seconds: Option<i32>,
+    pub required_matches: Option<i32>,
+    pub threshold: Option<serde_json::Number>,
+    pub status: String,
+    pub channel_ids: Vec<Uuid>,
+    pub limited_to: Vec<Value>,
+    pub quiet_hours: Vec<Value>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityChangedFieldName {
     DisplayName,
@@ -564,12 +582,67 @@ pub struct VolumeContentDownloaded {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BackupPolicyActivitySnapshot {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub source_type: String,
+    pub source_key: String,
+    pub backup_repository_id: Uuid,
+    pub enabled: bool,
+    pub cron: Option<String>,
+    pub time_zone: Option<String>,
+    pub webhook_enabled: bool,
+    pub keep_last_successful: i32,
+    pub timeout_seconds: i32,
+    pub alert_on_failure: bool,
+    pub run_as_actor_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "$type")]
 // This closed compatibility enum is serialized immediately at mutation
 // boundaries. Boxing its larger snapshots would add heap allocations to every
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
+    InitialAdministratorCreated {
+        #[serde(rename = "UserId")]
+        user_id: Uuid,
+        #[serde(rename = "UserName")]
+        user_name: String,
+        #[serde(rename = "Mode")]
+        mode: crate::SetupInitializationMode,
+    },
+    AlertRuleCreated {
+        #[serde(rename = "AlertRule")]
+        alert_rule: AlertRuleActivitySnapshot,
+    },
+    AlertRuleUpdated {
+        #[serde(rename = "OldRule")]
+        old_rule: AlertRuleActivitySnapshot,
+        #[serde(rename = "NewRule")]
+        new_rule: AlertRuleActivitySnapshot,
+    },
+    BackupPolicyRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
+    BackupPolicyUpdated {
+        #[serde(rename = "OldPolicy")]
+        old_policy: BackupPolicyActivitySnapshot,
+        #[serde(rename = "NewPolicy")]
+        new_policy: BackupPolicyActivitySnapshot,
+    },
+    AlertRuleRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
+    },
     VolumeContentDownloaded(VolumeContentDownloaded),
     GitRepoWebhookReceived(WebhookActivityDetails),
     StackWebhookReceived(WebhookActivityDetails),
@@ -785,6 +858,14 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Deployment")]
         deployment: DeploymentActivitySnapshot,
     },
+    DeploymentAdopted {
+        #[serde(rename = "Deployment")]
+        deployment: DeploymentActivitySnapshot,
+        #[serde(rename = "ContainerId")]
+        container_id: String,
+        #[serde(rename = "ContainerName")]
+        container_name: String,
+    },
     DeploymentDuplicated {
         #[serde(rename = "Deployment")]
         deployment: DeploymentActivitySnapshot,
@@ -875,6 +956,18 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Service")]
         service: SwarmServiceActivitySnapshot,
     },
+    SwarmServiceDuplicated {
+        #[serde(rename = "Service")]
+        service: SwarmServiceActivitySnapshot,
+        #[serde(rename = "Source")]
+        source: ActivitySourceResource,
+    },
+    SwarmServiceAdopted {
+        #[serde(rename = "Service")]
+        service: SwarmServiceActivitySnapshot,
+        #[serde(rename = "DockerServiceId")]
+        docker_service_id: String,
+    },
     SwarmServiceUpdated {
         #[serde(rename = "OldService")]
         old_service: SwarmServiceActivitySnapshot,
@@ -922,6 +1015,12 @@ pub enum ActivityEventInfo {
     PlatformCreated {
         #[serde(rename = "Platform")]
         platform: PlatformActivitySnapshot,
+    },
+    PlatformRenamed {
+        #[serde(rename = "OldName")]
+        old_name: String,
+        #[serde(rename = "NewName")]
+        new_name: String,
     },
     PlatformDeleted {
         #[serde(rename = "Platform")]
@@ -1679,8 +1778,17 @@ impl ActivityEventInfo {
             Self::RegistryCreated { .. } => ActivityEventType::RegistryCreated,
             Self::RegistryUpdated { .. } => ActivityEventType::RegistryUpdated,
             Self::RegistryRenamed { .. } => ActivityEventType::RegistryRenamed,
+            Self::AlertRuleRenamed { .. } => ActivityEventType::AlertRuleRenamed,
+            Self::InitialAdministratorCreated { .. } => {
+                ActivityEventType::InitialAdministratorCreated
+            }
+            Self::AlertRuleCreated { .. } => ActivityEventType::AlertRuleCreated,
+            Self::AlertRuleUpdated { .. } => ActivityEventType::AlertRuleUpdated,
+            Self::BackupPolicyRenamed { .. } => ActivityEventType::BackupPolicyRenamed,
+            Self::BackupPolicyUpdated { .. } => ActivityEventType::BackupPolicyUpdated,
             Self::RegistryDeleted { .. } => ActivityEventType::RegistryDeleted,
             Self::DeploymentCreated { .. } => ActivityEventType::DeploymentCreated,
+            Self::DeploymentAdopted { .. } => ActivityEventType::DeploymentAdopted,
             Self::DeploymentDuplicated { .. } => ActivityEventType::DeploymentDuplicated,
             Self::DeploymentUpdated { .. } => ActivityEventType::DeploymentUpdated,
             Self::DeploymentRenamed { .. } => ActivityEventType::DeploymentRenamed,
@@ -1698,6 +1806,8 @@ impl ActivityEventInfo {
             Self::StackRollback { .. } => ActivityEventType::StackRollback,
             Self::StackImported { .. } => ActivityEventType::StackImported,
             Self::SwarmServiceCreated { .. } => ActivityEventType::SwarmServiceCreated,
+            Self::SwarmServiceDuplicated { .. } => ActivityEventType::SwarmServiceDuplicated,
+            Self::SwarmServiceAdopted { .. } => ActivityEventType::SwarmServiceAdopted,
             Self::SwarmServiceUpdated { .. } => ActivityEventType::SwarmServiceUpdated,
             Self::SwarmServiceRenamed { .. } => ActivityEventType::SwarmServiceRenamed,
             Self::SwarmServiceDeleted { .. } => ActivityEventType::SwarmServiceDeleted,
@@ -1708,6 +1818,7 @@ impl ActivityEventInfo {
                 ActivityEventType::SwarmServiceOperationFailed
             }
             Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
+            Self::PlatformRenamed { .. } => ActivityEventType::PlatformRenamed,
             Self::PlatformDeleted { .. } => ActivityEventType::PlatformDeleted,
             Self::PlatformNodeAgentLifecycle { .. } => {
                 ActivityEventType::PlatformNodeAgentLifecycle
@@ -1934,6 +2045,42 @@ impl ActivityEvent {
         )
     }
 
+    pub fn new_backup_policy_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::BackupPolicy,
+            actor_id,
+            info,
+            ActivityStatus::Success,
+            created_at,
+        )
+    }
+
+    pub fn new_alert_rule_event(
+        resource_id: Uuid,
+        resource_name: String,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            resource_id,
+            resource_name,
+            ActivityResourceType::AlertRule,
+            actor_id,
+            info,
+            ActivityStatus::Success,
+            created_at,
+        )
+    }
+
     pub fn new_deployment_event(
         resource_id: Uuid,
         resource_name: String,
@@ -1948,6 +2095,7 @@ impl ActivityEvent {
         let status = if matches!(
             &info,
             ActivityEventInfo::DeploymentCreated { .. }
+                | ActivityEventInfo::DeploymentAdopted { .. }
                 | ActivityEventInfo::DeploymentDuplicated { .. }
         ) {
             ActivityStatus::Information

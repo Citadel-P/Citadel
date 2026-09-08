@@ -1,5 +1,6 @@
 use super::*;
 use citadel_adapters::container_mutation_store::PostgresContainerMutationStore;
+use citadel_domain::ResourceType;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
 use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
@@ -242,6 +243,141 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
             .fetch_one(&f.pool)
             .await
             .unwrap()
+    );
+    f.docker_server.abort();
+    let _ = tokio::fs::remove_file(f.docker_socket).await;
+}
+
+// Ports ContainerCommandCompletionTests and ContainerProcessingConsistencyTests:
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claims() {
+    let mut f = fixture().await;
+    let runtime = Arc::new(Runtime::default());
+    let mut state = f.lookup_state.platforms.clone();
+    state.containers = Arc::new(ContainerMutationService::new(
+        Arc::new(PostgresContainerMutationStore::new(f.pool.clone())),
+        runtime.clone(),
+    ));
+    f.app = platforms_http::router(state);
+    let container: Uuid = sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1")
+        .bind(f.platform_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let deployment = Uuid::now_v7();
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,status,spec) VALUES($1,'state-actions',$2,$3,'Healthy','{}')")
+        .bind(deployment).bind(f.platform_id).bind(f.administrator.actor_id.value()).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$2,isswarmtask=false WHERE id=$1")
+        .bind(container)
+        .bind(deployment)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let actor_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+        .bind(actor_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let mut writer = f.administrator.clone();
+    writer.actor_id = ActorId::new(actor_id);
+    writer.roles.clear();
+    assert_eq!(
+        send_json(
+            &f,
+            Method::POST,
+            "/api/v1/deployments/start",
+            writer.clone(),
+            json!([deployment])
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourcetype,resourceid,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,2,0)")
+        .bind(Uuid::now_v7()).bind(actor_id).bind(ResourceType::Deployment as i32).bind(deployment).execute(&f.pool).await.unwrap();
+    for (name, action, status) in [
+        ("start", ContainerAction::Start, "Healthy"),
+        ("pause", ContainerAction::Pause, "Paused"),
+        ("resume", ContainerAction::Unpause, "Healthy"),
+        ("restart", ContainerAction::Restart, "Healthy"),
+        ("stop", ContainerAction::Stop, "Stopped"),
+    ] {
+        let response = send_json(
+            &f,
+            Method::POST,
+            &format!("/api/v1/deployments/{name}"),
+            writer.clone(),
+            json!([deployment]),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::NO_CONTENT,
+            "{name}: {}",
+            json_body(response).await
+        );
+        assert_eq!(runtime.calls.lock().await.last().unwrap().3, action);
+        let saved: (String, String) =
+            sqlx::query_as("SELECT status,controlstate FROM deployments WHERE id=$1")
+                .bind(deployment)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+        assert_eq!(saved, (status.into(), "Idle".into()));
+    }
+    let calls = runtime.calls.lock().await.len();
+    for (ids, expected) in [
+        (json!([]), StatusCode::BAD_REQUEST),
+        (json!([Uuid::nil()]), StatusCode::BAD_REQUEST),
+        (json!([deployment, Uuid::now_v7()]), StatusCode::NOT_FOUND),
+    ] {
+        assert_eq!(
+            send_json(
+                &f,
+                Method::POST,
+                "/api/v1/deployments/start",
+                writer.clone(),
+                ids
+            )
+            .await
+            .status(),
+            expected
+        );
+    }
+    sqlx::query(
+        "UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\"}' WHERE id=$1",
+    )
+    .bind(f.platform_id)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        send_json(
+            &f,
+            Method::POST,
+            "/api/v1/deployments/start",
+            writer,
+            json!([deployment])
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(runtime.calls.lock().await.len(), calls);
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT controlstate FROM deployments WHERE id=$1")
+            .bind(deployment)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        "Idle"
     );
     f.docker_server.abort();
     let _ = tokio::fs::remove_file(f.docker_socket).await;

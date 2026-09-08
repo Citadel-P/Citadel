@@ -35,6 +35,86 @@ static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+async fn usages_resolve_the_account_actor_and_include_inactive_execution_dependencies() {
+    let f = fixture(true).await;
+    let account = create_account(&f, &format!("usage-{}", Uuid::now_v7()), true).await;
+    let actor: Uuid = sqlx::query_scalar("SELECT actorid FROM serviceaccounts WHERE id=$1")
+        .bind(account)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let path = format!("/api/v1/serviceAccounts/{account}/usages");
+    assert_eq!(
+        json(send(&f, Method::GET, &path, None, Some(f.administrator.clone())).await).await,
+        serde_json::json!([])
+    );
+    let action = Uuid::now_v7();
+    let action_name = format!("Action-{action}");
+    sqlx::query("INSERT INTO actions(id,name,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,createdbyactorid,runasactorid) VALUES($1,$4,'',true,false,'UTC',60,false,$2,$3)")
+        .bind(action).bind(f.administrator.actor_id.value()).bind(actor).bind(&action_name).execute(&f.pool).await.unwrap();
+    let secret = Uuid::now_v7();
+    let repository = Uuid::now_v7();
+    let policy = Uuid::now_v7();
+    sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'Internal')")
+        .bind(secret)
+        .bind(secret.to_string())
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,passwordsecretid,spec,status,type,createdbyactorid) VALUES($1,$2,$2,$3,'{}','Unknown','FileSystem',$4)")
+        .bind(repository).bind(repository.to_string()).bind(secret).bind(f.administrator.actor_id.value()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,backuprepositoryid,createdbyactorid,runasactorid,source,enabled,archivedat) VALUES($1,'Policy',$2,$3,$4,$5,'{}',true,CURRENT_TIMESTAMP)")
+        .bind(policy).bind(policy.to_string()).bind(repository).bind(f.administrator.actor_id.value()).bind(actor).execute(&f.pool).await.unwrap();
+    let expected = serde_json::json!([
+        {"id":action,"name":action_name,"resourceType":"AutomationAction","isActive":true},
+        {"id":policy,"name":"Policy","resourceType":"BackupPolicy","isActive":false}
+    ]);
+    let response = send(&f, Method::GET, &path, None, Some(f.administrator.clone())).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json(response).await, expected);
+    assert_eq!(
+        send(&f, Method::GET, &path, None, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let mut reader = f.administrator.clone();
+    reader.roles.clear();
+    assert_eq!(
+        send(&f, Method::GET, &path, None, Some(reader))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        send(
+            &f,
+            Method::GET,
+            &format!("/api/v1/serviceAccounts/{}/usages", Uuid::now_v7()),
+            None,
+            Some(f.administrator.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    let other = create_account(&f, &format!("unrelated-{}", Uuid::now_v7()), true).await;
+    assert_eq!(
+        json(
+            send(
+                &f,
+                Method::GET,
+                &format!("/api/v1/serviceAccounts/{other}/usages"),
+                None,
+                Some(f.administrator.clone())
+            )
+            .await
+        )
+        .await,
+        serde_json::json!([])
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
 async fn lifecycle_routes_persist_assignments_archive_and_safe_activities() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();

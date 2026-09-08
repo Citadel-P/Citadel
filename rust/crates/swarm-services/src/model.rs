@@ -506,7 +506,27 @@ pub struct CreateSwarmServiceInput {
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub tag_ids: Vec<Uuid>,
     #[serde(default)]
-    pub duplicate_source: Option<Value>,
+    pub duplicate_source: Option<SwarmServiceDuplicateSource>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SwarmServiceDuplicateSource {
+    pub resource_id: Uuid,
+    pub resource_type: String,
+    pub resource_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwarmServiceDuplicateDraft {
+    pub name: String,
+    pub source_name: String,
+    pub platform_id: Uuid,
+    pub description: Option<String>,
+    pub spec: SwarmServiceSpec,
+    pub tag_ids: Vec<Uuid>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -784,7 +804,7 @@ fn validate_references(
     ensure_unique(&targets, message)
 }
 
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub(crate) fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Deserialize<'de> + Default,

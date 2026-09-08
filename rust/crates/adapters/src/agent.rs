@@ -2,6 +2,9 @@ use std::fs;
 
 #[path = "agent_containers.rs"]
 mod containers;
+#[cfg(test)]
+#[path = "agent_key_rotation_tests.rs"]
+mod key_rotation_tests;
 
 #[path = "agent_images.rs"]
 pub(crate) mod images;
@@ -9,6 +12,8 @@ pub(crate) mod images;
 mod logs;
 #[path = "agent_node_agents.rs"]
 mod node_agents;
+#[path = "agent_swarm_inventory.rs"]
+mod swarm_inventory;
 #[path = "agent_terminal.rs"]
 mod terminal;
 #[path = "agent_workloads.rs"]
@@ -210,7 +215,8 @@ pub struct AgentBinaryExecOutput {
 
 #[derive(Clone)]
 pub struct AgentRequestSigner {
-    key: SigningKey,
+    key: std::sync::Arc<std::sync::RwLock<SigningKey>>,
+    path: Option<std::sync::Arc<std::path::PathBuf>>,
 }
 
 impl AgentRequestSigner {
@@ -275,19 +281,72 @@ impl AgentRequestSigner {
         })?;
         let key = SigningKey::from_bytes(&key_bytes);
         key_bytes.fill(0);
-        Ok(Self { key })
+        Ok(Self {
+            key: std::sync::Arc::new(std::sync::RwLock::new(key)),
+            path: Some(std::sync::Arc::new(path.to_owned())),
+        })
     }
 
     #[must_use]
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
         Self {
-            key: SigningKey::from_bytes(bytes),
+            key: std::sync::Arc::new(std::sync::RwLock::new(SigningKey::from_bytes(bytes))),
+            path: None,
         }
     }
 
     #[must_use]
     pub fn public_key_base64(&self) -> String {
-        base64::engine::general_purpose::STANDARD.encode(self.key.verifying_key().as_bytes())
+        base64::engine::general_purpose::STANDARD.encode(
+            self.key
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .verifying_key()
+                .as_bytes(),
+        )
+    }
+
+    /// Publish the new key only after its atomic replacement succeeds. Cloned clients
+    /// share this lock, so subsequent requests immediately use the rotated identity.
+    pub fn rotate(&self) -> Result<String, std::io::Error> {
+        use std::io::Write;
+        let path = self
+            .path
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("No persistent Agent key is configured."))?;
+        let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
+        getrandom::fill(bytes.as_mut()).map_err(std::io::Error::other)?;
+        let next = SigningKey::from_bytes(&bytes);
+        let temporary = path.with_extension(format!("rotate-{}", uuid::Uuid::now_v7()));
+        let result = (|| {
+            let mut options = fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&temporary)?;
+            file.write_all(bytes.as_ref())?;
+            file.sync_all()?;
+            drop(file);
+            // Preparing and flushing the file must not block ordinary signing on
+            // a synchronous lock while the filesystem is slow. Serialize only
+            // publication so concurrent rotations cannot diverge on disk/in memory.
+            let mut key = self
+                .key
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            fs::rename(&temporary, path.as_ref())?;
+            *key = next;
+            Ok::<_, std::io::Error>(
+                base64::engine::general_purpose::STANDARD.encode(key.verifying_key().as_bytes()),
+            )
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
     }
 
     fn sign<T: Message>(
@@ -331,7 +390,12 @@ impl AgentRequestSigner {
         payload.extend_from_slice(&nonce);
         payload.extend_from_slice(method.as_bytes());
         payload.extend_from_slice(&body_hash);
-        let signature = self.key.sign(&payload).to_bytes();
+        let signature = self
+            .key
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sign(&payload)
+            .to_bytes();
 
         let mut request = Request::new(message);
         if let Some(timeout) = timeout {
@@ -433,6 +497,25 @@ impl AgentClient {
             () = cancellation.cancelled() => Err(cancelled_error()),
             result = Self::connect(&address, self.signer.clone(), self.operation_timeout, self.allow_insecure) => result,
         }
+    }
+
+    /// Resolve a persisted Platform address without opening a second eager connection.
+    /// RPC deadlines still bound the lazy connection; unchanged addresses reuse their channel.
+    pub fn at_address(&self, address: &str) -> Result<Self, RuntimeCapabilityError> {
+        let address = validate_address(address, self.allow_insecure)?;
+        if self.address == address {
+            return Ok(self.clone());
+        }
+        let endpoint = Endpoint::from_shared(address.clone())
+            .map_err(|e| invalid_address(e.to_string()))?
+            .connect_timeout(self.operation_timeout);
+        Ok(Self {
+            channel: endpoint.connect_lazy(),
+            signer: self.signer.clone(),
+            operation_timeout: self.operation_timeout,
+            address,
+            allow_insecure: self.allow_insecure,
+        })
     }
 
     #[must_use]
@@ -662,6 +745,17 @@ impl AgentClient {
         maximum_output_bytes: usize,
         cancellation: &CancellationToken,
     ) -> Result<AgentBinaryExecOutput, RuntimeCapabilityError> {
+        self.exec_binary_observed(request, timeout, maximum_output_bytes, cancellation, None)
+            .await
+    }
+    pub(crate) async fn exec_binary_observed(
+        &self,
+        request: ExecBinaryRequest,
+        timeout: Duration,
+        maximum_output_bytes: usize,
+        cancellation: &CancellationToken,
+        output_sender: Option<tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
+    ) -> Result<AgentBinaryExecOutput, RuntimeCapabilityError> {
         if request.container_id.trim().is_empty()
             || request.container_id.len() > 256
             || request.cmd.is_empty()
@@ -712,6 +806,18 @@ impl AgentClient {
                             &mut stdout
                         };
                         target.extend_from_slice(&output.data);
+                        if let Some(sender) = &output_sender {
+                            let _ = sender
+                                .send(citadel_execution::ProcessChunk {
+                                    stream: if output.stream == 1 {
+                                        "stderr"
+                                    } else {
+                                        "stdout"
+                                    },
+                                    bytes: output.data,
+                                })
+                                .await;
+                        }
                     }
                     Some(exec_server_message::Msg::Exit(exit)) => exit_code = Some(exit.exit_code),
                     Some(exec_server_message::Msg::Error(error)) => {
@@ -967,6 +1073,42 @@ impl AgentClient {
             }
         }
         Ok(())
+    }
+
+    pub async fn open_image_pull(
+        &self,
+        input: PullImageRequest,
+        cancel: &CancellationToken,
+    ) -> Result<
+        tonic::Streaming<citadel_contracts::citadel::images::v1::PullImageResponse>,
+        RuntimeCapabilityError,
+    > {
+        let request = self.signer.sign(input, PULL_IMAGE_METHOD, None)?;
+        let mut client = self.image_client();
+        tokio::select! {
+            biased;
+            ()=cancel.cancelled()=>Err(cancelled_error()),
+            result=tokio::time::timeout(self.operation_timeout,client.pull(request))=>result.map_err(|_|timeout_error("opening image pull"))?.map(|v|v.into_inner()).map_err(normalize_status),
+        }
+    }
+
+    pub async fn prune_platform(
+        &self,
+        input: citadel_contracts::citadel::platforms::v1::PruneRequest,
+        cancel: &CancellationToken,
+    ) -> Result<citadel_contracts::citadel::platforms::v1::PruneResponse, RuntimeCapabilityError>
+    {
+        let request = self.signer.sign(
+            input,
+            "/citadel.platforms.v1.PlatformService/Prune",
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.platform_client();
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout,client.prune(request)) => result.map_err(|_| timeout_error("pruning the Agent platform"))?.map(|r| r.into_inner()).map_err(normalize_status),
+        }
     }
 
     /// Apply is deliberately not retried for the same mutation-safety reason as Pull.
@@ -1269,9 +1411,9 @@ pub(crate) fn network_request(input: &CreateRuntimeNetwork) -> CreateNetworkRequ
                 .config
                 .iter()
                 .map(|item| IpamConfigMessage {
-                    subnet: Some(item.subnet.clone()),
-                    ip_range: Some(item.ip_range.clone()),
-                    gateway: Some(item.gateway.clone()),
+                    subnet: item.subnet.clone(),
+                    ip_range: item.ip_range.clone(),
+                    gateway: item.gateway.clone(),
                 })
                 .collect(),
             options: value.options.clone().into_iter().collect(),
@@ -2352,6 +2494,8 @@ mod tests {
             .unwrap();
         signer
             .key
+            .read()
+            .unwrap()
             .verifying_key()
             .verify(&expected, &Signature::from_slice(&signature).unwrap())
             .unwrap();

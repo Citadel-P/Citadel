@@ -25,6 +25,12 @@ pub(super) fn router(state: ResourcesHttpState) -> Router {
         .contract_route(routes::PATCH_TAG, patch_tag)
         .contract_route(routes::DELETE_TAG, delete_tag)
         .contract_route(routes::GET_PLATFORM_TAGS, get_platform_tags)
+        .contract_route(routes::GET_DEPLOYMENT_TAGS, get_deployment_tags)
+        .contract_route(routes::REPLACE_DEPLOYMENT_TAGS, replace_deployment_tags)
+        .contract_route(routes::GET_STACK_TAGS, get_stack_tags)
+        .contract_route(routes::REPLACE_STACK_TAGS, replace_stack_tags)
+        .contract_route(routes::GET_SWARM_SERVICE_TAGS, get_service_tags)
+        .contract_route(routes::REPLACE_SWARM_SERVICE_TAGS, replace_service_tags)
         .contract_route(routes::GET_AUTOMATION_ACTION_TAGS, get_action_tags)
         .contract_route(routes::REPLACE_AUTOMATION_ACTION_TAGS, replace_action_tags)
         .contract_route(routes::GET_BUILD_PROJECT_TAGS, get_build_tags)
@@ -285,6 +291,25 @@ resource_tag_handlers!(
     replace_policy_tags,
     TaggableResourceType::BackupPolicy,
     ResourceType::BackupPolicy
+);
+
+resource_tag_handlers!(
+    get_deployment_tags,
+    replace_deployment_tags,
+    TaggableResourceType::Deployment,
+    ResourceType::Deployment
+);
+resource_tag_handlers!(
+    get_stack_tags,
+    replace_stack_tags,
+    TaggableResourceType::Stack,
+    ResourceType::Stack
+);
+resource_tag_handlers!(
+    get_service_tags,
+    replace_service_tags,
+    TaggableResourceType::SwarmService,
+    ResourceType::SwarmService
 );
 
 async fn resource_tags(

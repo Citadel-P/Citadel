@@ -1,5 +1,12 @@
 #![forbid(unsafe_code)]
 
+pub mod configuration_patch;
+mod quiet_hours;
+mod rule_metadata;
+mod windows_time_zones;
+pub use quiet_hours::is_in_quiet_hours;
+pub use rule_metadata::{RenameAlertRuleInput, description_patch};
+
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use chrono::{DateTime, Utc};
@@ -13,6 +20,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertChannelInput {
+    #[serde(default, deserialize_with = "optional_name")]
     pub name: String,
     pub alert_destination: String,
     pub url: String,
@@ -22,6 +30,9 @@ pub struct AlertChannelInput {
 impl AlertChannelInput {
     pub fn validate(&mut self) -> Result<(), AlertError> {
         self.name = self.name.trim().to_owned();
+        if self.name.is_empty() {
+            self.name = self.alert_destination.clone();
+        }
         self.url = self.url.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(AlertError::Validation(
@@ -81,6 +92,7 @@ pub struct AlertChannelView {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertRuleInput {
+    #[serde(default, deserialize_with = "optional_name")]
     pub name: String,
     pub description: Option<String>,
     #[serde(rename = "type")]
@@ -89,6 +101,7 @@ pub struct AlertRuleInput {
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
     pub threshold: Option<f64>,
+    #[serde(default = "enabled_status")]
     pub status: String,
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
@@ -99,8 +112,77 @@ pub struct AlertRuleInput {
 }
 
 impl AlertRuleInput {
+    // The create contract reports all field errors. Merged PATCH input still
+    // uses the domain invariants below, matching the existing API distinction.
+    pub fn validate_create(&mut self) -> Result<(), AlertError> {
+        let mut errors = std::collections::BTreeMap::new();
+        if invalid_cooldown(self.cooldown_seconds) {
+            errors.insert(
+                "CooldownSeconds".into(),
+                vec!["Cooldown must be between 10s and 24h.".into()],
+            );
+        }
+        if self.is_threshold_rule() {
+            if self.required_matches.is_none() {
+                errors.insert(
+                    "RequiredMatches".into(),
+                    vec!["'Required Matches' must not be empty.".into()],
+                );
+            }
+            if self.threshold.is_none() {
+                errors.insert(
+                    "Threshold".into(),
+                    vec!["'Threshold' must not be empty.".into()],
+                );
+            }
+        } else {
+            if self.required_matches.is_some() {
+                errors.insert(
+                    "RequiredMatches".into(),
+                    vec!["Non-threshold alerts must not define RequiredMatches.".into()],
+                );
+            }
+            if self.threshold.is_some() {
+                errors.insert(
+                    "Threshold".into(),
+                    vec!["Non-threshold alerts must not define Threshold.".into()],
+                );
+            }
+        }
+        if !errors.is_empty() {
+            return Err(AlertError::FieldValidation(errors));
+        }
+        self.validate()
+    }
+
+    fn is_threshold_rule(&self) -> bool {
+        matches!(
+            self.alert_type.as_str(),
+            "PlatformCpuHigh" | "PlatformRamHigh" | "PlatformDiskHigh"
+        )
+    }
+
+    pub fn snapshot(&self, id: Uuid) -> citadel_domain::AlertRuleActivitySnapshot {
+        citadel_domain::AlertRuleActivitySnapshot {
+            id,
+            name: self.name.clone(),
+            description: self.description.clone(),
+            alert_type: self.alert_type.clone(),
+            severity: self.severity.clone(),
+            cooldown_seconds: self.cooldown_seconds,
+            required_matches: self.required_matches,
+            threshold: self.threshold.and_then(serde_json::Number::from_f64),
+            status: self.status.clone(),
+            channel_ids: self.channel_ids.clone(),
+            limited_to: self.limited_to.clone(),
+            quiet_hours: self.quiet_hours.clone(),
+        }
+    }
     pub fn validate(&mut self) -> Result<(), AlertError> {
         self.name = self.name.trim().to_owned();
+        if self.name.is_empty() {
+            self.name = self.alert_type.clone();
+        }
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(AlertError::Validation(
                 "Alert Rule name must contain between 1 and 128 characters.".into(),
@@ -117,13 +199,8 @@ impl AlertRuleInput {
                 "Alert Rule status is invalid.".into(),
             ));
         }
-        if self
-            .cooldown_seconds
-            .is_some_and(|value| !(10..=86_400).contains(&value))
-        {
-            return Err(AlertError::Validation(
-                "Cooldown must be between 10 and 86400 seconds.".into(),
-            ));
+        if invalid_cooldown(self.cooldown_seconds) {
+            return Err(AlertError::InvalidCooldown);
         }
         if self
             .required_matches
@@ -136,6 +213,17 @@ impl AlertRuleInput {
         if self.threshold.is_some_and(|value| !value.is_finite()) {
             return Err(AlertError::Validation("Threshold must be finite.".into()));
         }
+        let threshold_rule = self.is_threshold_rule();
+        if threshold_rule && (self.threshold.is_none() || self.required_matches.is_none()) {
+            return Err(AlertError::Validation(
+                "Threshold alerts require RequiredMatches and Threshold.".into(),
+            ));
+        }
+        if !threshold_rule && (self.threshold.is_some() || self.required_matches.is_some()) {
+            return Err(AlertError::Validation(
+                "Non-threshold alerts must not define RequiredMatches or Threshold.".into(),
+            ));
+        }
         let mut unique = std::collections::HashSet::new();
         if self
             .channel_ids
@@ -146,8 +234,25 @@ impl AlertRuleInput {
                 "Alert Channel IDs must be valid and unique.".into(),
             ));
         }
+        quiet_hours::validate(&self.quiet_hours)?;
         Ok(())
     }
+}
+
+fn optional_name<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn invalid_cooldown(value: Option<i32>) -> bool {
+    value.is_some_and(|value| !(10..=86_400).contains(&value))
+}
+
+fn enabled_status() -> String {
+    "Enabled".into()
+}
+
+pub trait AlertEntitlements: Send + Sync {
+    fn advanced_alerting(&self) -> BoxFuture<'_, Result<bool, AlertError>>;
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -168,6 +273,25 @@ pub struct AlertRuleView {
     pub quiet_hours: Vec<Value>,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
+}
+
+impl AlertRuleView {
+    pub fn snapshot(&self) -> citadel_domain::AlertRuleActivitySnapshot {
+        citadel_domain::AlertRuleActivitySnapshot {
+            id: self.id,
+            name: self.name.clone(),
+            description: self.description.clone(),
+            alert_type: self.alert_type.clone(),
+            severity: self.severity.clone(),
+            cooldown_seconds: self.cooldown_seconds,
+            required_matches: self.required_matches,
+            threshold: self.threshold.and_then(serde_json::Number::from_f64),
+            status: self.status.clone(),
+            channel_ids: self.channel_ids.clone(),
+            limited_to: self.limited_to.clone(),
+            quiet_hours: self.quiet_hours.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -252,7 +376,7 @@ pub trait AlertStore: Send + Sync {
     fn update_channel<'a>(
         &'a self,
         id: Uuid,
-        input: &'a AlertChannelInput,
+        patch: &'a Value,
     ) -> BoxFuture<'a, Result<AlertChannelView, AlertError>>;
     fn delete_channels<'a>(&'a self, ids: &'a [Uuid]) -> BoxFuture<'a, Result<(), AlertError>>;
     fn list_rules(
@@ -268,10 +392,21 @@ pub trait AlertStore: Send + Sync {
     ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>>;
     fn update_rule<'a>(
         &'a self,
+        actor: ActorId,
         id: Uuid,
-        input: &'a AlertRuleInput,
+        patch: &'a Value,
     ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>>;
     fn delete_rules<'a>(&'a self, ids: &'a [Uuid]) -> BoxFuture<'a, Result<(), AlertError>>;
+    fn rename_rule<'a>(
+        &'a self,
+        actor: ActorId,
+        input: &'a RenameAlertRuleInput,
+    ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>>;
+    fn update_rule_description<'a>(
+        &'a self,
+        id: Uuid,
+        description: Option<Option<&'a str>>,
+    ) -> BoxFuture<'a, Result<AlertRuleView, AlertError>>;
     fn list_events<'a>(
         &'a self,
         actor: ActorId,
@@ -450,55 +585,16 @@ fn retry_delay(attempt: i32) -> chrono::Duration {
     chrono::Duration::seconds(DELAYS[index])
 }
 
-pub fn is_in_quiet_hours(quiet_hours: &[Value], now: DateTime<Utc>) -> bool {
-    use chrono::{Datelike, NaiveTime};
-    use chrono_tz::Tz;
-
-    quiet_hours.iter().any(|value| {
-        let zone = json_string(value, &["timezone", "Timezone"])
-            .and_then(|value| value.parse::<Tz>().ok());
-        let start = json_string(value, &["startTime", "StartTime"])
-            .and_then(|value| NaiveTime::parse_from_str(value, "%H:%M:%S").ok());
-        let end = json_string(value, &["endTime", "EndTime"])
-            .and_then(|value| NaiveTime::parse_from_str(value, "%H:%M:%S").ok());
-        let (Some(zone), Some(start), Some(end)) = (zone, start, end) else {
-            return false;
-        };
-        let local = now.with_timezone(&zone);
-        let local_time = local.time();
-        let in_range = if start <= end {
-            local_time >= start && local_time <= end
-        } else {
-            local_time >= start || local_time <= end
-        };
-        if !in_range {
-            return false;
-        }
-        let kind =
-            json_string(value, &["$type", "scheduleType", "ScheduleType"]).unwrap_or("Daily");
-        if kind.eq_ignore_ascii_case("Daily") {
-            return true;
-        }
-        let expected = json_string(value, &["dayOfWeek", "DayOfWeek"]);
-        let effective_day = if start > end && local_time <= end {
-            local.weekday().pred()
-        } else {
-            local.weekday()
-        };
-        expected.is_some_and(|expected| {
-            expected.eq_ignore_ascii_case(&format!("{effective_day:?}"))
-                || expected.parse::<u32>().ok() == Some(effective_day.num_days_from_sunday())
-        })
-    })
-}
-
-fn json_string<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
-    keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_str))
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum AlertError {
+    #[error("one or more validation errors occurred")]
+    FieldValidation(std::collections::BTreeMap<String, Vec<String>>),
+    #[error("Cooldown must be between 10s and 24h. (Parameter 'cooldownSeconds')")]
+    InvalidCooldown,
+    #[error("The provided alert rule does not exist")]
+    RuleNotFound,
+    #[error("Advanced alerting requires a license")]
+    LicenseRequired,
     #[error("{0}")]
     Validation(String),
     #[error("Alert resource was not found")]
@@ -514,6 +610,42 @@ pub enum AlertError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_validation_collects_field_errors_and_preserves_cooldown_boundaries() {
+        let mut input: AlertRuleInput = serde_json::from_value(serde_json::json!({
+            "type":"PlatformCpuHigh","severity":"Warning","cooldownSeconds":5
+        }))
+        .unwrap();
+        let AlertError::FieldValidation(fields) = input.validate_create().unwrap_err() else {
+            panic!("expected field-level validation");
+        };
+        assert_eq!(
+            serde_json::to_value(fields).unwrap(),
+            serde_json::json!({
+                "CooldownSeconds":["Cooldown must be between 10s and 24h."],
+                "RequiredMatches":["'Required Matches' must not be empty."],
+                "Threshold":["'Threshold' must not be empty."]
+            })
+        );
+        input.required_matches = Some(3);
+        input.threshold = Some(85.0);
+        for (cooldown, valid) in [
+            (None, true),
+            (Some(9), false),
+            (Some(10), true),
+            (Some(86400), true),
+            (Some(86401), false),
+        ] {
+            input.cooldown_seconds = cooldown;
+            assert_eq!(input.validate_create().is_ok(), valid);
+            if valid {
+                assert!(input.validate().is_ok());
+            } else {
+                assert!(matches!(input.validate(), Err(AlertError::InvalidCooldown)));
+            }
+        }
+    }
 
     #[test]
     fn accepts_supported_shoutrrr_urls_and_rejects_unknown_destinations() {

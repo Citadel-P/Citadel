@@ -21,12 +21,13 @@ impl ContainerMutationStore for Store {
     ) -> BoxFuture<'a, Result<Vec<Uuid>, RuntimeCapabilityError>> {
         Box::pin(async move { Ok(ids.iter().map(|id| Uuid::parse_str(id).unwrap()).collect()) })
     }
-    fn claim<'a>(
+    fn claim_selection<'a>(
         &'a self,
         _: ActorId,
         _: bool,
         ids: &'a [Uuid],
         _: ContainerAction,
+        _: ContainerSelectionKind,
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
         Box::pin(async move {
             self.claimed.fetch_add(1, Ordering::SeqCst);

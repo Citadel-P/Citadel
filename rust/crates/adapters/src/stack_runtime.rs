@@ -86,16 +86,10 @@ impl StackRuntimeRouter {
                     StackError::Runtime("The Edge Agent is disconnected or unavailable.".into())
                 });
         }
-        self.agent
-            .as_ref()
-            .filter(|agent| {
-                target.connector.eq_ignore_ascii_case("Agent")
-                    && agent.address().trim_end_matches('/') == target.address.trim_end_matches('/')
-            })
-            .map(|agent| AgentExecutionClient::Direct(std::sync::Arc::new(agent.clone())))
-            .ok_or_else(|| {
-                StackError::Runtime("The configured Agent transport is unavailable.".into())
-            })
+        let agent=self.agent.as_ref().filter(|_|target.connector.eq_ignore_ascii_case("Agent"))
+            .ok_or_else(||StackError::Runtime("The configured Agent transport is unavailable.".into()))?;
+        let agent=agent.at_address(&target.address).map_err(|error|StackError::Runtime(error.message))?;
+        Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
     }
 
     async fn apply_local(

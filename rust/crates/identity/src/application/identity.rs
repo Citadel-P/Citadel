@@ -35,6 +35,8 @@ pub enum IdentityError {
     SetupAlreadyComplete,
     #[error("validation failed: {0}")]
     Validation(String),
+    #[error("one or more validation errors occurred")]
+    FieldValidation(std::collections::BTreeMap<String, Vec<String>>),
     #[error("resource conflict: {0}")]
     Conflict(String),
     #[error("resource conflict: {message}")]
@@ -44,6 +46,8 @@ pub enum IdentityError {
     },
     #[error("resource was not found")]
     NotFound,
+    #[error("{0}")]
+    ResourceNotFound(&'static str),
     #[error("license capability '{0}' is unavailable")]
     LicenseRequired(&'static str),
     #[error("identity storage failed: {0}")]
@@ -158,6 +162,7 @@ pub trait IdentityStore: Send + Sync {
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
+        mode: citadel_domain::SetupInitializationMode,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>>;
 
     fn find_user_for_login<'a>(
@@ -355,6 +360,18 @@ impl IdentityService {
         &self,
         request: InitializeCitadelRequest,
     ) -> Result<UserAuthentication, IdentityError> {
+        self.initialize_user_in_mode(
+            request,
+            citadel_domain::SetupInitializationMode::Interactive,
+        )
+        .await
+    }
+
+    pub async fn initialize_user_in_mode(
+        &self,
+        request: InitializeCitadelRequest,
+        mode: citadel_domain::SetupInitializationMode,
+    ) -> Result<UserAuthentication, IdentityError> {
         validate_name(&request.name)?;
         validate_email(&request.email)?;
         validate_password(&request.password, Some(&request.name), Some(&request.email))?;
@@ -367,7 +384,9 @@ impl IdentityService {
             ActorId::new(SYSTEM_ACTOR_ID),
             now,
         );
-        self.store.initialize_administrator(&administrator).await
+        self.store
+            .initialize_administrator(&administrator, mode)
+            .await
     }
 
     pub async fn login(
@@ -874,6 +893,7 @@ impl IdentityService {
     }
 
     pub(crate) async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
+        let password = zeroize::Zeroizing::new(password);
         let permit = Arc::clone(&self.credential_workers)
             .acquire_owned()
             .await

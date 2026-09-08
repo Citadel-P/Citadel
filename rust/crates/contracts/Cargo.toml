@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+serde.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 tonic.workspace = true

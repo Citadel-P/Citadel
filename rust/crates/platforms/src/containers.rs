@@ -13,6 +13,14 @@ use crate::{RuntimeCapabilityError, RuntimeErrorKind};
 pub const MAX_CONTAINER_BATCH: usize = 100;
 pub const CONTAINER_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
 
+pub trait ContainerInspectionPort: Send + Sync {
+    fn inspection<'a>(
+        &'a self,
+        docker_id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<serde_json::Value, RuntimeCapabilityError>>;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContainerAction {
     Start,
@@ -21,6 +29,12 @@ pub enum ContainerAction {
     Pause,
     Unpause,
     Delete(DeleteContainerOptions),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerSelectionKind {
+    Containers,
+    Deployments,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -63,6 +77,23 @@ pub trait ContainerMutationStore: Send + Sync {
         administrator: bool,
         ids: &'a [Uuid],
         action: ContainerAction,
+    ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
+        self.claim_selection(
+            actor,
+            administrator,
+            ids,
+            action,
+            ContainerSelectionKind::Containers,
+        )
+    }
+
+    fn claim_selection<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        ids: &'a [Uuid],
+        action: ContainerAction,
+        selection: ContainerSelectionKind,
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>>;
 
     /// Updates only the indicated lease. None means the container no longer exists.
@@ -131,6 +162,47 @@ impl ContainerMutationService {
         ids: Vec<String>,
         action: ContainerAction,
     ) -> Result<(), RuntimeCapabilityError> {
+        self.execute_selection(
+            actor,
+            administrator,
+            ids,
+            action,
+            ContainerSelectionKind::Containers,
+        )
+        .await
+    }
+
+    pub async fn execute_deployments(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        ids: Vec<Uuid>,
+        action: ContainerAction,
+    ) -> Result<(), RuntimeCapabilityError> {
+        if ids.iter().any(Uuid::is_nil) || matches!(action, ContainerAction::Delete(_)) {
+            return Err(error(
+                RuntimeErrorKind::InvalidRequest,
+                "Select valid Deployment IDs and a supported state action.",
+            ));
+        }
+        self.execute_selection(
+            actor,
+            administrator,
+            ids.into_iter().map(|id| id.to_string()).collect(),
+            action,
+            ContainerSelectionKind::Deployments,
+        )
+        .await
+    }
+
+    async fn execute_selection(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        ids: Vec<String>,
+        action: ContainerAction,
+        selection: ContainerSelectionKind,
+    ) -> Result<(), RuntimeCapabilityError> {
         if ids.is_empty()
             || ids.len() > MAX_CONTAINER_BATCH
             || ids.iter().any(|id| !valid_container_id(id))
@@ -150,7 +222,15 @@ impl ContainerMutationService {
         // A disconnected HTTP caller must not abandon a committed processing claim.
         tokio::spawn(async move {
             let _permit = permit;
-            let mut ids =
+            let mut ids = if selection == ContainerSelectionKind::Deployments {
+                ids.iter()
+                    .map(|id| {
+                        Uuid::parse_str(id).map_err(|_| {
+                            error(RuntimeErrorKind::InvalidRequest, "Invalid Deployment ID.")
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
                 tokio::time::timeout(Duration::from_secs(10), service.store.resolve_ids(&ids))
                     .await
                     .map_err(|_| {
@@ -158,12 +238,15 @@ impl ContainerMutationService {
                             RuntimeErrorKind::Timeout,
                             "Resolving the Container IDs timed out.",
                         )
-                    })??;
+                    })??
+            };
             ids.sort_unstable();
             ids.dedup();
             let claim = tokio::time::timeout(
                 Duration::from_secs(10),
-                service.store.claim(actor, administrator, &ids, action),
+                service
+                    .store
+                    .claim_selection(actor, administrator, &ids, action, selection),
             )
             .await
             .map_err(|_| {

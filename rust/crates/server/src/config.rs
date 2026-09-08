@@ -560,6 +560,12 @@ fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigErro
 }
 
 fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, ConfigError> {
+    let (jwt_key, secret_encryption_key) = identity_keys_from_env()?;
+    identity_config_with_keys(transport, jwt_key, secret_encryption_key)
+}
+
+/// Also used by offline recovery, without requiring listener/TLS configuration.
+pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigError> {
     let jwt_key = env::var("Jwt__Key").map_err(|_| ConfigError::Invalid {
         name: "Jwt__Key",
         message: "must be configured with at least 32 bytes".to_owned(),
@@ -588,6 +594,17 @@ fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, Config
             message: "must decode to exactly 32 bytes".to_owned(),
         });
     }
+    Ok((
+        SecretBytes(Zeroizing::new(jwt_key.into_bytes())),
+        SecretBytes(Zeroizing::new(secret_encryption_key)),
+    ))
+}
+
+fn identity_config_with_keys(
+    transport: &TransportConfig,
+    jwt_key: SecretBytes,
+    secret_encryption_key: SecretBytes,
+) -> Result<IdentityConfig, ConfigError> {
     let issuer = env::var("Jwt__Issuer").unwrap_or_else(|_| {
         transport
             .public_url
@@ -622,8 +639,8 @@ fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, Config
     }
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
-        jwt_key: SecretBytes(Zeroizing::new(jwt_key.into_bytes())),
-        secret_encryption_key: SecretBytes(Zeroizing::new(secret_encryption_key)),
+        jwt_key,
+        secret_encryption_key,
         issuer,
         audience,
         access_token_lifetime: Duration::from_secs(access_token_minutes.checked_mul(60).ok_or(

@@ -481,12 +481,15 @@ impl AgentExecutionClient {
         maximum: usize,
         cancellation: &CancellationToken,
     ) -> Result<AgentBinaryExecOutput, RuntimeCapabilityError> {
+        self.exec_binary_observed(request,timeout,maximum,cancellation,None).await
+    }
+    pub(crate) async fn exec_binary_observed(&self,request:ExecBinaryRequest,timeout:Duration,maximum:usize,cancellation:&CancellationToken,output_sender:Option<tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>) -> Result<AgentBinaryExecOutput,RuntimeCapabilityError> {
         let Self::Edge(session) = self else {
             let Self::Direct(client) = self else {
                 unreachable!()
             };
             return client
-                .exec_binary(request, timeout, maximum, cancellation)
+                .exec_binary_observed(request, timeout, maximum, cancellation,output_sender)
                 .await;
         };
         if cancellation.is_cancelled() {
@@ -521,6 +524,7 @@ impl AgentExecutionClient {
                     } else {
                         stdout.extend_from_slice(&output.data);
                     }
+                    if let Some(sender)=&output_sender {let _=sender.send(citadel_execution::ProcessChunk{stream:if output.stream==1{"stderr"}else{"stdout"},bytes:output.data}).await;}
                 }
                 Some(exec_server_message::Msg::Exit(exit)) => exit_code = Some(exit.exit_code),
                 Some(exec_server_message::Msg::Error(_)) => {

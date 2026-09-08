@@ -137,7 +137,7 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
     );
     let first = store.bootstrap(&claim).await.unwrap();
     store
-        .secret_created(&claim, first.id, "secret-1")
+        .secret_created(&claim, first.id, &format!("secret-{}", first.id))
         .await
         .unwrap();
     let row:(String,i32,bool)=sqlx::query_as("SELECT tokenhash,version,expiresatutc>now() AND expiresatutc<=now()+interval '10 minutes' FROM swarmnodeagentbootstraps WHERE id=$1").bind(first.id).fetch_one(&f.pool).await.unwrap();

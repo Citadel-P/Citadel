@@ -39,6 +39,7 @@ pub fn router(state: ServiceAccountHttpState) -> Router {
             .contract_route(routes::ARCHIVE_SERVICE_ACCOUNTS, archive)
             .contract_route(routes::GET_SERVICE_ACCOUNT_LIMITS, limits)
             .contract_route(routes::GET_SERVICE_ACCOUNT, get_one)
+            .contract_route(routes::LIST_SERVICE_ACCOUNT_USAGES, usages)
             .contract_route(routes::UPDATE_SERVICE_ACCOUNT, update)
             .contract_route(routes::RENAME_SERVICE_ACCOUNT, rename)
             .contract_route(routes::ADD_SERVICE_ACCOUNT_ROLE, add_role)
@@ -184,6 +185,30 @@ async fn update(
         &headers,
     )?;
     Ok(Json(account).into_response())
+}
+
+async fn usages(
+    State(state): State<ServiceAccountHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_human_administrator(principal), &headers)?;
+    identity_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::ServiceAccount,
+                id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let usages = identity_result(state.service_accounts.usages(id).await, &headers)?;
+    Ok(crate::identity_http::no_store(Json(usages).into_response()))
 }
 
 async fn rename(

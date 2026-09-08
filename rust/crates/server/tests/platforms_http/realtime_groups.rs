@@ -54,6 +54,228 @@ async fn receive(socket: &mut Socket) -> Value {
         .unwrap();
     serde_json::from_str(frame.to_text().unwrap()).unwrap()
 }
+
+// Local counterpart to ExecSessionManagerTests and the browser's Join -> Start
+// -> Resize -> typed-array stdin sequence. Uses a Docker socket fixture by
+// default; optional environment variables target a disposable real container.
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; optional CITADEL_TERMINAL_TEST_CONTAINER/SOCKET enable live Docker"]
+async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
+    let (docker_id, docker_socket, fixture_server) = match (
+        std::env::var("CITADEL_TERMINAL_TEST_CONTAINER").ok(),
+        std::env::var("CITADEL_TERMINAL_TEST_SOCKET").ok(),
+    ) {
+        (Some(id), Some(socket)) => (id, PathBuf::from(socket), None),
+        (None, None) => {
+            let id = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
+            let path = std::env::temp_dir().join(format!("terminal-{}.sock", Uuid::now_v7()));
+            let listener = UnixListener::bind(&path).unwrap();
+            let target = id.clone();
+            (
+                id,
+                path,
+                Some(tokio::spawn(async move {
+                    local_terminal_fixture(listener, &target).await;
+                })),
+            )
+        }
+        _ => panic!("Set both terminal fixture environment variables or neither"),
+    };
+    let f = fixture().await;
+    let id: Uuid = sqlx::query_scalar("UPDATE containers SET dockernodeid=NULL,dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
+        .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
+    let mut reader = reader(&f);
+    reader.docker.docker = DockerClient::new(&docker_socket, StdDuration::from_secs(5)).unwrap();
+    let cancellation = CancellationToken::new();
+    let _guard = cancellation.clone().drop_guard();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_secs(30),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    for (reference, shell) in [(id.to_string(), "bash"), (docker_id[..12].to_owned(), "sh")] {
+        let group = format!("container-exec:{reference}:browser-session");
+        let mut output = Vec::new();
+        for (target, args) in [
+            ("JoinGroup", json!([group])),
+            (
+                "StartExecProcess",
+                json!([reference, "browser-session", shell]),
+            ),
+            ("ResizeExec", json!([reference, "browser-session", 100, 30])),
+            (
+                "SendExecInput",
+                json!([
+                    reference,
+                    "browser-session",
+                    "printf 'citadel-%s\\n' terminal-ok\n"
+                        .bytes()
+                        .enumerate()
+                        .map(|(i, b)| (i.to_string(), json!(b)))
+                        .collect::<serde_json::Map<_, _>>()
+                ]),
+            ),
+        ] {
+            socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":target,"target":target,"arguments":args}).to_string().into())).await.unwrap();
+            loop {
+                let frame = receive(&mut socket).await;
+                if frame["kind"] == "completion" {
+                    assert_eq!(frame["invocationId"], target);
+                    assert!(frame["error"].is_null(), "{target}: {frame}");
+                    break;
+                }
+                append_terminal_output(&frame, &mut output);
+            }
+        }
+        while !String::from_utf8_lossy(&output).contains("citadel-terminal-ok") {
+            append_terminal_output(&receive(&mut socket).await, &mut output);
+        }
+        // Ignore pending output until Leave completes. The next iteration must
+        // create a new session on the same shared realtime connection.
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"leave","target":"LeaveGroup","arguments":[group]}).to_string().into())).await.unwrap();
+        loop {
+            let frame = receive(&mut socket).await;
+            if frame["kind"] == "completion" {
+                assert!(frame["error"].is_null());
+                break;
+            }
+        }
+    }
+    socket.close(None).await.unwrap();
+    cancellation.cancel();
+    server.await.unwrap();
+    if let Some(server) = fixture_server {
+        tokio::time::timeout(StdDuration::from_secs(5), server)
+            .await
+            .unwrap()
+            .unwrap();
+        std::fs::remove_file(docker_socket).unwrap();
+    }
+    cleanup(f).await;
+}
+
+async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
+    for shell in ["/bin/bash", "/bin/sh"] {
+        if shell == "/bin/bash" {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (headers, _) = read_terminal_request(&mut socket).await;
+            assert!(headers.starts_with("GET /version "));
+            let body = r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#;
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+        let (mut create, _) = listener.accept().await.unwrap();
+        let (headers, body) = read_terminal_request(&mut create).await;
+        assert!(headers.starts_with(&format!("POST /v1.49/containers/{docker_id}/exec ")));
+        assert_eq!(body["Cmd"], json!([shell]));
+        let body = r#"{"Id":"exec-1"}"#;
+        create
+            .write_all(
+                format!(
+                    "HTTP/1.1 201 Created\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let (mut terminal, _) = listener.accept().await.unwrap();
+        let (headers, _) = read_terminal_request(&mut terminal).await;
+        assert!(headers.starts_with("POST /v1.49/exec/exec-1/start "));
+        terminal
+            .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+            .await
+            .unwrap();
+        let (mut resize, _) = listener.accept().await.unwrap();
+        let (headers, _) = read_terminal_request(&mut resize).await;
+        assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
+        resize
+            .write_all(b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut input = vec![0; "printf 'citadel-%s\\n' terminal-ok\n".len()];
+        terminal.read_exact(&mut input).await.unwrap();
+        assert_eq!(input, b"printf 'citadel-%s\\n' terminal-ok\n");
+        terminal
+            .write_all(b"citadel-terminal-ok\r\n")
+            .await
+            .unwrap();
+        assert_eq!(terminal.read(&mut input).await.unwrap(), 0);
+    }
+}
+
+async fn read_terminal_request(socket: &mut tokio::net::UnixStream) -> (String, Value) {
+    let mut headers = Vec::new();
+    while !headers.ends_with(b"\r\n\r\n") {
+        headers.push(socket.read_u8().await.unwrap());
+        assert!(headers.len() < 16384);
+    }
+    let headers = String::from_utf8(headers).unwrap();
+    let length = headers
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length:")
+                .map(|v| v.trim().parse::<usize>().unwrap())
+        })
+        .unwrap_or(0);
+    assert!(length < 16384);
+    let mut body = vec![0; length];
+    socket.read_exact(&mut body).await.unwrap();
+    let body = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body).unwrap()
+    };
+    (headers, body)
+}
+
+fn append_terminal_output(frame: &Value, output: &mut Vec<u8>) {
+    assert_eq!(frame["target"], "SendContainerExec", "{frame}");
+    output.extend(
+        frame["arguments"][0]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| u8::try_from(v.as_u64().unwrap()).unwrap()),
+    );
+    assert!(output.len() < 65536);
+}
 async fn invoke(socket: &mut Socket, target: &str, group: &str) -> Value {
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"1","target":target,"arguments":[group]}).to_string().into())).await.unwrap();
     let completion = receive(socket).await;
@@ -441,8 +663,9 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     use citadel_domain::SpecificPermission;
     use prost::Message as _;
     let f = fixture().await;
+    let docker_id = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
-        .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
+        .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
     let principal = super::lookup::subject(&f).await;
     super::lookup::grant(
         &f,
@@ -468,17 +691,11 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         .await
         .unwrap();
     let resolved = reader
-        .invocation_group(
-            &principal,
-            "StartContainerLogs",
-            &[json!(
-                "a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750"
-            )],
-        )
+        .invocation_group(&principal, "StartContainerLogs", &[json!(&docker_id)])
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(resolved.name, "container-log:a4c05df3937c");
+    assert_eq!(resolved.name, format!("container-log:{}", &docker_id[..12]));
     reader.read(&principal, &resolved, None).await.unwrap();
     let deployment = Uuid::now_v7();
     let spec:citadel_deployments::DeploymentSpec=serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
@@ -499,7 +716,8 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         .unwrap()
         .unwrap();
     assert_eq!(
-        deployment_group.name, "container-log:a4c05df3937c",
+        deployment_group.name,
+        format!("container-log:{}", &docker_id[..12]),
         "the unchanged Deployment viewer joins a short Docker-ID group"
     );
     let registry = &f.lookup_state.platforms.edge;
@@ -567,10 +785,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         };
         assert_eq!(request.kind, EdgeCommandKind::ContainerLogsStream as i32);
         let request = ContainerLogRequest::decode(request.payload.as_slice()).unwrap();
-        assert_eq!(
-            request.container_id,
-            "a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750"
-        );
+        assert_eq!(request.container_id, docker_id);
         assert_eq!(request.tail, 100);
         assert_eq!(request.follow, Some(true));
         assert!(other_commands.try_recv().is_err());

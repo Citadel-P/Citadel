@@ -40,12 +40,19 @@ const ALL_PLATFORM_SPECIFIC: i32 = SpecificPermission::Logs as i32
     | SpecificPermission::ManageNodeAgents as i32;
 const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
+mod container_inspection;
 mod container_mutations;
 mod deletion;
 mod edge;
 mod images;
+mod image_pull;
+mod registry_images;
+mod management;
 mod logs;
 mod statistics;
+mod swarm_overview;
+pub(crate) mod swarm_inventory;
+mod task_runtime;
 mod volume_content;
 pub use edge::EdgeHttpContext;
 
@@ -67,12 +74,61 @@ pub struct PlatformsHttpState {
 
 pub fn router(state: PlatformsHttpState) -> Router {
     Router::new()
+        .contract_route(routes::GET_SWARM_OVERVIEW, swarm_overview::get)
+        .contract_route(routes::INSPECT_SWARM_TASK, task_runtime::inspect)
+        .contract_route(
+            routes::GET_SWARM_TASK_TERMINAL_TARGET,
+            task_runtime::terminal,
+        )
+        .contract_route(routes::INSPECT_CONTAINER, container_inspection::inspect)
+        .contract_route(routes::GET_CONTAINER_INFO, container_inspection::info)
+        .contract_route(routes::GET_CONTAINER_DATA, container_inspection::data)
+        .contract_route(
+            routes::GET_DEPLOYMENT_CONTAINER_INFO,
+            container_inspection::deployment_info,
+        )
+        .contract_route(
+            routes::START_DEPLOYMENTS,
+            container_mutations::start_deployments,
+        )
+        .contract_route(
+            routes::STOP_DEPLOYMENTS,
+            container_mutations::stop_deployments,
+        )
+        .contract_route(
+            routes::RESTART_DEPLOYMENTS,
+            container_mutations::restart_deployments,
+        )
+        .contract_route(
+            routes::PAUSE_DEPLOYMENTS,
+            container_mutations::pause_deployments,
+        )
+        .contract_route(
+            routes::RESUME_DEPLOYMENTS,
+            container_mutations::resume_deployments,
+        )
+        .contract_route(
+            routes::INSPECT_DEPLOYMENT,
+            container_inspection::inspect_deployment,
+        )
+        .contract_route(
+            routes::GET_STACK_CONTAINERS_DATA,
+            container_inspection::stack_data,
+        )
+        .contract_route(
+            routes::INSPECT_STACK_CONTAINER,
+            container_inspection::inspect_stack,
+        )
         .contract_route(routes::LIST_VOLUME_DIRECTORY, volume_content::list)
         .contract_route(routes::DOWNLOAD_VOLUME_PATH, volume_content::download)
         .contract_route(routes::LIST_PLATFORMS, list_platforms)
         .contract_route(routes::CREATE_PLATFORM, create_platform)
         .contract_route(routes::DELETE_PLATFORMS, deletion::delete)
         .contract_route(routes::GET_AGENT_SETUP, get_agent_setup)
+        .contract_route(routes::ROTATE_AGENT_HUB_KEY, management::rotate_key)
+        .contract_route(routes::UPDATE_PLATFORM, management::patch)
+        .contract_route(routes::RENAME_PLATFORM, management::rename)
+        .contract_route(routes::PRUNE_PLATFORM, management::prune)
         .contract_route(routes::GET_PLATFORM, get_platform)
         .contract_route(routes::CREATE_EDGE_ENROLLMENT, edge::enroll)
         .contract_route(routes::GET_EDGE_STATUS, edge::status)
@@ -98,12 +154,19 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::GET_SWARM_SERVICE_STATS, statistics::service)
         .contract_route(routes::GET_SWARM_TASK_STATS, statistics::task)
         .contract_route(routes::GET_SWARM_SERVICE_LOGS, logs::service)
+        .contract_route(routes::INSPECT_MANAGED_SWARM_SERVICE, container_inspection::inspect_managed_service)
         .contract_route(routes::GET_SWARM_TASK_LOGS, logs::task)
         .contract_route(
             routes::GET_MANAGED_SWARM_SERVICE_LOGS,
             logs::managed_service,
         )
         .contract_route(routes::LIST_PLATFORM_IMAGES, list_images)
+        .contract_route(routes::DELETE_IMAGES, images::delete)
+        .contract_route(routes::PULL_IMAGE, image_pull::pull)
+        .contract_route(routes::GET_EXTERNAL_REPOSITORIES, registry_images::repositories)
+        .contract_route(routes::GET_DOCKER_HUB_REPOSITORIES, registry_images::docker_repositories)
+        .contract_route(routes::GET_DOCKER_HUB_REPOSITORY_TAGS, registry_images::docker_tags)
+        .contract_route(routes::GET_GHCR_PACKAGE_VERSIONS, registry_images::github_versions)
         .contract_route(routes::GET_PLATFORM_IMAGE, images::inspect)
         .contract_route(routes::GET_IMAGE_EXPOSED_PORTS, images::exposed_ports)
         .contract_route(routes::LIST_PLATFORM_NETWORKS, list_networks)
@@ -126,6 +189,19 @@ pub fn router(state: PlatformsHttpState) -> Router {
         .contract_route(routes::GET_SWARM_CONFIG, get_swarm_config)
         .contract_route(routes::LIST_SWARM_SECRETS, list_swarm_secrets)
         .contract_route(routes::GET_SWARM_SECRET, get_swarm_secret)
+        .contract_route(routes::UPDATE_SWARM_NODE, swarm_inventory::update_node)
+        .contract_route(routes::INSPECT_SWARM_NODE, swarm_inventory::inspect_node)
+        .contract_route(routes::UPDATE_SWARM_NODES_AVAILABILITY, swarm_inventory::update_availability)
+        .contract_route(routes::DELETE_SWARM_INVENTORY_SERVICES, swarm_inventory::delete_services)
+        .contract_route(routes::INSPECT_SWARM_SERVICE, swarm_inventory::inspect_service)
+        .contract_route(routes::RESTART_SWARM_SERVICE, swarm_inventory::restart_service)
+        .contract_route(routes::CREATE_SWARM_SECRET, swarm_inventory::create_secret)
+        .contract_route(routes::DELETE_SWARM_SECRETS, swarm_inventory::delete_secrets)
+        .contract_route(routes::UPDATE_SWARM_SECRET_LABELS, swarm_inventory::update_secret_labels)
+        .contract_route(routes::CREATE_SWARM_CONFIG, swarm_inventory::create_config)
+        .contract_route(routes::DELETE_SWARM_CONFIGS, swarm_inventory::delete_configs)
+        .contract_route(routes::GET_SWARM_CONFIG_DATA, swarm_inventory::config_data)
+        .contract_route(routes::UPDATE_SWARM_CONFIG_LABELS, swarm_inventory::update_config_labels)
         .with_state(state)
 }
 
@@ -140,6 +216,7 @@ async fn get_agent_setup(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     setup: Option<Extension<Arc<citadel_platforms::agent_setup::AgentSetupView>>>,
+    live: Option<Extension<management::AgentSetupContext>>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(
@@ -164,8 +241,13 @@ async fn get_agent_setup(
         setup.ok_or_else(|| IdentityError::Storage("Agent setup is not configured.".into())),
         &headers,
     )?;
+    if let Some(Extension(live)) = live {
+        return Ok(no_store(Json(live.view()).into_response()));
+    }
     Ok(no_store(Json(setup.as_ref()).into_response()))
 }
+
+pub use management::AgentSetupContext;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -477,11 +559,32 @@ async fn list_containers(
 async fn get_container(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    path: Result<Path<Uuid>, PathRejection>,
+    path: Result<Path<String>, PathRejection>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
-    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    let Path(reference) = identity_result(path.map_err(invalid_path), &headers)?;
+    if !valid_container_reference(&reference) {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Must be a valid container id".into(),
+            )),
+            &headers,
+        );
+    }
+    let id = match Uuid::parse_str(&reference) {
+        Ok(id) => id,
+        Err(_) => {
+            use citadel_platforms::StatisticsReadStore;
+            let store = citadel_adapters::statistics_read_store::PostgresStatisticsReadStore::new(
+                state.pool.clone(),
+            );
+            match store.find_container(&reference).await {
+                Ok(target) => required(Ok(target), &headers)?.id,
+                Err(error) => return Ok(runtime_error_response(error, &headers)),
+            }
+        }
+    };
     let mut container = required(
         state
             .platforms
@@ -493,6 +596,15 @@ async fn get_container(
     container.capabilities =
         Some(authorize_platform(&state, &principal, container.platform_id, &headers).await?);
     Ok(no_store(Json(container).into_response()))
+}
+
+fn valid_container_reference(reference: &str) -> bool {
+    match Uuid::parse_str(reference) {
+        Ok(id) => !id.is_nil(),
+        Err(_) => {
+            (12..=64).contains(&reference.len()) && reference.bytes().all(|b| b.is_ascii_hexdigit())
+        }
+    }
 }
 
 async fn list_images(
@@ -556,7 +668,7 @@ async fn list_networks(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -616,7 +728,7 @@ pub(crate) async fn lookup_platform_resources(
             RuntimeRef::Local(runtime) => {
                 PlatformInventoryPort::list_volumes(runtime, &cancellation).await
             }
-            RuntimeRef::Agent(runtime) => {
+            RuntimeRef::Agent(ref runtime) => {
                 PlatformInventoryPort::list_volumes(runtime, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
@@ -634,7 +746,7 @@ pub(crate) async fn lookup_platform_resources(
             RuntimeRef::Local(runtime) => {
                 PlatformInventoryPort::list_networks(runtime, &cancellation).await
             }
-            RuntimeRef::Agent(runtime) => {
+            RuntimeRef::Agent(ref runtime) => {
                 PlatformInventoryPort::list_networks(runtime, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
@@ -691,7 +803,7 @@ async fn get_network(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -739,7 +851,7 @@ async fn create_network(
             PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
                 .await
         }
-        Ok(RuntimeRef::Agent(runtime)) => {
+        Ok(RuntimeRef::Agent(ref runtime)) => {
             PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
                 .await
         }
@@ -792,7 +904,7 @@ async fn delete_networks(
             RuntimeRef::Local(runtime) => {
                 PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
             }
-            RuntimeRef::Agent(runtime) => {
+            RuntimeRef::Agent(ref runtime) => {
                 PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
@@ -855,7 +967,7 @@ async fn delete_networks(
             RuntimeRef::Local(runtime) => {
                 PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
             }
-            RuntimeRef::Agent(runtime) => {
+            RuntimeRef::Agent(ref runtime) => {
                 PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
@@ -915,7 +1027,7 @@ async fn list_volumes(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -992,7 +1104,7 @@ async fn get_volume(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -1037,7 +1149,7 @@ async fn create_volume(
         Ok(RuntimeRef::Local(runtime)) => {
             PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
         }
-        Ok(RuntimeRef::Agent(runtime)) => {
+        Ok(RuntimeRef::Agent(ref runtime)) => {
             PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
         }
         Ok(RuntimeRef::Edge(ref runtime)) => {
@@ -1099,7 +1211,7 @@ async fn delete_volumes(
                 )
                 .await
             }
-            RuntimeRef::Agent(runtime) => {
+            RuntimeRef::Agent(ref runtime) => {
                 PlatformResourceMutationPort::delete_volume(
                     runtime,
                     name,
@@ -1447,7 +1559,7 @@ async fn volume_capabilities(
 
 pub(crate) enum RuntimeRef<'a> {
     Local(&'a DockerClient),
-    Agent(&'a AgentClient),
+    Agent(AgentClient),
     Edge(EdgeRuntime),
 }
 
@@ -1472,7 +1584,7 @@ pub(crate) async fn realtime_daemon_snapshot(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -1484,7 +1596,7 @@ pub(crate) async fn realtime_daemon_snapshot(
         RuntimeRef::Local(runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             PlatformInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
@@ -1603,7 +1715,7 @@ pub(crate) async fn runtime_for_node<'a>(
                 citadel_platforms::PlatformRuntimePort::get_info(*runtime, &cancellation).await
             }
             RuntimeRef::Agent(runtime) => {
-                citadel_platforms::PlatformRuntimePort::get_info(*runtime, &cancellation).await
+                citadel_platforms::PlatformRuntimePort::get_info(runtime, &cancellation).await
             }
             RuntimeRef::Edge(runtime) => {
                 citadel_platforms::PlatformRuntimePort::get_info(runtime, &cancellation).await
@@ -1652,18 +1764,8 @@ async fn runtime_for(
         return Ok(RuntimeRef::Local(&state.docker));
     }
     if connector.eq_ignore_ascii_case("Agent") {
-        return state
-            .agent
-            .as_ref()
-            .filter(|agent| agent.address().trim_end_matches('/') == address.trim_end_matches('/'))
-            .map(RuntimeRef::Agent)
-            .ok_or_else(|| {
-                RuntimeCapabilityError::new(
-                    RuntimeErrorKind::Unavailable,
-                    "The configured Agent transport is unavailable.",
-                    true,
-                )
-            });
+        let agent = state.agent.as_ref().ok_or_else(|| RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, "The configured Agent transport is unavailable.", true))?;
+        return agent.for_address(&address, &CancellationToken::new()).await.map(RuntimeRef::Agent);
     }
     Err(RuntimeCapabilityError::new(
         RuntimeErrorKind::Unavailable,
@@ -1746,7 +1848,9 @@ fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView
         mountpoint: volume.mountpoint,
         created_at: volume.created_at,
         cluster_volume: volume.cluster_volume,
-        usage_data: volume.usage_data,
+        usage_data: volume
+            .usage_data
+            .and_then(|usage| serde_json::from_value(usage).ok()),
         containers: volume.containers,
         status: volume
             .status
@@ -2198,6 +2302,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn volume_usage_is_serialized_with_the_existing_ui_field_names() {
+        for usage in [
+            serde_json::json!({"Size": 1024, "RefCount": 2}),
+            serde_json::json!({"size": 1024, "refCount": 2}),
+        ] {
+            let view = map_volume(
+                RuntimeVolumeSummary {
+                    usage_data: Some(usage),
+                    ..Default::default()
+                },
+                VolumeCapabilitiesView::default(),
+            );
+            let json = serde_json::to_value(view).unwrap();
+            assert_eq!(
+                json["usageData"],
+                serde_json::json!({"size":1024, "refCount":2})
+            );
+        }
+        let view = map_volume(
+            RuntimeVolumeSummary::default(),
+            VolumeCapabilitiesView::default(),
+        );
+        assert!(view.usage_data.is_none());
+    }
+
+    #[test]
     fn execute_implies_write_and_read_without_granting_specific_operations() {
         let capabilities = platform_capabilities(EffectivePlatformPermission {
             level_mask: PermissionLevel::Execute as i32,
@@ -2291,6 +2421,28 @@ mod tests {
             &HeaderMap::new(),
         );
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn network_create_accepts_the_existing_ui_ipam_and_ip_version_fields() {
+        let input: CreateNetworkInput = serde_json::from_value(serde_json::json!({
+            "platformId": Uuid::new_v4(), "name":"fscsd", "driver":"bridge",
+            "scope":"local", "enableIPv4":true, "enableIPv6":false,
+            "internal":false, "attachable":false, "ingress":false,
+            "labels":{}, "options":{}, "ipam":{"driver":"default", "config":[{},{}]},
+            "configOnly":false
+        }))
+        .unwrap();
+        assert!(validate_network_input(&input.network).is_ok());
+        assert_eq!(input.network.enable_ipv4, Some(true));
+        assert_eq!(input.network.enable_ipv6, Some(false));
+        assert!(input.network.ipam.unwrap().config[0].subnet.is_none());
+        let invalid: CreateRuntimeNetwork = serde_json::from_value(serde_json::json!({
+            "name":"invalid", "driver":"bridge", "scope":"local",
+            "enableIPv4":false, "enableIPv6":false
+        }))
+        .unwrap();
+        assert!(validate_network_input(&invalid).is_err());
     }
 
     #[test]

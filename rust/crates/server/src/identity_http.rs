@@ -337,7 +337,28 @@ fn identity_error_response_with_request_id(error: IdentityError, request_id: Str
     if let IdentityError::LicenseRequired(capability) = &error {
         return license_required_response(capability, request_id);
     }
+    let mut errors = None;
+    let mut resource_problem = false;
     let (status, problem_type, title, detail) = match error {
+        IdentityError::FieldValidation(fields) => {
+            errors = Some(fields);
+            resource_problem = true;
+            (
+                StatusCode::BAD_REQUEST,
+                "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                "One or more validation errors occurred.",
+                String::new(),
+            )
+        }
+        IdentityError::ResourceNotFound(message) => {
+            resource_problem = true;
+            (
+                StatusCode::NOT_FOUND,
+                "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+                "Not Found",
+                message.to_owned(),
+            )
+        }
         IdentityError::InvalidCredentials | IdentityError::Unauthenticated => (
             StatusCode::UNAUTHORIZED,
             "authentication_required",
@@ -393,6 +414,12 @@ fn identity_error_response_with_request_id(error: IdentityError, request_id: Str
             message,
         ),
     };
+    let detail = if errors.is_some() { None } else { Some(detail) };
+    let (request_id, trace_id) = if resource_problem {
+        (None, Some(request_id))
+    } else {
+        (Some(request_id), None)
+    };
     let mut response = (
         status,
         Json(IdentityProblemDetails {
@@ -401,6 +428,8 @@ fn identity_error_response_with_request_id(error: IdentityError, request_id: Str
             status: status.as_u16(),
             detail,
             request_id,
+            trace_id,
+            errors,
             capability: None,
             license_status: None,
             effective_edition: None,
@@ -459,6 +488,7 @@ fn request_id(headers: &HeaderMap) -> String {
 fn license_required_response(capability_key: &'static str, request_id: String) -> Response {
     let (capability, display_name) = match capability_key {
         "custom-access-control" => ("CustomAccessControl", "Custom access control"),
+        "advanced-alerting" => ("AdvancedAlerting", "Advanced alerting"),
         _ => (capability_key, "This capability"),
     };
     let status = StatusCode::FORBIDDEN;
@@ -468,8 +498,10 @@ fn license_required_response(capability_key: &'static str, request_id: String) -
             r#type: "https://citadel.local/problems/license-capability-required",
             title: "License capability required",
             status: status.as_u16(),
-            detail: format!("{display_name} requires a Team license."),
-            request_id,
+            detail: Some(format!("{display_name} requires a Team license.")),
+            request_id: Some(request_id),
+            trace_id: None,
+            errors: None,
             capability: Some(capability),
             license_status: Some("Community"),
             effective_edition: Some("Community"),
@@ -495,8 +527,14 @@ struct IdentityProblemDetails {
     r#type: &'static str,
     title: &'static str,
     status: u16,
-    detail: String,
-    request_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    errors: Option<std::collections::BTreeMap<String, Vec<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     capability: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -518,6 +556,57 @@ mod tests {
         );
         assert_eq!(cookie(&headers, REFRESH_COOKIE), Some("token"));
         assert_eq!(cookie(&headers, "citadel"), None);
+    }
+
+    #[tokio::test]
+    async fn structured_resource_errors_preserve_dotnet_problem_contracts() {
+        use serde_json::json;
+        let mut headers = HeaderMap::new();
+        headers.insert(REQUEST_ID, HeaderValue::from_static("request-42"));
+        for (error, status, expected) in [
+            (
+                IdentityError::FieldValidation(
+                    [(
+                        "Field".into(),
+                        vec!["First error.".into(), "Second error.".into()],
+                    )]
+                    .into(),
+                ),
+                StatusCode::BAD_REQUEST,
+                json!({"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"Field":["First error.","Second error."]},"traceId":"request-42"}),
+            ),
+            (
+                IdentityError::ResourceNotFound("The provided alert rule does not exist"),
+                StatusCode::NOT_FOUND,
+                json!({"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Not Found","status":404,"detail":"The provided alert rule does not exist","traceId":"request-42"}),
+            ),
+            // Existing non-structured errors keep their established shape.
+            (
+                IdentityError::Validation("Invalid input.".into()),
+                StatusCode::BAD_REQUEST,
+                json!({"type":"validation_error","title":"Validation failed","status":400,"detail":"Invalid input.","requestId":"request-42"}),
+            ),
+            (
+                IdentityError::Storage("postgres://private-credential/database".into()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({"type":"internal_error","title":"Internal server error","status":500,"detail":"An unexpected error occurred.","requestId":"request-42"}),
+            ),
+        ] {
+            let response = identity_result::<()>(Err(error), &headers)
+                .unwrap_err()
+                .into_response();
+            assert_eq!(response.status(), status);
+            assert_eq!(response.headers()[CACHE_CONTROL], "no-store");
+            assert_eq!(
+                response.headers()[axum::http::header::CONTENT_TYPE],
+                "application/problem+json"
+            );
+            let bytes = axum::body::to_bytes(response.into_body(), 16 * 1024)
+                .await
+                .unwrap();
+            let actual: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]

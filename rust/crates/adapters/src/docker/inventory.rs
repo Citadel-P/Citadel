@@ -310,17 +310,17 @@ pub(super) fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
     }
 }
 
-fn map_node(value: SwarmNode) -> RuntimeSwarmNode {
+pub(crate) fn map_node(value: SwarmNode) -> RuntimeSwarmNode {
     RuntimeSwarmNode {
         id: value.id,
         version_index: bounded_i64(value.version.index),
         hostname: string_or_default(&value.description, &["Hostname"]),
-        role: string_or_default(&value.spec, &["Role"]),
+        role: swarm_node_enum(string_or_default(&value.spec, &["Role"])),
         is_leader: boolean(&value.manager_status, &["Leader"]),
-        reachability: string_or_default(&value.manager_status, &["Reachability"]),
-        status: string_or_default(&value.status, &["State"]),
+        reachability: swarm_node_enum(string_or_default(&value.manager_status, &["Reachability"])),
+        status: swarm_node_enum(string_or_default(&value.status, &["State"])),
         status_message: string(&value.status, &["Message"]),
-        availability: string_or_default(&value.spec, &["Availability"]),
+        availability: swarm_node_enum(string_or_default(&value.spec, &["Availability"])),
         engine_version: string_or_default(&value.description, &["Engine", "EngineVersion"]),
         operating_system: string_or_default(&value.description, &["Platform", "OS"]),
         architecture: string_or_default(&value.description, &["Platform", "Architecture"]),
@@ -328,6 +328,20 @@ fn map_node(value: SwarmNode) -> RuntimeSwarmNode {
         labels: object_map(&value.spec, &["Labels"]),
         created_at: timestamp(&value.created_at),
         updated_at: timestamp(&value.updated_at),
+    }
+}
+
+fn swarm_node_enum(value: String) -> String {
+    if let Some(known) = [
+        "Manager", "Worker", "Reachable", "Unreachable", "Unknown", "Ready", "Down",
+        "Disconnected", "Active", "Pause", "Drain",
+    ]
+    .into_iter()
+    .find(|known| known.eq_ignore_ascii_case(&value))
+    {
+        known.to_owned()
+    } else {
+        value
     }
 }
 
@@ -368,7 +382,7 @@ fn map_service(value: SwarmService) -> RuntimeSwarmService {
         swarm_service_id: None,
         stack_id: None,
         force_update: signed(&value.spec, &["TaskTemplate", "ForceUpdate"]),
-        runtime_hash: String::new(),
+        runtime_hash: crate::swarm_service_inspection::runtime_hash(&value.spec),
         created_at: timestamp(&value.created_at),
         updated_at: timestamp(&value.updated_at),
     }

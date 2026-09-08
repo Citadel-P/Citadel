@@ -6,6 +6,10 @@ use citadel_contracts::http::{
     ErrorResponse, ParameterContract, ParameterSchema, ROUTES, RouteAuthentication, RouteContract,
 };
 use serde_json::{Map, Value, json};
+#[path = "platform_image_schemas.rs"]
+mod platform_image_schemas;
+#[path = "swarm_schemas.rs"]
+mod swarm_schemas;
 
 pub fn generate(check: bool) -> Result<(), Box<dyn std::error::Error>> {
     let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -284,13 +288,15 @@ fn schemas() -> Value {
         },
         "ProblemDetails": {
             "type": "object",
-            "required": ["type", "title", "status", "requestId"],
+            "required": ["type", "title", "status"],
             "properties": {
                 "type": { "type": "string", "format": "uri-reference" },
                 "title": { "type": "string" },
                 "status": { "type": "integer" },
                 "detail": { "type": ["string", "null"] },
-                "requestId": { "type": "string" }
+                "requestId": { "type": "string" },
+                "traceId": { "type": "string" },
+                "errors": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
             }
         },
         "SetupStatusView": {
@@ -1162,6 +1168,22 @@ fn schemas() -> Value {
         "SwarmSecretView": swarm_secret_view(),
         "SwarmSecretsView": collection_view("items", "SwarmSecretView", "PlatformCapabilities")
     });
+    schemas.as_object_mut().unwrap().insert("PlatformWorkloadStatusCountsView".into(), json!({"type":"object","required":["total","healthy","degraded","failed","stopped","paused","inProgress","unknown"],"properties":{"total":integer(),"healthy":integer(),"degraded":integer(),"failed":integer(),"stopped":integer(),"paused":integer(),"inProgress":integer(),"unknown":integer()}}));
+    schemas.as_object_mut().unwrap().insert("SwarmOverviewView".into(), json!({"type":"object","required":["platformId","health","isStale","nodeCount","managerCount","quorum","serviceCount","serviceStatusCounts","runningTaskCount","desiredTaskCount","networkCount","localNetworkCount","volumeCount","imageCount","capabilities"],"properties":{
+            "platformId":uuid(),"health":string(),"message":nullable_string(),"isStale":{"type":"boolean"},"nodeCount":integer(),"managerCount":integer(),
+            "quorum":{"type":"object","required":["state","reachableManagers","requiredManagers","hasLeader"],"properties":{"state":{"type":"string","enum":["Unknown","Healthy","Degraded","Lost"]},"reachableManagers":integer(),"requiredManagers":integer(),"hasLeader":{"type":"boolean"}}},
+            "serviceCount":integer(),"serviceStatusCounts":{"$ref":"#/components/schemas/PlatformWorkloadStatusCountsView"},"runningTaskCount":integer(),"desiredTaskCount":integer(),"networkCount":integer(),"localNetworkCount":integer(),"volumeCount":integer(),"imageCount":integer(),"capabilities":{"$ref":"#/components/schemas/PlatformCapabilities"}
+        }}));
+    schemas.as_object_mut().unwrap().insert("SwarmTaskTerminalView".into(), json!({"type":"object","required":["dockerContainerId"],"properties":{"dockerContainerId":string()}}));
+    schemas["ContainerDeploymentView"] = container_deployment_view();
+    schemas["ContainerDataView"] = container_data_view();
+    schemas["ContainerInfoView"] = container_info_view();
+    schemas["WebhookResponse"] = json!({"type":"object","required":["accepted","status","requestId"],"properties":{
+        "accepted":{"type":"boolean"},"status":string(),"requestId":uuid(),"reason":nullable_string()
+    }});
+    schemas["ContainersDataView"] = json!({"type":"object","required":["containers"],"properties":{
+        "containers":{"type":"array","items":{"$ref":"#/components/schemas/ContainerDataView"}}
+    }});
     schemas["DeletePlatformsInput"] = json!({
         "type": "object", "required": ["ids"], "additionalProperties": false,
         "properties": {"ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}}}
@@ -1705,20 +1727,44 @@ fn phase5_schemas() -> Map<String, Value> {
         "BuildAgentPoolsView".into(),
         collection_view("pools", "BuildAgentPoolView", "ResourceCapabilities"),
     );
-    schemas.insert("AlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url","isActive"],"properties":{"name":string(),"alertDestination":string(),"url":string(),"isActive":{"type":"boolean"}}}));
+    schemas.insert("AlertChannelInput".into(), json!({"type":"object","required":["alertDestination","url","isActive"],"properties":{"name":nullable_string(),"alertDestination":string(),"url":string(),"isActive":{"type":"boolean"}}}));
     schemas.insert("VerifyAlertChannelInput".into(), json!({"type":"object","required":["name","alertDestination","url"],"properties":{"name":string(),"alertDestination":string(),"url":string()}}));
     schemas.insert("AlertChannelView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertChannelInput"},{"type":"object","required":["id","createdByActorId","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"createdAt":date_time()}}]}));
     schemas.insert("AlertChannelsView".into(), json!({"type":"object","required":["channels"],"properties":{"channels":{"type":"array","items":{"$ref":"#/components/schemas/AlertChannelView"}}}}));
-    schemas.insert("AlertRuleInput".into(), json!({"type":"object","required":["name","type","severity","status","channelIds","limitedTo","quietHours"],"properties":{"name":string(),"description":nullable_string(),"type":string(),"severity":string(),"cooldownSeconds":{"type":["integer","null"],"format":"int32"},"requiredMatches":{"type":["integer","null"],"format":"int32"},"threshold":{"type":["number","null"],"format":"double"},"status":string(),"channelIds":uuid_array(),"limitedTo":{"type":"array","items":{"type":"object"}},"quietHours":{"type":"array","items":{"type":"object"}}}}));
+    schemas.insert("AlertRuleInput".into(), json!({"type":"object","required":["type","severity"],"properties":{"name":nullable_string(),"description":nullable_string(),"type":string(),"severity":string(),"cooldownSeconds":{"type":["integer","null"],"format":"int32"},"requiredMatches":{"type":["integer","null"],"format":"int32"},"threshold":{"type":["number","null"],"format":"double"},"status":{"type":"string","default":"Enabled"},"channelIds":uuid_array(),"limitedTo":{"type":"array","items":{"type":"object"}},"quietHours":{"type":"array","items":{"type":"object"}}}}));
     schemas.insert(
         "CreateAlertRuleInput".into(),
         json!({"$ref":"#/components/schemas/AlertRuleInput"}),
     );
-    schemas.insert(
-        "PatchAlertRuleInput".into(),
-        json!({"$ref":"#/components/schemas/AlertRuleInput"}),
-    );
+    let mut rule_patch = schemas["AlertRuleInput"].clone();
+    rule_patch.as_object_mut().unwrap().remove("required");
+    rule_patch["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("name");
+    rule_patch["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("description");
+    for field in ["channelIds", "limitedTo", "quietHours"] {
+        rule_patch["properties"][field]["type"] = json!(["array", "null"]);
+    }
+    schemas.insert("PatchAlertRuleInput".into(), rule_patch);
     schemas.insert("AlertRuleView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertRuleInput"},{"type":"object","required":["id","createdByActorId","createdAt"],"properties":{"id":uuid(),"createdByActorId":uuid(),"createdAt":date_time()}}]}));
+    schemas.insert("AlertRuleConfigView".into(), json!({"allOf":[{"$ref":"#/components/schemas/AlertRuleInput"},{"type":"object","required":["id","isSystem"],"properties":{"id":uuid(),"isSystem":{"type":"boolean"}}}]}));
+    schemas.insert("BackupEventsView".into(), json!({"type":"object","required":["runId","events"],"properties":{"runId":uuid(),"events":string_array()}}));
+    schemas.insert("RunAsActorUsageView".into(), json!({"type":"object","required":["id","name","resourceType","isActive"],"properties":{"id":uuid(),"name":string(),"resourceType":{"$ref":"#/components/schemas/ResourceType"},"isActive":{"type":"boolean"}}}));
+    schemas.insert(
+        "RunAsActorUsageList".into(),
+        json!({"type":"array","items":{"$ref":"#/components/schemas/RunAsActorUsageView"}}),
+    );
+    schemas.insert("ActorView".into(), json!({"type":"object","required":["id","name","type","isEnabled"],"properties":{"id":uuid(),"name":string(),"type":{"type":"string","enum":["User","System","Agent","ServiceAccount","Team"]},"isEnabled":{"type":"boolean"}}}));
+    schemas.insert("PatchActorEnabledInput".into(), json!({"type":"object","required":["isEnabled"],"properties":{"isEnabled":{"type":"boolean"}}}));
+    schemas.insert("GlobalSearchStatus".into(), json!({"type":"object","required":["label","tone"],"properties":{"label":string(),"tone":{"type":"string","enum":["Positive","Negative","Warning","Info","Neutral"]}}}));
+    schemas.insert("GlobalSearchParent".into(), json!({"type":"object","required":["id","resourceType","name"],"properties":{"id":uuid(),"resourceType":{"$ref":"#/components/schemas/ResourceType"},"name":string()}}));
+    schemas.insert("GlobalSearchItem".into(), json!({"type":"object","required":["id","resourceType","name"],"properties":{"id":uuid(),"resourceType":{"$ref":"#/components/schemas/ResourceType"},"name":string(),"secondaryText":nullable_string(),"parent":{"$ref":"#/components/schemas/GlobalSearchParent"},"status":{"$ref":"#/components/schemas/GlobalSearchStatus"}}}));
+    schemas.insert("GlobalSearchGroup".into(), json!({"type":"object","required":["category","items"],"properties":{"category":{"type":"string","enum":["Platforms","Stacks","Deployments","Repositories","Registries","Automations","Backups","Builds","SwarmServices"]},"items":{"type":"array","items":{"$ref":"#/components/schemas/GlobalSearchItem"}}}}));
+    schemas.insert("GlobalSearchResponse".into(), json!({"type":"object","required":["query","groups"],"properties":{"query":string(),"groups":{"type":"array","items":{"$ref":"#/components/schemas/GlobalSearchGroup"}}}}));
     schemas.insert("AlertRulesView".into(), json!({"type":"object","required":["alertRules"],"properties":{"alertRules":{"type":"array","items":{"$ref":"#/components/schemas/AlertRuleView"}}}}));
     schemas.insert("AlertEventView".into(), json!({"type":"object","required":["id","alertRuleId","type","severity","status","message","info","resourceName","resourceType","createdAt","updatedAt"],"properties":{"id":uuid(),"alertRuleId":uuid(),"type":string(),"severity":string(),"status":string(),"message":string(),"info":{"type":"object"},"resourceId":nullable_uuid(),"resourceName":string(),"resourceType":string(),"acknowledgedByActorId":nullable_uuid(),"acknowledgedAt":nullable_date_time(),"resolvedByActorId":nullable_uuid(),"resolvedAt":nullable_date_time(),"resolutionNote":nullable_string(),"createdAt":date_time(),"updatedAt":date_time()}}));
     schemas.insert("AlertEventsView".into(), json!({"type":"object","required":["pagedResult"],"properties":{"pagedResult":{"type":"object","required":["items","totalCount","page","pageSize"],"properties":{"items":{"type":"array","items":{"$ref":"#/components/schemas/AlertEventView"}},"totalCount":{"type":"integer","format":"int64"},"page":{"type":"integer","format":"int32"},"pageSize":{"type":"integer","format":"int32"}}}}}));
@@ -1742,7 +1788,41 @@ fn phase5_schemas() -> Map<String, Value> {
     let backup_repository_spec = json!({"type":"object","required":["$type"],"properties":{"$type":string()},"additionalProperties":true});
     let backup_source_spec = json!({"type":"object","required":["$type"],"properties":{"$type":string()},"additionalProperties":true});
     schemas.insert("BackupRepositorySpec".into(), backup_repository_spec);
+    schemas.insert("PlatformBackupSummaryView".into(), json!({"type":"object","required":["platformId","policyCount","enabledPolicyCount","dockerVolumePolicyCount","stackPolicyCount","deploymentPolicyCount","swarmServicePolicyCount","attentionPolicyCount","lastRunStatus","lastRunAt"],"properties":{"platformId":uuid(),"policyCount":{"type":"integer","format":"int32"},"enabledPolicyCount":{"type":"integer","format":"int32"},"dockerVolumePolicyCount":{"type":"integer","format":"int32"},"stackPolicyCount":{"type":"integer","format":"int32"},"deploymentPolicyCount":{"type":"integer","format":"int32"},"swarmServicePolicyCount":{"type":"integer","format":"int32"},"attentionPolicyCount":{"type":"integer","format":"int32"},"lastRunStatus":nullable_string(),"lastRunAt":nullable_date_time()}}));
+    schemas.insert("PlatformBackupSummariesView".into(), json!({"type":"object","required":["platforms"],"properties":{"platforms":{"type":"array","items":{"$ref":"#/components/schemas/PlatformBackupSummaryView"}}}}));
+    schemas.insert("UpdateBackupRepositoryInput".into(), json!({"type":"object","properties":{"description":nullable_string(),"spec":{"anyOf":[{"$ref":"#/components/schemas/BackupRepositorySpec"},{"type":"null"}]}}}));
     schemas.insert("BackupSourceSpec".into(), backup_source_spec);
+    schemas.insert("UpdateBackupPolicyInput".into(),json!({"type":"object","properties":{"description":nullable_string(),"source":{"anyOf":[{"$ref":"#/components/schemas/BackupSourceSpec"},{"type":"null"}]},"backupRepositoryId":nullable_uuid(),"enabled":{"type":["boolean","null"]},"cron":nullable_string(),"timeZone":nullable_string(),"webhook":{"type":["object","null"]},"keepLastSuccessful":{"type":["integer","null"],"format":"int32"},"timeoutSeconds":{"type":["integer","null"],"format":"int32"},"alertOnFailure":{"type":["boolean","null"]},"runAsActorId":nullable_uuid()}}));
+    schemas.insert("StackBackupVolumePreviewItem".into(),json!({"type":"object","required":["name","kind","isExternal","isShared","hasBackupCoverage"],"properties":{"name":string(),"kind":string(),"isExternal":{"type":"boolean"},"isShared":{"type":"boolean"},"hasBackupCoverage":{"type":"boolean"},"dockerNodeId":nullable_string(),"nodeHostname":nullable_string()}}));
+    for (schema, id, name) in [
+        (
+            "DeploymentBackupSourcePreviewView",
+            "deploymentId",
+            "deploymentName",
+        ),
+        ("StackBackupSourcePreviewView", "stackId", "stackName"),
+        (
+            "SwarmServiceBackupSourcePreviewView",
+            "swarmServiceId",
+            "swarmServiceName",
+        ),
+    ] {
+        schemas.insert(schema.into(),json!({"type":"object","required":[id,name,"platformId","platformName","platformStatus","volumes","warnings"],"properties":{id:uuid(),name:string(),"platformId":uuid(),"platformName":string(),"platformStatus":string(),"volumes":{"type":"array","items":{"$ref":"#/components/schemas/StackBackupVolumePreviewItem"}},"warnings":string_array()}}));
+    }
+    for (schema, item, id) in [
+        ("BackupRunStream", "BackupRunStreamItem", "runId"),
+        (
+            "BackupRestoreRunStream",
+            "BackupRestoreRunStreamItem",
+            "restoreRunId",
+        ),
+    ] {
+        schemas.insert(item.into(),json!({"type":"object","required":[id],"properties":{id:uuid(),"status":nullable_string(),"message":nullable_string(),"stream":nullable_string(),"exitCode":{"type":["integer","null"],"format":"int32"}}}));
+        schemas.insert(
+            schema.into(),
+            json!({"type":"array","items":{"$ref":format!("#/components/schemas/{item}")}}),
+        );
+    }
     schemas.insert("BackupRepositoryInput".into(), json!({"type":"object","required":["name","description","spec","passwordSecretId"],"properties":{"name":string(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/BackupRepositorySpec"},"passwordSecretId":uuid()}}));
     schemas.insert("BackupRepositoryView".into(), json!({"type":"object","required":["id","name","normalizedName","description","type","spec","passwordSecretId","status","controlState","currentRunId","controlStartedAt","lastPrunedAt","lastCheckedAt","createdByActorId","createdAt","updatedAt","archivedAt","rowVersion"],"properties":{"id":uuid(),"name":string(),"normalizedName":string(),"description":nullable_string(),"type":string(),"spec":{"$ref":"#/components/schemas/BackupRepositorySpec"},"passwordSecretId":uuid(),"status":string(),"controlState":string(),"currentRunId":nullable_uuid(),"controlStartedAt":{"type":["integer","null"],"format":"int64"},"lastPrunedAt":nullable_date_time(),"lastCheckedAt":nullable_date_time(),"createdByActorId":uuid(),"createdAt":date_time(),"updatedAt":date_time(),"archivedAt":nullable_date_time(),"rowVersion":{"type":"integer","format":"int64"}}}));
     schemas.insert("BackupRepositoriesView".into(), json!({"type":"object","required":["repositories","capabilities"],"properties":{"repositories":{"type":"array","items":{"$ref":"#/components/schemas/BackupRepositoryView"}},"capabilities":{"$ref":"#/components/schemas/ResourceCapabilities"}}}));
@@ -1761,9 +1841,31 @@ fn phase5_schemas() -> Map<String, Value> {
     schemas.insert("BackupRestoreRunsView".into(), json!({"type":"object","required":["runs"],"properties":{"runs":{"type":"array","items":{"$ref":"#/components/schemas/BackupRestoreRunView"}}}}));
 
     schemas.insert(
+        "ContainerInspectView".into(),
+        json!({"type":"object","required":["id","created","args","execIDs","mounts"],"properties":{
+            "id":string(),"created":string(),"path":nullable_string(),"name":nullable_string(),"image":nullable_string(),
+            "args":string_array(),"execIDs":string_array(),"mounts":{"type":"array","items":{"type":"object"}},
+            "state":{"type":["object","null"]},"config":{"type":["object","null"]},"hostConfig":{"type":["object","null"]},
+            "networkSettings":{"type":["object","null"]},"graphDriver":{"type":["object","null"]},
+            "resolvConfPath":nullable_string(),"hostnamePath":nullable_string(),"hostsPath":nullable_string(),"logPath":nullable_string(),
+            "restartCount":{"type":["integer","null"]},"driver":nullable_string(),"platform":nullable_string(),"mountLabel":nullable_string(),"processLabel":nullable_string(),"appArmorProfile":nullable_string(),
+            "sizeRw":{"type":["integer","null"],"format":"int64"},"sizeRootFs":{"type":["integer","null"],"format":"int64"}
+        }}),
+    );
+    schemas.insert(
         "CreateNetworkInput".into(),
         json!({"type":"object","required":["platformId","name","driver","scope"],"properties":{"platformId":uuid(),"name":string(),"driver":string(),"scope":string(),"internal":{"type":["boolean","null"]},"attachable":{"type":["boolean","null"]},"ingress":{"type":["boolean","null"]},"enableIPv6":{"type":["boolean","null"]},"enableIPv4":{"type":["boolean","null"]},"configOnly":{"type":["boolean","null"]},"ipam":{"type":["object","null"]},"configFrom":{"type":["object","null"]},"labels":string_map(),"options":string_map()}}),
     );
+    platform_image_schemas::add(&mut schemas);
+    swarm_schemas::add(&mut schemas);
+    schemas.insert("DeleteImagesRequest".into(), json!({"type":"object","required":["platformId","ids"],"properties":{"platformId":uuid(),"ids":string_array(),"force":{"type":"boolean","default":false},"noPrune":{"type":"boolean","default":false}}}));
+    schemas.insert("AdoptContainerInput".into(), json!({"type":"object","required":["name","spec","previewFingerprint"],"properties":{"name":string(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"},"previewFingerprint":{"type":"string","minLength":64,"maxLength":64},"tagIds":{"type":"array","items":uuid()},"importSensitiveEnvironmentAsSecrets":{"type":"boolean","default":false}}}));
+    schemas.insert("ContainerAdoptionDraftView".into(), json!({"type":"object","required":["source","draft","issues","previewFingerprint","canImportSensitiveEnvironmentValues"],"properties":{
+        "source":{"type":"object","required":["id","dockerContainerId","name","platformId","platformName","state"],"properties":{"id":uuid(),"dockerContainerId":string(),"name":string(),"platformId":uuid(),"platformName":string(),"state":string()}},
+        "draft":{"type":"object","required":["name","platformId","spec","tagIds"],"properties":{"name":string(),"platformId":uuid(),"description":nullable_string(),"spec":{"$ref":"#/components/schemas/DeploymentSpec"},"tagIds":{"type":"array","items":uuid()}}},
+        "issues":{"type":"array","items":{"type":"object","required":["code","message","severity"],"properties":{"code":string(),"message":string(),"severity":{"type":"string","enum":["Warning","Blocker"]},"fieldPath":nullable_string()}}},
+        "previewFingerprint":string(),"canImportSensitiveEnvironmentValues":{"type":"boolean"}}}));
+    schemas.insert("DeleteImageResult".into(), json!({"type":"object","required":["items"],"properties":{"items":{"type":"array","items":{"type":"object","required":["result"],"properties":{"result":string_map()}}}}}));
     schemas.insert(
         "CreateNetworkView".into(),
         json!({"type":"object","required":["id"],"properties":{"id":string()}}),
@@ -2009,8 +2111,41 @@ fn container_view() -> Value {
             "projectionStaleSince":{"type":["integer","null"]}, "projectionStaleReason":nullable_string(),
             "lastStats":nullable(json!({"type":"object"})), "ports":{},
             "deploymentId":nullable_uuid(), "stackId":nullable_uuid(),
+            "imageView":nullable(json!({"$ref":"#/components/schemas/ImageView"})),
+            "deploymentView":nullable(json!({"$ref":"#/components/schemas/ContainerDeploymentView"})),
             "capabilities":nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"}))
         }
+    })
+}
+
+fn container_deployment_view() -> Value {
+    json!({"type":"object","required":["id","name","platformId","status","createdAt","createdByActorId","controlState","platformStatus","autoUpdateState"],
+        "properties":{"id":uuid(),"name":string(),"platformId":uuid(),"status":string(),"createdAt":date_time(),
+            "createdByActorId":uuid(),"controlState":string(),"platformStatus":string(),
+            "autoUpdateState":{"type":"object","required":["lastCheckedAt","status"],"properties":{"lastCheckedAt":date_time(),"status":string()}}}})
+}
+
+fn container_info_view() -> Value {
+    json!({"type":"object","required":["name","containerId","platformId","startedAt","finishedAt","platformName","volumes","ports","networks","state"],"properties":{
+        "name":string(),"containerId":string(),"platformId":uuid(),"startedAt":string(),"finishedAt":string(),"platformName":string(),
+        "volumes":string_array(),"networks":{"type":"object","additionalProperties":string()},
+        "ports":container_data_view()["properties"]["ports"].clone(),"state":string(),
+        "imageView":nullable(json!({"$ref":"#/components/schemas/ImageView"})),
+        "deploymentView":nullable(json!({"$ref":"#/components/schemas/ContainerDeploymentView"})),
+        "capabilities":nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"}))
+    }})
+}
+
+fn container_data_view() -> Value {
+    json!({"type":"object","required":["id","name","image","imageId","state","controlState","isSystem","hasCitadelOwnershipLabels","isSwarmTask"],
+        "properties":{"id":string(),"name":string(),"image":string(),"imageId":string(),"state":string(),
+            "controlState":string(),"created":integer(),"stack":nullable_string(),"platformId":uuid(),
+            "isSystem":{"type":"boolean"},"systemRole":nullable_string(),
+            "hasCitadelOwnershipLabels":{"type":"boolean"},"isSwarmTask":{"type":"boolean"},
+            "dockerNodeId":nullable_string(),"deploymentId":nullable_uuid(),"stackId":nullable_uuid(),
+            "containerStat":nullable(json!({"type":"object"})),
+            "capabilities":nullable(json!({"$ref":"#/components/schemas/PlatformCapabilities"})),
+            "ports":{"type":"object","additionalProperties":{"type":"array","items":{"type":"object","properties":{"hostIp":string(),"hostPort":string()}}}}}
     })
 }
 
@@ -2541,6 +2676,9 @@ fn parameter(parameter: &ParameterContract) -> Value {
 fn parameter_schema(schema: ParameterSchema) -> Value {
     match schema {
         ParameterSchema::String => string(),
+        ParameterSchema::ArrayUuid => {
+            json!({"type":"array","items":{"type":"string","format":"uuid"}})
+        }
         ParameterSchema::ArrayString => {
             json!({ "type": "array", "items": { "type": "string" } })
         }
@@ -2709,6 +2847,40 @@ mod tests {
                     "#/components/schemas/ProblemDetails"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn alert_rule_patch_schema_does_not_require_a_full_create_payload() {
+        let doc = document(false);
+        let schemas = &doc["components"]["schemas"];
+        assert!(schemas["AlertRuleInput"]["required"].is_array());
+        assert!(schemas["PatchAlertRuleInput"].get("required").is_none());
+        assert!(schemas["PatchAlertRuleInput"]["properties"].is_object());
+        assert!(
+            schemas["PatchAlertRuleInput"]["properties"]
+                .get("description")
+                .is_none()
+        );
+        assert_eq!(
+            doc["paths"]["/api/v1/alertRules/channels/{id}"]["patch"]["requestBody"]["content"]["application/json"]
+                ["schema"]["$ref"],
+            "#/components/schemas/AlertChannelInput"
+        );
+    }
+
+    #[test]
+    fn problem_schema_supports_field_errors_and_both_correlation_names() {
+        for public in [false, true] {
+            let doc = document(public);
+            let schema = &doc["components"]["schemas"]["ProblemDetails"];
+            assert_eq!(schema["required"], json!(["type", "title", "status"]));
+            assert_eq!(schema["properties"]["traceId"]["type"], "string");
+            assert_eq!(schema["properties"]["requestId"]["type"], "string");
+            assert_eq!(
+                schema["properties"]["errors"]["additionalProperties"],
+                json!({"type":"array","items":{"type":"string"}})
+            );
         }
     }
 

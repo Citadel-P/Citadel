@@ -189,6 +189,122 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn inventory_restores_only_platform_scoped_ownership_and_preserves_adoption() {
+    let database = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&database).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&database)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let other_platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    for id in [platform, other_platform] {
+        seed_platform(&pool, id, actor, Uuid::now_v7()).await;
+    }
+    let stack = Uuid::now_v7();
+    let release = Uuid::now_v7();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$2,$3,'WebEditor','{}','{}')")
+        .bind(stack).bind(stack.to_string()).bind(actor).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,createdbyactorid,platformid,spec,stackid,status,version) VALUES($1,$2,$3,'{}',$4,'Healthy','1')")
+        .bind(release).bind(actor).bind(platform).bind(stack).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,name,createdbyactorid,platformid,spec,status) VALUES($1,$2,$3,$4,'{}','Created')")
+        .bind(deployment).bind(deployment.to_string()).bind(actor).bind(platform).execute(&pool).await.unwrap();
+    let mut snapshot = snapshot(platform, false);
+    snapshot.swarm = None;
+    let template = snapshot.containers[0].clone();
+    snapshot.containers.clear();
+    for (name, stack_label, deployment_label, managed) in [
+        ("stack", Some(stack.to_string()), None, true),
+        ("deployment", None, Some(deployment.to_string()), true),
+        (
+            "conflicting",
+            Some(stack.to_string()),
+            Some(deployment.to_string()),
+            true,
+        ),
+        ("malformed", Some("not-a-uuid".into()), None, true),
+        ("orphaned", Some(Uuid::now_v7().to_string()), None, true),
+        ("unmanaged", Some(stack.to_string()), None, false),
+    ] {
+        let mut container = template.clone();
+        container.id = name.into();
+        if managed {
+            container
+                .labels
+                .insert("com.citadel.managed".into(), "true".into());
+        }
+        if let Some(value) = stack_label {
+            container
+                .labels
+                .insert("com.citadel.stack-id".into(), value);
+        }
+        if let Some(value) = deployment_label {
+            container
+                .labels
+                .insert("com.citadel.deployment-id".into(), value);
+        }
+        snapshot.containers.push(container);
+    }
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&snapshot).await.unwrap();
+    let reads = PostgresPlatformReadStore::new(pool.clone());
+    for container in reads.list_containers(platform).await.unwrap() {
+        assert_eq!(
+            container.stack_id,
+            (container.container_id == "stack").then_some(stack)
+        );
+        assert_eq!(
+            container.deployment_id,
+            (container.container_id == "deployment").then_some(deployment)
+        );
+    }
+    // Identical Docker labels on another Platform never grant Stack/Deployment access.
+    snapshot.platform_id = other_platform;
+    store.persist(&snapshot).await.unwrap();
+    for container in reads.list_containers(other_platform).await.unwrap() {
+        assert!(container.stack_id.is_none() && container.deployment_id.is_none());
+    }
+    // Adoption can attach ownership without changing Docker labels. Keep those
+    // authoritative links, even if a subsequent daemon snapshot disagrees.
+    snapshot.platform_id = platform;
+    sqlx::query(
+        "UPDATE containers SET stackid=$1 WHERE platformid=$2 AND dockercontainerid='unmanaged'",
+    )
+    .bind(stack)
+    .bind(platform)
+    .execute(&pool)
+    .await
+    .unwrap();
+    for container in &mut snapshot.containers {
+        container.labels.clear();
+        container
+            .labels
+            .insert("com.citadel.managed".into(), "true".into());
+        container
+            .labels
+            .insert("com.citadel.deployment-id".into(), deployment.to_string());
+    }
+    store.persist(&snapshot).await.unwrap();
+    for container in reads.list_containers(platform).await.unwrap() {
+        if ["stack", "unmanaged"].contains(&container.container_id.as_str()) {
+            assert_eq!(container.stack_id, Some(stack));
+            assert_eq!(container.deployment_id, None);
+        }
+    }
+    pool.close().await;
+}
+
 fn snapshot(platform_id: Uuid, include_task: bool) -> RuntimeInventorySnapshot {
     let observed_at = Utc::now();
     let service_id = Uuid::now_v7();

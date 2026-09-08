@@ -1,10 +1,97 @@
 # Rust development environment
 
-The VS Code Dev Container is the supported interactive environment for the
-Rust migration. It runs Citadel in Linux with PostgreSQL, Docker access, the
-React frontend, and the Rust debugger while the repository remains on the host.
+On Windows, prefer **VS Code in WSL Ubuntu**, with the repository on the Linux
+filesystem. Rust and Vite run directly in Ubuntu; Docker Desktop supplies Docker
+and PostgreSQL. The Dev Container remains a supported fallback.
 
-## Prerequisites
+This removes the workspace container and Windows bind-mount file watching from
+the normal development loop. It does not remove WSL's VM or guarantee a memory
+ceiling: Rust compilation, rust-analyzer, Docker workloads and filesystem cache
+still consume memory. Cargo builds use two parallel jobs by default, and the
+editor runs `cargo check` instead of Clippy on save. Full Clippy checks remain
+available in the check task. Development breakpoints and variable inspection
+are preserved.
+
+## Direct WSL setup (recommended)
+
+1. Install the VS Code **WSL** extension. In Docker Desktop, enable
+   **Settings > Resources > WSL Integration > Ubuntu**.
+2. From Ubuntu, verify `docker info --format '{{.OperatingSystem}}'` reports
+   `Docker Desktop`, and that `/var/run/docker.sock` is accessible to your user.
+   Compare `docker ps` with Docker Desktop before proceeding.
+   If Ubuntu already runs an independent Docker Engine, stop here and choose
+   which engine to use. Do not remove it or its data blindly. The preparation
+   task rejects an unexpected native engine; intentionally opting into it with
+   `CITADEL_DEV_ALLOW_NATIVE_DOCKER=true` in `rust/.env.development` uses that
+   engine's **different containers and volumes**, not Desktop's.
+3. Install Linux prerequisites inside Ubuntu:
+
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y build-essential pkg-config libssl-dev git curl rsync
+   ```
+
+   Install Rust using [rustup](https://rustup.rs/) and Linux Node.js 22 using
+   the [Node.js installation instructions](https://nodejs.org/en/download).
+   The repository pins the Rust toolchain in `rust-toolchain.toml`. Docker
+   Desktop integration must also provide `docker compose`. Verify `cargo`,
+   `node`, and `npm` resolve to Linux installations, not `/mnt/c/...`.
+   Features that execute external tools also need their Linux executables
+   (for example Deno for Automations and Restic for backups).
+4. Put the checkout under `~/projects/Citadel`, **not `/mnt/d`**. For a clean
+   checkout, clone recursively from your remote. For an existing dirty checkout,
+   copy the repository **including `.git` and submodule metadata** into a new,
+   empty directory; preserve staged, unstaged and untracked source files. Skip
+   disposable `node_modules`, Rust `target`, and .NET `bin`/`obj` artifacts.
+   Compare Git status and diffs before using the copy. Keep the original until
+   verified; do not replace it with a remote clone that loses local work.
+5. In Ubuntu, open the Linux checkout:
+
+   ```bash
+   cd ~/projects/Citadel
+   code .
+   ```
+
+   The status bar must say **WSL: Ubuntu**, not Dev Container. Install the
+   recommended Rust/CodeLLDB and frontend extensions in WSL when prompted.
+6. Run **Citadel: Initialize development dependencies** once. Then press
+   `Ctrl+Shift+B` to run, or choose **Citadel: Debug application** and press
+   `F5` for breakpoints. Do not run both at once.
+
+The preparation task creates an ignored, private `rust/.env.development` file
+once. Both the normal tasks and debugger use it. Entries are plain `KEY=value`
+(no shell expansion or surrounding quotes); edit it to override defaults.
+If you change the Docker socket, update both `CITADEL_RUST_DOCKER_SOCKET` and
+`DOCKER_HOST` so API calls and external Docker CLI operations use the same engine.
+Default keys are **development-only**, never suitable for production.
+
+In WSL, preparation starts only PostgreSQL, with project name `citadel-wsl`,
+exposing it on `127.0.0.1:15432`. This is a **new development database**, separate
+from the devcontainer's existing database. Runtime data lives under
+`~/.local/share/citadel-wsl`; compiler artifacts remain under `rust/target`.
+Nothing deletes or migrates your old database, volumes, or checkout. To retain
+an existing Citadel instance, use its backup/restore procedure and preserve its
+encryption/signing keys and runtime data; don't merely point at an old database
+with newly generated keys. A custom `DATABASE_URL` skips starting PostgreSQL.
+
+Stop the old devcontainer API/UI before running WSL to avoid port conflicts.
+To stop the WSL development database without deleting its data:
+
+```bash
+docker compose -p citadel-wsl -f .devcontainer/compose.yaml \
+  -f .devcontainer/compose.wsl.yaml stop postgres
+```
+
+Docker socket access does **not** require a container bind mount when the API
+runs directly in Ubuntu: it opens `/var/run/docker.sock` as a normal Unix socket.
+Do not expose the daemon on an unauthenticated TCP port or make its socket
+world-writable. Docker access is privileged; use trusted repositories only.
+See [Docker's WSL guidance](https://docs.docker.com/desktop/features/wsl/) and
+[VS Code's WSL guide](https://code.visualstudio.com/docs/remote/wsl).
+
+## Dev Container fallback
+
+### Prerequisites
 
 - Docker Desktop with Linux containers enabled
 - Visual Studio Code
@@ -13,7 +100,7 @@ React frontend, and the Rust debugger while the repository remains on the host.
 Rust, Node.js, CodeLLDB, rust-analyzer, and the frontend dependencies are
 installed inside the development container.
 
-## Open the development container
+### Open the development container
 
 1. Open the Citadel repository in VS Code.
 2. Press `Ctrl+Shift+P`.
@@ -102,7 +189,7 @@ Open these addresses from the host:
 The task creates separate **citadel-api** and **citadel-ui** terminal panels.
 The API is ready when its panel reports `Rust foundation server listening`.
 
-The Dev Container enables file-watcher polling at one-second intervals so Vite
+Only the Dev Container enables file-watcher polling at one-second intervals so Vite
 detects edits made on the Windows host. Without polling, mounted files can change
 while Vite continues serving an older transformed module, even after a browser
 refresh.
@@ -124,17 +211,21 @@ task at the same time because both workflows use ports 5173 and 8000.
 
 ## Run one process manually
 
-Use separate terminals inside the development container when investigating one
-side of the application:
+Use separate Linux terminals at the repository root when investigating one
+side of the application. Prepare the environment once:
 
 ```bash
-cd /workspace/rust
-cargo run --locked -p citadel-server -- serve
+bash rust/scripts/dev.sh prepare
 ```
 
 ```bash
-cd /workspace/src/Citadel.FrontEnd
-npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
+cd rust
+bash scripts/dev.sh exec cargo run --locked -p citadel-server -- serve
+```
+
+```bash
+cd src/Citadel.FrontEnd
+bash ../../rust/scripts/dev.sh exec npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
 ```
 
 The second command runs only the UI. API-backed pages will report that Citadel
@@ -149,6 +240,11 @@ Run the committed tasks from **Terminal > Run Task**:
 - **Citadel: Initialize development dependencies** refreshes locked Cargo and
   npm dependencies when their lockfiles change.
 
+Run `bash rust/scripts/test-dev.sh` to check environment generation, run/debug
+settings compatibility and startup guards without building Rust or starting
+containers. In WSL it additionally exercises the daemon selection and database
+startup guards with a mocked Docker command.
+
 ## Database schema changes
 
 The declarative schema in `crates/database/src/schema/schema.sql` is the Rust
@@ -156,7 +252,7 @@ database authority. Until the first Rust release, keep a single generated
 baseline and fold schema changes into it; do not hand-write migration SQL:
 
 ```bash
-cd /workspace/rust
+cd rust
 cargo run --locked -p xtask -- database refresh-baseline
 cargo run --locked -p xtask -- database verify
 ```

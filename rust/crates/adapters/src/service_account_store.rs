@@ -29,6 +29,30 @@ impl PostgresServiceAccountStore {
 }
 
 impl ServiceAccountStore for PostgresServiceAccountStore {
+    fn usages(
+        &self,
+        actor_id: ActorId,
+    ) -> BoxFuture<'_, Result<Vec<citadel_identity::RunAsActorUsageView>, IdentityError>> {
+        Box::pin(async move {
+            let rows: Vec<(Uuid, String, i32, bool)> = sqlx::query_as("SELECT id,name,13 AS resourcetype,enabled AS isactive FROM actions WHERE runasactorid=$1 UNION ALL SELECT id,name,16 AS resourcetype,(enabled AND archivedat IS NULL) AS isactive FROM backuppolicies WHERE runasactorid=$1 ORDER BY resourcetype,name,id")
+                .bind(actor_id.value()).fetch_all(&self.pool).await.map_err(storage)?;
+            Ok(rows
+                .into_iter()
+                .map(
+                    |(id, name, kind, is_active)| citadel_identity::RunAsActorUsageView {
+                        id,
+                        name,
+                        resource_type: if kind == 13 {
+                            ResourceType::AutomationAction
+                        } else {
+                            ResourceType::BackupPolicy
+                        },
+                        is_active,
+                    },
+                )
+                .collect())
+        })
+    }
     fn list<'a>(
         &'a self,
         actor_id: ActorId,

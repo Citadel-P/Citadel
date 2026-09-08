@@ -21,6 +21,9 @@ use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
 use crate::realtime::RealtimeHub;
 
+#[path = "deployments_http/adoption.rs"]
+mod adoption;
+
 pub struct DeploymentsRealtimeNotifier {
     realtime: Option<RealtimeHub>,
 }
@@ -33,6 +36,20 @@ impl DeploymentsRealtimeNotifier {
 }
 
 impl DeploymentChangeNotifier for DeploymentsRealtimeNotifier {
+    fn adopted(&self, deployment: &citadel_deployments::DeploymentView) {
+        self.changed(deployment.id, "created");
+        if let Some(realtime) = &self.realtime {
+            if let Some(container) = &deployment.docker_container_id {
+                realtime.publish_runtime_change(
+                    deployment.platform_id,
+                    "container",
+                    "update",
+                    container,
+                );
+            }
+            realtime.publish_resource_change("Platform", deployment.platform_id, "updated");
+        }
+    }
     fn changed(&self, deployment_id: Uuid, event: &'static str) {
         if let Some(realtime) = &self.realtime {
             realtime.publish_resource_change("Deployment", deployment_id, event);
@@ -50,6 +67,8 @@ pub fn router(state: DeploymentsHttpState) -> Router {
     Router::new()
         .contract_route(routes::LIST_DEPLOYMENTS, list_deployments)
         .contract_route(routes::CREATE_DEPLOYMENT, create_deployment)
+        .contract_route(routes::GET_CONTAINER_ADOPTION_DRAFT, adoption::draft)
+        .contract_route(routes::ADOPT_CONTAINER, adoption::adopt)
         .contract_route(routes::APPLY_DEPLOYMENT, apply_deployment)
         .contract_route(routes::DELETE_DEPLOYMENTS, delete_deployments)
         .contract_route(routes::RENAME_DEPLOYMENT, rename_deployment)

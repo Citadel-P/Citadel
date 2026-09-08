@@ -724,17 +724,7 @@ fn container_data(
     container: citadel_platforms::ContainerView,
     event: Option<&PublishedRuntimeEvent>,
 ) -> Value {
-    let mut value = json!({
-        "id":container.container_id,"name":container.name,"platformId":container.platform_id,
-        "image":container.docker_image_id,"imageId":container.docker_image_id,"state":container.state,
-        "controlState":container.control_state,"created":container.created,"stack":container.stack,
-        "ports":container.ports,"containerStat":container.last_stats,
-        "isSystem":container.is_system,"systemRole":container.system_role,
-        "hasCitadelOwnershipLabels":container.has_citadel_ownership_labels,
-        "isSwarmTask":container.is_swarm_task,"dockerNodeId":container.docker_node_id,
-        "deploymentId":container.deployment_id,"stackId":container.stack_id,
-        "capabilities":container.capabilities,
-    });
+    let mut value = container.runtime_data();
     if let Some(stat) = event
         .filter(|event| {
             event.payload["dockerNodeId"].as_str() == container.docker_node_id.as_deref()

@@ -15,7 +15,9 @@ pub struct CreateRuntimeNetwork {
     pub internal: Option<bool>,
     pub attachable: Option<bool>,
     pub ingress: Option<bool>,
+    #[serde(rename = "enableIPv6", alias = "enableIpv6")]
     pub enable_ipv6: Option<bool>,
+    #[serde(rename = "enableIPv4", alias = "enableIpv4")]
     pub enable_ipv4: Option<bool>,
     pub config_only: Option<bool>,
     pub ipam: Option<RuntimeIpam>,
@@ -39,9 +41,9 @@ pub struct RuntimeIpam {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeIpamConfig {
-    pub subnet: String,
-    pub ip_range: String,
-    pub gateway: String,
+    pub subnet: Option<String>,
+    pub ip_range: Option<String>,
+    pub gateway: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

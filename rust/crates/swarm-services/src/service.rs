@@ -34,6 +34,12 @@ pub struct ServiceOperationRequest {
 }
 
 pub trait SwarmServiceStore: Send + Sync {
+    fn duplicate_draft(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<crate::SwarmServiceDuplicateDraft, SwarmServiceError>>;
     fn update_check_candidates(
         &self,
         after: Option<Uuid>,
@@ -80,6 +86,14 @@ pub trait SwarmServiceStore: Send + Sync {
         id: Uuid,
         input: &'a UpdateSwarmServiceInput,
     ) -> BoxFuture<'a, Result<ManagedSwarmServiceView, SwarmServiceError>>;
+    fn update_description<'a>(
+        &'a self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+        description: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<ManagedSwarmServiceView, SwarmServiceError>>;
+
     fn rename<'a>(
         &'a self,
         actor_id: ActorId,
@@ -215,6 +229,7 @@ impl SwarmServiceChangeNotifier for NoopSwarmServiceChangeNotifier {
 
 #[derive(Clone)]
 pub struct ManagedSwarmServiceService {
+    adoption: Option<Arc<dyn crate::adoption::SwarmServiceAdoptionPort>>,
     store: Arc<dyn SwarmServiceStore>,
     runtime: Arc<dyn SwarmServiceRuntimePort>,
     notifier: Arc<dyn SwarmServiceChangeNotifier>,
@@ -235,6 +250,7 @@ impl ManagedSwarmServiceService {
         shutdown: CancellationToken,
     ) -> Self {
         Self {
+            adoption: None,
             store,
             runtime,
             notifier: Arc::new(NoopSwarmServiceChangeNotifier),
@@ -329,16 +345,74 @@ impl ManagedSwarmServiceService {
         self.store.get_authorized(actor_id, administrator, id).await
     }
 
+    pub fn with_adoption(
+        mut self,
+        adoption: Arc<dyn crate::adoption::SwarmServiceAdoptionPort>,
+    ) -> Self {
+        self.adoption = Some(adoption);
+        self
+    }
+    pub async fn adoption_draft(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        id: &str,
+        cancel: &CancellationToken,
+    ) -> Result<crate::adoption::SwarmServiceAdoptionDraft, SwarmServiceError> {
+        self.adoption
+            .as_ref()
+            .ok_or_else(|| SwarmServiceError::Runtime("Service adoption is unavailable.".into()))?
+            .draft(actor, administrator, platform, id, cancel)
+            .await
+    }
+    pub async fn adopt(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        id: &str,
+        mut input: crate::adoption::AdoptSwarmServiceInput,
+        cancel: &CancellationToken,
+    ) -> Result<ManagedSwarmServiceView, SwarmServiceError> {
+        normalize_name(&mut input.name)?;
+        normalize_description(&mut input.description)?;
+        if input.preview_fingerprint.len() != 64 || input.tag_ids.len() > 100 {
+            return Err(validation("Invalid adoption fingerprint or Tags."));
+        }
+        input.tag_ids = unique_ids(&input.tag_ids);
+        input.spec = input.spec.for_create();
+        input.spec.webhook = None;
+        input.spec.update_behavior = crate::UpdateBehavior::Disabled;
+        input.spec.validate()?;
+        let created = self
+            .adoption
+            .as_ref()
+            .ok_or_else(|| SwarmServiceError::Runtime("Service adoption is unavailable.".into()))?
+            .adopt(actor, administrator, platform, id, &input, cancel)
+            .await?;
+        self.notifier.changed(created.id, "created");
+        Ok(created)
+    }
+    pub async fn duplicate_draft(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+    ) -> Result<crate::SwarmServiceDuplicateDraft, SwarmServiceError> {
+        self.store.duplicate_draft(actor, administrator, id).await
+    }
+
     pub async fn create(
         &self,
         actor_id: ActorId,
         administrator: bool,
         mut input: CreateSwarmServiceInput,
     ) -> Result<ManagedSwarmServiceView, SwarmServiceError> {
-        if input.duplicate_source.is_some() {
-            return Err(validation(
-                "Managed Swarm Service duplication has not migrated to Rust yet.",
-            ));
+        if input.duplicate_source.as_ref().is_some_and(|source| {
+            source.resource_type != "SwarmService" || source.resource_id.is_nil()
+        }) {
+            return Err(validation("Duplicate source must be a Swarm Service."));
         }
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
@@ -350,6 +424,9 @@ impl ManagedSwarmServiceService {
         }
         input.tag_ids = unique_ids(&input.tag_ids);
         input.spec = input.spec.for_create();
+        if input.duplicate_source.is_some() {
+            input.spec.webhook = None;
+        }
         input.spec.validate()?;
         let created = self.store.create(actor_id, administrator, &input).await?;
         self.notifier.changed(created.id, "created");
@@ -378,6 +455,27 @@ impl ManagedSwarmServiceService {
         let updated = self
             .store
             .update(actor_id, administrator, id, &input)
+            .await?;
+        self.notifier.changed(id, "updated");
+        Ok(updated)
+    }
+
+    pub async fn update_description(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        id: Uuid,
+        description: Option<&str>,
+    ) -> Result<ManagedSwarmServiceView, SwarmServiceError> {
+        if id.is_nil() || description.is_some_and(|v| v.chars().count() > 600) {
+            return Err(SwarmServiceError::Validation(
+                "A valid Service id and a description of at most 600 characters are required."
+                    .into(),
+            ));
+        }
+        let updated = self
+            .store
+            .update_description(actor_id, administrator, id, description)
             .await?;
         self.notifier.changed(id, "updated");
         Ok(updated)

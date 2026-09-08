@@ -45,12 +45,31 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/swarm_overview.rs"]
+mod swarm_overview;
+#[path = "platforms_http/swarm_inventory.rs"]
+mod swarm_inventory;
+#[path = "platforms_http/service_adoption.rs"]
+mod service_adoption;
+#[path = "platforms_http/task_runtime.rs"]
+mod task_runtime;
+
+#[path = "platforms_http/adoption.rs"]
+mod adoption;
+#[path = "platforms_http/container_inspection.rs"]
+mod container_inspection;
 #[path = "platforms_http/container_mutations.rs"]
 mod container_mutations;
 #[path = "platforms_http/edge.rs"]
 mod edge;
+#[path = "platforms_http/get_container.rs"]
+mod get_container;
 #[path = "platforms_http/images.rs"]
 mod images;
+#[path="platforms_http/platform_image_management.rs"]
+mod platform_image_management;
+#[path="platforms_http/registry_browsing.rs"]
+mod registry_browsing;
 #[path = "platforms_http/logs.rs"]
 mod logs;
 #[path = "platforms_http/lookup.rs"]
@@ -65,6 +84,8 @@ mod node_coverage;
 mod node_resources;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
+#[path = "platforms_http/search.rs"]
+mod search;
 #[path = "platforms_http/statistics.rs"]
 mod statistics;
 #[path = "platforms_http/volume_content.rs"]
@@ -206,6 +227,8 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     )
     .await;
     assert_eq!(volumes["volumes"][0]["name"], "data");
+    assert_eq!(volumes["volumes"][0]["usageData"]["size"], 1024);
+    assert_eq!(volumes["volumes"][0]["usageData"]["refCount"], 1);
     let volume = json_body(
         send(
             &fixture,
@@ -216,6 +239,7 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     )
     .await;
     assert_eq!(volume["inUse"], true);
+    assert_eq!(volume["usageData"]["size"], 1024);
 
     let platforms = json_body(
         send(
@@ -393,6 +417,14 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     )
     .await;
     assert_eq!(created_network["id"], "network-created");
+    // NetworkEndpointTests parity: the default UI has empty IPv4/IPv6 IPAM rows.
+    let default_network = json_body(send_json(
+        &fixture, Method::POST, "/api/v1/networks", fixture.administrator.clone(),
+        json!({"platformId":fixture.platform_id,"name":"fscsd","driver":"bridge","scope":"local",
+            "enableIPv4":true,"enableIPv6":false,"internal":false,"attachable":false,"ingress":false,
+            "labels":{},"options":{},"ipam":{"driver":"default","config":[{},{}]},"configOnly":false}),
+    ).await).await;
+    assert_eq!(default_network["id"], "network-created");
     let created_volume = json_body(
         send_json(
             &fixture,
@@ -496,7 +528,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         credential_id: None,
         roles: vec!["Admin".to_owned()],
     };
-    let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(7, cluster).await;
+    let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(10, cluster).await;
     let platforms = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReadStore::new(pool.clone()),
     )));
@@ -556,12 +588,6 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         lookup_state,
         _guard: guard,
     }
-}
-
-async fn docker_fixture_with_limit(
-    request_limit: usize,
-) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
-    docker_fixture_for_cluster(request_limit, "cluster-test".into()).await
 }
 
 async fn docker_fixture_for_cluster(
@@ -628,10 +654,13 @@ async fn docker_fixture_for_cluster(
                     r#"{"Name":"frontend","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"swarm","Driver":"overlay","EnableIPv4":true,"Containers":{"container-1":{"Name":"web"}},"Peers":[{"Name":"worker-1","IP":"10.0.0.2"}],"Labels":{},"Options":{}}"#
                 }
                 ("GET", "/v1.49/volumes") => {
-                    r#"{"Volumes":[{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{},"UsageData":{"RefCount":1,"Size":1024}}],"Warnings":[]}"#
+                    r#"{"Volumes":[{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{}}],"Warnings":[]}"#
                 }
                 ("GET", "/v1.49/volumes/data") => {
-                    r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{},"UsageData":{"RefCount":1,"Size":1024}}"#
+                    r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Labels":{},"Scope":"local","Options":{}}"#
+                }
+                ("GET", "/v1.49/system/df") => {
+                    r#"{"Volumes":[{"Name":"data","UsageData":{"RefCount":1,"Size":1024}}]}"#
                 }
                 ("POST", "/v1.49/networks/create") => r#"{"Id":"network-created","Warning":""}"#,
                 ("POST", "/v1.49/volumes/create") => {

@@ -1,0 +1,6 @@
+# Start only postgres with this override; the API and UI run directly in WSL.
+# Use project name citadel-wsl to keep the devcontainer database untouched.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:15432:5432"

@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[path = "swarm_services_http/metadata.rs"]
+mod metadata;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
@@ -185,6 +188,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    metadata::verify(&app, &pool, &admin, id).await;
     assert_eq!(
         request(
             &app,

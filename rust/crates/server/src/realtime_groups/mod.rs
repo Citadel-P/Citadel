@@ -116,8 +116,14 @@ impl Group {
             return self.kind == "build-run" && self.id == Some(event.resource_id);
         }
         if self.kind == "activity" {
+            // The existing Alert router publishes a coarse Alert invalidation
+            // for Rule mutations too. Reload through the authorized activity
+            // reader; never broadcast audit payloads directly to subscribers.
+            let resource_matches = self.reference.as_deref() == Some(event.resource_type)
+                || (self.reference.as_deref() == Some("AlertRule")
+                    && event.resource_type == "Alert");
             return event.payload["dockerResourceType"] != "containerStats"
-                && self.reference.as_deref() == Some(event.resource_type)
+                && resource_matches
                 && (event.resource_id.is_nil() || self.id == Some(event.resource_id));
         }
         if let Some(platform) = event.platform_id {
@@ -420,6 +426,32 @@ mod tests {
                 .is_empty()
         );
         assert!(subscription.apply(snapshot(&[]), 100).unwrap().is_empty());
+    }
+    #[test]
+    fn alert_rule_activity_follows_committed_alert_invalidations_only() {
+        let id = Uuid::now_v7();
+        let group = Group::parse(&format!("activity:AlertRule:{id}")).unwrap();
+        let mut event = PublishedRuntimeEvent {
+            platform_id: None,
+            resource_type: "Alert",
+            resource_id: Uuid::nil(),
+            event_kind: "resourceChanged",
+            resource_revision: 1,
+            payload: json!({}),
+        };
+        assert!(group.affected_by(&event));
+        assert!(
+            !Group::parse(&format!("activity:User:{id}"))
+                .unwrap()
+                .affected_by(&event)
+        );
+        event.resource_id = Uuid::now_v7();
+        assert!(!group.affected_by(&event));
+        event.resource_id = id;
+        event.resource_type = "AlertRule";
+        assert!(group.affected_by(&event));
+        event.payload = json!({"dockerResourceType":"containerStats"});
+        assert!(!group.affected_by(&event));
     }
     #[test]
     fn rejects_private_untyped_malformed_and_unimplemented_stream_groups() {

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod adoption;
 mod model;
 mod service;
 

@@ -222,6 +222,7 @@ async fn restore_system(
     database: DatabaseConfig,
     bundle: std::path::PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let (_, encryption_key) = citadel_server::config::identity_keys_from_env()?;
     let cancellation = CancellationToken::new();
     let signal_token = cancellation.clone();
     let signal = tokio::spawn(async move {
@@ -236,6 +237,7 @@ async fn restore_system(
             pg_restore: std::env::var_os("CITADEL_PG_RESTORE_PATH")
                 .unwrap_or_else(|| "pg_restore".into()),
             maximum_output: 1024 * 1024,
+            secret_encryption_key: Some(zeroize::Zeroizing::new(encryption_key.expose().to_vec())),
         },
         &cancellation,
     )
@@ -326,6 +328,11 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         chrono::Duration::from_std(config.identity.access_token_lifetime)?,
         chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
     ));
+    citadel_server::bootstrap::initialize_from_environment(&identity).await?;
+    // Login must use persisted setup state before listeners open, not wait for
+    // the first background probe after a fresh bootstrap or ordinary restart.
+    readiness.set_setup(!identity.setup_status().await?.requires_setup);
+    readiness.set(true, false);
     let secret_protector = Arc::new(AesGcmSecretProtector::new(
         config.identity.secret_encryption_key.expose(),
     )?);
@@ -414,7 +421,7 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         Some(
             AgentClient::connect(
                 &agent.address,
-                agent_signer,
+                agent_signer.clone(),
                 agent.operation_timeout,
                 agent.allow_insecure,
             )
@@ -423,9 +430,14 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
-    let alert_store = Arc::new(PostgresAlertStore::new(pool.clone()).with_change_notifier(
-        citadel_server::realtime::change_callback(realtime_hub.clone(), "Alert"),
-    ));
+    let alert_store = Arc::new(
+        PostgresAlertStore::new(pool.clone())
+            .with_entitlements(entitlements.clone())
+            .with_change_notifier(citadel_server::realtime::change_callback(
+                realtime_hub.clone(),
+                "Alert",
+            )),
+    );
     let alert_delivery = Arc::new(ShoutrrrAlertDelivery::new(
         std::env::var_os("CITADEL_SHOUTRRR_PATH").unwrap_or_else(|| "shoutrrr".into()),
         Duration::from_secs(15),
@@ -497,6 +509,14 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             ),
             Arc::new(
                 PostgresBackupSourcePlanner::new(pool.clone())
+                    .with_runtime(
+                        citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+                            pool.clone(),
+                            docker.clone(),
+                            agent.clone(),
+                            edge_registry.clone(),
+                        ),
+                    )
                     .with_git_execution(Arc::clone(&git_execution))
                     .with_system_builder(Arc::new(PostgresCitadelSystemBackupBuilder::new(
                         pool.clone(),
@@ -623,6 +643,19 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             pool.clone(),
             secret_protector.clone(),
         )?))
+        .with_adoption(Arc::new(
+            citadel_adapters::deployment_store::PostgresContainerAdoption::new(
+                pool.clone(),
+                citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+                    pool.clone(),
+                    docker.clone(),
+                    agent.clone(),
+                    edge_registry.clone(),
+                ),
+                secret_protector.clone(),
+                config.identity.secret_encryption_key.expose(),
+            ),
+        ))
         .with_alerts(alert_store.clone()),
     );
     let swarm_services = Arc::new(
@@ -637,6 +670,14 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .with_image_digests(Arc::new(
             SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
                 .with_edge(edge_registry.clone()),
+        ))
+        .with_adoption(Arc::new(
+            citadel_adapters::swarm_service_store::PostgresSwarmServiceAdoption::new(
+                pool.clone(),
+                SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+                config.identity.secret_encryption_key.expose(),
+            ),
         ))
         .with_entitlements(entitlements.clone())
         .with_notifier(Arc::new(
@@ -848,6 +889,12 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 != citadel_server::config::TransportMode::Disabled,
         }))
         .merge(application_info_http::router())
+        .merge(citadel_server::search_http::router(Arc::new(
+            citadel_adapters::global_search::PostgresGlobalSearchStore::new(pool.clone()),
+        )))
+        .merge(citadel_server::actors_http::router(Arc::new(
+            citadel_adapters::actor_store::PostgresActorStore::new(pool.clone()),
+        )))
         .merge(license_http::router(license_http::LicenseHttpState {
             identity: Arc::clone(&identity),
             licenses,
@@ -946,6 +993,13 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         .merge({
             platforms_http::router(platform_state.clone())
                 .layer(axum::Extension(agent_setup))
+                .layer(axum::Extension(
+                    citadel_server::platforms_http::AgentSetupContext {
+                        signer: agent_signer,
+                        image: agent_image.clone(),
+                        requires_tls: !citadel_server::config::agent_allows_insecure()?,
+                    },
+                ))
                 .merge(citadel_server::lookup_http::router(
                     citadel_server::lookup_http::LookupHttpState {
                         store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(

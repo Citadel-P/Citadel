@@ -48,7 +48,9 @@ impl BackupSecretResolver for PostgresBackupSecretResolver {
     }
 }
 
+#[derive(Clone)]
 pub struct DockerResticBackupExecutor {
+    progress: Option<Arc<dyn Fn(BackupLog) + Send + Sync>>,
     docker: OsString,
     restic: OsString,
     image: String,
@@ -72,6 +74,7 @@ impl DockerResticBackupExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
+            progress: None,
             docker: docker.into(),
             restic: std::env::var_os("CITADEL_RESTIC_PATH").unwrap_or_else(|| "restic".into()),
             image: image.into(),
@@ -96,6 +99,31 @@ impl DockerResticBackupExecutor {
     }
 }
 impl BackupExecutor for DockerResticBackupExecutor {
+    fn backup_with_progress<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+        plan: &'a BackupSourcePlan,
+        cancellation: &'a CancellationToken,
+        progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
+    ) -> BoxFuture<'a, BackupExecutionResult> {
+        Box::pin(async move {
+            let mut executor = self.clone();
+            executor.progress = Some(progress);
+            executor.backup(claim, plan, cancellation).await
+        })
+    }
+    fn restore_with_progress<'a>(
+        &'a self,
+        claim: &'a RestoreClaim,
+        cancellation: &'a CancellationToken,
+        progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
+    ) -> BoxFuture<'a, RestoreExecutionResult> {
+        Box::pin(async move {
+            let mut executor = self.clone();
+            executor.progress = Some(progress);
+            executor.restore(claim, cancellation).await
+        })
+    }
     fn repository<'a>(
         &'a self,
         repository: &'a BackupRepositoryView,
@@ -299,7 +327,8 @@ impl DockerResticBackupExecutor {
         for (key, value) in environment {
             request = request.env(key, value);
         }
-        let output = run(request, cancellation)
+        let output = self
+            .run_observed(request, cancellation)
             .await
             .map_err(|error| error.to_string())?;
         if output.succeeded() {
@@ -472,7 +501,7 @@ impl DockerResticBackupExecutor {
         for (key, value) in environment {
             request = request.env(key, value);
         }
-        let output = match run(request, cancellation).await {
+        let output = match self.run_observed(request, cancellation).await {
             Ok(output) if output.succeeded() => output,
             Ok(output) => {
                 let logs = output_logs(&output);
@@ -617,8 +646,9 @@ impl DockerResticBackupExecutor {
                 format!("volume:{}", item.volume_name),
                 "/source".to_owned(),
             ];
-            let output = agent
-                .exec_binary(
+            let output = self
+                .exec_agent(
+                    agent,
                     ExecBinaryRequest {
                         container_id: container_id.clone(),
                         cmd: command,
@@ -683,8 +713,9 @@ impl DockerResticBackupExecutor {
                 .map_err(|error| error.to_string())?;
             let mut command = vec!["restic".to_owned()];
             command.extend(arguments);
-            let output = agent
-                .exec_binary(
+            let output = self
+                .exec_agent(
+                    agent,
                     ExecBinaryRequest {
                         container_id: container_id.clone(),
                         cmd: command,
@@ -809,7 +840,8 @@ impl DockerResticBackupExecutor {
         for (key, value) in environment {
             request = request.env(key, value);
         }
-        let output = run(request, cancellation)
+        let output = self
+            .run_observed(request, cancellation)
             .await
             .map_err(|error| error.to_string())?;
         if output.succeeded() {
@@ -966,8 +998,9 @@ impl DockerResticBackupExecutor {
                 .await
                 .map_err(|error| error.to_string())?;
             let environment = self.agent_repository_environment(&claim.repository).await?;
-            let metadata = agent
-                .exec_binary(
+            let metadata = self
+                .exec_agent(
+                    agent,
                     ExecBinaryRequest {
                         container_id: container_id.clone(),
                         cmd: vec![
@@ -991,8 +1024,9 @@ impl DockerResticBackupExecutor {
                 return Err(redact(&String::from_utf8_lossy(&metadata.stderr)));
             }
             let subtree = snapshot_subtree(&metadata.stdout, snapshot)?;
-            let output = agent
-                .exec_binary(
+            let output = self
+                .exec_agent(
+                    agent,
                     ExecBinaryRequest {
                         container_id: container_id.clone(),
                         cmd: vec![
@@ -1102,8 +1136,8 @@ impl DockerResticBackupExecutor {
         let agent = self
             .agent
             .as_ref()
-            .filter(|agent| agent.address().trim_end_matches('/') == address.trim_end_matches('/'))
-            .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?;
+            .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?
+            .at_address(&address).map_err(|error|error.message)?;
         if let Some(expected_node) = node_id {
             let info = agent
                 .handshake(cancellation)
@@ -1445,7 +1479,8 @@ impl DockerResticBackupExecutor {
         for (key, value) in env {
             request = request.env(key, value);
         }
-        let output = run(request, cancellation)
+        let output = self
+            .run_observed(request, cancellation)
             .await
             .map_err(|e| e.to_string())?;
         if output.succeeded() {
@@ -1453,6 +1488,42 @@ impl DockerResticBackupExecutor {
         } else {
             Err(redact(&String::from_utf8_lossy(&output.stderr)))
         }
+    }
+    async fn run_observed(
+        &self,
+        request: ProcessRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_execution::ProcessOutput, citadel_execution::ProcessError> {
+        let Some(progress) = &self.progress else {
+            return run(request, cancellation).await;
+        };
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let (result, ()) = tokio::join!(
+            run(request.output(sender), cancellation),
+            observe_output(receiver, progress)
+        );
+        result
+    }
+    async fn exec_agent(
+        &self,
+        agent: &AgentExecutionClient,
+        request: ExecBinaryRequest,
+        timeout: Duration,
+        maximum: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<crate::agent::AgentBinaryExecOutput, citadel_platforms::RuntimeCapabilityError>
+    {
+        let Some(progress) = &self.progress else {
+            return agent
+                .exec_binary(request, timeout, maximum, cancellation)
+                .await;
+        };
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let (result, ()) = tokio::join!(
+            agent.exec_binary_observed(request, timeout, maximum, cancellation, Some(sender)),
+            observe_output(receiver, progress)
+        );
+        result
     }
     async fn cleanup(&self, name: &str) {
         let _ = run(
@@ -1467,6 +1538,54 @@ impl DockerResticBackupExecutor {
             &CancellationToken::new(),
         )
         .await;
+    }
+}
+
+// Frame stdout/stderr independently before redaction: a split credential keyword
+// must never bypass the same redaction used by persisted logs. Oversized lines
+// are discarded rather than retained without a bound or partially disclosed.
+async fn observe_output(
+    mut receiver: tokio::sync::mpsc::Receiver<citadel_execution::ProcessChunk>,
+    progress: &Arc<dyn Fn(BackupLog) + Send + Sync>,
+) {
+    let mut lines = [(Vec::new(), false), (Vec::new(), false)];
+    while let Some(chunk) = receiver.recv().await {
+        let index = usize::from(chunk.stream == "stderr");
+        let (line, discard) = &mut lines[index];
+        for byte in chunk.bytes {
+            if byte == b'\n' {
+                let message = if *discard {
+                    "[oversized output line omitted]".into()
+                } else {
+                    redact(&String::from_utf8_lossy(line))
+                };
+                progress(BackupLog {
+                    stream: chunk.stream.into(),
+                    message,
+                });
+                line.clear();
+                *discard = false;
+            } else if !*discard {
+                if line.len() < 8192 {
+                    line.push(byte);
+                } else {
+                    line.clear();
+                    *discard = true;
+                }
+            }
+        }
+    }
+    for (index, (line, discard)) in lines.into_iter().enumerate() {
+        if discard || !line.is_empty() {
+            progress(BackupLog {
+                stream: if index == 1 { "stderr" } else { "stdout" }.into(),
+                message: if discard {
+                    "[oversized output line omitted]".into()
+                } else {
+                    redact(&String::from_utf8_lossy(&line))
+                },
+            });
+        }
     }
 }
 
@@ -1655,6 +1774,42 @@ fn policy_tag(id: Uuid) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn progress_frames_split_credentials_and_bounds_oversized_lines() {
+        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capture = output.clone();
+        let sink: Arc<dyn Fn(BackupLog) + Send + Sync> =
+            Arc::new(move |log| capture.lock().unwrap().push(log));
+        let (sender, receiver) = tokio::sync::mpsc::channel(4);
+        sender
+            .send(citadel_execution::ProcessChunk {
+                stream: "stderr",
+                bytes: b"pass".to_vec(),
+            })
+            .await
+            .unwrap();
+        sender
+            .send(citadel_execution::ProcessChunk {
+                stream: "stderr",
+                bytes: b"word=never-expose\n".to_vec(),
+            })
+            .await
+            .unwrap();
+        sender
+            .send(citadel_execution::ProcessChunk {
+                stream: "stdout",
+                bytes: [vec![b'x'; 9000], b"\ncomplete\n".to_vec()].concat(),
+            })
+            .await
+            .unwrap();
+        drop(sender);
+        observe_output(receiver, &sink).await;
+        let output = output.lock().unwrap();
+        assert_eq!(output.len(), 3);
+        assert_eq!(output[0].message, "[redacted]");
+        assert_eq!(output[1].message, "[oversized output line omitted]");
+        assert_eq!(output[2].message, "complete");
+    }
     #[test]
     fn restores_the_recorded_volume_root_not_the_helper_directory() {
         let id = "a".repeat(64);

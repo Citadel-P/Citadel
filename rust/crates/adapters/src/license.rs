@@ -398,6 +398,16 @@ impl citadel_backups::BackupEntitlements for PostgresLicenseEntitlementService {
     }
 }
 
+impl citadel_alerts::AlertEntitlements for PostgresLicenseEntitlementService {
+    fn advanced_alerting(&self) -> BoxFuture<'_, Result<bool, citadel_alerts::AlertError>> {
+        Box::pin(async move {
+            self.enabled(LicenseCapability::AdvancedAlerting)
+                .await
+                .map_err(|error| citadel_alerts::AlertError::Storage(error.to_string()))
+        })
+    }
+}
+
 fn verify_license(
     raw_license: &str,
     instance_id: Uuid,

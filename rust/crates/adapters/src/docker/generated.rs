@@ -28,6 +28,13 @@ pub struct Endpoint {
     pub streaming: bool,
 }
 
+pub const SYSTEM_DATA_USAGE: Endpoint = Endpoint {
+    operation_id: "SystemDataUsage",
+    method: "GET",
+    path: "/system/df",
+    versioned: true,
+    streaming: false,
+};
 pub const SYSTEM_PING: Endpoint = Endpoint {
     operation_id: "SystemPing",
     method: "GET",
@@ -203,6 +210,13 @@ pub const IMAGE_HISTORY: Endpoint = Endpoint {
     versioned: true,
     streaming: false,
 };
+pub const IMAGE_DELETE: Endpoint = Endpoint {
+    operation_id: "ImageDelete",
+    method: "DELETE",
+    path: "/images/{name}",
+    versioned: true,
+    streaming: false,
+};
 pub const VOLUME_LIST: Endpoint = Endpoint {
     operation_id: "VolumeList",
     method: "GET",
@@ -263,6 +277,62 @@ pub const NODE_LIST: Endpoint = Endpoint {
     operation_id: "NodeList",
     method: "GET",
     path: "/nodes",
+    versioned: true,
+    streaming: false,
+};
+pub const VOLUME_PRUNE: Endpoint = Endpoint {
+    operation_id: "VolumePrune",
+    method: "POST",
+    path: "/volumes/prune",
+    versioned: true,
+    streaming: false,
+};
+pub const NETWORK_PRUNE: Endpoint = Endpoint {
+    operation_id: "NetworkPrune",
+    method: "POST",
+    path: "/networks/prune",
+    versioned: true,
+    streaming: false,
+};
+pub const IMAGE_PRUNE: Endpoint = Endpoint {
+    operation_id: "ImagePrune",
+    method: "POST",
+    path: "/images/prune",
+    versioned: true,
+    streaming: false,
+};
+pub const BUILD_PRUNE: Endpoint = Endpoint {
+    operation_id: "BuildPrune",
+    method: "POST",
+    path: "/build/prune",
+    versioned: true,
+    streaming: false,
+};
+pub const NODE_INSPECT: Endpoint = Endpoint {
+    operation_id: "NodeInspect",
+    method: "GET",
+    path: "/nodes/{id}",
+    versioned: true,
+    streaming: false,
+};
+pub const NODE_UPDATE: Endpoint = Endpoint {
+    operation_id: "NodeUpdate",
+    method: "POST",
+    path: "/nodes/{id}/update",
+    versioned: true,
+    streaming: false,
+};
+pub const SECRET_UPDATE: Endpoint = Endpoint {
+    operation_id: "SecretUpdate",
+    method: "POST",
+    path: "/secrets/{id}/update",
+    versioned: true,
+    streaming: false,
+};
+pub const CONFIG_UPDATE: Endpoint = Endpoint {
+    operation_id: "ConfigUpdate",
+    method: "POST",
+    path: "/configs/{id}/update",
     versioned: true,
     streaming: false,
 };

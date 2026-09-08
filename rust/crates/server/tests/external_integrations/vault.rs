@@ -14,8 +14,9 @@ use citadel_adapters::{
 };
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, LoginRequest,
+    NoopServiceAccountLastUsedTracker, PasswordHasher, SYSTEM_ACTOR_ID, SessionMetadata,
+    SystemClock,
 };
 use citadel_resources::ResourceMetadataService;
 use citadel_server::resources_http::{self, ResourcesHttpState};
@@ -53,7 +54,17 @@ async fn request(
 
 /// Ports VaultKvV2_ShouldValidateResolveInjectAndRedactSecret through real HTTP
 /// handlers, PostgreSQL and Vault; the enclosing fixture proves runtime injection.
-pub async fn verify(pool: &PgPool, protector: Arc<AesGcmSecretProtector>, address: &str) -> Uuid {
+pub struct VerifiedProvider {
+    pub id: Uuid,
+    pub identity: Arc<IdentityService>,
+    pub bearer: String,
+}
+
+pub async fn verify(
+    pool: &PgPool,
+    protector: Arc<AesGcmSecretProtector>,
+    address: &str,
+) -> VerifiedProvider {
     let actor_id = Uuid::now_v7();
     let user_id = Uuid::now_v7();
     sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
@@ -88,6 +99,28 @@ pub async fn verify(pool: &PgPool, protector: Arc<AesGcmSecretProtector>, addres
         chrono::Duration::minutes(15),
         chrono::Duration::days(30),
     ));
+    let password = Argon2PasswordHasher::default()
+        .hash(super::PASSWORD)
+        .unwrap();
+    sqlx::query("UPDATE users SET password=$1 WHERE id=$2")
+        .bind(password)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    let (_, session) = identity
+        .login(
+            LoginRequest {
+                email_or_name: format!("vault-{user_id}@example.test"),
+                password: super::PASSWORD.into(),
+            },
+            SessionMetadata {
+                user_agent: None,
+                ip_address: None,
+            },
+        )
+        .await
+        .unwrap();
     let resources = Arc::new(
         ResourceMetadataService::new(
             Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
@@ -98,7 +131,7 @@ pub async fn verify(pool: &PgPool, protector: Arc<AesGcmSecretProtector>, addres
         )),
     );
     let app = resources_http::router(ResourcesHttpState {
-        identity,
+        identity: identity.clone(),
         resources,
         realtime: None,
     });
@@ -165,5 +198,9 @@ pub async fn verify(pool: &PgPool, protector: Arc<AesGcmSecretProtector>, addres
     .await;
     assert_eq!(replaced["success"], false);
     assert!(!after.contains(super::TOKEN));
-    id
+    VerifiedProvider {
+        id,
+        identity,
+        bearer: session.access_token,
+    }
 }

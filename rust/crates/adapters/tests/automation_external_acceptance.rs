@@ -106,7 +106,11 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     });
     let root = std::env::temp_dir().join(format!("citadel-deno-{}", Uuid::now_v7()));
     let store = Arc::new(PostgresAutomationStore::new(db.clone()));
-    let alerts = Arc::new(PostgresAlertStore::new(db.clone()));
+    let alerts = Arc::new(
+        PostgresAlertStore::new(db.clone()).with_entitlements(Arc::new(
+            citadel_adapters::identity_store::StaticEntitlementService::new(true),
+        )),
+    );
     let service = Arc::new(
         AutomationService::new(
             store.clone(),

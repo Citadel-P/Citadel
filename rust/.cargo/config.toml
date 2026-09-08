@@ -1,0 +1,3 @@
+[build]
+# Keep interactive development responsive; override with --jobs when needed.
+jobs = 2

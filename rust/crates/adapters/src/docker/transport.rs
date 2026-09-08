@@ -44,6 +44,10 @@ struct ContainerCreateResponse {
 #[serde(rename_all = "camelCase")]
 pub struct DockerImagePullMessage {
     #[serde(default)]
+    pub stream: Option<String>,
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
     pub progress: Option<String>,
@@ -53,6 +57,13 @@ pub struct DockerImagePullMessage {
     pub error: Option<String>,
     #[serde(rename = "errorDetail", default)]
     pub error_detail: Option<DockerImagePullError>,
+    #[serde(rename="progressDetail",default)]
+    pub progress_detail: Option<DockerImagePullProgress>,
+}
+
+#[derive(Debug,Clone,Default,Deserialize)]
+pub struct DockerImagePullProgress {
+    pub units: Option<String>, pub current: Option<i64>, pub total: Option<i64>, pub start: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -475,6 +486,19 @@ impl DockerClient {
         Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
     }
 
+    pub async fn prune_resources(&self, resource: citadel_platforms::prune::PruneResource) -> Result<serde_json::Value, DockerError> {
+        use super::generated::{VOLUME_PRUNE,NETWORK_PRUNE,IMAGE_PRUNE,BUILD_PRUNE};
+        use citadel_platforms::prune::PruneResource;
+        let (endpoint,query) = match resource {
+            PruneResource::Volume => (&VOLUME_PRUNE,"filters=%7B%7D"),
+            PruneResource::Network => (&NETWORK_PRUNE,"filters=%7B%7D"),
+            PruneResource::Image => (&IMAGE_PRUNE,"filters=%7B%22dangling%22%3A%5B%22false%22%5D%7D"),
+            PruneResource::Build => (&BUILD_PRUNE,"all=true&filters=%7B%7D"),
+            PruneResource::All => return Err(DockerError::InvalidIdentifier),
+        };
+        self.request_json::<(),serde_json::Value>(endpoint,endpoint.path,Some(query),None).await
+    }
+
     pub async fn inspect_swarm(&self) -> Result<SwarmInspect, DockerError> {
         self.get_json(&SWARM_INSPECT, SWARM_INSPECT.path, None)
             .await
@@ -499,6 +523,32 @@ impl DockerClient {
         .await
     }
 
+    pub async fn inspect_image_document(&self, id: &str) -> Result<serde_json::Value, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::IMAGE_INSPECT;
+        self.get_json(
+            endpoint,
+            &endpoint.path.replace("{name}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+
+    pub async fn inspect_container_document(
+        &self,
+        id: &str,
+    ) -> Result<serde_json::Value, DockerError> {
+        validate_identifier(id)?;
+        self.get_json(
+            &CONTAINER_INSPECT,
+            &CONTAINER_INSPECT
+                .path
+                .replace("{id}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+
     pub async fn image_history(
         &self,
         id: &str,
@@ -508,6 +558,23 @@ impl DockerClient {
         self.get_json(
             endpoint,
             &endpoint.path.replace("{name}", &urlencoding::encode(id)),
+            None,
+        )
+        .await
+    }
+
+    pub async fn delete_image(
+        &self,
+        id: &str,
+        force: bool,
+        no_prune: bool,
+    ) -> Result<Vec<std::collections::BTreeMap<String, String>>, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::IMAGE_DELETE;
+        self.request_json::<(), _>(
+            endpoint,
+            &endpoint.path.replace("{name}", &urlencoding::encode(id)),
+            Some(&format!("force={force}&noprune={no_prune}")),
             None,
         )
         .await
@@ -531,10 +598,38 @@ impl DockerClient {
     }
 
     pub async fn list_volumes(&self) -> Result<Vec<DockerVolume>, DockerError> {
-        Ok(self
+        let mut volumes = self
             .get_json::<VolumeListResponse>(&VOLUME_LIST, VOLUME_LIST.path, None)
             .await?
-            .volumes)
+            .volumes;
+        // Docker normally includes UsageData only in /system/df, not /volumes.
+        // Fetch just volume usage once, and join by name rather than response order.
+        if volumes.iter().any(|volume| volume.usage_data.is_none()) {
+            let mut usage = self.volume_usage().await?;
+            for volume in &mut volumes {
+                if volume.usage_data.is_none() {
+                    volume.usage_data = usage.remove(&volume.name);
+                }
+            }
+        }
+        Ok(volumes)
+    }
+
+    async fn volume_usage(&self) -> Result<HashMap<String, serde_json::Value>, DockerError> {
+        use super::generated::SYSTEM_DATA_USAGE;
+        // The relevant subset of SystemDataUsage has the same Volumes envelope.
+        let usage: VolumeListResponse = self
+            .get_json(
+                &SYSTEM_DATA_USAGE,
+                SYSTEM_DATA_USAGE.path,
+                Some("type=volume"),
+            )
+            .await?;
+        Ok(usage
+            .volumes
+            .into_iter()
+            .filter_map(|volume| volume.usage_data.map(|usage| (volume.name, usage)))
+            .collect())
     }
 
     pub async fn inspect_volume(&self, name: &str) -> Result<DockerVolume, DockerError> {
@@ -542,7 +637,11 @@ impl DockerClient {
         let path = VOLUME_INSPECT
             .path
             .replace("{name}", &urlencoding::encode(name));
-        self.get_json(&VOLUME_INSPECT, &path, None).await
+        let mut volume: DockerVolume = self.get_json(&VOLUME_INSPECT, &path, None).await?;
+        if volume.usage_data.is_none() {
+            volume.usage_data = self.volume_usage().await?.remove(&volume.name);
+        }
+        Ok(volume)
     }
 
     pub async fn create_volume(
@@ -600,6 +699,38 @@ impl DockerClient {
 
     pub async fn list_swarm_nodes(&self) -> Result<Vec<SwarmNode>, DockerError> {
         self.get_json(&NODE_LIST, NODE_LIST.path, None).await
+    }
+
+    pub async fn inspect_swarm_node(&self, id: &str) -> Result<SwarmNode, DockerError> {
+        validate_identifier(id)?;
+        let endpoint = &super::generated::NODE_INSPECT;
+        self.get_json(endpoint, &endpoint.path.replace("{id}", &urlencoding::encode(id)), None).await
+    }
+
+    pub async fn update_swarm_node(&self, id: &str, version: i64, spec: &serde_json::Value) -> Result<(), DockerError> {
+        self.update_swarm_spec(&super::generated::NODE_UPDATE, id, version, spec).await
+    }
+
+    pub async fn update_swarm_material(&self, secret: bool, id: &str, version: i64, spec: &serde_json::Value) -> Result<(), DockerError> {
+        let endpoint = if secret { &super::generated::SECRET_UPDATE } else { &super::generated::CONFIG_UPDATE };
+        self.update_swarm_spec(endpoint, id, version, spec).await
+    }
+
+    async fn update_swarm_spec(&self, endpoint: &Endpoint, id: &str, version: i64, spec: &serde_json::Value) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        self.send_request(endpoint, &endpoint.path.replace("{id}", &urlencoding::encode(id)), Some(&format!("version={version}")), Some(spec)).await?;
+        Ok(())
+    }
+
+    pub async fn list_swarm_service_tasks(&self, id: &str) -> Result<Vec<SwarmTask>, DockerError> {
+        validate_identifier(id)?;
+        let filters = serde_json::json!({"service":[id],"desired-state":["running"]}).to_string();
+        self.get_json(&TASK_LIST, TASK_LIST.path, Some(&format!("filters={}", urlencoding::encode(&filters)))).await
+    }
+    pub async fn list_swarm_node_tasks(&self, id: &str) -> Result<Vec<SwarmTask>, DockerError> {
+        validate_identifier(id)?;
+        let filters = serde_json::json!({"node":[id],"desired-state":["running"]}).to_string();
+        self.get_json(&TASK_LIST, TASK_LIST.path, Some(&format!("filters={}", urlencoding::encode(&filters)))).await
     }
 
     pub async fn list_swarm_services(&self) -> Result<Vec<SwarmService>, DockerError> {

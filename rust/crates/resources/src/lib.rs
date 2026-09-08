@@ -1,10 +1,13 @@
 #![forbid(unsafe_code)]
+pub mod registry_images;
 
 mod bindings;
 mod catalog;
 mod lookup;
+mod search;
 mod secret_provider_tests;
 mod tags;
+pub use search::*;
 pub mod webhooks;
 
 use std::sync::Arc;

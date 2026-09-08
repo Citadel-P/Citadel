@@ -1,6 +1,8 @@
 use citadel_database::{MigrationError, MigrationRunner};
 use sqlx::{Connection, PgConnection, Row};
 
+mod parity;
+
 fn database_url() -> String {
     std::env::var("CITADEL_TEST_DATABASE_URL")
         .expect("CITADEL_TEST_DATABASE_URL is required for this integration test")
@@ -32,14 +34,25 @@ async fn clean_install_restart_and_checksum_enforcement() {
     assert_eq!(second.already_applied, 1);
 
     let mut connection = PgConnection::connect(&database_url).await.unwrap();
-    let table_count: i64 =
-        sqlx::query("SELECT count(*) AS count FROM pg_tables WHERE schemaname = 'public'")
-            .fetch_one(&mut connection)
-            .await
-            .unwrap()
-            .try_get("count")
-            .unwrap();
-    assert_eq!(table_count, 84, "83 product tables plus the Rust journal");
+    let tables: std::collections::BTreeSet<String> = sqlx::query_scalar::<_, String>(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap()
+    .into_iter()
+    .collect();
+    let mut expected: std::collections::BTreeSet<String> = citadel_database::SCHEMA_SQL
+        .lines()
+        .filter_map(|line| line.strip_prefix("CREATE TABLE "))
+        .filter_map(|line| line.split_whitespace().next())
+        .map(str::to_owned)
+        .collect();
+    expected.insert("citadel_schema_migrations".into());
+    assert_eq!(
+        tables, expected,
+        "the migrated tables must match the declarative schema plus the journal"
+    );
 
     let outbox_exists: bool =
         sqlx::query_scalar("SELECT to_regclass('public.alertdeliveryoutbox') IS NOT NULL")

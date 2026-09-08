@@ -1,3 +1,4 @@
+mod actors;
 mod identity;
 mod mfa;
 mod oidc;
@@ -10,6 +11,7 @@ mod service_accounts;
 mod teams;
 mod users;
 
+pub use actors::*;
 pub use identity::*;
 pub use mfa::*;
 pub use oidc::*;

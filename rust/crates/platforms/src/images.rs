@@ -81,6 +81,16 @@ pub trait ImageInspectionPort: Send + Sync {
     ) -> BoxFuture<'a, Result<ImageInspection, RuntimeCapabilityError>>;
 }
 
+pub trait ImageDeletionPort: Send + Sync {
+    fn delete_image<'a>(
+        &'a self,
+        id: &'a str,
+        force: bool,
+        no_prune: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<BTreeMap<String, String>>, RuntimeCapabilityError>>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
