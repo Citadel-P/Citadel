@@ -35,6 +35,15 @@ pub struct ServiceAccountView {
     pub resource_accesses: Vec<ServiceAccountResourceAccess>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunAsActorUsageView {
+    pub id: Uuid,
+    pub name: String,
+    pub resource_type: ResourceType,
+    pub is_active: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceAccountResourceAccess {
@@ -178,6 +187,10 @@ pub trait ServiceAccountStore: Send + Sync {
     ) -> BoxFuture<'a, Result<StoredPage<ServiceAccountView>, IdentityError>>;
 
     fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<ServiceAccountView>, IdentityError>>;
+    fn usages(
+        &self,
+        actor_id: ActorId,
+    ) -> BoxFuture<'_, Result<Vec<RunAsActorUsageView>, IdentityError>>;
 
     fn create<'a>(
         &'a self,
@@ -316,6 +329,11 @@ impl ServiceAccountService {
 
     pub async fn get(&self, id: Uuid) -> Result<ServiceAccountView, IdentityError> {
         self.store.get(id).await?.ok_or(IdentityError::NotFound)
+    }
+
+    pub async fn usages(&self, id: Uuid) -> Result<Vec<RunAsActorUsageView>, IdentityError> {
+        let account = self.get(id).await?;
+        self.store.usages(account.actor_id).await
     }
 
     pub async fn create(

@@ -14,6 +14,118 @@ use std::sync::{
 };
 use uuid::Uuid;
 
+// AlertService.ProcessAsync chooses the highest-severity matching rule before
+// applying cooldown. A suppressed winner must not fall back to a lower rule.
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(3)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = ActorId::new(Uuid::now_v7());
+    // Isolate the two competing rules from the seeded global Build failure rule.
+    let builtin_ids: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE alertrules SET status='Disabled' WHERE type='BuildRunFailed' AND status='Enabled' AND createdbyactorid=$1 RETURNING id",
+    ).bind(Uuid::from_u128(1)).fetch_all(&pool).await.unwrap();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+        citadel_adapters::identity_store::StaticEntitlementService::new(true),
+    ));
+    let resource = Uuid::now_v7();
+    let mut ids = Vec::new();
+    for severity in ["Warning", "Critical"] {
+        let rule = store
+            .create_rule(
+                actor,
+                &AlertRuleInput {
+                    name: format!("severity-{severity}-{resource}"),
+                    description: None,
+                    alert_type: "BuildRunFailed".into(),
+                    severity: severity.into(),
+                    cooldown_seconds: Some(60),
+                    required_matches: None,
+                    threshold: None,
+                    status: "Enabled".into(),
+                    channel_ids: vec![],
+                    quiet_hours: vec![],
+                    limited_to: vec![json!({"resourceId":resource,"resourceType":"Build"})],
+                },
+            )
+            .await
+            .unwrap();
+        ids.push(rule.id);
+    }
+    let observation = AlertObservation {
+        alert_type: "BuildRunFailed".into(),
+        info: json!({"HumanMessage":"Build failed."}),
+        resource_id: resource,
+        resource_name: "severity-test".into(),
+        resource_type: "Build".into(),
+        deduplication_component: "first".into(),
+        observed_at: Utc::now(),
+        value: None,
+        matched: true,
+    };
+    let event = store.process_event(&observation).await.unwrap().unwrap();
+    assert_eq!(event.alert_rule_id, ids[1]);
+    let emitted: Vec<Uuid> =
+        sqlx::query_scalar("SELECT alertruleid FROM alertevents WHERE alertruleid=ANY($1)")
+            .bind(&ids)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        emitted,
+        vec![ids[1]],
+        "one observation must not emit lower-severity duplicates"
+    );
+    assert!(
+        store
+            .process_event(&AlertObservation {
+                observed_at: observation.observed_at + Duration::seconds(1),
+                deduplication_component: "second".into(),
+                ..observation
+            })
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM alertevents WHERE alertruleid=ANY($1)")
+            .bind(&ids)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 1,
+        "cooldown does not fall through to the Warning rule"
+    );
+    store.delete_rules(&ids).await.unwrap();
+    sqlx::query("UPDATE alertrules SET status='Enabled' WHERE id=ANY($1)")
+        .bind(&builtin_ids)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
 async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
@@ -32,9 +144,13 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .unwrap();
     let notifications = Arc::new(AtomicUsize::new(0));
     let changes = notifications.clone();
-    let store = PostgresAlertStore::new(pool.clone()).with_change_notifier(Arc::new(move || {
-        changes.fetch_add(1, Ordering::SeqCst);
-    }));
+    let store = PostgresAlertStore::new(pool.clone())
+        .with_entitlements(Arc::new(
+            citadel_adapters::identity_store::StaticEntitlementService::new(true),
+        ))
+        .with_change_notifier(Arc::new(move || {
+            changes.fetch_add(1, Ordering::SeqCst);
+        }));
     let channel = store
         .create_channel(
             actor,
@@ -180,6 +296,11 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
             .await
             .unwrap()
     );
+    // Exercise this rule's two-match threshold independently from the seeded
+    // Critical CPU rule, which correctly wins during normal combined evaluation.
+    let cpu_builtin_ids: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE alertrules SET status='Disabled' WHERE type='PlatformCpuHigh' AND status='Enabled' AND createdbyactorid=$1 RETURNING id",
+    ).bind(Uuid::from_u128(1)).fetch_all(&pool).await.unwrap();
     let threshold_rule = store
         .create_rule(
             actor,
@@ -270,6 +391,51 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         3
     );
 
+    // AlertService.ProcessAsync: a license downgrade skips custom rules, but
+    // built-in rules continue. Reconstruct the store to exercise persisted state.
+    let free_store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+        citadel_adapters::identity_store::StaticEntitlementService::new(false),
+    ));
+    let after_downgrade = AlertObservation {
+        deduplication_component: "after-downgrade".into(),
+        observed_at: within_cooldown.observed_at + Duration::minutes(2),
+        ..within_cooldown
+    };
+    assert!(
+        free_store
+            .process_event(&after_downgrade)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let state_time: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "SELECT lasttriggeredat FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
+    )
+    .bind(evaluated_rule.id)
+    .bind(observed_resource)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(state_time < after_downgrade.observed_at);
+    sqlx::query("UPDATE alertrules SET createdbyactorid=$2 WHERE id=$1")
+        .bind(evaluated_rule.id)
+        .bind(Uuid::from_u128(1))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let builtin = free_store
+        .process_event(&after_downgrade)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(builtin.alert_rule_id, evaluated_rule.id);
+    sqlx::query("UPDATE alertrules SET createdbyactorid=$2 WHERE id=$1")
+        .bind(evaluated_rule.id)
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+
     let missing = Uuid::now_v7();
     assert!(matches!(
         store.delete_channels(&[channel.id, missing]).await,
@@ -286,7 +452,23 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .delete_rules(&[rule.id, evaluated_rule.id, threshold_rule.id])
         .await
         .unwrap();
+    sqlx::query("UPDATE alertrules SET status='Enabled' WHERE id=ANY($1)")
+        .bind(&cpu_builtin_ids)
+        .execute(&pool)
+        .await
+        .unwrap();
     store.delete_channels(&[channel.id]).await.unwrap();
+    // Audit history intentionally retains its actor after resource deletion.
+    // Remove this fixture's audit rows before deleting its synthetic actor.
+    let audit_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activityevents WHERE createdbyactorid=$1 AND eventtype='AlertRuleCreated'",
+    ).bind(actor.value()).fetch_one(&pool).await.unwrap();
+    assert_eq!(audit_count, 3);
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM actors WHERE id=$1")
         .bind(actor.value())
         .execute(&pool)

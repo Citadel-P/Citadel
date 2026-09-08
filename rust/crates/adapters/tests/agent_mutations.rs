@@ -147,9 +147,34 @@ impl ContainerService for MutationFixture {
 
     async fn inspect(
         &self,
-        _: Request<InspectContainerRequest>,
+        request: Request<InspectContainerRequest>,
     ) -> Result<Response<InspectContainerResponse>, Status> {
-        Err(Status::unimplemented("not used"))
+        require_signature(&request)?;
+        use citadel_contracts::citadel::shared_models::v1::{
+            ContainerConfig, ContainerState, ContainerStateType,
+        };
+        match request.get_ref().container_id.as_str() {
+            "missing" => return Err(Status::not_found("Container not found")),
+            "denied" => return Err(Status::permission_denied("Inspection denied")),
+            "container-1" => (),
+            other => panic!("unexpected inspection target: {other}"),
+        }
+        Ok(Response::new(InspectContainerResponse {
+            id: "container-1".into(),
+            config: Some(ContainerConfig {
+                image: Some("busybox:latest".into()),
+                env: vec![
+                    "CITADEL_VAULT_SECRET=agent-private".into(),
+                    "APP_MODE=production".into(),
+                ],
+                ..Default::default()
+            }),
+            state: Some(ContainerState {
+                status: ContainerStateType::Running as i32,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
     }
 
     async fn create(
@@ -773,6 +798,55 @@ fn stack_claim() -> StackOperationClaim {
         operation: "Apply".to_owned(),
         service_names: vec!["web".into()],
     }
+}
+
+// Ports the runtime inspection assertion from RegularAgentCompatibilityTests
+// across signed gRPC. The peer is a fixture, not a live Agent acceptance test.
+#[tokio::test]
+async fn signed_agent_inspection_preserves_image_state_and_redacts_secrets() {
+    use citadel_platforms::containers::ContainerInspectionPort;
+    let (address, shutdown) = start_fixture(MutationFixture {
+        fail_network_create: false,
+        network_create_calls: Arc::default(),
+        container_delete_calls: Arc::default(),
+        deployment_apply_calls: Arc::default(),
+        container_action_calls: Arc::default(),
+        stack_apply_calls: Arc::default(),
+    })
+    .await;
+    let _guard = shutdown.drop_guard();
+    let client = connect(&address).await;
+    let cancel = CancellationToken::new();
+    let result = client.inspection("container-1", &cancel).await.unwrap();
+    assert_eq!(result["id"], "container-1");
+    assert_eq!(result["state"]["status"], "Running");
+    assert_eq!(result["config"]["image"], "busybox:latest");
+    assert_eq!(
+        result["config"]["env"],
+        serde_json::json!(["CITADEL_VAULT_SECRET=********", "APP_MODE=production"])
+    );
+    assert!(!result.to_string().contains("agent-private"));
+    assert_eq!(
+        client
+            .inspection("missing", &cancel)
+            .await
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::NotFound
+    );
+    assert_eq!(
+        client.inspection("denied", &cancel).await.unwrap_err().kind,
+        RuntimeErrorKind::PermissionDenied
+    );
+    cancel.cancel();
+    assert_eq!(
+        client
+            .inspection("container-1", &cancel)
+            .await
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::Cancelled
+    );
 }
 
 async fn connect(address: &str) -> AgentClient {

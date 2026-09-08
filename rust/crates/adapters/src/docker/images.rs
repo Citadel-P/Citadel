@@ -8,6 +8,27 @@ use super::{
     runtime::{cancelled_error, normalize_docker_error},
 };
 
+impl citadel_platforms::images::ImageDeletionPort for DockerClient {
+    fn delete_image<'a>(
+        &'a self,
+        id: &'a str,
+        force: bool,
+        no_prune: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<std::collections::BTreeMap<String, String>>, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => Err(cancelled_error()),
+                result = DockerClient::delete_image(self, id, force, no_prune) => result.map_err(normalize_docker_error),
+            }
+        })
+    }
+}
+
 impl ImageInspectionPort for DockerClient {
     fn exposed_ports<'a>(
         &'a self,

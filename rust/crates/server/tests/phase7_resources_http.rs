@@ -38,6 +38,22 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "phase7_resources_http/alert_assertions.rs"]
+mod alert_assertions;
+#[path = "phase7_resources_http/alert_rule_create.rs"]
+mod alert_rule_create;
+#[path = "phase7_resources_http/alert_rule_metadata.rs"]
+mod alert_rule_metadata;
+#[path = "phase7_resources_http/alert_rule_patch.rs"]
+mod alert_rule_patch;
+#[path = "phase7_resources_http/backup_completion.rs"]
+mod backup_completion;
+#[path = "phase7_resources_http/backup_policy_metadata.rs"]
+mod backup_policy_metadata;
+#[path = "phase7_resources_http/backup_repository_patch.rs"]
+mod backup_repository_patch;
+#[path = "phase7_resources_http/backup_summaries.rs"]
+mod backup_summaries;
 #[path = "phase7_resources_http/backup_webhooks.rs"]
 mod backup_webhooks;
 #[path = "phase7_resources_http/build_completion.rs"]
@@ -79,7 +95,10 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let backup_store = Arc::new(PostgresBackupStore::new(pool.clone()));
     let backup_entitlement = Arc::new(backup_webhooks::Entitlement::default());
     let backup_planner = Arc::new(FakeBackupPlanner::default());
-    let alert_store = Arc::new(PostgresAlertStore::new(pool.clone()));
+    let alert_entitlement = Arc::new(alert_rule_create::Entitlement::default());
+    let alert_store = Arc::new(
+        PostgresAlertStore::new(pool.clone()).with_entitlements(alert_entitlement.clone()),
+    );
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
     let edge = citadel_adapters::edge::EdgeRegistry::default();
@@ -134,12 +153,12 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     }))
     .merge(alerts_http::router(AlertsHttpState {
         identity: identity.clone(),
-        store: alert_store,
+        store: alert_store.clone(),
         delivery: Arc::new(FakeAlertDelivery),
     }))
     .merge(citadel_server::resources_http::router(
         citadel_server::resources_http::ResourcesHttpState {
-            identity,
+            identity: identity.clone(),
             resources: Arc::new(citadel_resources::ResourceMetadataService::new(
                 Arc::new(
                     citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore::new(
@@ -431,6 +450,17 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(rule["channelIds"][0], channel_id);
+    alert_rule_metadata::verify(&app, &pool, &principal, &rule, &alert_store).await;
+    alert_rule_patch::verify(&app, &pool, &principal, &rule, &channel, &hub, &alert_store).await;
+    alert_rule_create::verify(
+        &app,
+        &pool,
+        &principal,
+        &alert_entitlement,
+        &channel,
+        &alert_store,
+    )
+    .await;
 
     let project = response_json(
         request(
@@ -636,6 +666,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let repository_id = repository["id"].as_str().unwrap();
+    backup_repository_patch::before_ready(&app, &pool, &principal, &repository).await;
     let validation = response_json(
         request(
             &app,
@@ -648,6 +679,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(validation["status"], "Ready");
+    backup_repository_patch::after_ready(&app, &pool, &principal, &repository).await;
     let persisted_validation: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM backuprepositoryvalidations WHERE backuprepositoryid=$1",
     )
@@ -674,6 +706,11 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let policy_id = policy["id"].as_str().unwrap();
+    backup_policy_metadata::verify(&app, &pool, &principal, &policy).await;
+    backup_summaries::verify(&app, &pool, &principal, &policy).await;
+    backup_completion::verify_policy(&app, &pool, &principal, &policy).await;
+    backup_completion::verify_previews(&pool, identity.clone(), &principal, &fixture).await;
+    backup_completion::verify_streams(&app, &pool, &backups, &principal, &policy).await;
     let backup_run = response_json(
         request(
             &app,
@@ -701,6 +738,44 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
 
     let reader = seed_regular_user(&pool).await;
+    let restore_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,targetplatformid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid) VALUES($1,$2,$3,$4,'restored',false,false,'Queued',$5)")
+        .bind(restore_id).bind(Uuid::parse_str(backup_run_id).unwrap()).bind(Uuid::parse_str(repository_id).unwrap())
+        .bind(fixture.platform).bind(principal.actor_id.value()).execute(&pool).await.unwrap();
+    for (resource, id) in [
+        ("backupRuns", Uuid::parse_str(backup_run_id).unwrap()),
+        ("backupRestoreRuns", restore_id),
+    ] {
+        let path = format!("/api/v1/{resource}/{id}/events");
+        assert_eq!(
+            request(&app, Method::GET, &path, None, None).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request(&app, Method::GET, &path, Some(reader.clone()), None)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        let response = request(&app, Method::GET, &path, Some(principal.clone()), None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(response).await,
+            json!({"runId":id,"events":[]})
+        );
+        assert_eq!(
+            request(
+                &app,
+                Method::GET,
+                &format!("/api/v1/{resource}/{}/events", Uuid::now_v7()),
+                Some(principal.clone()),
+                None
+            )
+            .await
+            .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
     git_webhooks::verify(&app, &pool, &fixture).await;
     build_webhooks::verify(
         &app,
@@ -1043,7 +1118,7 @@ async fn seed_dependencies(pool: &sqlx::PgPool, actor: ActorId) -> FixtureIds {
         git_repository: Uuid::now_v7(),
         secret: Uuid::now_v7(),
     };
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(ids.platform).bind(format!("phase7-platform-{}", ids.platform.simple())).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}',$2,$3,'docker.io','Enabled')")
         .bind(ids.registry).bind(actor.value()).bind(format!("phase7-registry-{}", ids.registry.simple())).execute(pool).await.unwrap();
@@ -1062,8 +1137,8 @@ async fn seed_dependencies(pool: &sqlx::PgPool, actor: ActorId) -> FixtureIds {
 
 fn alert_rule_json(suffix: &str, channel_id: Uuid) -> Value {
     json!({
-        "name":format!("rule-{suffix}"),"description":null,"type":"BuildRunFailed",
-        "severity":"Critical","cooldownSeconds":60,"requiredMatches":null,"threshold":null,
+        "name":format!("rule-{suffix}"),"description":"Original description","type":"BuildRunFailed",
+        "severity":"Warning","cooldownSeconds":60,"requiredMatches":null,"threshold":null,
         "status":"Enabled","channelIds":[channel_id],"limitedTo":[],"quietHours":[]
     })
 }
@@ -1091,9 +1166,17 @@ async fn request(
     principal: Option<ActorPrincipal>,
     body: Option<Value>,
 ) -> axum::response::Response {
-    let mut builder = Request::builder().method(method).uri(uri);
+    let content_type = if method == Method::PATCH {
+        "application/merge-patch+json"
+    } else {
+        "application/json"
+    };
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("x-request-id", "alert-parity-request");
     if body.is_some() {
-        builder = builder.header("content-type", "application/json");
+        builder = builder.header("content-type", content_type);
     }
     let mut request = builder
         .body(Body::from(body.map_or_else(Vec::new, |value| {
@@ -1107,12 +1190,14 @@ async fn request(
 }
 
 async fn response_json(response: axum::response::Response) -> Value {
+    let status = response.status();
+    let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     assert!(
-        response.status().is_success(),
-        "unexpected status {}",
-        response.status()
+        status.is_success(),
+        "unexpected status {status}: {}",
+        String::from_utf8_lossy(&body)
     );
-    serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
+    serde_json::from_slice(&body).unwrap()
 }
 
 struct FakeBuildExecutor {
@@ -1157,6 +1242,25 @@ struct FakeBackupPlanner {
 }
 struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
+    fn preview<'a>(
+        &'a self,
+        _: citadel_backups::source_preview::BackupPreviewKind,
+        _: Uuid,
+        _: ActorId,
+        _: bool,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_backups::source_preview::BackupSourcePreview, BackupError>>
+    {
+        Box::pin(async { Err(BackupError::NotFound) })
+    }
+    fn validate_source<'a>(
+        &'a self,
+        _: &'a Value,
+        _: &'a citadel_backups::BackupRepositoryView,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), BackupError>> {
+        Box::pin(async { Ok(()) })
+    }
     fn plan<'a>(
         &'a self,
         claim: &'a BackupClaim,
@@ -1209,10 +1313,10 @@ impl BackupExecutor for FakeBackupExecutor {
     fn backup<'a>(
         &'a self,
         _: &'a BackupClaim,
-        _: &'a BackupSourcePlan,
+        plan: &'a BackupSourcePlan,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, BackupExecutionResult> {
-        Box::pin(async {
+        Box::pin(async move {
             BackupExecutionResult {
                 status: "Succeeded",
                 snapshot_availability: "Available",
@@ -1226,7 +1330,22 @@ impl BackupExecutor for FakeBackupExecutor {
                 error_message: None,
                 warnings: vec![],
                 logs: vec![],
-                items: vec![],
+                items: plan
+                    .items
+                    .iter()
+                    .map(|item| citadel_backups::BackupRunItemResult {
+                        id: item.id,
+                        status: "Succeeded",
+                        restic_snapshot_id: Some("a".repeat(64)),
+                        parent_snapshot_id: None,
+                        files_processed: Some(1),
+                        bytes_processed: Some(16),
+                        bytes_added: Some(16),
+                        exit_code: Some(0),
+                        error_code: None,
+                        error_message: None,
+                    })
+                    .collect(),
             }
         })
     }

@@ -4,6 +4,7 @@ use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
 use citadel_execution::{ProcessLimits, ProcessRequest, run};
 use citadel_platforms::{
     RuntimeErrorKind,
+    containers::ContainerInspectionPort,
     logs::{LogReadPort, LogResource},
     terminal::{ContainerTerminalPort, TerminalInput, TerminalOutput, TerminalShell},
 };
@@ -69,6 +70,10 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
             "--detach",
             "--name",
             &workload,
+            "--env",
+            "CITADEL_VAULT_SECRET=citadel-inspect-fixture-secret",
+            "--env",
+            "APP_MODE=production",
             "--entrypoint",
             "/bin/sh",
             "restic/restic:0.18.1",
@@ -112,6 +117,24 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
             RuntimeErrorKind::Authentication
         );
         let cancel = CancellationToken::new();
+        // RegularAgentCompatibilityTests inspects the deployed runtime container;
+        // also retain VaultKvV2CompatibilityTests' no-plaintext inspection assertion.
+        let container = client.inspection(&id, &cancel).await.unwrap();
+        assert_eq!(container["id"], id);
+        assert_eq!(container["state"]["status"], "Running");
+        assert_eq!(container["config"]["image"], "restic/restic:0.18.1");
+        let env = container["config"]["env"].as_array().unwrap();
+        assert!(env.contains(&serde_json::json!("CITADEL_VAULT_SECRET=********")));
+        assert!(env.contains(&serde_json::json!("APP_MODE=production")));
+        assert!(
+            !container
+                .to_string()
+                .contains("citadel-inspect-fixture-secret")
+        );
+        assert_eq!(
+            bad.inspection(&id, &cancel).await.unwrap_err().kind,
+            RuntimeErrorKind::Authentication
+        );
         let inspected = citadel_platforms::images::ImageInspectionPort::inspect_image(
             &client,
             "restic/restic:0.18.1",

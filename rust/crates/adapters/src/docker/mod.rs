@@ -1,5 +1,5 @@
 mod images;
-mod inventory;
+pub(crate) mod inventory;
 mod mutations;
 pub(crate) mod runtime;
 mod transport;

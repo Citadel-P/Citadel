@@ -167,6 +167,41 @@ async fn node_agent_operation(
     Ok(response)
 }
 
+pub(super) async fn initialize_swarm(
+    state: &PlatformsHttpState,
+    platform: &PlatformView,
+) -> Result<bool, RuntimeCapabilityError> {
+    let runtime = runtime_for(state, platform.id).await?;
+    let port: &dyn PlatformInventoryPort = match &runtime {
+        RuntimeRef::Local(port) => *port,
+        RuntimeRef::Agent(port) => port,
+        RuntimeRef::Edge(port) => port,
+    };
+    let cancellation = CancellationToken::new();
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let target = citadel_platforms::jobs::InventoryCollectionTarget {
+        platform_id: platform.id,
+        platform_type: platform.platform_type.clone(),
+    };
+    let snapshot = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        citadel_platforms::jobs::collect_inventory(port, &target, &cancellation),
+    )
+    .await
+    .map_err(|_| {
+        RuntimeCapabilityError::new(
+            RuntimeErrorKind::Timeout,
+            "Swarm inventory initialization timed out.",
+            true,
+        )
+    })??;
+    citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+        state.pool.clone(),
+    )
+    .initialize_swarm(&snapshot)
+    .await
+}
+
 pub(super) async fn node_coverage(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -200,38 +235,7 @@ pub(super) async fn node_coverage(
         &headers,
     )?;
     if coverage.total_nodes == 0 {
-        let initialized = async {
-            let runtime = runtime_for(&state, id).await?;
-            let port: &dyn PlatformInventoryPort = match &runtime {
-                RuntimeRef::Local(port) => *port,
-                RuntimeRef::Agent(port) => *port,
-                RuntimeRef::Edge(port) => port,
-            };
-            let cancellation = CancellationToken::new();
-            let _cancel_on_drop = cancellation.clone().drop_guard();
-            let target = citadel_platforms::jobs::InventoryCollectionTarget {
-                platform_id: id,
-                platform_type: platform.platform_type.clone(),
-            };
-            let snapshot = tokio::time::timeout(
-                std::time::Duration::from_secs(30),
-                citadel_platforms::jobs::collect_inventory(port, &target, &cancellation),
-            )
-            .await
-            .map_err(|_| {
-                RuntimeCapabilityError::new(
-                    RuntimeErrorKind::Timeout,
-                    "Swarm inventory initialization timed out.",
-                    true,
-                )
-            })??;
-            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
-                state.pool.clone(),
-            )
-            .initialize_swarm(&snapshot)
-            .await
-        }
-        .await;
+        let initialized = initialize_swarm(&state, &platform).await;
         let changed = match initialized {
             Ok(changed) => changed,
             Err(error) => return Ok(runtime_error_response(error, &headers)),

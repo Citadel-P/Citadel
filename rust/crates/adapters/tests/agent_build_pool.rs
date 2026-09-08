@@ -103,9 +103,20 @@ impl ImageService for BuildHost {
     type PullStream = Output<PullImageResponse>;
     async fn pull(
         &self,
-        _: Request<PullImageRequest>,
+        request: Request<PullImageRequest>,
     ) -> Result<Response<Self::PullStream>, Status> {
-        Err(Status::unimplemented("not used"))
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        assert!(request.metadata().get_bin("x-signature-bin").is_some());
+        let input = request.into_inner();
+        if input.from_image == "fail:latest" {
+            return Err(Status::unavailable("ambiguous pull failure"));
+        }
+        assert_eq!(input.from_image, "nginx:latest");
+        assert_eq!(input.auth.as_deref(), Some("encoded-auth"));
+        Ok(Response::new(Box::pin(async_stream::stream! {
+            yield Ok(PullImageResponse{status:Some("Pulling".into()),progress:Some(JsonProgressReply{current:Some(1),total:Some(2),..Default::default()}),..Default::default()});
+            std::future::pending::<()>().await;
+        })))
     }
     type BuildStream = Output<ImageBuildResponse>;
     async fn build(
@@ -121,6 +132,46 @@ impl ImageService for BuildHost {
     ) -> Result<Response<Self::PushStream>, Status> {
         Err(Status::unimplemented("not used"))
     }
+}
+
+#[tokio::test]
+async fn image_pull_stream_preserves_progress_and_cancels_without_retrying() {
+    use citadel_platforms::image_pull::ImagePullPort;
+    use futures_util::StreamExt;
+    let (address, calls, stop, task) = host("28.0.0").await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[31; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let cancel = CancellationToken::new();
+    assert!(
+        client
+            .pull_image_stream("fail:latest", None, &cancel)
+            .await
+            .is_err()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let mut stream = client
+        .pull_image_stream("nginx:latest", Some("encoded-auth"), &cancel)
+        .await
+        .unwrap();
+    let item = stream.next().await.unwrap().unwrap();
+    assert_eq!(item.status.as_deref(), Some("Pulling"));
+    assert_eq!(item.progress.unwrap().total, Some(2));
+    cancel.cancel();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), stream.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    stop.cancel();
+    task.abort();
 }
 
 async fn host(

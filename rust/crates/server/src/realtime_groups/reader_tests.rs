@@ -32,6 +32,8 @@ fn build_log_events_only_target_the_matching_run_group() {
 
 fn container(node: Option<&str>) -> ContainerView {
     ContainerView {
+        image_view: None,
+        deployment_view: None,
         id: Uuid::now_v7(),
         platform_id: Uuid::now_v7(),
         container_id: "same-docker-id".into(),

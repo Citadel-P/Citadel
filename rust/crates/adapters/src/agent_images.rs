@@ -4,6 +4,106 @@ use citadel_contracts::citadel::images::v1::{
 };
 use citadel_platforms::images::{ImageContainer, ImageInspection, ImageInspectionPort, ImageLayer};
 
+impl AgentClient {
+    pub async fn inspect_image_document(
+        &self,
+        id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<serde_json::Value, RuntimeCapabilityError> {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                InspectImageRequest { id: id.into() },
+                "/citadel.images.v1.ImageService/Inspect",
+                Some(self.operation_timeout),
+            )?;
+            let response = self
+                .image_client()
+                .inspect(request)
+                .await
+                .map_err(normalize_status)?
+                .into_inner();
+            serde_json::to_value(response).map_err(|_| {
+                RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Remote,
+                    "Invalid Image inspection.",
+                    false,
+                )
+            })
+        })
+        .await
+    }
+}
+
+impl citadel_platforms::images::ImageDeletionPort for AgentClient {
+    fn delete_image<'a>(
+        &'a self,
+        id: &'a str,
+        force: bool,
+        no_prune: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<std::collections::BTreeMap<String, String>>, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            let request = self.signer.sign(
+                citadel_contracts::citadel::images::v1::DeleteImageRequest {
+                    ids: vec![id.into()],
+                    force,
+                    noprune: no_prune,
+                },
+                "/citadel.images.v1.ImageService/Delete",
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.image_client();
+            let response = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.delete(request)) =>
+                    result.map_err(|_| timeout_error("deleting an Image"))?.map_err(normalize_status)?.into_inner(),
+            };
+            Ok(response
+                .items
+                .into_iter()
+                .map(|item| item.result.into_iter().collect())
+                .collect())
+        })
+    }
+}
+
+impl citadel_platforms::images::ImageDeletionPort for crate::edge::EdgeRuntime {
+    fn delete_image<'a>(
+        &'a self,
+        id: &'a str,
+        force: bool,
+        no_prune: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<std::collections::BTreeMap<String, String>>, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            let response: citadel_contracts::citadel::images::v1::DeleteImageResponse =
+                crate::agent_execution::unary(
+                    &self.session,
+                    citadel_contracts::citadel::edge::v1::EdgeCommandKind::ImageDelete,
+                    citadel_contracts::citadel::images::v1::DeleteImageRequest {
+                        ids: vec![id.into()],
+                        force,
+                        noprune: no_prune,
+                    },
+                    cancellation,
+                )
+                .await?;
+            Ok(response
+                .items
+                .into_iter()
+                .map(|item| item.result.into_iter().collect())
+                .collect())
+        })
+    }
+}
+
 impl ImageInspectionPort for AgentClient {
     fn exposed_ports<'a>(
         &'a self,

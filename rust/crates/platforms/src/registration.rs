@@ -265,7 +265,7 @@ fn validate_agent_address(address: Option<&str>) -> Result<String, PlatformRegis
     Ok(address.to_owned())
 }
 
-fn validate(
+pub(crate) fn validate(
     mut input: CreatePlatformInput,
 ) -> Result<CreatePlatformInput, PlatformRegistrationError> {
     input.name = input.name.trim().to_owned();
@@ -311,7 +311,7 @@ fn validate(
     Ok(input)
 }
 
-fn validate_platform_type(
+pub(crate) fn validate_platform_type(
     platform_type: PlatformType,
     swarm: Option<&RuntimeSwarmInfo>,
 ) -> Result<Option<&RuntimeSwarmInfo>, PlatformRegistrationError> {

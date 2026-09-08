@@ -6,6 +6,7 @@ async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases
     let fixture = fixture().await;
     let id = fixture.platform_id;
     let cluster = format!("cluster-{id}");
+    let service_id = format!("node-agent-{id}");
     let url = format!("/api/v1/platforms/{id}/node-agent-coverage");
     assert_eq!(
         send(&fixture, &url, None).await.status(),
@@ -40,14 +41,14 @@ async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases
     assert_eq!(coverage["unsupportedNodes"], 0);
     assert_eq!(coverage["unschedulableNodes"], 1);
     assert_eq!(coverage["missingNodes"], 1);
-    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerservicename,dockerserviceid,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:abc','agent@sha256:abc',$2,'Installed','citadel-node-agent','node-agent-service','daemon','node-1')").bind(id).bind(&cluster).execute(&fixture.pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerservicename,dockerserviceid,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:abc','agent@sha256:abc',$2,'Installed','citadel-node-agent',$3,'daemon','node-1')").bind(id).bind(&cluster).bind(&service_id).execute(&fixture.pool).await.unwrap();
     let coverage = get().await;
     assert_eq!(coverage["state"], "Partial");
     assert_eq!(coverage["reasons"], json!(["NodeAgentServiceDrifted"]));
     // Existing system Services must count for coverage even though inventory
     // tables hide them. A replacement with the same name is not the pinned ID.
-    sqlx::query("UPDATE swarmserviceprojections SET dockerserviceid='node-agent-service',mode='Global',image='agent@sha256:abc',labels=$2 WHERE platformid=$1")
-        .bind(id).bind(json!({"com.citadel.system":"true","com.citadel.system-role":"swarm-node-agent","com.citadel.platform-id":id,"com.citadel.swarm-cluster-id":cluster})).execute(&fixture.pool).await.unwrap();
+    sqlx::query("UPDATE swarmserviceprojections SET dockerserviceid=$3,mode='Global',image='agent@sha256:abc',labels=$2 WHERE platformid=$1")
+        .bind(id).bind(json!({"com.citadel.system":"true","com.citadel.system-role":"swarm-node-agent","com.citadel.platform-id":id,"com.citadel.swarm-cluster-id":cluster})).bind(&service_id).execute(&fixture.pool).await.unwrap();
     assert_eq!(get().await["reasons"], json!([]));
     sqlx::query(
         "UPDATE swarmserviceprojections SET image='agent@sha256:wrong' WHERE platformid=$1",
@@ -104,16 +105,17 @@ async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initialization() {
-    let fixture = fixture().await;
+    let cluster = format!("coverage-{}", Uuid::now_v7());
+    let fixture = fixture_for_cluster(cluster.clone()).await;
     let id = fixture.platform_id;
     fixture.docker_server.abort();
-    let (docker, server, socket) = docker_fixture_with_limit(12).await;
+    let (docker, server, socket) = docker_fixture_for_cluster(13, cluster.clone()).await;
     // Replace the router's transport with the fixture using the same persisted
     // identity/permission services as the other Platform HTTP scenarios.
     let mut state = fixture.lookup_state.platforms.clone();
     state.docker = docker;
     let app = platforms_http::router(state);
-    sqlx::query("UPDATE platforms SET clusterid='cluster-test',platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\"}' WHERE id=$1").bind(id).execute(&fixture.pool).await.unwrap();
+    sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&fixture.pool).await.unwrap();
     sqlx::query("DELETE FROM swarmnodeprojections WHERE platformid=$1")
         .bind(id)
         .execute(&fixture.pool)
@@ -147,7 +149,7 @@ async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initial
     let mut older = snapshot(id);
     older.info.swarm = Some(citadel_platforms::RuntimeSwarmInfo {
         node_id: "node-1".into(),
-        cluster_id: Some("cluster-test".into()),
+        cluster_id: Some(cluster),
         local_node_state: "active".into(),
         control_available: true,
         ..Default::default()

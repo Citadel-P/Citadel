@@ -50,13 +50,197 @@ pub fn router(state: SwarmServicesHttpState) -> Router {
         .contract_route(routes::CREATE_SWARM_SERVICE, create)
         .contract_route(routes::DELETE_SWARM_SERVICES, delete)
         .contract_route(routes::GET_MANAGED_SWARM_SERVICE, get)
+        .contract_route(routes::GET_SWARM_SERVICE_DUPLICATE_DRAFT, duplicate_draft)
+        .contract_route(routes::GET_SWARM_SERVICE_ADOPTION_DRAFT, adoption_draft)
+        .contract_route(routes::ADOPT_SWARM_SERVICE, adopt)
         .contract_route(routes::UPDATE_SWARM_SERVICE, update)
         .contract_route(routes::RENAME_SWARM_SERVICE, rename)
+        .contract_route(routes::UPDATE_SWARM_SERVICE_METADATA, update_metadata)
         .contract_route(routes::APPLY_SWARM_SERVICE, apply)
         .contract_route(routes::SCALE_SWARM_SERVICE, scale)
         .contract_route(routes::FORCE_UPDATE_SWARM_SERVICE, force_update)
         .contract_route(routes::CHECK_SWARM_SERVICE_UPDATES, check_updates)
         .with_state(state)
+}
+
+async fn duplicate_draft(
+    State(state): State<SwarmServicesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize(
+        &state,
+        &principal,
+        id,
+        PermissionLevel::Read,
+        None,
+        &headers,
+    )
+    .await?;
+    let draft = identity_result(
+        state
+            .services
+            .duplicate_draft(principal.actor_id, principal.is_administrator(), id)
+            .await
+            .map_err(service_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(serde_json::json!({
+        "draft": {"name":draft.name,"platformId":draft.platform_id,"description":draft.description,
+            "spec":draft.spec,"tagIds":draft.tag_ids,"duplicateSource":{
+                "resourceType":"SwarmService","resourceId":id,"resourceName":draft.source_name}},
+        "warnings":draft.warnings
+    })).into_response()))
+}
+
+async fn authorize_adoption(
+    state: &SwarmServicesHttpState,
+    principal: &ActorPrincipal,
+    platform: Uuid,
+    headers: &HeaderMap,
+) -> IdentityHttpResult<()> {
+    if !principal.is_administrator() {
+        identity_result(
+            state
+                .identity
+                .authorize_resource(
+                    principal,
+                    ResourceType::SwarmService,
+                    Uuid::nil(),
+                    PermissionLevel::Write,
+                    None,
+                )
+                .await,
+            headers,
+        )?;
+        identity_result(
+            state
+                .identity
+                .authorize_resource(
+                    principal,
+                    ResourceType::Platform,
+                    platform,
+                    PermissionLevel::Read,
+                    Some(SpecificPermission::Inspect),
+                )
+                .await,
+            headers,
+        )?;
+    }
+    Ok(())
+}
+
+async fn adoption_draft(
+    State(state): State<SwarmServicesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<(Uuid, String)>, PathRejection>,
+    headers: HeaderMap,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path((platform, id)) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_adoption(&state, &principal, platform, &headers).await?;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    let draft = identity_result(
+        state
+            .services
+            .adoption_draft(
+                principal.actor_id,
+                principal.is_administrator(),
+                platform,
+                &id,
+                &cancel,
+            )
+            .await
+            .map_err(service_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(serde_json::json!({
+        "draft": {"name":draft.name,"platformId":draft.source.platform_id,"description":draft.description,
+            "spec":draft.spec,"tagIds":null,"duplicateSource":null},
+        "source":draft.source,"issues":draft.issues,"previewFingerprint":draft.preview_fingerprint
+    })).into_response()))
+}
+
+async fn adopt(
+    State(state): State<SwarmServicesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<(Uuid, String)>, PathRejection>,
+    headers: HeaderMap,
+    body: Result<Json<citadel_swarm_services::adoption::AdoptSwarmServiceInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path((platform, id)) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize_adoption(&state, &principal, platform, &headers).await?;
+    let Json(input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    let service = identity_result(
+        state
+            .services
+            .adopt(
+                principal.actor_id,
+                principal.is_administrator(),
+                platform,
+                &id,
+                input,
+                &cancel,
+            )
+            .await
+            .map_err(service_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(service).into_response()))
+}
+
+#[derive(serde::Deserialize)]
+struct ServiceMetadataInput {
+    #[serde(deserialize_with = "deserialize_description")]
+    description: Option<String>,
+}
+
+fn deserialize_description<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    serde::Deserialize::deserialize(deserializer)
+}
+
+async fn update_metadata(
+    State(state): State<SwarmServicesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+    input: Result<Json<ServiceMetadataInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
+    authorize(
+        &state,
+        &principal,
+        id,
+        PermissionLevel::Write,
+        None,
+        &headers,
+    )
+    .await?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let value = identity_result(
+        state
+            .services
+            .update_description(
+                principal.actor_id,
+                principal.is_administrator(),
+                id,
+                input.description.as_deref(),
+            )
+            .await
+            .map_err(service_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(value).into_response()))
 }
 
 async fn check_updates(

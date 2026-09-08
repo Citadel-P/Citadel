@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::resource_tags;
 
 const READ_MASK: i32 = 1 | 2 | 4;
-const AUTHORIZED_CTE: &str = r#"
+pub(crate) const AUTHORIZED_CTE: &str = r#"
 WITH actor_scope AS (
     SELECT actor.id AS actorid FROM actors actor
     WHERE actor.id=$1 AND actor.isenabled
@@ -138,6 +138,40 @@ ORDER BY repository.name,repository.id"#
                 .and_then(map_repository)
         })
     }
+    fn update_repository<'a>(
+        &'a self,
+        id: Uuid,
+        patch: &'a Value,
+    ) -> BoxFuture<'a, Result<BackupRepositoryView, BackupError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let current = sqlx::query(
+                "SELECT * FROM backuprepositories WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_repository)?;
+            let input = repository_patch::apply(&current, patch)?;
+            if input.spec != current.spec {
+                let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND expiresat>CURRENT_TIMESTAMP)")
+                    .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
+                if active {
+                    return Err(BackupError::Conflict(
+                        "Backup Repository has an active operation.".into(),
+                    ));
+                }
+            }
+            let row = sqlx::query("UPDATE backuprepositories SET description=$2,spec=$3,type=$4,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(id).bind(&input.description).bind(&input.spec).bind(input.spec["$type"].as_str().expect("validated repository type"))
+                .fetch_one(&mut *tx).await.map_err(storage)?;
+            let repository = map_repository(row)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(repository)
+        })
+    }
     fn archive_repository(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>> {
         Box::pin(async move {
             let n=sqlx::query("UPDATE backuprepositories SET archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND controlstate='Idle' AND NOT EXISTS(SELECT 1 FROM backuppolicies WHERE backuprepositoryid=$1 AND archivedat IS NULL)").bind(id).execute(&self.pool).await.map_err(storage)?.rows_affected();
@@ -208,15 +242,26 @@ ORDER BY repository.name,repository.id"#
     ) -> BoxFuture<'_, Result<bool, BackupError>> {
         let operation = operation.to_owned();
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            // All location changes and operation claims take the same row lock.
+            sqlx::query(
+                "SELECT id FROM backuprepositories WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(repository_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)?;
             let affected = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,$3,CURRENT_TIMESTAMP,$4) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype=EXCLUDED.operationtype,createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP")
                 .bind(repository_id)
                 .bind(operation_id)
                 .bind(operation)
                 .bind(expires_at)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(storage)?
                 .rows_affected();
+            tx.commit().await.map_err(storage)?;
             Ok(affected == 1)
         })
     }
@@ -299,6 +344,182 @@ ORDER BY policy.name,policy.id"#
                 .map_err(storage)?
                 .ok_or(BackupError::NotFound)
                 .and_then(map_policy)
+        })
+    }
+    fn platform_summaries<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<Vec<summaries::PlatformBackupSummary>, BackupError>> {
+        Box::pin(async move {
+            if platform_ids.is_empty() {
+                return Ok(vec![]);
+            }
+            let query = format!(
+                "{AUTHORIZED_CTE}{}",
+                include_str!("backup_platform_summaries.sql")
+            );
+            let rows = sqlx::query(AssertSqlSafe(query.as_str()))
+                .bind(actor.value())
+                .bind(ResourceType::BackupPolicy as i32)
+                .bind(READ_MASK)
+                .bind(administrator)
+                .bind(platform_ids)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
+            rows.into_iter()
+                .map(|row| {
+                    Ok(summaries::PlatformBackupSummary {
+                        platform_id: row.try_get("platformid").map_err(storage)?,
+                        policy_count: row.try_get("policycount").map_err(storage)?,
+                        enabled_policy_count: row.try_get("enabledpolicycount").map_err(storage)?,
+                        docker_volume_policy_count: row
+                            .try_get("dockervolumepolicycount")
+                            .map_err(storage)?,
+                        stack_policy_count: row.try_get("stackpolicycount").map_err(storage)?,
+                        deployment_policy_count: row
+                            .try_get("deploymentpolicycount")
+                            .map_err(storage)?,
+                        swarm_service_policy_count: row
+                            .try_get("swarmservicepolicycount")
+                            .map_err(storage)?,
+                        attention_policy_count: row
+                            .try_get("attentionpolicycount")
+                            .map_err(storage)?,
+                        last_run_status: row.try_get("lastrunstatus").map_err(storage)?,
+                        last_run_at: row.try_get("lastrunat").map_err(storage)?,
+                    })
+                })
+                .collect()
+        })
+    }
+    fn rename_policy<'a>(
+        &'a self,
+        actor: ActorId,
+        input: &'a policy_metadata::RenameBackupPolicyInput,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let old = sqlx::query(
+                "SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(input.id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_policy)?;
+            let row = sqlx::query("UPDATE backuppolicies SET name=$2,normalizedname=$3,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(input.id).bind(&input.name).bind(input.name.to_uppercase())
+                .fetch_one(&mut *tx).await.map_err(|error| {
+                    if error.as_database_error().is_some_and(|db| db.is_unique_violation() && db.constraint() == Some("ix_backuppolicies_normalizedname")) {
+                        BackupError::Conflict("Backup Policy name already exists.".into())
+                    } else { storage(error) }
+                })?;
+            let policy = map_policy(row)?;
+            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+                policy.id,
+                policy.name.clone(),
+                actor,
+                citadel_domain::ActivityEventInfo::BackupPolicyRenamed {
+                    old_name: old.name,
+                    new_name: policy.name.clone(),
+                },
+                Utc::now(),
+            )
+            .map_err(storage)?;
+            crate::activity_store::insert_activity(&mut tx, &activity)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(policy)
+        })
+    }
+    fn update_policy<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        row_version: i64,
+        input: &'a BackupPolicyInput,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let old = sqlx::query(
+                "SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_policy)?;
+            if old.row_version != row_version {
+                return Err(BackupError::Conflict(
+                    "Backup Policy changed; reload before saving.".into(),
+                ));
+            }
+            citadel_backups::policy_update::guard(&old, input)?;
+            let row = sqlx::query("UPDATE backuppolicies SET description=$2,source=$3,backuprepositoryid=$4,enabled=$5,cron=$6,timezone=$7,webhook=$8,keeplastsuccessful=$9,timeoutseconds=$10,alertonfailure=$11,runasactorid=$12,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(id).bind(&input.description).bind(&input.source).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(&input.webhook).bind(input.keep_last_successful).bind(input.timeout_seconds).bind(input.alert_on_failure).bind(input.run_as_actor_id)
+                .fetch_one(&mut *tx).await.map_err(storage)?;
+            let policy = map_policy(row)?;
+            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+                policy.id,
+                policy.name.clone(),
+                actor,
+                citadel_domain::ActivityEventInfo::BackupPolicyUpdated {
+                    old_policy: policy_metadata::activity_snapshot(&old)?,
+                    new_policy: policy_metadata::activity_snapshot(&policy)?,
+                },
+                Utc::now(),
+            )
+            .map_err(storage)?;
+            crate::activity_store::insert_activity(&mut tx, &activity)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(policy)
+        })
+    }
+    fn update_policy_description<'a>(
+        &'a self,
+        actor: ActorId,
+        id: Uuid,
+        description: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<BackupPolicyView, BackupError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let old = sqlx::query(
+                "SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_policy)?;
+            let old_policy = policy_metadata::activity_snapshot(&old)?;
+            let row = sqlx::query("UPDATE backuppolicies SET description=$2,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(id).bind(description).fetch_one(&mut *tx).await.map_err(storage)?;
+            let policy = map_policy(row)?;
+            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+                policy.id,
+                policy.name.clone(),
+                actor,
+                citadel_domain::ActivityEventInfo::BackupPolicyUpdated {
+                    old_policy,
+                    new_policy: policy_metadata::activity_snapshot(&policy)?,
+                },
+                Utc::now(),
+            )
+            .map_err(storage)?;
+            crate::activity_store::insert_activity(&mut tx, &activity)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(policy)
         })
     }
     fn archive_policy(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>> {

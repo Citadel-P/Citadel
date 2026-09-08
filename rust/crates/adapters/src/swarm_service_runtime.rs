@@ -32,6 +32,75 @@ pub struct SwarmServiceRuntimeRouter {
 }
 
 impl SwarmServiceRuntimeRouter {
+    pub async fn inspect_service(
+        &self,
+        platform: Uuid,
+        id: &str,
+        cancel: &CancellationToken,
+    ) -> Result<SwarmServiceMessage, SwarmServiceError> {
+        let work = async {
+            use citadel_platforms::PlatformRuntimePort;
+            let pinned: (Option<String>, Value) =
+                sqlx::query_as("SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1")
+                    .bind(platform)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(SwarmServiceError::NotFound)?;
+            let check = |info: &citadel_platforms::RuntimePlatformInfo| {
+                if citadel_platforms::swarm_mutations::manager_matches(
+                    info,
+                    pinned.0.as_deref(),
+                    &pinned.1,
+                ) {
+                    Ok(())
+                } else {
+                    Err(SwarmServiceError::Conflict(
+                        "The connected Docker manager no longer belongs to this Swarm platform."
+                            .into(),
+                    ))
+                }
+            };
+            if self.connector(platform).await? == "Local" {
+                check(
+                    &self
+                        .docker
+                        .get_info(cancel)
+                        .await
+                        .map_err(inspection_error)?,
+                )?;
+                crate::swarm_inventory::SwarmInventoryClient::Local(&self.docker)
+                    .inspect_service(id, cancel)
+                    .await
+                    .map_err(inspection_error)
+            } else {
+                let agent = self.agent_for(platform).await?;
+                let info = match &agent {
+                    crate::agent_execution::AgentExecutionClient::Direct(client) => {
+                        client.get_info(cancel).await
+                    }
+                    crate::agent_execution::AgentExecutionClient::Edge(session) => {
+                        crate::edge::EdgeRuntime {
+                            session: session.clone(),
+                        }
+                        .get_info(cancel)
+                        .await
+                    }
+                }
+                .map_err(inspection_error)?;
+                check(&info)?;
+                agent
+                    .inspect_managed_swarm_service(id, cancel)
+                    .await
+                    .map_err(inspection_error)
+            }
+        };
+        tokio::select! { biased;
+            () = cancel.cancelled() => Err(SwarmServiceError::Cancelled),
+            result = tokio::time::timeout(std::time::Duration::from_secs(30),work) =>
+                result.unwrap_or_else(|_| Err(SwarmServiceError::Runtime("Service inspection timed out.".into()))),
+        }
+    }
     #[must_use]
     pub fn new(pool: PgPool, docker: DockerClient, agent: Option<AgentClient>) -> Self {
         Self {
@@ -72,16 +141,17 @@ impl SwarmServiceRuntimeRouter {
                     )
                 });
         }
-        self.agent
+        let agent = self
+            .agent
             .as_ref()
-            .filter(|agent| {
-                connector == "Agent"
-                    && agent.address().trim_end_matches('/') == address.trim_end_matches('/')
-            })
-            .map(|agent| AgentExecutionClient::Direct(std::sync::Arc::new(agent.clone())))
+            .filter(|_| connector == "Agent")
             .ok_or_else(|| {
                 SwarmServiceError::Runtime("The configured Agent transport is unavailable.".into())
-            })
+            })?;
+        let agent = agent
+            .at_address(&address)
+            .map_err(|error| SwarmServiceError::Runtime(error.message))?;
+        Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
     }
 
     async fn connector(&self, platform_id: Uuid) -> Result<String, SwarmServiceError> {
@@ -150,12 +220,7 @@ impl SwarmServiceRuntimeRouter {
             .map(str::to_owned)
             .collect();
         let observed=tokio::select!{biased;()=cancellation.cancelled()=>return Err(SwarmServiceError::Cancelled),result=self.docker.inspect_swarm_service(&service_id)=>result}.map_err(runtime)?;
-        Ok(observed_result(
-            observed,
-            claim.desired_hash.clone(),
-            warnings,
-            true,
-        ))
+        Ok(observed_result(observed, warnings, true))
     }
 
     async fn mutate_agent(
@@ -315,12 +380,7 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
             match self.connector(claim.platform_id).await?.as_str() {
                 "Local" => {
                     let observed=tokio::select!{biased;()=cancellation.cancelled()=>return Err(SwarmServiceError::Cancelled),result=self.docker.inspect_swarm_service(id)=>result}.map_err(runtime)?;
-                    Ok(Some(observed_result(
-                        observed,
-                        claim.desired_hash.clone(),
-                        Vec::new(),
-                        true,
-                    )))
+                    Ok(Some(observed_result(observed, Vec::new(), true)))
                 }
                 "Agent" | "EdgeAgent" => {
                     let agent = self.agent_for(claim.platform_id).await?;
@@ -496,7 +556,6 @@ fn proto_spec(
 
 fn observed_result(
     service: crate::docker::generated::SwarmService,
-    runtime_hash: String,
     warnings: Vec<String>,
     accepted: bool,
 ) -> RuntimeServiceResult {
@@ -539,7 +598,7 @@ fn observed_result(
         accepted,
         rollout_complete: rollout_error.is_none() && running >= desired,
         rollout_error,
-        runtime_hash,
+        runtime_hash: crate::swarm_service_inspection::runtime_hash(&service.spec),
         applied_digest: service
             .spec
             .pointer("/TaskTemplate/ContainerSpec/Image")
@@ -591,6 +650,17 @@ fn edge_unavailable() -> SwarmServiceError {
     SwarmServiceError::Runtime(
         "Edge Agent mutations are not available during this migration phase.".to_owned(),
     )
+}
+fn inspection_error(error: citadel_platforms::RuntimeCapabilityError) -> SwarmServiceError {
+    use citadel_platforms::RuntimeErrorKind;
+    match error.kind {
+        RuntimeErrorKind::NotFound => SwarmServiceError::NotFound,
+        RuntimeErrorKind::Conflict => SwarmServiceError::Conflict(error.message),
+        RuntimeErrorKind::InvalidRequest => SwarmServiceError::Validation(error.message),
+        RuntimeErrorKind::PermissionDenied => SwarmServiceError::Forbidden,
+        RuntimeErrorKind::Cancelled => SwarmServiceError::Cancelled,
+        _ => SwarmServiceError::Runtime(error.message),
+    }
 }
 fn agent_runtime(error: citadel_platforms::RuntimeCapabilityError) -> SwarmServiceError {
     if matches!(

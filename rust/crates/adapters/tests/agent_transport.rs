@@ -65,8 +65,21 @@ impl PlatformService for FixtureService {
         Ok(Response::new(CheckHealthResponse { healthy: true }))
     }
 
-    async fn prune(&self, _: Request<PruneRequest>) -> Result<Response<PruneResponse>, Status> {
-        Err(Status::unimplemented("fixture"))
+    async fn prune(
+        &self,
+        request: Request<PruneRequest>,
+    ) -> Result<Response<PruneResponse>, Status> {
+        assert!(request.metadata().get_bin("x-signature-bin").is_some());
+        let attempt = self.attempts.fetch_add(1, Ordering::Relaxed);
+        if attempt == 0 {
+            return Err(Status::unavailable("ambiguous prune failure"));
+        }
+        Ok(Response::new(PruneResponse {
+            resource: request.into_inner().resource,
+            space_reclaimed: 42,
+            images_deleted: vec!["old".into()],
+            ..Default::default()
+        }))
     }
 
     type StreamPlatformStatsStream = StatsStream;
@@ -100,6 +113,32 @@ impl PlatformService for FixtureService {
             },
         )]))))
     }
+}
+
+#[tokio::test]
+async fn platform_prune_is_signed_and_never_replayed_after_ambiguous_failure() {
+    use citadel_platforms::prune::{PlatformPrunePort, PruneResource};
+    let (address, attempts, _, stop) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[5; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let cancel = CancellationToken::new();
+    assert!(client.prune(PruneResource::Image, &cancel).await.is_err());
+    assert_eq!(
+        attempts.load(Ordering::Relaxed),
+        1,
+        "A failed destructive request must not retry"
+    );
+    let result = client.prune(PruneResource::Image, &cancel).await.unwrap();
+    assert_eq!(result.space_reclaimed, 42);
+    assert_eq!(result.images_deleted, vec!["old"]);
+    assert_eq!(attempts.load(Ordering::Relaxed), 2);
+    stop.cancel();
 }
 
 fn platform_info() -> PlatformInfoResponse {
@@ -191,6 +230,29 @@ async fn normalizes_a_unary_deadline_and_bounds_retries() {
     assert_eq!(error.kind, RuntimeErrorKind::Timeout);
     assert_eq!(attempts.load(Ordering::Relaxed), 1);
     server_cancellation.cancel();
+}
+
+#[tokio::test]
+async fn persisted_agent_address_rebinds_without_sending_to_the_startup_endpoint() {
+    let (old_address, old_attempts, _, old_stop) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let (new_address, new_attempts, _, new_stop) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let base = AgentClient::connect(
+        &old_address,
+        AgentRequestSigner::from_bytes(&[6; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let rebound = base.at_address(&new_address).unwrap();
+    assert_eq!(base.address(), old_address);
+    assert_eq!(rebound.address(), new_address);
+    rebound.get_info(&CancellationToken::new()).await.unwrap();
+    assert_eq!(old_attempts.load(Ordering::Relaxed), 0);
+    assert_eq!(new_attempts.load(Ordering::Relaxed), 2);
+    assert!(base.at_address("file:///var/run/docker.sock").is_err());
+    old_stop.cancel();
+    new_stop.cancel();
 }
 
 #[tokio::test]

@@ -8,6 +8,143 @@ use citadel_contracts::citadel::{
 };
 use prost::Message;
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn delete_images_preserves_authorization_and_reconciles_partial_failure() {
+    let f = fixture().await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let first = format!("sha256:{}", "a".repeat(64));
+    let second = format!("sha256:{}", "b".repeat(64));
+    for image in [&first, &second] {
+        sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,$2,$3,now(),'[]')").bind(Uuid::now_v7()).bind(image).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    }
+    let socket = std::env::temp_dir().join(format!("images-{}.sock", Uuid::now_v7()));
+    let listener = UnixListener::bind(&socket).unwrap();
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let operations = deleted.clone();
+    let a = first.clone();
+    let b = second.clone();
+    let server = tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            let line = request.lines().next().unwrap();
+            let (status, body) = if line.starts_with("GET /version ") {
+                (200, json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"}))
+            } else if line.starts_with("DELETE ") {
+                assert!(line.contains("force=true&noprune=true"));
+                operations.lock().await.push(line.to_owned());
+                if line.contains(&"b".repeat(64)) {
+                    (409, json!({"message":"image is in use"}))
+                } else {
+                    (200, json!([{"Deleted":a}]))
+                }
+            } else {
+                assert!(line.starts_with("GET /v1.49/images/json"));
+                (
+                    200,
+                    json!([{"Id":b,"RepoTags":[],"RepoDigests":[],"Created":0,"Size":0,"Containers":1}]),
+                )
+            };
+            let body = body.to_string();
+            let phrase = if status == 200 { "OK" } else { "Conflict" };
+            stream.write_all(format!("HTTP/1.1 {status} {phrase}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+        }
+    });
+    let mut state = f.lookup_state.platforms.clone();
+    state.docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
+    let mut f = f;
+    f.app = platforms_http::router(state);
+    let body = json!({"platformId":f.platform_id,"ids":[first,second],"force":true,"noPrune":true});
+    let anonymous = Request::builder()
+        .method(Method::DELETE)
+        .uri("/api/v1/images")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    assert_eq!(
+        f.app.clone().oneshot(anonymous).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send_json(
+            &f,
+            Method::DELETE,
+            "/api/v1/images",
+            super::lookup::subject(&f).await,
+            body.clone()
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert!(deleted.lock().await.is_empty());
+    let unknown = json!({"platformId":f.platform_id,"ids":[format!("sha256:{}","c".repeat(64))]});
+    assert_eq!(
+        send_json(
+            &f,
+            Method::DELETE,
+            "/api/v1/images",
+            f.administrator.clone(),
+            unknown
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert!(deleted.lock().await.is_empty());
+    assert_eq!(
+        send_json(
+            &f,
+            Method::DELETE,
+            "/api/v1/images",
+            f.administrator.clone(),
+            body
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(deleted.lock().await.len(), 2);
+    let rows:Vec<(String,String)>=sqlx::query_as("SELECT dockerimageid,controlstate FROM images WHERE platformid=$1 AND dockerimageid=ANY($2)").bind(f.platform_id).bind(&[first.clone(),second.clone()]).fetch_all(&f.pool).await.unwrap();
+    assert_eq!(rows, vec![(second, "Idle".into())]);
+    sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,$2,$3,now(),'[]')")
+        .bind(Uuid::now_v7()).bind(&first).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let success = json_body(
+        send_json(
+            &f,
+            Method::DELETE,
+            "/api/v1/images",
+            f.administrator.clone(),
+            json!({"platformId":f.platform_id,"ids":[first,first],"force":true,"noPrune":true}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(success["items"][0]["result"]["Deleted"], first);
+    assert_eq!(
+        deleted.lock().await.len(),
+        3,
+        "Duplicate IDs must not repeat a Docker mutation"
+    );
+    server.abort();
+    f.docker_server.abort();
+    std::fs::remove_file(socket).unwrap();
+}
+
 // Ports ImageEndpointTests and SwarmNodeLocalResourceEndpointTests' inspect
 // contract, adding a wrong-node/no-fallback regression at the real HTTP boundary.
 #[tokio::test]

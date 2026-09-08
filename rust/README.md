@@ -1,5 +1,44 @@
 # Citadel Rust migration workspace
 
+## API parity gate
+
+Phase 7.5 is still in progress; this workspace is not yet a full replacement
+for the .NET Core. Run `cargo run -p xtask -- parity` from `rust/` to compare all
+.NET operation IDs, HTTP methods, paths, and public/internal exposure with the
+Rust route catalog. The command deliberately fails while omissions remain;
+there is no allowlist that hides missing operations.
+
+This is separate from `cargo run -p xtask -- openapi --check`, which checks
+generated-artifact freshness and compatibility of the implemented subset.
+Neither command replaces HTTP/persistence tests or live transport acceptance.
+See [Phase 7.5 implementation evidence](reports/phase7-5-api-parity.md).
+
+## Unattended first run and recovery
+
+For unattended Rust Core setup, supply all three settings:
+`Bootstrap__AdminName`, `Bootstrap__AdminEmail`, and
+`Bootstrap__AdminPasswordFile`. Mount the password file read-only and use its
+absolute path inside Core. It must be a regular UTF-8 file of at most 1 KiB;
+one trailing newline is allowed. Do not put the password itself in environment
+variables. With no bootstrap settings, use the normal browser setup.
+
+Partial settings fail startup without completing setup. Successful setup creates
+one administrator and the two disabled example automations in one transaction.
+It does not issue a browser session. After setup, these settings are ignored and
+the password mount can be removed before restarting.
+
+Offline `restore-system` requires the original `Jwt__Key` and
+`Secrets__EncryptionKey` from the backed-up installation. Preserve these outside
+the database backup. A missing/malformed encryption key is rejected before target
+database work; a correctly sized **wrong** key is not detected by this preflight
+and cannot decrypt restored secrets. Restore into a disposable environment and
+verify the retained keys before replacing an installation.
+
+Process, HTTP/PostgreSQL and recovery test commands and remaining parity gaps
+are tracked in [the test-port report](reports/phase7-5-test-port-progress.md).
+
+## Migration background
+
 This workspace contains the isolated migration work described in
 `Citadel.Internals/specs/dotnet-to-rust-migration.md`. Rust owns its generated
 v1 database baseline and migration runner and now hosts the Phase 3A identity
@@ -333,8 +372,9 @@ remain Phase 8.
 
 ## Interactive development
 
-Use the committed VS Code Dev Container to run the Rust API, PostgreSQL, Docker
-integration, and the existing React frontend together. The complete setup,
+On Windows, use VS Code in WSL with the repository on the Linux filesystem,
+running the Rust API and frontend directly and PostgreSQL in Docker Desktop.
+The committed Dev Container remains available as a fallback. The complete setup,
 run, debugging, test, shutdown, and troubleshooting commands are documented in
 [DEVELOPMENT.md](DEVELOPMENT.md).
 

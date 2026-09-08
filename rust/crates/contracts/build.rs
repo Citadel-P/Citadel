@@ -43,9 +43,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut prost = prost_build::Config::new();
     prost.protoc_executable(&protoc);
 
-    tonic_prost_build::configure()
+    let mut builder = tonic_prost_build::configure();
+    // Only inspection messages need a JSON document for adoption comparison.
+    for name in [
+        "InspectContainerResponse",
+        "HostPortBindingList",
+        "HostPortBinding",
+        "NetworkSettings",
+        "MapFieldNetwork",
+        "EndpointSettings",
+        "EndpointIPAMConfig",
+        "Address",
+        "ContainerConfig",
+        "MountPoint",
+        "GraphDriverData",
+        "HostConfig",
+        "Ulimits",
+        "Mount",
+        "VolumeOptions",
+        "DriverConfig",
+        "BindOptions",
+        "RestartPolicy",
+        "ContainerState",
+        "LogConfig",
+        "Health",
+    ] {
+        builder = builder.type_attribute(
+            format!(".citadel.shared_models.v1.{name}"),
+            "#[derive(serde::Serialize)]",
+        );
+    }
+    builder
         .build_client(true)
         .build_server(true)
+        .type_attribute(
+            ".citadel.images.v1.InspectImageResponse",
+            "#[derive(serde::Serialize)]",
+        )
+        .type_attribute(
+            ".citadel.images.v1.ContainerImageResult",
+            "#[derive(serde::Serialize)]",
+        )
+        .type_attribute(
+            ".citadel.images.v1.HistoryImageResult",
+            "#[derive(serde::Serialize)]",
+        )
         .compile_with_config(
             prost,
             &protos,

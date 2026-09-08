@@ -19,8 +19,11 @@ use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
 
+#[path = "container_adoption.rs"]
+mod adoption;
 #[path = "deployment_updates_store.rs"]
 mod updates;
+pub use adoption::PostgresContainerAdoption;
 
 const DEPLOYMENT_RESOURCE_TYPE: i32 = 1;
 const PLATFORM_RESOURCE_TYPE: i32 = 0;

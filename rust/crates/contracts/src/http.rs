@@ -109,6 +109,7 @@ impl IntegerFormat {
 pub enum ParameterSchema {
     String,
     ArrayString,
+    ArrayUuid,
     Boolean {
         default: Option<bool>,
     },
@@ -263,6 +264,20 @@ const REGISTRY_FILTER_PARAMETERS: &[ParameterContract] = &[
         },
     ),
     ParameterContract::query("tags", ParameterSchema::ArrayString),
+];
+
+const GLOBAL_SEARCH_PARAMETERS: &[ParameterContract] = &[
+    ParameterContract::required_query("q", ParameterSchema::String),
+    ParameterContract::query("types", ParameterSchema::String),
+    ParameterContract::query(
+        "limitPerType",
+        ParameterSchema::Integer {
+            format: IntegerFormat::Int32,
+            default: Some(5),
+            minimum: Some(1),
+            maximum: Some(10),
+        },
+    ),
 ];
 
 const GIT_REPOSITORY_FILTER_PARAMETERS: &[ParameterContract] = &[ParameterContract::query(
@@ -685,42 +700,42 @@ route_catalog! {
     },
     GET_PERMISSION_MATRIX => {
         method: Get, path: "/api/v1/roles/permissions/matrix", operation_id: "getPermissionMatrix", summary: "Get permission matrix",
-        public: true, setup_exempt: false, authentication: Anonymous,
+        public: false, setup_exempt: false, authentication: Anonymous,
         request_schema: None, response_schema: Some("PermissionMatrixResponse"), success_status: 200,
         error_responses: [BadRequest, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_LICENSE_ENTITLEMENTS => {
         method: Get, path: "/api/v1/license/entitlements", operation_id: "getLicenseEntitlements", summary: "Get effective license entitlements",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("LicenseEntitlementsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_LICENSE => {
         method: Get, path: "/api/v1/license", operation_id: "getLicense", summary: "Get installed license state",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("LicenseView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     INSTALL_LICENSE => {
         method: Post, path: "/api/v1/license", operation_id: "installLicense", summary: "Install or replace a license",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("InstallLicenseInput"), response_schema: Some("LicenseView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     REMOVE_LICENSE => {
         method: Delete, path: "/api/v1/license", operation_id: "removeLicense", summary: "Remove the installed license",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("LicenseView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_LICENSE_REQUEST => {
         method: Get, path: "/api/v1/license/request", operation_id: "getLicenseRequest", summary: "Get license request metadata",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("LicenseRequestView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
@@ -972,203 +987,223 @@ route_catalog! {
     },
     LIST_ROLES => {
         method: Get, path: "/api/v1/roles", operation_id: "listRoles", summary: "Get all Roles",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("RolesView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_ROLE => {
         method: Get, path: "/api/v1/roles/{id}", operation_id: "getRole", summary: "Get a Role by ID",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("RoleView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     CREATE_ROLE => {
         method: Post, path: "/api/v1/roles", operation_id: "createRole", summary: "Create a Role",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("RoleInput"), response_schema: Some("RoleView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     PATCH_ROLE_PERMISSIONS => {
         method: Patch, path: "/api/v1/roles/{id}/permissions", operation_id: "updateRolePermissions", summary: "Update Role permissions",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("PatchRolePermissionsInput"), response_schema: Some("RoleView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     RENAME_ROLE => {
         method: Post, path: "/api/v1/roles/rename", operation_id: "renameRole", summary: "Rename a Role",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("RenameResource"), response_schema: Some("RoleView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     DELETE_ROLES => {
         method: Delete, path: "/api/v1/roles", operation_id: "deleteRoles", summary: "Delete Roles",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("DeleteRolesInput"), response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     LIST_OIDC_PROVIDERS => {
         method: Get, path: "/api/v1/oidcProviders", operation_id: "listOidcProviders", summary: "List OIDC providers",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("OidcProvidersView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_OIDC_PROVIDER => {
         method: Get, path: "/api/v1/oidcProviders/{id}", operation_id: "getOidcProvider", summary: "Get OIDC provider",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("OidcProviderView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     CREATE_OIDC_PROVIDER => {
         method: Post, path: "/api/v1/oidcProviders", operation_id: "createOidcProvider", summary: "Create OIDC provider",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("OidcProviderInput"), response_schema: Some("OidcProviderView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     RENAME_OIDC_PROVIDER => {
         method: Post, path: "/api/v1/oidcProviders/rename", operation_id: "renameOidcProvider", summary: "Rename OIDC provider",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("RenameResource"), response_schema: Some("OidcProviderView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     UPDATE_OIDC_PROVIDER => {
         method: Patch, path: "/api/v1/oidcProviders/{id}", operation_id: "updateOidcProvider", summary: "Update OIDC provider",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("UpdateOidcProviderInput"), response_schema: Some("OidcProviderView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     UPDATE_OIDC_PROVIDER_METADATA => {
         method: Patch, path: "/api/v1/oidcProviders/{id}/_metadata", operation_id: "updateOidcProviderMetadata", summary: "Update OIDC provider metadata",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("PatchResourceMetadata"), response_schema: Some("OidcProviderView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     DELETE_OIDC_PROVIDER => {
         method: Delete, path: "/api/v1/oidcProviders/{id}", operation_id: "deleteOidcProvider", summary: "Delete OIDC provider",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     TEST_OIDC_PROVIDER_DISCOVERY => {
         method: Post, path: "/api/v1/oidcProviders/{id}/testDiscovery", operation_id: "testOidcProviderDiscovery", summary: "Test OIDC provider discovery",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("OidcDiscoveryResultView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     TEST_OIDC_DISCOVERY => {
         method: Post, path: "/api/v1/oidcProviders/testDiscovery", operation_id: "testOidcDiscovery", summary: "Test OIDC discovery",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("TestOidcProviderDiscoveryInput"), response_schema: Some("OidcDiscoveryResultView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     LIST_SERVICE_ACCOUNTS => {
         method: Get, path: "/api/v1/serviceAccounts", operation_id: "listServiceAccounts", summary: "List Service Accounts",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ServiceAccountsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: SERVICE_ACCOUNT_FILTER_PARAMETERS
     },
     CREATE_SERVICE_ACCOUNT => {
         method: Post, path: "/api/v1/serviceAccounts", operation_id: "createServiceAccount", summary: "Create a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("CreateServiceAccountInput"), response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     ARCHIVE_SERVICE_ACCOUNTS => {
         method: Delete, path: "/api/v1/serviceAccounts", operation_id: "archiveServiceAccounts", summary: "Archive Service Accounts",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("DeleteServiceAccountsInput"), response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_SERVICE_ACCOUNT_LIMITS => {
         method: Get, path: "/api/v1/serviceAccounts/limits", operation_id: "getServiceAccountLimits", summary: "Get Service Account limits",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ServiceAccountLimitsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     GET_SERVICE_ACCOUNT => {
         method: Get, path: "/api/v1/serviceAccounts/{id}", operation_id: "getServiceAccount", summary: "Get a Service Account",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
+    GET_ACTOR => {
+        method: Get, path: "/api/v1/actors/{id}", operation_id: "getActor", summary: "Get an Actor",
+        public: false, setup_exempt: false, authentication: Administrator, request_schema: None, response_schema: Some("ActorView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GLOBAL_SEARCH => {
+        method: Get, path: "/api/v1/search", operation_id: "globalSearch", summary: "Search authorized resources",
+        public: false, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("GlobalSearchResponse"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: GLOBAL_SEARCH_PARAMETERS
+    },
+    PATCH_ACTOR_ENABLED => {
+        method: Patch, path: "/api/v1/actors/{id}/enabled", operation_id: "patchActorEnabled", summary: "Enable or disable an Actor",
+        public: false, setup_exempt: false, authentication: Administrator, request_schema: Some("PatchActorEnabledInput"), response_schema: Some("ActorView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    LIST_SERVICE_ACCOUNT_USAGES => {
+        method: Get, path: "/api/v1/serviceAccounts/{id}/usages", operation_id: "listServiceAccountUsages", summary: "List Service Account execution usages",
+        public: false, setup_exempt: false, authentication: Administrator, request_schema: None, response_schema: Some("RunAsActorUsageList"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     UPDATE_SERVICE_ACCOUNT => {
         method: Patch, path: "/api/v1/serviceAccounts/{id}", operation_id: "updateServiceAccount", summary: "Update a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("PatchServiceAccountInput"), response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     RENAME_SERVICE_ACCOUNT => {
         method: Post, path: "/api/v1/serviceAccounts/rename", operation_id: "renameServiceAccount", summary: "Rename a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("RenameResource"), response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[]
     },
     ADD_SERVICE_ACCOUNT_ROLE => {
         method: Post, path: "/api/v1/serviceAccounts/{id}/roles", operation_id: "addServiceAccountRole", summary: "Assign a Role to a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("AddServiceAccountRoleInput"), response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     REMOVE_SERVICE_ACCOUNT_ROLE => {
         method: Delete, path: "/api/v1/serviceAccounts/{id}/roles/{roleId}", operation_id: "removeServiceAccountRole", summary: "Remove a Role from a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id"), ParameterContract::path_uuid("roleId")]
     },
     ADD_SERVICE_ACCOUNT_RESOURCE_ACCESS => {
         method: Post, path: "/api/v1/serviceAccounts/{id}/resource-accesses", operation_id: "addServiceAccountResourceAccess", summary: "Add a resource override to a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: Some("ServiceAccountResourceAccessInput"), response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     REMOVE_SERVICE_ACCOUNT_RESOURCE_ACCESS => {
         method: Delete, path: "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}", operation_id: "removeServiceAccountResourceAccess", summary: "Remove a resource override from a Service Account",
-        public: true, setup_exempt: false, authentication: Administrator,
+        public: false, setup_exempt: false, authentication: Administrator,
         request_schema: None, response_schema: Some("ServiceAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id"), ParameterContract::path_uuid("resourceAccessId")]
     },
     LIST_SERVICE_ACCOUNT_TOKENS => {
         method: Get, path: "/api/v1/serviceAccounts/{id}/tokens", operation_id: "listServiceAccountTokens", summary: "List Service Account tokens",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ServiceAccountTokensView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: TOKEN_FILTER_PARAMETERS
     },
     CREATE_SERVICE_ACCOUNT_TOKEN => {
         method: Post, path: "/api/v1/serviceAccounts/{id}/tokens", operation_id: "createServiceAccountToken", summary: "Create a Service Account token",
-        public: true, setup_exempt: false, authentication: Human,
+        public: false, setup_exempt: false, authentication: Human,
         request_schema: Some("CreateServiceAccountTokenInput"), response_schema: Some("CreatedServiceAccountTokenView"), success_status: 201,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id")]
     },
     REVOKE_SERVICE_ACCOUNT_TOKEN => {
         method: Delete, path: "/api/v1/serviceAccounts/{id}/tokens/{tokenId}", operation_id: "revokeServiceAccountToken", summary: "Revoke a Service Account token",
-        public: true, setup_exempt: false, authentication: Human,
+        public: false, setup_exempt: false, authentication: Human,
         request_schema: None, response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("id"), ParameterContract::path_uuid("tokenId")]
@@ -1287,6 +1322,12 @@ route_catalog! {
         request_schema: None, response_schema: Some("StackConfigView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
     },
+    GET_STACK_CONTAINERS_DATA => {
+        method: Get, path: "/api/v1/stacks/{stackId}/data", operation_id: "getContainersData", summary: "Get Stack runtime containers",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainersDataView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
     GET_STACK_DUPLICATE_DRAFT => {
         method: Get, path: "/api/v1/stacks/{stackId}/duplicate-draft", operation_id: "getStackDuplicateDraft", summary: "Build a Stack duplicate draft",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1365,6 +1406,30 @@ route_catalog! {
         request_schema: Some("SwarmServiceIds"), response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
     },
+    GET_SWARM_SERVICE_DUPLICATE_DRAFT => {
+        method: Get, path: "/api/v1/swarmServices/{id}/duplicate-draft", operation_id: "getSwarmServiceDuplicateDraft", summary: "Prepare a managed Service duplicate",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceDuplicateDraftView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_SWARM_SERVICE_ADOPTION_DRAFT => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adoption-draft", operation_id: "getSwarmServiceAdoptionDraft", summary: "Review an unmanaged Docker Service for adoption",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceAdoptionDraftView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    ADOPT_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adopt", operation_id: "adoptSwarmService", summary: "Adopt an existing Docker Service without changing Docker",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("AdoptSwarmServiceInput"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    INSPECT_MANAGED_SWARM_SERVICE => {
+        method: Get, path: "/api/v1/swarmServices/{id}/inspect", operation_id: "inspectManagedSwarmService", summary: "Inspect the deployed managed Service",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     GET_MANAGED_SWARM_SERVICE => {
         method: Get, path: "/api/v1/swarmServices/{id}", operation_id: "getManagedSwarmService", summary: "Get a managed Docker Swarm Service",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1376,6 +1441,13 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: Some("UpdateSwarmServiceInput"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_SWARM_SERVICE_METADATA => {
+        method: Patch, path: "/api/v1/swarmServices/{id}/_metadata", operation_id: "updateSwarmServiceMetadata", summary: "Update managed Service metadata",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PatchResourceMetadata"), response_schema: Some("ManagedSwarmServiceView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("id")]
     },
     RENAME_SWARM_SERVICE => {
         method: Post, path: "/api/v1/swarmServices/rename", operation_id: "renameSwarmService", summary: "Rename a managed Docker Swarm Service",
@@ -1413,6 +1485,30 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("AgentSetupView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    ROTATE_AGENT_HUB_KEY => {
+        method: Post, path: "/api/v1/platforms/agent/setup/rotate-key", operation_id: "rotateAgentHubKey", summary: "Rotate the Agent signing key",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("AgentSetupView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_PLATFORM => {
+        method: Patch, path: "/api/v1/platforms/{id}", operation_id: "updatePlatform", summary: "Update a Platform",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PlatformInput"), response_schema: Some("PlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_PLATFORM => {
+        method: Post, path: "/api/v1/platforms/rename", operation_id: "renamePlatform", summary: "Rename a Platform",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("RenameResource"), response_schema: Some("PlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    PRUNE_PLATFORM => {
+        method: Post, path: "/api/v1/platforms/{id}/prune", operation_id: "prunePlatform", summary: "Prune unused Docker resources",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("PrunePlatformInput"), response_schema: Some("PrunePlatformView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     CREATE_PLATFORM => {
         method: Post, path: "/api/v1/platforms", operation_id: "createPlatform", summary: "Create a Platform",
@@ -1508,8 +1604,8 @@ route_catalog! {
         method: Get, path: "/api/v1/containers/{id}", operation_id: "getContainer", summary: "Get a Container",
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ContainerView"), success_status: 200,
-        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
-        parameters: &[ParameterContract::path_uuid("id")]
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_string("id")]
     },
     GET_CONTAINER_STATS => {
         method: Get, path: "/api/v1/containers/{id}/stats", operation_id: "getContainerStats", summary: "Get Container statistics",
@@ -1545,6 +1641,20 @@ route_catalog! {
         request_schema: None, response_schema: Some("SwarmServiceStatsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId"),ParameterContract::query("hours",ParameterSchema::Reference("StatsHours"))]
+    },
+    INSPECT_SWARM_TASK => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect", operation_id: "inspectSwarmTask", summary: "Inspect the current Task container",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId")]
+    },
+    GET_SWARM_TASK_TERMINAL_TARGET => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal", operation_id: "getSwarmTaskTerminalTarget", summary: "Resolve the current Task terminal target",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmTaskTerminalView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"),ParameterContract::path_string("resourceId")]
     },
     GET_SWARM_TASK_STATS => {
         method: Get, path: "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats", operation_id: "getSwarmTaskStats", summary: "Get current Task statistics",
@@ -1651,6 +1761,13 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId")]
     },
+    GET_SWARM_OVERVIEW => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm", operation_id: "getSwarmOverview", summary: "Get Swarm inventory health and quorum",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmOverviewView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, BadGateway, ServiceUnavailable, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
     GET_SWARM_NODE => {
         method: Get, path: "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}", operation_id: "getSwarmNode", summary: "Get a Swarm Node",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1728,6 +1845,97 @@ route_catalog! {
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError],
         parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
     },
+    UPDATE_SWARM_NODE => {
+        method: Patch, path: "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}", operation_id: "updateSwarmNode", summary: "updateSwarmNode",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateSwarmNodeInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("nodeId")]
+    },
+    INSPECT_SWARM_NODE => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect", operation_id: "inspectSwarmNode", summary: "inspectSwarmNode",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmNodeInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("nodeId")]
+    },
+    UPDATE_SWARM_NODES_AVAILABILITY => {
+        method: Patch, path: "/api/v1/platforms/{platformId}/swarm/nodes/availability", operation_id: "updateSwarmNodesAvailability", summary: "updateSwarmNodesAvailability",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateSwarmNodesAvailabilityInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    DELETE_SWARM_INVENTORY_SERVICES => {
+        method: Delete, path: "/api/v1/platforms/{platformId}/swarm/services", operation_id: "deleteSwarmInventoryServices", summary: "deleteSwarmInventoryServices",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteSwarmResourcesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    INSPECT_SWARM_SERVICE => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect", operation_id: "inspectSwarmService", summary: "inspectSwarmService",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmServiceInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    RESTART_SWARM_SERVICE => {
+        method: Post, path: "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart", operation_id: "restartSwarmService", summary: "restartSwarmService",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    CREATE_SWARM_SECRET => {
+        method: Post, path: "/api/v1/platforms/{platformId}/swarm/secrets", operation_id: "createSwarmSecret", summary: "createSwarmSecret",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateSwarmSecretInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    DELETE_SWARM_SECRETS => {
+        method: Delete, path: "/api/v1/platforms/{platformId}/swarm/secrets", operation_id: "deleteSwarmSecrets", summary: "deleteSwarmSecrets",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteSwarmResourcesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    UPDATE_SWARM_SECRET_LABELS => {
+        method: Patch, path: "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}/labels", operation_id: "updateSwarmSecretLabels", summary: "updateSwarmSecretLabels",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateSwarmResourceLabelsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    CREATE_SWARM_CONFIG => {
+        method: Post, path: "/api/v1/platforms/{platformId}/swarm/configs", operation_id: "createSwarmConfig", summary: "createSwarmConfig",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("CreateSwarmConfigInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    DELETE_SWARM_CONFIGS => {
+        method: Delete, path: "/api/v1/platforms/{platformId}/swarm/configs", operation_id: "deleteSwarmConfigs", summary: "deleteSwarmConfigs",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteSwarmResourcesInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId")]
+    },
+    GET_SWARM_CONFIG_DATA => {
+        method: Get, path: "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content", operation_id: "getSwarmConfigData", summary: "getSwarmConfigData",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("SwarmConfigDataView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
+    UPDATE_SWARM_CONFIG_LABELS => {
+        method: Patch, path: "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/labels", operation_id: "updateSwarmConfigLabels", summary: "updateSwarmConfigLabels",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("UpdateSwarmResourceLabelsInput"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("platformId"), ParameterContract::path_string("resourceId")]
+    },
     LIST_TAGS => {
         method: Get, path: "/api/v1/tags", operation_id: "listTags", summary: "List resource tags",
         public: true, setup_exempt: false, authentication: Actor,
@@ -1736,7 +1944,7 @@ route_catalog! {
     },
     LOOKUP => {
         method: Get, path: "/api/v1/lookup", operation_id: "lookup", summary: "Look up accessible resources",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("ResourceInfo"), response_is_array: true, success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
         parameters: &[
@@ -1838,37 +2046,37 @@ route_catalog! {
     },
     LIST_GIT_ACCOUNTS => {
         method: Get, path: "/api/v1/gitAccounts", operation_id: "listGitAccounts", summary: "List Git accounts",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("GitAccountsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[]
     },
     CREATE_GIT_ACCOUNT => {
         method: Post, path: "/api/v1/gitAccounts", operation_id: "createGitAccount", summary: "Create a Git account",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: Some("GitAccountInput"), response_schema: Some("GitAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, Conflict, TooManyRequests, InternalServerError], parameters: &[]
     },
     DELETE_GIT_ACCOUNTS => {
         method: Delete, path: "/api/v1/gitAccounts", operation_id: "deleteGitAccounts", summary: "Delete Git accounts",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: Some("DeleteGitAccountsInput"), response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
     },
     GET_GIT_ACCOUNT => {
         method: Get, path: "/api/v1/gitAccounts/{id}", operation_id: "getGitAccount", summary: "Get a Git account",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("GitAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     GET_GIT_ACCOUNT_CONFIG => {
         method: Get, path: "/api/v1/gitAccounts/{id}/_cfg", operation_id: "getGitAccountConfig", summary: "Get Git account configuration",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: None, response_schema: Some("GitAccountConfigView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     UPDATE_GIT_ACCOUNT => {
         method: Patch, path: "/api/v1/gitAccounts/{id}", operation_id: "updateGitAccount", summary: "Update a Git account",
-        public: true, setup_exempt: false, authentication: Actor,
+        public: false, setup_exempt: false, authentication: Actor,
         request_schema: Some("GitAccountInput"), response_schema: Some("GitAccountView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
@@ -2009,6 +2217,49 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_DEPLOYMENT_TAGS => {
+        method: Get, path: "/api/v1/deployments/{deploymentId}/tags", operation_id: "getDeploymentTags", summary: "Get Deployment tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    REPLACE_DEPLOYMENT_TAGS => {
+        method: Put, path: "/api/v1/deployments/{deploymentId}/tags", operation_id: "replaceDeploymentTags", summary: "Replace Deployment tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    GET_STACK_TAGS => {
+        method: Get, path: "/api/v1/stacks/{stackId}/tags", operation_id: "getStackTags", summary: "Get Stack tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    REPLACE_STACK_TAGS => {
+        method: Put, path: "/api/v1/stacks/{stackId}/tags", operation_id: "replaceStackTags", summary: "Replace Stack tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    GET_SWARM_SERVICE_TAGS => {
+        method: Get, path: "/api/v1/swarmServices/{id}/tags", operation_id: "getSwarmServiceTags", summary: "Get SwarmService tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    REPLACE_SWARM_SERVICE_TAGS => {
+        method: Put, path: "/api/v1/swarmServices/{id}/tags", operation_id: "replaceSwarmServiceTags", summary: "Replace SwarmService tags",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("ReplaceResourceTagsInput"), response_schema: Some("ResourceTagsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RECEIVE_WEBHOOK => {
+        method: Post, path: "/listener/{authType}/{resourceType}/{id}/{execution}", operation_id: "receiveWebhook", summary: "Receive a provider webhook delivery",
+        public: false, setup_exempt: true, authentication: Anonymous,
+        request_schema: None, response_schema: Some("WebhookResponse"), success_status: 202,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError],
+        parameters: &[ParameterContract::path_string("authType"), ParameterContract::path_string("resourceType"), ParameterContract::path_uuid("id"), ParameterContract::path_string("execution")]
     },
     GET_BACKUP_POLICY_TAGS => {
         method: Get, path: "/api/v1/backupPolicies/{id}/tags", operation_id: "getBackupPolicyTags", summary: "Get BackupPolicy tags",
@@ -2283,6 +2534,21 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("AlertRuleView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    GET_ALERT_RULE_CONFIG => {
+        method: Get, path: "/api/v1/alertRules/{id}/_cfg", operation_id: "getAlertRuleConfig", summary: "Get Alert Rule configuration",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("AlertRuleConfigView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_ALERT_RULE => {
+        method: Post, path: "/api/v1/alertRules/rename", operation_id: "renameAlertRule", summary: "Rename an Alert Rule",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("RenameResource"), response_schema: Some("AlertRuleView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_ALERT_RULE_METADATA => {
+        method: Patch, path: "/api/v1/alertRules/{id}/_metadata", operation_id: "updateAlertRuleMetadata", summary: "Update Alert Rule metadata",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("PatchResourceMetadata"), response_schema: Some("AlertRuleView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     UPDATE_ALERT_RULE => {
         method: Patch, path: "/api/v1/alertRules/{id}", operation_id: "updateAlertRule", summary: "Update an Alert Rule",
         public: true, setup_exempt: false, authentication: Actor, request_schema: Some("PatchAlertRuleInput"), response_schema: Some("AlertRuleView"), success_status: 200,
@@ -2333,6 +2599,11 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupRepositoryView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
+    UPDATE_BACKUP_REPOSITORY => {
+        method: Patch, path: "/api/v1/backupRepositories/{id}", operation_id: "updateBackupRepository", summary: "Update a Backup Repository",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("UpdateBackupRepositoryInput"), response_schema: Some("BackupRepositoryView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     ARCHIVE_BACKUP_REPOSITORY => {
         method: Delete, path: "/api/v1/backupRepositories/{id}", operation_id: "archiveBackupRepository", summary: "Archive a Backup Repository",
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: None, success_status: 204,
@@ -2363,10 +2634,30 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupPoliciesView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: BACKUP_POLICY_FILTER_PARAMETERS
     },
+    GET_PLATFORM_BACKUP_SUMMARIES => {
+        method: Get, path: "/api/v1/backupPolicies/platform-summaries", operation_id: "getPlatformBackupSummaries", summary: "Get Platform Backup summaries",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("PlatformBackupSummariesView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: &[ParameterContract::required_query("platformIds", ParameterSchema::ArrayUuid)]
+    },
     CREATE_BACKUP_POLICY => {
         method: Post, path: "/api/v1/backupPolicies", operation_id: "createBackupPolicy", summary: "Create a Backup Policy",
         public: true, setup_exempt: false, authentication: Actor, request_schema: Some("BackupPolicyInput"), response_schema: Some("BackupPolicyView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    GET_DEPLOYMENT_BACKUP_SOURCE_PREVIEW => {
+        method: Get, path: "/api/v1/deployments/{deploymentId}/backup-source-preview", operation_id: "getDeploymentBackupSourcePreview", summary: "Preview Deployment Backup volumes",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("DeploymentBackupSourcePreviewView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("deploymentId")]
+    },
+    GET_STACK_BACKUP_SOURCE_PREVIEW => {
+        method: Get, path: "/api/v1/stacks/{stackId}/backup-source-preview", operation_id: "getStackBackupSourcePreview", summary: "Preview Stack Backup volumes",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("StackBackupSourcePreviewView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("stackId")]
+    },
+    GET_SWARM_SERVICE_BACKUP_SOURCE_PREVIEW => {
+        method: Get, path: "/api/v1/swarmServices/{id}/backup-source-preview", operation_id: "getSwarmServiceBackupSourcePreview", summary: "Preview Service Backup volumes",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("SwarmServiceBackupSourcePreviewView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     GET_BACKUP_POLICY => {
         method: Get, path: "/api/v1/backupPolicies/{id}", operation_id: "getBackupPolicy", summary: "Get a Backup Policy",
@@ -2376,6 +2667,21 @@ route_catalog! {
     ARCHIVE_BACKUP_POLICY => {
         method: Delete, path: "/api/v1/backupPolicies/{id}", operation_id: "archiveBackupPolicy", summary: "Archive a Backup Policy",
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    UPDATE_BACKUP_POLICY => {
+        method: Patch, path: "/api/v1/backupPolicies/{id}", operation_id: "updateBackupPolicy", summary: "Update a Backup Policy",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("UpdateBackupPolicyInput"), response_schema: Some("BackupPolicyView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RENAME_BACKUP_POLICY => {
+        method: Post, path: "/api/v1/backupPolicies/rename", operation_id: "renameBackupPolicy", summary: "Rename a Backup Policy",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("RenameResource"), response_schema: Some("BackupPolicyView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
+    },
+    UPDATE_BACKUP_POLICY_METADATA => {
+        method: Patch, path: "/api/v1/backupPolicies/{id}/_metadata", operation_id: "updateBackupPolicyMetadata", summary: "Update Backup Policy metadata",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("PatchResourceMetadata"), response_schema: Some("BackupPolicyView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     QUEUE_BACKUP_RUN => {
@@ -2388,6 +2694,16 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupRunsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, TooManyRequests, InternalServerError], parameters: BACKUP_RUN_FILTER_PARAMETERS
     },
+    RUN_BACKUP_POLICY => {
+        method: Post, path: "/api/v1/backupPolicies/{id}/run", operation_id: "runBackupPolicy", summary: "Run a Backup Policy with progress",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("QueueBackupRunInput"), response_schema: Some("BackupRunStream"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    RUN_BACKUP_RESTORE_VOLUME => {
+        method: Post, path: "/api/v1/backupRuns/{id}/restoreVolume/run", operation_id: "runBackupRestoreVolume", summary: "Restore a Backup Volume with progress",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("RestoreVolumeInput"), response_schema: Some("BackupRestoreRunStream"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
     GET_BACKUP_RUN => {
         method: Get, path: "/api/v1/backupRuns/{id}", operation_id: "getBackupRun", summary: "Get a Backup Run",
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupRunView"), success_status: 200,
@@ -2396,6 +2712,11 @@ route_catalog! {
     GET_BACKUP_LOGS => {
         method: Get, path: "/api/v1/backupRuns/{id}/logs", operation_id: "getBackupRunLogs", summary: "Get Backup Run logs",
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BACKUP_RUN_EVENTS => {
+        method: Get, path: "/api/v1/backupRuns/{id}/events", operation_id: "getBackupRunEvents", summary: "Get Backup Run events",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupEventsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     CANCEL_BACKUP_RUN => {
@@ -2421,6 +2742,11 @@ route_catalog! {
     GET_BACKUP_RESTORE_LOGS => {
         method: Get, path: "/api/v1/backupRestoreRuns/{id}/logs", operation_id: "getBackupRestoreRunLogs", summary: "Get Backup Restore Run logs",
         public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupLogsView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    GET_BACKUP_RESTORE_RUN_EVENTS => {
+        method: Get, path: "/api/v1/backupRestoreRuns/{id}/events", operation_id: "getBackupRestoreRunEvents", summary: "Get Backup Restore Run events",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("BackupEventsView"), success_status: 200,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
     },
     CANCEL_BACKUP_RESTORE => {
@@ -2463,6 +2789,111 @@ route_catalog! {
         public: true, setup_exempt: false, authentication: Actor,
         request_schema: Some("DeleteContainersRequest"), response_schema: None, success_status: 204,
         error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    INSPECT_STACK_CONTAINER => {
+        method: Get, path: "/api/v1/stacks/{stackId}/containers/{containerId}/inspect", operation_id: "inspectStackContainer", summary: "Inspect a Stack Container with sensitive environment values redacted",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError],
+        parameters: &[ParameterContract::path_uuid("stackId"), ParameterContract::path_string("containerId")]
+    },
+    GET_CONTAINER_INFO => {
+        method: Get, path: "/api/v1/containers/{id}/info", operation_id: "getContainerInfo", summary: "getContainerInfo",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInfoView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_string("id")]
+    },
+    GET_CONTAINER_DATA => {
+        method: Get, path: "/api/v1/containers/{id}/data", operation_id: "getContainerData", summary: "getContainerData",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerDataView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_string("id")]
+    },
+    GET_DEPLOYMENT_CONTAINER_INFO => {
+        method: Get, path: "/api/v1/deployments/{id}/info", operation_id: "getDeploymentContainerInfo", summary: "getDeploymentContainerInfo",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInfoView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    START_DEPLOYMENTS => {
+        method: Post, path: "/api/v1/deployments/start", operation_id: "startDeployments", summary: "Start Deployments",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    STOP_DEPLOYMENTS => {
+        method: Post, path: "/api/v1/deployments/stop", operation_id: "stopDeployments", summary: "Stop Deployments",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    RESTART_DEPLOYMENTS => {
+        method: Post, path: "/api/v1/deployments/restart", operation_id: "restartDeployments", summary: "Restart Deployments",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    PAUSE_DEPLOYMENTS => {
+        method: Post, path: "/api/v1/deployments/pause", operation_id: "pauseDeployments", summary: "Pause Deployments",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    RESUME_DEPLOYMENTS => {
+        method: Post, path: "/api/v1/deployments/resume", operation_id: "resumeDeployments", summary: "Resume Deployments",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("DeploymentIds"), response_schema: None, success_status: 204,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError, ServiceUnavailable], parameters: &[]
+    },
+    INSPECT_DEPLOYMENT => {
+        method: Get, path: "/api/v1/deployments/{id}/inspect", operation_id: "inspectDeployment", summary: "inspectDeployment",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    INSPECT_CONTAINER => {
+        method: Get, path: "/api/v1/containers/{id}/inspect", operation_id: "inspectContainer", summary: "Inspect a Container with sensitive environment values redacted",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerInspectView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_string("id")]
+    },
+    GET_CONTAINER_ADOPTION_DRAFT => {
+        method: Get, path: "/api/v1/containers/{id}/adoption-draft", operation_id: "getContainerAdoptionDraft", summary: "Review adoption of an unmanaged Container",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: None, response_schema: Some("ContainerAdoptionDraftView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    ADOPT_CONTAINER => {
+        method: Post, path: "/api/v1/containers/{id}/adopt", operation_id: "adoptContainer", summary: "Adopt a Container without changing Docker",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("AdoptContainerInput"), response_schema: Some("DeploymentView"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[ParameterContract::path_uuid("id")]
+    },
+    DELETE_IMAGES => {
+        method: Delete, path: "/api/v1/images", operation_id: "deleteImages", summary: "Delete Images",
+        public: true, setup_exempt: false, authentication: Actor,
+        request_schema: Some("DeleteImagesRequest"), response_schema: Some("DeleteImageResult"), success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, BadGateway, InternalServerError], parameters: &[]
+    },
+    GET_EXTERNAL_REPOSITORIES => {
+        method: Get, path: "/api/v1/images/{registryName}/repositories", operation_id: "getExternalRepositories", summary: "List Registry repositories",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("IImageRepository"), response_is_array: true, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("registryName")]
+    },
+    GET_DOCKER_HUB_REPOSITORIES => {
+        method: Get, path: "/api/v1/images/dockerhub/{registryName}/repositories", operation_id: "getDockerHubRepositories", summary: "List Docker Hub repositories",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("DockerHubRepositoryInfo"), response_is_array: true, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("registryName")]
+    },
+    GET_DOCKER_HUB_REPOSITORY_TAGS => {
+        method: Get, path: "/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags", operation_id: "getDockerHubRepositoryTags", summary: "List Docker Hub repository tags",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("DockerHubTagView"), response_is_array: true, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("registryName"),ParameterContract::path_string("repositoryName")]
+    },
+    GET_GHCR_PACKAGE_VERSIONS => {
+        method: Get, path: "/api/v1/images/ghcr/{registryName}/{packageName}/versions", operation_id: "getGhcrPackageVersions", summary: "List GitHub package versions",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: None, response_schema: Some("GitHubCrPackageVersion"), response_is_array: true, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[ParameterContract::path_string("registryName"),ParameterContract::path_string("packageName")]
+    },
+    PULL_IMAGE => {
+        method: Post, path: "/api/v1/images/pull", operation_id: "pullImage", summary: "Pull a Docker image with progress",
+        public: true, setup_exempt: false, authentication: Actor, request_schema: Some("PullImageInput"), response_schema: Some("PullImageStreamItem"), response_is_array: true, success_status: 200,
+        error_responses: [BadRequest, Unauthorized, Forbidden, NotFound, Conflict, TooManyRequests, InternalServerError], parameters: &[]
     },
     CREATE_NETWORK => {
         method: Post, path: "/api/v1/networks", operation_id: "createNetwork", summary: "Create a Network",
@@ -3024,7 +3455,7 @@ mod tests {
             assert_eq!(route.path, path);
             assert_eq!(route.operation_id, operation_id);
             assert_eq!(route.authentication, RouteAuthentication::Administrator);
-            assert!(route.public);
+            assert!(!route.public);
         }
     }
 
@@ -3067,7 +3498,7 @@ mod tests {
             assert_eq!(route.method, method);
             assert_eq!(route.path, path);
             assert_eq!(route.operation_id, operation_id);
-            assert!(route.public);
+            assert!(!route.public);
         }
         assert_eq!(
             routes::GET_LICENSE_ENTITLEMENTS.authentication,
@@ -3166,7 +3597,7 @@ mod tests {
             assert_eq!(route.path, path);
             assert_eq!(route.operation_id, operation_id);
             assert_eq!(route.authentication, RouteAuthentication::Administrator);
-            assert!(route.public);
+            assert!(!route.public);
         }
     }
 
@@ -3256,7 +3687,7 @@ mod tests {
             assert_eq!(route.path, path);
             assert_eq!(route.operation_id, operation_id);
             assert_eq!(route.authentication, RouteAuthentication::Actor);
-            assert!(route.public);
+            assert!(!route.public);
             assert!(route.error_responses.contains(&ErrorResponse::Unauthorized));
             assert!(route.error_responses.contains(&ErrorResponse::Forbidden));
         }

@@ -16,6 +16,147 @@ mod container_mutations;
 mod distribution;
 
 #[tokio::test]
+async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for (expected, body) in [
+            (
+                "GET /version ",
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
+            ),
+            (
+                "GET /v1.49/volumes ",
+                r#"{"Volumes":[{"Name":"data"},{"Name":"empty"},{"Name":"unknown"}]}"#,
+            ),
+            (
+                "GET /v1.49/system/df?type=volume ",
+                r#"{"Volumes":[{"Name":"empty","UsageData":{"Size":0,"RefCount":0}},{"Name":"data","UsageData":{"Size":4096,"RefCount":2}}]}"#,
+            ),
+            ("GET /v1.49/volumes/data ", r#"{"Name":"data"}"#),
+            (
+                "GET /v1.49/system/df?type=volume ",
+                r#"{"Volumes":[{"Name":"data","UsageData":{"Size":8192,"RefCount":2}}]}"#,
+            ),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 2048];
+            while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 8192);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            assert!(String::from_utf8_lossy(&bytes).starts_with(expected));
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let volumes = citadel_platforms::PlatformInventoryPort::list_volumes(&client, &cancel)
+        .await
+        .unwrap();
+    assert_eq!(volumes[0].usage_data.as_ref().unwrap()["Size"], 4096);
+    assert!(volumes[0].in_use);
+    assert_eq!(volumes[1].usage_data.as_ref().unwrap()["Size"], 0);
+    assert!(!volumes[1].in_use);
+    assert!(volumes[2].usage_data.is_none());
+    let inspected =
+        citadel_platforms::PlatformInventoryPort::inspect_volume(&client, "data", &cancel)
+            .await
+            .unwrap();
+    assert_eq!(inspected.usage_data.unwrap()["Size"], 8192);
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn network_create_preserves_ip_versions_and_omits_empty_ipam_rows() {
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for step in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            let header_end = loop {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 16384);
+                bytes.extend_from_slice(&buffer[..n]);
+                if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break end + 4;
+                }
+            };
+            let headers = String::from_utf8_lossy(&bytes[..header_end]);
+            let body = if step == 0 {
+                assert!(headers.starts_with("GET /version "));
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+            } else {
+                assert!(headers.starts_with("POST /v1.49/networks/create "));
+                let length: usize = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse().unwrap())
+                    })
+                    .unwrap();
+                while bytes.len() < header_end + length {
+                    let n = socket.read(&mut buffer).await.unwrap();
+                    assert!(n > 0 && bytes.len() < 16384);
+                    bytes.extend_from_slice(&buffer[..n]);
+                }
+                let request: serde_json::Value =
+                    serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap();
+                assert_eq!(request["EnableIPv4"], true);
+                assert_eq!(request["EnableIPv6"], false);
+                assert_eq!(
+                    request["IPAM"]["Config"],
+                    serde_json::json!([{"Subnet":"10.42.0.0/24"}])
+                );
+                r#"{"Id":"created","Warning":""}"#
+            };
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let input = serde_json::from_value(serde_json::json!({
+        "name":"created", "driver":"bridge", "scope":"local",
+        "enableIPv4":true, "enableIPv6":false,
+        "ipam":{"driver":"default", "config":[{}, {}, {"subnet":"10.42.0.0/24"}]}
+    }))
+    .unwrap();
+    let created = PlatformResourceMutationPort::create_network(
+        &client,
+        &input,
+        &tokio_util::sync::CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(created.id, "created");
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
 async fn image_inspect_combines_generated_details_history_and_filtered_containers() {
     use citadel_platforms::images::ImageInspectionPort;
     use tokio_util::sync::CancellationToken;
@@ -328,7 +469,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..28 {
+        for _ in 0..30 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -537,7 +678,9 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/swarm",
             "/v1.49/images/json?all=true",
             "/v1.49/volumes",
+            "/v1.49/system/df?type=volume",
             "/v1.49/volumes/data",
+            "/v1.49/system/df?type=volume",
             "/v1.49/networks",
             "/v1.49/networks/network-1",
             "/v1.49/nodes",
@@ -590,6 +733,9 @@ fn response_for(path: &str) -> Vec<u8> {
         "/v1.49/volumes/data" => {
             r#"{"Name":"data","Driver":"local","Mountpoint":"/data","CreatedAt":"2026-01-01T00:00:00Z","Status":null,"Labels":null,"Scope":"local","Options":null}"#
         }
+        "/v1.49/system/df?type=volume" => {
+            r#"{"Volumes":[{"Name":"data","UsageData":{"Size":1024,"RefCount":1}}]}"#
+        }
         "/v1.49/networks" => {
             r#"[{"Name":"bridge","Id":"network-1","Created":"2026-01-01T00:00:00Z","Scope":"local","Driver":"bridge","EnableIPv4":true,"Containers":null,"Peers":null,"Labels":{},"Options":{}}]"#
         }
@@ -637,6 +783,17 @@ fn temp_socket() -> PathBuf {
 
 #[tokio::test]
 async fn terminal_hijacks_generated_exec_route_streams_stdin_resizes_and_closes_on_drop() {
+    exercise_terminal_resize("200 OK").await;
+}
+
+// .NET ContainerService.ExecAsync logs a resize failure without disposing the
+// interactive stream. Docker can reject an initial resize during exec startup.
+#[tokio::test]
+async fn terminal_resize_rejection_does_not_close_the_interactive_session() {
+    exercise_terminal_resize("409 Conflict").await;
+}
+
+async fn exercise_terminal_resize(resize_status: &'static str) {
     use citadel_platforms::terminal::*;
     use tokio_util::sync::CancellationToken;
     let path = temp_socket();
@@ -678,7 +835,12 @@ async fn terminal_hijacks_generated_exec_route_streams_stdin_resizes_and_closes_
         let (request, _) = read_terminal_request(&mut resize).await;
         assert!(request.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
         resize
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .write_all(
+                format!(
+                    "HTTP/1.1 {resize_status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+                .as_bytes(),
+            )
             .await
             .unwrap();
         terminal.write_all(b"resized").await.unwrap();

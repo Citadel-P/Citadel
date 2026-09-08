@@ -33,6 +33,9 @@ use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "resources_http/workload_tags.rs"]
+mod workload_tags;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE5_DATABASE_URL"]
 async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles() {
@@ -185,6 +188,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         assert_eq!(response.status(), StatusCode::OK);
         action_tags.push(response_json(response).await);
     }
+
+    workload_tags::verify(&app, &pool, &administrator, &action_tags).await;
 
     let automation_response = request(
         &app,

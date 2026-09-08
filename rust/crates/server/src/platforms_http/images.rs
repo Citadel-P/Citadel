@@ -1,6 +1,117 @@
 use super::*;
 use citadel_platforms::images::ImageInspectionPort;
 
+static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct DeleteImagesInput {
+    platform_id: Uuid,
+    ids: Vec<String>,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    no_prune: bool,
+}
+
+pub(super) async fn delete(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    input: Result<Json<DeleteImagesInput>, JsonRejection>,
+) -> IdentityHttpResult {
+    let principal = identity_result(require_actor(principal), &headers)?;
+    let Json(mut input) = identity_result(input.map_err(invalid_json), &headers)?;
+    identity_result(
+        validate_resource_ids(&mut input.ids, 100, "Image"),
+        &headers,
+    )?;
+    if input.platform_id.is_nil()
+        || input.ids.iter().any(|id| {
+            let hash = id.strip_prefix("sha256:").unwrap_or(id);
+            hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit())
+        })
+    {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "A Platform and full Docker Image IDs are required.".into(),
+            )),
+            &headers,
+        );
+    }
+    for id in &mut input.ids {
+        *id = format!(
+            "sha256:{}",
+            id.strip_prefix("sha256:")
+                .unwrap_or(id)
+                .to_ascii_lowercase()
+        );
+    }
+    input.ids.sort();
+    input.ids.dedup();
+    authorize_platform_level(
+        &state,
+        &principal,
+        input.platform_id,
+        PermissionLevel::Execute,
+        &headers,
+    )
+    .await?;
+    if identity_result(platform_is_swarm(&state, input.platform_id).await, &headers)? {
+        return Ok(conflict_response(
+            "Node-local Image deletion requires an explicit Node target and is not available."
+                .into(),
+            &headers,
+        ));
+    }
+    // Keep bounded cleanup running if the browser disconnects after Docker accepts deletion.
+    let Ok(permit) = IMAGE_DELETE_SLOTS.try_acquire() else {
+        return Ok(runtime_error_response(
+            RuntimeCapabilityError::new(
+                RuntimeErrorKind::ResourceExhausted,
+                "Image deletion capacity is busy. Try again later.",
+                false,
+            ),
+            &headers,
+        ));
+    };
+    let task = tokio::spawn(async move {
+        let _permit = permit;
+        let runtime = runtime_for(&state, input.platform_id).await?;
+        let (mutation, inventory): (
+            &dyn citadel_platforms::images::ImageDeletionPort,
+            &dyn PlatformInventoryPort,
+        ) = match &runtime {
+            RuntimeRef::Local(runtime) => (*runtime, *runtime),
+            RuntimeRef::Agent(runtime) => (runtime, runtime),
+            RuntimeRef::Edge(runtime) => (runtime, runtime),
+        };
+        let result = citadel_adapters::image_deletion::delete(
+            &state.pool,
+            input.platform_id,
+            &input.ids,
+            input.force,
+            input.no_prune,
+            mutation,
+            inventory,
+        )
+        .await;
+        for id in &input.ids {
+            publish_runtime_change(&state, input.platform_id, "image", "update", id);
+        }
+        result
+    });
+    let result = identity_result(
+        task.await
+            .map_err(|error| IdentityError::Storage(error.to_string())),
+        &headers,
+    )?;
+    match result {
+        Ok(items) => Ok(no_store(Json(serde_json::json!({"items":items.into_iter().map(|result| serde_json::json!({"result":result})).collect::<Vec<_>>()})).into_response())),
+        Err(error) => Ok(runtime_error_response(error, &headers)),
+    }
+}
+
 pub(super) async fn exposed_ports(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -48,7 +159,7 @@ pub(super) async fn exposed_ports(
         RuntimeRef::Local(runtime) => {
             ImageInspectionPort::exposed_ports(runtime, &docker_id, &cancel).await
         }
-        RuntimeRef::Agent(runtime) => {
+        RuntimeRef::Agent(ref runtime) => {
             ImageInspectionPort::exposed_ports(runtime, &docker_id, &cancel).await
         }
         RuntimeRef::Edge(runtime) => runtime.exposed_ports(&docker_id, &cancel).await,
@@ -117,7 +228,7 @@ pub(super) async fn inspect(
             ImageInspectionPort::inspect_image(*runtime, &image_id, &cancellation).await
         }
         RuntimeRef::Agent(runtime) => {
-            ImageInspectionPort::inspect_image(*runtime, &image_id, &cancellation).await
+            ImageInspectionPort::inspect_image(runtime, &image_id, &cancellation).await
         }
         RuntimeRef::Edge(runtime) => {
             ImageInspectionPort::inspect_image(runtime, &image_id, &cancellation).await

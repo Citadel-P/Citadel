@@ -95,6 +95,16 @@ pub(crate) async fn persist_snapshot(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
 ) -> Result<(), RuntimeCapabilityError> {
+    if snapshot.swarm.is_some() {
+        // The event worker and a post-mutation refresh can finish in reverse
+        // order. Serialize their short commits and never restore an older
+        // manager observation over a newer one (including resource versions).
+        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+            .bind(snapshot.platform_id).fetch_optional(&mut **transaction).await.map_err(storage)?;
+        let newer: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1 AND observedat>$2)")
+            .bind(snapshot.platform_id).bind(snapshot.observed_at).fetch_one(&mut **transaction).await.map_err(storage)?;
+        if newer { return Ok(()); }
+    }
     persist_platform(transaction, snapshot).await?;
     persist_images(transaction, snapshot).await?;
     persist_containers(transaction, snapshot, None).await?;
@@ -253,13 +263,29 @@ WITH incoming AS (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, rowversion,
-        projectionobservedat, dockernodeid)
+        projectionobservedat, dockernodeid, stackid, deploymentid)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name, incoming."imageId",
            incoming.created, initcap(incoming.state), 'Idle', $3, incoming.stack,
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
-           COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3, $4
+           COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3, $4,
+           release.stackid, deployment.id
     FROM incoming
+    LEFT JOIN stacks stack
+      ON stack.id = CASE WHEN incoming.labels->>'com.citadel.stack-id'
+          ~* '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'
+          THEN (incoming.labels->>'com.citadel.stack-id')::uuid END
+     AND incoming.labels->>'com.citadel.managed' = 'true'
+     AND NOT (incoming.labels ? 'com.citadel.deployment-id')
+    LEFT JOIN stackreleases release
+      ON release.id = stack.currentstackreleaseid AND release.platformid = $1
+    LEFT JOIN deployments deployment
+      ON deployment.id = CASE WHEN incoming.labels->>'com.citadel.deployment-id'
+          ~* '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'
+          THEN (incoming.labels->>'com.citadel.deployment-id')::uuid END
+     AND deployment.platformid = $1
+     AND incoming.labels->>'com.citadel.managed' = 'true'
+     AND NOT (incoming.labels ? 'com.citadel.stack-id')
     ON CONFLICT {conflict} DO UPDATE
     SET name = EXCLUDED.name,
         dockerimageid = EXCLUDED.dockerimageid,
@@ -271,6 +297,10 @@ WITH incoming AS (
         hascitadelownershiplabels = EXCLUDED.hascitadelownershiplabels,
         isswarmtask = EXCLUDED.isswarmtask,
         ports = EXCLUDED.ports,
+        stackid = CASE WHEN containers.deploymentid IS NULL
+            THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
+        deploymentid = CASE WHEN containers.stackid IS NULL
+            THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
         projectionobservedat = EXCLUDED.projectionobservedat,
         projectionstalesince = NULL,
         projectionstalereason = NULL,
@@ -418,6 +448,15 @@ ON CONFLICT (platformid, dockerserviceid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+
+    // Adoption links the existing Docker identity before labels change on Apply.
+    // Retain that persisted ownership through subsequent daemon snapshots.
+    sqlx::query(
+        "UPDATE swarmserviceprojections p SET ownership='CitadelService',swarmserviceid=s.id,ownershipdiagnostic=NULL FROM swarmservices s WHERE p.platformid=$1 AND s.platformid=p.platformid AND s.dockerserviceid=p.dockerserviceid AND p.stackid IS NULL AND p.ownership IN ('Unmanaged','CitadelService')"
+    ).bind(snapshot.platform_id).execute(&mut **transaction).await.map_err(storage)?;
+    sqlx::query(
+        "UPDATE swarmserviceprojections p SET ownership='Unmanaged',swarmserviceid=NULL,ownershipdiagnostic='Orphaned Citadel Service ownership' WHERE p.platformid=$1 AND p.ownership='CitadelService' AND p.stackid IS NULL AND NOT EXISTS(SELECT 1 FROM swarmservices s WHERE s.id=p.swarmserviceid)"
+    ).bind(snapshot.platform_id).execute(&mut **transaction).await.map_err(storage)?;
 
     let tasks = json(&swarm.tasks)?;
     sqlx::query(

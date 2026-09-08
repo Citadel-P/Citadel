@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 mod database_gen;
 mod openapi_gen;
+mod parity;
 
 #[derive(Parser)]
 struct Cli {
@@ -21,6 +22,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Check all reference .NET HTTP operation IDs, routes, and public exposure.
+    Parity,
     /// Manage the Rust-owned database schema and migration artifacts.
     Database {
         #[command(subcommand)]
@@ -68,6 +71,13 @@ struct OperationSpec {
 }
 
 const OPERATIONS: &[OperationSpec] = &[
+    OperationSpec {
+        operation_id: "SystemDataUsage",
+        method: "get",
+        path: "/system/df",
+        versioned: true,
+        streaming: false,
+    },
     OperationSpec {
         operation_id: "SystemPing",
         method: "get",
@@ -244,6 +254,13 @@ const OPERATIONS: &[OperationSpec] = &[
         streaming: false,
     },
     OperationSpec {
+        operation_id: "ImageDelete",
+        method: "delete",
+        path: "/images/{name}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
         operation_id: "VolumeList",
         method: "get",
         path: "/volumes",
@@ -303,6 +320,62 @@ const OPERATIONS: &[OperationSpec] = &[
         operation_id: "NodeList",
         method: "get",
         path: "/nodes",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "VolumePrune",
+        method: "post",
+        path: "/volumes/prune",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NetworkPrune",
+        method: "post",
+        path: "/networks/prune",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ImagePrune",
+        method: "post",
+        path: "/images/prune",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "BuildPrune",
+        method: "post",
+        path: "/build/prune",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NodeInspect",
+        method: "get",
+        path: "/nodes/{id}",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "NodeUpdate",
+        method: "post",
+        path: "/nodes/{id}/update",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "SecretUpdate",
+        method: "post",
+        path: "/secrets/{id}/update",
+        versioned: true,
+        streaming: false,
+    },
+    OperationSpec {
+        operation_id: "ConfigUpdate",
+        method: "post",
+        path: "/configs/{id}/update",
         versioned: true,
         streaming: false,
     },
@@ -669,6 +742,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             DatabaseCommand::RefreshCatalog => database_gen::refresh_catalog(),
         },
         Command::Openapi { check } => openapi_gen::generate(check),
+        Command::Parity => parity::check(),
         Command::Docker { check } => generate_docker(check),
     }
 }

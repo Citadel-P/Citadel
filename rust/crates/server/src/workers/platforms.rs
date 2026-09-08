@@ -211,6 +211,7 @@ pub fn register(
             agent_event_source(
                 cancellation.child_token(),
                 agent,
+                pool.clone(),
                 sender,
                 Arc::clone(&metrics),
                 settings.agent_reconnect_delay,
@@ -413,6 +414,7 @@ async fn reconcile_inventory(
             }
             _ => {}
         }
+        let selected_agent;
         let runtime: &dyn PlatformInventoryPort =
             if target.connector_type.eq_ignore_ascii_case("Local") {
                 &worker.docker
@@ -420,10 +422,8 @@ async fn reconcile_inventory(
                 let Some(agent) = worker.agent.as_ref() else {
                     continue;
                 };
-                if agent.address().trim_end_matches('/') != target.address.trim_end_matches('/') {
-                    continue;
-                }
-                agent
+                selected_agent = agent.at_address(&target.address)?;
+                &selected_agent
             } else {
                 // Edge Agents use an inbound command session. That resolver is registered
                 // when the Edge transport owns a live session; disconnected targets keep
@@ -632,22 +632,8 @@ async fn agent_container_stats(
     let _task = context.metrics.task_guard();
     let store = PostgresContainerStatsStore::new(context.pool.clone());
     loop {
-        if let Err(error) = agent.get_info(&cancellation).await {
-            if cancellation.is_cancelled() {
-                return Ok(());
-            }
-            context.metrics.agent_handshake_failed();
-            if !error.retryable {
-                return Err(error);
-            }
-            tracing::warn!(%error, "Agent handshake failed");
-            if wait_to_reconnect(&cancellation, reconnect_delay).await {
-                return Ok(());
-            }
-            continue;
-        }
-        let platform_id = match agent_platform_id(&context.pool, agent.address()).await {
-            Ok(Some(id)) => id,
+        let (platform_id, agent) = match agent_subscription(&context.pool, &agent).await {
+            Ok(Some(target)) => target,
             Ok(None) => {
                 if wait_to_reconnect(&cancellation, reconnect_delay).await {
                     return Ok(());
@@ -662,6 +648,20 @@ async fn agent_container_stats(
                 continue;
             }
         };
+        if let Err(error) = agent.get_info(&cancellation).await {
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            context.metrics.agent_handshake_failed();
+            if !error.retryable {
+                return Err(error);
+            }
+            tracing::warn!(%error, "Agent handshake failed");
+            if wait_to_reconnect(&cancellation, reconnect_delay).await {
+                return Ok(());
+            }
+            continue;
+        }
         let mut stream = match agent
             .stream_container_stats(context.fetch_interval, &cancellation)
             .await
@@ -678,8 +678,16 @@ async fn agent_container_stats(
             }
             Err(error) => return Err(error),
         };
+        let changed = wait_for_agent_reconfiguration(&context.pool, platform_id, agent.address());
+        tokio::pin!(changed);
         loop {
-            match stream.next().await {
+            let next = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Ok(()),
+                () = &mut changed => break,
+                next = stream.next() => next,
+            };
+            match next {
                 Some(Ok(stats)) => {
                     if stats.is_empty() {
                         continue;
@@ -800,17 +808,36 @@ async fn local_platform_id(pool: &PgPool) -> Result<Option<uuid::Uuid>, RuntimeC
         .map_err(worker_storage)
 }
 
-async fn agent_platform_id(
+async fn agent_subscription(
     pool: &PgPool,
-    address: &str,
-) -> Result<Option<uuid::Uuid>, RuntimeCapabilityError> {
-    sqlx::query_scalar(
-        "SELECT id FROM platforms WHERE connectortype = 'Agent' AND rtrim(address, '/') = rtrim($1, '/') ORDER BY id LIMIT 1",
+    base: &AgentClient,
+) -> Result<Option<(uuid::Uuid, AgentClient)>, RuntimeCapabilityError> {
+    // This worker owns the existing direct-Agent subscription. Resolve its
+    // persisted address instead of permanently pinning it to startup settings.
+    let target: Option<(uuid::Uuid, String)> = sqlx::query_as(
+        "SELECT id,address FROM platforms WHERE connectortype = 'Agent' ORDER BY (rtrim(address, '/') = rtrim($1, '/')) DESC,id LIMIT 1",
     )
-    .bind(address)
+    .bind(base.address())
     .fetch_optional(pool)
     .await
-    .map_err(worker_storage)
+    .map_err(worker_storage)?;
+    target
+        .map(|(id, address)| base.at_address(&address).map(|client| (id, client)))
+        .transpose()
+}
+
+async fn wait_for_agent_reconfiguration(pool: &PgPool, id: uuid::Uuid, address: &str) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        let unchanged: Result<bool, _> = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM platforms WHERE id=$1 AND connectortype='Agent' AND rtrim(address,'/')=rtrim($2,'/'))",
+        ).bind(id).bind(address).fetch_one(pool).await;
+        match unchanged {
+            Ok(false) => return,
+            Ok(true) => {}
+            Err(error) => tracing::warn!(%error, "Agent subscription configuration lookup failed"),
+        }
+    }
 }
 
 async fn wait_to_reconnect(cancellation: &CancellationToken, reconnect_delay: Duration) -> bool {
@@ -918,12 +945,25 @@ async fn event_source(
 async fn agent_event_source(
     cancellation: CancellationToken,
     agent: AgentClient,
+    pool: PgPool,
     sender: BoundedSender<InventoryEvent>,
     metrics: Arc<Metrics>,
     reconnect_delay: Duration,
 ) -> Result<(), std::convert::Infallible> {
     let _task = metrics.task_guard();
     loop {
+        let (platform_id, agent) = match agent_subscription(&pool, &agent).await {
+            Ok(Some(target)) => target,
+            result => {
+                if let Err(error) = result {
+                    tracing::warn!(%error, "Agent Platform lookup for events failed");
+                }
+                if wait_to_reconnect(&cancellation, reconnect_delay).await {
+                    return Ok(());
+                }
+                continue;
+            }
+        };
         let stream = agent.stream_daemon_events(&cancellation).await;
         let mut stream = match stream {
             Ok(stream) => stream,
@@ -943,10 +983,13 @@ async fn agent_event_source(
                 continue;
             }
         };
+        let changed = wait_for_agent_reconfiguration(&pool, platform_id, agent.address());
+        tokio::pin!(changed);
         loop {
             let event = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
+                () = &mut changed => break,
                 event = stream.next() => event,
             };
             match event {

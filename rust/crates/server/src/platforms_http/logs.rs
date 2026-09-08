@@ -56,7 +56,7 @@ async fn authorize_logs(
     )
 }
 
-async fn swarm_platform(
+pub(super) async fn swarm_platform(
     state: &PlatformsHttpState,
     platform_id: Uuid,
     headers: &HeaderMap,

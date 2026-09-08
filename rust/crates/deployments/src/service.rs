@@ -298,6 +298,9 @@ pub trait DeploymentEntitlementPort: Send + Sync {
 
 pub trait DeploymentChangeNotifier: Send + Sync {
     fn changed(&self, deployment_id: Uuid, event: &'static str);
+    fn adopted(&self, deployment: &DeploymentView) {
+        self.changed(deployment.id, "created");
+    }
 }
 
 #[derive(Default)]
@@ -319,6 +322,7 @@ pub struct DeploymentService {
     apply_timeout: Duration,
     apply_slots: Arc<Semaphore>,
     alerts: Option<Arc<dyn AlertEventSink>>,
+    adoption: Option<Arc<dyn crate::adoption::ContainerAdoptionPort>>,
 }
 
 impl DeploymentService {
@@ -340,6 +344,7 @@ impl DeploymentService {
             apply_timeout: Duration::from_secs(10 * 60),
             apply_slots: Arc::new(Semaphore::new(4)),
             alerts: None,
+            adoption: None,
         }
     }
 
@@ -347,6 +352,58 @@ impl DeploymentService {
     pub fn with_notifier(mut self, notifier: Arc<dyn DeploymentChangeNotifier>) -> Self {
         self.notifier = notifier;
         self
+    }
+
+    pub fn with_adoption(
+        mut self,
+        adoption: Arc<dyn crate::adoption::ContainerAdoptionPort>,
+    ) -> Self {
+        self.adoption = Some(adoption);
+        self
+    }
+
+    pub async fn adoption_draft(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        cancel: &CancellationToken,
+    ) -> Result<crate::adoption::ContainerAdoptionDraft, DeploymentError> {
+        self.adoption
+            .as_ref()
+            .ok_or_else(|| DeploymentError::Runtime("Container adoption is unavailable.".into()))?
+            .draft(actor, administrator, id, cancel)
+            .await
+    }
+
+    pub async fn adopt_container(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        mut input: crate::adoption::AdoptContainerInput,
+        cancel: &CancellationToken,
+    ) -> Result<DeploymentView, DeploymentError> {
+        normalize_name(&mut input.name)?;
+        normalize_description(&mut input.description)?;
+        if input.tag_ids.len() > 100 || input.preview_fingerprint.len() != 64 {
+            return Err(DeploymentError::Validation(
+                "Review the adoption draft and selected Tags before adopting.".into(),
+            ));
+        }
+        input.tag_ids = unique_ids(&input.tag_ids);
+        input.spec = input.spec.for_create();
+        input.spec.validate()?;
+        self.ensure_expansion_entitlements(None, &input.spec)
+            .await?;
+        let created = self
+            .adoption
+            .as_ref()
+            .ok_or_else(|| DeploymentError::Runtime("Container adoption is unavailable.".into()))?
+            .adopt(actor, administrator, id, input, cancel)
+            .await?;
+        self.notifier.adopted(&created);
+        Ok(created)
     }
 
     #[must_use]

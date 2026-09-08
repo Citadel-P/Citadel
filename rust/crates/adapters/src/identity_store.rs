@@ -14,6 +14,8 @@ use uuid::Uuid;
 
 use crate::activity_store::{insert_activity, invalid_activity};
 
+mod default_automations;
+
 #[derive(Clone)]
 pub struct PostgresIdentityStore {
     pool: PgPool,
@@ -42,6 +44,7 @@ impl IdentityStore for PostgresIdentityStore {
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
+        mode: citadel_domain::SetupInitializationMode,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
@@ -112,6 +115,22 @@ WHERE id = 1 AND initializedat IS NULL
             if completed != 1 {
                 return Err(IdentityError::SetupAlreadyComplete);
             }
+            default_automations::insert(&mut transaction, administrator.actor_id().value())
+                .await
+                .map_err(storage)?;
+            let activity = ActivityEvent::new_user_event(
+                administrator.id(),
+                administrator.name().to_owned(),
+                administrator.created_by_actor_id(),
+                ActivityEventInfo::InitialAdministratorCreated {
+                    user_id: administrator.id(),
+                    user_name: administrator.name().to_owned(),
+                    mode,
+                },
+                administrator.created_at(),
+            )
+            .map_err(invalid_activity)?;
+            insert_activity(&mut transaction, &activity).await?;
             transaction.commit().await.map_err(storage)?;
             Ok(UserAuthentication {
                 user_id: administrator.id(),
@@ -895,6 +914,12 @@ impl StaticEntitlementService {
 
 impl EntitlementService for StaticEntitlementService {
     fn custom_access_control_enabled(&self) -> BoxFuture<'_, Result<bool, IdentityError>> {
+        Box::pin(async move { Ok(self.custom_access_control) })
+    }
+}
+
+impl citadel_alerts::AlertEntitlements for StaticEntitlementService {
+    fn advanced_alerting(&self) -> BoxFuture<'_, Result<bool, citadel_alerts::AlertError>> {
         Box::pin(async move { Ok(self.custom_access_control) })
     }
 }

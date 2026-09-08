@@ -14,6 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 type ProcessEnvironment = Vec<(OsString, OsString)>;
 type PgDumpRequest = (Vec<OsString>, ProcessEnvironment);
@@ -27,18 +28,30 @@ pub struct PostgresCitadelSystemBackupBuilder {
     maximum_output: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CitadelSystemRestoreOptions {
     pub bundle: PathBuf,
     pub database_url: String,
     pub pg_restore: OsString,
     pub maximum_output: usize,
+    // Recovery material is supplied out of band, never included in logs or the
+    // pg_restore environment. Presence/shape is checked before target writes.
+    pub secret_encryption_key: Option<Zeroizing<Vec<u8>>>,
 }
 
 pub async fn restore_citadel_system(
     options: &CitadelSystemRestoreOptions,
     cancellation: &CancellationToken,
 ) -> Result<(), BackupError> {
+    if options
+        .secret_encryption_key
+        .as_ref()
+        .is_none_or(|key| key.len() != 32)
+    {
+        return Err(BackupError::Validation(
+            "Restore requires the original Secrets__EncryptionKey (32 decoded bytes) before modifying PostgreSQL.".into(),
+        ));
+    }
     let dump = validate_recovery_bundle(&options.bundle).await?;
     let (arguments, environment) = pg_restore_request(&options.database_url, &dump)?;
     let mut request = ProcessRequest::new(options.pg_restore.clone())
@@ -111,6 +124,9 @@ impl PostgresCitadelSystemBackupBuilder {
         directory: &Path,
         cancellation: &CancellationToken,
     ) -> Result<(), BackupError> {
+        // Commit a lazily-created identity before pg_dump takes its snapshot.
+        // Otherwise a first backup advertises an identity absent from its DB.
+        let instance_id = instance_id(&self.pool).await?;
         let database_dir = directory.join("database");
         tokio::fs::create_dir(&database_dir)
             .await
@@ -142,7 +158,6 @@ impl PostgresCitadelSystemBackupBuilder {
         validate_dump(&dump).await?;
         set_private_file(&dump)?;
 
-        let instance_id = instance_id(&self.pool).await?;
         let mut checksums = BTreeMap::new();
         checksums.insert(
             "database/citadel.dump".to_owned(),
@@ -280,7 +295,16 @@ fn pg_restore_request(database_url: &str, source: &Path) -> Result<PgDumpRequest
             "--single-transaction".into(),
             "--exit-on-error".into(),
             "--dbname".into(),
-            postgres_database_name(database_url)?.into(),
+            // pg_restore interprets a --dbname value containing '=' as a libpq
+            // connection string. Quote the database as a single conninfo value
+            // so unusual names cannot override the host/user from our environment.
+            format!(
+                "dbname='{}'",
+                postgres_database_name(database_url)?
+                    .replace('\\', "\\\\")
+                    .replace('\'', "\\'")
+            )
+            .into(),
             source.as_os_str().to_owned(),
         ],
         postgres_environment(database_url)?,
@@ -289,22 +313,39 @@ fn pg_restore_request(database_url: &str, source: &Path) -> Result<PgDumpRequest
 
 fn postgres_database_name(database_url: &str) -> Result<String, BackupError> {
     let url = postgres_url(database_url)?;
-    Ok(url.path().trim_start_matches('/').to_owned())
+    decode_postgres_component(url.path().trim_start_matches('/'))
+}
+
+fn decode_postgres_component(value: &str) -> Result<String, BackupError> {
+    let decoded = urlencoding::decode(value)
+        .map_err(|_| BackupError::Validation("PostgreSQL URL contains invalid UTF-8.".into()))?;
+    if decoded.contains('\0') {
+        return Err(BackupError::Validation(
+            "PostgreSQL URL contains a null byte.".into(),
+        ));
+    }
+    Ok(decoded.into_owned())
 }
 
 fn postgres_environment(database_url: &str) -> Result<ProcessEnvironment, BackupError> {
     let url = postgres_url(database_url)?;
-    let database = url.path().trim_start_matches('/');
+    let database = decode_postgres_component(url.path().trim_start_matches('/'))?;
     let mut environment = vec![
         ("PGHOST".into(), url.host_str().unwrap_or_default().into()),
-        ("PGUSER".into(), url.username().into()),
+        (
+            "PGUSER".into(),
+            decode_postgres_component(url.username())?.into(),
+        ),
         ("PGDATABASE".into(), database.into()),
     ];
     if let Some(port) = url.port() {
         environment.push(("PGPORT".into(), port.to_string().into()));
     }
     if let Some(password) = url.password() {
-        environment.push(("PGPASSWORD".into(), password.into()));
+        environment.push((
+            "PGPASSWORD".into(),
+            decode_postgres_component(password)?.into(),
+        ));
     }
     if let Some((_, ssl_mode)) = url.query_pairs().find(|(key, _)| key == "sslmode") {
         environment.push(("PGSSLMODE".into(), ssl_mode.as_ref().into()));
@@ -522,6 +563,10 @@ fn bounded_error(bytes: &[u8]) -> String {
 fn storage(error: impl std::fmt::Display) -> BackupError {
     BackupError::Storage(error.to_string())
 }
+
+#[cfg(test)]
+#[path = "citadel_system_backup/parity_tests.rs"]
+mod parity_tests;
 
 #[cfg(test)]
 mod tests {

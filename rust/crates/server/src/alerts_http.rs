@@ -35,6 +35,9 @@ pub fn router(state: AlertsHttpState) -> Router {
             .contract_route(routes::LIST_ALERT_RULES, list_rules)
             .contract_route(routes::CREATE_ALERT_RULE, create_rule)
             .contract_route(routes::GET_ALERT_RULE, get_rule)
+            .contract_route(routes::GET_ALERT_RULE_CONFIG, get_rule_config)
+            .contract_route(routes::RENAME_ALERT_RULE, rename_rule)
+            .contract_route(routes::UPDATE_ALERT_RULE_METADATA, update_rule_metadata)
             .contract_route(routes::UPDATE_ALERT_RULE, update_rule)
             .contract_route(routes::DELETE_ALERT_RULES, delete_rules)
             .contract_route(routes::LIST_ALERT_EVENTS, list_events)
@@ -161,7 +164,7 @@ async fn update_channel(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(mut i): Json<AlertChannelInput>,
+    Json(patch): Json<serde_json::Value>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -173,9 +176,8 @@ async fn update_channel(
         &h,
     )
     .await?;
-    result(i.validate(), &h)?;
     Ok(no_store(
-        Json(result(s.store.update_channel(id, &i).await, &h)?).into_response(),
+        Json(result(s.store.update_channel(id, &patch).await, &h)?).into_response(),
     ))
 }
 async fn delete_channels(
@@ -270,7 +272,7 @@ async fn create_rule(
         &h,
     )
     .await?;
-    result(i.validate(), &h)?;
+    result(i.validate_create(), &h)?;
     Ok(no_store(
         Json(result(s.store.create_rule(p.actor_id, &i).await, &h)?).into_response(),
     ))
@@ -295,12 +297,63 @@ async fn get_rule(
         Json(result(s.store.get_rule(id).await, &h)?).into_response(),
     ))
 }
-async fn update_rule(
+async fn get_rule_config(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(mut i): Json<AlertRuleInput>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::Alert,
+        PermissionLevel::Read,
+        Some(id),
+        &h,
+    )
+    .await?;
+    let rule = result(s.store.get_rule(id).await, &h)?;
+    Ok(no_store(
+        Json(json!({
+            "id":rule.id,"name":rule.name,"description":rule.description,
+            "isSystem":rule.created_by_actor_id == Uuid::from_u128(1),
+            "type":rule.alert_type,"severity":rule.severity,"cooldownSeconds":rule.cooldown_seconds,
+            "requiredMatches":rule.required_matches,"threshold":rule.threshold,"status":rule.status,
+            "channelIds":rule.channel_ids,"limitedTo":rule.limited_to,"quietHours":rule.quiet_hours
+        }))
+        .into_response(),
+    ))
+}
+
+async fn rename_rule(
+    State(s): State<AlertsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    h: HeaderMap,
+    Json(mut input): Json<citadel_alerts::RenameAlertRuleInput>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    result(input.validate(), &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::Alert,
+        PermissionLevel::Write,
+        Some(input.id),
+        &h,
+    )
+    .await?;
+    Ok(no_store(
+        Json(result(s.store.rename_rule(p.actor_id, &input).await, &h)?).into_response(),
+    ))
+}
+
+async fn update_rule_metadata(
+    State(s): State<AlertsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    h: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -312,9 +365,39 @@ async fn update_rule(
         &h,
     )
     .await?;
-    result(i.validate(), &h)?;
+    let description = result(citadel_alerts::description_patch(&patch), &h)?;
     Ok(no_store(
-        Json(result(s.store.update_rule(id, &i).await, &h)?).into_response(),
+        Json(result(
+            s.store.update_rule_description(id, description).await,
+            &h,
+        )?)
+        .into_response(),
+    ))
+}
+
+async fn update_rule(
+    State(s): State<AlertsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    h: HeaderMap,
+    Json(patch): Json<serde_json::Value>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::Alert,
+        PermissionLevel::Write,
+        Some(id),
+        &h,
+    )
+    .await?;
+    Ok(no_store(
+        Json(result(
+            s.store.update_rule(p.actor_id, id, &patch).await,
+            &h,
+        )?)
+        .into_response(),
     ))
 }
 async fn delete_rules(
@@ -491,6 +574,14 @@ async fn auth(
 fn result<T>(r: Result<T, AlertError>, h: &HeaderMap) -> IdentityHttpResult<T> {
     identity_result(
         r.map_err(|e| match e {
+            AlertError::FieldValidation(fields) => IdentityError::FieldValidation(fields),
+            AlertError::InvalidCooldown => IdentityError::FieldValidation(
+                [("0".into(), vec![AlertError::InvalidCooldown.to_string()])].into(),
+            ),
+            AlertError::RuleNotFound => {
+                IdentityError::ResourceNotFound("The provided alert rule does not exist")
+            }
+            AlertError::LicenseRequired => IdentityError::LicenseRequired("advanced-alerting"),
             AlertError::Validation(m) => IdentityError::Validation(m),
             AlertError::NotFound => IdentityError::NotFound,
             AlertError::Conflict(m) => IdentityError::Conflict(m),

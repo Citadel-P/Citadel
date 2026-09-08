@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+mod streams;
 
 #[derive(Clone)]
 pub struct BackupsHttpState {
@@ -29,24 +30,48 @@ pub fn router(state: BackupsHttpState) -> Router {
             .contract_route(routes::LIST_BACKUP_REPOSITORIES, list_repositories)
             .contract_route(routes::CREATE_BACKUP_REPOSITORY, create_repository)
             .contract_route(routes::GET_BACKUP_REPOSITORY, get_repository)
+            .contract_route(routes::UPDATE_BACKUP_REPOSITORY, update_repository)
             .contract_route(routes::ARCHIVE_BACKUP_REPOSITORY, archive_repository)
             .contract_route(routes::VALIDATE_BACKUP_REPOSITORY, validate_repository)
             .contract_route(routes::INITIALIZE_BACKUP_REPOSITORY, initialize_repository)
             .contract_route(routes::CHECK_BACKUP_REPOSITORY, check_repository)
             .contract_route(routes::PRUNE_BACKUP_REPOSITORY, prune_repository)
             .contract_route(routes::LIST_BACKUP_POLICIES, list_policies)
+            .contract_route(routes::GET_PLATFORM_BACKUP_SUMMARIES, platform_summaries)
+            .contract_route(
+                routes::GET_DEPLOYMENT_BACKUP_SOURCE_PREVIEW,
+                deployment_source_preview,
+            )
+            .contract_route(
+                routes::GET_STACK_BACKUP_SOURCE_PREVIEW,
+                stack_source_preview,
+            )
+            .contract_route(
+                routes::GET_SWARM_SERVICE_BACKUP_SOURCE_PREVIEW,
+                service_source_preview,
+            )
             .contract_route(routes::CREATE_BACKUP_POLICY, create_policy)
             .contract_route(routes::GET_BACKUP_POLICY, get_policy)
+            .contract_route(routes::UPDATE_BACKUP_POLICY, update_policy)
+            .contract_route(routes::RENAME_BACKUP_POLICY, rename_policy)
+            .contract_route(
+                routes::UPDATE_BACKUP_POLICY_METADATA,
+                update_policy_metadata,
+            )
             .contract_route(routes::ARCHIVE_BACKUP_POLICY, archive_policy)
             .contract_route(routes::QUEUE_BACKUP_RUN, queue_backup)
+            .contract_route(routes::RUN_BACKUP_POLICY, streams::run_backup)
             .contract_route(routes::LIST_BACKUP_RUNS, list_runs)
             .contract_route(routes::GET_BACKUP_RUN, get_run)
             .contract_route(routes::GET_BACKUP_LOGS, get_backup_logs)
+            .contract_route(routes::GET_BACKUP_RUN_EVENTS, get_backup_events)
             .contract_route(routes::CANCEL_BACKUP_RUN, cancel_backup)
             .contract_route(routes::QUEUE_BACKUP_RESTORE, queue_restore)
+            .contract_route(routes::RUN_BACKUP_RESTORE_VOLUME, streams::run_restore)
             .contract_route(routes::LIST_BACKUP_RESTORES, list_restores)
             .contract_route(routes::GET_BACKUP_RESTORE, get_restore)
             .contract_route(routes::GET_BACKUP_RESTORE_LOGS, get_restore_logs)
+            .contract_route(routes::GET_BACKUP_RESTORE_RUN_EVENTS, get_restore_events)
             .contract_route(routes::CANCEL_BACKUP_RESTORE, cancel_restore)
             .with_state(state),
         "BackupPolicy",
@@ -79,6 +104,12 @@ struct Restores {
 struct Logs {
     run_id: Uuid,
     logs: String,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Events {
+    run_id: Uuid,
+    events: Vec<String>,
 }
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -181,6 +212,56 @@ async fn get_repository(
         Json(result(s.backups.store().get_repository(id).await, &h)?).into_response(),
     ))
 }
+async fn update_repository(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, axum::extract::rejection::PathRejection>,
+    h: HeaderMap,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let Path(id) = identity_result(
+        path.map_err(|_| IdentityError::Validation("Repository ID must be a UUID.".into())),
+        &h,
+    )?;
+    if id.is_nil() {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Repository ID is required.".into(),
+            )),
+            &h,
+        );
+    }
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupRepository,
+        PermissionLevel::Write,
+        Some(id),
+        &h,
+    )
+    .await?;
+    let Json(patch) = identity_result(
+        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        &h,
+    )?;
+    if patch.get("spec").is_some_and(|v| !v.is_null()) {
+        let current = result(s.backups.store().get_repository(id).await, &h)?;
+        let input = result(
+            citadel_backups::repository_patch::apply(&current, &patch),
+            &h,
+        )?;
+        authorize_repository_dependencies(&s, &p, &input, &h).await?;
+    }
+    Ok(no_store(
+        Json(result(
+            s.backups.store().update_repository(id, &patch).await,
+            &h,
+        )?)
+        .into_response(),
+    ))
+}
+
 async fn archive_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -313,6 +394,58 @@ async fn list_policies(
         .into_response(),
     ))
 }
+async fn platform_summaries(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+    h: HeaderMap,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Read,
+        None,
+        &h,
+    )
+    .await?;
+    let mut ids = Vec::new();
+    for (key, value) in url::form_urlencoded::parse(query.as_deref().unwrap_or_default().as_bytes())
+    {
+        if key == "platformIds" {
+            let id = identity_result(
+                Uuid::parse_str(&value)
+                    .map_err(|_| IdentityError::Validation("Platform IDs must be UUIDs.".into())),
+                &h,
+            )?;
+            if !id.is_nil() {
+                ids.push(id);
+            }
+            if ids.len() > 256 {
+                return identity_result(
+                    Err(IdentityError::Validation(
+                        "At most 256 Platform IDs can be requested.".into(),
+                    )),
+                    &h,
+                );
+            }
+        }
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    let platforms = result(
+        s.backups
+            .store()
+            .platform_summaries(p.actor_id, p.is_administrator(), &ids)
+            .await,
+        &h,
+    )?;
+    Ok(no_store(
+        Json(serde_json::json!({"platforms":platforms})).into_response(),
+    ))
+}
+
 async fn create_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -350,6 +483,63 @@ async fn create_policy(
         .into_response(),
     ))
 }
+macro_rules! backup_source_preview {
+    ($handler:ident,$kind:ident,$resource:ident) => {
+        async fn $handler(
+            State(s): State<BackupsHttpState>,
+            p: Option<Extension<ActorPrincipal>>,
+            path: Result<Path<Uuid>, axum::extract::rejection::PathRejection>,
+            h: HeaderMap,
+        ) -> IdentityHttpResult {
+            let p = actor(p, &h)?;
+            let Path(id) = identity_result(
+                path.map_err(|_| IdentityError::Validation("Resource ID must be a UUID.".into())),
+                &h,
+            )?;
+            if id.is_nil() {
+                return identity_result(
+                    Err(IdentityError::Validation("Resource ID is required.".into())),
+                    &h,
+                );
+            }
+            auth(
+                &s,
+                &p,
+                ResourceType::$resource,
+                PermissionLevel::Read,
+                Some(id),
+                &h,
+            )
+            .await?;
+            let cancellation = s.cancellation.child_token();
+            let _guard = cancellation.clone().drop_guard();
+            let preview = result(
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    s.backups.planner().preview(
+                        citadel_backups::source_preview::BackupPreviewKind::$kind,
+                        id,
+                        p.actor_id,
+                        p.is_administrator(),
+                        &cancellation,
+                    ),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    Err(BackupError::External(
+                        "Backup source preview timed out.".into(),
+                    ))
+                }),
+                &h,
+            )?;
+            Ok(no_store(Json(preview).into_response()))
+        }
+    };
+}
+backup_source_preview!(deployment_source_preview, Deployment, Deployment);
+backup_source_preview!(stack_source_preview, Stack, Stack);
+backup_source_preview!(service_source_preview, SwarmService, SwarmService);
+
 async fn get_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -368,6 +558,178 @@ async fn get_policy(
     .await?;
     Ok(no_store(
         Json(result(s.backups.store().get_policy(id).await, &h)?).into_response(),
+    ))
+}
+
+async fn update_policy(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, axum::extract::rejection::PathRejection>,
+    h: HeaderMap,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let Path(id) = identity_result(
+        path.map_err(|_| IdentityError::Validation("Policy ID must be a UUID.".into())),
+        &h,
+    )?;
+    if id.is_nil() {
+        return identity_result(
+            Err(IdentityError::Validation("Policy ID is required.".into())),
+            &h,
+        );
+    }
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Write,
+        Some(id),
+        &h,
+    )
+    .await?;
+    let Json(patch) = identity_result(
+        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        &h,
+    )?;
+    let current = result(s.backups.store().get_policy(id).await, &h)?;
+    let input = result(citadel_backups::policy_update::merge(&current, &patch), &h)?;
+    if citadel_backups::policy_update::changes_paid_trigger(&current, &input) {
+        result(s.backups.ensure_automated_operations().await, &h)?;
+    }
+    if citadel_backups::policy_update::changes_execution(&patch) {
+        identity_result(
+            s.identity
+                .ensure_run_as_allowed(
+                    &p,
+                    citadel_domain::ActorId::new(
+                        input.run_as_actor_id.expect("validated run-as Actor"),
+                    ),
+                )
+                .await,
+            &h,
+        )?;
+    }
+    if patch.get("source").is_some_and(|v| !v.is_null())
+        || patch
+            .get("backupRepositoryId")
+            .is_some_and(|v| !v.is_null())
+    {
+        authorize_policy_dependencies(&s, &p, &input, &h).await?;
+        let repository = result(
+            s.backups
+                .store()
+                .get_repository(input.backup_repository_id)
+                .await,
+            &h,
+        )?;
+        let cancellation = s.cancellation.child_token();
+        let _guard = cancellation.clone().drop_guard();
+        result(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                s.backups
+                    .planner()
+                    .validate_source(&input.source, &repository, &cancellation),
+            )
+            .await
+            .unwrap_or_else(|_| {
+                Err(BackupError::External(
+                    "Backup source validation timed out.".into(),
+                ))
+            }),
+            &h,
+        )?;
+    }
+    Ok(no_store(
+        Json(result(
+            s.backups
+                .store()
+                .update_policy(p.actor_id, id, current.row_version, &input)
+                .await,
+            &h,
+        )?)
+        .into_response(),
+    ))
+}
+
+async fn rename_policy(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    h: HeaderMap,
+    body: Result<
+        Json<citadel_backups::policy_metadata::RenameBackupPolicyInput>,
+        axum::extract::rejection::JsonRejection,
+    >,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let Json(mut input) = identity_result(
+        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        &h,
+    )?;
+    result(input.validate(), &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Write,
+        Some(input.id),
+        &h,
+    )
+    .await?;
+    Ok(no_store(
+        Json(result(
+            s.backups.store().rename_policy(p.actor_id, &input).await,
+            &h,
+        )?)
+        .into_response(),
+    ))
+}
+
+async fn update_policy_metadata(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, axum::extract::rejection::PathRejection>,
+    h: HeaderMap,
+    body: Result<Json<serde_json::Value>, axum::extract::rejection::JsonRejection>,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let Path(id) = identity_result(
+        path.map_err(|_| IdentityError::Validation("Policy ID must be a UUID.".into())),
+        &h,
+    )?;
+    if id.is_nil() {
+        return identity_result(
+            Err(IdentityError::Validation("Policy ID is required.".into())),
+            &h,
+        );
+    }
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Write,
+        Some(id),
+        &h,
+    )
+    .await?;
+    let Json(patch) = identity_result(
+        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        &h,
+    )?;
+    let description = result(
+        citadel_backups::policy_metadata::description_patch(&patch),
+        &h,
+    )?;
+    Ok(no_store(
+        Json(result(
+            s.backups
+                .store()
+                .update_policy_description(p.actor_id, id, description)
+                .await,
+            &h,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -479,26 +841,46 @@ async fn queue_backup(
     input: Option<Json<QueueInput>>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
+    let input = input.map(|Json(v)| v).unwrap_or_default();
+    let run = enqueue_backup(&s, &p, id, input, &h).await?;
+    Ok(no_store(Json(run).into_response()))
+}
+async fn enqueue_backup(
+    s: &BackupsHttpState,
+    p: &ActorPrincipal,
+    id: Uuid,
+    input: QueueInput,
+    h: &HeaderMap,
+) -> IdentityHttpResult<citadel_backups::BackupRunView> {
     auth(
-        &s,
-        &p,
+        s,
+        p,
         ResourceType::BackupPolicy,
         PermissionLevel::Execute,
         Some(id),
-        &h,
+        h,
     )
     .await?;
-    let trigger = input
-        .and_then(|Json(v)| v.trigger)
-        .unwrap_or_else(|| "Manual".into());
+    let trigger = input.trigger.unwrap_or_else(|| "Manual".into());
+    if !matches!(trigger.as_str(), "Manual" | "Schedule" | "Webhook") {
+        return identity_result(
+            Err(IdentityError::Validation(
+                "Backup trigger is invalid.".into(),
+            )),
+            h,
+        );
+    }
+    if trigger != "Manual" {
+        result(s.backups.ensure_automated_operations().await, h)?;
+    }
     let run = result(
         s.backups
             .store()
             .enqueue_backup(p.actor_id, id, &trigger)
             .await,
-        &h,
+        h,
     )?;
-    Ok(no_store(Json(run).into_response()))
+    Ok(run)
 }
 async fn list_runs(
     State(s): State<BackupsHttpState>,
@@ -555,6 +937,60 @@ async fn get_run(
     .await?;
     Ok(no_store(Json(run).into_response()))
 }
+async fn get_backup_events(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    h: HeaderMap,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let run = result(s.backups.store().get_run(id).await, &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Read,
+        Some(run.backup_policy_id),
+        &h,
+    )
+    .await?;
+    // .NET exposes an empty events collection. Execution output remains in /logs.
+    Ok(no_store(
+        Json(Events {
+            run_id: id,
+            events: Vec::new(),
+        })
+        .into_response(),
+    ))
+}
+
+async fn get_restore_events(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    Path(id): Path<Uuid>,
+    h: HeaderMap,
+) -> IdentityHttpResult {
+    let p = actor(p, &h)?;
+    let restore = result(s.backups.store().get_restore(id).await, &h)?;
+    let source = result(s.backups.store().get_run(restore.backup_run_id).await, &h)?;
+    auth(
+        &s,
+        &p,
+        ResourceType::BackupPolicy,
+        PermissionLevel::Read,
+        Some(source.backup_policy_id),
+        &h,
+    )
+    .await?;
+    Ok(no_store(
+        Json(Events {
+            run_id: id,
+            events: Vec::new(),
+        })
+        .into_response(),
+    ))
+}
+
 async fn get_backup_logs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -608,14 +1044,25 @@ async fn queue_restore(
     Json(i): Json<RestoreInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
-    let source = result(s.backups.store().get_run(id).await, &h)?;
+    Ok(no_store(
+        Json(enqueue_restore(&s, &p, id, i, &h).await?).into_response(),
+    ))
+}
+async fn enqueue_restore(
+    s: &BackupsHttpState,
+    p: &ActorPrincipal,
+    id: Uuid,
+    i: RestoreInput,
+    h: &HeaderMap,
+) -> IdentityHttpResult<citadel_backups::BackupRestoreRunView> {
+    let source = result(s.backups.store().get_run(id).await, h)?;
     let permission = auth(
-        &s,
-        &p,
+        s,
+        p,
         ResourceType::BackupPolicy,
         PermissionLevel::Execute,
         Some(source.backup_policy_id),
-        &h,
+        h,
     )
     .await?;
     identity_result(
@@ -623,15 +1070,15 @@ async fn queue_restore(
             .has_specific(citadel_domain::SpecificPermission::Restore)
             .then_some(())
             .ok_or(IdentityError::Forbidden),
-        &h,
+        h,
     )?;
     auth(
-        &s,
-        &p,
+        s,
+        p,
         ResourceType::Platform,
         PermissionLevel::Write,
         Some(i.target_platform_id),
-        &h,
+        h,
     )
     .await?;
     let run = result(
@@ -647,9 +1094,9 @@ async fn queue_restore(
                 source_backup_run_item_id: i.source_backup_run_item_id,
             })
             .await,
-        &h,
+        h,
     )?;
-    Ok(no_store(Json(run).into_response()))
+    Ok(run)
 }
 async fn list_restores(
     State(s): State<BackupsHttpState>,

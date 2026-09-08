@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use citadel_domain::ActorId;
 use citadel_platforms::{
-    AuthorizedReadError, ContainerStatView, ContainerView, EffectivePlatformPermission, ImageView,
+    AuthorizedReadError, ContainerDeploymentUpdateState, ContainerDeploymentView,
+    ContainerStatView, ContainerView, EffectivePlatformPermission, ImageView,
     NodeResourceProjection, PlatformReadStore, PlatformStatView, PlatformView,
     RuntimeNetworkSummary, RuntimeVolumeSummary, SwarmConfigView, SwarmNetworkView, SwarmNodeView,
     SwarmSecretView, SwarmServiceView, SwarmTaskView, WorkloadStatusCounts,
@@ -116,6 +117,42 @@ impl PostgresPlatformReadStore {
 }
 
 impl PlatformReadStore for PostgresPlatformReadStore {
+    fn swarm_summary(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<'_, Result<citadel_platforms::swarm_overview::SwarmSummary, AuthorizedReadError>>
+    {
+        Box::pin(async move {
+            let row = sqlx::query(include_str!("swarm_summary.sql"))
+                .bind(platform)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(storage)?;
+            Ok(citadel_platforms::swarm_overview::SwarmSummary {
+                is_stale: row.try_get("isstale").map_err(storage)?,
+                node_count: row.try_get("nodecount").map_err(storage)?,
+                manager_count: row.try_get("managercount").map_err(storage)?,
+                reachable_managers: row.try_get("reachablemanagers").map_err(storage)?,
+                has_leader: row.try_get("hasleader").map_err(storage)?,
+                managers_stale: row.try_get("managersstale").map_err(storage)?,
+                service_counts: WorkloadStatusCounts {
+                    total: row.try_get("total").map_err(storage)?,
+                    healthy: row.try_get("healthy").map_err(storage)?,
+                    degraded: row.try_get("degraded").map_err(storage)?,
+                    failed: row.try_get("failed").map_err(storage)?,
+                    stopped: row.try_get("stopped").map_err(storage)?,
+                    unknown: row.try_get("unknown").map_err(storage)?,
+                    ..Default::default()
+                },
+                running_tasks: row.try_get("runningtasks").map_err(storage)?,
+                desired_tasks: row.try_get("desiredtasks").map_err(storage)?,
+                network_count: row.try_get("networkcount").map_err(storage)?,
+                local_network_count: row.try_get("localnetworkcount").map_err(storage)?,
+                volume_count: row.try_get("volumecount").map_err(storage)?,
+                image_count: row.try_get("imagecount").map_err(storage)?,
+            })
+        })
+    }
     fn list_authorized<'a>(
         &'a self,
         actor_id: ActorId,
@@ -259,7 +296,7 @@ GROUP BY requested.id
         platform_id: Uuid,
     ) -> BoxFuture<'_, Result<Vec<ContainerView>, AuthorizedReadError>> {
         Box::pin(async move {
-            sqlx::query(CONTAINER_SELECT)
+            sqlx::query(AssertSqlSafe(format!("{CONTAINER_SELECT} WHERE container.platformid=$1 ORDER BY container.name,container.id")))
                 .bind(platform_id)
                 .fetch_all(&self.pool)
                 .await
@@ -275,13 +312,15 @@ GROUP BY requested.id
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ContainerView>, AuthorizedReadError>> {
         Box::pin(async move {
-            sqlx::query(CONTAINER_SELECT_BY_ID)
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .map(map_container)
-                .transpose()
+            sqlx::query(AssertSqlSafe(format!(
+                "{CONTAINER_SELECT} WHERE container.id=$1"
+            )))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)?
+            .map(map_container)
+            .transpose()
         })
     }
 
@@ -307,6 +346,24 @@ GROUP BY requested.id
             .map_err(storage)?;
             // Docker IDs are daemon-local. Never choose an arbitrary Platform or node.
             Ok(if ids.len() == 1 { Some(ids[0]) } else { None })
+        })
+    }
+
+    fn list_stack_containers(
+        &self,
+        stack_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, AuthorizedReadError>> {
+        Box::pin(async move {
+            sqlx::query(AssertSqlSafe(format!(
+                "{CONTAINER_SELECT} WHERE container.stackid=$1 ORDER BY container.name,container.id"
+            )))
+            .bind(stack_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(map_container)
+            .collect()
         })
     }
 
@@ -512,41 +569,23 @@ SELECT container.id, container.platformid, container.dockercontainerid, containe
        node.hostname AS nodehostname, container.projectionobservedat,
        container.projectionstalesince, container.projectionstalereason, container.ports,
        container.deploymentid, container.stackid,
+       image.id AS image_id, image.tags AS image_tags, image.name AS image_name,
+       image.dockerimageid AS image_dockerimageid, image.size AS image_size,
+       image.containers AS image_containers, image.createdat AS image_createdat,
+       image.updatedat AS image_updatedat, image.registryid AS image_registryid,
+       deployment.name AS deployment_name, deployment.status AS deployment_status,
        stat.containerid AS stat_containerid, stat.memoryactive AS stat_memoryactive,
        stat.memorycache AS stat_memorycache, stat.cpuusage AS stat_cpuusage,
        stat.memorylimit AS stat_memorylimit, stat.rxbytes AS stat_rxbytes,
        stat.txbytes AS stat_txbytes, stat.created AS stat_created
 FROM containers container
+LEFT JOIN images image ON image.id=container.imageid AND image.platformid=container.platformid
+LEFT JOIN deployments deployment ON deployment.id=container.deploymentid AND deployment.platformid=container.platformid
 LEFT JOIN swarmnodeprojections node
   ON node.platformid = container.platformid AND node.dockernodeid = container.dockernodeid
 LEFT JOIN LATERAL (
     SELECT * FROM containerstats WHERE containerid = container.id ORDER BY created DESC LIMIT 1
 ) stat ON TRUE
-WHERE container.platformid = $1
-ORDER BY container.name, container.id
-"#;
-
-const CONTAINER_SELECT_BY_ID: &str = r#"
-SELECT container.id, container.platformid, container.dockercontainerid, container.name,
-       container.dockerimageid, container.created, container.state,
-       COALESCE(container.controlstate, 'Idle') AS controlstate, container.updated,
-       container.stack, container.issystem, container.systemrole,
-       container.hascitadelownershiplabels, container.isswarmtask, container.dockernodeid,
-       node.hostname AS nodehostname, container.projectionobservedat,
-       container.projectionstalesince, container.projectionstalereason, container.ports,
-       container.deploymentid, container.stackid,
-       stat.containerid AS stat_containerid, stat.memoryactive AS stat_memoryactive,
-       stat.memorycache AS stat_memorycache, stat.cpuusage AS stat_cpuusage,
-       stat.memorylimit AS stat_memorylimit, stat.rxbytes AS stat_rxbytes,
-       stat.txbytes AS stat_txbytes, stat.created AS stat_created
-FROM containers container
-LEFT JOIN swarmnodeprojections node
-  ON node.platformid = container.platformid AND node.dockernodeid = container.dockernodeid
-LEFT JOIN LATERAL (
-    SELECT * FROM containerstats WHERE containerid = container.id ORDER BY created DESC LIMIT 1
-) stat ON TRUE
-WHERE container.id = $1
-LIMIT 1
 "#;
 
 fn map_platform(row: PgRow) -> Result<PlatformView, AuthorizedReadError> {
@@ -629,6 +668,57 @@ fn counts(
 }
 
 fn map_container(row: PgRow) -> Result<ContainerView, AuthorizedReadError> {
+    let platform_id = row.try_get("platformid").map_err(storage)?;
+    let image_view = row
+        .try_get::<Option<Uuid>, _>("image_id")
+        .map_err(storage)?
+        .map(|id| {
+            Ok::<_, AuthorizedReadError>(ImageView {
+                id,
+                platform_id,
+                tags: json(row.try_get("image_tags").map_err(storage)?)?,
+                name: row.try_get("image_name").map_err(storage)?,
+                docker_image_id: row.try_get("image_dockerimageid").map_err(storage)?,
+                size: row.try_get("image_size").map_err(storage)?,
+                is_in_use: row.try_get::<i32, _>("image_containers").map_err(storage)? > 0,
+                created_at: row.try_get("image_createdat").map_err(storage)?,
+                updated_at: row.try_get("image_updatedat").map_err(storage)?,
+                registry_id: row.try_get("image_registryid").map_err(storage)?,
+                control_state: "Idle".into(),
+                repo_digests: None,
+                content_identity: None,
+                docker_node_id: None,
+                node_hostname: None,
+                is_stale: false,
+                stale_reason: None,
+                capabilities: None,
+            })
+        })
+        .transpose()?;
+    let deployment_view = row
+        .try_get::<Option<String>, _>("deployment_name")
+        .map_err(storage)?
+        .map(|name| {
+            // Match the .NET container projection: only identity/name/status are
+            // joined. It must not expose Deployment configuration to Platform readers.
+            let minimum = chrono::DateTime::from_timestamp(-62_135_596_800, 0)
+                .expect("valid .NET minimum timestamp");
+            Ok::<_, AuthorizedReadError>(ContainerDeploymentView {
+                id: row.try_get("deploymentid").map_err(storage)?,
+                name,
+                platform_id,
+                status: row.try_get("deployment_status").map_err(storage)?,
+                created_at: minimum,
+                created_by_actor_id: Uuid::nil(),
+                control_state: "Idle".into(),
+                platform_status: "Offline".into(),
+                auto_update_state: ContainerDeploymentUpdateState {
+                    last_checked_at: minimum,
+                    status: "Unknown".into(),
+                },
+            })
+        })
+        .transpose()?;
     let last_stats = row
         .try_get::<Option<Uuid>, _>("stat_containerid")
         .map_err(storage)?
@@ -669,6 +759,8 @@ fn map_container(row: PgRow) -> Result<ContainerView, AuthorizedReadError> {
         ports: crate::container_ports::normalize(row.try_get("ports").map_err(storage)?),
         deployment_id: row.try_get("deploymentid").map_err(storage)?,
         stack_id: row.try_get("stackid").map_err(storage)?,
+        image_view,
+        deployment_view,
         capabilities: None,
     })
 }

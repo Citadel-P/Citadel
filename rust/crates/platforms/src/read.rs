@@ -162,7 +162,51 @@ pub struct ContainerView {
     pub ports: Value,
     pub deployment_id: Option<Uuid>,
     pub stack_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_view: Option<ImageView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_view: Option<ContainerDeploymentView>,
     pub capabilities: Option<PlatformCapabilitiesView>,
+}
+
+/// The container contract embeds a summary, never Deployment configuration or
+/// resource bindings. These are read-model fields, not a cross-feature entity.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerDeploymentView {
+    pub id: Uuid,
+    pub name: String,
+    pub platform_id: Uuid,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub created_by_actor_id: Uuid,
+    pub control_state: String,
+    pub platform_status: String,
+    pub auto_update_state: ContainerDeploymentUpdateState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerDeploymentUpdateState {
+    pub last_checked_at: DateTime<Utc>,
+    pub status: String,
+}
+
+impl ContainerView {
+    /// Shared HTTP/live runtime shape: `id` is the Docker ID, not the DB UUID.
+    pub fn runtime_data(&self) -> Value {
+        serde_json::json!({
+            "id":self.container_id,"name":self.name,"platformId":self.platform_id,
+            "image":self.image_view.as_ref().map_or("", |image| image.name.as_str()),"imageId":self.docker_image_id,"state":self.state,
+            "controlState":self.control_state,"created":self.created,"stack":self.stack,
+            "ports":self.ports,"containerStat":self.last_stats,
+            "isSystem":self.is_system,"systemRole":self.system_role,
+            "hasCitadelOwnershipLabels":self.has_citadel_ownership_labels,
+            "isSwarmTask":self.is_swarm_task,"dockerNodeId":self.docker_node_id,
+            "deploymentId":self.deployment_id,"stackId":self.stack_id,
+            "capabilities":self.capabilities,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -228,7 +272,7 @@ pub struct VolumeView {
     pub mountpoint: String,
     pub created_at: String,
     pub cluster_volume: Option<Value>,
-    pub usage_data: Option<Value>,
+    pub usage_data: Option<VolumeUsageDataView>,
     pub containers: Vec<Value>,
     pub status: BTreeMap<String, String>,
     pub labels: BTreeMap<String, String>,
@@ -238,6 +282,15 @@ pub struct VolumeView {
     pub is_stale: bool,
     pub stale_reason: Option<String>,
     pub capabilities: Option<VolumeCapabilitiesView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeUsageDataView {
+    #[serde(alias = "Size")]
+    pub size: i64,
+    #[serde(alias = "RefCount")]
+    pub ref_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -396,6 +449,11 @@ pub trait PlatformReadStore: Send + Sync {
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<PlatformView>, AuthorizedReadError>>;
 
+    fn swarm_summary(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<'_, Result<crate::swarm_overview::SwarmSummary, AuthorizedReadError>>;
+
     fn permissions_for_platforms<'a>(
         &'a self,
         actor_id: ActorId,
@@ -411,6 +469,11 @@ pub trait PlatformReadStore: Send + Sync {
         &self,
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ContainerView>, AuthorizedReadError>>;
+
+    fn list_stack_containers(
+        &self,
+        stack_id: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerView>, AuthorizedReadError>>;
 
     fn resolve_container_reference<'a>(
         &'a self,
@@ -562,6 +625,13 @@ impl PlatformReadService {
         self.store.get_container(id).await
     }
 
+    pub async fn list_stack_containers(
+        &self,
+        stack_id: Uuid,
+    ) -> Result<Vec<ContainerView>, AuthorizedReadError> {
+        self.store.list_stack_containers(stack_id).await
+    }
+
     pub async fn get_container_by_reference(
         &self,
         reference: &str,
@@ -599,6 +669,13 @@ impl PlatformReadService {
         platform_id: Uuid,
     ) -> Result<Vec<SwarmNodeView>, AuthorizedReadError> {
         self.store.list_swarm_nodes(platform_id).await
+    }
+
+    pub async fn swarm_summary(
+        &self,
+        platform: Uuid,
+    ) -> Result<crate::swarm_overview::SwarmSummary, AuthorizedReadError> {
+        self.store.swarm_summary(platform).await
     }
 
     pub async fn get_swarm_node(

@@ -359,8 +359,18 @@ mod tests {
         assert_eq!(manifest.len(), 1);
         assert!(!MIGRATIONS[0].sql.contains("__EFMigrationsHistory"));
         assert!(!MIGRATIONS[0].sql.contains("START TRANSACTION"));
-        assert_eq!(MIGRATIONS[0].sql.matches("CREATE TABLE ").count(), 83);
-        assert_eq!(MIGRATIONS[0].sql.matches("INSERT INTO ").count(), 92);
+        let tables = |sql: &str| {
+            sql.lines()
+                .filter_map(|line| line.strip_prefix("CREATE TABLE "))
+                .filter_map(|line| line.split_whitespace().next())
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+        };
+        assert_eq!(tables(MIGRATIONS[0].sql), tables(super::super::SCHEMA_SQL));
+        assert_eq!(
+            MIGRATIONS[0].sql.matches("INSERT INTO ").count(),
+            super::super::SCHEMA_SQL.matches("INSERT INTO ").count()
+        );
     }
 
     #[test]

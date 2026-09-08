@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
+use crate::contract_router::ContractRouterExt;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
 use axum::{Json, Router};
 use chrono::Utc;
 use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_automation::{AutomationError, AutomationService};
+use citadel_contracts::http::routes;
 use citadel_domain::ActorId;
 use citadel_git::{GitRepositoryExecutionError, GitRepositoryExecutionService, GitWebhookOutcome};
 use citadel_resources::webhooks::{WebhookConfiguration, WebhookError};
@@ -36,10 +37,7 @@ pub struct WebhooksHttpState {
 
 pub fn router(state: WebhooksHttpState) -> Router {
     Router::new()
-        .route(
-            "/listener/{auth_type}/{resource_type}/{id}/{execution}",
-            post(receive),
-        )
+        .contract_route(routes::RECEIVE_WEBHOOK, receive)
         .with_state(state)
 }
 

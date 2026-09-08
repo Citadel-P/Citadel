@@ -41,6 +41,61 @@ fn disconnect_platform_closes_manager_and_nodes_but_preserves_other_targets() {
 }
 
 #[tokio::test]
+async fn image_deletion_preserves_options_and_does_not_replay_a_failed_command() {
+    use citadel_contracts::citadel::images::v1::{
+        DeleteImageRequest, DeleteImageResponse, DeleteImageResponseItem,
+    };
+    use citadel_platforms::images::ImageDeletionPort;
+    let registry = EdgeRegistry::default();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    for success in [true, false] {
+        let (result, ()) = tokio::join!(
+            runtime.delete_image("sha256:abc", true, true, &cancel),
+            async {
+                let envelope = outbound.recv().await.unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("expected deletion command")
+                };
+                assert_eq!(command.kind, EdgeCommandKind::ImageDelete as i32);
+                let request = DeleteImageRequest::decode(command.payload.as_slice()).unwrap();
+                assert_eq!(request.ids, ["sha256:abc"]);
+                assert!(request.force && request.noprune);
+                let id = Uuid::parse_str(&command.command_id).unwrap();
+                if success {
+                    session.output(
+                        id,
+                        DeleteImageResponse {
+                            items: vec![DeleteImageResponseItem {
+                                result: [("Deleted".into(), "sha256:abc".into())].into(),
+                            }],
+                        }
+                        .encode_to_vec(),
+                    );
+                }
+                session.complete(id, success);
+            }
+        );
+        if success {
+            assert_eq!(result.unwrap()[0]["Deleted"], "sha256:abc");
+        } else {
+            assert!(result.is_err());
+        }
+        while let Ok(envelope) = outbound.try_recv() {
+            assert!(
+                !matches!(envelope.body, Some(core_envelope::Body::Command(_))),
+                "destructive command was replayed"
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn service_log_reads_preserve_tail_truncation_and_reject_oversized_agent_output() {
     use citadel_contracts::citadel::swarm::v1::{SwarmLogsRequest, SwarmLogsResponse};
     use citadel_platforms::logs::{LogReadPort, LogResource, MAX_LOG_FRAME};

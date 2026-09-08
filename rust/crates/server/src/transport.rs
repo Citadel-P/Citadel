@@ -252,20 +252,18 @@ async fn security_middleware(
         && !state.readiness.is_setup()
         && setup_gated(request.uri().path())
     {
-        let (status, title, detail) = if state.readiness.is_database_ready() {
-            (
-                StatusCode::CONFLICT,
-                "Setup required",
-                "Citadel must be initialized before this endpoint can be used.",
-            )
-        } else {
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Setup unavailable",
-                "Citadel setup state is unavailable.",
-            )
-        };
-        return problem(status, title, detail, request_id);
+        if state.readiness.is_database_ready() {
+            return crate::identity_http::identity_error_response(
+                citadel_identity::IdentityError::SetupRequired,
+                request.headers(),
+            );
+        }
+        return problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Setup unavailable",
+            "Citadel setup state is unavailable.",
+            request_id,
+        );
     }
     let response = next.run(request).await;
     if response.status() == StatusCode::PAYLOAD_TOO_LARGE {
@@ -513,6 +511,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(setup_required.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            setup_required.headers()[axum::http::header::CACHE_CONTROL],
+            "no-store"
+        );
+        let correlation = setup_required.headers()[&REQUEST_ID]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let body = axum::body::to_bytes(setup_required.into_body(), 4096)
+            .await
+            .unwrap();
+        let problem: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(problem["type"], "setup_required");
+        assert_eq!(problem["requestId"], correlation);
 
         readiness.set_setup(true);
         let too_large = app

@@ -13,9 +13,11 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+mod preview;
 
 #[derive(Clone)]
 pub struct PostgresBackupSourcePlanner {
+    runtime: Option<crate::container_mutations::ContainerRuntimeRouter>,
     pool: PgPool,
     system_builder: Option<Arc<dyn CitadelSystemBackupBuilder>>,
     git_execution: Option<Arc<GitRepositoryExecutionService>>,
@@ -25,10 +27,19 @@ impl PostgresBackupSourcePlanner {
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self {
+            runtime: None,
             pool,
             system_builder: None,
             git_execution: None,
         }
+    }
+    #[must_use]
+    pub fn with_runtime(
+        mut self,
+        runtime: crate::container_mutations::ContainerRuntimeRouter,
+    ) -> Self {
+        self.runtime = Some(runtime);
+        self
     }
 
     #[must_use]
@@ -112,8 +123,13 @@ impl PostgresBackupSourcePlanner {
         })
     }
 
-    async fn plan_deployment(&self, claim: &BackupClaim) -> Result<BackupSourcePlan, BackupError> {
-        let deployment_id = uuid_field(&claim.run.source_snapshot, "deploymentId")?;
+    async fn plan_deployment(
+        &self,
+        source: &Value,
+        repository_type: Option<&str>,
+        preview: bool,
+    ) -> Result<BackupSourcePlan, BackupError> {
+        let deployment_id = uuid_field(source, "deploymentId")?;
         let row = sqlx::query(
             "SELECT d.name,d.platformid,d.spec,p.platformdescriptor,p.status FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=$1",
         )
@@ -123,13 +139,17 @@ impl PostgresBackupSourcePlanner {
         .map_err(storage)?
         .ok_or(BackupError::NotFound)?;
         let platform = platform_from_row(&row)?;
-        if platform.kind == "DockerSwarm" {
+        if platform.kind == "DockerSwarm" && !preview {
             return Err(BackupError::Validation(
                 "A Deployment on Docker Swarm requires an exact Task placement before its local Volumes can be backed up.".into(),
             ));
         }
-        validate_repository(&platform.kind, &claim.repository.repository_type)?;
-        require_online(&platform)?;
+        if let Some(repository) = repository_type {
+            validate_repository(&platform.kind, repository)?;
+        }
+        if !preview {
+            require_online(&platform)?;
+        }
         let spec = DeploymentSpec::from_storage_value(row.try_get("spec").map_err(storage)?)
             .map_err(|error| BackupError::Storage(error.to_string()))?;
         let volumes = spec
@@ -138,7 +158,7 @@ impl PostgresBackupSourcePlanner {
             .into_iter()
             .filter_map(|mount| named_deployment_volume(&mount))
             .collect::<BTreeSet<_>>();
-        if volumes.is_empty() {
+        if volumes.is_empty() && !preview {
             return Err(BackupError::Validation(
                 "Deployment has no Docker named Volumes to back up.".into(),
             ));
@@ -154,17 +174,22 @@ impl PostgresBackupSourcePlanner {
                 .into_iter()
                 .map(|volume| BackupSourceItem::new(platform.id, volume, None, None))
                 .collect(),
-            warnings: vec![],
+            warnings: if preview && platform.status != "Online" {
+                vec!["The Deployment Platform is offline. Saved volume settings are used as a fallback.".into()]
+            } else {
+                vec![]
+            },
             local_directory: None,
         })
     }
 
     async fn plan_stack(
         &self,
-        claim: &BackupClaim,
+        source: &Value,
+        repository_type: Option<&str>,
         cancellation: &tokio_util::sync::CancellationToken,
     ) -> Result<BackupSourcePlan, BackupError> {
-        let stack_id = uuid_field(&claim.run.source_snapshot, "stackId")?;
+        let stack_id = uuid_field(source, "stackId")?;
         let row = sqlx::query(
             "SELECT s.name,r.id AS releaseid,r.platformid,r.spec,p.platformdescriptor,p.status FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1",
         )
@@ -175,7 +200,9 @@ impl PostgresBackupSourcePlanner {
         .ok_or(BackupError::NotFound)?;
         let platform = platform_from_row(&row)?;
         require_online(&platform)?;
-        validate_repository(&platform.kind, &claim.repository.repository_type)?;
+        if let Some(repository) = repository_type {
+            validate_repository(&platform.kind, repository)?;
+        }
         let name: String = row.try_get("name").map_err(storage)?;
         let release_id: Uuid = row.try_get("releaseid").map_err(storage)?;
         if platform.kind != "DockerSwarm" {
@@ -246,7 +273,7 @@ impl PostgresBackupSourcePlanner {
                 .get(compose_name)
                 .cloned()
                 .unwrap_or_default();
-            if volume_refs.is_empty() {
+            if volume_refs.is_empty() && self.runtime.is_none() {
                 continue;
             }
             validate_service_projection(&service, &docker_name)?;
@@ -259,20 +286,31 @@ impl PostgresBackupSourcePlanner {
                 )));
             }
             for task in tasks {
+                if self.runtime.is_some() {
+                    for volume in self.task_volumes(platform.id, &task, cancellation).await? {
+                        insert_task_volume(&mut items, &mut counts, platform.id, &task, volume)?;
+                    }
+                    continue;
+                }
                 for compose_volume in &volume_refs {
                     let physical = physical_swarm_volume(&model, &namespace, compose_volume);
                     insert_task_volume(&mut items, &mut counts, platform.id, &task, physical)?;
                 }
             }
         }
+        if items.is_empty() && repository_type.is_none() {
+            return Ok(empty_preview_plan(format!("Stack {name}")));
+        }
         finish_swarm_plan(format!("Stack {name}"), items, counts)
     }
 
     async fn plan_swarm_service(
         &self,
-        claim: &BackupClaim,
+        source: &Value,
+        repository_type: Option<&str>,
+        cancellation: &tokio_util::sync::CancellationToken,
     ) -> Result<BackupSourcePlan, BackupError> {
-        let id = uuid_field(&claim.run.source_snapshot, "swarmServiceId")?;
+        let id = uuid_field(source, "swarmServiceId")?;
         let row = sqlx::query(
             "SELECT s.name,s.platformid,s.spec,s.dockerserviceid,p.platformdescriptor,p.status,sp.desiredtaskcount,sp.runningtaskcount,sp.isstale FROM swarmservices s JOIN platforms p ON p.id=s.platformid LEFT JOIN swarmserviceprojections sp ON sp.platformid=s.platformid AND (sp.swarmserviceid=s.id OR sp.dockerserviceid=s.dockerserviceid) WHERE s.id=$1",
         )
@@ -288,7 +326,9 @@ impl PostgresBackupSourcePlanner {
             ));
         }
         require_online(&platform)?;
-        validate_repository(&platform.kind, &claim.repository.repository_type)?;
+        if let Some(repository) = repository_type {
+            validate_repository(&platform.kind, repository)?;
+        }
         let name: String = row.try_get("name").map_err(storage)?;
         validate_service_projection(&row, &name)?;
         let docker_service_id = row
@@ -304,7 +344,10 @@ impl PostgresBackupSourcePlanner {
             .filter(|mount| mount.kind == MountKind::Volume && !mount.source.trim().is_empty())
             .map(|mount| mount.source)
             .collect::<BTreeSet<_>>();
-        if volumes.is_empty() {
+        if volumes.is_empty() && self.runtime.is_none() {
+            if repository_type.is_none() {
+                return Ok(empty_preview_plan(format!("Swarm Service {name}")));
+            }
             return Err(BackupError::Validation(
                 "Swarm Service has no supported local named Volumes to back up.".into(),
             ));
@@ -319,11 +362,67 @@ impl PostgresBackupSourcePlanner {
         let mut items = BTreeMap::<(String, String), BackupSourceItem>::new();
         let mut counts = BTreeMap::<(String, String), usize>::new();
         for task in tasks {
+            if self.runtime.is_some() {
+                for volume in self.task_volumes(platform.id, &task, cancellation).await? {
+                    insert_task_volume(&mut items, &mut counts, platform.id, &task, volume)?;
+                }
+                continue;
+            }
             for volume in &volumes {
                 insert_task_volume(&mut items, &mut counts, platform.id, &task, volume.clone())?;
             }
         }
+        if items.is_empty() && repository_type.is_none() {
+            return Ok(empty_preview_plan(format!("Swarm Service {name}")));
+        }
         finish_swarm_plan(format!("Swarm Service {name}"), items, counts)
+    }
+
+    async fn task_volumes(
+        &self,
+        platform_id: Uuid,
+        task: &TaskPlacement,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<BTreeSet<String>, BackupError> {
+        use crate::container_mutations::Runtime;
+        use citadel_platforms::containers::{ContainerInspectionPort, ContainerTarget};
+        let router = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| BackupError::Validation("Node inspection is unavailable.".into()))?;
+        let docker_id = task
+            .container_id
+            .as_ref()
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| {
+                BackupError::Validation("Current Task has no Container to inspect.".into())
+            })?;
+        let target = ContainerTarget {
+            id: Uuid::nil(),
+            platform_id,
+            docker_id: docker_id.clone(),
+            node_id: Some(task.docker_node_id.clone()),
+        };
+        let runtime = router
+            .resolve(&target, cancel)
+            .await
+            .map_err(|e| BackupError::Validation(e.message))?;
+        let inspected = match runtime {
+            Runtime::Local(r) => r.inspection(docker_id, cancel).await,
+            Runtime::Agent(r) => r.inspection(docker_id, cancel).await,
+            Runtime::Edge(r) => r.inspection(docker_id, cancel).await,
+        }
+        .map_err(|e| BackupError::Validation(e.message))?;
+        Ok(inspected
+            .get("mounts")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|m| m.get("type").and_then(Value::as_str) == Some("volume"))
+            .filter_map(|m| m.get("name").and_then(Value::as_str))
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect())
     }
 
     async fn platform(&self, id: Uuid) -> Result<Platform, BackupError> {
@@ -338,6 +437,55 @@ impl PostgresBackupSourcePlanner {
 }
 
 impl BackupSourcePlanner for PostgresBackupSourcePlanner {
+    fn preview<'a>(
+        &'a self,
+        kind: citadel_backups::source_preview::BackupPreviewKind,
+        id: Uuid,
+        actor: citadel_domain::ActorId,
+        administrator: bool,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_backups::source_preview::BackupSourcePreview, BackupError>>
+    {
+        Box::pin(self.preview_source(kind, id, actor, administrator, cancellation))
+    }
+    fn validate_source<'a>(
+        &'a self,
+        source: &'a Value,
+        repository: &'a citadel_backups::BackupRepositoryView,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<(), BackupError>> {
+        Box::pin(async move {
+            match discriminator(source)? {
+                "DockerVolume" => {
+                    let platform = self.platform(uuid_field(source, "platformId")?).await?;
+                    validate_node_target(
+                        &platform.kind,
+                        optional_string(source, "dockerNodeId").as_deref(),
+                    )?;
+                    validate_repository(&platform.kind, &repository.repository_type)?;
+                }
+                "Deployment" => {
+                    self.plan_deployment(source, Some(&repository.repository_type), false)
+                        .await?;
+                }
+                "Stack" => {
+                    self.plan_stack(source, Some(&repository.repository_type), cancellation)
+                        .await?;
+                }
+                "SwarmService" => {
+                    self.plan_swarm_service(
+                        source,
+                        Some(&repository.repository_type),
+                        cancellation,
+                    )
+                    .await?;
+                }
+                "CitadelSystem" => {}
+                _ => return Err(BackupError::Validation("Unsupported Backup source.".into())),
+            }
+            Ok(())
+        })
+    }
     fn plan<'a>(
         &'a self,
         claim: &'a BackupClaim,
@@ -346,9 +494,30 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
         Box::pin(async move {
             match discriminator(&claim.run.source_snapshot)? {
                 "DockerVolume" => self.plan_volume(claim).await,
-                "Deployment" => self.plan_deployment(claim).await,
-                "Stack" => self.plan_stack(claim, cancellation).await,
-                "SwarmService" => self.plan_swarm_service(claim).await,
+                "Deployment" => {
+                    self.plan_deployment(
+                        &claim.run.source_snapshot,
+                        Some(&claim.repository.repository_type),
+                        false,
+                    )
+                    .await
+                }
+                "Stack" => {
+                    self.plan_stack(
+                        &claim.run.source_snapshot,
+                        Some(&claim.repository.repository_type),
+                        cancellation,
+                    )
+                    .await
+                }
+                "SwarmService" => {
+                    self.plan_swarm_service(
+                        &claim.run.source_snapshot,
+                        Some(&claim.repository.repository_type),
+                        cancellation,
+                    )
+                    .await
+                }
                 "CitadelSystem" => {
                     let builder = self.system_builder.as_ref().ok_or_else(|| {
                         BackupError::Validation(
@@ -380,6 +549,7 @@ struct Platform {
 
 #[derive(Debug)]
 struct TaskPlacement {
+    container_id: Option<String>,
     docker_node_id: String,
     node_hostname: String,
 }
@@ -389,13 +559,18 @@ async fn current_tasks(
     platform_id: Uuid,
     service_id: &str,
 ) -> Result<Vec<TaskPlacement>, BackupError> {
-    sqlx::query("SELECT dockernodeid,nodehostname,state,desiredstate,isstale FROM swarmtaskprojections WHERE platformid=$1 AND dockerserviceid=$2 AND lower(desiredstate)='running' ORDER BY dockertaskid")
+    let rows=sqlx::query("SELECT dockernodeid,nodehostname,state,desiredstate,isstale,dockercontainerid FROM swarmtaskprojections WHERE platformid=$1 AND dockerserviceid=$2 AND lower(desiredstate)='running' ORDER BY dockertaskid LIMIT 1001")
         .bind(platform_id)
         .bind(service_id)
         .fetch_all(pool)
         .await
-        .map_err(storage)?
-        .into_iter()
+        .map_err(storage)?;
+    if rows.len() > 1000 {
+        return Err(BackupError::Validation(
+            "Backup source exceeds the 1000 current Task limit.".into(),
+        ));
+    }
+    rows.into_iter()
         .map(|row| {
             let stale: bool = row.try_get("isstale").map_err(storage)?;
             let state: String = row.try_get("state").map_err(storage)?;
@@ -411,6 +586,7 @@ async fn current_tasks(
                 ));
             }
             Ok(TaskPlacement {
+                container_id: row.try_get("dockercontainerid").map_err(storage)?,
                 docker_node_id,
                 node_hostname: row.try_get("nodehostname").map_err(storage)?,
             })
@@ -431,6 +607,11 @@ fn insert_task_volume(
         ));
     }
     let key = (task.docker_node_id.clone(), volume.clone());
+    if items.len() >= 1000 && !items.contains_key(&key) {
+        return Err(BackupError::Validation(
+            "Backup source exceeds the 1000 resolved Volume limit.".into(),
+        ));
+    }
     *counts.entry(key.clone()).or_default() += 1;
     items.entry(key).or_insert_with(|| {
         BackupSourceItem::new(
@@ -467,6 +648,15 @@ fn finish_swarm_plan(
         warnings,
         local_directory: None,
     })
+}
+
+fn empty_preview_plan(display_name: String) -> BackupSourcePlan {
+    BackupSourcePlan {
+        display_name,
+        items: vec![],
+        warnings: vec!["No supported Docker named volumes were resolved for this resource.".into()],
+        local_directory: None,
+    }
 }
 
 fn platform_from_row(row: &sqlx::postgres::PgRow) -> Result<Platform, BackupError> {

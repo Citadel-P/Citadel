@@ -35,6 +35,8 @@ struct Fixture {
 }
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+#[path = "users_http/actors.rs"]
+mod actors;
 const VIEWER_ROLE_ID: Uuid = Uuid::from_u128(0x30000000000000000000000000000003);
 
 #[tokio::test]
