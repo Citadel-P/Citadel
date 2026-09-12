@@ -2233,8 +2233,8 @@ fn invalid_query(_: QueryRejection) -> IdentityError {
     IdentityError::Validation("The resource query is invalid.".to_owned())
 }
 
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is invalid.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }
 
 fn parse_tag_filters(query: Option<&str>) -> Result<Vec<Uuid>, IdentityError> {
@@ -2272,7 +2272,9 @@ fn platform_error(error: AuthorizedReadError) -> IdentityError {
 
 fn platform_registration_error(error: PlatformRegistrationError) -> IdentityError {
     match error {
-        PlatformRegistrationError::Validation(message) => IdentityError::Validation(message),
+        PlatformRegistrationError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
         PlatformRegistrationError::Conflict(message) => IdentityError::Conflict(message),
         PlatformRegistrationError::Storage(message) => IdentityError::Storage(message),
         PlatformRegistrationError::Runtime(_) => {

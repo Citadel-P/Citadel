@@ -435,6 +435,14 @@ pub struct DuplicateSourceInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchDeploymentInput {
+    // The editor submits the full form. Like .NET, configuration PATCH only
+    // applies platform/spec; identity, rename and metadata have their own paths.
+    #[serde(rename = "id")]
+    pub _id: Option<Uuid>,
+    #[serde(rename = "name")]
+    pub _name: Option<String>,
+    #[serde(rename = "description")]
+    pub _description: Option<String>,
     pub platform_id: Option<Uuid>,
     pub spec: Option<Value>,
 }

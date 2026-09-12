@@ -34,8 +34,8 @@ pub fn patch_input(
             object.insert(field.into(), next.clone());
         }
     }
-    let input: CreatePlatformInput = serde_json::from_value(value)
-        .map_err(|_| invalid("The Platform patch contains an invalid field value."))?;
+    let input: CreatePlatformInput = serde_path_to_error::deserialize(value)
+        .map_err(|error| invalid(&format!("Invalid Platform patch: {error}")))?;
     let input = crate::registration::validate(input)?;
     if input.platform_type.as_str() != current.platform_type {
         return Err(invalid(

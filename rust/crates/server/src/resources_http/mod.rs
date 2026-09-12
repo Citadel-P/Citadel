@@ -110,7 +110,7 @@ async fn capabilities(
 
 fn metadata_error(error: ResourceMetadataError) -> IdentityError {
     match error {
-        ResourceMetadataError::Validation(message) => IdentityError::Validation(message),
+        ResourceMetadataError::Validation(message) => crate::request_validation::validation_error(message),
         ResourceMetadataError::NotFound => IdentityError::NotFound,
         ResourceMetadataError::Conflict(message) => IdentityError::Conflict(message),
         ResourceMetadataError::Credential => IdentityError::Credential,
@@ -118,8 +118,8 @@ fn metadata_error(error: ResourceMetadataError) -> IdentityError {
     }
 }
 
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is not valid JSON for this operation.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }
 
 fn publish_resource_change(

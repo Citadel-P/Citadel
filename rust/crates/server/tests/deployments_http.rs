@@ -439,6 +439,9 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         &format!("/api/v1/deployments/{deployment_id}"),
         Some(admin.clone()),
         Some(json!({
+            "id": deployment_id,
+            "name": "ignored-config-patch-name",
+            "description": "ignored-config-patch-description",
             "platformId": platform_id,
             "spec": {
                 "updateBehavior":"Disabled",
@@ -462,6 +465,10 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let full_patch = response_json(full_patch).await;
     assert_eq!(full_patch["spec"]["lifeCycleSpec"]["restartPolicy"], "No");
     assert_eq!(full_patch["spec"]["labels"]["key1"], "val1");
+    assert_eq!(full_patch["name"], created["name"]);
+    assert_eq!(full_patch["description"], created["description"]);
+    assert_eq!(full_patch["spec"]["resourceSpec"]["nanoCpus"], 0.25);
+    assert_eq!(full_patch["spec"]["resourceSpec"]["memoryLimit"], 256.0);
 
     let partial_patch = request(
         &app,
@@ -476,25 +483,51 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     assert_eq!(partial_patch["spec"]["ports"][0], "2220-27017/tcp");
     assert_eq!(partial_patch["spec"]["updateBehavior"], "Disabled");
 
+    for (input, field, explanation) in [
+        (json!({"platformId":42}), "$.platformId", "invalid type"),
+        (
+            json!({"unknownField":true}),
+            "$.unknownField",
+            "unknown field `unknownField`",
+        ),
+    ] {
+        let response = request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/deployments/{deployment_id}"),
+            Some(admin.clone()),
+            Some(input),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(
+            body["errors"][field][0]
+                .as_str()
+                .is_some_and(|message| message.contains(explanation)),
+            "{body}"
+        );
+        assert!(body["traceId"].is_string());
+    }
+
     for invalid_patch in [
         json!({"platformId":Uuid::now_v7()}),
-        json!({"name":"forged-audit-name"}),
+        json!({"unknownField":"not-supported"}),
         json!([]),
         json!({"spec":{"image":{"$type":"Internal","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}}}),
         json!({"spec":{"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx@sha256:abc"},"updateBehavior":"Notify"}}),
     ] {
-        assert_eq!(
-            request(
-                &app,
-                Method::PATCH,
-                &format!("/api/v1/deployments/{deployment_id}"),
-                Some(admin.clone()),
-                Some(invalid_patch),
-            )
-            .await
-            .status(),
-            StatusCode::BAD_REQUEST
-        );
+        let response = request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/deployments/{deployment_id}"),
+            Some(admin.clone()),
+            Some(invalid_patch),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(!body["errors"].as_object().unwrap().is_empty(), "{body}");
     }
     assert_eq!(
         sqlx::query_scalar::<_, Uuid>("SELECT platformid FROM deployments WHERE id=$1")

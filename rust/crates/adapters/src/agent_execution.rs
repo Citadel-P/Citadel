@@ -51,11 +51,12 @@ impl AgentExecutionClient {
         environment: &[String],
         registry: Option<&crate::agent::AgentStackRegistry>,
         cancellation: &CancellationToken,
+        progress: Option<&citadel_stacks::StackProgress>,
     ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError> {
         match self {
             Self::Direct(client) => {
                 client
-                    .apply_stack(claim, source, environment, registry, cancellation)
+                    .apply_stack(claim, source, environment, registry, cancellation, progress)
                     .await
             }
             Self::Edge(session) => {
@@ -65,7 +66,7 @@ impl AgentExecutionClient {
                     crate::agent::workloads::stack_request(claim, source, environment, registry),
                     cancellation,
                 )?;
-                crate::agent::workloads::consume_stack_stream(frames, cancellation).await
+                crate::agent::workloads::consume_stack_stream(frames, cancellation, progress).await
             }
         }
     }

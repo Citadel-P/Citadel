@@ -218,8 +218,8 @@ async fn compatibility_problem(
     assert_eq!(actual, expected);
 }
 
-// Preserve the existing generic envelope for cases without a .NET error
-// snapshot; field-validation and missing-Rule contracts use the helpers above.
+// Validation explanations must be visible to the frontend, including cases
+// without a named .NET field snapshot. Not-found keeps its existing envelope.
 pub(super) async fn problem(response: axum::response::Response, status: StatusCode, detail: &str) {
     assert_eq!(response.status(), status);
     assert_eq!(
@@ -229,6 +229,17 @@ pub(super) async fn problem(response: axum::response::Response, status: StatusCo
     assert_eq!(response.headers()["cache-control"], "no-store");
     let bytes = to_bytes(response.into_body(), 16 * 1024).await.unwrap();
     let body: Value = serde_json::from_slice(&bytes).unwrap();
+    if status == StatusCode::BAD_REQUEST {
+        assert_eq!(
+            body,
+            json!({
+                "type":"https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                "title":"One or more validation errors occurred.",
+                "status":400,"errors":{"$":[detail]},"traceId":"alert-parity-request"
+            })
+        );
+        return;
+    }
     assert!(!body["requestId"].as_str().unwrap().is_empty());
     let (kind, title) = if status == StatusCode::NOT_FOUND {
         ("not_found", "Not found")

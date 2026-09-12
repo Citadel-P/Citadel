@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -6,7 +7,7 @@ use chrono::{DateTime, Utc};
 use citadel_alerts::{
     AlertChannelInput, AlertChannelView, AlertDelivery, AlertDeliveryClaim, AlertError,
     AlertEventFilter, AlertEventPage, AlertEventView, AlertObservation, AlertRuleInput,
-    AlertRuleView, AlertStore, NewAlertEvent, is_in_quiet_hours,
+    AlertRuleListItem, AlertRuleView, AlertStore, NewAlertEvent, is_in_quiet_hours,
 };
 use citadel_domain::{ActorId, ResourceType};
 use citadel_execution::{OutputLimitPolicy, ProcessLimits, ProcessRequest, run};
@@ -284,7 +285,7 @@ ORDER BY channel.name,channel.id"#
         &self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<AlertRuleView>, AlertError>> {
+    ) -> BoxFuture<'_, Result<Vec<AlertRuleListItem>, AlertError>> {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTE}
@@ -307,7 +308,28 @@ GROUP BY r.id"#
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?;
-            rows.into_iter().map(map_rule).collect()
+            let rules = rows
+                .into_iter()
+                .map(map_rule)
+                .collect::<Result<Vec<_>, _>>()?;
+            // Rule access does not imply access to its linked channels.
+            let channels_by_id: HashMap<_, _> = self
+                .list_channels(actor, administrator)
+                .await?
+                .into_iter()
+                .map(|channel| (channel.id, channel))
+                .collect();
+            Ok(rules
+                .into_iter()
+                .map(|rule| AlertRuleListItem {
+                    channels: rule
+                        .channel_ids
+                        .iter()
+                        .filter_map(|id| channels_by_id.get(id).cloned())
+                        .collect(),
+                    rule,
+                })
+                .collect())
         })
     }
     fn get_rule(&self, id: Uuid) -> BoxFuture<'_, Result<AlertRuleView, AlertError>> {

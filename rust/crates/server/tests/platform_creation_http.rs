@@ -843,6 +843,61 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
     cleanup_platform(&competing.pool, platform_id).await;
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn platform_patch_reports_json_field_errors_without_writes() {
+    let suffix = Uuid::now_v7().simple().to_string();
+    let harness = harness(StaticInventory::standalone(format!("daemon-{suffix}"))).await;
+    let response = request(
+        &harness.app,
+        Some(harness.administrator.clone()),
+        json!({
+            "name":format!("validation-{suffix}"),
+            "address":format!("https://validation-{suffix}.example.test:5001"),
+            "type":"Docker", "connectorType":"Agent"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let original = response_json(response).await;
+    let id = Uuid::parse_str(original["id"].as_str().unwrap()).unwrap();
+    let selections = harness.runtime.selections.lock().unwrap().len();
+    for (suffix, input, field, structured) in [
+        ("", json!({"address":false}), "address", false),
+        ("/_metadata", json!({"description":42}), "description", true),
+    ] {
+        let mut request = Request::builder()
+            .method(Method::PATCH)
+            .uri(format!("/api/v1/platforms/{id}{suffix}"))
+            .header("content-type", "application/json")
+            .body(Body::from(input.to_string()))
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(harness.administrator.clone());
+        let response = harness.app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        let explanation = if structured {
+            body["errors"][format!("$.{field}")][0].as_str().unwrap()
+        } else {
+            body["errors"]["$"][0].as_str().unwrap()
+        };
+        assert!(explanation.contains("string"), "{body}");
+        assert!(body.to_string().contains(field), "{body}");
+    }
+    let persisted: (String, String) =
+        sqlx::query_as("SELECT name,address FROM platforms WHERE id=$1")
+            .bind(id)
+            .fetch_one(&harness.pool)
+            .await
+            .unwrap();
+    assert_eq!(persisted.0, original["name"]);
+    assert_eq!(persisted.1, original["address"]);
+    assert_eq!(harness.runtime.selections.lock().unwrap().len(), selections);
+    cleanup_platform(&harness.pool, id).await;
+}
+
 struct TestHarness {
     app: Router,
     pool: sqlx::PgPool,

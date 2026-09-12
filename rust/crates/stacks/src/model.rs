@@ -687,15 +687,21 @@ pub struct StackCapabilities {
     pub can_write: bool,
     pub can_execute: bool,
     pub can_delete: bool,
+    pub can_view_logs: bool,
+    pub can_inspect: bool,
+    pub can_open_terminal: bool,
+    pub can_pull: bool,
     pub can_apply: bool,
-    pub can_resource_bindings: bool,
+    pub can_view_resource_bindings: bool,
+    pub can_view_releases: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilities {
-    pub can_create: bool,
-    pub can_delete: bool,
+    pub can_read: bool,
+    pub can_write: bool,
+    pub can_execute: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -837,19 +843,42 @@ pub struct StackFilter {
     pub platform_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackStreamItem {
-    #[serde(rename = "type")]
     pub event_type: StackApplyEventType,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub stack_status: Option<StackReleaseStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
+}
+
+impl Serialize for StackStreamItem {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        let mut item = serializer.serialize_map(None)?;
+        item.serialize_entry("type", &self.event_type)?;
+        if let Some(message) = &self.message {
+            // Docker also writes normal progress to stderr. The public `message`
+            // field is reserved for errors; .NET uses `progressMessage` otherwise.
+            let field = if self.exit_code.is_some_and(|code| code != 0) {
+                "message"
+            } else {
+                "progressMessage"
+            };
+            item.serialize_entry(field, message)?;
+        }
+        if let Some(code) = self.exit_code {
+            item.serialize_entry("exitCode", &code)?;
+        }
+        if let Some(status) = self.stack_status {
+            item.serialize_entry("stackStatus", &status)?;
+        }
+        if let Some(severity) = &self.severity {
+            item.serialize_entry("severity", severity)?;
+        }
+        item.end()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1146,7 +1175,7 @@ pub struct StackDriftMonitorResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "$type")]
+#[serde(tag = "$type", rename_all_fields = "camelCase")]
 pub enum StackDrift {
     MissingContainer {
         service_name: String,
@@ -1386,6 +1415,46 @@ pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stack_stream_serializes_normal_output_as_progress() {
+        for event_type in [
+            StackApplyEventType::SystemMessage,
+            StackApplyEventType::StdOut,
+            StackApplyEventType::StdErr,
+        ] {
+            let mut item = StackStreamItem::system("Container beszel Started");
+            item.event_type = event_type;
+            let wire = serde_json::to_value(&item).unwrap();
+            assert_eq!(wire["progressMessage"], "Container beszel Started");
+            assert!(
+                wire.get("message").is_none(),
+                "Normal output must not populate the error field"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_stream_keeps_success_and_failure_distinct() {
+        let success = serde_json::to_value(StackStreamItem::completed(
+            StackReleaseStatus::Healthy,
+            "Stack deployment completed.",
+        ))
+        .unwrap();
+        assert_eq!(success["progressMessage"], "Stack deployment completed.");
+        assert_eq!(success["exitCode"], 0);
+        assert_eq!(success["severity"], "success");
+        assert!(success.get("message").is_none());
+        let failed = serde_json::to_value(StackStreamItem::completed(
+            StackReleaseStatus::Failed,
+            "Docker deployment failed.",
+        ))
+        .unwrap();
+        assert_eq!(failed["message"], "Docker deployment failed.");
+        assert_eq!(failed["exitCode"], 1);
+        assert_eq!(failed["severity"], "error");
+        assert!(failed.get("progressMessage").is_none());
+    }
 
     #[test]
     fn successful_git_apply_advances_and_clears_the_update_state() {

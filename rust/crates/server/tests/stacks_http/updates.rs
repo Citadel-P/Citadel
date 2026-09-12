@@ -169,7 +169,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
     let service = StackService::new(
         store.clone(),
         runtime.clone(),
-        Arc::new(EmptyBindings),
+        Arc::new(FixtureBindings),
         Arc::new(NoopStackChangeNotifier),
         CancellationToken::new(),
     )
@@ -260,7 +260,7 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
     let service = StackService::new(
         Arc::new(PostgresStackStore::new(pool.clone())),
         runtime.clone(),
-        Arc::new(EmptyBindings),
+        Arc::new(FixtureBindings),
         Arc::new(NoopStackChangeNotifier),
         CancellationToken::new(),
     )
@@ -333,7 +333,7 @@ async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: 
     let service = StackService::new(
         store.clone(),
         runtime.clone(),
-        Arc::new(EmptyBindings),
+        Arc::new(FixtureBindings),
         Arc::new(NoopStackChangeNotifier),
         CancellationToken::new(),
     );

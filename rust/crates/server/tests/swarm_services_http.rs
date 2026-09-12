@@ -188,6 +188,33 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    let mut invalid_spec = created["spec"].clone();
+    invalid_spec["replicas"] = json!(-1);
+    for (method, path, body, explanation) in [
+        (
+            Method::PATCH,
+            format!("/api/v1/swarmServices/{id}"),
+            json!({"rowVersion":"bad"}),
+            "rowVersion",
+        ),
+        (
+            Method::PATCH,
+            format!("/api/v1/swarmServices/{id}"),
+            json!({"spec":invalid_spec,"rowVersion":created["rowVersion"]}),
+            "replica",
+        ),
+    ] {
+        let response = request(&app, method, &path, Some(admin.clone()), Some(body)).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(
+            body["errors"]
+                .to_string()
+                .to_lowercase()
+                .contains(&explanation.to_lowercase()),
+            "{body}"
+        );
+    }
     metadata::verify(&app, &pool, &admin, id).await;
     assert_eq!(
         request(

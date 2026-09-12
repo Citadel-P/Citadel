@@ -15,7 +15,7 @@ pub(super) async fn run_backup(
         &h,
     )?;
     let Json(input) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     let progress = s.backups.subscribe_progress(); // Subscribe before enqueue: fast workers must not lose completion.
@@ -43,7 +43,7 @@ pub(super) async fn run_restore(
         &h,
     )?;
     let Json(input) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     let progress = s.backups.subscribe_progress();

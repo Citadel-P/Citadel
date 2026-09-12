@@ -26,6 +26,8 @@ use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "automation_http_execution/drafts.rs"]
+mod drafts;
 #[path = "automation_http_execution/webhooks.rs"]
 mod webhooks;
 
@@ -252,6 +254,8 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         10,
         ".NET Test uses the saved timeout, not a request override"
     );
+    let draft_action = create(&app, &admin, "console.log('disabled test');", false, 10).await;
+    drafts::verify(&app, &db, &admin, &store, &draft_action).await;
 
     let action = create(
         &app,

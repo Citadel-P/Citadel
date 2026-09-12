@@ -7,7 +7,14 @@
       "type": "lldb",
       "request": "launch",
       "cargo": {
-        "args": ["build", "--locked", "-p", "citadel-server"],
+        "args": [
+          "build",
+          "--locked",
+          "--manifest-path",
+          "${workspaceFolder}/rust/Cargo.toml",
+          "-p",
+          "citadel-server"
+        ],
         "filter": {
           "name": "citadel-server",
           "kind": "bin"

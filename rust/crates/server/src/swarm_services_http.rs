@@ -594,7 +594,7 @@ fn parse_filter(query: Option<&str>) -> Result<SwarmServiceFilter, IdentityError
 }
 pub(crate) fn service_error(error: SwarmServiceError) -> IdentityError {
     match error {
-        SwarmServiceError::Validation(value) => IdentityError::Validation(value),
+        SwarmServiceError::Validation(value) => crate::request_validation::validation_error(value),
         SwarmServiceError::NotFound => IdentityError::NotFound,
         SwarmServiceError::Forbidden => IdentityError::Forbidden,
         SwarmServiceError::Conflict(value)
@@ -616,6 +616,6 @@ fn require_actor(
 fn invalid_path(_: PathRejection) -> IdentityError {
     IdentityError::Validation("The managed Swarm Service path is invalid.".to_owned())
 }
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is invalid.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }

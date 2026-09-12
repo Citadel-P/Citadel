@@ -119,7 +119,18 @@ impl ApplicationGroupReader {
                 if let Some(change)=change {
                         let change=change.map_err(failure)?;
                         if change.platform_id!=platform_id || change.event_kind!="runtimeChanged" || change.payload["dockerResourceType"]=="containerStats" {continue;}
-                        let targets=reader.log_targets(&principal,&group).await?;
+                        // Keep forwarding logs while the projection read is pending.
+                        let read=reader.log_targets(&principal,&group);
+                        tokio::pin!(read);
+                        let targets=loop {
+                            tokio::select! {
+                                biased;
+                                ()=cancel.cancelled()=>return,
+                                targets=&mut read=>break targets,
+                                Some((_,item))=streams.next(),if !streams.is_empty()=>yield item?,
+                            }
+                        };
+                        let targets=targets?;
                         identities.retain(|id,_|{
                             let keep=targets.iter().any(|t|t.id==*id);
                             if !keep {streams.remove(id);}

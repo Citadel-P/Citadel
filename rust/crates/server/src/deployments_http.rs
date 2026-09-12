@@ -516,7 +516,7 @@ fn parse_filter(query: Option<&str>) -> Result<DeploymentFilter, IdentityError> 
 
 fn deployment_error(error: DeploymentError) -> IdentityError {
     match error {
-        DeploymentError::Validation(message) => IdentityError::Validation(message),
+        DeploymentError::Validation(message) => crate::request_validation::validation_error(message),
         DeploymentError::NotFound => IdentityError::NotFound,
         DeploymentError::Forbidden => IdentityError::Forbidden,
         DeploymentError::LicenseRequired(capability) => IdentityError::LicenseRequired(capability),
@@ -542,8 +542,8 @@ fn invalid_path(_: PathRejection) -> IdentityError {
     IdentityError::Validation("The Deployment path is invalid.".to_owned())
 }
 
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is invalid.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }
 
 #[cfg(test)]
