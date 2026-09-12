@@ -1,5 +1,5 @@
-mod bindings;
-mod catalog;
+pub(crate) mod bindings;
+pub(crate) mod catalog;
 pub(crate) mod tags;
 
 use std::sync::Arc;
@@ -110,7 +110,9 @@ async fn capabilities(
 
 fn metadata_error(error: ResourceMetadataError) -> IdentityError {
     match error {
-        ResourceMetadataError::Validation(message) => crate::request_validation::validation_error(message),
+        ResourceMetadataError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
         ResourceMetadataError::NotFound => IdentityError::NotFound,
         ResourceMetadataError::Conflict(message) => IdentityError::Conflict(message),
         ResourceMetadataError::Credential => IdentityError::Credential,

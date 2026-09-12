@@ -7,6 +7,20 @@ use citadel_platforms::{
 
 static PRUNE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/prune",
+    operation_id = "prunePlatform",
+    summary = "Prune unused Docker resources",
+    request_body = PrunePlatformInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::prune::PrunePlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn prune(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -77,6 +91,18 @@ impl AgentSetupContext {
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/agent/setup/rotate-key",
+    operation_id = "rotateAgentHubKey",
+    summary = "Rotate the Agent signing key",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn rotate_key(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -115,6 +141,19 @@ pub(super) async fn rotate_key(
     Ok(no_store(Json(setup.view()).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/rename",
+    operation_id = "renamePlatform",
+    summary = "Rename a Platform",
+    request_body = RenamePlatformInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn rename(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -134,6 +173,20 @@ pub(super) async fn rename(
     .await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{id}",
+    operation_id = "updatePlatform",
+    summary = "Update a Platform",
+    request_body = ref("#/components/schemas/PlatformInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn patch(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

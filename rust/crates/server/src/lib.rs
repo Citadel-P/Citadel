@@ -10,9 +10,9 @@ pub mod bootstrap;
 pub mod builds_http;
 mod capabilities;
 pub mod config;
-pub mod contract_router;
 pub mod deployments_http;
 pub mod diagnostics;
+pub mod diagnostics_http;
 pub mod git_accounts_http;
 pub mod git_repositories_http;
 pub mod identity_http;
@@ -22,6 +22,7 @@ pub mod lookup_http;
 pub mod metrics;
 pub mod mfa_http;
 pub mod oidc_http;
+pub mod openapi;
 pub mod platforms_http;
 pub mod profile_http;
 pub mod realtime;
@@ -40,31 +41,26 @@ pub mod webhooks_http;
 pub mod workers;
 
 pub fn automation_endpoint_catalog_json() -> String {
-    let endpoints = citadel_contracts::http::ROUTES
-        .iter()
-        .filter(|route| route.path.starts_with("/api/v1/"))
-        .map(|route| {
-            let group = route
-                .path
+    let api: serde_json::Value =
+        serde_json::from_str(openapi::json_document(false)).expect("OpenAPI is valid JSON");
+    let mut endpoints = Vec::new();
+    for (path, item) in api["paths"].as_object().unwrap() {
+        if !path.starts_with("/api/v1/") {
+            continue;
+        }
+        for (method, operation) in item.as_object().unwrap() {
+            let Some(id) = operation["operationId"].as_str() else {
+                continue;
+            };
+            let group = path
                 .trim_start_matches("/api/v1/")
                 .split('/')
                 .next()
                 .unwrap_or("api");
-            serde_json::json!({
-                "key": route.operation_id,
-                "group": group,
-                "method": match route.method {
-                    citadel_contracts::http::HttpMethod::Get => "GET",
-                    citadel_contracts::http::HttpMethod::Post => "POST",
-                    citadel_contracts::http::HttpMethod::Put => "PUT",
-                    citadel_contracts::http::HttpMethod::Patch => "PATCH",
-                    citadel_contracts::http::HttpMethod::Delete => "DELETE",
-                },
-                "path": route.path,
-            })
-        })
-        .collect::<Vec<_>>();
-    serde_json::to_string(&endpoints).expect("typed HTTP contracts serialize")
+            endpoints.push(serde_json::json!({"key": id, "group": group, "method": method.to_uppercase(), "path": path}));
+        }
+    }
+    serde_json::to_string(&endpoints).expect("HTTP catalog serializes")
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -116,7 +112,7 @@ impl Readiness {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadinessResponse {
     pub status: &'static str,

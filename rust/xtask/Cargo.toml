@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-citadel-contracts = { path = "../crates/contracts" }
+citadel-server = { path = "../crates/server" }
 citadel-domain = { path = "../crates/domain" }
 clap.workspace = true
 serde.workspace = true

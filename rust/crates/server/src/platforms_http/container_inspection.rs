@@ -2,6 +2,19 @@ use super::*;
 use citadel_adapters::statistics_read_store::PostgresStatisticsReadStore;
 use citadel_platforms::{StatisticsReadStore, containers::ContainerInspectionPort};
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices/{id}/inspect",
+    operation_id = "inspectManagedSwarmService",
+    summary = "Inspect the deployed managed Service",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn inspect_managed_service(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -72,6 +85,19 @@ pub(super) async fn inspect_managed_service(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/data",
+    operation_id = "getContainersData",
+    summary = "Get Stack runtime containers",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainersDataView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn stack_data(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -124,7 +150,8 @@ enum ReadKind {
 }
 
 macro_rules! container_reader {
-    ($name:ident, $kind:ident) => {
+    ($(#[$name_attr:meta])* $name:ident, $kind:ident) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -135,9 +162,57 @@ macro_rules! container_reader {
         }
     };
 }
-container_reader!(inspect, Inspect);
-container_reader!(info, Info);
-container_reader!(data, Data);
+container_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}/inspect",
+    operation_id = "inspectContainer",
+    summary = "Inspect a Container with sensitive environment values redacted",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    inspect,
+    Inspect
+);
+container_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}/info",
+    operation_id = "getContainerInfo",
+    summary = "getContainerInfo",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    info,
+    Info
+);
+container_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}/data",
+    operation_id = "getContainerData",
+    summary = "getContainerData",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerDataView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    data,
+    Data
+);
 
 async fn read_container(
     State(state): State<PlatformsHttpState>,
@@ -189,7 +264,8 @@ async fn read_container(
 }
 
 macro_rules! deployment_reader {
-    ($name:ident, $kind:ident) => {
+    ($(#[$name_attr:meta])* $name:ident, $kind:ident) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -200,8 +276,40 @@ macro_rules! deployment_reader {
         }
     };
 }
-deployment_reader!(inspect_deployment, Inspect);
-deployment_reader!(deployment_info, Info);
+deployment_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{id}/inspect",
+    operation_id = "inspectDeployment",
+    summary = "inspectDeployment",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    inspect_deployment,
+    Inspect
+);
+deployment_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{id}/info",
+    operation_id = "getDeploymentContainerInfo",
+    summary = "getDeploymentContainerInfo",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    deployment_info,
+    Info
+);
 
 async fn read_deployment(
     state: PlatformsHttpState,
@@ -258,6 +366,19 @@ async fn read_deployment(
     inspect_target(&state, container, &headers, kind, None).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/containers/{containerId}/inspect",
+    operation_id = "inspectStackContainer",
+    summary = "Inspect a Stack Container with sensitive environment values redacted",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path), ("containerId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn inspect_stack(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

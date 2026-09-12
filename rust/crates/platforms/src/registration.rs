@@ -14,7 +14,7 @@ use crate::{
 
 pub const LOCAL_DOCKER_ADDRESS: &str = "http://localhost.docker";
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 pub enum PlatformType {
     #[default]
     Docker,
@@ -33,7 +33,7 @@ impl PlatformType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 pub enum PlatformConnectorType {
     #[default]
     Unknown,
@@ -54,7 +54,7 @@ impl PlatformConnectorType {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePlatformInput {
     pub name: String,

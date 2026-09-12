@@ -112,7 +112,7 @@ pub trait OidcStore: Send + Sync {
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>>;
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateOidcProviderRequest {
     pub name: String,
@@ -132,65 +132,82 @@ pub struct CreateOidcProviderRequest {
     pub default_role_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchOidcProviderRequest {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub name: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub display_name: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub issuer: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub client_id: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub client_secret: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub scopes: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub enabled: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub auto_provision_users: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub allow_email_auto_link: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub require_email_verified: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub allowed_email_domains: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub required_claim_name: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub required_claim_values: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<Uuid>, required = false)]
     pub default_role_id: PatchField<Uuid>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenameOidcProviderRequest {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchOidcProviderMetadataRequest {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<String>>, required = false)]
     pub tags: PatchField<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TestOidcDiscoveryRequest {
     pub provider_id: Option<Uuid>,
     pub issuer: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcProviderView {
     pub id: Uuid,
@@ -240,20 +257,20 @@ impl From<&OidcProvider> for OidcProviderView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcProvidersView {
     pub providers: Vec<OidcProviderView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcLoginProviderView {
     pub id: Uuid,
     pub display_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcLoginProvidersView {
     pub providers: Vec<OidcLoginProviderView>,

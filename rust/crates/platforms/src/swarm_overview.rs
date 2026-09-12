@@ -19,7 +19,7 @@ pub struct SwarmSummary {
     pub image_count: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmQuorumView {
     pub state: &'static str,
@@ -28,7 +28,7 @@ pub struct SwarmQuorumView {
     pub has_leader: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmOverviewView {
     pub platform_id: Uuid,

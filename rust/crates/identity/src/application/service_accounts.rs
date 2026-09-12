@@ -16,7 +16,7 @@ pub const MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS: i64 = 365;
 pub const MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS: i64 = 10;
 pub const MAXIMUM_SERVICE_ACCOUNT_DESCRIPTION_CHARS: usize = 600;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceAccountView {
     pub id: Uuid,
@@ -44,7 +44,7 @@ pub struct RunAsActorUsageView {
     pub is_active: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceAccountResourceAccess {
     pub id: Option<Uuid>,
@@ -57,7 +57,7 @@ pub struct ServiceAccountResourceAccess {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateServiceAccountRequest {
     pub name: String,
@@ -72,29 +72,31 @@ pub struct CreateServiceAccountRequest {
     pub resource_accesses: Vec<ServiceAccountResourceAccess>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateServiceAccountRequest {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub is_enabled: PatchField<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameServiceAccountRequest {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddServiceAccountRoleRequest {
     pub role_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddServiceAccountResourceAccessRequest {
     pub resource_type: ResourceType,
@@ -104,13 +106,13 @@ pub struct AddServiceAccountResourceAccessRequest {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveServiceAccountsRequest {
     pub ids: Vec<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceAccountTokenView {
     pub id: Uuid,
@@ -125,7 +127,7 @@ pub struct ServiceAccountTokenView {
     pub created_at_utc: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateServiceAccountTokenRequest {
     pub name: String,
@@ -134,7 +136,7 @@ pub struct CreateServiceAccountTokenRequest {
     pub never_expires: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedServiceAccountTokenView {
     #[serde(flatten)]
@@ -142,7 +144,7 @@ pub struct CreatedServiceAccountTokenView {
     pub token: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceAccountLimitsView {
     pub default_token_lifetime_days: i64,

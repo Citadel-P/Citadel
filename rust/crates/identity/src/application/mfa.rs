@@ -198,32 +198,32 @@ pub trait MfaStore: Send + Sync {
     fn reset(&self, commit: ResetMfaCommit) -> BoxFuture<'_, Result<(), IdentityError>>;
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MfaVerificationInput {
     pub code: Option<String>,
     pub recovery_code: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmMandatoryMfaSetupInput {
     pub code: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StartProfileMfaSetupInput {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmProfileMfaSetupInput {
     pub code: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DisableProfileMfaInput {
     pub password: String,
@@ -231,14 +231,14 @@ pub struct DisableProfileMfaInput {
     pub recovery_code: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegenerateProfileMfaRecoveryCodesInput {
     pub password: String,
     pub code: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MandatoryMfaSetupView {
     pub secret: String,
@@ -246,20 +246,20 @@ pub struct MandatoryMfaSetupView {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MandatoryMfaSetupCompleteView {
     pub access_token: String,
     pub recovery_codes: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MfaVerificationView {
     pub access_token: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileMfaSetupView {
     pub secret: String,
@@ -267,7 +267,7 @@ pub struct ProfileMfaSetupView {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileMfaStatusView {
     pub enabled: bool,
@@ -276,7 +276,7 @@ pub struct ProfileMfaStatusView {
     pub can_disable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileMfaRecoveryCodesView {
     pub enabled: bool,

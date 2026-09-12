@@ -36,14 +36,15 @@ impl<T: Clone> MetadataPatch<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum RegistryStatus {
     Active,
     Disabled,
     Deprecated,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = resources::catalog::GitRepositorySyncMode)]
 pub enum GitRepositorySyncMode {
     Manual,
     #[default]
@@ -60,7 +61,7 @@ impl GitRepositorySyncMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoCommand {
     #[serde(default)]
@@ -84,7 +85,7 @@ impl RegistryStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryView {
     pub id: Uuid,
@@ -101,7 +102,7 @@ pub struct RegistryView {
     pub tags: Vec<TagSummary>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewRegistry {
     pub name: String,
@@ -132,20 +133,22 @@ impl NewRegistry {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryPatch {
     pub name: Option<String>,
     pub registry_host: Option<String>,
     pub status: Option<RegistryStatus>,
     #[serde(default)]
+    #[schema(value_type = Option<Value>, required = false)]
     pub configuration: MetadataPatch<Value>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: MetadataPatch<String>,
     pub tag_ids: Option<Vec<Uuid>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryView {
     pub id: Uuid,
@@ -167,7 +170,7 @@ pub struct GitRepositoryView {
     pub tags: Vec<TagSummary>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewGitRepository {
     pub name: String,
@@ -368,24 +371,30 @@ pub fn validate_webhook(webhook: Option<&Value>) -> Result<(), ResourceMetadataE
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryPatch {
     pub name: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: MetadataPatch<String>,
     pub url: Option<String>,
     pub default_branch: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<Uuid>, required = false)]
     pub git_account_id: MetadataPatch<Uuid>,
     pub sync_mode: Option<GitRepositorySyncMode>,
     #[serde(default)]
+    #[schema(value_type = Option<i32>, required = false)]
     pub sync_interval_minutes: MetadataPatch<i32>,
     #[serde(default)]
+    #[schema(value_type = Option<Value>, required = false)]
     pub webhook: MetadataPatch<Value>,
     #[serde(default)]
+    #[schema(value_type = Option<RepoCommand>, required = false)]
     pub on_clone: MetadataPatch<RepoCommand>,
     #[serde(default)]
+    #[schema(value_type = Option<RepoCommand>, required = false)]
     pub on_pull: MetadataPatch<RepoCommand>,
     pub tag_ids: Option<Vec<Uuid>>,
 }

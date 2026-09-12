@@ -5,7 +5,6 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, PermissionGrant};
 use citadel_identity::{
@@ -17,10 +16,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct TeamsHttpState {
@@ -31,21 +30,7 @@ pub struct TeamsHttpState {
 
 pub fn router(state: TeamsHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_TEAMS, list)
-            .contract_route(routes::SEARCH_TEAMS, search)
-            .contract_route(routes::GET_TEAM, get)
-            .contract_route(routes::CREATE_TEAM, create)
-            .contract_route(routes::PATCH_TEAM, patch)
-            .contract_route(routes::RENAME_TEAM, rename)
-            .contract_route(routes::ADD_TEAM_ROLE, add_role)
-            .contract_route(routes::REMOVE_TEAM_ROLE, remove_role)
-            .contract_route(routes::ADD_TEAM_MEMBER, add_member)
-            .contract_route(routes::REMOVE_TEAM_MEMBER, remove_member)
-            .contract_route(routes::ADD_TEAM_RESOURCE_ACCESS, add_resource_access)
-            .contract_route(routes::REMOVE_TEAM_RESOURCE_ACCESS, remove_resource_access)
-            .contract_route(routes::DELETE_TEAMS, delete)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "Team",
     )
 }
@@ -72,13 +57,26 @@ struct TeamSearchFilter {
     limit: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct TeamsResponse {
     paged_result: PagedResult<TeamView>,
     capabilities: ResourceCapabilities,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/teams",
+    operation_id = "listTeams",
+    summary = "Get all Teams",
+    responses(
+        (status = 200, description = "Success", body = TeamsResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("Name" = Option<String>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -117,6 +115,19 @@ async fn list(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/teams/search",
+    operation_id = "searchTeams",
+    summary = "Search Teams for assignment",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/TeamSearchItems"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("Query" = Option<String>, Query), ("Limit" = Option<i32>, Query, minimum = 1, maximum = 50, extensions(("x-citadel-default" = json!(20))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn search(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -139,6 +150,19 @@ async fn search(
     Ok(no_store(Json(teams).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/teams/{id}",
+    operation_id = "getTeam",
+    summary = "Get a Team by ID",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -154,6 +178,19 @@ async fn get(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/teams",
+    operation_id = "createTeam",
+    summary = "Create a Team",
+    request_body = CreateTeamRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -171,6 +208,20 @@ async fn create(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/teams/{id}",
+    operation_id = "updateTeam",
+    summary = "Update a Team",
+    request_body = PatchTeamRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn patch(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -189,6 +240,19 @@ async fn patch(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/teams/rename",
+    operation_id = "renameTeam",
+    summary = "Rename a Team",
+    request_body = RenameTeamRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -209,6 +273,20 @@ async fn rename(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/teams/{id}/roles",
+    operation_id = "addTeamRole",
+    summary = "Assign a Role to a Team",
+    request_body = AddTeamRoleRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_role(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -230,6 +308,19 @@ async fn add_role(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/teams/{id}/roles/{roleId}",
+    operation_id = "removeTeamRole",
+    summary = "Remove a Role from a Team",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_role(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -250,6 +341,20 @@ async fn remove_role(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/teams/{id}/members",
+    operation_id = "addTeamMember",
+    summary = "Add an Actor to a Team",
+    request_body = AddTeamMemberRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_member(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -271,6 +376,19 @@ async fn add_member(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/teams/{id}/members/{memberActorId}",
+    operation_id = "removeTeamMember",
+    summary = "Remove an Actor from a Team",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("memberActorId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_member(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -291,6 +409,20 @@ async fn remove_member(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/teams/{id}/resource-accesses",
+    operation_id = "addTeamResourceAccess",
+    summary = "Add a resource override to a Team",
+    request_body = TeamResourceAccessInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_resource_access(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -312,6 +444,20 @@ async fn add_resource_access(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/teams/{id}/resource-accesses",
+    operation_id = "removeTeamResourceAccess",
+    summary = "Remove a resource override from a Team",
+    request_body = TeamResourceAccessInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_resource_access(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -333,6 +479,19 @@ async fn remove_resource_access(
     Ok(no_store(Json(team).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/teams",
+    operation_id = "deleteTeams",
+    summary = "Delete Teams",
+    request_body = DeleteTeamsRequest,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -404,4 +563,21 @@ const fn default_page_size() -> i64 {
 }
 const fn default_search_limit() -> i64 {
     20
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<TeamsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(search))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(patch))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(add_role))
+        .normalized_routes(utoipa_axum::routes!(remove_role))
+        .normalized_routes(utoipa_axum::routes!(add_member))
+        .normalized_routes(utoipa_axum::routes!(remove_member))
+        .normalized_routes(utoipa_axum::routes!(add_resource_access))
+        .normalized_routes(utoipa_axum::routes!(remove_resource_access))
+        .normalized_routes(utoipa_axum::routes!(delete))
 }

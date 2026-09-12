@@ -1,5 +1,18 @@
 use super::*;
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm",
+    operation_id = "getSwarmOverview",
+    summary = "Get Swarm inventory health and quorum",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::swarm_overview::SwarmOverviewView, content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn get(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

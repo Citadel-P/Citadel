@@ -7,7 +7,6 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_stacks::{
@@ -19,8 +18,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 pub struct StacksRealtimeNotifier {
@@ -49,35 +48,22 @@ pub struct StacksHttpState {
 }
 
 pub fn router(state: StacksHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_STACKS, list)
-        .contract_route(routes::CREATE_STACK, create)
-        .contract_route(routes::DELETE_STACKS, delete)
-        .contract_route(routes::RENAME_STACK, rename)
-        .contract_route(routes::APPLY_STACK, apply)
-        .contract_route(routes::ROLLBACK_STACK, rollback)
-        .contract_route(routes::PREFLIGHT_SWARM_STACK, preflight)
-        .contract_route(routes::START_STACKS, start)
-        .contract_route(routes::STOP_STACKS, stop)
-        .contract_route(routes::PAUSE_STACKS, pause)
-        .contract_route(routes::RESUME_STACKS, resume)
-        .contract_route(routes::RESTART_STACKS, restart)
-        .contract_route(routes::GET_STACK, get)
-        .contract_route(routes::CHECK_STACK_UPDATES, check_updates)
-        .contract_route(routes::GET_STACK_CONFIG, get_config)
-        .contract_route(routes::GET_STACK_DUPLICATE_DRAFT, duplicate_draft)
-        .contract_route(routes::LIST_STACK_RELEASES, releases)
-        .contract_route(routes::UPDATE_STACK, update)
-        .contract_route(routes::UPDATE_STACK_METADATA, update_metadata)
-        .contract_route(routes::GET_STACK_DRIFT, drift)
-        .contract_route(routes::UPDATE_STACK_DRIFT_POLICY, update_drift_policy)
-        .contract_route(routes::RECONCILE_STACK, reconcile)
-        .contract_route(routes::GET_COMPOSE_IMPORT_DRAFT, import_draft)
-        .contract_route(routes::VALIDATE_COMPOSE_IMPORT_DRAFT, validate_import_draft)
-        .contract_route(routes::IMPORT_COMPOSE_PROJECT, import)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/{stackId}/check-updates",
+    operation_id = "checkStackUpdates",
+    summary = "Check a Stack source for updates",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn check_updates(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -114,6 +100,19 @@ async fn check_updates(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks",
+    operation_id = "listStacks",
+    summary = "List authorized Stacks",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StacksView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -139,6 +138,19 @@ async fn list(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}",
+    operation_id = "getStack",
+    summary = "Get a Stack",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -165,6 +177,19 @@ async fn get(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/_cfg",
+    operation_id = "getStackConfig",
+    summary = "Get Stack configuration",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackConfigView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_config(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -191,6 +216,19 @@ async fn get_config(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/duplicate-draft",
+    operation_id = "getStackDuplicateDraft",
+    summary = "Build a Stack duplicate draft",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackDuplicateDraftView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn duplicate_draft(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -217,6 +255,19 @@ async fn duplicate_draft(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/releases",
+    operation_id = "listStackReleases",
+    summary = "List previous healthy Stack releases",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackReleasesView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn releases(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -245,6 +296,19 @@ async fn releases(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks",
+    operation_id = "createStack",
+    summary = "Create a Stack",
+    request_body = CreateStackInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -277,6 +341,20 @@ async fn create(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/stacks/{id}",
+    operation_id = "updateStack",
+    summary = "Update Stack configuration",
+    request_body = PatchStackInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -306,6 +384,20 @@ async fn update(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/stacks/{id}/_metadata",
+    operation_id = "updateStackMetadata",
+    summary = "Update Stack metadata",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_metadata(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -358,6 +450,19 @@ async fn update_metadata(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/rename",
+    operation_id = "renameStack",
+    summary = "Rename a Stack",
+    request_body = RenameStackInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -391,6 +496,19 @@ async fn rename(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/stacks",
+    operation_id = "deleteStacks",
+    summary = "Delete Stacks",
+    request_body = Vec<Uuid>,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -421,6 +539,19 @@ async fn delete(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/apply",
+    operation_id = "applyStack",
+    summary = "Apply a Stack and stream progress",
+    request_body = ApplyStackInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/StackStreamItems"), content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn apply(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -449,6 +580,19 @@ async fn apply(
     Ok(progress_response(receiver))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/rollback",
+    operation_id = "rollbackStack",
+    summary = "Roll back a Stack and stream progress",
+    request_body = RollbackStackInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/StackStreamItems"), content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rollback(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -477,13 +621,26 @@ async fn rollback(
     Ok(progress_response(receiver))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct SwarmPreflightInput {
     compose_files: Vec<String>,
     #[serde(default)]
     build_image_bindings: Vec<citadel_stacks::StackBuildImageBinding>,
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/preflight/swarm",
+    operation_id = "preflightSwarmStack",
+    summary = "Validate Docker Swarm Stack compatibility",
+    request_body = SwarmPreflightInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::SwarmStackCompatibilityReport, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn preflight(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -515,6 +672,19 @@ async fn preflight(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/drift",
+    operation_id = "getStackDrift",
+    summary = "Get Stack drift",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackDriftReport, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn drift(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -541,7 +711,7 @@ async fn drift(
     Ok(no_store(Json(value).into_response()))
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StackDriftPolicyInput {
     mode: Option<citadel_stacks::StackDriftMode>,
@@ -573,6 +743,20 @@ impl From<StackDriftPolicyInput> for citadel_stacks::StackDriftPolicy {
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/stacks/{stackId}/drift-policy",
+    operation_id = "updateStackDriftPolicy",
+    summary = "Update Stack drift policy",
+    request_body = StackDriftPolicyInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_drift_policy(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -606,6 +790,19 @@ async fn update_drift_policy(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/stacks/{stackId}/reconcile",
+    operation_id = "reconcileStack",
+    summary = "Reconcile safe Stack drift",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackReconciliationResult, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn reconcile(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -632,6 +829,19 @@ async fn reconcile(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}",
+    operation_id = "getComposeProjectImportDraft",
+    summary = "Get a Compose or Swarm Stack import draft",
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::ComposeProjectImportDraftView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("projectName" = String, Path), ("importKind" = Option<citadel_stacks::StackImportKind>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn import_draft(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -672,7 +882,7 @@ struct ImportDraftQuery {
     import_kind: Option<citadel_stacks::StackImportKind>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ValidateImportRequest {
     name: String,
@@ -681,6 +891,20 @@ struct ValidateImportRequest {
     import_kind: Option<citadel_stacks::StackImportKind>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft",
+    operation_id = "validateComposeProjectImportDraft",
+    summary = "Validate a source for an unmanaged Compose project",
+    request_body = ValidateImportRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::ComposeProjectImportValidation, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("projectName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn validate_import_draft(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -722,7 +946,7 @@ async fn validate_import_draft(
     Ok(no_store(Json(value).into_response()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ImportRequest {
     name: String,
@@ -737,6 +961,20 @@ struct ImportRequest {
     import_sensitive_environment_as_secrets: bool,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import",
+    operation_id = "importComposeProject",
+    summary = "Import a Compose project or Swarm Stack",
+    request_body = ImportRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("projectName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn import(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -865,7 +1103,8 @@ async fn authorize_git_patch_source(
 }
 
 macro_rules! state_action {
-    ($name:ident,$action:expr) => {
+    ($(#[$name_attr:meta])* $name:ident,$action:expr) => {
+        $(#[$name_attr])*
         async fn $name(
             State(state): State<StacksHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -902,11 +1141,91 @@ macro_rules! state_action {
         }
     };
 }
-state_action!(start, StackAction::Start);
-state_action!(stop, StackAction::Stop);
-state_action!(pause, StackAction::Pause);
-state_action!(resume, StackAction::Resume);
-state_action!(restart, StackAction::Restart);
+state_action!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/stacks/start",
+    operation_id = "startStacks",
+    summary = "Start Stacks",
+    request_body = ref("#/components/schemas/StackIds"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    start,
+    StackAction::Start
+);
+state_action!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/stacks/stop",
+    operation_id = "stopStacks",
+    summary = "Stop Stacks",
+    request_body = ref("#/components/schemas/StackIds"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    stop,
+    StackAction::Stop
+);
+state_action!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/stacks/pause",
+    operation_id = "pauseStacks",
+    summary = "Pause Stacks",
+    request_body = ref("#/components/schemas/StackIds"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    pause,
+    StackAction::Pause
+);
+state_action!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/stacks/resume",
+    operation_id = "resumeStacks",
+    summary = "Resume Stacks",
+    request_body = ref("#/components/schemas/StackIds"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    resume,
+    StackAction::Resume
+);
+state_action!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/stacks/restart",
+    operation_id = "restartStacks",
+    summary = "Restart Stacks",
+    request_body = ref("#/components/schemas/StackIds"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    restart,
+    StackAction::Restart
+);
 
 fn progress_response(
     mut receiver: tokio::sync::mpsc::Receiver<citadel_stacks::StackStreamItem>,
@@ -1036,4 +1355,33 @@ fn invalid_query(_: QueryRejection) -> IdentityError {
 }
 fn invalid_json(error: JsonRejection) -> IdentityError {
     crate::request_validation::invalid_json(error)
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(delete))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(apply))
+        .normalized_routes(utoipa_axum::routes!(rollback))
+        .normalized_routes(utoipa_axum::routes!(preflight))
+        .normalized_routes(utoipa_axum::routes!(start))
+        .normalized_routes(utoipa_axum::routes!(stop))
+        .normalized_routes(utoipa_axum::routes!(pause))
+        .normalized_routes(utoipa_axum::routes!(resume))
+        .normalized_routes(utoipa_axum::routes!(restart))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(check_updates))
+        .normalized_routes(utoipa_axum::routes!(get_config))
+        .normalized_routes(utoipa_axum::routes!(duplicate_draft))
+        .normalized_routes(utoipa_axum::routes!(releases))
+        .normalized_routes(utoipa_axum::routes!(update))
+        .normalized_routes(utoipa_axum::routes!(update_metadata))
+        .normalized_routes(utoipa_axum::routes!(drift))
+        .normalized_routes(utoipa_axum::routes!(update_drift_policy))
+        .normalized_routes(utoipa_axum::routes!(reconcile))
+        .normalized_routes(utoipa_axum::routes!(import_draft))
+        .normalized_routes(utoipa_axum::routes!(validate_import_draft))
+        .normalized_routes(utoipa_axum::routes!(import))
 }

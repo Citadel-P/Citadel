@@ -37,7 +37,7 @@ pub enum ContainerSelectionKind {
     Deployments,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteContainerOptions {
     #[serde(default)]

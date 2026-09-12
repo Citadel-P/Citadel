@@ -9,15 +9,14 @@ use citadel_automation::{
     AutomationActionInput, AutomationError, AutomationProgress, AutomationProgressError,
     AutomationService,
 };
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct AutomationHttpState {
@@ -27,33 +26,19 @@ pub struct AutomationHttpState {
 
 pub fn router(state: AutomationHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_AUTOMATION_ACTIONS, list)
-            .contract_route(routes::CREATE_AUTOMATION_ACTION, create)
-            .contract_route(routes::GET_AUTOMATION_ACTION, get_one)
-            .contract_route(routes::RENAME_AUTOMATION_ACTION, rename)
-            .contract_route(routes::UPDATE_AUTOMATION_ACTION, update)
-            .contract_route(routes::UPDATE_AUTOMATION_ACTION_METADATA, update_metadata)
-            .contract_route(routes::DELETE_AUTOMATION_ACTION, remove)
-            .contract_route(routes::RUN_AUTOMATION_ACTION, run_action)
-            .contract_route(routes::TEST_AUTOMATION_ACTION, test_action)
-            .contract_route(routes::LIST_AUTOMATION_RUNS, list_runs)
-            .contract_route(routes::GET_AUTOMATION_RUN, get_run)
-            .contract_route(routes::GET_AUTOMATION_RUN_LOGS, run_logs)
-            .contract_route(routes::CANCEL_AUTOMATION_RUN, cancel_run)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "AutomationAction",
     )
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ActionList {
     actions: Vec<AuthorizedAction>,
     capabilities: citadel_platforms::ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct AuthorizedAction {
     #[serde(flatten)]
     action: citadel_automation::AutomationActionView,
@@ -110,13 +95,13 @@ async fn action_response(
     Ok(no_store(Json(actions.remove(0)).into_response()))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RunList {
     runs: Vec<citadel_automation::AutomationRunView>,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RunInput {
     args_json: Option<Value>,
@@ -124,7 +109,7 @@ struct RunInput {
     code: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RenameInput {
     id: Uuid,
@@ -136,6 +121,19 @@ struct LimitQuery {
     limit: Option<usize>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/automation/actions",
+    operation_id = "listAutomationActions",
+    summary = "List Automation Actions",
+    responses(
+        (status = 200, description = "Success", body = ActionList, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -184,6 +182,19 @@ async fn list(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/automation/actions",
+    operation_id = "createAutomationAction",
+    summary = "Create an Automation Action",
+    request_body = AutomationActionInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -235,6 +246,19 @@ async fn create(
     action_response(&state, &principal, action, &headers).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/automation/actions/{id}",
+    operation_id = "getAutomationAction",
+    summary = "Get an Automation Action",
+    responses(
+        (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_one(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -250,6 +274,19 @@ async fn get_one(
     action_response(&state, &principal, action, &headers).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/automation/actions/rename",
+    operation_id = "renameAutomationAction",
+    summary = "Rename an Automation Action",
+    request_body = RenameInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -277,6 +314,20 @@ async fn rename(
     action_response(&state, &principal, action, &headers).await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/automation/actions/{id}",
+    operation_id = "updateAutomationAction",
+    summary = "Update an Automation Action",
+    request_body = ref("#/components/schemas/UpdateAutomationActionInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -287,6 +338,20 @@ async fn update(
     update_action(state, principal, id, headers, patch, false).await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/automation/actions/{id}/_metadata",
+    operation_id = "updateAutomationActionMetadata",
+    summary = "Update Automation Action metadata",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_metadata(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -367,6 +432,19 @@ async fn update_action(
     action_response(&state, &principal, action, &headers).await
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/automation/actions/{id}",
+    operation_id = "deleteAutomationAction",
+    summary = "Delete an Automation Action",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -387,6 +465,20 @@ async fn remove(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/automation/actions/{id}/run",
+    operation_id = "runAutomationAction",
+    summary = "Queue an Automation Action run",
+    request_body = Option<RunInput>,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/runAutomationActionResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn run_action(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -397,6 +489,20 @@ async fn run_action(
     enqueue(state, principal, id, headers, input, "Manual").await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/automation/actions/{id}/test",
+    operation_id = "testAutomationAction",
+    summary = "Queue a test Automation Action run",
+    request_body = Option<RunInput>,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/testAutomationActionResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_action(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -496,6 +602,19 @@ async fn enqueue(
     Ok(response)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/automation/actions/{id}/runs",
+    operation_id = "listAutomationActionRuns",
+    summary = "List Automation Action runs",
+    responses(
+        (status = 200, description = "Success", body = RunList, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("limit" = Option<i32>, Query, minimum = 1, maximum = 100, extensions(("x-citadel-default" = json!(20))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_runs(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -517,6 +636,19 @@ async fn list_runs(
     Ok(no_store(Json(RunList { runs }).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/automation/actions/{id}/runs/{runId}",
+    operation_id = "getAutomationActionRun",
+    summary = "Get an Automation Action run",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/AutomationActionRunView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_run(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -537,6 +669,19 @@ async fn get_run(
     Ok(no_store(Json(run).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/automation/actions/{id}/runs/{runId}/logs",
+    operation_id = "getAutomationActionRunLogs",
+    summary = "Get Automation Action run logs",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/AutomationActionRunLogsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn run_logs(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -560,6 +705,19 @@ async fn run_logs(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/automation/actions/{id}/runs/{runId}/cancel",
+    operation_id = "cancelAutomationActionRun",
+    summary = "Cancel an Automation Action run",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn cancel_run(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -690,4 +848,21 @@ fn map_error(error: AutomationError) -> IdentityError {
         AutomationError::Storage(message) => IdentityError::Storage(message),
         AutomationError::External(message) => IdentityError::External(message),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<AutomationHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(get_one))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(update))
+        .normalized_routes(utoipa_axum::routes!(update_metadata))
+        .normalized_routes(utoipa_axum::routes!(remove))
+        .normalized_routes(utoipa_axum::routes!(run_action))
+        .normalized_routes(utoipa_axum::routes!(test_action))
+        .normalized_routes(utoipa_axum::routes!(list_runs))
+        .normalized_routes(utoipa_axum::routes!(get_run))
+        .normalized_routes(utoipa_axum::routes!(run_logs))
+        .normalized_routes(utoipa_axum::routes!(cancel_run))
 }

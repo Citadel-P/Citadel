@@ -6,12 +6,11 @@ use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use citadel_application::{InstallLicenseRequest, LicenseService};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{identity_error_response, no_store, require_human_administrator};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct LicenseHttpState {
@@ -20,15 +19,21 @@ pub struct LicenseHttpState {
 }
 
 pub fn router(state: LicenseHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::GET_LICENSE_ENTITLEMENTS, entitlements)
-        .contract_route(routes::GET_LICENSE, get)
-        .contract_route(routes::INSTALL_LICENSE, install)
-        .contract_route(routes::REMOVE_LICENSE, remove)
-        .contract_route(routes::GET_LICENSE_REQUEST, request)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/license/entitlements",
+    operation_id = "getLicenseEntitlements",
+    summary = "Get effective license entitlements",
+    responses(
+        (status = 200, description = "Success", body = citadel_application::LicenseEntitlementsView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn entitlements(
     State(state): State<LicenseHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -43,6 +48,18 @@ async fn entitlements(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/license",
+    operation_id = "getLicense",
+    summary = "Get installed license state",
+    responses(
+        (status = 200, description = "Success", body = citadel_application::LicenseView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<LicenseHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -57,6 +74,19 @@ async fn get(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/license",
+    operation_id = "installLicense",
+    summary = "Install or replace a license",
+    request_body = InstallLicenseRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_application::LicenseView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn install(
     State(state): State<LicenseHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -83,6 +113,18 @@ async fn install(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/license",
+    operation_id = "removeLicense",
+    summary = "Remove the installed license",
+    responses(
+        (status = 200, description = "Success", body = citadel_application::LicenseView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove(
     State(state): State<LicenseHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -98,6 +140,18 @@ async fn remove(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/license/request",
+    operation_id = "getLicenseRequest",
+    summary = "Get license request metadata",
+    responses(
+        (status = 200, description = "Success", body = citadel_application::LicenseRequestView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn request(
     State(state): State<LicenseHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -123,4 +177,13 @@ async fn authorize(
         .authorize(&principal, ResourceType::License, level, None)
         .await?;
     Ok(principal)
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<LicenseHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(entitlements))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(install))
+        .normalized_routes(utoipa_axum::routes!(remove))
+        .normalized_routes(utoipa_axum::routes!(request))
 }

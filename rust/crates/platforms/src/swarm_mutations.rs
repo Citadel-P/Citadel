@@ -26,7 +26,7 @@ pub fn manager_matches(
     })
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSwarmNodeInput {
     pub version_index: i64,
@@ -34,13 +34,13 @@ pub struct UpdateSwarmNodeInput {
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
 }
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmNodeAvailabilityTarget {
     pub node_id: String,
     pub version_index: i64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSwarmNodesAvailabilityInput {
     #[serde(default)]
@@ -56,14 +56,14 @@ pub struct CreateSwarmMaterialInput {
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSwarmResourceLabelsInput {
     pub version_index: i64,
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct DeleteSwarmResourcesInput {
     #[serde(default)]
     pub ids: Vec<String>,

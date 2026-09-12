@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = deployments::model::UpdateBehavior)]
 pub enum UpdateBehavior {
     #[default]
     #[serde(alias = "disabled")]
@@ -16,7 +17,7 @@ pub enum UpdateBehavior {
     AutoDeploy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StopSignal {
     #[serde(alias = "sigterm")]
     SIGTERM,
@@ -28,7 +29,7 @@ pub enum StopSignal {
     SIGQUIT,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum ContainerRestartPolicy {
     #[serde(alias = "no")]
     #[default]
@@ -41,7 +42,7 @@ pub enum ContainerRestartPolicy {
     UnlessStopped,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 pub enum DeploymentImageInfo {
     Local {
@@ -174,7 +175,7 @@ impl DeploymentImageInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -183,7 +184,7 @@ pub struct ResourceSpec {
     pub memory_limit: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LifeCycleSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -194,11 +195,12 @@ pub struct LifeCycleSpec {
     pub restart_policy: ContainerRestartPolicy,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentSpec {
     pub image: DeploymentImageInfo,
     #[serde(default)]
+    #[schema(default = UpdateBehavior::default)]
     pub update_behavior: UpdateBehavior,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub life_cycle_spec: Option<LifeCycleSpec>,
@@ -302,7 +304,8 @@ impl DeploymentSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = deployments::model::TagSummary)]
 #[serde(rename_all = "camelCase")]
 pub struct TagSummary {
     pub id: Uuid,
@@ -310,7 +313,7 @@ pub struct TagSummary {
     pub color: String,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentCapabilities {
     pub can_view_logs: bool,
@@ -324,7 +327,8 @@ pub struct DeploymentCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = deployments::model::ResourceCapabilities)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilities {
     pub can_read: bool,
@@ -332,7 +336,8 @@ pub struct ResourceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = deployments::model::AutoUpdateState)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoUpdateState {
     pub last_checked_at: DateTime<Utc>,
@@ -345,7 +350,7 @@ pub struct AutoUpdateState {
     pub last_error: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentView {
     pub id: Uuid,
@@ -382,7 +387,7 @@ pub struct DeploymentView {
     pub capabilities: Option<DeploymentCapabilities>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentConfigView {
     pub id: Uuid,
@@ -405,14 +410,14 @@ impl From<&DeploymentView> for DeploymentConfigView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentsView {
     pub deployments: Vec<DeploymentView>,
     pub capabilities: ResourceCapabilities,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateDeploymentInput {
     pub name: String,
@@ -420,11 +425,12 @@ pub struct CreateDeploymentInput {
     pub description: Option<String>,
     pub spec: DeploymentSpec,
     #[serde(default, deserialize_with = "deserialize_null_default")]
+    #[schema(nullable)]
     pub tag_ids: Vec<Uuid>,
     pub duplicate_source: Option<DuplicateSourceInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateSourceInput {
     pub resource_type: String,
@@ -432,7 +438,7 @@ pub struct DuplicateSourceInput {
     pub resource_name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchDeploymentInput {
     // The editor submits the full form. Like .NET, configuration PATCH only
@@ -447,10 +453,11 @@ pub struct PatchDeploymentInput {
     pub spec: Option<Value>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchDeploymentMetadataInput {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub description: FieldPatch<String>,
     #[serde(default, rename = "tags")]
     pub _tags: Option<Vec<String>>,
@@ -479,14 +486,14 @@ where
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenameDeploymentInput {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplyDeploymentInput {
     pub id: Uuid,
@@ -494,14 +501,15 @@ pub struct ApplyDeploymentInput {
     pub recreate: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentApplyError {
     pub code: i64,
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[schema(as = deployments::model::ImagePullProgress)]
 #[serde(rename_all = "camelCase")]
 pub struct ImagePullProgress {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -514,7 +522,7 @@ pub struct ImagePullProgress {
     pub units: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentStreamItem {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -559,7 +567,7 @@ pub struct DeploymentFilter {
     pub platform_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateWarning {
     pub code: String,
@@ -568,14 +576,14 @@ pub struct DuplicateWarning {
     pub field_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentDuplicateDraftView {
     pub draft: CreateDeploymentInputView,
     pub warnings: Vec<DuplicateWarning>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDeploymentInputView {
     pub name: String,

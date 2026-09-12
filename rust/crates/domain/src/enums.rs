@@ -6,7 +6,7 @@ pub enum SetupInitializationMode {
     Unattended,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum LookupResourceType {
     Platform,
     Deployment,
@@ -106,7 +106,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, utoipa::ToSchema)]
     pub enum LicenseCapability {
         CustomAccessControl,
         AutomatedOperations,
@@ -138,7 +138,7 @@ impl LicenseCapability {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
     pub enum LicenseStatus {
         Community,
         Valid,
@@ -153,7 +153,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
     pub enum MfaPolicy {
         #[default]
         Optional,
@@ -163,7 +163,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
     pub enum ActivityResourceType {
         Platform,
         Registry,
@@ -187,7 +187,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
     pub enum ActivityEventType {
         DeploymentCreated,
         DeploymentDuplicated,
@@ -470,7 +470,7 @@ impl ActivityEventType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum ActorType {
     User,
     System,
@@ -512,7 +512,19 @@ pub enum AuthenticatedPrincipalType {
     Agent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+)]
 #[repr(i32)]
 pub enum ResourceType {
     Platform = 0,
@@ -585,7 +597,7 @@ impl ResourceType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[repr(i32)]
 pub enum PermissionLevel {
     None = 0,
@@ -612,7 +624,7 @@ impl PermissionLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[repr(i32)]
 pub enum SpecificPermission {
     Logs = 1 << 0,
@@ -648,7 +660,7 @@ impl SpecificPermission {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum RoleType {
     System,
     Custom,
@@ -673,7 +685,7 @@ impl RoleType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum UserDateTimeFormat {
     System,
     TwentyFourHour,
@@ -701,7 +713,7 @@ impl UserDateTimeFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum UserTheme {
     System,
     Light,

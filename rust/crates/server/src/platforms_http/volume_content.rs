@@ -36,6 +36,19 @@ async fn authorize(
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/volumes/{name}/files",
+    operation_id = "listVolumeDirectory",
+    summary = "Browse a Volume directory",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/VolumeDirectoryView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("name" = String, Path), ("path" = Option<String>, Query), ("dockerNodeId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn list(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -76,6 +89,19 @@ pub(super) async fn list(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/volumes/{name}/files/download",
+    operation_id = "downloadVolumePath",
+    summary = "Download a Volume file or directory",
+    responses(
+        (status = 200, description = "Success"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("name" = String, Path), ("path" = Option<String>, Query), ("dockerNodeId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn download(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

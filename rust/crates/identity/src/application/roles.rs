@@ -11,7 +11,7 @@ use crate::{
     Clock, EntitlementService, IdentityError, PatchField, permission_matrix, validate_name,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RolePermissionView {
     pub resource_type: ResourceType,
@@ -20,7 +20,7 @@ pub struct RolePermissionView {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RolePermissionInput {
     pub resource_type: ResourceType,
@@ -28,7 +28,7 @@ pub struct RolePermissionInput {
     pub specific_permissions: Option<Vec<SpecificPermission>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RoleView {
     pub id: Uuid,
@@ -37,28 +37,29 @@ pub struct RoleView {
     pub permissions: Vec<RolePermissionView>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRoleRequest {
     pub name: String,
     pub permissions: Option<Vec<RolePermissionInput>>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchRolePermissionsRequest {
     #[serde(default)]
+    #[schema(value_type = Option<Vec<RolePermissionInput>>, required = false)]
     pub permissions: PatchField<Vec<RolePermissionInput>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameRoleRequest {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteRolesRequest {
     pub ids: Vec<Uuid>,

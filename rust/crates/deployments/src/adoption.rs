@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdoptContainerInput {
     pub name: String,
@@ -21,7 +21,7 @@ pub struct AdoptContainerInput {
     pub import_sensitive_environment_as_secrets: bool,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdoptionSource {
     pub id: Uuid,
@@ -32,7 +32,7 @@ pub struct AdoptionSource {
     pub state: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdoptionIssue {
     pub code: String,
@@ -41,7 +41,7 @@ pub struct AdoptionIssue {
     pub field_path: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerAdoptionDraft {
     pub source: AdoptionSource,
@@ -51,7 +51,7 @@ pub struct ContainerAdoptionDraft {
     pub can_import_sensitive_environment_values: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdoptionDeploymentDraft {
     pub name: String,

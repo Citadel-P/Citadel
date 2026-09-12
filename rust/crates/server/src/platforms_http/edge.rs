@@ -12,7 +12,8 @@ pub struct EdgeHttpContext {
 
 use citadel_platforms::node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions};
 macro_rules! setup_handler {
-    ($name:ident,$kind:ident) => {
+    ($(#[$name_attr:meta])* $name:ident,$kind:ident) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             Extension(edge): Extension<EdgeHttpContext>,
@@ -38,10 +39,71 @@ macro_rules! setup_handler {
         }
     };
 }
-setup_handler!(install_node_agents, Install);
-setup_handler!(repair_node_agents, Repair);
-setup_handler!(upgrade_node_agents, Upgrade);
+setup_handler!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/node-agents/install",
+    operation_id = "installSwarmNodeAgents",
+    summary = "Install Docker Swarm node agents",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    install_node_agents,
+    Install
+);
+setup_handler!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/node-agents/repair",
+    operation_id = "repairSwarmNodeAgents",
+    summary = "Repair Docker Swarm node-agent coverage",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    repair_node_agents,
+    Repair
+);
+setup_handler!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/node-agents/upgrade",
+    operation_id = "upgradeSwarmNodeAgents",
+    summary = "Upgrade Docker Swarm node agents",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    upgrade_node_agents,
+    Upgrade
+);
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/platforms/{id}/node-agents",
+    operation_id = "removeSwarmNodeAgents",
+    summary = "Remove Docker Swarm node agents",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn remove_node_agents(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -202,6 +264,19 @@ pub(super) async fn initialize_swarm(
     .await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{id}/node-agent-coverage",
+    operation_id = "getSwarmNodeAgentCoverage",
+    summary = "Get Docker Swarm node-agent coverage",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeAgentCoverageView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn node_coverage(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -262,6 +337,19 @@ pub(super) async fn node_coverage(
     Ok(no_store(Json(coverage).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/edge/enrollments",
+    operation_id = "createEdgeAgentEnrollment",
+    summary = "Create an Edge Agent enrollment token",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn enroll(
     State(state): State<PlatformsHttpState>,
     Extension(edge): Extension<EdgeHttpContext>,
@@ -279,6 +367,19 @@ pub(super) async fn enroll(
     )
     .await
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{id}/edge/status",
+    operation_id = "getEdgeAgentStatus",
+    summary = "Get Edge Agent connection status",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn status(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -297,6 +398,19 @@ pub(super) async fn status(
     )?;
     Ok(no_store(Json(status).into_response()))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{id}/edge/revoke",
+    operation_id = "revokeEdgeAgent",
+    summary = "Revoke an Edge Agent binding",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn revoke(
     State(state): State<PlatformsHttpState>,
     Extension(edge): Extension<EdgeHttpContext>,

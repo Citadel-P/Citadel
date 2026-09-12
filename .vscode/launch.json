@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Citadel: Debug Rust API",
-      "preLaunchTask": "Citadel: Prepare development environment",
+      "preLaunchTask": "Citadel: Prepare Rust API",
       "type": "lldb",
       "request": "launch",
       "cargo": {

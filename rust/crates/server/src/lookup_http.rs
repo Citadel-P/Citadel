@@ -1,12 +1,11 @@
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::platforms_http::{PlatformsHttpState, lookup_platform_resources};
 use axum::extract::rejection::QueryRejection;
 use axum::extract::{Extension, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::LookupResourceType;
 use citadel_identity::{ActorPrincipal, EntitlementService, IdentityError};
 use citadel_resources::{LookupCaller, LookupError, LookupRequest, LookupResult, LookupStore};
@@ -22,9 +21,7 @@ pub struct LookupHttpState {
 }
 
 pub fn router(state: LookupHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LOOKUP, lookup)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
 #[derive(Deserialize)]
@@ -39,6 +36,19 @@ struct LookupQuery {
     platform_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/lookup",
+    operation_id = "lookup",
+    summary = "Look up accessible resources",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/lookupResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("TargetResourceType" = citadel_domain::LookupResourceType, Query), ("SourceResourceType" = Option<citadel_domain::LookupResourceType>, Query), ("SourceResourceId" = Option<uuid::Uuid>, Query), ("PlatformId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn lookup(
     State(state): State<LookupHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -106,4 +116,8 @@ fn lookup_error(error: LookupError) -> IdentityError {
         LookupError::NotFound => IdentityError::NotFound,
         LookupError::Storage(message) => IdentityError::Storage(message),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<LookupHttpState> {
+    utoipa_axum::router::OpenApiRouter::new().normalized_routes(utoipa_axum::routes!(lookup))
 }

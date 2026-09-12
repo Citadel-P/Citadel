@@ -3,7 +3,7 @@ use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 pub enum PruneResource {
     All,
     Volume,
@@ -22,13 +22,13 @@ impl PruneResource {
         }
     }
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PrunePlatformInput {
     pub resource: PruneResource,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PrunePlatformView {
     pub resource: PruneResource,

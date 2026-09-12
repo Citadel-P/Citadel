@@ -137,7 +137,7 @@ pub struct GitSyncClaim {
     pub actor_id: ActorId,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryRefView {
     pub id: Uuid,

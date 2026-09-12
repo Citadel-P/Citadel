@@ -17,7 +17,7 @@ const MINIMUM_SEARCH_CHARACTERS: usize = 2;
 const MAXIMUM_PAGE_SIZE: i64 = 500;
 const MAXIMUM_SEARCH_RESULTS: i64 = 50;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamView {
     pub id: Uuid,
@@ -31,7 +31,7 @@ pub struct TeamView {
     pub members: Option<Vec<TeamMemberView>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberView {
     pub actor_id: ActorId,
@@ -47,7 +47,7 @@ pub struct TeamSearchItemView {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamResourceAccessInput {
     pub resource_type: ResourceType,
@@ -57,7 +57,7 @@ pub struct TeamResourceAccessInput {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamResourceAccessView {
     pub resource_type: ResourceType,
@@ -68,7 +68,7 @@ pub struct TeamResourceAccessView {
     pub id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeamRequest {
     pub name: String,
@@ -80,39 +80,43 @@ pub struct CreateTeamRequest {
     pub resource_accesses: Vec<TeamResourceAccessInput>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchTeamRequest {
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub is_enabled: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub user_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<TeamResourceAccessInput>>, required = false)]
     pub resource_accesses: PatchField<Vec<TeamResourceAccessInput>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameTeamRequest {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddTeamRoleRequest {
     pub role_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddTeamMemberRequest {
     pub member_actor_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteTeamsRequest {
     pub ids: Vec<Uuid>,

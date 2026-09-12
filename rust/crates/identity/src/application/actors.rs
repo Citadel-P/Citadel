@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::IdentityError;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ActorView {
     pub id: Uuid,
@@ -31,7 +31,7 @@ impl ActorView {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchActorEnabledInput {
     pub is_enabled: bool,

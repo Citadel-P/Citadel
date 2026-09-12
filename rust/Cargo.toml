@@ -28,6 +28,8 @@ rust-version = "1.97.1"
 repository = "https://github.com/citadel-p/citadel"
 
 [workspace.dependencies]
+utoipa = { version = "=5.5.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-axum = "=0.2.0"
 aes-gcm = { version = "=0.10.3", features = ["std", "zeroize"] }
 async-stream = "=0.3.6"
 argon2 = { version = "=0.5.3", features = ["std", "zeroize"] }

@@ -7,7 +7,6 @@ use axum::http::header::LOCATION;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_identity::ActorPrincipal;
 use citadel_identity::{
     CreateOidcProviderRequest, IdentityError, OidcService, PatchOidcProviderMetadataRequest,
@@ -17,11 +16,11 @@ use serde::Deserialize;
 use url::Url;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     identity_error_response, no_store, require_human_administrator, session_metadata,
     with_refresh_cookie,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct OidcHttpState {
@@ -46,28 +45,21 @@ struct CallbackQuery {
 }
 
 pub fn router(state: OidcHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_OIDC_LOGIN_PROVIDERS, list_login_providers)
-        .contract_route(routes::BEGIN_OIDC_LOGIN, begin_login)
-        .contract_route(routes::COMPLETE_OIDC_LOGIN, complete_login)
-        .contract_route(routes::LIST_OIDC_PROVIDERS, list_providers)
-        .contract_route(routes::GET_OIDC_PROVIDER, get_provider)
-        .contract_route(routes::CREATE_OIDC_PROVIDER, create_provider)
-        .contract_route(routes::RENAME_OIDC_PROVIDER, rename_provider)
-        .contract_route(routes::UPDATE_OIDC_PROVIDER, update_provider)
-        .contract_route(
-            routes::UPDATE_OIDC_PROVIDER_METADATA,
-            update_provider_metadata,
-        )
-        .contract_route(routes::DELETE_OIDC_PROVIDER, delete_provider)
-        .contract_route(
-            routes::TEST_OIDC_PROVIDER_DISCOVERY,
-            test_provider_discovery,
-        )
-        .contract_route(routes::TEST_OIDC_DISCOVERY, test_discovery)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/authentication/oidc/providers",
+    operation_id = "listOidcLoginProviders",
+    summary = "List enabled OIDC login providers",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcLoginProvidersView, content_type = "application/json"),
+        crate::openapi::errors::RequestErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_login_providers(State(state): State<OidcHttpState>, headers: HeaderMap) -> Response {
     match state.oidc.list_login_providers().await {
         Ok(view) => no_store(Json(view).into_response()),
@@ -75,6 +67,19 @@ async fn list_login_providers(State(state): State<OidcHttpState>, headers: Heade
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/authentication/oidc/{id}/login",
+    operation_id = "beginOidcLogin",
+    summary = "Begin OIDC login",
+    responses(
+        (status = 302, description = "Success"),
+        crate::openapi::errors::RedirectErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("returnUrl" = Option<String>, Query)),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn begin_login(
     State(state): State<OidcHttpState>,
     Path(provider_id): Path<Uuid>,
@@ -105,6 +110,19 @@ async fn begin_login(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/authentication/oidc/{id}/callback",
+    operation_id = "completeOidcLogin",
+    summary = "Complete OIDC login",
+    responses(
+        (status = 302, description = "Success"),
+        crate::openapi::errors::RedirectErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("code" = Option<String>, Query), ("state" = Option<String>, Query), ("error" = Option<String>, Query), ("error_description" = Option<String>, Query)),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn complete_login(
     State(state): State<OidcHttpState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
@@ -150,6 +168,18 @@ async fn complete_login(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/oidcProviders",
+    operation_id = "listOidcProviders",
+    summary = "List OIDC providers",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProvidersView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_providers(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -164,6 +194,19 @@ async fn list_providers(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/oidcProviders/{id}",
+    operation_id = "getOidcProvider",
+    summary = "Get OIDC provider",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -179,6 +222,19 @@ async fn get_provider(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/oidcProviders",
+    operation_id = "createOidcProvider",
+    summary = "Create OIDC provider",
+    request_body = CreateOidcProviderRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -199,6 +255,19 @@ async fn create_provider(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/oidcProviders/rename",
+    operation_id = "renameOidcProvider",
+    summary = "Rename OIDC provider",
+    request_body = RenameOidcProviderRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -223,6 +292,20 @@ async fn rename_provider(
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/oidcProviders/{id}",
+    operation_id = "updateOidcProvider",
+    summary = "Update OIDC provider",
+    request_body = PatchOidcProviderRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -244,6 +327,20 @@ async fn update_provider(
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/oidcProviders/{id}/_metadata",
+    operation_id = "updateOidcProviderMetadata",
+    summary = "Update OIDC provider metadata",
+    request_body = PatchOidcProviderMetadataRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_provider_metadata(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -269,6 +366,19 @@ async fn update_provider_metadata(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/oidcProviders/{id}",
+    operation_id = "deleteOidcProvider",
+    summary = "Delete OIDC provider",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -285,6 +395,19 @@ async fn delete_provider(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/oidcProviders/{id}/testDiscovery",
+    operation_id = "testOidcProviderDiscovery",
+    summary = "Test OIDC provider discovery",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/OidcDiscoveryResultView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_provider_discovery(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -307,6 +430,19 @@ async fn test_provider_discovery(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/oidcProviders/testDiscovery",
+    operation_id = "testOidcDiscovery",
+    summary = "Test OIDC discovery",
+    request_body = TestOidcDiscoveryRequest,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/OidcDiscoveryResultView"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_discovery(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -369,4 +505,20 @@ mod tests {
             format!("https://citadel.test/api/v1/authentication/oidc/{provider_id}/callback")
         );
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<OidcHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_login_providers))
+        .normalized_routes(utoipa_axum::routes!(begin_login))
+        .normalized_routes(utoipa_axum::routes!(complete_login))
+        .normalized_routes(utoipa_axum::routes!(list_providers))
+        .normalized_routes(utoipa_axum::routes!(get_provider))
+        .normalized_routes(utoipa_axum::routes!(create_provider))
+        .normalized_routes(utoipa_axum::routes!(rename_provider))
+        .normalized_routes(utoipa_axum::routes!(update_provider))
+        .normalized_routes(utoipa_axum::routes!(update_provider_metadata))
+        .normalized_routes(utoipa_axum::routes!(delete_provider))
+        .normalized_routes(utoipa_axum::routes!(test_provider_discovery))
+        .normalized_routes(utoipa_axum::routes!(test_discovery))
 }

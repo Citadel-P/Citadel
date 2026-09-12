@@ -3,7 +3,7 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeletePlatformsInput {
     pub ids: Vec<Uuid>,

@@ -2,6 +2,20 @@ use super::*;
 use axum::body::Body;
 use citadel_backups::progress::{BackupRunStreamItem, is_terminal};
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupPolicies/{id}/run",
+    operation_id = "runBackupPolicy",
+    summary = "Run a Backup Policy with progress",
+    request_body = QueueInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/BackupRunStream"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn run_backup(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -14,10 +28,7 @@ pub(super) async fn run_backup(
         path.map_err(|_| IdentityError::Validation("Policy ID must be a UUID.".into())),
         &h,
     )?;
-    let Json(input) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(input) = identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     let progress = s.backups.subscribe_progress(); // Subscribe before enqueue: fast workers must not lose completion.
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
     Ok(response(
@@ -30,6 +41,20 @@ pub(super) async fn run_backup(
         format!("Backup run queued for \"{}\".", run.policy_name_snapshot),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRuns/{id}/restoreVolume/run",
+    operation_id = "runBackupRestoreVolume",
+    summary = "Restore a Backup Volume with progress",
+    request_body = RestoreInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/BackupRestoreRunStream"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn run_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -42,10 +67,7 @@ pub(super) async fn run_restore(
         path.map_err(|_| IdentityError::Validation("Backup Run ID must be a UUID.".into())),
         &h,
     )?;
-    let Json(input) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(input) = identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     let progress = s.backups.subscribe_progress();
     let run = enqueue_restore(&s, &p, id, input, &h).await?;
     let source = result(s.backups.store().get_run(id).await, &h)?;

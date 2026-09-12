@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+utoipa.workspace = true
 chrono.workspace = true
 citadel-domain = { path = "../domain" }
 citadel-resources = { path = "../resources" }

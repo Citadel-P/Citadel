@@ -4,6 +4,19 @@ use citadel_platforms::deletion::{
     DeletePlatformsInput, PlatformDeletionError, PlatformDeletionStore,
 };
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/platforms",
+    operation_id = "deletePlatforms",
+    summary = "Delete Platform registrations",
+    request_body = DeletePlatformsInput,
+    responses(
+        (status = 200, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn delete(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

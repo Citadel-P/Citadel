@@ -5,7 +5,6 @@ use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_git::{
     GitAccountError, GitAccountInput, GitAccountPatch, GitAccountService, GitAccountView,
@@ -15,8 +14,8 @@ use citadel_platforms::ResourceCapabilitiesView;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 #[derive(Clone)]
@@ -27,24 +26,17 @@ pub struct GitAccountsHttpState {
 }
 
 pub fn router(state: GitAccountsHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_GIT_ACCOUNTS, list)
-        .contract_route(routes::CREATE_GIT_ACCOUNT, create)
-        .contract_route(routes::DELETE_GIT_ACCOUNTS, delete)
-        .contract_route(routes::GET_GIT_ACCOUNT, get)
-        .contract_route(routes::GET_GIT_ACCOUNT_CONFIG, get_config)
-        .contract_route(routes::UPDATE_GIT_ACCOUNT, update)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitAccountsResponse {
     git_accounts: Vec<AuthorizedGitAccountView>,
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct AuthorizedGitAccountView {
     #[serde(flatten)]
@@ -52,12 +44,24 @@ struct AuthorizedGitAccountView {
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct DeleteGitAccountsInput {
     ids: Vec<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitAccounts",
+    operation_id = "listGitAccounts",
+    summary = "List Git accounts",
+    responses(
+        (status = 200, description = "Success", body = GitAccountsResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -90,6 +94,19 @@ async fn list(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitAccounts/{id}",
+    operation_id = "getGitAccount",
+    summary = "Get a Git account",
+    responses(
+        (status = 200, description = "Success", body = AuthorizedGitAccountView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -119,6 +136,19 @@ async fn get(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitAccounts/{id}/_cfg",
+    operation_id = "getGitAccountConfig",
+    summary = "Get Git account configuration",
+    responses(
+        (status = 200, description = "Success", body = citadel_git::GitAccountConfigView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_config(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -141,6 +171,19 @@ async fn get_config(
     Ok(no_store(Json(account).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/gitAccounts",
+    operation_id = "createGitAccount",
+    summary = "Create a Git account",
+    request_body = GitAccountInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_git::GitAccountView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -162,6 +205,20 @@ async fn create(
     Ok(no_store(Json(account).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/gitAccounts/{id}",
+    operation_id = "updateGitAccount",
+    summary = "Update a Git account",
+    request_body = GitAccountPatch,
+    responses(
+        (status = 200, description = "Success", body = citadel_git::GitAccountView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -191,6 +248,19 @@ async fn update(
     Ok(no_store(Json(account).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/gitAccounts",
+    operation_id = "deleteGitAccounts",
+    summary = "Delete Git accounts",
+    request_body = DeleteGitAccountsInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<GitAccountsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -300,7 +370,9 @@ async fn permission(
 
 fn account_error(error: GitAccountError) -> IdentityError {
     match error {
-        GitAccountError::Validation(message) => crate::request_validation::validation_error(message),
+        GitAccountError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
         GitAccountError::NotFound => IdentityError::NotFound,
         GitAccountError::Conflict(message) => IdentityError::Conflict(message),
         GitAccountError::Credential => IdentityError::Credential,
@@ -316,4 +388,14 @@ fn publish(state: &GitAccountsHttpState) {
     if let Some(realtime) = &state.realtime {
         realtime.publish_resource_change("GitAccount", Uuid::nil(), "gitAccountChanged");
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<GitAccountsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(delete))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(get_config))
+        .normalized_routes(utoipa_axum::routes!(update))
 }

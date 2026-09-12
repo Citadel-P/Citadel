@@ -1,7 +1,7 @@
 use serde::Serialize;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceInfo {
     pub id: Uuid,
@@ -9,7 +9,7 @@ pub struct ResourceInfo {
     pub group: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PagedResult<T> {
     pub items: Vec<T>,

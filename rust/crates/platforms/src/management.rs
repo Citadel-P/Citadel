@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenamePlatformInput {
     pub id: Uuid,

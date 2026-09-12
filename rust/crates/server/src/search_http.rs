@@ -1,6 +1,6 @@
 use crate::{
-    contract_router::ContractRouterExt,
     identity_http::{IdentityHttpResult, identity_result, no_store},
+    openapi::router::OpenApiRouterExt,
 };
 use axum::{
     Json, Router,
@@ -8,7 +8,6 @@ use axum::{
     http::HeaderMap,
     response::IntoResponse,
 };
-use citadel_contracts::http::routes;
 use citadel_identity::{ActorPrincipal, IdentityError};
 use citadel_resources::{
     GlobalSearchQuery, GlobalSearchResponse, GlobalSearchStore, ResourceMetadataError,
@@ -16,11 +15,22 @@ use citadel_resources::{
 use std::sync::Arc;
 
 pub fn router(store: Arc<dyn GlobalSearchStore>) -> Router {
-    Router::new()
-        .contract_route(routes::GLOBAL_SEARCH, search)
-        .with_state(store)
+    documented_routes().split_for_parts().0.with_state(store)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/search",
+    operation_id = "globalSearch",
+    summary = "Search authorized resources",
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GlobalSearchResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("q" = String, Query), ("types" = Option<String>, Query), ("limitPerType" = Option<i32>, Query, minimum = 1, maximum = 10, extensions(("x-citadel-default" = json!(5))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn search(
     State(store): State<Arc<dyn GlobalSearchStore>>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -57,4 +67,9 @@ fn error(error: ResourceMetadataError) -> IdentityError {
         ResourceMetadataError::Validation(message) => IdentityError::Validation(message),
         other => IdentityError::Storage(other.to_string()),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Arc<dyn GlobalSearchStore>>
+{
+    utoipa_axum::router::OpenApiRouter::new().normalized_routes(utoipa_axum::routes!(search))
 }

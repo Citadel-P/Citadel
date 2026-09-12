@@ -2,7 +2,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use citadel_contracts::http::ROUTES;
 use serde_json::Value;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -21,19 +20,28 @@ pub fn check() -> Result<(), Box<dyn std::error::Error>> {
     )?)?;
     let expected = reference(&full, &public)?;
     let mut actual = BTreeMap::new();
-    for route in ROUTES {
-        if actual
-            .insert(
-                route.operation_id.to_owned(),
-                Operation {
-                    method: route.method.as_openapi_str().into(),
-                    path: route.path.into(),
-                    public: route.public,
-                },
-            )
-            .is_some()
-        {
-            return Err(format!("Duplicate Rust operation ID: {}", route.operation_id).into());
+    let document = crate::openapi_gen::document(false);
+    for (path, item) in document["paths"]
+        .as_object()
+        .ok_or("Generated API has no paths")?
+    {
+        for (method, operation) in item.as_object().ok_or("Invalid generated path item")? {
+            let Some(id) = operation["operationId"].as_str() else {
+                continue;
+            };
+            if actual
+                .insert(
+                    id.to_owned(),
+                    Operation {
+                        method: method.to_owned(),
+                        path: path.to_owned(),
+                        public: operation["x-citadel-public"].as_bool().unwrap_or(false),
+                    },
+                )
+                .is_some()
+            {
+                return Err(format!("Duplicate Rust operation ID: {id}").into());
+            }
         }
     }
     let gaps = compare(&expected, &actual);

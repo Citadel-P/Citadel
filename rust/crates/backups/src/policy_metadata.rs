@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{BackupError, BackupPolicyView};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RenameBackupPolicyInput {
     pub id: Uuid,
     pub name: String,

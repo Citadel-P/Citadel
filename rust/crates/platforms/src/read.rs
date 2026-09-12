@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::AuthorizedReadError;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkloadStatusCounts {
     pub total: i64,
@@ -23,7 +23,7 @@ pub struct WorkloadStatusCounts {
     pub unknown: i64,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilitiesView {
     pub can_read: bool,
@@ -31,7 +31,7 @@ pub struct ResourceCapabilitiesView {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformCapabilitiesView {
     pub can_read: bool,
@@ -44,7 +44,7 @@ pub struct PlatformCapabilitiesView {
     pub can_manage_node_agents: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageCapabilitiesView {
     pub can_read: bool,
@@ -54,7 +54,7 @@ pub struct ImageCapabilitiesView {
     pub can_pull: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkCapabilitiesView {
     pub can_read: bool,
@@ -63,7 +63,7 @@ pub struct NetworkCapabilitiesView {
     pub can_inspect: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeCapabilitiesView {
     pub can_read: bool,
@@ -80,7 +80,7 @@ pub struct EffectivePlatformPermission {
     pub specific_mask: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformStatView {
     pub created: i64,
@@ -93,7 +93,7 @@ pub struct PlatformStatView {
     pub disk_usage: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformView {
     pub id: Uuid,
@@ -123,7 +123,7 @@ pub struct PlatformView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatView {
     pub container_id: Uuid,
@@ -136,7 +136,7 @@ pub struct ContainerStatView {
     pub created: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerView {
     pub id: Uuid,
@@ -171,7 +171,7 @@ pub struct ContainerView {
 
 /// The container contract embeds a summary, never Deployment configuration or
 /// resource bindings. These are read-model fields, not a cross-feature entity.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDeploymentView {
     pub id: Uuid,
@@ -185,7 +185,7 @@ pub struct ContainerDeploymentView {
     pub auto_update_state: ContainerDeploymentUpdateState,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDeploymentUpdateState {
     pub last_checked_at: DateTime<Utc>,
@@ -209,7 +209,7 @@ impl ContainerView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageView {
     pub id: Uuid,
@@ -232,7 +232,7 @@ pub struct ImageView {
     pub capabilities: Option<ImageCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkView {
     pub name: String,
@@ -261,7 +261,7 @@ pub struct NetworkView {
     pub capabilities: Option<NetworkCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeView {
     pub id: String,
@@ -284,7 +284,7 @@ pub struct VolumeView {
     pub capabilities: Option<VolumeCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeUsageDataView {
     #[serde(alias = "Size")]
@@ -293,7 +293,7 @@ pub struct VolumeUsageDataView {
     pub ref_count: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmNodeView {
     pub id: String,
@@ -319,7 +319,7 @@ pub struct SwarmNodeView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceView {
     pub id: String,
@@ -348,7 +348,7 @@ pub struct SwarmServiceView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmTaskView {
     pub id: String,
@@ -373,7 +373,7 @@ pub struct SwarmTaskView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmNetworkView {
     pub id: String,
@@ -394,7 +394,7 @@ pub struct SwarmNetworkView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmConfigView {
     pub id: String,
@@ -411,7 +411,7 @@ pub struct SwarmConfigView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmSecretView {
     pub id: String,

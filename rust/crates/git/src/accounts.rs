@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum GitTransport {
     Http,
     Https,
@@ -26,7 +26,7 @@ impl GitTransport {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum GitAuthType {
     Basic,
     Token,
@@ -44,7 +44,7 @@ impl GitAuthType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 pub enum GitAuthConfiguration {
     Basic {
@@ -62,7 +62,7 @@ pub enum GitAuthConfiguration {
     },
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitAccountInput {
     pub name: String,
@@ -72,7 +72,7 @@ pub struct GitAccountInput {
     pub configuration: GitAuthConfiguration,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitAccountPatch {
     pub name: Option<String>,
@@ -93,7 +93,7 @@ impl GitAccountInput {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitAccountView {
     pub id: Uuid,
@@ -105,7 +105,7 @@ pub struct GitAccountView {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitAccountConfigView {
     pub id: Uuid,

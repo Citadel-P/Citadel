@@ -88,6 +88,19 @@ pub(super) async fn swarm_platform(
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs",
+    operation_id = "getSwarmServiceLogs",
+    summary = "Read bounded Service logs",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn service(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -137,6 +150,19 @@ async fn service_logs(
     .await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices/{id}/logs",
+    operation_id = "getManagedSwarmServiceLogs",
+    summary = "Read managed Service logs",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn managed_service(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -181,6 +207,19 @@ pub(super) async fn managed_service(
     service_logs(&state, service.platform_id, &docker_id, tail, &headers).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs",
+    operation_id = "getSwarmTaskLogs",
+    summary = "Read current Task logs on its owning node",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn task(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

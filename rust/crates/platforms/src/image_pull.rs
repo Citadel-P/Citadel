@@ -5,7 +5,7 @@ use std::pin::Pin;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PullImageInput {
     pub platform_id: Uuid,
@@ -26,7 +26,8 @@ pub struct PullImageStreamItem {
     pub progress: Option<ImagePullProgress>,
     pub error: Option<ImagePullError>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = platforms::image_pull::ImagePullProgress)]
 #[serde(rename_all = "camelCase")]
 pub struct ImagePullProgress {
     pub units: Option<String>,

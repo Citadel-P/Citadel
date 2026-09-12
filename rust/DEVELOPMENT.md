@@ -58,6 +58,14 @@ are preserved.
    `Ctrl+Shift+B` to run, or choose **Citadel: Debug application** and press
    `F5` for breakpoints. Do not run both at once.
 
+Both workflows build the Rust API and regenerate `schema/v1.json` and
+`schema/public-v1.json` at the repository root before launching it. To build
+and export without starting the application or PostgreSQL, run the
+**Citadel: Build Rust API** task, or `bash rust/scripts/build.sh` from the
+repository root. Plain `cargo build` only compiles. The standalone
+**Citadel: Generate OpenAPI spec** and **Citadel: Verify OpenAPI spec** tasks
+remain available for export and freshness checks.
+
 The preparation task creates an ignored, private `rust/.env.development` file
 once. Both the normal tasks and debugger use it. Entries are plain `KEY=value`
 (no shell expansion or surrounding quotes); edit it to override defaults.

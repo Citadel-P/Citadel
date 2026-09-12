@@ -6,7 +6,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = swarm_services::model::UpdateBehavior)]
 pub enum UpdateBehavior {
     #[default]
     Disabled,
@@ -14,7 +15,7 @@ pub enum UpdateBehavior {
     AutoDeploy,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum SchedulingMode {
     #[default]
     Replicated,
@@ -22,7 +23,18 @@ pub enum SchedulingMode {
 }
 
 #[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
 )]
 pub enum PortPublishMode {
     #[default]
@@ -30,14 +42,14 @@ pub enum PortPublishMode {
     Host,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum MountKind {
     Volume,
     Bind,
     Tmpfs,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum RestartCondition {
     None,
     OnFailure,
@@ -45,14 +57,14 @@ pub enum RestartCondition {
     Any,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum UpdateOrder {
     #[default]
     StopFirst,
     StartFirst,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum UpdateFailureAction {
     Continue,
     #[default]
@@ -60,7 +72,7 @@ pub enum UpdateFailureAction {
     Rollback,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 pub enum SwarmServiceImageInfo {
     External {
@@ -119,7 +131,7 @@ impl SwarmServiceImageInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServicePort {
     pub target_port: i32,
@@ -135,7 +147,7 @@ fn tcp() -> String {
     "tcp".to_owned()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceMount {
     pub kind: MountKind,
@@ -145,7 +157,7 @@ pub struct SwarmServiceMount {
     pub read_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceSecretReference {
     pub secret_id: String,
@@ -153,7 +165,7 @@ pub struct SwarmServiceSecretReference {
     pub target_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceConfigReference {
     pub config_id: String,
@@ -161,7 +173,7 @@ pub struct SwarmServiceConfigReference {
     pub target_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceResources {
     pub limit_nano_cpus: Option<i64>,
@@ -170,7 +182,7 @@ pub struct SwarmServiceResources {
     pub reservation_memory_bytes: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceHealthCheck {
     pub test: Vec<String>,
@@ -180,7 +192,7 @@ pub struct SwarmServiceHealthCheck {
     pub start_period_nanoseconds: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceRestartPolicy {
     #[serde(default)]
@@ -190,7 +202,7 @@ pub struct SwarmServiceRestartPolicy {
     pub window_nanoseconds: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceUpdatePolicy {
     #[serde(default = "one")]
@@ -206,7 +218,7 @@ const fn one() -> i32 {
     1
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceWebhookConfig {
     #[serde(default)]
@@ -227,7 +239,7 @@ fn github_hmac_sha256() -> String {
     "GitHubHmacSha256".to_owned()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceSpec {
     pub image: SwarmServiceImageInfo,
@@ -496,7 +508,7 @@ impl SwarmServiceSpec {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateSwarmServiceInput {
     pub name: String,
@@ -504,12 +516,13 @@ pub struct CreateSwarmServiceInput {
     pub description: Option<String>,
     pub spec: SwarmServiceSpec,
     #[serde(default, deserialize_with = "deserialize_null_default")]
+    #[schema(nullable)]
     pub tag_ids: Vec<Uuid>,
     #[serde(default)]
     pub duplicate_source: Option<SwarmServiceDuplicateSource>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SwarmServiceDuplicateSource {
     pub resource_id: Uuid,
@@ -529,21 +542,21 @@ pub struct SwarmServiceDuplicateDraft {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateSwarmServiceInput {
     pub spec: SwarmServiceSpec,
     pub row_version: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenameSwarmServiceInput {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScaleSwarmServiceInput {
     pub replicas: i32,
@@ -555,7 +568,8 @@ pub struct SwarmServiceFilter {
     pub platform_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[schema(as = swarm_services::model::ResourceCapabilities)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilities {
     pub can_read: bool,
@@ -563,7 +577,7 @@ pub struct ResourceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceCapabilities {
     pub can_view_logs: bool,
@@ -575,7 +589,8 @@ pub struct SwarmServiceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[schema(as = swarm_services::model::AutoUpdateState)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoUpdateState {
     pub last_checked_at: DateTime<Utc>,
@@ -585,7 +600,7 @@ pub struct AutoUpdateState {
     pub last_error: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceOperationView {
     pub id: Uuid,
@@ -599,7 +614,8 @@ pub struct SwarmServiceOperationView {
     pub result_message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = swarm_services::model::TagSummary)]
 #[serde(rename_all = "camelCase")]
 pub struct TagSummary {
     pub id: Uuid,
@@ -607,7 +623,7 @@ pub struct TagSummary {
     pub color: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedSwarmServiceView {
     pub id: Uuid,
@@ -639,7 +655,7 @@ pub struct ManagedSwarmServiceView {
     pub capabilities: Option<SwarmServiceCapabilities>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedSwarmServicesView {
     pub swarm_services: Vec<ManagedSwarmServiceView>,

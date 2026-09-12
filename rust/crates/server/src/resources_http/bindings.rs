@@ -3,7 +3,6 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::ActorPrincipal;
 use citadel_platforms::ResourceCapabilitiesView;
@@ -19,51 +18,26 @@ use super::{
     ResourcesHttpState, authorize_global, authorize_resource, capabilities, invalid_json,
     metadata_error, publish_resource_change, require_actor,
 };
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 pub(super) fn router(state: ResourcesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::GET_GLOBAL_RESOURCE_BINDINGS, get_global_bindings)
-        .contract_route(
-            routes::CREATE_GLOBAL_RESOURCE_BINDING,
-            create_global_binding,
-        )
-        .contract_route(
-            routes::UPDATE_GLOBAL_RESOURCE_BINDING,
-            update_global_binding,
-        )
-        .contract_route(
-            routes::DELETE_GLOBAL_RESOURCE_BINDING,
-            delete_global_binding,
-        )
-        .contract_route(routes::GET_RESOURCE_BINDINGS, get_resource_bindings)
-        .contract_route(routes::CREATE_RESOURCE_BINDING, create_resource_binding)
-        .contract_route(routes::UPDATE_RESOURCE_BINDING, update_resource_binding)
-        .contract_route(routes::DELETE_RESOURCE_BINDING, delete_resource_binding)
-        .contract_route(routes::LIST_SECRET_DEFINITIONS, list_secrets)
-        .contract_route(routes::CREATE_INTERNAL_SECRET, create_internal_secret)
-        .contract_route(routes::CREATE_EXTERNAL_SECRET, create_external_secret)
-        .contract_route(routes::UPDATE_EXTERNAL_SECRET, update_external_secret)
-        .contract_route(routes::DELETE_SECRET_DEFINITION, delete_secret)
-        .contract_route(routes::LIST_SECRET_PROVIDERS, list_secret_providers)
-        .contract_route(
-            routes::CREATE_VAULT_KV2_SECRET_PROVIDER,
-            create_secret_provider,
-        )
-        .contract_route(
-            routes::UPDATE_VAULT_KV2_SECRET_PROVIDER,
-            update_secret_provider,
-        )
-        .contract_route(routes::DELETE_SECRET_PROVIDER, delete_secret_provider)
-        .contract_route(
-            routes::TEST_VAULT_KV2_SECRET_PROVIDER_CONNECTION,
-            test_secret_provider,
-        )
-        .contract_route(routes::TEST_EXTERNAL_SECRET, test_external_secret)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/secret-providers/vault-kv2/test",
+    operation_id = "testVaultKvV2SecretProviderConnection",
+    summary = "Test a Vault-compatible KV v2 Secret provider connection",
+    request_body = citadel_resources::TestSecretProviderInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SecretProviderConnectionTestResultView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_secret_provider(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -83,6 +57,19 @@ async fn test_secret_provider(
     Ok(no_store(Json(result).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/secrets/external/test",
+    operation_id = "testExternalSecret",
+    summary = "Test an external Secret reference",
+    request_body = citadel_resources::TestExternalSecretInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ExternalSecretTestResultView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_external_secret(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -102,7 +89,7 @@ async fn test_external_secret(
     Ok(no_store(Json(result).into_response()))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GlobalBindingsResponse {
     #[serde(flatten)]
@@ -110,20 +97,20 @@ struct GlobalBindingsResponse {
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct SecretDefinitionsResponse {
     secrets: Vec<SecretDefinitionView>,
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct SecretProvidersResponse {
     providers: Vec<SecretProviderView>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct InternalSecretInput {
     name: String,
@@ -139,6 +126,18 @@ struct SecretScopeQuery {
     target_resource_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/resourceBindings/global",
+    operation_id = "getGlobalResourceBindings",
+    summary = "Get global resource bindings",
+    responses(
+        (status = 200, description = "Success", body = GlobalBindingsResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_global_bindings(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -157,6 +156,19 @@ async fn get_global_bindings(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/global",
+    operation_id = "createGlobalResourceBinding",
+    summary = "Create a global resource binding",
+    request_body = NewResourceBinding,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_global_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -181,6 +193,19 @@ async fn create_global_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/resourceBindings/global",
+    operation_id = "updateGlobalResourceBinding",
+    summary = "Update a global resource binding",
+    request_body = ResourceBindingInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_global_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -203,6 +228,19 @@ async fn update_global_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/resourceBindings/global/{id}",
+    operation_id = "deleteGlobalResourceBinding",
+    summary = "Delete a global resource binding",
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_global_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -224,6 +262,19 @@ async fn delete_global_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/resourceBindings/{scope}/{resourceId}",
+    operation_id = "getResourceBindings",
+    summary = "Get resource bindings",
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("scope" = String, Path), ("resourceId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_resource_bindings(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -237,6 +288,20 @@ async fn get_resource_bindings(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/{scope}/{resourceId}",
+    operation_id = "createResourceBinding",
+    summary = "Create a resource binding",
+    request_body = NewResourceBinding,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("scope" = String, Path), ("resourceId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_resource_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -263,6 +328,20 @@ async fn create_resource_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/resourceBindings/{scope}/{resourceId}",
+    operation_id = "updateResourceBinding",
+    summary = "Update a resource binding",
+    request_body = ResourceBindingInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("scope" = String, Path), ("resourceId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_resource_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -287,6 +366,19 @@ async fn update_resource_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/resourceBindings/{scope}/{resourceId}/{id}",
+    operation_id = "deleteResourceBinding",
+    summary = "Delete a resource binding",
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("scope" = String, Path), ("resourceId" = uuid::Uuid, Path), ("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_resource_binding(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -320,6 +412,19 @@ async fn delete_resource_binding(
     Ok(no_store(Json(bindings).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/resourceBindings/secrets",
+    operation_id = "listSecretDefinitions",
+    summary = "List Secret definitions",
+    responses(
+        (status = 200, description = "Success", body = SecretDefinitionsResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("scope" = Option<citadel_resources::ResourceBindingScope>, Query), ("resourceId" = Option<uuid::Uuid>, Query), ("targetResourceType" = Option<citadel_domain::ResourceType>, Query), ("targetResourceId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_secrets(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -349,6 +454,20 @@ async fn list_secrets(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/secrets",
+    operation_id = "createInternalSecret",
+    summary = "Create an internal encrypted Secret",
+    request_body = InternalSecretInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::SecretDefinitionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("scope" = Option<String>, Query), ("resourceId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_internal_secret(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -371,6 +490,19 @@ async fn create_internal_secret(
     Ok(no_store(Json(secret).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/secrets/external",
+    operation_id = "createExternalSecret",
+    summary = "Create an external Secret definition",
+    request_body = ExternalSecretInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::SecretDefinitionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_external_secret(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -393,6 +525,20 @@ async fn create_external_secret(
     Ok(no_store(Json(secret).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/resourceBindings/secrets/external/{id}",
+    operation_id = "updateExternalSecret",
+    summary = "Update an external Secret definition",
+    request_body = ExternalSecretPatch,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::SecretDefinitionView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_external_secret(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -416,6 +562,19 @@ async fn update_external_secret(
     Ok(no_store(Json(secret).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/resourceBindings/secrets/{id}",
+    operation_id = "deleteSecretDefinition",
+    summary = "Delete an unused Secret definition",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_secret(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -437,6 +596,18 @@ async fn delete_secret(
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/resourceBindings/secret-providers",
+    operation_id = "listSecretProviders",
+    summary = "List Secret providers",
+    responses(
+        (status = 200, description = "Success", body = SecretProvidersResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_secret_providers(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -457,6 +628,19 @@ async fn list_secret_providers(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/resourceBindings/secret-providers/vault-kv2",
+    operation_id = "createVaultKvV2SecretProvider",
+    summary = "Create a Vault-compatible KV v2 Secret provider",
+    request_body = SecretProviderInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::SecretProviderView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_secret_provider(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -477,6 +661,20 @@ async fn create_secret_provider(
     Ok(no_store(Json(provider).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/resourceBindings/secret-providers/vault-kv2/{id}",
+    operation_id = "updateVaultKvV2SecretProvider",
+    summary = "Update a Vault-compatible KV v2 Secret provider",
+    request_body = SecretProviderPatch,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::SecretProviderView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_secret_provider(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -499,6 +697,19 @@ async fn update_secret_provider(
     Ok(no_store(Json(provider).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/resourceBindings/secret-providers/{id}",
+    operation_id = "deleteSecretProvider",
+    summary = "Delete a Secret provider",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_secret_provider(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -748,4 +959,27 @@ fn path_value<T>(
         path.map_err(|error| citadel_identity::IdentityError::Validation(error.to_string())),
         headers,
     )
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ResourcesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(get_global_bindings))
+        .normalized_routes(utoipa_axum::routes!(create_global_binding))
+        .normalized_routes(utoipa_axum::routes!(update_global_binding))
+        .normalized_routes(utoipa_axum::routes!(delete_global_binding))
+        .normalized_routes(utoipa_axum::routes!(get_resource_bindings))
+        .normalized_routes(utoipa_axum::routes!(create_resource_binding))
+        .normalized_routes(utoipa_axum::routes!(update_resource_binding))
+        .normalized_routes(utoipa_axum::routes!(delete_resource_binding))
+        .normalized_routes(utoipa_axum::routes!(list_secrets))
+        .normalized_routes(utoipa_axum::routes!(create_internal_secret))
+        .normalized_routes(utoipa_axum::routes!(create_external_secret))
+        .normalized_routes(utoipa_axum::routes!(update_external_secret))
+        .normalized_routes(utoipa_axum::routes!(delete_secret))
+        .normalized_routes(utoipa_axum::routes!(list_secret_providers))
+        .normalized_routes(utoipa_axum::routes!(create_secret_provider))
+        .normalized_routes(utoipa_axum::routes!(update_secret_provider))
+        .normalized_routes(utoipa_axum::routes!(delete_secret_provider))
+        .normalized_routes(utoipa_axum::routes!(test_secret_provider))
+        .normalized_routes(utoipa_axum::routes!(test_external_secret))
 }

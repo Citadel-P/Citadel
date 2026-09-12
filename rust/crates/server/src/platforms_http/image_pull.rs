@@ -5,6 +5,19 @@ use citadel_platforms::image_pull::{
 use futures_util::StreamExt;
 static PULL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/images/pull",
+    operation_id = "pullImage",
+    summary = "Pull a Docker image with progress",
+    request_body = PullImageInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/pullImageResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn pull(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

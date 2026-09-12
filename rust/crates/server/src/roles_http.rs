@@ -6,7 +6,6 @@ use axum::extract::{Extension, Path, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, PermissionGrant, permission_matrix};
 use citadel_identity::{
@@ -17,10 +16,10 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct RolesHttpState {
@@ -31,26 +30,30 @@ pub struct RolesHttpState {
 
 pub fn router(state: RolesHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_ROLES, list)
-            .contract_route(routes::GET_ROLE, get)
-            .contract_route(routes::CREATE_ROLE, create)
-            .contract_route(routes::PATCH_ROLE_PERMISSIONS, patch_permissions)
-            .contract_route(routes::RENAME_ROLE, rename)
-            .contract_route(routes::DELETE_ROLES, delete)
-            .contract_route(routes::GET_PERMISSION_MATRIX, get_permission_matrix)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "Role",
     )
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RolesResponse {
     roles: Vec<RoleView>,
     capabilities: ResourceCapabilities,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/roles",
+    operation_id = "listRoles",
+    summary = "Get all Roles",
+    responses(
+        (status = 200, description = "Success", body = RolesResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -71,6 +74,19 @@ async fn list(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/roles/{id}",
+    operation_id = "getRole",
+    summary = "Get a Role by ID",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -86,6 +102,19 @@ async fn get(
     Ok(no_store(Json(role).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/roles",
+    operation_id = "createRole",
+    summary = "Create a Role",
+    request_body = CreateRoleRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -104,6 +133,20 @@ async fn create(
     Ok(no_store(Json(role).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/roles/{id}/permissions",
+    operation_id = "updateRolePermissions",
+    summary = "Update Role permissions",
+    request_body = PatchRolePermissionsRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn patch_permissions(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -126,6 +169,19 @@ async fn patch_permissions(
     Ok(no_store(Json(role).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/roles/rename",
+    operation_id = "renameRole",
+    summary = "Rename a Role",
+    request_body = RenameRoleRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -147,6 +203,19 @@ async fn rename(
     Ok(no_store(Json(role).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/roles",
+    operation_id = "deleteRoles",
+    summary = "Delete Roles",
+    request_body = DeleteRolesRequest,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -201,6 +270,18 @@ async fn role_permission(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/roles/permissions/matrix",
+    operation_id = "getPermissionMatrix",
+    summary = "Get permission matrix",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/PermissionMatrixResponse"), content_type = "application/json"),
+        crate::openapi::errors::RequestErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_permission_matrix() -> Response {
     let matrix = permission_matrix()
         .into_iter()
@@ -311,4 +392,15 @@ const fn specific_permission_label(permission: SpecificPermission) -> &'static s
         SpecificPermission::ResourceBindings => "Resource Bindings",
         _ => permission_name(permission),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<RolesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(patch_permissions))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(delete))
+        .normalized_routes(utoipa_axum::routes!(get_permission_matrix))
 }
