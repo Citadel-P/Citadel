@@ -1,13 +1,17 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ApiQuery;
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Extension, Path, Query, RawQuery, State};
+use axum::extract::rejection::JsonRejection;
+use axum::extract::{Extension, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
 use citadel_automation::{
     AutomationActionInput, AutomationError, AutomationProgress, AutomationProgressError,
-    AutomationService,
+    AutomationService, UpdateAutomationActionInput, UpdateAutomationActionMetadata,
 };
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
@@ -99,6 +103,13 @@ async fn action_response(
 #[serde(rename_all = "camelCase")]
 struct RunList {
     runs: Vec<citadel_automation::AutomationRunView>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct AutomationActionRunLogsView {
+    run_id: Uuid,
+    logs: String,
 }
 
 #[derive(Deserialize, Default, utoipa::ToSchema)]
@@ -199,7 +210,7 @@ async fn create(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(mut input): Json<AutomationActionInput>,
+    ValidatedJson(mut input): ValidatedJson<AutomationActionInput>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
@@ -262,7 +273,7 @@ async fn create(
 async fn get_one(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -291,7 +302,7 @@ async fn rename(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(input): Json<RenameInput>,
+    ValidatedJson(input): ValidatedJson<RenameInput>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize(
@@ -319,7 +330,7 @@ async fn rename(
     path = "/api/v1/automation/actions/{id}",
     operation_id = "updateAutomationAction",
     summary = "Update an Automation Action",
-    request_body = ref("#/components/schemas/UpdateAutomationActionInput"),
+    request_body = UpdateAutomationActionInput,
     responses(
         (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -331,11 +342,19 @@ async fn rename(
 async fn update(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<Value>,
+    patch: Result<Json<UpdateAutomationActionInput>, JsonRejection>,
 ) -> IdentityHttpResult {
-    update_action(state, principal, id, headers, patch, false).await
+    update_action(
+        state,
+        principal,
+        id,
+        headers,
+        patch.map(|Json(value)| value),
+        false,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -343,7 +362,7 @@ async fn update(
     path = "/api/v1/automation/actions/{id}/_metadata",
     operation_id = "updateAutomationActionMetadata",
     summary = "Update Automation Action metadata",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body = UpdateAutomationActionMetadata,
     responses(
         (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -355,11 +374,19 @@ async fn update(
 async fn update_metadata(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<Value>,
+    patch: Result<Json<UpdateAutomationActionMetadata>, JsonRejection>,
 ) -> IdentityHttpResult {
-    update_action(state, principal, id, headers, patch, true).await
+    update_action(
+        state,
+        principal,
+        id,
+        headers,
+        patch.map(|Json(value)| value.into()),
+        true,
+    )
+    .await
 }
 
 async fn update_action(
@@ -367,28 +394,20 @@ async fn update_action(
     principal: Option<Extension<ActorPrincipal>>,
     id: Uuid,
     headers: HeaderMap,
-    patch: Value,
+    patch: Result<UpdateAutomationActionInput, JsonRejection>,
     metadata_only: bool,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
-    if metadata_only
-        && !patch
-            .as_object()
-            .is_some_and(|fields| fields.keys().all(|key| key == "description"))
-    {
-        return identity_result(
-            Err(IdentityError::Validation(
-                "Only description can be changed through Action metadata.".into(),
-            )),
-            &headers,
-        );
-    }
+    let patch = identity_result(
+        patch.map_err(crate::request_validation::invalid_json),
+        &headers,
+    )?;
     let current = identity_result(
         state.automation.store().get(id).await.map_err(map_error),
         &headers,
     )?;
-    let mut input = merge_update(current.clone(), patch, &headers)?;
+    let mut input = patch.apply(current.clone());
     identity_result(
         state
             .automation
@@ -448,7 +467,7 @@ async fn update_action(
 async fn remove(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -482,9 +501,9 @@ async fn remove(
 async fn run_action(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    input: Option<Json<RunInput>>,
+    input: Option<ValidatedJson<RunInput>>,
 ) -> IdentityHttpResult {
     enqueue(state, principal, id, headers, input, "Manual").await
 }
@@ -506,9 +525,9 @@ async fn run_action(
 async fn test_action(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    input: Option<Json<RunInput>>,
+    input: Option<ValidatedJson<RunInput>>,
 ) -> IdentityHttpResult {
     enqueue(state, principal, id, headers, input, "Test").await
 }
@@ -518,12 +537,12 @@ async fn enqueue(
     principal: Option<Extension<ActorPrincipal>>,
     id: Uuid,
     headers: HeaderMap,
-    input: Option<Json<RunInput>>,
+    input: Option<ValidatedJson<RunInput>>,
     trigger: &str,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Execute, &headers).await?;
-    let input = input.map(|Json(value)| value).unwrap_or_default();
+    let input = input.map(|ValidatedJson(value)| value).unwrap_or_default();
     let args = match input.args_json {
         Some(Value::String(value)) => identity_result(
             serde_json::from_str::<Value>(&value)
@@ -618,8 +637,8 @@ async fn enqueue(
 async fn list_runs(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
-    Query(query): Query<LimitQuery>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiQuery(query): ApiQuery<LimitQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -652,7 +671,7 @@ async fn list_runs(
 async fn get_run(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, run_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -675,7 +694,7 @@ async fn get_run(
     operation_id = "getAutomationActionRunLogs",
     summary = "Get Automation Action run logs",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/AutomationActionRunLogsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = AutomationActionRunLogsView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)),
@@ -685,7 +704,7 @@ async fn get_run(
 async fn run_logs(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, run_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -700,8 +719,11 @@ async fn run_logs(
         &headers,
     )?;
     Ok(no_store(
-        Json(serde_json::json!({"runId":run.id,"logs":run.logs.unwrap_or_default()}))
-            .into_response(),
+        Json(AutomationActionRunLogsView {
+            run_id: run.id,
+            logs: run.logs.unwrap_or_default(),
+        })
+        .into_response(),
     ))
 }
 
@@ -721,7 +743,7 @@ async fn run_logs(
 async fn cancel_run(
     State(state): State<AutomationHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, run_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -741,69 +763,6 @@ fn actor(
         value
             .map(|Extension(value)| value)
             .ok_or(IdentityError::Unauthenticated),
-        headers,
-    )
-}
-
-fn merge_update(
-    current: citadel_automation::AutomationActionView,
-    patch: Value,
-    headers: &HeaderMap,
-) -> IdentityHttpResult<AutomationActionInput> {
-    const FIELDS: &[&str] = &[
-        "description",
-        "code",
-        "defaultArgsJson",
-        "enabled",
-        "scheduleEnabled",
-        "scheduleCron",
-        "scheduleTimeZone",
-        "webhook",
-        "timeoutSeconds",
-        "alertOnFailure",
-        "runAsActorId",
-    ];
-    let Value::Object(patch) = patch else {
-        return identity_result(
-            Err(IdentityError::Validation(
-                "Automation Action update must be a JSON object.".to_owned(),
-            )),
-            headers,
-        );
-    };
-    if let Some(field) = patch.keys().find(|field| !FIELDS.contains(&field.as_str())) {
-        return identity_result(
-            Err(IdentityError::Validation(format!(
-                "Automation Action update field '{field}' is not supported."
-            ))),
-            headers,
-        );
-    }
-    let mut value = serde_json::json!({
-        "name": current.name,
-        "description": current.description,
-        "code": current.code,
-        "defaultArgsJson": current.default_args_json,
-        "enabled": current.enabled,
-        "scheduleEnabled": current.schedule_enabled,
-        "scheduleCron": current.schedule_cron,
-        "scheduleTimeZone": current.schedule_time_zone,
-        "webhook": current.webhook,
-        "timeoutSeconds": current.timeout_seconds,
-        "alertOnFailure": current.alert_on_failure,
-        "runAsActorId": current.run_as_actor_id,
-        "tagIds": [],
-    });
-    let target = value
-        .as_object_mut()
-        .expect("Automation Action update base is an object");
-    for (key, value) in patch {
-        target.insert(key, value);
-    }
-    identity_result(
-        serde_json::from_value(value).map_err(|error| {
-            IdentityError::Validation(format!("Automation Action update is invalid: {error}"))
-        }),
         headers,
     )
 }

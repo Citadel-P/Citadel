@@ -5,6 +5,9 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
+mod config;
+pub use config::{RepoWebhookConfig, WebhookAuthScheme, WebhookProvider};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebhookConfiguration {
     pub enabled: bool,

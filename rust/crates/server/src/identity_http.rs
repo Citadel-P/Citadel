@@ -1,3 +1,4 @@
+use crate::request_validation::ValidatedJson;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -108,7 +109,7 @@ async fn initialize(
     State(state): State<IdentityHttpState>,
     connect: ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Json(request): Json<InitializeCitadelRequest>,
+    ValidatedJson(request): ValidatedJson<InitializeCitadelRequest>,
 ) -> Response {
     let metadata = session_metadata(&headers, connect);
     match state.mfa.initialize(request, metadata).await {
@@ -141,7 +142,7 @@ async fn login(
     State(state): State<IdentityHttpState>,
     connect: ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Json(request): Json<LoginRequest>,
+    ValidatedJson(request): ValidatedJson<LoginRequest>,
 ) -> Response {
     let metadata = session_metadata(&headers, connect);
     match state.mfa.login(request, metadata).await {

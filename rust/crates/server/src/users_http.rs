@@ -88,7 +88,7 @@ async fn list(
         user_read_permission(&state.identity, &principal).await,
         &headers,
     )?;
-    let filter = identity_result(user_query(query, "User filters are invalid."), &headers)?;
+    let filter = identity_result(user_query(query), &headers)?;
     let paged_result = identity_result(
         state
             .users
@@ -139,10 +139,7 @@ async fn search(
         user_read_permission(&state.identity, &principal).await,
         &headers,
     )?;
-    let filter = identity_result(
-        user_query(query, "User search filters are invalid."),
-        &headers,
-    )?;
+    let filter = identity_result(user_query(query), &headers)?;
     let users = identity_result(
         state.users.search(&filter.query, filter.limit).await,
         &headers,
@@ -459,22 +456,19 @@ async fn delete(
 
 fn user_path<T>(path: Result<Path<T>, PathRejection>) -> Result<T, IdentityError> {
     path.map(|Path(value)| value)
-        .map_err(|_| IdentityError::Validation("User path is invalid.".to_owned()))
+        .map_err(crate::request_validation::invalid_path)
 }
 
 fn user_json<T>(payload: Result<Json<T>, JsonRejection>) -> Result<T, IdentityError> {
     payload
         .map(|Json(value)| value)
-        .map_err(|_| IdentityError::Validation("User request body is invalid.".to_owned()))
+        .map_err(crate::request_validation::invalid_json)
 }
 
-fn user_query<T>(
-    query: Result<Query<T>, QueryRejection>,
-    message: &str,
-) -> Result<T, IdentityError> {
+fn user_query<T>(query: Result<Query<T>, QueryRejection>) -> Result<T, IdentityError> {
     query
         .map(|Query(value)| value)
-        .map_err(|_| IdentityError::Validation(message.to_owned()))
+        .map_err(crate::request_validation::invalid_query)
 }
 
 async fn authorize_administrator(

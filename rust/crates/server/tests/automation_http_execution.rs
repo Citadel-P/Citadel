@@ -28,6 +28,8 @@ use uuid::Uuid;
 
 #[path = "automation_http_execution/drafts.rs"]
 mod drafts;
+#[path = "automation_http_execution/patches.rs"]
+mod patches;
 #[path = "automation_http_execution/webhooks.rs"]
 mod webhooks;
 
@@ -77,11 +79,16 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .merge(webhooks::router(db.clone(), service.clone()));
     let admin = actor(&db, true).await;
     let denied = actor(&db, false).await;
+    patches::verify(&app, &admin, &denied, &store).await;
     let defaulted = request(&app, Method::POST, "/api/v1/automation/actions", Some(admin.clone()), Some(json!({
-        "name":format!("default-timeout-{}",Uuid::now_v7()),"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false
+        "name":format!("default-timeout-{}",Uuid::now_v7()),"webhook":{},"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false
     }))).await;
     assert_eq!(defaulted.status(), StatusCode::OK);
-    assert_eq!(body(defaulted).await["timeoutSeconds"], 300);
+    let defaulted = body(defaulted).await;
+    assert_eq!(defaulted["timeoutSeconds"], 300);
+    assert_eq!(defaulted["webhook"]["enabled"], false);
+    assert_eq!(defaulted["webhook"]["provider"], "GitHub");
+    assert_eq!(defaulted["webhook"]["authScheme"], "GitHubHmacSha256");
     let oversized = request(&app, Method::POST, "/api/v1/automation/actions", Some(admin.clone()), Some(json!({
         "name":format!("invalid-timeout-{}",Uuid::now_v7()),"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false,"timeoutSeconds":1801
     }))).await;

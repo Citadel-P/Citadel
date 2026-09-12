@@ -1265,7 +1265,16 @@
               "null"
             ]
           },
-          "webhook": {}
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
+            ]
+          }
         },
         "required": [
           "name",
@@ -1548,7 +1557,16 @@
             "format": "date-time",
             "type": "string"
           },
-          "webhook": {}
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
+            ]
+          }
         },
         "required": [
           "id",
@@ -11450,34 +11468,48 @@
         "type": "object"
       },
       "RepoWebhookConfig": {
+        "description": "Shared wire configuration, matching .NET's WebhookConfig defaults.",
         "properties": {
           "authScheme": {
-            "enum": [
-              "GitHubHmacSha256",
-              "GitLabSignedToken",
-              "GitLabLegacyToken",
-              "BearerToken"
-            ],
-            "type": "string"
+            "default": "GitHubHmacSha256",
+            "oneOf": [
+              {
+                "enum": [
+                  "GitHubHmacSha256",
+                  "GitLabSignedToken",
+                  "GitLabLegacyToken",
+                  "BearerToken"
+                ],
+                "type": "string"
+              }
+            ]
           },
           "branchFilter": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "enabled": {
+            "default": false,
             "type": "boolean"
           },
           "provider": {
-            "enum": [
-              "GitHub",
-              "GitLab",
-              "Generic"
-            ],
-            "type": "string"
+            "default": "GitHub",
+            "oneOf": [
+              {
+                "enum": [
+                  "GitHub",
+                  "GitLab",
+                  "Generic"
+                ],
+                "type": "string"
+              }
+            ]
           },
           "secret": {
+            "default": null,
             "type": [
               "string",
               "null"
@@ -16787,16 +16819,10 @@
         "additionalProperties": false,
         "properties": {
           "alertOnFailure": {
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "type": "boolean"
           },
           "code": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "defaultArgsJson": {
             "type": [
@@ -16811,10 +16837,7 @@
             ]
           },
           "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "type": "boolean"
           },
           "runAsActorId": {
             "format": "uuid",
@@ -16830,10 +16853,7 @@
             ]
           },
           "scheduleEnabled": {
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "type": "boolean"
           },
           "scheduleTimeZone": {
             "type": [
@@ -16856,6 +16876,18 @@
               {
                 "$ref": "#/components/schemas/RepoWebhookConfig"
               }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAutomationActionMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
             ]
           }
         },
@@ -22366,7 +22398,8 @@
                 "$ref": "#/components/schemas/UpdateAutomationActionInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -22489,10 +22522,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PatchResourceMetadata"
+                "$ref": "#/components/schemas/UpdateAutomationActionMetadata"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {

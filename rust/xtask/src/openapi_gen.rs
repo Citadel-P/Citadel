@@ -274,6 +274,28 @@ mod tests {
     }
 
     #[test]
+    fn automation_patch_and_logs_use_native_dtos() {
+        let doc = document(false);
+        let schemas = &doc["components"]["schemas"];
+        let patch = &schemas["UpdateAutomationActionInput"];
+        assert_eq!(patch["additionalProperties"], false);
+        assert_eq!(patch["properties"]["code"]["type"], "string");
+        assert!(
+            patch
+                .get("required")
+                .is_none_or(|value| value.as_array().is_some_and(Vec::is_empty))
+        );
+        let metadata = &schemas["UpdateAutomationActionMetadata"];
+        assert_eq!(metadata["properties"].as_object().unwrap().len(), 1);
+        assert!(metadata["properties"].get("description").is_some());
+        assert_eq!(metadata["additionalProperties"], false);
+        assert_eq!(
+            schemas["AutomationActionRunLogsView"]["properties"]["logs"]["type"],
+            "string"
+        );
+    }
+
+    #[test]
     fn reference_validation_rejects_missing_nested_components() {
         assert!(validate_references(&json!({"components":{"schemas":{"Broken":{"properties":{"nested":{"$ref":"#/components/schemas/Missing"}}}}}})).is_err());
     }

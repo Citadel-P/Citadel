@@ -1,7 +1,8 @@
+use crate::request_validation::ApiQuery;
 use std::sync::Arc;
 
 use axum::extract::rejection::PathRejection;
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Path, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -126,7 +127,7 @@ async fn files(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
-    Query(query): Query<FilesQuery>,
+    ApiQuery(query): ApiQuery<FilesQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(principal, path, &headers)?;
@@ -164,7 +165,7 @@ async fn file_content(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
-    Query(query): Query<FilesQuery>,
+    ApiQuery(query): ApiQuery<FilesQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(principal, path, &headers)?;
@@ -208,7 +209,7 @@ async fn compare(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
-    Query(query): Query<CompareQuery>,
+    ApiQuery(query): ApiQuery<CompareQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(principal, path, &headers)?;
@@ -283,7 +284,7 @@ async fn compose_projects(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
-    Query(query): Query<BranchQuery>,
+    ApiQuery(query): ApiQuery<BranchQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(principal, path, &headers)?;
@@ -320,7 +321,7 @@ async fn sync(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
-    Query(query): Query<BranchQuery>,
+    ApiQuery(query): ApiQuery<BranchQuery>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(principal, path, &headers)?;

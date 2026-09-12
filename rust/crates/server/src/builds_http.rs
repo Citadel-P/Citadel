@@ -1,6 +1,9 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ApiQuery;
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, RawQuery, State};
+use axum::extract::{Extension, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -205,7 +208,7 @@ async fn create_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(mut input): Json<BuildProjectInput>,
+    ValidatedJson(mut input): ValidatedJson<BuildProjectInput>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
@@ -344,7 +347,7 @@ async fn authorize_build_dependencies(
 async fn get_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -371,7 +374,7 @@ async fn get_project(
 async fn archive_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -405,9 +408,9 @@ async fn archive_project(
 async fn update_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     save_project(&state, principal, id, patch, None, false, &headers).await
 }
@@ -429,9 +432,9 @@ async fn update_project(
 async fn update_project_metadata(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     save_project(&state, principal, id, patch, None, true, &headers).await
 }
@@ -453,7 +456,7 @@ async fn rename_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(input): Json<RenamePool>,
+    ValidatedJson(input): ValidatedJson<RenamePool>,
 ) -> IdentityHttpResult {
     save_project(
         &state,
@@ -531,9 +534,9 @@ async fn save_project(
 async fn queue_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    input: Option<Json<QueueInput>>,
+    input: Option<ValidatedJson<QueueInput>>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     identity_result(
@@ -550,7 +553,7 @@ async fn queue_run(
         &headers,
     )?;
     let trigger = input
-        .and_then(|Json(value)| value.trigger)
+        .and_then(|ValidatedJson(value)| value.trigger)
         .unwrap_or_else(|| "Manual".to_owned());
     if !matches!(trigger.as_str(), "Manual" | "Webhook" | "Dependency") {
         return Err(crate::identity_http::IdentityHttpError::from_parts(
@@ -597,7 +600,7 @@ async fn queue_run(
 async fn list_runs(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Query(filter): Query<RunFilter>,
+    ApiQuery(filter): ApiQuery<RunFilter>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -636,7 +639,7 @@ async fn list_runs(
 async fn get_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -670,7 +673,7 @@ async fn get_run(
 async fn get_logs(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -708,7 +711,7 @@ async fn get_logs(
 async fn cancel_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -800,7 +803,7 @@ async fn create_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(mut input): Json<BuildAgentPoolInput>,
+    ValidatedJson(mut input): ValidatedJson<BuildAgentPoolInput>,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     authorize_global_for(
@@ -840,7 +843,7 @@ async fn create_pool(
 async fn get_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -876,7 +879,7 @@ async fn get_pool(
 async fn test_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -917,9 +920,9 @@ async fn test_pool(
 async fn update_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     save_pool(&state, principal, id, patch, None, false, &headers).await
 }
@@ -941,9 +944,9 @@ async fn update_pool(
 async fn update_pool_metadata(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     save_pool(&state, principal, id, patch, None, true, &headers).await
 }
@@ -971,7 +974,7 @@ async fn rename_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(input): Json<RenamePool>,
+    ValidatedJson(input): ValidatedJson<RenamePool>,
 ) -> IdentityHttpResult {
     save_pool(
         &state,
@@ -1117,7 +1120,7 @@ async fn pool_response(
 async fn archive_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -1170,7 +1173,7 @@ async fn enroll_pool(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -1208,7 +1211,7 @@ async fn pool_edge_status(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
@@ -1248,7 +1251,7 @@ async fn revoke_pool_edge(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;

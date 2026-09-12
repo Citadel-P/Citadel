@@ -1,9 +1,10 @@
+use crate::request_validation::ApiPath;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::Router;
 use axum::extract::rejection::QueryRejection;
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use citadel_application::{ActivityFilter, ActivityRecord, ActivityService, PagedActivityRecords};
@@ -102,7 +103,7 @@ struct ActivitiesView {
 async fn get_by_id(
     State(state): State<ActivitiesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(principal)) = principal else {

@@ -1,3 +1,4 @@
+use crate::request_validation::invalid_json;
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, PathRejection};
@@ -306,7 +307,7 @@ fn principal_and_id(
 ) -> IdentityHttpResult<(ActorPrincipal, Uuid)> {
     let principal = identity_result(require_actor(principal), headers)?;
     let Path(id) = identity_result(
-        path.map_err(|error| IdentityError::Validation(error.to_string())),
+        path.map_err(crate::request_validation::invalid_path),
         headers,
     )?;
     Ok((principal, id))
@@ -378,10 +379,6 @@ fn account_error(error: GitAccountError) -> IdentityError {
         GitAccountError::Credential => IdentityError::Credential,
         GitAccountError::Storage(message) => IdentityError::Storage(message),
     }
-}
-
-fn invalid_json(error: JsonRejection) -> IdentityError {
-    crate::request_validation::invalid_json(error)
 }
 
 fn publish(state: &GitAccountsHttpState) {

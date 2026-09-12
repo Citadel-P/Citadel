@@ -59,6 +59,9 @@ pub async fn verify(
     )
     .await;
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();
+    // Older rows may contain a JSON null rather than a SQL NULL.
+    set_config(db, id, &Value::Null).await;
+    assert!(store.get(id).await.unwrap().webhook.is_none());
     let config = json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"fixture-webhook-secret"});
     set_config(db, id, &config).await;
     let url = format!("/listener/generic/automation-action/{id}/run");
@@ -211,7 +214,13 @@ pub async fn verify(
     }
     // The authenticated snapshot is rechecked under the enqueue row lock.
     assert!(matches!(
-        store.enqueue_webhook(id, &config, &json!({})).await,
+        store
+            .enqueue_webhook(
+                id,
+                &serde_json::from_value(config.clone()).unwrap(),
+                &json!({})
+            )
+            .await,
         Err(AutomationError::Conflict(_))
     ));
     set_config(db, id, &json!({"enabled":false})).await;

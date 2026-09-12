@@ -1,8 +1,10 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::{Extension, Path, State};
+use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use citadel_identity::ActorPrincipal;
@@ -40,7 +42,7 @@ async fn change_password(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<ChangeCurrentPasswordRequest>,
+    ValidatedJson(request): ValidatedJson<ChangeCurrentPasswordRequest>,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);
@@ -101,7 +103,7 @@ async fn list_sessions(
 async fn revoke_session(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(session_id): Path<uuid::Uuid>,
+    ApiPath(session_id): ApiPath<uuid::Uuid>,
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
@@ -190,7 +192,7 @@ async fn patch_preferences(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<PatchUserPreferencesRequest>,
+    ValidatedJson(request): ValidatedJson<PatchUserPreferencesRequest>,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);
@@ -244,7 +246,7 @@ async fn update_current(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<UpdateCurrentProfileRequest>,
+    ValidatedJson(request): ValidatedJson<UpdateCurrentProfileRequest>,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);

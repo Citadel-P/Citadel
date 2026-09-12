@@ -1,7 +1,8 @@
+use crate::request_validation::ApiPath;
 use std::net::SocketAddr;
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{ConnectInfo, Extension, Path, State};
+use axum::extract::{ConnectInfo, Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
@@ -48,8 +49,14 @@ async fn verify_authentication(
         Ok(id) => id,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state
         .mfa
@@ -122,8 +129,14 @@ async fn confirm_mandatory_setup(
         Ok(id) => id,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state
         .mfa
@@ -197,8 +210,14 @@ async fn start_profile_setup(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state.mfa.start_profile_setup(&principal, input).await {
         Ok(view) => no_store(Json(view).into_response()),
@@ -229,8 +248,14 @@ async fn confirm_profile_setup(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state
         .mfa
@@ -265,8 +290,14 @@ async fn disable_profile_mfa(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state
         .mfa
@@ -301,8 +332,14 @@ async fn regenerate_recovery_codes(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let Ok(Json(input)) = input else {
-        return invalid_json(&headers);
+    let input = match input {
+        Ok(Json(input)) => input,
+        Err(error) => {
+            return identity_error_response(
+                crate::request_validation::invalid_json(error),
+                &headers,
+            );
+        }
     };
     match state.mfa.regenerate_recovery_codes(&principal, input).await {
         Ok(view) => no_store(Json(view).into_response()),
@@ -326,7 +363,7 @@ async fn regenerate_recovery_codes(
 async fn reset_user_mfa(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(user_id): Path<Uuid>,
+    ApiPath(user_id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> Response {
     let principal = match require_human_administrator(principal) {
@@ -356,13 +393,6 @@ fn authentication_cookie_id(headers: &HeaderMap, name: &str) -> Result<Uuid, Ide
     cookie(headers, name)
         .and_then(|value| Uuid::parse_str(value).ok())
         .ok_or(IdentityError::Unauthenticated)
-}
-
-fn invalid_json(headers: &HeaderMap) -> Response {
-    identity_error_response(
-        IdentityError::Validation("The request body is invalid.".to_owned()),
-        headers,
-    )
 }
 
 #[cfg(test)]

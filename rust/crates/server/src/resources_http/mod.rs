@@ -1,3 +1,4 @@
+use crate::request_validation::invalid_json;
 pub(crate) mod bindings;
 pub(crate) mod catalog;
 pub(crate) mod tags;
@@ -6,7 +7,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::Extension;
-use axum::extract::rejection::JsonRejection;
 use axum::http::HeaderMap;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
@@ -118,10 +118,6 @@ fn metadata_error(error: ResourceMetadataError) -> IdentityError {
         ResourceMetadataError::Credential => IdentityError::Credential,
         ResourceMetadataError::Storage(message) => IdentityError::Storage(message),
     }
-}
-
-fn invalid_json(error: JsonRejection) -> IdentityError {
-    crate::request_validation::invalid_json(error)
 }
 
 fn publish_resource_change(

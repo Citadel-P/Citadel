@@ -301,22 +301,6 @@
       }
     ]
   },
-  "AutomationActionRunLogsView": {
-    "properties": {
-      "logs": {
-        "type": "string"
-      },
-      "runId": {
-        "format": "uuid",
-        "type": "string"
-      }
-    },
-    "required": [
-      "runId",
-      "logs"
-    ],
-    "type": "object"
-  },
   "AutomationActionRunStreamItem": {
     "properties": {
       "error": {
@@ -3491,43 +3475,6 @@
     ],
     "type": "object"
   },
-  "RepoWebhookConfig": {
-    "properties": {
-      "authScheme": {
-        "enum": [
-          "GitHubHmacSha256",
-          "GitLabSignedToken",
-          "GitLabLegacyToken",
-          "BearerToken"
-        ],
-        "type": "string"
-      },
-      "branchFilter": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "enabled": {
-        "type": "boolean"
-      },
-      "provider": {
-        "enum": [
-          "GitHub",
-          "GitLab",
-          "Generic"
-        ],
-        "type": "string"
-      },
-      "secret": {
-        "type": [
-          "string",
-          "null"
-        ]
-      }
-    },
-    "type": "object"
-  },
   "ResourceBindingScope": {
     "enum": [
       "Global",
@@ -4847,84 +4794,6 @@
       "$ref": "#/components/schemas/TeamSearchItemView"
     },
     "type": "array"
-  },
-  "UpdateAutomationActionInput": {
-    "additionalProperties": false,
-    "properties": {
-      "alertOnFailure": {
-        "type": [
-          "boolean",
-          "null"
-        ]
-      },
-      "code": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "defaultArgsJson": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "description": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "enabled": {
-        "type": [
-          "boolean",
-          "null"
-        ]
-      },
-      "runAsActorId": {
-        "format": "uuid",
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "scheduleCron": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "scheduleEnabled": {
-        "type": [
-          "boolean",
-          "null"
-        ]
-      },
-      "scheduleTimeZone": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "timeoutSeconds": {
-        "format": "int32",
-        "type": [
-          "integer",
-          "null"
-        ]
-      },
-      "webhook": {
-        "oneOf": [
-          {
-            "type": "null"
-          },
-          {
-            "$ref": "#/components/schemas/RepoWebhookConfig"
-          }
-        ]
-      }
-    },
-    "type": "object"
   },
   "UpdateBackupPolicyInput": {
     "properties": {

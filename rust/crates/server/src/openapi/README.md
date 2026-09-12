@@ -73,3 +73,26 @@ DTOs, and remove its obsolete compatibility entries. Use distinct schema names
 for different DTOs that happen to share a Rust short name. Keep a compatibility
 schema when a handler still builds a response using arbitrary JSON; a bare
 `Value` cannot infer those fields.
+
+## HTTP extraction
+
+Use typed request/response DTOs. `ValidatedJson`, `ApiPath` and
+`ApiQuery` in `request_validation` delegate deserialization to Axum and
+convert rejections into Citadel Problem Details with request IDs and error
+details. Use `Result<Json<T>, JsonRejection>` (or the corresponding path/query
+extractor) when authorization must run before a validation error is returned;
+map the captured rejection through the shared validation functions afterwards.
+Do not move a deferred rejection ahead of authorization as a cleanup.
+
+`WorkloadQuery` centralizes Deployment/Stack/Service collection filters. Its
+parser preserves repeated tags, case-insensitive keys and duplicate rules;
+ordinary `Query<T>` does not implement all of those compatibility semantics.
+Other tag catalogs have different rules and keep their existing parsers.
+Raw signed webhook bodies and incremental JSON progress streams remain explicit.
+
+Automation webhook configuration uses the shared `citadel_resources::RepoWebhookConfig`
+DTO and its provider/authentication enums in create, PATCH, persisted views and
+dispatch. Its schema is derived and registered through those DTOs, including
+nullable PATCH fields; it has no frozen compatibility entry or custom schema
+builder. PostgreSQL uses SQLx's typed JSON codec. The unrelated webhook event
+payload remains raw bytes for signature verification.
