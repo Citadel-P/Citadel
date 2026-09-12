@@ -1,3 +1,4 @@
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, Query, State};
@@ -58,7 +59,7 @@ struct Channels {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Rules {
-    alert_rules: Vec<citadel_alerts::AlertRuleView>,
+    alert_rules: Vec<citadel_alerts::AlertRuleListItem>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +124,7 @@ async fn create_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(mut i): Json<AlertChannelInput>,
+    ValidatedJson(mut i): ValidatedJson<AlertChannelInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -164,7 +165,7 @@ async fn update_channel(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -184,7 +185,7 @@ async fn delete_channels(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(i): Json<Ids>,
+    ValidatedJson(i): ValidatedJson<Ids>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -203,7 +204,7 @@ async fn verify_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(i): Json<VerifyInput>,
+    ValidatedJson(i): ValidatedJson<VerifyInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -260,7 +261,7 @@ async fn create_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(mut i): Json<AlertRuleInput>,
+    ValidatedJson(mut i): ValidatedJson<AlertRuleInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -330,7 +331,7 @@ async fn rename_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(mut input): Json<citadel_alerts::RenameAlertRuleInput>,
+    ValidatedJson(mut input): ValidatedJson<citadel_alerts::RenameAlertRuleInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     result(input.validate(), &h)?;
@@ -353,7 +354,7 @@ async fn update_rule_metadata(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -380,7 +381,7 @@ async fn update_rule(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(patch): Json<serde_json::Value>,
+    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -404,7 +405,7 @@ async fn delete_rules(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(i): Json<Ids>,
+    ValidatedJson(i): ValidatedJson<Ids>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -484,7 +485,7 @@ async fn acknowledge(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(i): Json<Ids>,
+    ValidatedJson(i): ValidatedJson<Ids>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -503,7 +504,7 @@ async fn resolve(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(i): Json<ResolveInput>,
+    ValidatedJson(i): ValidatedJson<ResolveInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -582,7 +583,7 @@ fn result<T>(r: Result<T, AlertError>, h: &HeaderMap) -> IdentityHttpResult<T> {
                 IdentityError::ResourceNotFound("The provided alert rule does not exist")
             }
             AlertError::LicenseRequired => IdentityError::LicenseRequired("advanced-alerting"),
-            AlertError::Validation(m) => IdentityError::Validation(m),
+            AlertError::Validation(m) => crate::request_validation::validation_error(m),
             AlertError::NotFound => IdentityError::NotFound,
             AlertError::Conflict(m) => IdentityError::Conflict(m),
             AlertError::Storage(m) | AlertError::Delivery(m) => IdentityError::Storage(m),

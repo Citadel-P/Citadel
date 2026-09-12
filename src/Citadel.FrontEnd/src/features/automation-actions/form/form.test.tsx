@@ -1,7 +1,10 @@
 import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { Route, Routes } from 'react-router';
 import { AutomationActionForm } from './form';
+
+const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn() }));
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
   useLicenseEntitlements: () => ({
@@ -10,21 +13,23 @@ vi.mock('@/features/license/use-license-entitlements', () => ({
 }));
 
 vi.mock('@/lib/hooks', () => ({
-  useMutate: () => ({ mutateAsync: vi.fn() }),
+  useMutate: () => ({ mutateAsync: mocks.mutate }),
   useSaveResource: () => ({
-    save: vi.fn(),
+    save: mocks.save,
     isPending: false,
   }),
 }));
 
 vi.mock('@/lib/atoms', () => ({
-  useTaskSheet: () => ({ open: vi.fn() }),
+  useTaskSheet: () => ({ open: mocks.open }),
 }));
 
 vi.mock('@/lib/monaco', () => ({
   configureAutomationActionEditor: vi.fn(),
   MonacoDiff: () => null,
-  MonacoEditor: () => <div />,
+  MonacoEditor: ({ value, filename, onValueChange }: any) => (
+    <textarea aria-label={filename} value={value} onChange={(event) => onValueChange(event.target.value)} />
+  ),
 }));
 
 vi.mock('@/components/custom/common', () => ({
@@ -74,6 +79,72 @@ const action: AutomationActionView = {
 };
 
 describe('AutomationActionForm licensing', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mocks.open.mockClear();
+    mocks.save.mockClear();
+    mocks.mutate.mockClear();
+  });
+
+  it('tests edited code and arguments without saving the action', async () => {
+    const { user } = renderCitadel(
+      <Routes>
+        <Route
+          path="/automation/edit/:id"
+          element={
+            <AutomationActionForm
+              mode="edit"
+              resource={{
+                ...action,
+                capabilities: { ...action.capabilities, canExecute: true },
+              }}
+            />
+          }
+        />
+      </Routes>,
+      { route: `/automation/edit/${action.id}` },
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'action.mts' }), {
+      target: { value: 'console.log("draft");' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'args.json' }), {
+      target: { value: '{"draft":true}' },
+    });
+    expect(screen.getByRole('button', { name: 'Test Draft' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Test Draft' }));
+    expect(mocks.open).toHaveBeenCalledWith({
+      kind: 'automationActionRun',
+      payload: {
+        id: action.id,
+        name: action.name,
+        mode: 'test',
+        code: 'console.log("draft");',
+        argsJson: '{"draft":true}',
+      },
+    });
+    expect(screen.getByRole('textbox', { name: 'action.mts' })).toHaveValue('console.log("draft");');
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['empty code', { code: ' ' }],
+    ['invalid arguments', { defaultArgsJson: '{invalid' }],
+    ['a running action', { controlState: ResourceControlState.Processing }],
+  ])('disables testing with %s', (_reason, changes) => {
+    renderCitadel(
+      <AutomationActionForm
+        mode="edit"
+        resource={{
+          ...action,
+          ...changes,
+          capabilities: { ...action.capabilities, canExecute: true },
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Test Draft' })).toBeDisabled();
+  });
+
   it('keeps the cron trigger disabled without Automated Operations', () => {
     renderCitadel(<AutomationActionForm mode="edit" resource={action} />, {
       route: `/automation/${action.id}`,

@@ -295,6 +295,7 @@ pub trait AutomationStore: Send + Sync {
         trigger: &'a str,
         args: &'a Value,
         timeout_seconds: Option<i32>,
+        code: Option<&'a str>,
     ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>>;
     fn enqueue_webhook<'a>(
         &'a self,
@@ -499,7 +500,15 @@ impl AutomationService {
         trigger: &str,
         args: &Value,
         timeout_seconds: Option<i32>,
+        code: Option<&str>,
     ) -> Result<mpsc::Receiver<AutomationProgress>, AutomationError> {
+        if let Some(code) = code {
+            if trigger != "Test" || code.trim().is_empty() || code.len() > 256 * 1024 {
+                return Err(AutomationError::Validation(
+                    "Draft code is only accepted for tests and must contain between 1 byte and 256 KiB.".into(),
+                ));
+            }
+        }
         let configured = match timeout_seconds {
             Some(seconds) => seconds,
             None => self.store.get(id).await?.timeout_seconds,
@@ -512,7 +521,7 @@ impl AutomationService {
         })?;
         let claim = self
             .store
-            .enqueue_for_execution(actor, id, trigger, args, timeout_seconds)
+            .enqueue_for_execution(actor, id, trigger, args, timeout_seconds, code)
             .await?;
         let (sender, receiver) = mpsc::channel(16);
         let _ = sender.try_send(AutomationProgress::state(&claim.run, "Queued"));

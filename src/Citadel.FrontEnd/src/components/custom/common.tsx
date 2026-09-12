@@ -881,6 +881,7 @@ export type LogSeverity = 'info' | 'success' | 'warning' | 'error';
 
 interface LogViewerProps {
   logs: string | string[] | LogEntry[];
+  emptyMessage?: string;
   autoScroll?: boolean;
   className?: string;
   showTimestamps?: boolean;
@@ -1054,6 +1055,7 @@ const OVERSCAN = 10;
 export const LogViewer = memo(
   ({
     logs,
+    emptyMessage = 'No logs available...',
     autoScroll = true,
     className,
     showTimestamps: initialShowTimestamps = false,
@@ -1232,7 +1234,7 @@ export const LogViewer = memo(
               <div style={{ height: virtual.paddingBottom }} aria-hidden />
             </>
           ) : (
-            <div className="text-zinc-600 italic">No logs available...</div>
+            <div className="text-zinc-600 italic">{emptyMessage}</div>
           )}
         </div>
       </div>

@@ -135,6 +135,7 @@ pub(crate) fn deployment_request(command: &RuntimeDeploymentCommand) -> ApplyDep
 pub(crate) async fn consume_stack_stream<S>(
     mut stream: S,
     cancellation: &CancellationToken,
+    progress: Option<&citadel_stacks::StackProgress>,
 ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError>
 where
     S: futures_util::Stream<
@@ -176,17 +177,23 @@ where
             _ => citadel_stacks::StackApplyEventType::Unknown,
         };
         let cost = item.message.as_ref().map_or(0, |message| message.len()) + 64;
-        if retained_bytes.saturating_add(cost) > 512 * 1024 {
+        if cost > 256 * 1024 {
             continue;
         }
-        retained_bytes += cost;
-        messages.push(citadel_stacks::StackStreamItem {
+        let message = citadel_stacks::StackStreamItem {
             event_type,
             message: item.message,
             exit_code: item.exit_code,
             stack_status: Some(status),
             severity: None,
-        });
+        };
+        if let Some(progress) = progress {
+            progress.send(message.clone()).await;
+        }
+        if retained_bytes.saturating_add(cost) <= 512 * 1024 {
+            retained_bytes += cost;
+            messages.push(message);
+        }
     }
     if failed {
         status = citadel_stacks::StackReleaseStatus::Failed;
@@ -198,6 +205,52 @@ where
 mod tests {
     use super::*;
     use citadel_contracts::citadel::stacks::v1::StackApplyResponse;
+
+    #[tokio::test]
+    async fn remote_progress_arrives_before_the_remote_stream_finishes() {
+        let cancellation = CancellationToken::new();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let progress = citadel_stacks::StackProgress::new(
+            sender,
+            vec!["secret-token".into()],
+            cancellation.clone(),
+        );
+        let (upstream, frames) = tokio::sync::mpsc::channel(1);
+        let stream = futures_util::stream::unfold(frames, |mut frames| async move {
+            frames.recv().await.map(|frame| (frame, frames))
+        });
+        let consume = consume_stack_stream(Box::pin(stream), &cancellation, Some(&progress));
+        let observe = async {
+            upstream
+                .send(Ok(StackApplyResponse {
+                    message: Some("Pulling secret-token".into()),
+                    ..Default::default()
+                }))
+                .await
+                .unwrap();
+            let item = receiver.recv().await.unwrap();
+            assert!(!item.message.unwrap().contains("secret-token"));
+            // Do not provide completion until the first remote frame is forwarded.
+            upstream
+                .send(Ok(StackApplyResponse {
+                    exit_code: Some(0),
+                    ..Default::default()
+                }))
+                .await
+                .unwrap();
+            drop(upstream);
+            assert_eq!(receiver.recv().await.unwrap().exit_code, Some(0));
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(consume, observe)
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            result.unwrap().status,
+            citadel_stacks::StackReleaseStatus::Healthy
+        );
+    }
 
     // StackServiceTests: rejected Compose-to-Swarm deploy followed by a
     // successful Compose restoration must still report the Apply as failed.
@@ -213,6 +266,7 @@ mod tests {
         let result = consume_stack_stream(
             futures_util::stream::iter(replies),
             &CancellationToken::new(),
+            None,
         )
         .await
         .unwrap();
@@ -235,6 +289,7 @@ mod tests {
         let result = consume_stack_stream(
             futures_util::stream::iter(replies),
             &CancellationToken::new(),
+            None,
         )
         .await
         .unwrap();
@@ -262,7 +317,8 @@ mod tests {
         assert!(
             consume_stack_stream(
                 futures_util::stream::iter(replies),
-                &CancellationToken::new()
+                &CancellationToken::new(),
+                None,
             )
             .await
             .is_err()
@@ -270,7 +326,7 @@ mod tests {
         let cancellation = CancellationToken::new();
         cancellation.cancel();
         assert!(
-            consume_stack_stream(futures_util::stream::pending(), &cancellation)
+            consume_stack_stream(futures_util::stream::pending(), &cancellation, None)
                 .await
                 .is_err()
         );

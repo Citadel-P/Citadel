@@ -1666,7 +1666,7 @@ fn phase5_schemas() -> Map<String, Value> {
     );
     schemas.insert(
         "TestAutomationActionInput".into(),
-        json!({"type":"object","properties":{"argsJson":{"type":["string","null"],"maxLength":65536}}}),
+        json!({"type":"object","properties":{"argsJson":{"type":["string","null"],"maxLength":65536},"code":{"type":["string","null"],"description":"Optional unsaved script for this test run only (at most 256 KiB). Requires Execute permission. Omit to use saved code."}}}),
     );
     schemas.insert("AutomationActionRunView".into(), json!({"type":"object","required":["id","actionId","actionName","trigger","status","runAsActorId","argsJson","codeSnapshot","codeHash","timeoutSeconds","queuedAt"],"properties":{"id":uuid(),"actionId":uuid(),"actionName":string(),"trigger":string(),"status":string(),"runAsActorId":uuid(),"triggeredByActorId":nullable_uuid(),"argsJson":string(),"codeSnapshot":nullable_string(),"codeHash":string(),"timeoutSeconds":{"type":"integer","format":"int32"},"queuedAt":{"type":"string","format":"date-time"},"startedAt":{"type":["string","null"],"format":"date-time"},"finishedAt":{"type":["string","null"],"format":"date-time"},"durationMs":{"type":["integer","null"],"format":"int64"},"exitCode":{"type":["integer","null"],"format":"int32"},"logs":nullable_string(),"errorMessage":nullable_string()}}));
     schemas.insert("AutomationActionRunStreamItem".into(), json!({"type":"object","properties":{"runId":nullable_uuid(),"status":nullable_string(),"stream":nullable_string(),"progressMessage":nullable_string(),"errorMessage":nullable_string(),"error":{"oneOf":[{"type":"null"},{"type":"object","properties":{"code":{"type":"integer"},"message":string()}}]}}}));

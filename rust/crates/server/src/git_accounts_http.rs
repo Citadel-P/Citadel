@@ -300,7 +300,7 @@ async fn permission(
 
 fn account_error(error: GitAccountError) -> IdentityError {
     match error {
-        GitAccountError::Validation(message) => IdentityError::Validation(message),
+        GitAccountError::Validation(message) => crate::request_validation::validation_error(message),
         GitAccountError::NotFound => IdentityError::NotFound,
         GitAccountError::Conflict(message) => IdentityError::Conflict(message),
         GitAccountError::Credential => IdentityError::Credential,
@@ -308,8 +308,8 @@ fn account_error(error: GitAccountError) -> IdentityError {
     }
 }
 
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is not valid JSON for this operation.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }
 
 fn publish(state: &GitAccountsHttpState) {

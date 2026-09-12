@@ -18,12 +18,18 @@ use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
 mod update_checks;
+mod drift;
 mod webhooks;
 
 const READ: i32 = 1;
 const WRITE: i32 = 2;
 const EXECUTE: i32 = 4;
+const LOGS: i32 = 1;
+const INSPECT: i32 = 1 << 1;
 const APPLY: i32 = 1 << 2;
+const PULL: i32 = 1 << 3;
+const TERMINAL: i32 = 1 << 4;
+const RELEASES: i32 = 1 << 6;
 
 const AUTHORIZED_CTES: &str = r#"
 WITH actor_scope AS (
@@ -55,7 +61,7 @@ SELECT s.id,s.name,s.description,s.stacksource,s.stackupdatestate,s.driftpolicy,
        COALESCE(tags.value,'[]'::jsonb) tags,
        activity.value latest_activity,
        CASE WHEN $2 THEN 7 ELSE GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) END permission_level,
-       CASE WHEN $2 THEN 63 ELSE (COALESCE(g.specific_mask,0)|COALESCE(rp.specific_mask,0)) END permission_specific
+       CASE WHEN $2 THEN 127 ELSE (COALESCE(g.specific_mask,0)|COALESCE(rp.specific_mask,0)) END permission_specific
 FROM stacks s
 JOIN stackreleases r ON r.id=s.currentstackreleaseid
 JOIN platforms p ON p.id=r.platformid
@@ -134,6 +140,15 @@ impl StackStore for PostgresStackStore {
             Ok(())
         })
     }
+    fn record_drift<'a>(
+        &'a self,
+        expected: &'a StackView,
+        status: StackReleaseStatus,
+        info: ActivityEventInfo,
+    ) -> BoxFuture<'a, Result<bool, StackError>> {
+        Box::pin(drift::record(&self.pool, expected, status, info))
+    }
+
     fn drift_monitor_candidates(
         &self,
         after: Option<Uuid>,
@@ -325,7 +340,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let version: String = row.try_get("version").map_err(storage)?;
             let changed_definition = old_platform != new_platform || old_spec != *spec;
             if changed_definition && old_status == StackReleaseStatus::Healthy {
-                sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,source,resourcebindings,createdat,createdbyactorid) SELECT $1,stackid,platformid,status,version,spec,source,resourcebindings,createdat,createdbyactorid FROM stackreleases WHERE id=$2")
+                sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,source,resourcebindings,createdat,createdbyactorid) SELECT $1,r.stackid,r.platformid,r.status,r.version,r.spec,r.source,r.resourcebindings,r.createdat,r.createdbyactorid FROM stackreleases r WHERE r.id=$2 AND NOT EXISTS(SELECT 1 FROM stackreleases snapshot WHERE snapshot.stackid=r.stackid AND snapshot.id<>r.id AND snapshot.version=r.version AND snapshot.status='Healthy')")
                     .bind(Uuid::now_v7()).bind(release_id).execute(&mut *tx).await.map_err(storage)?;
             }
             let next_spec = spec.to_storage_value()?;
@@ -501,8 +516,8 @@ ORDER BY s.createdat DESC,s.name,s.id"#
     ) -> BoxFuture<'_, Result<Vec<StackReleaseView>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            ensure_access(&mut tx, actor, administrator, id, READ, 0).await?;
-            let rows=sqlx::query("SELECT r.*,p.status platform_status,p.name platform_name,a.type actor_type,COALESCE(u.name,sa.name,t.name,'Unknown') actor_name FROM stackreleases r JOIN platforms p ON p.id=r.platformid JOIN actors a ON a.id=r.createdbyactorid LEFT JOIN users u ON u.actorid=a.id LEFT JOIN serviceaccounts sa ON sa.actorid=a.id LEFT JOIN teams t ON t.actorid=a.id WHERE r.stackid=$1 AND r.id<>(SELECT currentstackreleaseid FROM stacks WHERE id=$1) AND r.status='Healthy' ORDER BY r.createdat DESC,r.id DESC")
+            ensure_access(&mut tx, actor, administrator, id, READ, RELEASES).await?;
+            let rows=sqlx::query("WITH history AS (SELECT DISTINCT ON (r.version) r.* FROM stackreleases r JOIN stacks s ON s.id=r.stackid JOIN stackreleases current ON current.id=s.currentstackreleaseid WHERE r.stackid=$1 AND r.id<>current.id AND r.version<>current.version AND r.status='Healthy' ORDER BY r.version,r.createdat,r.id) SELECT r.*,p.status platform_status,p.name platform_name,a.type actor_type,COALESCE(u.name,sa.name,t.name,'Unknown') actor_name FROM history r JOIN platforms p ON p.id=r.platformid JOIN actors a ON a.id=r.createdbyactorid LEFT JOIN users u ON u.actorid=a.id LEFT JOIN serviceaccounts sa ON sa.actorid=a.id LEFT JOIN teams t ON t.actorid=a.id ORDER BY r.createdat DESC,r.id DESC")
                 .bind(id).fetch_all(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             rows.into_iter().map(map_release).collect()
@@ -569,11 +584,27 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 webhooks::claim(&mut tx, job_id, id, current_release, &spec).await?;
             }
             let mut platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
+            let has_snapshot: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM stackreleases snapshot JOIN stackreleases current ON current.id=$1 WHERE snapshot.stackid=current.stackid AND snapshot.id<>current.id AND snapshot.version=current.version AND snapshot.status='Healthy')")
+                .bind(current_release).fetch_one(&mut *tx).await.map_err(storage)?;
+            let status = StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?;
+            let create_next = has_snapshot
+                && !matches!(status, StackReleaseStatus::Created | StackReleaseStatus::Failed);
             let operation = if let Some(selected) = rollback_release_id {
                 let rollback=sqlx::query("SELECT platformid,spec FROM stackreleases WHERE id=$1 AND stackid=$2 AND status='Healthy'")
                     .bind(selected).bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Validation("Only a previous healthy Stack release can be rolled back.".to_owned()))?;
                 platform_id = rollback.try_get("platformid").map_err(storage)?;
                 spec = StackSpec::from_storage_value(rollback.try_get("spec").map_err(storage)?)?;
+                "Rollback"
+            } else {
+                "Apply"
+            };
+            if rollback_release_id.is_some() || create_next {
+                // The preserved snapshot is the deployed definition. The edited
+                // row must never become a healthy historical release itself.
+                if has_snapshot {
+                    sqlx::query("UPDATE stackreleases SET status='Created' WHERE id=$1")
+                        .bind(current_release).execute(&mut *tx).await.map_err(storage)?;
+                }
                 let next = next_version(row.try_get("version").map_err(storage)?);
                 release_id = Uuid::now_v7();
                 sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,createdat,createdbyactorid) VALUES($1,$2,$3,'Applying',$4,$5,$6,$7)")
@@ -585,15 +616,13 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                     .execute(&mut *tx)
                     .await
                     .map_err(storage)?;
-                "Rollback"
             } else {
                 sqlx::query("UPDATE stackreleases SET status='Applying' WHERE id=$1")
                     .bind(current_release)
                     .execute(&mut *tx)
                     .await
                     .map_err(storage)?;
-                "Apply"
-            };
+            }
             let platform = sqlx::query("SELECT platformdescriptor FROM platforms WHERE id=$1")
                 .bind(platform_id)
                 .fetch_one(&mut *tx)
@@ -1300,14 +1329,19 @@ fn map_stack(row: PgRow) -> Result<StackView, StackError> {
         platform_name: Some(row.try_get("platform_name").map_err(storage)?),
         tags: serde_json::from_value::<Vec<TagSummary>>(row.try_get("tags").map_err(storage)?)
             .map_err(|error| StackError::Storage(error.to_string()))?,
-        latest_activity_view: row.try_get("latest_activity").map_err(storage)?,
+        latest_activity_view: drift::public_activity(row.try_get("latest_activity").map_err(storage)?),
         capabilities: Some(citadel_stacks::StackCapabilities {
-            can_read: level & READ != 0,
-            can_write: level & WRITE != 0,
+            can_read: level >= READ,
+            can_write: level >= WRITE,
             can_execute: level & EXECUTE != 0,
             can_delete: level & EXECUTE != 0,
+            can_view_logs: level >= READ && specific & LOGS != 0,
+            can_inspect: level >= READ && specific & INSPECT != 0,
+            can_open_terminal: level >= READ && specific & TERMINAL != 0,
+            can_pull: level >= READ && specific & PULL != 0,
             can_apply: level & EXECUTE != 0 && specific & APPLY != 0,
-            can_resource_bindings: specific & (1 << 5) != 0,
+            can_view_resource_bindings: level >= READ && specific & (1 << 5) != 0,
+            can_view_releases: level >= READ && specific & RELEASES != 0,
         }),
         row_version: row.try_get("rowversion").map_err(storage)?,
     })

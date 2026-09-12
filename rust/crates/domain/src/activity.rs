@@ -946,6 +946,16 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Result")]
         result: StackResultActivitySnapshot,
     },
+    StackDriftDetected {
+        #[serde(rename = "Reason")]
+        reason: String,
+        #[serde(rename = "Fingerprint")]
+        fingerprint: String,
+    },
+    StackDriftResolved {
+        #[serde(rename = "PreviousFingerprint")]
+        previous_fingerprint: String,
+    },
     StackImported {
         #[serde(rename = "Stack")]
         stack: StackActivitySnapshot,
@@ -1805,6 +1815,8 @@ impl ActivityEventInfo {
             Self::StackApplied { .. } => ActivityEventType::StackApplied,
             Self::StackRollback { .. } => ActivityEventType::StackRollback,
             Self::StackImported { .. } => ActivityEventType::StackImported,
+            Self::StackDriftDetected { .. } => ActivityEventType::StackDriftDetected,
+            Self::StackDriftResolved { .. } => ActivityEventType::StackDriftResolved,
             Self::SwarmServiceCreated { .. } => ActivityEventType::SwarmServiceCreated,
             Self::SwarmServiceDuplicated { .. } => ActivityEventType::SwarmServiceDuplicated,
             Self::SwarmServiceAdopted { .. } => ActivityEventType::SwarmServiceAdopted,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_domain::ActorId;
+use citadel_domain::{ActivityEventInfo, ActorId};
 use futures_util::future::BoxFuture;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -11,6 +11,8 @@ use uuid::Uuid;
 #[path = "update_checks.rs"]
 mod update_checks;
 pub use update_checks::StackUpdateScanner;
+#[path = "resolution_message.rs"]
+mod resolution_message;
 
 use crate::{
     ApplyStackInput, ComposeModel, ComposeProjectImportDraftView, ComposeProjectImportSourceView,
@@ -78,6 +80,12 @@ pub trait StackStore: Send + Sync {
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<crate::StackWebhookJob>, StackError>>;
     fn discard_webhook(&self, id: Uuid) -> BoxFuture<'_, Result<(), StackError>>;
+    fn record_drift<'a>(
+        &'a self,
+        expected: &'a StackView,
+        status: StackReleaseStatus,
+        info: ActivityEventInfo,
+    ) -> BoxFuture<'a, Result<bool, StackError>>;
     fn drift_monitor_candidates(
         &self,
         after: Option<Uuid>,
@@ -211,6 +219,39 @@ pub trait StackStore: Send + Sync {
     ) -> BoxFuture<'_, Result<Option<Uuid>, StackError>>;
 }
 
+/// Bounded, redacted progress shared with the HTTP stream during execution.
+pub struct StackProgress {
+    sender: mpsc::Sender<StackStreamItem>,
+    secrets: Vec<String>,
+    cancellation: CancellationToken,
+}
+
+impl StackProgress {
+    pub fn new(
+        sender: mpsc::Sender<StackStreamItem>,
+        secrets: Vec<String>,
+        cancellation: CancellationToken,
+    ) -> Self {
+        Self {
+            sender,
+            secrets,
+            cancellation,
+        }
+    }
+
+    pub async fn send(&self, mut item: StackStreamItem) {
+        item.message = item
+            .message
+            .take()
+            .map(|message| redact(message, &self.secrets));
+        tokio::select! {
+            biased;
+            () = self.cancellation.cancelled() => {},
+            _ = self.sender.send(item) => {},
+        }
+    }
+}
+
 pub trait StackRuntimePort: Send + Sync {
     fn apply<'a>(
         &'a self,
@@ -218,6 +259,7 @@ pub trait StackRuntimePort: Send + Sync {
         source: &'a crate::StackApplySource,
         environment: &'a [String],
         cancellation: &'a CancellationToken,
+        progress: Option<&'a StackProgress>,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>>;
     fn observe<'a>(
         &'a self,
@@ -414,9 +456,29 @@ impl StackService {
                     .await
                     .map(|reconciliation| {
                         result.reconciled += usize::from(!reconciliation.actions.is_empty());
+                        reconciliation
+                            .after_report
+                            .unwrap_or(reconciliation.before_report)
                     })
             } else {
-                self.drift(system, true, stack.id).await.map(|_| ())
+                self.drift(system, true, stack.id).await
+            };
+            let outcome = match outcome {
+                Ok(report) => {
+                    if let Some((status, info)) = drift_status_update(&stack, &report) {
+                        self.store
+                            .record_drift(&stack, status, info)
+                            .await
+                            .map(|changed| {
+                                if changed {
+                                    self.notifier.changed(stack.id, "driftChanged");
+                                }
+                            })
+                    } else {
+                        Ok(())
+                    }
+                }
+                Err(error) => Err(error),
             };
             match outcome {
                 Ok(()) => result.checked += 1,
@@ -1626,6 +1688,16 @@ async fn execute_apply(
             return;
         }
     };
+    let _ = sender
+        .send(StackStreamItem::system(
+            resolution_message::compose_resolution_message(
+                &model,
+                &resolved,
+                source.env_file_paths.len(),
+                &redactions,
+            ),
+        ))
+        .await;
     let labels_override = match create_ownership_labels_override(
         &compose_files,
         claim.stack_id,
@@ -1656,17 +1728,21 @@ async fn execute_apply(
             "Submitting Stack deployment to Docker...",
         ))
         .await;
+    let progress = StackProgress::new(sender.clone(), redactions.clone(), cancellation.clone());
     match tokio::time::timeout(
         timeout,
-        runtime.apply(&claim, &source, &environment, &cancellation),
+        runtime.apply(
+            &claim,
+            &source,
+            &environment,
+            &cancellation,
+            Some(&progress),
+        ),
     )
     .await
     {
         Ok(Ok(mut result)) => {
             redact_runtime_messages(&mut result, &redactions);
-            for item in &result.messages {
-                let _ = sender.send(item.clone()).await;
-            }
             if result.status == StackReleaseStatus::Healthy {
                 let applied_at = chrono::Utc::now();
                 for binding in &mut claim.spec.common_mut().build_image_bindings {
@@ -1924,6 +2000,64 @@ fn project_name(stack: &StackView) -> Result<String, StackError> {
     }
 }
 
+fn drift_status_update(
+    stack: &StackView,
+    report: &StackDriftReport,
+) -> Option<(StackReleaseStatus, ActivityEventInfo)> {
+    if stack.control_state != "Idle"
+        || stack.platform_status != "Online"
+        || stack.drift_policy.mode == crate::StackDriftMode::Disabled
+        || !matches!(
+            stack.status,
+            StackReleaseStatus::Healthy | StackReleaseStatus::Degraded
+        )
+    {
+        return None;
+    }
+    let info = stack
+        .latest_activity_view
+        .as_ref()
+        .and_then(|activity| activity.get("info"));
+    let previous = info
+        .filter(|info| {
+            info.get("$type").and_then(serde_json::Value::as_str) == Some("StackDriftDetected")
+        })
+        .and_then(|info| info.get("Fingerprint").or_else(|| info.get("fingerprint")))
+        .and_then(serde_json::Value::as_str);
+    if !report.has_drift {
+        return previous
+            .filter(|_| stack.status == StackReleaseStatus::Degraded)
+            .map(|value| {
+                (
+                    StackReleaseStatus::Healthy,
+                    ActivityEventInfo::StackDriftResolved {
+                        previous_fingerprint: value.into(),
+                    },
+                )
+            });
+    }
+    let fingerprint =
+        compose_digest(&[serde_json::to_string(&report.drifts).expect("drift report serializes")]);
+    let status = if stack.drift_policy.mark_degraded {
+        StackReleaseStatus::Degraded
+    } else {
+        stack.status
+    };
+    if previous == Some(fingerprint.as_str()) && status == stack.status {
+        return None;
+    }
+    Some((
+        status,
+        ActivityEventInfo::StackDriftDetected {
+            reason: format!(
+                "Stack runtime drift detected ({} items).",
+                report.drifts.len()
+            ),
+            fingerprint,
+        },
+    ))
+}
+
 pub fn calculate_drift(
     stack: &StackView,
     runtime: &StackRuntimeSnapshot,
@@ -1987,11 +2121,13 @@ pub fn calculate_drift(
         .iter()
         .filter(|item| desired_names.contains(item.service_name.as_str()))
     {
-        match container.state.as_str() {
-            "exited" | "offline" => drifts.push(StackDrift::ContainerStopped {
-                container_id: container.docker_container_id.clone(),
-                service_name: container.service_name.clone(),
-            }),
+        match container.state.to_ascii_lowercase().as_str() {
+            "created" | "dead" | "exited" | "offline" => {
+                drifts.push(StackDrift::ContainerStopped {
+                    container_id: container.docker_container_id.clone(),
+                    service_name: container.service_name.clone(),
+                })
+            }
             "paused" => drifts.push(StackDrift::ContainerPaused {
                 container_id: container.docker_container_id.clone(),
                 service_name: container.service_name.clone(),
@@ -1999,7 +2135,7 @@ pub fn calculate_drift(
             _ if container
                 .health
                 .as_deref()
-                .is_some_and(|health| health == "unhealthy") =>
+                .is_some_and(|health| health.eq_ignore_ascii_case("unhealthy")) =>
             {
                 drifts.push(StackDrift::ContainerUnhealthy {
                     container_id: container.docker_container_id.clone(),
@@ -2141,6 +2277,100 @@ mod tests {
         assert!(report.has_structural_drift);
         assert!(report.has_auto_fixable_drift);
         assert_eq!(report.drifts.len(), 2);
+    }
+
+    #[test]
+    fn drift_recognizes_projected_container_states_and_serializes_frontend_fields() {
+        for (state, kind) in [
+            ("Exited", "ContainerStopped"),
+            ("Created", "ContainerStopped"),
+            ("Paused", "ContainerPaused"),
+        ] {
+            let report = calculate_drift(
+                &stack(StackReleaseStatus::Healthy, StackDriftPolicy::default()),
+                &StackRuntimeSnapshot {
+                    containers: vec![crate::StackRuntimeContainer {
+                        docker_container_id: "docker-api".into(),
+                        service_name: "api".into(),
+                        state: state.into(),
+                        health: None,
+                    }],
+                    services: vec![],
+                },
+            )
+            .unwrap();
+            assert!(report.has_drift, "{state} must not be healthy");
+            let drift = serde_json::to_value(&report.drifts[0]).unwrap();
+            assert_eq!(drift["$type"], kind);
+            assert_eq!(drift["serviceName"], "api");
+            assert_eq!(drift["containerId"], "docker-api");
+            assert!(!report.has_structural_drift);
+        }
+        let drift = serde_json::to_value(StackDrift::MissingContainer {
+            service_name: "api".into(),
+        })
+        .unwrap();
+        assert_eq!(drift["serviceName"], "api");
+    }
+
+    #[test]
+    fn bindings_capability_uses_the_frontend_contract() {
+        let value = serde_json::to_value(crate::StackCapabilities {
+            can_view_resource_bindings: true,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(value["canViewResourceBindings"], true);
+    }
+
+    #[test]
+    fn drift_status_respects_policy_deduplication_and_recovery_origin() {
+        let mut stack = stack(StackReleaseStatus::Healthy, StackDriftPolicy::default());
+        let mut report = calculate_drift(
+            &stack,
+            &StackRuntimeSnapshot {
+                containers: vec![],
+                services: vec![],
+            },
+        )
+        .unwrap();
+        let (status, info) = drift_status_update(&stack, &report).unwrap();
+        assert_eq!(status, StackReleaseStatus::Degraded);
+        stack.status = status;
+        stack.latest_activity_view = Some(serde_json::json!({"info": info}));
+        assert!(drift_status_update(&stack, &report).is_none());
+        report.has_drift = false;
+        report.drifts.clear();
+        assert!(matches!(
+            drift_status_update(&stack, &report),
+            Some((
+                StackReleaseStatus::Healthy,
+                ActivityEventInfo::StackDriftResolved { .. }
+            ))
+        ));
+        stack.latest_activity_view = None;
+        assert!(
+            drift_status_update(&stack, &report).is_none(),
+            "unrelated degradation must not be healed"
+        );
+        report.has_drift = true;
+        stack.status = StackReleaseStatus::Healthy;
+        stack.drift_policy.mark_degraded = false;
+        assert_eq!(
+            drift_status_update(&stack, &report).unwrap().0,
+            StackReleaseStatus::Healthy
+        );
+        for status in [
+            StackReleaseStatus::Stopped,
+            StackReleaseStatus::Paused,
+            StackReleaseStatus::Applying,
+        ] {
+            stack.status = status;
+            assert!(drift_status_update(&stack, &report).is_none());
+        }
+        stack.status = StackReleaseStatus::Healthy;
+        stack.control_state = "Processing".into();
+        assert!(drift_status_update(&stack, &report).is_none());
     }
 
     #[test]

@@ -306,7 +306,7 @@ async fn authorize(
 
 fn execution_error(error: GitRepositoryExecutionError) -> IdentityError {
     match error {
-        GitRepositoryExecutionError::Validation(message) => IdentityError::Validation(message),
+        GitRepositoryExecutionError::Validation(message) => crate::request_validation::validation_error(message),
         GitRepositoryExecutionError::NotFound => IdentityError::NotFound,
         GitRepositoryExecutionError::NotSynchronized => {
             IdentityError::Conflict("Git repository has not been synchronized yet.".to_owned())

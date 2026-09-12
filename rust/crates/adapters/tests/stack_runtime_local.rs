@@ -21,7 +21,7 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
     let source = fixture.source();
     let applied = fixture
         .runtime
-        .apply(&fixture.claim(), &source, &[], &fixture.cancellation)
+        .apply(&fixture.claim(), &source, &[], &fixture.cancellation, None)
         .await
         .unwrap();
     assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);
@@ -66,7 +66,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
     let source = fixture.source();
     let applied = fixture
         .runtime
-        .apply(&fixture.claim(), &source, &[], &fixture.cancellation)
+        .apply(&fixture.claim(), &source, &[], &fixture.cancellation, None)
         .await
         .unwrap();
     assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);

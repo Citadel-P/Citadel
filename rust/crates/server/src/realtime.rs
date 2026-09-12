@@ -825,8 +825,21 @@ async fn run_group_connection(
                     continue;
                 }
                 for joined in groups.values_mut().filter(|g|g.group.affected_by(&event)) {
-                    let snapshot=tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,Some(&event))).await
-                        .map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?;
+                    // Inventory I/O must not pause this connection's active streams.
+                    let snapshot={
+                        let read=tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,Some(&event)));
+                        tokio::pin!(read);
+                        loop {
+                            tokio::select! {
+                                biased;
+                                ()=cancellation.cancelled()=>return Ok(()),
+                                result=&mut read=>break result.map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?,
+                                Some((_,item))=streams.next(),if !streams.is_empty()=>{
+                                    send_group_message(socket,service,&item.map_err(map_realtime_read_error)?).await?;
+                                }
+                            }
+                        }
+                    };
                     for update in joined.apply(snapshot,service.inner.snapshot_limit).map_err(map_realtime_read_error)? {
                         send_group_message(socket,service,&update).await?;
                     }

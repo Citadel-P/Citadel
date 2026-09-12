@@ -42,6 +42,8 @@ use uuid::Uuid;
 mod alert_assertions;
 #[path = "phase7_resources_http/alert_rule_create.rs"]
 mod alert_rule_create;
+#[path = "phase7_resources_http/alert_rule_list.rs"]
+mod alert_rule_list;
 #[path = "phase7_resources_http/alert_rule_metadata.rs"]
 mod alert_rule_metadata;
 #[path = "phase7_resources_http/alert_rule_patch.rs"]
@@ -66,6 +68,8 @@ mod build_webhooks;
 mod git_webhooks;
 #[path = "phase7_resources_http/stack_webhooks.rs"]
 mod stack_webhooks;
+#[path = "phase7_resources_http/validation.rs"]
+mod validation;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
@@ -194,6 +198,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         "reads/authentication failures do not notify"
     );
     let fixture = seed_dependencies(&pool, principal.actor_id).await;
+    validation::verify_inputs(&app, &principal, fixture.git_repository).await;
     let suffix = Uuid::now_v7().simple().to_string();
 
     let build_pool_response = request(
@@ -450,6 +455,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(rule["channelIds"][0], channel_id);
+    alert_rule_list::verify(&app, &pool, &principal, &rule, &channel).await;
     alert_rule_metadata::verify(&app, &pool, &principal, &rule, &alert_store).await;
     alert_rule_patch::verify(&app, &pool, &principal, &rule, &channel, &hub, &alert_store).await;
     alert_rule_create::verify(
@@ -706,6 +712,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let policy_id = policy["id"].as_str().unwrap();
+    validation::verify_policy(&app, &principal, &policy).await;
     backup_policy_metadata::verify(&app, &pool, &principal, &policy).await;
     backup_summaries::verify(&app, &pool, &principal, &policy).await;
     backup_completion::verify_policy(&app, &pool, &principal, &policy).await;

@@ -121,6 +121,7 @@ struct RunList {
 struct RunInput {
     args_json: Option<Value>,
     timeout_seconds: Option<i32>,
+    code: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -449,6 +450,7 @@ async fn enqueue(
             } else {
                 input.timeout_seconds
             },
+            input.code.as_deref(),
         )
         .await
     {

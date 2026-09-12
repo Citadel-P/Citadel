@@ -26,8 +26,8 @@ pub fn apply_rule(current: &AlertRuleView, patch: &Value) -> Result<AlertRuleInp
             value[field] = Value::Array(Vec::new());
         }
     }
-    let mut input: AlertRuleInput = serde_json::from_value(value).map_err(|_| {
-        AlertError::Validation("Alert Rule patch contains invalid field values.".into())
+    let mut input: AlertRuleInput = serde_path_to_error::deserialize(value).map_err(|error| {
+        AlertError::Validation(format!("Invalid Alert Rule patch: {error}"))
     })?;
     input.validate()?;
     Ok(input)
@@ -44,8 +44,8 @@ pub fn apply_channel(
         patch,
         &["name", "alertDestination", "url", "isActive"],
     )?;
-    let mut input: AlertChannelInput = serde_json::from_value(value).map_err(|_| {
-        AlertError::Validation("Alert Channel patch contains invalid field values.".into())
+    let mut input: AlertChannelInput = serde_path_to_error::deserialize(value).map_err(|error| {
+        AlertError::Validation(format!("Invalid Alert Channel patch: {error}"))
     })?;
     input.validate()?;
     Ok(input)

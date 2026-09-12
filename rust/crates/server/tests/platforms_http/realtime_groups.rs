@@ -288,6 +288,106 @@ async fn cleanup(f: Fixture) {
     std::fs::remove_file(f.docker_socket).unwrap();
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_logs_flow_while_another_group_snapshot_is_pending() {
+    use citadel_adapters::edge::EdgeTarget;
+    use citadel_contracts::citadel::containers::v1::ContainerLogResponse;
+    use prost::Message as _;
+    let f = fixture().await;
+    let id: Uuid = sqlx::query_scalar(
+        "UPDATE containers SET dockernodeid='node-1' WHERE platformid=$1 RETURNING id",
+    )
+    .bind(f.platform_id)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let (session, mut commands) = f
+        .lookup_state
+        .platforms
+        .edge
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let cancellation = CancellationToken::new();
+    let _guard = cancellation.clone().drop_guard();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_secs(30),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader(&f)));
+    let hub = service.hub();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    let group = format!("container-log:{id}");
+    assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+    assert!(invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null());
+    let command = commands.recv().await.unwrap();
+    let command_id = Uuid::parse_str(&command.command_id).unwrap();
+    let info = format!("container-info:{id}");
+    assert!(invoke(&mut socket, "JoinGroup", &info).await["error"].is_null());
+    assert_eq!(receive(&mut socket).await["target"], "ReceiveContainerInfo");
+
+    let mut writer = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE containers IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "container", "update", id.to_string());
+    // Wait for the snapshot read to actually block before producing a log.
+    tokio::time::timeout(StdDuration::from_secs(2), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock')")
+                .fetch_one(&f.pool).await.unwrap();
+            if blocked { break; }
+            tokio::time::sleep(StdDuration::from_millis(10)).await;
+        }
+    }).await.expect("the shared connection must be reading its snapshot");
+    let bytes = b"2026-09-08T12:00:00Z live during inventory read\n".to_vec();
+    session.output(
+        command_id,
+        ContainerLogResponse { log: bytes.clone() }.encode_to_vec(),
+    );
+    let output = tokio::time::timeout(StdDuration::from_secs(1), receive(&mut socket))
+        .await
+        .expect("a pending snapshot must not block live log delivery");
+    assert_eq!(output["target"], "SendContainerLogs");
+    assert_eq!(output["arguments"][0], json!(bytes));
+    writer.rollback().await.unwrap();
+    assert_eq!(receive(&mut socket).await["target"], "ReceiveContainerInfo");
+    socket.close(None).await.unwrap();
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}
+
 // Ports ExecSessionManagerTests and the Terminal-specific Swarm permission contract.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
@@ -582,6 +682,14 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         .unwrap();
     let command = commands.recv().await.unwrap();
     let original = Uuid::parse_str(&command.command_id).unwrap();
+    // A ready log must not wait behind an inventory refresh. Model a busy
+    // projection writer while both the log frame and its invalidation are ready.
+    let mut projection_write = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE containers IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *projection_write)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
     session.output(
         original,
         ContainerLogResponse {
@@ -589,12 +697,33 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         }
         .encode_to_vec(),
     );
-    let event = logs.next().await.unwrap().unwrap();
+    let event = tokio::time::timeout(StdDuration::from_secs(1), logs.next())
+        .await
+        .expect("ready logs must not wait for inventory projection reads")
+        .unwrap()
+        .unwrap();
     assert_eq!(event.target, "SendStackLogs");
     assert_eq!(
         event.arguments[0],
         json!(b"2026-09-06T12:00:00Z [web] first\n".to_vec())
     );
+    session.output(
+        original,
+        ContainerLogResponse {
+            log: b"2026-09-06T12:00:00Z second\n".to_vec(),
+        }
+        .encode_to_vec(),
+    );
+    let event = tokio::time::timeout(StdDuration::from_secs(1), logs.next())
+        .await
+        .expect("subsequent logs must flow while a projection refresh is pending")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        event.arguments[0],
+        json!(b"2026-09-06T12:00:00Z [web] second\n".to_vec())
+    );
+    projection_write.rollback().await.unwrap();
     hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
     session.output(
         original,

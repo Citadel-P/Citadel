@@ -99,6 +99,7 @@ impl StackRuntimeRouter {
         environment: &[String],
         registry: Option<&AgentStackRegistry>,
         cancellation: &CancellationToken,
+        progress: Option<&citadel_stacks::StackProgress>,
     ) -> Result<StackRuntimeResult, StackError> {
         let root = temporary_run_root(claim.stack_id);
         tokio::fs::create_dir_all(&root).await.map_err(runtime_io)?;
@@ -158,9 +159,14 @@ impl StackRuntimeRouter {
             };
             let mut messages = Vec::new();
             if let Some(command) = claim.spec.common().pre_deploy.as_ref() {
-                let command_result =
-                    run_stack_commands(command, &working_directory, environment, cancellation)
-                        .await?;
+                let command_result = run_stack_commands(
+                    command,
+                    &working_directory,
+                    environment,
+                    cancellation,
+                    progress,
+                )
+                .await?;
                 let status = command_result.status;
                 append_messages_bounded(&mut messages, command_result.messages);
                 if status != StackReleaseStatus::Healthy {
@@ -185,8 +191,14 @@ impl StackRuntimeRouter {
                 }
                 args.push(claim.project_name.clone());
                 prepend_docker_config(&mut args, docker_config.as_deref());
-                let result =
-                    run_docker(&args, &working_directory, environment, cancellation).await?;
+                let result = run_docker(
+                    &args,
+                    &working_directory,
+                    environment,
+                    cancellation,
+                    progress,
+                )
+                .await?;
                 append_messages_bounded(&mut messages, result.messages);
                 Ok(StackRuntimeResult {
                     status: result.status,
@@ -203,8 +215,14 @@ impl StackRuntimeRouter {
                     );
                     let mut down = down;
                     prepend_docker_config(&mut down, docker_config.as_deref());
-                    let down_result =
-                        run_docker(&down, &working_directory, environment, cancellation).await?;
+                    let down_result = run_docker(
+                        &down,
+                        &working_directory,
+                        environment,
+                        cancellation,
+                        progress,
+                    )
+                    .await?;
                     let status = down_result.status;
                     append_messages_bounded(&mut messages, down_result.messages);
                     if status != StackReleaseStatus::Healthy {
@@ -226,14 +244,20 @@ impl StackRuntimeRouter {
                 }
                 prepend_docker_config(&mut up, docker_config.as_deref());
                 let mut result =
-                    run_docker(&up, &working_directory, environment, cancellation).await?;
+                    run_docker(&up, &working_directory, environment, cancellation, progress)
+                        .await?;
                 append_messages_bounded(&mut messages, result.messages);
                 if result.status == StackReleaseStatus::Healthy
                     && let Some(command) = claim.spec.common().post_deploy.as_ref()
                 {
-                    let command_result =
-                        run_stack_commands(command, &working_directory, environment, cancellation)
-                            .await?;
+                    let command_result = run_stack_commands(
+                        command,
+                        &working_directory,
+                        environment,
+                        cancellation,
+                        progress,
+                    )
+                    .await?;
                     append_messages_bounded(&mut messages, command_result.messages);
                     result.status = command_result.status;
                 }
@@ -258,6 +282,21 @@ impl StackRuntimeRouter {
     ) -> Result<StackRuntimeSnapshot, StackError> {
         match orchestration {
             StackOrchestrationMode::DockerCompose => {
+                // Local drift needs current Docker state and Compose service labels;
+                // the inventory projection can lag immediately after an apply.
+                if self
+                    .platform(platform_id)
+                    .await?
+                    .connector
+                    .eq_ignore_ascii_case("Local")
+                {
+                    let containers = self
+                        .docker
+                        .list_containers(true)
+                        .await
+                        .map_err(runtime_io)?;
+                    return Ok(local_compose_snapshot(containers, project));
+                }
                 let rows = sqlx::query("SELECT dockercontainerid,name,state FROM containers WHERE platformid=$1 AND stack=$2 AND NOT isswarmtask ORDER BY dockercontainerid")
                     .bind(platform_id).bind(project).fetch_all(&self.pool).await.map_err(storage)?;
                 Ok(StackRuntimeSnapshot {
@@ -366,15 +405,16 @@ impl StackRuntimePort for StackRuntimeRouter {
         source: &'a StackApplySource,
         environment: &'a [String],
         cancellation: &'a CancellationToken,
+        progress: Option<&'a citadel_stacks::StackProgress>,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         async move {
             validate_stack_execution(claim)?;
             let target = self.platform(claim.platform_id).await?;
             let registry = self.stack_registry(claim.spec.common().registry_id).await?;
             if target.connector.eq_ignore_ascii_case("Local") {
-                self.apply_local(claim, source, environment, registry.as_ref(), cancellation).await
+                self.apply_local(claim, source, environment, registry.as_ref(), cancellation, progress).await
             } else if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
-                self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation).await.map_err(agent_error)
+                self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation, progress).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
             }
@@ -458,7 +498,8 @@ impl StackRuntimePort for StackRuntimeRouter {
                     "rm".to_owned(),
                     claim.project_name.clone(),
                 ];
-                let result = run_docker(&args, &std::env::temp_dir(), &[], cancellation).await?;
+                let result =
+                    run_docker(&args, &std::env::temp_dir(), &[], cancellation, None).await?;
                 return if result.status == StackReleaseStatus::Healthy {
                     Ok(())
                 } else {
@@ -555,7 +596,8 @@ impl StackRuntimePort for StackRuntimeRouter {
                 let mut args = Vec::with_capacity(ids.len() + 1);
                 args.push(command.to_owned());
                 args.extend(ids.iter().cloned());
-                let result = run_docker(&args, &std::env::temp_dir(), &[], cancellation).await?;
+                let result =
+                    run_docker(&args, &std::env::temp_dir(), &[], cancellation, None).await?;
                 if result.status == StackReleaseStatus::Healthy {
                     Ok(ids)
                 } else {
@@ -660,6 +702,7 @@ impl StackRuntimePort for StackRuntimeRouter {
                             &std::env::temp_dir(),
                             &[],
                             cancellation,
+                            None,
                         )
                         .await
                         .and_then(|result| {
@@ -933,8 +976,17 @@ async fn run_docker(
     directory: &Path,
     environment: &[String],
     cancellation: &CancellationToken,
+    progress: Option<&citadel_stacks::StackProgress>,
 ) -> Result<StackRuntimeResult, StackError> {
-    run_process("docker", args, directory, environment, cancellation).await
+    run_process(
+        "docker",
+        args,
+        directory,
+        environment,
+        cancellation,
+        progress,
+    )
+    .await
 }
 
 async fn run_stack_commands(
@@ -942,21 +994,26 @@ async fn run_stack_commands(
     root: &Path,
     environment: &[String],
     cancellation: &CancellationToken,
+    progress: Option<&citadel_stacks::StackProgress>,
 ) -> Result<StackRuntimeResult, StackError> {
     let directory = resolve_staged_path(root, &command.path)?;
     if !tokio::fs::try_exists(&directory)
         .await
         .map_err(runtime_io)?
     {
+        let item = StackStreamItem {
+            event_type: StackApplyEventType::StdErr,
+            message: Some(format!("Command path '{}' does not exist.", command.path)),
+            exit_code: None,
+            stack_status: None,
+            severity: None,
+        };
+        if let Some(progress) = progress {
+            progress.send(item.clone()).await;
+        }
         return Ok(StackRuntimeResult {
             status: StackReleaseStatus::Failed,
-            messages: vec![StackStreamItem {
-                event_type: StackApplyEventType::StdErr,
-                message: Some(format!("Command path '{}' does not exist.", command.path)),
-                exit_code: None,
-                stack_status: None,
-                severity: None,
-            }],
+            messages: vec![item],
         });
     }
 
@@ -967,8 +1024,15 @@ async fn run_stack_commands(
         .filter(|value| !value.trim().is_empty())
     {
         let (program, arguments) = shell_invocation(value);
-        let result =
-            run_process(program, &arguments, &directory, environment, cancellation).await?;
+        let result = run_process(
+            program,
+            &arguments,
+            &directory,
+            environment,
+            cancellation,
+            progress,
+        )
+        .await?;
         append_messages_bounded(&mut messages, result.messages);
         if result.status != StackReleaseStatus::Healthy {
             return Ok(StackRuntimeResult {
@@ -1027,6 +1091,7 @@ async fn run_process(
     directory: &Path,
     environment: &[String],
     cancellation: &CancellationToken,
+    progress: Option<&citadel_stacks::StackProgress>,
 ) -> Result<StackRuntimeResult, StackError> {
     let mut command = Command::new(program);
     command
@@ -1041,47 +1106,50 @@ async fn run_process(
             command.env(name, value);
         }
     }
-    collect_process(command, cancellation).await
+    collect_process(command, cancellation, progress).await
 }
 
 async fn collect_process(
     mut command: Command,
     cancellation: &CancellationToken,
+    progress: Option<&citadel_stacks::StackProgress>,
 ) -> Result<StackRuntimeResult, StackError> {
+    command.kill_on_drop(true);
     let mut child = command.spawn().map_err(runtime_io)?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| StackError::Runtime("Process stdout was not captured.".to_owned()))?;
+        .ok_or_else(|| StackError::Runtime("Process stdout was not captured.".into()))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| StackError::Runtime("Process stderr was not captured.".to_owned()))?;
-    let stdout_task = tokio::spawn(read_bounded(stdout));
-    let stderr_task = tokio::spawn(read_bounded(stderr));
-    let status = tokio::select! {
+        .ok_or_else(|| StackError::Runtime("Process stderr was not captured.".into()))?;
+    // Poll both pipes and process completion together. Dropping this future also
+    // drops the readers and kills the child; there are no detached reader tasks.
+    let (stdout, stderr, status) = tokio::select! {
         biased;
-        () = cancellation.cancelled() => {
-            let _ = child.kill().await;
-            return Err(StackError::Cancelled);
-        },
-        value = child.wait() => value.map_err(runtime_io)?,
+        () = cancellation.cancelled() => return Err(StackError::Cancelled),
+        result = async {
+            tokio::try_join!(
+                read_process_output(stdout, StackApplyEventType::StdOut, progress),
+                read_process_output(stderr, StackApplyEventType::StdErr, progress),
+                async { child.wait().await.map_err(runtime_io) },
+            )
+        } => result?,
     };
-    let stdout = stdout_task
-        .await
-        .map_err(|error| StackError::Runtime(error.to_string()))??;
-    let stderr = stderr_task
-        .await
-        .map_err(|error| StackError::Runtime(error.to_string()))??;
-    let mut messages = lines(stdout, StackApplyEventType::StdOut);
-    messages.extend(lines(stderr, StackApplyEventType::StdErr));
-    messages.push(StackStreamItem {
+    let mut messages = stdout;
+    append_messages_bounded(&mut messages, stderr);
+    let completed = StackStreamItem {
         event_type: StackApplyEventType::CommandCompleted,
         message: None,
         exit_code: status.code(),
         stack_status: None,
         severity: None,
-    });
+    };
+    if let Some(progress) = progress {
+        progress.send(completed.clone()).await;
+    }
+    messages.push(completed);
     Ok(StackRuntimeResult {
         status: if status.success() {
             StackReleaseStatus::Healthy
@@ -1107,35 +1175,119 @@ fn validate_stack_execution(claim: &StackOperationClaim) -> Result<(), StackErro
     Ok(())
 }
 
-async fn read_bounded(
+async fn read_process_output(
     mut reader: impl tokio::io::AsyncRead + Unpin,
-) -> Result<Vec<u8>, StackError> {
-    let mut output = Vec::new();
-    let mut chunk = [0_u8; 8192];
+    event_type: StackApplyEventType,
+    progress: Option<&citadel_stacks::StackProgress>,
+) -> Result<Vec<StackStreamItem>, StackError> {
+    let mut messages = Vec::new();
+    let mut retained = 0usize;
+    let mut pending = Vec::new();
+    let mut oversized = false;
+    let mut chunk = [0u8; 8192];
     loop {
         let count = reader.read(&mut chunk).await.map_err(runtime_io)?;
+        for &byte in &chunk[..count] {
+            if matches!(byte, b'\n' | b'\r') {
+                if !oversized {
+                    emit_process_line(&pending, event_type, progress, &mut messages, &mut retained)
+                        .await;
+                }
+                pending.clear();
+                oversized = false;
+            } else if pending.len() < MAX_PROCESS_OUTPUT_BYTES && !oversized {
+                pending.push(byte);
+            } else {
+                // Discard an oversized line as a whole, never expose a partial
+                // secret or let an unterminated output line grow without bound.
+                pending.clear();
+                oversized = true;
+            }
+        }
         if count == 0 {
+            if !oversized {
+                emit_process_line(&pending, event_type, progress, &mut messages, &mut retained)
+                    .await;
+            }
             break;
         }
-        let remaining = MAX_PROCESS_OUTPUT_BYTES.saturating_sub(output.len());
-        output.extend_from_slice(&chunk[..count.min(remaining)]);
     }
-    Ok(output)
+    Ok(messages)
 }
 
-fn lines(bytes: Vec<u8>, event_type: StackApplyEventType) -> Vec<StackStreamItem> {
-    String::from_utf8_lossy(&bytes)
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| StackStreamItem {
-            event_type,
-            message: Some(line.to_owned()),
-            exit_code: None,
-            stack_status: None,
-            severity: None,
-        })
-        .collect()
+async fn emit_process_line(
+    bytes: &[u8],
+    event_type: StackApplyEventType,
+    progress: Option<&citadel_stacks::StackProgress>,
+    messages: &mut Vec<StackStreamItem>,
+    retained: &mut usize,
+) {
+    let line = String::from_utf8_lossy(bytes);
+    if line.trim().is_empty() {
+        return;
+    }
+    let item = StackStreamItem {
+        event_type,
+        message: Some(line.into_owned()),
+        exit_code: None,
+        stack_status: None,
+        severity: None,
+    };
+    if let Some(progress) = progress {
+        progress.send(item.clone()).await;
+    }
+    let cost = bytes.len() + 64;
+    if retained.saturating_add(cost) <= MAX_PROCESS_OUTPUT_BYTES {
+        *retained += cost;
+        messages.push(item);
+    }
 }
+
+fn local_compose_snapshot(
+    containers: Vec<crate::docker::generated::ContainerSummary>,
+    project: &str,
+) -> StackRuntimeSnapshot {
+    let mut containers = containers
+        .into_iter()
+        .filter(|container| {
+            container
+                .labels
+                .get("com.docker.compose.project")
+                .is_some_and(|value| value == project)
+                && !container.labels.contains_key("com.docker.swarm.task.id")
+                && !container
+                    .labels
+                    .get("com.docker.compose.oneoff")
+                    .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        })
+        .map(|container| StackRuntimeContainer {
+            service_name: container
+                .labels
+                .get("com.docker.compose.service")
+                .cloned()
+                .unwrap_or_else(|| {
+                    container
+                        .names
+                        .first()
+                        .map(|name| name.trim_start_matches('/').to_owned())
+                        .unwrap_or_default()
+                }),
+            docker_container_id: container.id,
+            state: container.state,
+            health: container
+                .status
+                .to_ascii_lowercase()
+                .contains("(unhealthy)")
+                .then(|| "unhealthy".into()),
+        })
+        .collect::<Vec<_>>();
+    containers.sort_by(|a, b| a.docker_container_id.cmp(&b.docker_container_id));
+    StackRuntimeSnapshot {
+        containers,
+        services: vec![],
+    }
+}
+
 fn last_message(result: &StackRuntimeResult) -> String {
     result
         .messages
@@ -1187,6 +1339,7 @@ fn reconciliation_action(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn transported_stack_paths_cannot_escape_the_staging_root() {
@@ -1262,6 +1415,181 @@ mod tests {
         ));
     }
 
+    // ProcessRunner/StackService yield stdout and stderr before command exit.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_streams_both_pipes_before_exit_and_preserves_failure() {
+        let root = std::env::temp_dir().join(format!("citadel-stack-stream-{}", Uuid::now_v7()));
+        tokio::fs::create_dir_all(&root).await.unwrap();
+        let cancellation = CancellationToken::new();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let progress = citadel_stacks::StackProgress::new(
+            sender,
+            vec!["private-token".into()],
+            cancellation.clone(),
+        );
+        let mut command = Command::new("/bin/sh");
+        command.arg("-c").arg("printf 'stdout private-token\\n'; printf 'stderr ready\\r' >&2; while [ ! -f release ]; do sleep 0.02; done; printf 'last line'; exit 7")
+            .current_dir(&root).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let process = collect_process(command, &cancellation, Some(&progress));
+        let observe = async {
+            let first = receiver.recv().await.unwrap();
+            let second = receiver.recv().await.unwrap();
+            assert!(
+                [&first, &second]
+                    .iter()
+                    .any(|item| item.event_type == StackApplyEventType::StdOut)
+            );
+            assert!(
+                [&first, &second]
+                    .iter()
+                    .any(|item| item.event_type == StackApplyEventType::StdErr)
+            );
+            assert!(
+                [&first, &second].iter().all(|item| !item
+                    .message
+                    .as_deref()
+                    .unwrap()
+                    .contains("private-token"))
+            );
+            // The process cannot finish until progress is received by the caller.
+            tokio::fs::write(root.join("release"), b"").await.unwrap();
+            assert_eq!(
+                receiver.recv().await.unwrap().message.as_deref(),
+                Some("last line")
+            );
+            assert_eq!(receiver.recv().await.unwrap().exit_code, Some(7));
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(process, observe)
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap().status, StackReleaseStatus::Failed);
+        tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn secrets_split_across_pipe_reads_are_redacted_before_streaming() {
+        use tokio::io::AsyncWriteExt;
+        let (mut writer, reader) = tokio::io::duplex(4);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let progress = citadel_stacks::StackProgress::new(
+            sender,
+            vec!["private-token".into()],
+            CancellationToken::new(),
+        );
+        let read = read_process_output(reader, StackApplyEventType::StdOut, Some(&progress));
+        let write = async {
+            writer.write_all(b"value private-token\n").await.unwrap();
+            drop(writer);
+        };
+        let (result, ()) =
+            tokio::time::timeout(Duration::from_secs(5), async { tokio::join!(read, write) })
+                .await
+                .unwrap();
+        result.unwrap();
+        let text = receiver.recv().await.unwrap().message.unwrap();
+        assert!(text.starts_with("value "));
+        assert!(!text.contains("private-token"));
+    }
+
+    #[tokio::test]
+    async fn output_streams_past_retention_limit_and_discards_oversized_lines() {
+        let cancellation = CancellationToken::new();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let progress = citadel_stacks::StackProgress::new(sender, vec![], cancellation);
+        let mut bytes = vec![b'x'; MAX_PROCESS_OUTPUT_BYTES + 1];
+        bytes.extend_from_slice(b"\n");
+        for _ in 0..300 {
+            bytes.extend_from_slice(format!("{}\n", "y".repeat(1024)).as_bytes());
+        }
+        bytes.extend_from_slice(b"last");
+        let read = read_process_output(
+            bytes.as_slice(),
+            StackApplyEventType::StdErr,
+            Some(&progress),
+        );
+        let observe = async {
+            for _ in 0..300 {
+                assert_eq!(
+                    receiver.recv().await.unwrap().message.unwrap(),
+                    "y".repeat(1024)
+                );
+            }
+            assert_eq!(
+                receiver.recv().await.unwrap().message.as_deref(),
+                Some("last")
+            );
+        };
+        let (retained, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(read, observe)
+        })
+        .await
+        .unwrap();
+        let retained = retained.unwrap();
+        assert!(retained.len() < 300);
+        assert!(
+            retained
+                .iter()
+                .map(|item| item.message.as_ref().unwrap().len() + 64)
+                .sum::<usize>()
+                <= MAX_PROCESS_OUTPUT_BYTES
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancellation_interrupts_a_process_with_a_full_progress_queue() {
+        let cancellation = CancellationToken::new();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let progress = citadel_stacks::StackProgress::new(sender, vec![], cancellation.clone());
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg("while :; do printf 'progress\\n'; done")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let process = collect_process(command, &cancellation, Some(&progress));
+        let cancel = async {
+            receiver.recv().await.unwrap();
+            cancellation.cancel();
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(process, cancel)
+        })
+        .await
+        .unwrap();
+        assert!(matches!(result, Err(StackError::Cancelled)));
+    }
+
+    #[test]
+    fn local_drift_uses_compose_service_labels_and_current_state() {
+        let container =
+            |project: &str, service: &str, state: &str| crate::docker::generated::ContainerSummary {
+                id: service.into(),
+                names: vec!["/custom-container-name".into()],
+                state: state.into(),
+                labels: [
+                    ("com.docker.compose.project".into(), project.into()),
+                    ("com.docker.compose.service".into(), service.into()),
+                ]
+                .into(),
+                ..Default::default()
+            };
+        let snapshot = local_compose_snapshot(
+            vec![
+                container("beszel", "agent", "running"),
+                container("other", "other", "running"),
+                container("beszel", "web", "exited"),
+            ],
+            "beszel",
+        );
+        assert_eq!(snapshot.containers.len(), 2);
+        assert_eq!(snapshot.containers[1].service_name, "web");
+        assert_eq!(snapshot.containers[1].state, "exited");
+    }
+
     #[test]
     fn shell_commands_are_passed_as_one_argument_to_the_platform_shell() {
         let (_, arguments) = shell_invocation("printf '%s' \"$TOKEN\"");
@@ -1323,6 +1651,7 @@ mod tests {
             &root,
             &["CITADEL_TEST_VALUE=resolved".to_owned()],
             &CancellationToken::new(),
+            None,
         )
         .await
         .unwrap();

@@ -28,6 +28,7 @@ describe('StackLogs', () => {
       expect.objectContaining({
         containerFilters: [],
         enableContainerFilter: true,
+        emptyMessage: 'Waiting for logs…',
       }),
     );
   });

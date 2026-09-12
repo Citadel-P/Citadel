@@ -1,3 +1,4 @@
+use crate::request_validation::ValidatedJson;
 use crate::capabilities::ResourceCapabilities;
 use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
@@ -170,7 +171,7 @@ async fn create_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(mut i): Json<BackupRepositoryInput>,
+    ValidatedJson(mut i): ValidatedJson<BackupRepositoryInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -242,7 +243,7 @@ async fn update_repository(
     )
     .await?;
     let Json(patch) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     if patch.get("spec").is_some_and(|v| !v.is_null()) {
@@ -286,7 +287,7 @@ async fn validate_repository(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(input): Json<RepositoryLocationInput>,
+    ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Validate").await
 }
@@ -295,7 +296,7 @@ async fn initialize_repository(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(input): Json<RepositoryLocationInput>,
+    ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Initialize").await
 }
@@ -304,7 +305,7 @@ async fn check_repository(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(input): Json<RepositoryLocationInput>,
+    ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Check").await
 }
@@ -313,7 +314,7 @@ async fn prune_repository(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(input): Json<RepositoryLocationInput>,
+    ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Prune").await
 }
@@ -450,7 +451,7 @@ async fn create_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
-    Json(mut i): Json<BackupPolicyInput>,
+    ValidatedJson(mut i): ValidatedJson<BackupPolicyInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -589,7 +590,7 @@ async fn update_policy(
     )
     .await?;
     let Json(patch) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     let current = result(s.backups.store().get_policy(id).await, &h)?;
@@ -664,7 +665,7 @@ async fn rename_policy(
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     let Json(mut input) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     result(input.validate(), &h)?;
@@ -714,7 +715,7 @@ async fn update_policy_metadata(
     )
     .await?;
     let Json(patch) = identity_result(
-        body.map_err(|_| IdentityError::Validation("The request body is invalid.".into())),
+        body.map_err(crate::request_validation::invalid_json),
         &h,
     )?;
     let description = result(
@@ -838,10 +839,10 @@ async fn queue_backup(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    input: Option<Json<QueueInput>>,
+    input: Option<ValidatedJson<QueueInput>>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
-    let input = input.map(|Json(v)| v).unwrap_or_default();
+    let input = input.map(|ValidatedJson(v)| v).unwrap_or_default();
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
     Ok(no_store(Json(run).into_response()))
 }
@@ -1041,7 +1042,7 @@ async fn queue_restore(
     p: Option<Extension<ActorPrincipal>>,
     Path(id): Path<Uuid>,
     h: HeaderMap,
-    Json(i): Json<RestoreInput>,
+    ValidatedJson(i): ValidatedJson<RestoreInput>,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
     Ok(no_store(
@@ -1272,7 +1273,7 @@ fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> IdentityHttpResult<T> 
     identity_result(
         r.map_err(|e| match e {
             BackupError::LicenseRequired => IdentityError::LicenseRequired("automated-operations"),
-            BackupError::Validation(m) => IdentityError::Validation(m),
+            BackupError::Validation(m) => crate::request_validation::validation_error(m),
             BackupError::NotFound => IdentityError::NotFound,
             BackupError::Conflict(m) => IdentityError::Conflict(m),
             BackupError::Storage(m) => IdentityError::Storage(m),

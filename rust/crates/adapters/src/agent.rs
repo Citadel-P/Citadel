@@ -1003,6 +1003,7 @@ impl AgentClient {
         environment: &[String],
         registry: Option<&AgentStackRegistry>,
         cancellation: &CancellationToken,
+        progress: Option<&citadel_stacks::StackProgress>,
     ) -> Result<citadel_stacks::StackRuntimeResult, RuntimeCapabilityError> {
         let request = self.signer.sign(
             workloads::stack_request(claim, source, environment, registry),
@@ -1018,7 +1019,7 @@ impl AgentClient {
                     .map_err(normalize_status)?
             }
         };
-        workloads::consume_stack_stream(response.into_inner(), cancellation).await
+        workloads::consume_stack_stream(response.into_inner(), cancellation, progress).await
     }
 
     /// Pull is deliberately not retried: once an Agent accepts this mutation,

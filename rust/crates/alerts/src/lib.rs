@@ -275,6 +275,13 @@ pub struct AlertRuleView {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AlertRuleListItem {
+    #[serde(flatten)]
+    pub rule: AlertRuleView,
+    pub channels: Vec<AlertChannelView>,
+}
+
 impl AlertRuleView {
     pub fn snapshot(&self) -> citadel_domain::AlertRuleActivitySnapshot {
         citadel_domain::AlertRuleActivitySnapshot {
@@ -383,7 +390,7 @@ pub trait AlertStore: Send + Sync {
         &self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<AlertRuleView>, AlertError>>;
+    ) -> BoxFuture<'_, Result<Vec<AlertRuleListItem>, AlertError>>;
     fn get_rule(&self, id: Uuid) -> BoxFuture<'_, Result<AlertRuleView, AlertError>>;
     fn create_rule<'a>(
         &'a self,

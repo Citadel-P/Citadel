@@ -26,6 +26,7 @@ pub mod platforms_http;
 pub mod profile_http;
 pub mod realtime;
 pub mod realtime_groups;
+mod request_validation;
 pub mod resources_http;
 pub mod roles_http;
 pub mod search_http;

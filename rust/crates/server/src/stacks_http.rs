@@ -228,7 +228,7 @@ async fn releases(
         principal,
         path,
         PermissionLevel::Read,
-        None,
+        Some(SpecificPermission::Releases),
         &headers,
     )
     .await?;
@@ -960,8 +960,9 @@ async fn collection_capabilities(
 ) -> IdentityHttpResult<ResourceCapabilities> {
     if principal.is_administrator() {
         return Ok(ResourceCapabilities {
-            can_create: true,
-            can_delete: true,
+            can_read: true,
+            can_write: true,
+            can_execute: true,
         });
     }
     let p = identity
@@ -969,10 +970,13 @@ async fn collection_capabilities(
         .await
         .map_err(|error| crate::identity_http::IdentityHttpError::from_parts(error, headers))?;
     Ok(ResourceCapabilities {
-        can_create: p
+        can_read: p
+            .as_ref()
+            .is_some_and(|value| value.level.grants(PermissionLevel::Read)),
+        can_write: p
             .as_ref()
             .is_some_and(|value| value.level.grants(PermissionLevel::Write)),
-        can_delete: p
+        can_execute: p
             .as_ref()
             .is_some_and(|value| value.level.grants(PermissionLevel::Execute)),
     })
@@ -1004,7 +1008,7 @@ fn parse_filter(query: Option<&str>) -> Result<StackFilter, IdentityError> {
 }
 fn stack_error(error: StackError) -> IdentityError {
     match error {
-        StackError::Validation(message) => IdentityError::Validation(message),
+        StackError::Validation(message) => crate::request_validation::validation_error(message),
         StackError::NotFound => IdentityError::NotFound,
         StackError::Forbidden => IdentityError::Forbidden,
         StackError::LicenseRequired(capability) => IdentityError::LicenseRequired(capability),
@@ -1030,6 +1034,6 @@ fn invalid_path(_: PathRejection) -> IdentityError {
 fn invalid_query(_: QueryRejection) -> IdentityError {
     IdentityError::Validation("The Stack query is invalid.".to_owned())
 }
-fn invalid_json(_: JsonRejection) -> IdentityError {
-    IdentityError::Validation("The request body is invalid.".to_owned())
+fn invalid_json(error: JsonRejection) -> IdentityError {
+    crate::request_validation::invalid_json(error)
 }

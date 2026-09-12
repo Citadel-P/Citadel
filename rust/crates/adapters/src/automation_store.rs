@@ -37,7 +37,7 @@ pub struct PostgresAutomationStore {
 
 enum EnqueueMode<'a> {
     Queue,
-    Execute,
+    Execute(Option<&'a str>),
     Webhook(&'a serde_json::Value),
 }
 
@@ -88,7 +88,10 @@ impl PostgresAutomationStore {
             }
             let state: String = action.try_get("controlstate").map_err(storage)?;
             let run_id = Uuid::now_v7();
-            let code: String = action.try_get("code").map_err(storage)?;
+            let code: String = match mode {
+                EnqueueMode::Execute(Some(code)) if trigger == "Test" => code.to_owned(),
+                _ => action.try_get("code").map_err(storage)?,
+            };
             let name: String = action.try_get("name").map_err(storage)?;
             let run_as: Uuid = action.try_get("runasactorid").map_err(storage)?;
             let triggered_by = (trigger != "Webhook").then_some(actor.value());
@@ -116,7 +119,7 @@ impl PostgresAutomationStore {
             sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             let run = get_run_tx(&mut tx, run_id).await?;
             add_run_activity(&mut tx, &run).await?;
-            let run = if matches!(mode, EnqueueMode::Execute) {
+            let run = if matches!(mode, EnqueueMode::Execute(_)) {
                 start_run(&mut tx, id, run_id).await?
             } else {
                 run
@@ -366,6 +369,7 @@ ORDER BY action.name,action.id"#
         trigger: &'a str,
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
+        code: Option<&'a str>,
     ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
         Box::pin(async move {
             self.enqueue_run(
@@ -374,7 +378,7 @@ ORDER BY action.name,action.id"#
                 trigger,
                 args,
                 timeout_seconds,
-                EnqueueMode::Execute,
+                EnqueueMode::Execute(code),
             )
             .await
             .map(|run| AutomationRunClaim { run })

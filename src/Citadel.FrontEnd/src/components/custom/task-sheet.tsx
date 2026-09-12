@@ -1,4 +1,5 @@
 import { memo, ReactNode, useCallback, useEffect, useMemo } from 'react';
+import type { AutomationActionTestDraftInput } from '@/api/automation-draft';
 import {
   Calendar,
   Check,
@@ -52,7 +53,6 @@ import {
   RunAutomationActionInput,
   QueueBackupRunInput,
   RestoreVolumeInput,
-  TestAutomationActionInput,
   StackReleaseStatus,
   StackReleaseSource,
   StackSnapshot,
@@ -108,7 +108,7 @@ type BackupRestoreRunLogsParams = {
 type AutomationActionRunParams = {
   id: string;
   name: string;
-} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & TestAutomationActionInput));
+} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & AutomationActionTestDraftInput));
 
 type BackupRestoreRunStreamItem = {
   restoreRunId: string;
@@ -1590,15 +1590,15 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
   const { id, mode } = params;
   const queryClient = useQueryClient();
 
-  const request: RunAutomationActionInput | TestAutomationActionInput = useMemo(() => {
+  const request: RunAutomationActionInput | AutomationActionTestDraftInput = useMemo(() => {
     if (params.mode === 'run') {
       return { argsJson: params.argsJson, timeoutSeconds: params.timeoutSeconds };
     }
 
-    return { argsJson: params.argsJson };
+    return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<RunAutomationActionInput | TestAutomationActionInput, AutomationActionRunStreamItem>({
+  const state = useStreamProgress<RunAutomationActionInput | AutomationActionTestDraftInput, AutomationActionRunStreamItem>({
     endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
     request,
     successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',

@@ -48,6 +48,7 @@ const Logs = memo(
       <div className="flex flex-col gap-3">
         <LogViewer
           logs={logs}
+          emptyMessage="Waiting for logs…"
           autoScroll={true}
           timeStamps={true}
           allowWrap={true}

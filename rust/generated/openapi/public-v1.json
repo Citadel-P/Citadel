@@ -14393,6 +14393,13 @@
               "string",
               "null"
             ]
+          },
+          "code": {
+            "description": "Optional unsaved script for this test run only (at most 256 KiB). Requires Execute permission. Omit to use saved code.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "type": "object"
