@@ -17,6 +17,7 @@ use chrono_tz::Tz;
 use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_domain::ActorId;
 use citadel_execution::{OutputLimitPolicy, ProcessError, ProcessLimits, ProcessRequest, run};
+use citadel_resources::RepoWebhookConfig;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,6 +25,9 @@ use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+mod patch;
+pub use patch::{UpdateAutomationActionInput, UpdateAutomationActionMetadata};
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -36,7 +40,7 @@ pub struct AutomationActionInput {
     pub schedule_enabled: bool,
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: Option<String>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<RepoWebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Option<Uuid>,
@@ -112,8 +116,11 @@ impl AutomationActionInput {
         {
             return Err(AutomationError::Validation("Schedule fields must be at most 128 characters and Run-as Actor must not be empty.".into()));
         }
-        citadel_resources::validate_webhook(self.webhook.as_ref())
-            .map_err(|error| AutomationError::Validation(error.to_string()))?;
+        if let Some(webhook) = &self.webhook {
+            webhook
+                .validate()
+                .map_err(|error| AutomationError::Validation(error.to_string()))?;
+        }
         self.default_args_json = Some(args.to_owned());
         self.timeout_seconds = Some(timeout);
         self.schedule_time_zone = Some(
@@ -138,7 +145,7 @@ pub struct AutomationActionView {
     pub schedule_enabled: bool,
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: String,
-    pub webhook: Option<Value>,
+    pub webhook: Option<RepoWebhookConfig>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
@@ -156,11 +163,9 @@ pub struct AutomationActionView {
 impl AutomationActionView {
     pub fn snapshot(&self) -> citadel_domain::AutomationActionActivitySnapshot {
         let mut webhook = self.webhook.clone();
-        if let Some(Value::Object(fields)) = &mut webhook {
-            for (key, value) in fields {
-                if key.eq_ignore_ascii_case("secret") && !value.is_null() {
-                    *value = Value::String("********".into());
-                }
+        if let Some(config) = &mut webhook {
+            if config.secret.is_some() {
+                config.secret = Some("********".into());
             }
         }
         citadel_domain::AutomationActionActivitySnapshot {
@@ -173,7 +178,8 @@ impl AutomationActionView {
             schedule_enabled: self.schedule_enabled,
             schedule_cron: self.schedule_cron.clone(),
             schedule_time_zone: self.schedule_time_zone.clone(),
-            webhook,
+            webhook: webhook
+                .map(|value| serde_json::to_value(value).expect("webhook fields serialize")),
             timeout_seconds: self.timeout_seconds,
             alert_on_failure: self.alert_on_failure,
             run_as_actor_id: self.run_as_actor_id,
@@ -228,13 +234,10 @@ pub fn changes_paid_trigger(
     current: Option<&AutomationActionView>,
     proposed: &AutomationActionInput,
 ) -> bool {
-    let webhook_enabled = |value: Option<&Value>| {
-        value
-            .and_then(|v| v.get("enabled").or_else(|| v.get("Enabled")))
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-    };
-    let webhook = webhook_enabled(proposed.webhook.as_ref());
+    let webhook = proposed
+        .webhook
+        .as_ref()
+        .is_some_and(|config| config.enabled);
     let Some(current) = current else {
         return proposed.schedule_enabled || webhook;
     };
@@ -300,7 +303,7 @@ pub trait AutomationStore: Send + Sync {
     fn enqueue_webhook<'a>(
         &'a self,
         id: Uuid,
-        expected_webhook: &'a Value,
+        expected_webhook: &'a RepoWebhookConfig,
         args: &'a Value,
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>>;
     fn claim_next<'a>(
@@ -460,7 +463,7 @@ impl AutomationService {
     pub async fn queue_webhook(
         &self,
         id: Uuid,
-        expected_webhook: &Value,
+        expected_webhook: &RepoWebhookConfig,
         args: &Value,
     ) -> Result<(), AutomationError> {
         let action = self.store.get(id).await?;
@@ -1239,13 +1242,16 @@ mod tests {
         assert!(changes_paid_trigger(Some(&current), &proposed));
         proposed.schedule_enabled = false;
         assert!(!changes_paid_trigger(Some(&current), &proposed));
-        proposed.webhook = Some(serde_json::json!({"enabled":true}));
+        proposed.webhook =
+            Some(serde_json::from_value(serde_json::json!({"enabled":true})).unwrap());
         let with_webhook = AutomationActionView {
             webhook: proposed.webhook.clone(),
             ..current
         };
         assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
-        proposed.webhook = Some(serde_json::json!({"enabled":true,"secret":"changed"}));
+        proposed.webhook = Some(
+            serde_json::from_value(serde_json::json!({"enabled":true,"secret":"changed"})).unwrap(),
+        );
         assert!(changes_paid_trigger(Some(&with_webhook), &proposed));
         proposed.enabled = false;
         assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
@@ -1256,11 +1262,14 @@ mod tests {
         let actor = ActorId::new(Uuid::now_v7());
         let mut proposed = input();
         proposed.webhook = Some(
-            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken"}),
+            serde_json::from_value(
+                serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken"}),
+            )
+            .unwrap(),
         );
         assert!(proposed.validate(actor).is_err());
         proposed.webhook = Some(
-            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"webhook-shared-secret"}),
+            serde_json::from_value(serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"webhook-shared-secret"})).unwrap(),
         );
         proposed.validate(actor).unwrap();
         proposed.schedule_cron = Some("*".repeat(129));

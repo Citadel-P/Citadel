@@ -296,4 +296,54 @@ mod tests {
         assert_eq!(page["schema"]["default"], 1);
         assert_eq!(page["schema"]["minimum"].as_f64(), Some(1.0));
     }
+    #[test]
+    fn automation_webhook_schema_is_derived_from_the_runtime_dto() {
+        use utoipa::PartialSchema;
+        // Utoipa may wrap an inline enum in allOf when adding its default.
+        fn enum_values(schema: &Value) -> Option<&Value> {
+            schema.get("enum").or_else(|| {
+                ["allOf", "oneOf", "anyOf"]
+                    .iter()
+                    .filter_map(|key| schema[*key].as_array())
+                    .flatten()
+                    .find_map(enum_values)
+            })
+        }
+        let native = serde_json::to_value(citadel_resources::RepoWebhookConfig::schema()).unwrap();
+        for public in [false, true] {
+            let doc = serde_json::to_value(document(public)).unwrap();
+            let schemas = &doc["components"]["schemas"];
+            assert_eq!(schemas["RepoWebhookConfig"], native);
+            assert_eq!(
+                enum_values(&native["properties"]["provider"]),
+                Some(&json!(["GitHub", "GitLab", "Generic"]))
+            );
+            assert_eq!(
+                enum_values(&native["properties"]["authScheme"]),
+                Some(&json!([
+                    "GitHubHmacSha256",
+                    "GitLabSignedToken",
+                    "GitLabLegacyToken",
+                    "BearerToken"
+                ]))
+            );
+            for owner in [
+                "AutomationActionInput",
+                "UpdateAutomationActionInput",
+                "AutomationActionView",
+            ] {
+                let webhook = &schemas[owner]["properties"]["webhook"];
+                let alternatives = webhook["oneOf"].as_array().unwrap();
+                assert!(
+                    alternatives
+                        .contains(&json!({"$ref":"#/components/schemas/RepoWebhookConfig"})),
+                    "{owner}: {webhook}"
+                );
+                assert!(
+                    alternatives.contains(&json!({"type":"null"})),
+                    "{owner}: {webhook}"
+                );
+            }
+        }
+    }
 }

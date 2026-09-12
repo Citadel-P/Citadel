@@ -1,8 +1,10 @@
+use crate::request_validation::WorkloadQuery;
+use crate::request_validation::{invalid_json, invalid_path};
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::rejection::{JsonRejection, PathRejection};
-use axum::extract::{Extension, Path, RawQuery, State};
+use axum::extract::{Extension, Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
@@ -205,11 +207,15 @@ async fn apply_deployment(
 async fn list_deployments(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    RawQuery(raw_query): RawQuery,
+    filter: Result<WorkloadQuery, crate::identity_http::IdentityHttpError>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
-    let filter = identity_result(parse_filter(raw_query.as_deref()), &headers)?;
+    let filter = filter?;
+    let filter = DeploymentFilter {
+        tags: filter.tags,
+        platform_id: filter.platform_id,
+    };
     let capabilities = collection_capabilities(&state.identity, &principal, &headers).await?;
     let result = state
         .deployments
@@ -612,32 +618,6 @@ async fn collection_capabilities(
     })
 }
 
-fn parse_filter(query: Option<&str>) -> Result<DeploymentFilter, IdentityError> {
-    let mut filter = DeploymentFilter::default();
-    for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
-        if key.eq_ignore_ascii_case("tags") {
-            if filter.tags.len() >= 100 {
-                return Err(IdentityError::Validation(
-                    "At most 100 Deployment Tags may be filtered at once.".to_owned(),
-                ));
-            }
-            if !value.trim().is_empty() && !filter.tags.iter().any(|tag| tag == &value) {
-                filter.tags.push(value.into_owned());
-            }
-        } else if key.eq_ignore_ascii_case("platformId") {
-            let id = Uuid::parse_str(&value).map_err(|_| {
-                IdentityError::Validation("The Platform ID filter is invalid.".to_owned())
-            })?;
-            if filter.platform_id.replace(id).is_some() {
-                return Err(IdentityError::Validation(
-                    "The Platform ID filter may be supplied only once.".to_owned(),
-                ));
-            }
-        }
-    }
-    Ok(filter)
-}
-
 fn deployment_error(error: DeploymentError) -> IdentityError {
     match error {
         DeploymentError::Validation(message) => {
@@ -664,14 +644,6 @@ fn require_actor(
         .ok_or(IdentityError::Unauthenticated)
 }
 
-fn invalid_path(_: PathRejection) -> IdentityError {
-    IdentityError::Validation("The Deployment path is invalid.".to_owned())
-}
-
-fn invalid_json(error: JsonRejection) -> IdentityError {
-    crate::request_validation::invalid_json(error)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -680,7 +652,8 @@ mod tests {
     fn filter_accepts_repeated_tags_and_one_platform() {
         let platform = Uuid::now_v7();
         let parsed =
-            parse_filter(Some(&format!("tags=prod&tags=blue&platformId={platform}"))).unwrap();
+            WorkloadQuery::parse(Some(&format!("tags=prod&tags=blue&platformId={platform}")))
+                .unwrap();
         assert_eq!(parsed.tags, ["prod", "blue"]);
         assert_eq!(parsed.platform_id, Some(platform));
     }
@@ -689,7 +662,7 @@ mod tests {
     fn filter_rejects_repeated_platform() {
         let platform = Uuid::now_v7();
         assert!(
-            parse_filter(Some(&format!(
+            WorkloadQuery::parse(Some(&format!(
                 "platformId={platform}&platformId={platform}"
             )))
             .is_err()

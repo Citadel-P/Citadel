@@ -9,6 +9,7 @@ mod secret_provider_tests;
 mod tags;
 pub use search::*;
 pub mod webhooks;
+pub use webhooks::{RepoWebhookConfig, WebhookAuthScheme, WebhookProvider};
 
 use std::sync::Arc;
 

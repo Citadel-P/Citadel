@@ -1,8 +1,10 @@
 use crate::capabilities::ResourceCapabilities;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
 use crate::openapi::router::OpenApiRouterExt;
+use crate::request_validation::ApiPath;
+use crate::request_validation::ApiQuery;
 use crate::request_validation::ValidatedJson;
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -190,7 +192,7 @@ async fn create_repository(
 async fn get_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -284,7 +286,7 @@ async fn update_repository(
 async fn archive_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -317,7 +319,7 @@ async fn archive_repository(
 async fn validate_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
@@ -340,7 +342,7 @@ async fn validate_repository(
 async fn initialize_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
@@ -363,7 +365,7 @@ async fn initialize_repository(
 async fn check_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
@@ -386,7 +388,7 @@ async fn check_repository(
 async fn prune_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(input): ValidatedJson<RepositoryLocationInput>,
 ) -> IdentityHttpResult {
@@ -722,7 +724,7 @@ backup_source_preview!(
 async fn get_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1042,7 +1044,7 @@ fn json_uuid(value: &serde_json::Value, key: &str) -> Option<Uuid> {
 async fn archive_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1075,7 +1077,7 @@ async fn archive_policy(
 async fn queue_backup(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     input: Option<ValidatedJson<QueueInput>>,
 ) -> IdentityHttpResult {
@@ -1137,7 +1139,7 @@ async fn enqueue_backup(
 async fn list_runs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Query(f): Query<RunFilter>,
+    ApiQuery(f): ApiQuery<RunFilter>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1186,7 +1188,7 @@ async fn list_runs(
 async fn get_run(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1218,7 +1220,7 @@ async fn get_run(
 async fn get_backup_events(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1258,7 +1260,7 @@ async fn get_backup_events(
 async fn get_restore_events(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1298,7 +1300,7 @@ async fn get_restore_events(
 async fn get_backup_logs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1336,7 +1338,7 @@ async fn get_backup_logs(
 async fn cancel_backup(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1370,7 +1372,7 @@ async fn cancel_backup(
 async fn queue_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(i): ValidatedJson<RestoreInput>,
 ) -> IdentityHttpResult {
@@ -1445,7 +1447,7 @@ async fn enqueue_restore(
 async fn list_restores(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Query(f): Query<RunFilter>,
+    ApiQuery(f): ApiQuery<RunFilter>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1495,7 +1497,7 @@ async fn list_restores(
 async fn get_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1528,7 +1530,7 @@ async fn get_restore(
 async fn get_restore_logs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -1567,7 +1569,7 @@ async fn get_restore_logs(
 async fn cancel_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;

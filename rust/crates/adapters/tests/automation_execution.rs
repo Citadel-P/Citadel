@@ -207,7 +207,8 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         );
     }
     let current = store.get(action.id).await.unwrap();
-    input.webhook = Some(json!({"enabled":true,"secret":"do-not-audit"}));
+    input.webhook =
+        Some(serde_json::from_value(json!({"enabled":true,"secret":"do-not-audit"})).unwrap());
     let updated = store.update(&current, &input, actor, false).await.unwrap();
     assert!(
         store.update(&current, &input, actor, false).await.is_err(),
@@ -222,7 +223,10 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     .unwrap();
     assert_eq!(audit["NewAction"]["Webhook"]["secret"], "********");
     assert!(!audit.to_string().contains("do-not-audit"));
-    assert_eq!(updated.webhook.as_ref().unwrap()["secret"], "do-not-audit");
+    assert_eq!(
+        updated.webhook.as_ref().unwrap().secret.as_deref(),
+        Some("do-not-audit")
+    );
 
     // Audit persistence failure rolls the resource change back.
     assert!(

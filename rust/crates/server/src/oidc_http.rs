@@ -1,8 +1,9 @@
+use crate::request_validation::ApiPath;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{ConnectInfo, Extension, Path, Query, State};
+use axum::extract::{ConnectInfo, Extension, Query, State};
 use axum::http::header::LOCATION;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -82,7 +83,7 @@ async fn list_login_providers(State(state): State<OidcHttpState>, headers: Heade
 )]
 async fn begin_login(
     State(state): State<OidcHttpState>,
-    Path(provider_id): Path<Uuid>,
+    ApiPath(provider_id): ApiPath<Uuid>,
     headers: HeaderMap,
     query: Result<Query<BeginLoginQuery>, QueryRejection>,
 ) -> Response {
@@ -126,7 +127,7 @@ async fn begin_login(
 async fn complete_login(
     State(state): State<OidcHttpState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
-    Path(provider_id): Path<Uuid>,
+    ApiPath(provider_id): ApiPath<Uuid>,
     headers: HeaderMap,
     query: Result<Query<CallbackQuery>, QueryRejection>,
 ) -> Response {
@@ -210,7 +211,7 @@ async fn list_providers(
 async fn get_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> Response {
     if let Err(error) = require_human_administrator(principal) {
@@ -309,7 +310,7 @@ async fn rename_provider(
 async fn update_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
     input: Result<Json<PatchOidcProviderRequest>, JsonRejection>,
 ) -> Response {
@@ -344,7 +345,7 @@ async fn update_provider(
 async fn update_provider_metadata(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
     input: Result<Json<PatchOidcProviderMetadataRequest>, JsonRejection>,
 ) -> Response {
@@ -382,7 +383,7 @@ async fn update_provider_metadata(
 async fn delete_provider(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> Response {
     let principal = match require_human_administrator(principal) {
@@ -411,7 +412,7 @@ async fn delete_provider(
 async fn test_provider_discovery(
     State(state): State<OidcHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> Response {
     if let Err(error) = require_human_administrator(principal) {
@@ -485,11 +486,11 @@ fn redirect(location: String, headers: &HeaderMap) -> Response {
 }
 
 fn invalid_json(error: JsonRejection, headers: &HeaderMap) -> Response {
-    identity_error_response(IdentityError::Validation(error.body_text()), headers)
+    identity_error_response(crate::request_validation::invalid_json(error), headers)
 }
 
 fn invalid_query(error: QueryRejection, headers: &HeaderMap) -> Response {
-    identity_error_response(IdentityError::Validation(error.body_text()), headers)
+    identity_error_response(crate::request_validation::invalid_query(error), headers)
 }
 
 #[cfg(test)]

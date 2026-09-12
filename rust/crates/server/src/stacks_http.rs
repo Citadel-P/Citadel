@@ -1,8 +1,10 @@
+use crate::request_validation::WorkloadQuery;
+use crate::request_validation::{invalid_json, invalid_path, invalid_query};
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
-use axum::extract::{Extension, Path, Query, RawQuery, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
@@ -116,11 +118,15 @@ async fn check_updates(
 async fn list(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    RawQuery(query): RawQuery,
+    filter: Result<WorkloadQuery, crate::identity_http::IdentityHttpError>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
-    let filter = identity_result(parse_filter(query.as_deref()), &headers)?;
+    let filter = filter?;
+    let filter = StackFilter {
+        tags: filter.tags,
+        platform_id: filter.platform_id,
+    };
     let capabilities = collection_capabilities(&state.identity, &principal, &headers).await?;
     let value = identity_result(
         state
@@ -1300,31 +1306,7 @@ async fn collection_capabilities(
             .is_some_and(|value| value.level.grants(PermissionLevel::Execute)),
     })
 }
-fn parse_filter(query: Option<&str>) -> Result<StackFilter, IdentityError> {
-    let mut filter = StackFilter::default();
-    for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
-        if key.eq_ignore_ascii_case("tags") {
-            if filter.tags.len() >= 100 {
-                return Err(IdentityError::Validation(
-                    "At most 100 Stack Tags may be filtered at once.".to_owned(),
-                ));
-            }
-            if !value.trim().is_empty() && !filter.tags.iter().any(|tag| tag == &value) {
-                filter.tags.push(value.into_owned());
-            }
-        } else if key.eq_ignore_ascii_case("platformId") {
-            if filter.platform_id.is_some() {
-                return Err(IdentityError::Validation(
-                    "The Platform ID filter may be supplied only once.".to_owned(),
-                ));
-            }
-            filter.platform_id = Some(Uuid::parse_str(&value).map_err(|_| {
-                IdentityError::Validation("The Platform ID filter is invalid.".to_owned())
-            })?);
-        }
-    }
-    Ok(filter)
-}
+
 fn stack_error(error: StackError) -> IdentityError {
     match error {
         StackError::Validation(message) => crate::request_validation::validation_error(message),
@@ -1346,15 +1328,6 @@ fn require_actor(
     principal
         .map(|Extension(value)| value)
         .ok_or(IdentityError::Unauthenticated)
-}
-fn invalid_path(_: PathRejection) -> IdentityError {
-    IdentityError::Validation("The Stack path is invalid.".to_owned())
-}
-fn invalid_query(_: QueryRejection) -> IdentityError {
-    IdentityError::Validation("The Stack query is invalid.".to_owned())
-}
-fn invalid_json(error: JsonRejection) -> IdentityError {
-    crate::request_validation::invalid_json(error)
 }
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHttpState> {

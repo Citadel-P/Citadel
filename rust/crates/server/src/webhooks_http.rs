@@ -307,7 +307,12 @@ async fn dispatch(
             .get(id)
             .await
             .map_err(automation_error)?;
-        let webhook = WebhookConfiguration::from_value(action.webhook.as_ref())
+        let config = action
+            .webhook
+            .as_ref()
+            .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
+        let webhook = config
+            .configuration()
             .map_err(webhook_auth_error)?
             .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
         if let Some(reason) = webhook
@@ -319,11 +324,7 @@ async fn dispatch(
         let args = normalize_payload(body);
         // Queue durably, using the configured run-as Actor, not the caller's token.
         // A short HTTP acknowledgement must not own or cancel the script process.
-        return match state
-            .automation
-            .queue_webhook(id, action.webhook.as_ref().unwrap(), &args)
-            .await
-        {
+        return match state.automation.queue_webhook(id, config, &args).await {
             Ok(()) => Ok(WebhookDispatch::default()),
             Err(AutomationError::Conflict(_)) => Ok(WebhookDispatch::noop(
                 "Action is disabled, busy, or its webhook configuration changed.",

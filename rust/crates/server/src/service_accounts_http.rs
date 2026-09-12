@@ -1,8 +1,11 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ApiQuery;
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::IntoResponse;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
@@ -70,7 +73,7 @@ async fn list(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Query(filter): Query<ListFilter>,
+    ApiQuery(filter): ApiQuery<ListFilter>,
 ) -> IdentityHttpResult {
     let principal = identity_result(authenticated_principal(principal), &headers)?;
     let permission = identity_result(
@@ -114,7 +117,7 @@ async fn list(
 async fn get_one(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(authenticated_principal(principal), &headers)?;
@@ -147,7 +150,7 @@ async fn create(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<CreateServiceAccountRequest>,
+    ValidatedJson(request): ValidatedJson<CreateServiceAccountRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -189,9 +192,9 @@ async fn create(
 async fn update(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<UpdateServiceAccountRequest>,
+    ValidatedJson(request): ValidatedJson<UpdateServiceAccountRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -233,7 +236,7 @@ async fn update(
 async fn usages(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
@@ -271,7 +274,7 @@ async fn rename(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<RenameServiceAccountRequest>,
+    ValidatedJson(request): ValidatedJson<RenameServiceAccountRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -314,7 +317,7 @@ async fn archive(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<ArchiveServiceAccountsRequest>,
+    ValidatedJson(request): ValidatedJson<ArchiveServiceAccountsRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -356,9 +359,9 @@ async fn archive(
 async fn add_role(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<AddServiceAccountRoleRequest>,
+    ValidatedJson(request): ValidatedJson<AddServiceAccountRoleRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -400,7 +403,7 @@ async fn add_role(
 async fn remove_role(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, role_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, role_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
@@ -444,9 +447,9 @@ async fn remove_role(
 async fn add_resource_access(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<AddServiceAccountResourceAccessRequest>,
+    ValidatedJson(request): ValidatedJson<AddServiceAccountResourceAccessRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
@@ -488,7 +491,7 @@ async fn add_resource_access(
 async fn remove_resource_access(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, resource_access_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, resource_access_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
@@ -556,9 +559,9 @@ async fn limits(
 async fn list_tokens(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Query(filter): Query<TokenFilter>,
+    ApiQuery(filter): ApiQuery<TokenFilter>,
 ) -> IdentityHttpResult {
     let principal = identity_result(authenticated_principal(principal), &headers)?;
     identity_result(
@@ -601,9 +604,9 @@ async fn list_tokens(
 async fn create_token(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<CreateServiceAccountTokenRequest>,
+    ValidatedJson(request): ValidatedJson<CreateServiceAccountTokenRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human(principal), &headers)?;
     identity_result(
@@ -652,7 +655,7 @@ async fn create_token(
 async fn revoke_token(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, token_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, token_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human(principal), &headers)?;

@@ -1,7 +1,64 @@
 use std::error::Error;
 
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use citadel_identity::IdentityError;
+
+mod workload_query;
+pub(crate) use workload_query::WorkloadQuery;
+
+/// Typed path extraction with Citadel's validation response format.
+pub(crate) struct ApiPath<T>(pub T);
+
+impl<S, T> axum::extract::FromRequestParts<S> for ApiPath<T>
+where
+    S: Send + Sync,
+    T: serde::de::DeserializeOwned + Send,
+{
+    type Rejection = axum::response::Response;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        axum::extract::Path::<T>::from_request_parts(parts, state)
+            .await
+            .map(|axum::extract::Path(value)| Self(value))
+            .map_err(|error| {
+                crate::identity_http::identity_error_response(invalid_path(error), &parts.headers)
+            })
+    }
+}
+
+/// Typed query extraction with Citadel's validation response format.
+pub(crate) struct ApiQuery<T>(pub T);
+
+impl<S, T> axum::extract::FromRequestParts<S> for ApiQuery<T>
+where
+    S: Send + Sync,
+    T: serde::de::DeserializeOwned,
+{
+    type Rejection = axum::response::Response;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        axum::extract::Query::<T>::from_request_parts(parts, state)
+            .await
+            .map(|axum::extract::Query(value)| Self(value))
+            .map_err(|error| {
+                crate::identity_http::identity_error_response(invalid_query(error), &parts.headers)
+            })
+    }
+}
+
+pub(crate) fn invalid_path(error: PathRejection) -> IdentityError {
+    field_error("$path".to_owned(), error.body_text())
+}
+
+pub(crate) fn invalid_query(error: QueryRejection) -> IdentityError {
+    field_error("$query".to_owned(), error.body_text())
+}
 
 /// JSON body extraction for handlers that previously let Axum return plain-text
 /// rejections. Successful bodies have exactly the same decoding semantics.
@@ -86,6 +143,96 @@ mod tests {
     };
     use serde::de::DeserializeOwned;
     use serde_json::Value;
+
+    #[tokio::test]
+    async fn path_query_and_json_rejections_use_problem_details_with_trace_id() {
+        use axum::{Router, http::Request, routing::post};
+        use tower::ServiceExt;
+
+        #[derive(serde::Deserialize)]
+        struct Filter {
+            limit: u16,
+        }
+        #[derive(serde::Deserialize)]
+        struct Input {
+            enabled: bool,
+        }
+        async fn handler(
+            ApiPath(id): ApiPath<uuid::Uuid>,
+            ApiQuery(filter): ApiQuery<Filter>,
+            ValidatedJson(input): ValidatedJson<Input>,
+        ) -> Json<Value> {
+            Json(serde_json::json!({"id":id,"limit":filter.limit,"enabled":input.enabled}))
+        }
+        let app = Router::new().route("/items/{id}", post(handler));
+        let id = uuid::Uuid::now_v7();
+        for (path, payload, field) in [
+            (
+                "/items/invalid?limit=2".into(),
+                r#"{"enabled":true}"#,
+                "$path",
+            ),
+            (
+                format!("/items/{id}?limit=bad"),
+                r#"{"enabled":true}"#,
+                "$query",
+            ),
+            (
+                format!("/items/{id}?limit=2"),
+                r#"{"enabled":42}"#,
+                "$.enabled",
+            ),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post(path)
+                        .header("content-type", "application/json")
+                        .header("x-request-id", "extractor-test")
+                        .body(axum::body::Body::from(payload))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(
+                response.headers()["content-type"],
+                "application/problem+json"
+            );
+            let body: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap())
+                    .unwrap();
+            assert!(body["errors"][field][0].as_str().is_some(), "{body}");
+            assert_eq!(body["traceId"], "extractor-test");
+        }
+        let response = app
+            .oneshot(
+                Request::post(format!("/items/{id}?limit=2"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(r#"{"enabled":false}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
+        assert_eq!(body, serde_json::json!({"id":id,"limit":2,"enabled":false}));
+    }
+
+    #[tokio::test]
+    async fn typed_automation_patch_reports_the_invalid_field() {
+        let body = problem::<citadel_automation::UpdateAutomationActionInput>(
+            br#"{"timeoutSeconds":"bad"}"#,
+        )
+        .await;
+        assert!(
+            body["errors"]["$.timeoutSeconds"][0]
+                .as_str()
+                .unwrap()
+                .contains("invalid type")
+        );
+    }
 
     async fn problem<T: DeserializeOwned>(input: &[u8]) -> Value {
         let rejection = match Json::<T>::from_bytes(input) {

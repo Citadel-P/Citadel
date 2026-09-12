@@ -1,8 +1,9 @@
+use crate::request_validation::ApiPath;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{Extension, Path, State};
+use axum::extract::{Extension, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
@@ -90,7 +91,7 @@ async fn list(
 async fn get(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
@@ -150,7 +151,7 @@ async fn create(
 async fn patch_permissions(
     State(state): State<RolesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
     request: Result<Json<PatchRolePermissionsRequest>, JsonRejection>,
 ) -> IdentityHttpResult {
@@ -240,7 +241,7 @@ async fn delete(
 fn role_json<T>(payload: Result<Json<T>, JsonRejection>) -> Result<T, IdentityError> {
     payload
         .map(|Json(value)| value)
-        .map_err(|error| IdentityError::Validation(error.body_text()))
+        .map_err(crate::request_validation::invalid_json)
 }
 
 async fn authorize(

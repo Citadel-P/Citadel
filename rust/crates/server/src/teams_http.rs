@@ -1,7 +1,9 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
 use axum::extract::rejection::QueryRejection;
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -88,7 +90,7 @@ async fn list(
         team_read_permission(&state.identity, &principal).await,
         &headers,
     )?;
-    let filter = identity_result(team_query(query, "Team filters are invalid."), &headers)?;
+    let filter = identity_result(team_query(query), &headers)?;
     let paged_result = identity_result(
         state
             .teams
@@ -139,10 +141,7 @@ async fn search(
         team_read_permission(&state.identity, &principal).await,
         &headers,
     )?;
-    let filter = identity_result(
-        team_query(query, "Team search filters are invalid."),
-        &headers,
-    )?;
+    let filter = identity_result(team_query(query), &headers)?;
     let teams = identity_result(
         state.teams.search(&filter.query, filter.limit).await,
         &headers,
@@ -166,7 +165,7 @@ async fn search(
 async fn get(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_human_administrator(principal), &headers)?;
@@ -195,7 +194,7 @@ async fn create(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<CreateTeamRequest>,
+    ValidatedJson(request): ValidatedJson<CreateTeamRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
@@ -225,9 +224,9 @@ async fn create(
 async fn patch(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<PatchTeamRequest>,
+    ValidatedJson(request): ValidatedJson<PatchTeamRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
@@ -257,7 +256,7 @@ async fn rename(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<RenameTeamRequest>,
+    ValidatedJson(request): ValidatedJson<RenameTeamRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
@@ -290,9 +289,9 @@ async fn rename(
 async fn add_role(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<AddTeamRoleRequest>,
+    ValidatedJson(request): ValidatedJson<AddTeamRoleRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
@@ -324,7 +323,7 @@ async fn add_role(
 async fn remove_role(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, role_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, role_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(
@@ -358,9 +357,9 @@ async fn remove_role(
 async fn add_member(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<AddTeamMemberRequest>,
+    ValidatedJson(request): ValidatedJson<AddTeamMemberRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
@@ -392,7 +391,7 @@ async fn add_member(
 async fn remove_member(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path((id, member_actor_id)): Path<(Uuid, Uuid)>,
+    ApiPath((id, member_actor_id)): ApiPath<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let principal = identity_result(
@@ -426,9 +425,9 @@ async fn remove_member(
 async fn add_resource_access(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<TeamResourceAccessInput>,
+    ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
@@ -461,9 +460,9 @@ async fn add_resource_access(
 async fn remove_resource_access(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    Json(request): Json<TeamResourceAccessInput>,
+    ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
@@ -496,7 +495,7 @@ async fn delete(
     State(state): State<TeamsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(request): Json<DeleteTeamsRequest>,
+    ValidatedJson(request): ValidatedJson<DeleteTeamsRequest>,
 ) -> IdentityHttpResult {
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Execute, None).await,
@@ -546,13 +545,10 @@ async fn team_read_permission(
     }
 }
 
-fn team_query<T>(
-    query: Result<Query<T>, QueryRejection>,
-    message: &str,
-) -> Result<T, IdentityError> {
+fn team_query<T>(query: Result<Query<T>, QueryRejection>) -> Result<T, IdentityError> {
     query
         .map(|Query(value)| value)
-        .map_err(|_| IdentityError::Validation(message.to_owned()))
+        .map_err(crate::request_validation::invalid_query)
 }
 
 const fn first_page() -> i64 {

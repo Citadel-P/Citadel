@@ -1,7 +1,9 @@
+use crate::request_validation::ApiPath;
+use crate::request_validation::ApiQuery;
 use crate::request_validation::ValidatedJson;
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
@@ -161,7 +163,7 @@ async fn create_channel(
 async fn get_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -195,7 +197,7 @@ async fn get_channel(
 async fn update_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
@@ -377,7 +379,7 @@ async fn create_rule(
 async fn get_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -410,7 +412,7 @@ async fn get_rule(
 async fn get_rule_config(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -488,7 +490,7 @@ async fn rename_rule(
 async fn update_rule_metadata(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
@@ -529,7 +531,7 @@ async fn update_rule_metadata(
 async fn update_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
     ValidatedJson(patch): ValidatedJson<serde_json::Value>,
 ) -> IdentityHttpResult {
@@ -599,7 +601,7 @@ async fn delete_rules(
 async fn list_events(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Query(f): Query<EventFilter>,
+    ApiQuery(f): ApiQuery<EventFilter>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
@@ -635,7 +637,7 @@ async fn list_events(
 async fn get_event(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;

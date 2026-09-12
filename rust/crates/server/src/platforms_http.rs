@@ -1,3 +1,4 @@
+use crate::request_validation::{invalid_json, invalid_path, invalid_query};
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
@@ -2507,18 +2508,6 @@ fn required<T>(
     identity_result(result, headers)?.ok_or_else(|| {
         crate::identity_http::IdentityHttpError::from_parts(IdentityError::NotFound, headers)
     })
-}
-
-fn invalid_path(_: PathRejection) -> IdentityError {
-    IdentityError::Validation("The resource path is invalid.".to_owned())
-}
-
-fn invalid_query(_: QueryRejection) -> IdentityError {
-    IdentityError::Validation("The resource query is invalid.".to_owned())
-}
-
-fn invalid_json(error: JsonRejection) -> IdentityError {
-    crate::request_validation::invalid_json(error)
 }
 
 fn parse_tag_filters(query: Option<&str>) -> Result<Vec<Uuid>, IdentityError> {

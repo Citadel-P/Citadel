@@ -4,6 +4,7 @@ use citadel_automation::{
     AutomationRunResult, AutomationRunView, AutomationStore, code_hash,
 };
 use citadel_domain::{ActivityEvent, ActivityEventInfo, ActorId, ResourceType};
+use citadel_resources::RepoWebhookConfig;
 use futures_util::future::BoxFuture;
 use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -38,7 +39,7 @@ pub struct PostgresAutomationStore {
 enum EnqueueMode<'a> {
     Queue,
     Execute(Option<&'a str>),
-    Webhook(&'a serde_json::Value),
+    Webhook(&'a RepoWebhookConfig),
 }
 
 impl PostgresAutomationStore {
@@ -72,8 +73,10 @@ impl PostgresAutomationStore {
                 .ok_or(AutomationError::NotFound)?;
             let enabled: bool = action.try_get("enabled").map_err(storage)?;
             if let EnqueueMode::Webhook(expected) = mode {
-                let current: Option<serde_json::Value> =
-                    action.try_get("webhook").map_err(storage)?;
+                let current = action
+                    .try_get::<Option<sqlx::types::Json<Option<RepoWebhookConfig>>>, _>("webhook")
+                    .map_err(storage)?
+                    .and_then(|sqlx::types::Json(value)| value);
                 if current.as_ref() != Some(expected) {
                     return Err(AutomationError::Conflict(
                         "Webhook configuration changed. Retry with the current configuration."
@@ -162,7 +165,7 @@ impl AutomationStore for PostgresAutomationStore {
                 .bind(input.run_as_actor_id.ok_or_else(|| AutomationError::Validation("Run-as Actor is required.".to_owned()))?)
                 .bind(input.schedule_cron.as_deref()).bind(input.schedule_enabled)
                 .bind(input.schedule_time_zone.as_deref().unwrap_or("UTC"))
-                .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref())
+                .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref().map(sqlx::types::Json))
                 .execute(&mut *tx).await.map_err(database)?;
             crate::resource_tags::insert(
                 &mut tx,
@@ -253,7 +256,7 @@ ORDER BY action.name,action.id"#
                 .bind(input.run_as_actor_id.ok_or_else(|| AutomationError::Validation("Run-as Actor is required.".to_owned()))?)
                 .bind(input.schedule_cron.as_deref()).bind(input.schedule_enabled)
                 .bind(input.schedule_time_zone.as_deref().unwrap_or("UTC"))
-                .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref())
+                .bind(input.timeout_seconds.unwrap_or(60)).bind(input.webhook.as_ref().map(sqlx::types::Json))
                 .bind(current.row_version)
                 .execute(&mut *tx).await.map_err(database)?.rows_affected();
             if affected == 0 {
@@ -388,7 +391,7 @@ ORDER BY action.name,action.id"#
     fn enqueue_webhook<'a>(
         &'a self,
         id: Uuid,
-        expected_webhook: &'a serde_json::Value,
+        expected_webhook: &'a RepoWebhookConfig,
         args: &'a serde_json::Value,
     ) -> BoxFuture<'a, Result<AutomationRunView, AutomationError>> {
         self.enqueue_run(
@@ -788,7 +791,10 @@ fn map_action(row: sqlx::postgres::PgRow) -> Result<AutomationActionView, Automa
         schedule_enabled: row.try_get("scheduleenabled").map_err(storage)?,
         schedule_cron: row.try_get("schedulecron").map_err(storage)?,
         schedule_time_zone: row.try_get("scheduletimezone").map_err(storage)?,
-        webhook: row.try_get("webhook").map_err(storage)?,
+        webhook: row
+            .try_get::<Option<sqlx::types::Json<Option<RepoWebhookConfig>>>, _>("webhook")
+            .map_err(storage)?
+            .and_then(|sqlx::types::Json(value)| value),
         timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,
         alert_on_failure: row.try_get("alertonfailure").map_err(storage)?,
         run_as_actor_id: row.try_get("runasactorid").map_err(storage)?,
