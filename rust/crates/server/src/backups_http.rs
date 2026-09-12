@@ -103,6 +103,7 @@ struct RepositoryLocationInput {
     get,
     path = "/api/v1/backupRepositories",
     operation_id = "listBackupRepositories",
+    tag = "BackupRepositories",
     summary = "List Backup Repositories",
     responses(
         (status = 200, description = "Success", body = Repositories, content_type = "application/json"),
@@ -141,6 +142,7 @@ async fn list_repositories(
     post,
     path = "/api/v1/backupRepositories",
     operation_id = "createBackupRepository",
+    tag = "BackupRepositories",
     summary = "Create a Backup Repository",
     request_body = BackupRepositoryInput,
     responses(
@@ -180,6 +182,7 @@ async fn create_repository(
     get,
     path = "/api/v1/backupRepositories/{id}",
     operation_id = "getBackupRepository",
+    tag = "BackupRepositories",
     summary = "Get a Backup Repository",
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupRepositoryView, content_type = "application/json"),
@@ -213,8 +216,12 @@ async fn get_repository(
     patch,
     path = "/api/v1/backupRepositories/{id}",
     operation_id = "updateBackupRepository",
+    tag = "BackupRepositories",
     summary = "Update a Backup Repository",
-    request_body = ref("#/components/schemas/UpdateBackupRepositoryInput"),
+    request_body(content(
+        (ref("#/components/schemas/UpdateBackupRepositoryInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/UpdateBackupRepositoryInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupRepositoryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -274,6 +281,7 @@ async fn update_repository(
     delete,
     path = "/api/v1/backupRepositories/{id}",
     operation_id = "archiveBackupRepository",
+    tag = "BackupRepositories",
     summary = "Archive a Backup Repository",
     responses(
         (status = 204, description = "Success"),
@@ -306,6 +314,7 @@ async fn archive_repository(
     post,
     path = "/api/v1/backupRepositories/{id}/validate",
     operation_id = "validateBackupRepository",
+    tag = "BackupRepositories",
     summary = "Validate a Backup Repository",
     request_body = RepositoryLocationInput,
     responses(
@@ -329,6 +338,7 @@ async fn validate_repository(
     post,
     path = "/api/v1/backupRepositories/{id}/initialize",
     operation_id = "initializeBackupRepository",
+    tag = "BackupRepositories",
     summary = "Initialize a Backup Repository",
     request_body = RepositoryLocationInput,
     responses(
@@ -352,6 +362,7 @@ async fn initialize_repository(
     post,
     path = "/api/v1/backupRepositories/{id}/check",
     operation_id = "checkBackupRepository",
+    tag = "BackupRepositories",
     summary = "Check a Backup Repository",
     request_body = RepositoryLocationInput,
     responses(
@@ -375,6 +386,7 @@ async fn check_repository(
     post,
     path = "/api/v1/backupRepositories/{id}/prune",
     operation_id = "pruneBackupRepository",
+    tag = "BackupRepositories",
     summary = "Prune a Backup Repository",
     request_body = RepositoryLocationInput,
     responses(
@@ -449,6 +461,7 @@ async fn repository_operation(
     get,
     path = "/api/v1/backupPolicies",
     operation_id = "listBackupPolicies",
+    tag = "BackupPolicies",
     summary = "List Backup Policies",
     responses(
         (status = 200, description = "Success", body = Policies, content_type = "application/json"),
@@ -488,6 +501,7 @@ async fn list_policies(
     get,
     path = "/api/v1/backupPolicies/platform-summaries",
     operation_id = "getPlatformBackupSummaries",
+    tag = "BackupPolicies",
     summary = "Get Platform Backup summaries",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/PlatformBackupSummariesView"), content_type = "application/json"),
@@ -553,6 +567,7 @@ async fn platform_summaries(
     post,
     path = "/api/v1/backupPolicies",
     operation_id = "createBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Create a Backup Policy",
     request_body = BackupPolicyInput,
     responses(
@@ -658,6 +673,7 @@ backup_source_preview!(
     get,
     path = "/api/v1/deployments/{deploymentId}/backup-source-preview",
     operation_id = "getDeploymentBackupSourcePreview",
+    tag = "Deployments",
     summary = "Preview Deployment Backup volumes",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/DeploymentBackupSourcePreviewView"), content_type = "application/json"),
@@ -676,6 +692,7 @@ backup_source_preview!(
     get,
     path = "/api/v1/stacks/{stackId}/backup-source-preview",
     operation_id = "getStackBackupSourcePreview",
+    tag = "Stacks",
     summary = "Preview Stack Backup volumes",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/StackBackupSourcePreviewView"), content_type = "application/json"),
@@ -694,6 +711,7 @@ backup_source_preview!(
     get,
     path = "/api/v1/swarmServices/{id}/backup-source-preview",
     operation_id = "getSwarmServiceBackupSourcePreview",
+    tag = "SwarmServices",
     summary = "Preview Service Backup volumes",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceBackupSourcePreviewView"), content_type = "application/json"),
@@ -712,6 +730,7 @@ backup_source_preview!(
     get,
     path = "/api/v1/backupPolicies/{id}",
     operation_id = "getBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Get a Backup Policy",
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
@@ -746,8 +765,12 @@ async fn get_policy(
     patch,
     path = "/api/v1/backupPolicies/{id}",
     operation_id = "updateBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Update a Backup Policy",
-    request_body = ref("#/components/schemas/UpdateBackupPolicyInput"),
+    request_body(content(
+        (ref("#/components/schemas/UpdateBackupPolicyInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/UpdateBackupPolicyInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -849,6 +872,7 @@ async fn update_policy(
     post,
     path = "/api/v1/backupPolicies/rename",
     operation_id = "renameBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Rename a Backup Policy",
     request_body = citadel_backups::policy_metadata::RenameBackupPolicyInput,
     responses(
@@ -893,8 +917,12 @@ async fn rename_policy(
     patch,
     path = "/api/v1/backupPolicies/{id}/_metadata",
     operation_id = "updateBackupPolicyMetadata",
+    tag = "BackupPolicies",
     summary = "Update Backup Policy metadata",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body(content(
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -1032,6 +1060,7 @@ fn json_uuid(value: &serde_json::Value, key: &str) -> Option<Uuid> {
     delete,
     path = "/api/v1/backupPolicies/{id}",
     operation_id = "archiveBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Archive a Backup Policy",
     responses(
         (status = 204, description = "Success"),
@@ -1064,6 +1093,7 @@ async fn archive_policy(
     post,
     path = "/api/v1/backupPolicies/{id}/runs",
     operation_id = "queueBackupRun",
+    tag = "BackupPolicies",
     summary = "Queue a Backup Run",
     request_body = Option<QueueInput>,
     responses(
@@ -1127,6 +1157,7 @@ async fn enqueue_backup(
     get,
     path = "/api/v1/backupRuns",
     operation_id = "listBackupRuns",
+    tag = "BackupRuns",
     summary = "List Backup Runs",
     responses(
         (status = 200, description = "Success", body = Runs, content_type = "application/json"),
@@ -1176,6 +1207,7 @@ async fn list_runs(
     get,
     path = "/api/v1/backupRuns/{id}",
     operation_id = "getBackupRun",
+    tag = "BackupRuns",
     summary = "Get a Backup Run",
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupRunView, content_type = "application/json"),
@@ -1208,6 +1240,7 @@ async fn get_run(
     get,
     path = "/api/v1/backupRuns/{id}/events",
     operation_id = "getBackupRunEvents",
+    tag = "BackupRuns",
     summary = "Get Backup Run events",
     responses(
         (status = 200, description = "Success", body = Events, content_type = "application/json"),
@@ -1248,6 +1281,7 @@ async fn get_backup_events(
     get,
     path = "/api/v1/backupRestoreRuns/{id}/events",
     operation_id = "getBackupRestoreRunEvents",
+    tag = "BackupRestoreRuns",
     summary = "Get Backup Restore Run events",
     responses(
         (status = 200, description = "Success", body = Events, content_type = "application/json"),
@@ -1288,6 +1322,7 @@ async fn get_restore_events(
     get,
     path = "/api/v1/backupRuns/{id}/logs",
     operation_id = "getBackupRunLogs",
+    tag = "BackupRuns",
     summary = "Get Backup Run logs",
     responses(
         (status = 200, description = "Success", body = Logs, content_type = "application/json"),
@@ -1326,6 +1361,7 @@ async fn get_backup_logs(
     post,
     path = "/api/v1/backupRuns/{id}/cancel",
     operation_id = "cancelBackupRun",
+    tag = "BackupRuns",
     summary = "Cancel a Backup Run",
     responses(
         (status = 204, description = "Success"),
@@ -1359,6 +1395,7 @@ async fn cancel_backup(
     post,
     path = "/api/v1/backupRuns/{id}/restoreVolume",
     operation_id = "restoreBackupVolume",
+    tag = "BackupRuns",
     summary = "Queue a Volume restore",
     request_body = RestoreInput,
     responses(
@@ -1435,6 +1472,7 @@ async fn enqueue_restore(
     get,
     path = "/api/v1/backupRestoreRuns",
     operation_id = "listBackupRestoreRuns",
+    tag = "BackupRestoreRuns",
     summary = "List Backup Restore Runs",
     responses(
         (status = 200, description = "Success", body = Restores, content_type = "application/json"),
@@ -1485,6 +1523,7 @@ async fn list_restores(
     get,
     path = "/api/v1/backupRestoreRuns/{id}",
     operation_id = "getBackupRestoreRun",
+    tag = "BackupRestoreRuns",
     summary = "Get a Backup Restore Run",
     responses(
         (status = 200, description = "Success", body = citadel_backups::BackupRestoreRunView, content_type = "application/json"),
@@ -1518,6 +1557,7 @@ async fn get_restore(
     get,
     path = "/api/v1/backupRestoreRuns/{id}/logs",
     operation_id = "getBackupRestoreRunLogs",
+    tag = "BackupRestoreRuns",
     summary = "Get Backup Restore Run logs",
     responses(
         (status = 200, description = "Success", body = Logs, content_type = "application/json"),
@@ -1557,6 +1597,7 @@ async fn get_restore_logs(
     post,
     path = "/api/v1/backupRestoreRuns/{id}/cancel",
     operation_id = "cancelBackupRestoreRun",
+    tag = "BackupRestoreRuns",
     summary = "Cancel a Backup Restore Run",
     responses(
         (status = 204, description = "Success"),

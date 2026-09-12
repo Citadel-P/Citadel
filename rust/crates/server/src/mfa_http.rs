@@ -30,10 +30,12 @@ pub fn router(state: IdentityHttpState) -> Router {
     post,
     path = "/api/v1/authentication/mfa/verify",
     operation_id = "verifyAuthenticationMfa",
+    tag = "Authentication",
     summary = "Complete an MFA challenge",
     request_body = MfaVerificationInput,
+    params(("citadel_mfa_challenge" = String, Cookie, description = "MFA Challenge")),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::MfaVerificationView, content_type = "application/json"),
+        (status = 200, description = "Success", body = citadel_identity::MfaVerificationView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA challenge cookie."))),
         crate::openapi::errors::AuthenticationErrors
     ),
     security(),
@@ -84,7 +86,9 @@ async fn verify_authentication(
     get,
     path = "/api/v1/authentication/mfa/setup",
     operation_id = "getAuthenticationMfaSetup",
+    tag = "Authentication",
     summary = "Get mandatory MFA setup",
+    params(("citadel_mfa_setup" = String, Cookie, description = "MFA Setup")),
     responses(
         (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupView, content_type = "application/json"),
         crate::openapi::errors::AuthenticationErrors
@@ -110,10 +114,12 @@ async fn get_mandatory_setup(
     post,
     path = "/api/v1/authentication/mfa/setup/confirm",
     operation_id = "confirmAuthenticationMfaSetup",
+    tag = "Authentication",
     summary = "Complete mandatory MFA setup",
     request_body = ConfirmMandatoryMfaSetupInput,
+    params(("citadel_mfa_setup" = String, Cookie, description = "MFA Setup")),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupCompleteView, content_type = "application/json"),
+        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupCompleteView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA setup cookie."))),
         crate::openapi::errors::AuthenticationErrors
     ),
     security(),
@@ -164,6 +170,7 @@ async fn confirm_mandatory_setup(
     get,
     path = "/api/v1/profile/mfa",
     operation_id = "getProfileMfaStatus",
+    tag = "Profile",
     summary = "Get MFA status",
     responses(
         (status = 200, description = "Success", body = citadel_identity::ProfileMfaStatusView, content_type = "application/json"),
@@ -191,6 +198,7 @@ async fn get_profile_status(
     post,
     path = "/api/v1/profile/mfa/setup",
     operation_id = "startProfileMfaSetup",
+    tag = "Profile",
     summary = "Start MFA setup",
     request_body = StartProfileMfaSetupInput,
     responses(
@@ -229,6 +237,7 @@ async fn start_profile_setup(
     post,
     path = "/api/v1/profile/mfa/setup/confirm",
     operation_id = "confirmProfileMfaSetup",
+    tag = "Profile",
     summary = "Complete MFA setup",
     request_body = ConfirmProfileMfaSetupInput,
     responses(
@@ -271,6 +280,7 @@ async fn confirm_profile_setup(
     post,
     path = "/api/v1/profile/mfa/disable",
     operation_id = "disableProfileMfa",
+    tag = "Profile",
     summary = "Disable MFA",
     request_body = DisableProfileMfaInput,
     responses(
@@ -313,6 +323,7 @@ async fn disable_profile_mfa(
     post,
     path = "/api/v1/profile/mfa/recovery-codes",
     operation_id = "regenerateProfileMfaRecoveryCodes",
+    tag = "Profile",
     summary = "Regenerate MFA recovery codes",
     request_body = RegenerateProfileMfaRecoveryCodesInput,
     responses(
@@ -351,6 +362,7 @@ async fn regenerate_recovery_codes(
     delete,
     path = "/api/v1/users/{id}/mfa",
     operation_id = "resetUserMfa",
+    tag = "Users",
     summary = "Reset a user's MFA",
     responses(
         (status = 204, description = "Success"),

@@ -40,6 +40,7 @@ struct LookupQuery {
     get,
     path = "/api/v1/lookup",
     operation_id = "lookup",
+    tag = "Lookup",
     summary = "Look up accessible resources",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/lookupResponse"), content_type = "application/json"),

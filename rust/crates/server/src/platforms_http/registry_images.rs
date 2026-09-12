@@ -61,6 +61,7 @@ browse_one!(
     get,
     path = "/api/v1/images/{registryName}/repositories",
     operation_id = "getExternalRepositories",
+    tag = "Images",
     summary = "List Registry repositories",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/getExternalRepositoriesResponse"), content_type = "application/json"),
@@ -78,6 +79,7 @@ browse_one!(
     get,
     path = "/api/v1/images/dockerhub/{registryName}/repositories",
     operation_id = "getDockerHubRepositories",
+    tag = "Images",
     summary = "List Docker Hub repositories",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoriesResponse"), content_type = "application/json"),
@@ -95,6 +97,7 @@ browse_two!(
     get,
     path = "/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags",
     operation_id = "getDockerHubRepositoryTags",
+    tag = "Images",
     summary = "List Docker Hub repository tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoryTagsResponse"), content_type = "application/json"),
@@ -112,6 +115,7 @@ browse_two!(
     get,
     path = "/api/v1/images/ghcr/{registryName}/{packageName}/versions",
     operation_id = "getGhcrPackageVersions",
+    tag = "Images",
     summary = "List GitHub package versions",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/getGhcrPackageVersionsResponse"), content_type = "application/json"),

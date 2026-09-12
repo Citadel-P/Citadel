@@ -72,6 +72,7 @@ pub fn router(state: DeploymentsHttpState) -> Router {
     post,
     path = "/api/v1/deployments/{deploymentId}/check-updates",
     operation_id = "checkDeploymentUpdates",
+    tag = "Deployments",
     summary = "Check the applied Deployment image for updates",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
@@ -123,6 +124,7 @@ async fn check_deployment_updates(
     post,
     path = "/api/v1/deployments/apply",
     operation_id = "applyDeployment",
+    tag = "Deployments",
     summary = "Apply a Deployment",
     request_body = ApplyDeploymentInput,
     responses(
@@ -195,6 +197,7 @@ async fn apply_deployment(
     get,
     path = "/api/v1/deployments",
     operation_id = "listDeployments",
+    tag = "Deployments",
     summary = "List authorized Deployments",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentsView, content_type = "application/json"),
@@ -236,6 +239,7 @@ async fn list_deployments(
     get,
     path = "/api/v1/deployments/{deploymentId}",
     operation_id = "getDeployment",
+    tag = "Deployments",
     summary = "Get a Deployment",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
@@ -277,6 +281,7 @@ async fn get_deployment(
     get,
     path = "/api/v1/deployments/{deploymentId}/_cfg",
     operation_id = "getDeploymentConfig",
+    tag = "Deployments",
     summary = "Get Deployment configuration",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentConfigView, content_type = "application/json"),
@@ -318,6 +323,7 @@ async fn get_deployment_config(
     get,
     path = "/api/v1/deployments/{deploymentId}/duplicate-draft",
     operation_id = "getDeploymentDuplicateDraft",
+    tag = "Deployments",
     summary = "Build a Deployment duplicate draft",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentDuplicateDraftView, content_type = "application/json"),
@@ -359,6 +365,7 @@ async fn get_deployment_duplicate_draft(
     post,
     path = "/api/v1/deployments",
     operation_id = "createDeployment",
+    tag = "Deployments",
     summary = "Create a Deployment",
     request_body = CreateDeploymentInput,
     responses(
@@ -403,8 +410,12 @@ async fn create_deployment(
     patch,
     path = "/api/v1/deployments/{id}",
     operation_id = "updateDeployment",
+    tag = "Deployments",
     summary = "Update Deployment configuration",
-    request_body = PatchDeploymentInput,
+    request_body(content(
+        (PatchDeploymentInput = "application/merge-patch+json"),
+        (PatchDeploymentInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -453,8 +464,12 @@ async fn update_deployment(
     patch,
     path = "/api/v1/deployments/{id}/_metadata",
     operation_id = "updateDeploymentMetadata",
+    tag = "Deployments",
     summary = "Update Deployment metadata",
-    request_body = PatchDeploymentMetadataInput,
+    request_body(content(
+        (PatchDeploymentMetadataInput = "application/merge-patch+json"),
+        (PatchDeploymentMetadataInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -497,6 +512,7 @@ async fn update_deployment_metadata(
     post,
     path = "/api/v1/deployments/rename",
     operation_id = "renameDeployment",
+    tag = "Deployments",
     summary = "Rename a Deployment",
     request_body = RenameDeploymentInput,
     responses(
@@ -543,6 +559,7 @@ async fn rename_deployment(
     delete,
     path = "/api/v1/deployments",
     operation_id = "deleteDeployments",
+    tag = "Deployments",
     summary = "Delete Deployments",
     request_body = Vec<Uuid>,
     responses(

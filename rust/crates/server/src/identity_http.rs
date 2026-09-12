@@ -53,30 +53,21 @@ pub async fn authentication_middleware(
     if let Some(token) = bearer(request.headers())
         && let Ok(authenticated) = identity.authenticate_bearer_context(token).await
     {
-        if authenticated.automation_run_id.is_some()
-            && automation_token_path_is_blocked(request.uri().path())
+        if let Err(error) =
+            crate::token_safety::authorize_http(&authenticated, request.uri().path())
         {
-            return identity_error_response(IdentityError::Forbidden, request.headers());
+            return identity_error_response(error, request.headers());
         }
         request.extensions_mut().insert(authenticated.principal);
     }
     next.run(request).await
 }
 
-fn automation_token_path_is_blocked(path: &str) -> bool {
-    path.starts_with("/api/v1/authentication")
-        || path.starts_with("/api/v1/automation")
-        || path.starts_with("/api/v1/resourceBindings/secrets")
-        || path.starts_with("/api/v1/resourceBindings/secret-providers")
-        || path.split('/').any(|segment| {
-            segment.eq_ignore_ascii_case("terminal") || segment.eq_ignore_ascii_case("exec")
-        })
-}
-
 #[utoipa::path(
     get,
     path = "/api/v1/setup/status",
     operation_id = "getSetupStatus",
+    tag = "Setup",
     summary = "Get setup status",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SetupStatusView"), content_type = "application/json"),
@@ -96,6 +87,7 @@ async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap
     post,
     path = "/api/v1/setup/initialize",
     operation_id = "initializeCitadel",
+    tag = "Setup",
     summary = "Initialize Citadel",
     request_body = InitializeCitadelRequest,
     responses(
@@ -129,10 +121,11 @@ async fn initialize(
     post,
     path = "/api/v1/authentication/login",
     operation_id = "login",
+    tag = "Authentication",
     summary = "Sign in",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json"),
+        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token on success, or citadel_mfa_challenge / citadel_mfa_setup when MFA is required. Multiple Set-Cookie headers may be returned."))),
         crate::openapi::errors::LoginErrors
     ),
     security(),
@@ -159,9 +152,11 @@ async fn login(
     get,
     path = "/api/v1/authentication/refresh",
     operation_id = "refreshToken",
+    tag = "Authentication",
     summary = "Refresh browser access",
+    params(("refresh_token" = String, Cookie, description = "Refresh Token")),
     responses(
-        (status = 200, description = "Success", body = AccessTokenResponse, content_type = "application/json"),
+        (status = 200, description = "Success", body = AccessTokenResponse, content_type = "application/json", headers(("Set-Cookie" = String, description = "Rotates refresh_token."))),
         crate::openapi::errors::LoginErrors
     ),
     security(),
@@ -199,9 +194,11 @@ async fn refresh(
     post,
     path = "/api/v1/authentication/logout",
     operation_id = "logout",
+    tag = "Authentication",
     summary = "End browser session",
+    params(("refresh_token" = String, Cookie, description = "Refresh Token")),
     responses(
-        (status = 204, description = "Success"),
+        (status = 204, description = "Success", headers(("Set-Cookie" = String, description = "Expires refresh_token, citadel_mfa_challenge and citadel_mfa_setup using separate Set-Cookie headers."))),
         crate::openapi::errors::ResourceErrors
     ),
     security(),
@@ -811,23 +808,6 @@ mod tests {
             roles: vec!["Admin".to_owned()],
         };
         assert!(require_human_administrator(Some(Extension(principal))).is_ok());
-    }
-
-    #[test]
-    fn automation_tokens_cannot_reenter_sensitive_execution_surfaces() {
-        for path in [
-            "/api/v1/authentication/logout",
-            "/api/v1/automation/actions",
-            "/api/v1/resourceBindings/secrets",
-            "/api/v1/platforms/one/containers/two/terminal",
-            "/api/v1/tasks/one/exec",
-        ] {
-            assert!(automation_token_path_is_blocked(path), "{path}");
-        }
-        assert!(!automation_token_path_is_blocked("/api/v1/platforms"));
-        assert!(!automation_token_path_is_blocked(
-            "/api/v1/stacks/one/apply"
-        ));
     }
 }
 

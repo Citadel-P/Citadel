@@ -53,6 +53,7 @@ url.workspace = true
 urlencoding.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+utoipa-swagger-ui.workspace = true
 
 [dev-dependencies]
 prost.workspace = true

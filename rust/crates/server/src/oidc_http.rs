@@ -53,6 +53,7 @@ pub fn router(state: OidcHttpState) -> Router {
     get,
     path = "/api/v1/authentication/oidc/providers",
     operation_id = "listOidcLoginProviders",
+    tag = "Authentication",
     summary = "List enabled OIDC login providers",
     responses(
         (status = 200, description = "Success", body = citadel_identity::OidcLoginProvidersView, content_type = "application/json"),
@@ -72,6 +73,7 @@ async fn list_login_providers(State(state): State<OidcHttpState>, headers: Heade
     get,
     path = "/api/v1/authentication/oidc/{id}/login",
     operation_id = "beginOidcLogin",
+    tag = "Authentication",
     summary = "Begin OIDC login",
     responses(
         (status = 302, description = "Success"),
@@ -115,9 +117,10 @@ async fn begin_login(
     get,
     path = "/api/v1/authentication/oidc/{id}/callback",
     operation_id = "completeOidcLogin",
+    tag = "Authentication",
     summary = "Complete OIDC login",
     responses(
-        (status = 302, description = "Success"),
+        (status = 302, description = "Success", headers(("Set-Cookie" = String, description = "Sets refresh_token after successful OIDC login."))),
         crate::openapi::errors::RedirectErrors
     ),
     params(("id" = uuid::Uuid, Path), ("code" = Option<String>, Query), ("state" = Option<String>, Query), ("error" = Option<String>, Query), ("error_description" = Option<String>, Query)),
@@ -173,6 +176,7 @@ async fn complete_login(
     get,
     path = "/api/v1/oidcProviders",
     operation_id = "listOidcProviders",
+    tag = "OidcProviders",
     summary = "List OIDC providers",
     responses(
         (status = 200, description = "Success", body = citadel_identity::OidcProvidersView, content_type = "application/json"),
@@ -199,6 +203,7 @@ async fn list_providers(
     get,
     path = "/api/v1/oidcProviders/{id}",
     operation_id = "getOidcProvider",
+    tag = "OidcProviders",
     summary = "Get OIDC provider",
     responses(
         (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
@@ -227,6 +232,7 @@ async fn get_provider(
     post,
     path = "/api/v1/oidcProviders",
     operation_id = "createOidcProvider",
+    tag = "OidcProviders",
     summary = "Create OIDC provider",
     request_body = CreateOidcProviderRequest,
     responses(
@@ -260,6 +266,7 @@ async fn create_provider(
     post,
     path = "/api/v1/oidcProviders/rename",
     operation_id = "renameOidcProvider",
+    tag = "OidcProviders",
     summary = "Rename OIDC provider",
     request_body = RenameOidcProviderRequest,
     responses(
@@ -297,8 +304,12 @@ async fn rename_provider(
     patch,
     path = "/api/v1/oidcProviders/{id}",
     operation_id = "updateOidcProvider",
+    tag = "OidcProviders",
     summary = "Update OIDC provider",
-    request_body = PatchOidcProviderRequest,
+    request_body(content(
+        (PatchOidcProviderRequest = "application/merge-patch+json"),
+        (PatchOidcProviderRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -332,8 +343,12 @@ async fn update_provider(
     patch,
     path = "/api/v1/oidcProviders/{id}/_metadata",
     operation_id = "updateOidcProviderMetadata",
+    tag = "OidcProviders",
     summary = "Update OIDC provider metadata",
-    request_body = PatchOidcProviderMetadataRequest,
+    request_body(content(
+        (PatchOidcProviderMetadataRequest = "application/merge-patch+json"),
+        (PatchOidcProviderMetadataRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -371,6 +386,7 @@ async fn update_provider_metadata(
     delete,
     path = "/api/v1/oidcProviders/{id}",
     operation_id = "deleteOidcProvider",
+    tag = "OidcProviders",
     summary = "Delete OIDC provider",
     responses(
         (status = 204, description = "Success"),
@@ -400,6 +416,7 @@ async fn delete_provider(
     post,
     path = "/api/v1/oidcProviders/{id}/testDiscovery",
     operation_id = "testOidcProviderDiscovery",
+    tag = "OidcProviders",
     summary = "Test OIDC provider discovery",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/OidcDiscoveryResultView"), content_type = "application/json"),
@@ -435,6 +452,7 @@ async fn test_provider_discovery(
     post,
     path = "/api/v1/oidcProviders/testDiscovery",
     operation_id = "testOidcDiscovery",
+    tag = "OidcProviders",
     summary = "Test OIDC discovery",
     request_body = TestOidcDiscoveryRequest,
     responses(

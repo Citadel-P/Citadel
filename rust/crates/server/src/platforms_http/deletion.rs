@@ -8,6 +8,7 @@ use citadel_platforms::deletion::{
     delete,
     path = "/api/v1/platforms",
     operation_id = "deletePlatforms",
+    tag = "Platforms",
     summary = "Delete Platform registrations",
     request_body = DeletePlatformsInput,
     responses(

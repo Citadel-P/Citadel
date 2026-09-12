@@ -51,6 +51,7 @@ struct WebhookResponse {
     post,
     path = "/listener/{authType}/{resourceType}/{id}/{execution}",
     operation_id = "receiveWebhook",
+    tag = "WebhookListener",
     summary = "Receive a provider webhook delivery",
     request_body = serde_json::Value,
     responses(

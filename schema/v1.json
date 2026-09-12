@@ -18482,6 +18482,8 @@
     },
     "securitySchemes": {
       "Bearer": {
+        "bearerFormat": "Citadel JWT or cit_sa_ Service Account token",
+        "description": "Use a Citadel User JWT or Service Account bearer token in the Authorization header.",
         "scheme": "bearer",
         "type": "http"
       }
@@ -18624,6 +18626,9 @@
           }
         ],
         "summary": "List authorized activities",
+        "tags": [
+          "Activities"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -18721,6 +18726,9 @@
           }
         ],
         "summary": "Get an authorized activity",
+        "tags": [
+          "Activities"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -18828,6 +18836,9 @@
           }
         ],
         "summary": "Get an Actor",
+        "tags": [
+          "Actors"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -18955,6 +18966,9 @@
           }
         ],
         "summary": "Enable or disable an Actor",
+        "tags": [
+          "Actors"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -19099,6 +19113,9 @@
           }
         ],
         "summary": "List Alert Events",
+        "tags": [
+          "AlertEvents"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19208,6 +19225,9 @@
           }
         ],
         "summary": "Acknowledge Alert Events",
+        "tags": [
+          "AlertEvents"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19317,6 +19337,9 @@
           }
         ],
         "summary": "Resolve Alert Events",
+        "tags": [
+          "AlertEvents"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19403,6 +19426,9 @@
           }
         ],
         "summary": "Count unresolved Alert Events",
+        "tags": [
+          "AlertEvents"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19510,6 +19536,9 @@
           }
         ],
         "summary": "Get an Alert Event",
+        "tags": [
+          "AlertEvents"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19619,6 +19648,9 @@
           }
         ],
         "summary": "Delete Alert Rules",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19703,6 +19735,9 @@
           }
         ],
         "summary": "List Alert Rules",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19807,6 +19842,9 @@
           }
         ],
         "summary": "Create an Alert Rule",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -19916,6 +19954,9 @@
           }
         ],
         "summary": "Delete Alert Channels",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20000,6 +20041,9 @@
           }
         ],
         "summary": "List Alert Channels",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20104,6 +20148,9 @@
           }
         ],
         "summary": "Create an Alert Channel",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20203,6 +20250,9 @@
           }
         ],
         "summary": "Verify an Alert Channel",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20310,6 +20360,9 @@
           }
         ],
         "summary": "Get an Alert Channel",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20330,6 +20383,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertChannelInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/AlertChannelInput"
               }
@@ -20435,6 +20493,9 @@
           }
         ],
         "summary": "Update an Alert Channel",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20551,6 +20612,9 @@
           }
         ],
         "summary": "Rename an Alert Rule",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20658,6 +20722,9 @@
           }
         ],
         "summary": "Get an Alert Rule",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20678,6 +20745,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchAlertRuleInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchAlertRuleInput"
               }
@@ -20782,6 +20854,9 @@
           }
         ],
         "summary": "Update an Alert Rule",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20889,6 +20964,9 @@
           }
         ],
         "summary": "Get Alert Rule configuration",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -20911,6 +20989,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadata"
               }
@@ -21005,6 +21088,9 @@
           }
         ],
         "summary": "Update Alert Rule metadata",
+        "tags": [
+          "AlertRules"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -21091,6 +21177,9 @@
           }
         ],
         "summary": "Get application information",
+        "tags": [
+          "Application"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21118,7 +21207,15 @@
                 }
               }
             },
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets refresh_token on success, or citadel_mfa_challenge / citadel_mfa_setup when MFA is required. Multiple Set-Cookie headers may be returned.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21183,6 +21280,9 @@
         },
         "security": [],
         "summary": "Sign in",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21191,9 +21291,28 @@
     "/api/v1/authentication/logout": {
       "post": {
         "operationId": "logout",
+        "parameters": [
+          {
+            "description": "Refresh Token",
+            "in": "cookie",
+            "name": "refresh_token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Expires refresh_token, citadel_mfa_challenge and citadel_mfa_setup using separate Set-Cookie headers.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21268,6 +21387,9 @@
         },
         "security": [],
         "summary": "End browser session",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21276,6 +21398,17 @@
     "/api/v1/authentication/mfa/setup": {
       "get": {
         "operationId": "getAuthenticationMfaSetup",
+        "parameters": [
+          {
+            "description": "MFA Setup",
+            "in": "cookie",
+            "name": "citadel_mfa_setup",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -21340,6 +21473,9 @@
         },
         "security": [],
         "summary": "Get mandatory MFA setup",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21348,6 +21484,17 @@
     "/api/v1/authentication/mfa/setup/confirm": {
       "post": {
         "operationId": "confirmAuthenticationMfaSetup",
+        "parameters": [
+          {
+            "description": "MFA Setup",
+            "in": "cookie",
+            "name": "citadel_mfa_setup",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -21367,7 +21514,15 @@
                 }
               }
             },
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets refresh_token and expires the MFA setup cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21422,6 +21577,9 @@
         },
         "security": [],
         "summary": "Complete mandatory MFA setup",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21430,6 +21588,17 @@
     "/api/v1/authentication/mfa/verify": {
       "post": {
         "operationId": "verifyAuthenticationMfa",
+        "parameters": [
+          {
+            "description": "MFA Challenge",
+            "in": "cookie",
+            "name": "citadel_mfa_challenge",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -21449,7 +21618,15 @@
                 }
               }
             },
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets refresh_token and expires the MFA challenge cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21504,6 +21681,9 @@
         },
         "security": [],
         "summary": "Complete an MFA challenge",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21566,6 +21746,9 @@
         },
         "security": [],
         "summary": "List enabled OIDC login providers",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21619,7 +21802,15 @@
         ],
         "responses": {
           "302": {
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets refresh_token after successful OIDC login.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21674,6 +21865,9 @@
         },
         "security": [],
         "summary": "Complete OIDC login",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21758,6 +21952,9 @@
         },
         "security": [],
         "summary": "Begin OIDC login",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21766,6 +21963,17 @@
     "/api/v1/authentication/refresh": {
       "get": {
         "operationId": "refreshToken",
+        "parameters": [
+          {
+            "description": "Refresh Token",
+            "in": "cookie",
+            "name": "refresh_token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -21775,7 +21983,15 @@
                 }
               }
             },
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Rotates refresh_token.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -21840,6 +22056,9 @@
         },
         "security": [],
         "summary": "Refresh browser access",
+        "tags": [
+          "Authentication"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -21939,6 +22158,9 @@
           }
         ],
         "summary": "List Automation Actions",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22043,6 +22265,9 @@
           }
         ],
         "summary": "Create an Automation Action",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22159,6 +22384,9 @@
           }
         ],
         "summary": "Rename an Automation Action",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22269,6 +22497,9 @@
           }
         ],
         "summary": "Delete an Automation Action",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22374,6 +22605,9 @@
           }
         ],
         "summary": "Get an Automation Action",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22394,6 +22628,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAutomationActionInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateAutomationActionInput"
               }
@@ -22499,6 +22738,9 @@
           }
         ],
         "summary": "Update an Automation Action",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22521,6 +22763,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAutomationActionMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateAutomationActionMetadata"
               }
@@ -22626,6 +22873,9 @@
           }
         ],
         "summary": "Update Automation Action metadata",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22759,6 +23009,9 @@
           }
         ],
         "summary": "Queue an Automation Action run",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22878,6 +23131,9 @@
           }
         ],
         "summary": "List Automation Action runs",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -22994,6 +23250,9 @@
           }
         ],
         "summary": "Get an Automation Action run",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23113,6 +23372,9 @@
           }
         ],
         "summary": "Cancel an Automation Action run",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23229,6 +23491,9 @@
           }
         ],
         "summary": "Get Automation Action run logs",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23336,6 +23601,9 @@
           }
         ],
         "summary": "Get AutomationAction tags",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23450,6 +23718,9 @@
           }
         ],
         "summary": "Replace AutomationAction tags",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23583,6 +23854,9 @@
           }
         ],
         "summary": "Queue a test Automation Action run",
+        "tags": [
+          "AutomationActions"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23682,6 +23956,9 @@
           }
         ],
         "summary": "List Backup Policies",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23796,6 +24073,9 @@
           }
         ],
         "summary": "Create a Backup Policy",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -23896,6 +24176,9 @@
           }
         ],
         "summary": "Get Platform Backup summaries",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24012,6 +24295,9 @@
           }
         ],
         "summary": "Rename a Backup Policy",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24122,6 +24408,9 @@
           }
         ],
         "summary": "Archive a Backup Policy",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24227,6 +24516,9 @@
           }
         ],
         "summary": "Get a Backup Policy",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24247,6 +24539,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBackupPolicyInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateBackupPolicyInput"
               }
@@ -24351,6 +24648,9 @@
           }
         ],
         "summary": "Update a Backup Policy",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24373,6 +24673,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadata"
               }
@@ -24477,6 +24782,9 @@
           }
         ],
         "summary": "Update Backup Policy metadata",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24604,6 +24912,9 @@
           }
         ],
         "summary": "Run a Backup Policy with progress",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24737,6 +25048,9 @@
           }
         ],
         "summary": "Queue a Backup Run",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24844,6 +25158,9 @@
           }
         ],
         "summary": "Get BackupPolicy tags",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -24958,6 +25275,9 @@
           }
         ],
         "summary": "Replace BackupPolicy tags",
+        "tags": [
+          "BackupPolicies"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25044,6 +25364,9 @@
           }
         ],
         "summary": "List Backup Repositories",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25158,6 +25481,9 @@
           }
         ],
         "summary": "Create a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25268,6 +25594,9 @@
           }
         ],
         "summary": "Archive a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25373,6 +25702,9 @@
           }
         ],
         "summary": "Get a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25393,6 +25725,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBackupRepositoryInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateBackupRepositoryInput"
               }
@@ -25497,6 +25834,9 @@
           }
         ],
         "summary": "Update a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25627,6 +25967,9 @@
           }
         ],
         "summary": "Check a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25757,6 +26100,9 @@
           }
         ],
         "summary": "Initialize a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -25887,6 +26233,9 @@
           }
         ],
         "summary": "Prune a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26024,6 +26373,9 @@
           }
         ],
         "summary": "Validate a Backup Repository",
+        "tags": [
+          "BackupRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26142,6 +26494,9 @@
           }
         ],
         "summary": "List Backup Restore Runs",
+        "tags": [
+          "BackupRestoreRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26249,6 +26604,9 @@
           }
         ],
         "summary": "Get a Backup Restore Run",
+        "tags": [
+          "BackupRestoreRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26359,6 +26717,9 @@
           }
         ],
         "summary": "Cancel a Backup Restore Run",
+        "tags": [
+          "BackupRestoreRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26466,6 +26827,9 @@
           }
         ],
         "summary": "Get Backup Restore Run events",
+        "tags": [
+          "BackupRestoreRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26573,6 +26937,9 @@
           }
         ],
         "summary": "Get Backup Restore Run logs",
+        "tags": [
+          "BackupRestoreRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26682,6 +27049,9 @@
           }
         ],
         "summary": "List Backup Runs",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26789,6 +27159,9 @@
           }
         ],
         "summary": "Get a Backup Run",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -26899,6 +27272,9 @@
           }
         ],
         "summary": "Cancel a Backup Run",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27006,6 +27382,9 @@
           }
         ],
         "summary": "Get Backup Run events",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27113,6 +27492,9 @@
           }
         ],
         "summary": "Get Backup Run logs",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27240,6 +27622,9 @@
           }
         ],
         "summary": "Queue a Volume restore",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27367,6 +27752,9 @@
           }
         ],
         "summary": "Restore a Backup Volume with progress",
+        "tags": [
+          "BackupRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27466,6 +27854,9 @@
           }
         ],
         "summary": "List Build Agent Pools",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27570,6 +27961,9 @@
           }
         ],
         "summary": "Create a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27686,6 +28080,9 @@
           }
         ],
         "summary": "Rename a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27796,6 +28193,9 @@
           }
         ],
         "summary": "Archive a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27901,6 +28301,9 @@
           }
         ],
         "summary": "Get a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -27921,6 +28324,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBuildAgentPoolInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateBuildAgentPoolInput"
               }
@@ -28025,6 +28433,9 @@
           }
         ],
         "summary": "Update a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28047,6 +28458,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadata"
               }
@@ -28151,6 +28567,9 @@
           }
         ],
         "summary": "Update Build Agent Pool metadata",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28268,6 +28687,9 @@
           }
         ],
         "summary": "Create build pool Edge Agent enrollment",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28378,6 +28800,9 @@
           }
         ],
         "summary": "Revoke build pool Edge Agent",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28495,6 +28920,9 @@
           }
         ],
         "summary": "Get build pool Edge Agent status",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28602,6 +29030,9 @@
           }
         ],
         "summary": "Get BuildAgentPool tags",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28716,6 +29147,9 @@
           }
         ],
         "summary": "Replace BuildAgentPool tags",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28833,6 +29267,9 @@
           }
         ],
         "summary": "Test a Build Agent Pool",
+        "tags": [
+          "BuildAgentPools"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -28932,6 +29369,9 @@
           }
         ],
         "summary": "List Build Projects",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29046,6 +29486,9 @@
           }
         ],
         "summary": "Create a Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29162,6 +29605,9 @@
           }
         ],
         "summary": "Update Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29272,6 +29718,9 @@
           }
         ],
         "summary": "Archive a Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29377,6 +29826,9 @@
           }
         ],
         "summary": "Get a Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29397,6 +29849,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBuildProjectInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateBuildProjectInput"
               }
@@ -29501,6 +29958,9 @@
           }
         ],
         "summary": "Update Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29523,6 +29983,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadata"
               }
@@ -29627,6 +30092,9 @@
           }
         ],
         "summary": "Update Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29760,6 +30228,9 @@
           }
         ],
         "summary": "Queue a Build Run",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29867,6 +30338,9 @@
           }
         ],
         "summary": "Get BuildProject tags",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -29981,6 +30455,9 @@
           }
         ],
         "summary": "Replace BuildProject tags",
+        "tags": [
+          "BuildProjects"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30090,6 +30567,9 @@
           }
         ],
         "summary": "List Build Runs",
+        "tags": [
+          "BuildRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30197,6 +30677,9 @@
           }
         ],
         "summary": "Get a Build Run",
+        "tags": [
+          "BuildRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30297,6 +30780,9 @@
           }
         ],
         "summary": "Cancel a Build Run",
+        "tags": [
+          "BuildRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30404,6 +30890,9 @@
           }
         ],
         "summary": "Get Build Run logs",
+        "tags": [
+          "BuildRuns"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30523,6 +31012,9 @@
           }
         ],
         "summary": "Delete Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30641,6 +31133,9 @@
           }
         ],
         "summary": "Pause Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30759,6 +31254,9 @@
           }
         ],
         "summary": "Restart Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30877,6 +31375,9 @@
           }
         ],
         "summary": "Start Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -30995,6 +31496,9 @@
           }
         ],
         "summary": "Stop Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31113,6 +31617,9 @@
           }
         ],
         "summary": "Unpause Containers",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31229,6 +31736,9 @@
           }
         ],
         "summary": "Get a Container",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31366,6 +31876,9 @@
           }
         ],
         "summary": "Adopt a Container without changing Docker",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31493,6 +32006,9 @@
           }
         ],
         "summary": "Review adoption of an unmanaged Container",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31619,6 +32135,9 @@
           }
         ],
         "summary": "getContainerData",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31745,6 +32264,9 @@
           }
         ],
         "summary": "getContainerInfo",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31871,6 +32393,9 @@
           }
         ],
         "summary": "Inspect a Container with sensitive environment values redacted",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -31995,6 +32520,9 @@
           }
         ],
         "summary": "Get Container statistics",
+        "tags": [
+          "Containers"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32118,6 +32646,9 @@
           }
         ],
         "summary": "Delete Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32234,6 +32765,9 @@
           }
         ],
         "summary": "List authorized Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32348,6 +32882,9 @@
           }
         ],
         "summary": "Create a Deployment",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32477,6 +33014,9 @@
           }
         ],
         "summary": "Apply a Deployment",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32595,6 +33135,9 @@
           }
         ],
         "summary": "Pause Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32711,6 +33254,9 @@
           }
         ],
         "summary": "Rename a Deployment",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32829,6 +33375,9 @@
           }
         ],
         "summary": "Restart Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -32947,6 +33496,9 @@
           }
         ],
         "summary": "Resume Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33065,6 +33617,9 @@
           }
         ],
         "summary": "Start Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33183,6 +33738,9 @@
           }
         ],
         "summary": "Stop Deployments",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33290,6 +33848,9 @@
           }
         ],
         "summary": "Get a Deployment",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33397,6 +33958,9 @@
           }
         ],
         "summary": "Get Deployment configuration",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33524,6 +34088,9 @@
           }
         ],
         "summary": "Preview Deployment Backup volumes",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33651,6 +34218,9 @@
           }
         ],
         "summary": "Check the applied Deployment image for updates",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33758,6 +34328,9 @@
           }
         ],
         "summary": "Build a Deployment duplicate draft",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33865,6 +34438,9 @@
           }
         ],
         "summary": "Get Deployment tags",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -33979,6 +34555,9 @@
           }
         ],
         "summary": "Replace Deployment tags",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34001,6 +34580,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchDeploymentInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchDeploymentInput"
               }
@@ -34106,6 +34690,9 @@
           }
         ],
         "summary": "Update Deployment configuration",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34128,6 +34715,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchDeploymentMetadataInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchDeploymentMetadataInput"
               }
@@ -34233,6 +34825,9 @@
           }
         ],
         "summary": "Update Deployment metadata",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34360,6 +34955,9 @@
           }
         ],
         "summary": "getDeploymentContainerInfo",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34487,6 +35085,9 @@
           }
         ],
         "summary": "inspectDeployment",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34602,6 +35203,9 @@
           }
         ],
         "summary": "Get Deployment statistics",
+        "tags": [
+          "Deployments"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -34711,6 +35315,9 @@
           }
         ],
         "summary": "Delete Git accounts",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -34795,6 +35402,9 @@
           }
         ],
         "summary": "List Git accounts",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -34899,6 +35509,9 @@
           }
         ],
         "summary": "Create a Git account",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -35006,6 +35619,9 @@
           }
         ],
         "summary": "Get a Git account",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -35026,6 +35642,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitAccountPatch"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/GitAccountPatch"
               }
@@ -35131,6 +35752,9 @@
           }
         ],
         "summary": "Update a Git account",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -35238,6 +35862,9 @@
           }
         ],
         "summary": "Get Git account configuration",
+        "tags": [
+          "GitAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -35347,6 +35974,9 @@
           }
         ],
         "summary": "Delete Git repositories",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -35444,6 +36074,9 @@
           }
         ],
         "summary": "List Git repositories",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -35558,6 +36191,9 @@
           }
         ],
         "summary": "Create a Git repository",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -35674,6 +36310,9 @@
           }
         ],
         "summary": "Rename a Git repository",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -35781,6 +36420,9 @@
           }
         ],
         "summary": "Get a Git repository",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -35801,6 +36443,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitRepositoryPatch"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/GitRepositoryPatch"
               }
@@ -35906,6 +36553,9 @@
           }
         ],
         "summary": "Update a Git repository",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36013,6 +36663,9 @@
           }
         ],
         "summary": "Get Git repository configuration",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36035,6 +36688,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadataInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadataInput"
               }
@@ -36140,6 +36798,9 @@
           }
         ],
         "summary": "Update Git repository metadata",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36277,6 +36938,9 @@
           }
         ],
         "summary": "Discover remote Git branches",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36420,6 +37084,9 @@
           }
         ],
         "summary": "Compare immutable Git commits",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36565,6 +37232,9 @@
           }
         ],
         "summary": "Discover Compose projects in a Git repository",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36708,6 +37378,9 @@
           }
         ],
         "summary": "List files in an immutable Git tree",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36851,6 +37524,9 @@
           }
         ],
         "summary": "Read a bounded immutable Git file",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -36958,6 +37634,9 @@
           }
         ],
         "summary": "Get synchronized Git repository references",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37093,6 +37772,9 @@
           }
         ],
         "summary": "Queue Git repository synchronization",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37200,6 +37882,9 @@
           }
         ],
         "summary": "Get Git repository tags",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37314,6 +37999,9 @@
           }
         ],
         "summary": "Replace Git repository tags",
+        "tags": [
+          "GitRepositories"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37440,6 +38128,9 @@
           }
         ],
         "summary": "Delete Images",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37556,6 +38247,9 @@
           }
         ],
         "summary": "List Docker Hub repositories",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37680,6 +38374,9 @@
           }
         ],
         "summary": "List Docker Hub repository tags",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37804,6 +38501,9 @@
           }
         ],
         "summary": "List GitHub package versions",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -37920,6 +38620,9 @@
           }
         ],
         "summary": "Pull a Docker image with progress",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -38017,6 +38720,9 @@
           }
         ],
         "summary": "List Platform Images",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -38170,6 +38876,9 @@
           }
         ],
         "summary": "Inspect an Image on its owning Docker node",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -38316,6 +39025,9 @@
           }
         ],
         "summary": "Read exposed ports using the Citadel Image ID",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -38432,6 +39144,9 @@
           }
         ],
         "summary": "List Registry repositories",
+        "tags": [
+          "Images"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -38518,6 +39233,9 @@
           }
         ],
         "summary": "Remove the installed license",
+        "tags": [
+          "License"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -38602,6 +39320,9 @@
           }
         ],
         "summary": "Get installed license state",
+        "tags": [
+          "License"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -38696,6 +39417,9 @@
           }
         ],
         "summary": "Install or replace a license",
+        "tags": [
+          "License"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -38782,6 +39506,9 @@
           }
         ],
         "summary": "Get effective license entitlements",
+        "tags": [
+          "License"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -38868,6 +39595,9 @@
           }
         ],
         "summary": "Get license request metadata",
+        "tags": [
+          "License"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39010,6 +39740,9 @@
           }
         ],
         "summary": "Look up accessible resources",
+        "tags": [
+          "Lookup"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39119,6 +39852,9 @@
           }
         ],
         "summary": "Delete Networks",
+        "tags": [
+          "Networks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -39233,6 +39969,9 @@
           }
         ],
         "summary": "Create a Network",
+        "tags": [
+          "Networks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -39372,6 +40111,9 @@
           }
         ],
         "summary": "List Platform Networks",
+        "tags": [
+          "Networks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -39495,6 +40237,9 @@
           }
         ],
         "summary": "Inspect a Platform Network",
+        "tags": [
+          "Networks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -39581,6 +40326,9 @@
           }
         ],
         "summary": "List OIDC providers",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39685,6 +40433,9 @@
           }
         ],
         "summary": "Create OIDC provider",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39801,6 +40552,9 @@
           }
         ],
         "summary": "Rename OIDC provider",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39897,6 +40651,9 @@
           }
         ],
         "summary": "Test OIDC discovery",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -39997,6 +40754,9 @@
           }
         ],
         "summary": "Delete OIDC provider",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -40102,6 +40862,9 @@
           }
         ],
         "summary": "Get OIDC provider",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -40122,6 +40885,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchOidcProviderRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchOidcProviderRequest"
               }
@@ -40227,6 +40995,9 @@
           }
         ],
         "summary": "Update OIDC provider",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -40249,6 +41020,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchOidcProviderMetadataRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchOidcProviderMetadataRequest"
               }
@@ -40354,6 +41130,9 @@
           }
         ],
         "summary": "Update OIDC provider metadata",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -40461,6 +41240,9 @@
           }
         ],
         "summary": "Test OIDC provider discovery",
+        "tags": [
+          "OidcProviders"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -40570,6 +41352,9 @@
           }
         ],
         "summary": "Delete Platform registrations",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -40677,6 +41462,9 @@
           }
         ],
         "summary": "List authorized Platforms",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -40781,6 +41569,9 @@
           }
         ],
         "summary": "Create a Platform",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -40867,6 +41658,9 @@
           }
         ],
         "summary": "Get regular Agent setup instructions",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -40953,6 +41747,9 @@
           }
         ],
         "summary": "Rotate the Agent signing key",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41069,6 +41866,9 @@
           }
         ],
         "summary": "Rename a Platform",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41176,6 +41976,9 @@
           }
         ],
         "summary": "Get a Platform",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41196,6 +41999,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PlatformInput"
               }
@@ -41300,6 +42108,9 @@
           }
         ],
         "summary": "Update a Platform",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41322,6 +42133,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPlatformMetadataInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchPlatformMetadataInput"
               }
@@ -41417,6 +42233,9 @@
           }
         ],
         "summary": "Update Platform metadata",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41524,6 +42343,9 @@
           }
         ],
         "summary": "List Platform Containers",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41641,6 +42463,9 @@
           }
         ],
         "summary": "Create an Edge Agent enrollment token",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41751,6 +42576,9 @@
           }
         ],
         "summary": "Revoke an Edge Agent binding",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41868,6 +42696,9 @@
           }
         ],
         "summary": "Get Edge Agent connection status",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -41985,6 +42816,9 @@
           }
         ],
         "summary": "Get Docker Swarm node-agent coverage",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42102,6 +42936,9 @@
           }
         ],
         "summary": "Remove Docker Swarm node agents",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42219,6 +43056,9 @@
           }
         ],
         "summary": "Install Docker Swarm node agents",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42336,6 +43176,9 @@
           }
         ],
         "summary": "Repair Docker Swarm node-agent coverage",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42453,6 +43296,9 @@
           }
         ],
         "summary": "Upgrade Docker Swarm node agents",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42580,6 +43426,9 @@
           }
         ],
         "summary": "Prune unused Docker resources",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42695,6 +43544,9 @@
           }
         ],
         "summary": "Get Platform statistics",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42802,6 +43654,9 @@
           }
         ],
         "summary": "Get Platform tags",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -42916,6 +43771,9 @@
           }
         ],
         "summary": "Replace Platform tags",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43053,6 +43911,9 @@
           }
         ],
         "summary": "Get Swarm inventory health and quorum",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43173,6 +44034,9 @@
           }
         ],
         "summary": "deleteSwarmConfigs",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43278,6 +44142,9 @@
           }
         ],
         "summary": "List Swarm Configs",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43395,6 +44262,9 @@
           }
         ],
         "summary": "createSwarmConfig",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43510,6 +44380,9 @@
           }
         ],
         "summary": "Get a Swarm Config",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43635,6 +44508,9 @@
           }
         ],
         "summary": "getSwarmConfigData",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43763,6 +44639,9 @@
           }
         ],
         "summary": "updateSwarmConfigLabels",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43870,6 +44749,9 @@
           }
         ],
         "summary": "List Swarm Networks",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -43985,6 +44867,9 @@
           }
         ],
         "summary": "Get a Swarm Network",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44092,6 +44977,9 @@
           }
         ],
         "summary": "List Swarm Nodes",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44212,6 +45100,9 @@
           }
         ],
         "summary": "updateSwarmNodesAvailability",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44327,6 +45218,9 @@
           }
         ],
         "summary": "Get a Swarm Node",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44453,6 +45347,9 @@
           }
         ],
         "summary": "updateSwarmNode",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44578,6 +45475,9 @@
           }
         ],
         "summary": "inspectSwarmNode",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44698,6 +45598,9 @@
           }
         ],
         "summary": "deleteSwarmSecrets",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44803,6 +45706,9 @@
           }
         ],
         "summary": "List Swarm Secrets",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -44920,6 +45826,9 @@
           }
         ],
         "summary": "createSwarmSecret",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45035,6 +45944,9 @@
           }
         ],
         "summary": "Get a Swarm Secret",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45163,6 +46075,9 @@
           }
         ],
         "summary": "updateSwarmSecretLabels",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45283,6 +46198,9 @@
           }
         ],
         "summary": "deleteSwarmInventoryServices",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45388,6 +46306,9 @@
           }
         ],
         "summary": "List Swarm Services",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45503,6 +46424,9 @@
           }
         ],
         "summary": "Get a Swarm Service",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45638,6 +46562,9 @@
           }
         ],
         "summary": "Adopt an existing Docker Service without changing Docker",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45763,6 +46690,9 @@
           }
         ],
         "summary": "Review an unmanaged Docker Service for adoption",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -45888,6 +46818,9 @@
           }
         ],
         "summary": "inspectSwarmService",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46045,6 +46978,9 @@
           }
         ],
         "summary": "Read bounded Service logs",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46163,6 +47099,9 @@
           }
         ],
         "summary": "restartSwarmService",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46316,6 +47255,9 @@
           }
         ],
         "summary": "Get Service statistics and node coverage",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46443,6 +47385,9 @@
           }
         ],
         "summary": "List Swarm Tasks",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46558,6 +47503,9 @@
           }
         ],
         "summary": "Get a Swarm Task",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46703,6 +47651,9 @@
           }
         ],
         "summary": "Inspect the current Task container",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -46860,6 +47811,9 @@
           }
         ],
         "summary": "Read current Task logs on its owning node",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47013,6 +47967,9 @@
           }
         ],
         "summary": "Get current Task statistics",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47158,6 +48115,9 @@
           }
         ],
         "summary": "Resolve the current Task terminal target",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47291,6 +48251,9 @@
           }
         ],
         "summary": "Get a Compose or Swarm Stack import draft",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47426,6 +48389,9 @@
           }
         ],
         "summary": "Import a Compose project or Swarm Stack",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47561,6 +48527,9 @@
           }
         ],
         "summary": "Validate a source for an unmanaged Compose project",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47712,6 +48681,9 @@
           }
         ],
         "summary": "Browse a Volume directory",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47856,6 +48828,9 @@
           }
         ],
         "summary": "Download a Volume file or directory",
+        "tags": [
+          "Platforms"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -47942,6 +48917,9 @@
           }
         ],
         "summary": "Get current profile",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48036,6 +49014,9 @@
           }
         ],
         "summary": "Update current profile",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48125,6 +49106,9 @@
           }
         ],
         "summary": "Change current profile password",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48221,6 +49205,9 @@
           }
         ],
         "summary": "Get MFA status",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48310,6 +49297,9 @@
           }
         ],
         "summary": "Disable MFA",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48406,6 +49396,9 @@
           }
         ],
         "summary": "Regenerate MFA recovery codes",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48502,6 +49495,9 @@
           }
         ],
         "summary": "Start MFA setup",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48598,6 +49594,9 @@
           }
         ],
         "summary": "Complete MFA setup",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48684,6 +49683,9 @@
           }
         ],
         "summary": "Get current profile preferences",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48693,6 +49695,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserPreferencesRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchUserPreferencesRequest"
               }
@@ -48778,6 +49785,9 @@
           }
         ],
         "summary": "Update current profile preferences",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48864,6 +49874,9 @@
           }
         ],
         "summary": "Revoke other profile sessions",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -48948,6 +49961,9 @@
           }
         ],
         "summary": "List current profile sessions",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -49048,6 +50064,9 @@
           }
         ],
         "summary": "Revoke a profile session",
+        "tags": [
+          "Profile"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -49157,6 +50176,9 @@
           }
         ],
         "summary": "Delete Registries",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49263,6 +50285,9 @@
           }
         ],
         "summary": "List Registries",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49272,6 +50297,85 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "examples": {
+                "AWS": {
+                  "value": {
+                    "configuration": {
+                      "$type": "AWS",
+                      "accessKey": "example-access-key",
+                      "authenticationRequired": true,
+                      "region": "us-east-2",
+                      "secretAccessKey": "example-secret-key"
+                    },
+                    "name": "my-ecr-registry",
+                    "registryHost": "123456789012.dkr.ecr.us-east-2.amazonaws.com",
+                    "status": "Active"
+                  }
+                },
+                "Azure": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Azure",
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-azure-registry",
+                    "registryHost": "myproject.azurecr.io",
+                    "status": "Active"
+                  }
+                },
+                "Custom": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Custom",
+                      "authEnabled": true,
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-custom-registry",
+                    "registryHost": "localhost:9965",
+                    "status": "Active"
+                  }
+                },
+                "DockerHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "DockerHub",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-dockerhub-registry",
+                    "registryHost": "docker.io",
+                    "status": "Active"
+                  }
+                },
+                "GitHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "GitHub",
+                      "ghcrAuthEnabled": true,
+                      "nameSpace": "citadel-p",
+                      "pat": "example-token"
+                    },
+                    "name": "my-github-registry",
+                    "registryHost": "ghcr.io",
+                    "status": "Active"
+                  }
+                },
+                "Gitlab": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Gitlab",
+                      "instanceUrl": "https://gitlab.com",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-gitlab-registry",
+                    "registryHost": "registry.gitlab.com",
+                    "status": "Active"
+                  }
+                }
+              },
               "schema": {
                 "$ref": "#/components/schemas/NewRegistry"
               }
@@ -49377,6 +50481,9 @@
           }
         ],
         "summary": "Create a Registry",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49493,6 +50600,9 @@
           }
         ],
         "summary": "Rename a Registry",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49600,6 +50710,9 @@
           }
         ],
         "summary": "Get a Registry",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49620,6 +50733,169 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "examples": {
+                "AWS": {
+                  "value": {
+                    "configuration": {
+                      "$type": "AWS",
+                      "accessKey": "example-access-key",
+                      "authenticationRequired": true,
+                      "region": "us-east-2",
+                      "secretAccessKey": "example-secret-key"
+                    },
+                    "name": "my-ecr-registry",
+                    "registryHost": "123456789012.dkr.ecr.us-east-2.amazonaws.com",
+                    "status": "Active"
+                  }
+                },
+                "Azure": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Azure",
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-azure-registry",
+                    "registryHost": "myproject.azurecr.io",
+                    "status": "Active"
+                  }
+                },
+                "Custom": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Custom",
+                      "authEnabled": true,
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-custom-registry",
+                    "registryHost": "localhost:9965",
+                    "status": "Active"
+                  }
+                },
+                "DockerHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "DockerHub",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-dockerhub-registry",
+                    "registryHost": "docker.io",
+                    "status": "Active"
+                  }
+                },
+                "GitHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "GitHub",
+                      "ghcrAuthEnabled": true,
+                      "nameSpace": "citadel-p",
+                      "pat": "example-token"
+                    },
+                    "name": "my-github-registry",
+                    "registryHost": "ghcr.io",
+                    "status": "Active"
+                  }
+                },
+                "Gitlab": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Gitlab",
+                      "instanceUrl": "https://gitlab.com",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-gitlab-registry",
+                    "registryHost": "registry.gitlab.com",
+                    "status": "Active"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RegistryPatch"
+              }
+            },
+            "application/merge-patch+json": {
+              "examples": {
+                "AWS": {
+                  "value": {
+                    "configuration": {
+                      "$type": "AWS",
+                      "accessKey": "example-access-key",
+                      "authenticationRequired": true,
+                      "region": "us-east-2",
+                      "secretAccessKey": "example-secret-key"
+                    },
+                    "name": "my-ecr-registry",
+                    "registryHost": "123456789012.dkr.ecr.us-east-2.amazonaws.com",
+                    "status": "Active"
+                  }
+                },
+                "Azure": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Azure",
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-azure-registry",
+                    "registryHost": "myproject.azurecr.io",
+                    "status": "Active"
+                  }
+                },
+                "Custom": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Custom",
+                      "authEnabled": true,
+                      "password": "example-password",
+                      "userName": "example-user"
+                    },
+                    "name": "my-custom-registry",
+                    "registryHost": "localhost:9965",
+                    "status": "Active"
+                  }
+                },
+                "DockerHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "DockerHub",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-dockerhub-registry",
+                    "registryHost": "docker.io",
+                    "status": "Active"
+                  }
+                },
+                "GitHub": {
+                  "value": {
+                    "configuration": {
+                      "$type": "GitHub",
+                      "ghcrAuthEnabled": true,
+                      "nameSpace": "citadel-p",
+                      "pat": "example-token"
+                    },
+                    "name": "my-github-registry",
+                    "registryHost": "ghcr.io",
+                    "status": "Active"
+                  }
+                },
+                "Gitlab": {
+                  "value": {
+                    "configuration": {
+                      "$type": "Gitlab",
+                      "instanceUrl": "https://gitlab.com",
+                      "pat": "example-token",
+                      "userName": "example-user"
+                    },
+                    "name": "my-gitlab-registry",
+                    "registryHost": "registry.gitlab.com",
+                    "status": "Active"
+                  }
+                }
+              },
               "schema": {
                 "$ref": "#/components/schemas/RegistryPatch"
               }
@@ -49725,6 +51001,9 @@
           }
         ],
         "summary": "Update a Registry",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49832,6 +51111,9 @@
           }
         ],
         "summary": "Get Registry configuration",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -49854,6 +51136,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadataInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadataInput"
               }
@@ -49959,6 +51246,9 @@
           }
         ],
         "summary": "Update Registry metadata",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50066,6 +51356,9 @@
           }
         ],
         "summary": "Get Registry tags",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50180,6 +51473,9 @@
           }
         ],
         "summary": "Replace Registry tags",
+        "tags": [
+          "Registries"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50266,6 +51562,9 @@
           }
         ],
         "summary": "Get global resource bindings",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50380,6 +51679,9 @@
           }
         ],
         "summary": "Update a global resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50484,6 +51786,9 @@
           }
         ],
         "summary": "Create a global resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50601,6 +51906,9 @@
           }
         ],
         "summary": "Delete a global resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50687,6 +51995,9 @@
           }
         ],
         "summary": "List Secret providers",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50793,6 +52104,9 @@
           }
         ],
         "summary": "Create a Vault-compatible KV v2 Secret provider",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50899,6 +52213,9 @@
           }
         ],
         "summary": "Test a Vault-compatible KV v2 Secret provider connection",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -50921,6 +52238,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretProviderPatch"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/SecretProviderPatch"
               }
@@ -51026,6 +52348,9 @@
           }
         ],
         "summary": "Update a Vault-compatible KV v2 Secret provider",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51136,6 +52461,9 @@
           }
         ],
         "summary": "Delete a Secret provider",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51268,6 +52596,9 @@
           }
         ],
         "summary": "List Secret definitions",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51401,6 +52732,9 @@
           }
         ],
         "summary": "Create an internal encrypted Secret",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51517,6 +52851,9 @@
           }
         ],
         "summary": "Create an external Secret definition",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51623,6 +52960,9 @@
           }
         ],
         "summary": "Test an external Secret reference",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51645,6 +52985,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalSecretPatch"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/ExternalSecretPatch"
               }
@@ -51750,6 +53095,9 @@
           }
         ],
         "summary": "Update an external Secret definition",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51860,6 +53208,9 @@
           }
         ],
         "summary": "Delete an unused Secret definition",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -51975,6 +53326,9 @@
           }
         ],
         "summary": "Get resource bindings",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -52108,6 +53462,9 @@
           }
         ],
         "summary": "Update a resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -52241,6 +53598,9 @@
           }
         ],
         "summary": "Create a resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -52375,6 +53735,9 @@
           }
         ],
         "summary": "Delete a resource binding",
+        "tags": [
+          "ResourceBindings"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -52474,6 +53837,9 @@
           }
         ],
         "summary": "Delete Roles",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52558,6 +53924,9 @@
           }
         ],
         "summary": "Get all Roles",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52662,6 +54031,9 @@
           }
         ],
         "summary": "Create a Role",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52724,6 +54096,9 @@
         },
         "security": [],
         "summary": "Get permission matrix",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52840,6 +54215,9 @@
           }
         ],
         "summary": "Rename a Role",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52947,6 +54325,9 @@
           }
         ],
         "summary": "Get a Role by ID",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -52969,6 +54350,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchRolePermissionsRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchRolePermissionsRequest"
               }
@@ -53064,6 +54450,9 @@
           }
         ],
         "summary": "Update Role permissions",
+        "tags": [
+          "Roles"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53180,6 +54569,9 @@
           }
         ],
         "summary": "Search authorized resources",
+        "tags": [
+          "Search"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53269,6 +54661,9 @@
           }
         ],
         "summary": "Archive Service Accounts",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53394,6 +54789,9 @@
           }
         ],
         "summary": "List Service Accounts",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53488,6 +54886,9 @@
           }
         ],
         "summary": "Create a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53574,6 +54975,9 @@
           }
         ],
         "summary": "Get Service Account limits",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53670,6 +55074,9 @@
           }
         ],
         "summary": "Rename a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53767,6 +55174,9 @@
           }
         ],
         "summary": "Get a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53787,6 +55197,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceAccountRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateServiceAccountRequest"
               }
@@ -53872,6 +55287,9 @@
           }
         ],
         "summary": "Update a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -53979,6 +55397,9 @@
           }
         ],
         "summary": "Add a resource override to a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54085,6 +55506,9 @@
           }
         ],
         "summary": "Remove a resource override from a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54192,6 +55616,9 @@
           }
         ],
         "summary": "Assign a Role to a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54298,6 +55725,9 @@
           }
         ],
         "summary": "Remove a Role from a Service Account",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54417,6 +55847,9 @@
           }
         ],
         "summary": "List Service Account tokens",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54522,6 +55955,9 @@
           }
         ],
         "summary": "Create a Service Account token",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54621,6 +56057,9 @@
           }
         ],
         "summary": "Revoke a Service Account token",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54728,6 +56167,9 @@
           }
         ],
         "summary": "List Service Account execution usages",
+        "tags": [
+          "ServiceAccounts"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -54820,6 +56262,9 @@
         },
         "security": [],
         "summary": "Initialize Citadel",
+        "tags": [
+          "Setup"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": true
@@ -54892,6 +56337,9 @@
         },
         "security": [],
         "summary": "Get setup status",
+        "tags": [
+          "Setup"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": true
@@ -55015,6 +56463,9 @@
           }
         ],
         "summary": "Delete Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55131,6 +56582,9 @@
           }
         ],
         "summary": "List authorized Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55245,6 +56699,9 @@
           }
         ],
         "summary": "Create a Stack",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55371,6 +56828,9 @@
           }
         ],
         "summary": "Apply a Stack and stream progress",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55479,6 +56939,9 @@
           }
         ],
         "summary": "Pause Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55585,6 +57048,9 @@
           }
         ],
         "summary": "Validate Docker Swarm Stack compatibility",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55701,6 +57167,9 @@
           }
         ],
         "summary": "Rename a Stack",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55809,6 +57278,9 @@
           }
         ],
         "summary": "Restart Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -55917,6 +57389,9 @@
           }
         ],
         "summary": "Resume Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56043,6 +57518,9 @@
           }
         ],
         "summary": "Roll back a Stack and stream progress",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56151,6 +57629,9 @@
           }
         ],
         "summary": "Start Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56259,6 +57740,9 @@
           }
         ],
         "summary": "Stop Stacks",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56281,6 +57765,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchStackInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchStackInput"
               }
@@ -56386,6 +57875,9 @@
           }
         ],
         "summary": "Update Stack configuration",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56408,6 +57900,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchResourceMetadata"
               }
@@ -56512,6 +58009,9 @@
           }
         ],
         "summary": "Update Stack metadata",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56619,6 +58119,9 @@
           }
         ],
         "summary": "Get a Stack",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56726,6 +58229,9 @@
           }
         ],
         "summary": "Get Stack configuration",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56853,6 +58359,9 @@
           }
         ],
         "summary": "Preview Stack Backup volumes",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -56980,6 +58489,9 @@
           }
         ],
         "summary": "Check a Stack source for updates",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57115,6 +58627,9 @@
           }
         ],
         "summary": "Inspect a Stack Container with sensitive environment values redacted",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57222,6 +58737,9 @@
           }
         ],
         "summary": "Get Stack runtime containers",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57339,6 +58857,9 @@
           }
         ],
         "summary": "Get Stack drift",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57466,6 +58987,9 @@
           }
         ],
         "summary": "Update Stack drift policy",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57573,6 +59097,9 @@
           }
         ],
         "summary": "Build a Stack duplicate draft",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57690,6 +59217,9 @@
           }
         ],
         "summary": "Reconcile safe Stack drift",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57797,6 +59327,9 @@
           }
         ],
         "summary": "List previous healthy Stack releases",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -57912,6 +59445,9 @@
           }
         ],
         "summary": "Get Stack Container statistics",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58019,6 +59555,9 @@
           }
         ],
         "summary": "Get Stack tags",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58133,6 +59672,9 @@
           }
         ],
         "summary": "Replace Stack tags",
+        "tags": [
+          "Stacks"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58256,6 +59798,9 @@
           }
         ],
         "summary": "Delete managed Docker Swarm Services",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58372,6 +59917,9 @@
           }
         ],
         "summary": "List managed Docker Swarm Services",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58486,6 +60034,9 @@
           }
         ],
         "summary": "Create a managed Docker Swarm Service",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58602,6 +60153,9 @@
           }
         ],
         "summary": "Rename a managed Docker Swarm Service",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58709,6 +60263,9 @@
           }
         ],
         "summary": "Get a managed Docker Swarm Service",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58834,6 +60391,9 @@
           }
         ],
         "summary": "Update managed Docker Swarm Service configuration",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -58856,6 +60416,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceMetadataInput"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/ServiceMetadataInput"
               }
@@ -58961,6 +60526,9 @@
           }
         ],
         "summary": "Update managed Service metadata",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59088,6 +60656,9 @@
           }
         ],
         "summary": "Apply a managed Docker Swarm Service and stream progress",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59215,6 +60786,9 @@
           }
         ],
         "summary": "Preview Service Backup volumes",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59342,6 +60916,9 @@
           }
         ],
         "summary": "Check the applied Service image for updates",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59449,6 +61026,9 @@
           }
         ],
         "summary": "Prepare a managed Service duplicate",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59576,6 +61156,9 @@
           }
         ],
         "summary": "Force a managed Docker Swarm Service task update and stream progress",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59693,6 +61276,9 @@
           }
         ],
         "summary": "Inspect the deployed managed Service",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59842,6 +61428,9 @@
           }
         ],
         "summary": "Read managed Service logs",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -59979,6 +61568,9 @@
           }
         ],
         "summary": "Scale a managed Docker Swarm Service and stream progress",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60086,6 +61678,9 @@
           }
         ],
         "summary": "Get SwarmService tags",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60200,6 +61795,9 @@
           }
         ],
         "summary": "Replace SwarmService tags",
+        "tags": [
+          "SwarmServices"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60286,6 +61884,9 @@
           }
         ],
         "summary": "List resource tags",
+        "tags": [
+          "Tags"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60400,6 +62001,9 @@
           }
         ],
         "summary": "Create a resource tag",
+        "tags": [
+          "Tags"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60500,6 +62104,9 @@
           }
         ],
         "summary": "Delete a resource tag",
+        "tags": [
+          "Tags"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60625,6 +62232,9 @@
           }
         ],
         "summary": "Update a resource tag",
+        "tags": [
+          "Tags"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -60724,6 +62334,9 @@
           }
         ],
         "summary": "Delete Teams",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -60841,6 +62454,9 @@
           }
         ],
         "summary": "Get all Teams",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -60945,6 +62561,9 @@
           }
         ],
         "summary": "Create a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61061,6 +62680,9 @@
           }
         ],
         "summary": "Rename a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61169,6 +62791,9 @@
           }
         ],
         "summary": "Search Teams for assignment",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61276,6 +62901,9 @@
           }
         ],
         "summary": "Get a Team by ID",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61296,6 +62924,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchTeamRequest"
               }
@@ -61391,6 +63024,9 @@
           }
         ],
         "summary": "Update a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61518,6 +63154,9 @@
           }
         ],
         "summary": "Add an Actor to a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61634,6 +63273,9 @@
           }
         ],
         "summary": "Remove an Actor from a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61751,6 +63393,9 @@
           }
         ],
         "summary": "Remove a resource override from a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -61876,6 +63521,9 @@
           }
         ],
         "summary": "Add a resource override to a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62003,6 +63651,9 @@
           }
         ],
         "summary": "Assign a Role to a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62119,6 +63770,9 @@
           }
         ],
         "summary": "Remove a Role from a Team",
+        "tags": [
+          "Teams"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62218,6 +63872,9 @@
           }
         ],
         "summary": "Delete Users",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62335,6 +63992,9 @@
           }
         ],
         "summary": "Get all Users",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62439,6 +64099,9 @@
           }
         ],
         "summary": "Create a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62555,6 +64218,9 @@
           }
         ],
         "summary": "Rename a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62663,6 +64329,9 @@
           }
         ],
         "summary": "Search Users for assignment",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62770,6 +64439,9 @@
           }
         ],
         "summary": "Get a User by ID",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62790,6 +64462,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserRequest"
+              }
+            },
+            "application/merge-patch+json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchUserRequest"
               }
@@ -62895,6 +64572,9 @@
           }
         ],
         "summary": "Update a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -62995,6 +64675,9 @@
           }
         ],
         "summary": "Reset a user's MFA",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -63112,6 +64795,9 @@
           }
         ],
         "summary": "Remove a resource override from a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -63237,6 +64923,9 @@
           }
         ],
         "summary": "Add a resource override to a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -63364,6 +65053,9 @@
           }
         ],
         "summary": "Assign a Role to a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -63480,6 +65172,9 @@
           }
         ],
         "summary": "Remove a Role from a User",
+        "tags": [
+          "Users"
+        ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
@@ -63589,6 +65284,9 @@
           }
         ],
         "summary": "Delete Volumes",
+        "tags": [
+          "Volumes"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -63703,6 +65401,9 @@
           }
         ],
         "summary": "Create a Volume",
+        "tags": [
+          "Volumes"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -63834,6 +65535,9 @@
           }
         ],
         "summary": "List Platform Volumes",
+        "tags": [
+          "Volumes"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -63957,6 +65661,9 @@
           }
         ],
         "summary": "Inspect a Platform Volume",
+        "tags": [
+          "Volumes"
+        ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": false
@@ -64019,6 +65726,9 @@
         },
         "security": [],
         "summary": "Process liveness",
+        "tags": [
+          "Diagnostics"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": true,
         "x-citadel-setup-exempt": true
@@ -64164,6 +65874,9 @@
         },
         "security": [],
         "summary": "Receive a provider webhook delivery",
+        "tags": [
+          "WebhookListener"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": true
@@ -64219,6 +65932,9 @@
         },
         "security": [],
         "summary": "OpenMetrics diagnostics",
+        "tags": [
+          "Diagnostics"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": true
@@ -64291,6 +66007,9 @@
         },
         "security": [],
         "summary": "Dependency readiness",
+        "tags": [
+          "Diagnostics"
+        ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": true

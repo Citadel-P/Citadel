@@ -52,6 +52,7 @@ fn storage(error: RuntimeCapabilityError) -> IdentityError {
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats",
     operation_id = "getSwarmTaskStats",
+    tag = "Platforms",
     summary = "Get current Task statistics",
     responses(
         (status = 200, description = "Success", body = TaskHistory, content_type = "application/json"),
@@ -158,6 +159,7 @@ pub(super) async fn task(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats",
     operation_id = "getSwarmServiceStats",
+    tag = "Platforms",
     summary = "Get Service statistics and node coverage",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceStatsView"), content_type = "application/json"),
@@ -239,6 +241,7 @@ pub(super) async fn service(
     get,
     path = "/api/v1/containers/{id}/stats",
     operation_id = "getContainerStats",
+    tag = "Containers",
     summary = "Get Container statistics",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
@@ -292,6 +295,7 @@ pub(super) async fn container(
     get,
     path = "/api/v1/platforms/{id}/stats",
     operation_id = "getPlatformStats",
+    tag = "Platforms",
     summary = "Get Platform statistics",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/PlatformStatsView"), content_type = "application/json"),
@@ -335,6 +339,7 @@ pub(super) async fn platform(
     get,
     path = "/api/v1/deployments/{id}/stats",
     operation_id = "getDeploymentStats",
+    tag = "Deployments",
     summary = "Get Deployment statistics",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
@@ -365,6 +370,7 @@ pub(super) async fn deployment(
     get,
     path = "/api/v1/stacks/{stackId}/stats",
     operation_id = "getStackStats",
+    tag = "Stacks",
     summary = "Get Stack Container statistics",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/StackStatsView"), content_type = "application/json"),

@@ -6,6 +6,7 @@ use citadel_backups::progress::{BackupRunStreamItem, is_terminal};
     post,
     path = "/api/v1/backupPolicies/{id}/run",
     operation_id = "runBackupPolicy",
+    tag = "BackupPolicies",
     summary = "Run a Backup Policy with progress",
     request_body = QueueInput,
     responses(
@@ -45,6 +46,7 @@ pub(super) async fn run_backup(
     post,
     path = "/api/v1/backupRuns/{id}/restoreVolume/run",
     operation_id = "runBackupRestoreVolume",
+    tag = "BackupRuns",
     summary = "Restore a Backup Volume with progress",
     request_body = RestoreInput,
     responses(

@@ -2,12 +2,13 @@
 use std::sync::LazyLock;
 use utoipa::openapi::{
     Components, Info, OpenApi, Paths,
-    security::{Http, HttpAuthScheme, SecurityScheme},
+    security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
 pub(crate) mod compatibility;
 pub(crate) mod errors;
 pub(crate) mod router;
+pub mod serving;
 
 pub fn document(public_only: bool) -> OpenApi {
     let mut api = OpenApi::new(
@@ -24,7 +25,10 @@ pub fn document(public_only: bool) -> OpenApi {
     api.components = Some(Components::new());
     api.components.as_mut().unwrap().add_security_scheme(
         "Bearer",
-        SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+        SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer)
+            .bearer_format("Citadel JWT or cit_sa_ Service Account token")
+            .description(Some("Use a Citadel User JWT or Service Account bearer token in the Authorization header."))
+            .build()),
     );
     api.merge(crate::automation_http::documented_routes().into_openapi());
     api.merge(crate::stacks_http::documented_routes().into_openapi());
@@ -344,6 +348,143 @@ mod tests {
                     "{owner}: {webhook}"
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn documents_authentication_cookies_security_and_rate_limits() {
+        let doc = serde_json::to_value(document(false)).unwrap();
+        let bearer = &doc["components"]["securitySchemes"]["Bearer"];
+        assert_eq!(bearer["scheme"], "bearer");
+        assert!(bearer["bearerFormat"].as_str().unwrap().contains("cit_sa_"));
+        assert!(
+            bearer["description"]
+                .as_str()
+                .unwrap()
+                .contains("Service Account")
+        );
+        for (route, method, cookie) in [
+            ("refresh", "get", "refresh_token"),
+            ("logout", "post", "refresh_token"),
+            ("mfa/verify", "post", "citadel_mfa_challenge"),
+            ("mfa/setup", "get", "citadel_mfa_setup"),
+            ("mfa/setup/confirm", "post", "citadel_mfa_setup"),
+        ] {
+            let op = &doc["paths"][format!("/api/v1/authentication/{route}")][method];
+            assert!(
+                op["parameters"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|p| p["name"] == cookie && p["in"] == "cookie" && p["required"] == true)
+            );
+        }
+        for (route, method, status) in [
+            ("login", "post", "200"),
+            ("refresh", "get", "200"),
+            ("logout", "post", "204"),
+            ("mfa/verify", "post", "200"),
+            ("mfa/setup/confirm", "post", "200"),
+            ("oidc/{id}/callback", "get", "302"),
+        ] {
+            let header = &doc["paths"][format!("/api/v1/authentication/{route}")][method]["responses"]
+                [status]["headers"]["Set-Cookie"];
+            assert_eq!(header["schema"]["type"], "string", "{route}");
+            assert!(
+                header["description"]
+                    .as_str()
+                    .unwrap()
+                    .contains("refresh_token")
+            );
+        }
+        for item in doc["paths"].as_object().unwrap().values() {
+            for op in item
+                .as_object()
+                .unwrap()
+                .values()
+                .filter(|v| v.get("operationId").is_some())
+            {
+                assert!(op["responses"]["429"]["content"]["application/problem+json"].is_object());
+            }
+        }
+    }
+
+    #[test]
+    fn operations_are_grouped_and_merge_patch_is_explicit() {
+        for public in [false, true] {
+            let doc = serde_json::to_value(document(public)).unwrap();
+            for item in doc["paths"].as_object().unwrap().values() {
+                for op in item
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .filter(|op| op.get("operationId").is_some())
+                {
+                    let tags = op["tags"].as_array().expect("operation has tags");
+                    assert!(!tags.is_empty());
+                    assert!(!tags.contains(&json!("default")));
+                }
+            }
+            for (path, tag) in [
+                ("/api/v1/deployments/{id}", "Deployments"),
+                ("/api/v1/stacks/{id}", "Stacks"),
+            ] {
+                let op = &doc["paths"][path]["patch"];
+                assert_eq!(op["tags"], json!([tag]));
+                let content = &op["requestBody"]["content"];
+                assert!(content["application/merge-patch+json"].is_object());
+                assert_eq!(
+                    content["application/merge-patch+json"],
+                    content["application/json"]
+                );
+            }
+            assert!(
+                doc["paths"]["/api/v1/containers/start"]["patch"]["requestBody"]["content"]
+                    .get("application/merge-patch+json")
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn registry_examples_are_valid_requests_in_both_documents() {
+        for public in [false, true] {
+            let doc = serde_json::to_value(document(public)).unwrap();
+            for (route, method) in [
+                ("/api/v1/registries", "post"),
+                ("/api/v1/registries/{id}", "patch"),
+            ] {
+                let content = doc["paths"][route][method]["requestBody"]["content"]
+                    .as_object()
+                    .unwrap();
+                for media in content.values() {
+                    let examples = media["examples"].as_object().unwrap();
+                    assert_eq!(examples.len(), 6);
+                    for (name, example) in examples {
+                        let value: Value = example["value"].clone();
+                        let mut create: citadel_resources::NewRegistry =
+                            serde_json::from_value(value.clone()).unwrap();
+                        create
+                            .validate()
+                            .unwrap_or_else(|error| panic!("{name}: {error}"));
+                        let _: citadel_resources::RegistryPatch =
+                            serde_json::from_value(value).unwrap();
+                    }
+                }
+                if method == "patch" {
+                    assert!(content.contains_key("application/merge-patch+json"));
+                }
+            }
+            assert_eq!(
+                doc["components"]["securitySchemes"]["Bearer"]["type"],
+                json!("http")
+            );
         }
     }
 }

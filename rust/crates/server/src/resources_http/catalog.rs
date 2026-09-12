@@ -1,3 +1,5 @@
+mod registry_examples;
+
 use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -118,6 +120,7 @@ struct CatalogFilters {
     get,
     path = "/api/v1/registries",
     operation_id = "listRegistries",
+    tag = "Registries",
     summary = "List Registries",
     responses(
         (status = 200, description = "Success", body = RegistriesResponse, content_type = "application/json"),
@@ -178,6 +181,7 @@ async fn list_registries(
     get,
     path = "/api/v1/registries/{id}",
     operation_id = "getRegistry",
+    tag = "Registries",
     summary = "Get a Registry",
     responses(
         (status = 200, description = "Success", body = AuthorizedRegistryView, content_type = "application/json"),
@@ -227,6 +231,7 @@ async fn get_registry(
     get,
     path = "/api/v1/registries/{id}/_cfg",
     operation_id = "getRegistryConfig",
+    tag = "Registries",
     summary = "Get Registry configuration",
     responses(
         (status = 200, description = "Success", body = RegistryConfigResponse, content_type = "application/json"),
@@ -272,8 +277,16 @@ async fn get_registry_config(
     post,
     path = "/api/v1/registries",
     operation_id = "createRegistry",
+    tag = "Registries",
     summary = "Create a Registry",
-    request_body = NewRegistry,
+    request_body(content = NewRegistry, examples(
+            ("Azure" = (value = json!(registry_examples::azure()))),
+            ("AWS" = (value = json!(registry_examples::aws()))),
+            ("Gitlab" = (value = json!(registry_examples::gitlab()))),
+            ("DockerHub" = (value = json!(registry_examples::dockerhub()))),
+            ("GitHub" = (value = json!(registry_examples::github()))),
+            ("Custom" = (value = json!(registry_examples::custom())))
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -315,8 +328,27 @@ async fn create_registry(
     patch,
     path = "/api/v1/registries/{id}",
     operation_id = "updateRegistry",
+    tag = "Registries",
     summary = "Update a Registry",
-    request_body = RegistryPatch,
+    request_body(content(
+        (RegistryPatch = "application/json", examples(
+            ("Azure" = (value = json!(registry_examples::azure()))),
+            ("AWS" = (value = json!(registry_examples::aws()))),
+            ("Gitlab" = (value = json!(registry_examples::gitlab()))),
+            ("DockerHub" = (value = json!(registry_examples::dockerhub()))),
+            ("GitHub" = (value = json!(registry_examples::github()))),
+            ("Custom" = (value = json!(registry_examples::custom())))
+        )),
+        (RegistryPatch = "application/merge-patch+json", examples(
+            ("Azure" = (value = json!(registry_examples::azure()))),
+            ("AWS" = (value = json!(registry_examples::aws()))),
+            ("Gitlab" = (value = json!(registry_examples::gitlab()))),
+            ("DockerHub" = (value = json!(registry_examples::dockerhub()))),
+            ("GitHub" = (value = json!(registry_examples::github()))),
+            ("Custom" = (value = json!(registry_examples::custom())))
+        ))
+    )),
+
     responses(
         (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -384,8 +416,12 @@ async fn mutate_registry(
     patch,
     path = "/api/v1/registries/{id}/_metadata",
     operation_id = "updateRegistryMetadata",
+    tag = "Registries",
     summary = "Update Registry metadata",
-    request_body = PatchResourceMetadataInput,
+    request_body(content(
+        (PatchResourceMetadataInput = "application/merge-patch+json"),
+        (PatchResourceMetadataInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -420,6 +456,7 @@ async fn update_registry_metadata(
     post,
     path = "/api/v1/registries/rename",
     operation_id = "renameRegistry",
+    tag = "Registries",
     summary = "Rename a Registry",
     request_body = RenameResourceInput,
     responses(
@@ -454,6 +491,7 @@ async fn rename_registry(
     delete,
     path = "/api/v1/registries",
     operation_id = "deleteRegistries",
+    tag = "Registries",
     summary = "Delete Registries",
     request_body = DeleteResourcesInput,
     responses(
@@ -508,6 +546,7 @@ async fn delete_registries(
     get,
     path = "/api/v1/gitRepositories",
     operation_id = "listGitRepositories",
+    tag = "GitRepositories",
     summary = "List Git repositories",
     responses(
         (status = 200, description = "Success", body = GitRepositoriesResponse, content_type = "application/json"),
@@ -573,6 +612,7 @@ async fn list_git_repositories(
     get,
     path = "/api/v1/gitRepositories/{id}",
     operation_id = "getGitRepository",
+    tag = "GitRepositories",
     summary = "Get a Git repository",
     responses(
         (status = 200, description = "Success", body = AuthorizedGitRepositoryView, content_type = "application/json"),
@@ -621,6 +661,7 @@ async fn get_git_repository(
     get,
     path = "/api/v1/gitRepositories/{id}/_cfg",
     operation_id = "getGitRepositoryConfig",
+    tag = "GitRepositories",
     summary = "Get Git repository configuration",
     responses(
         (status = 200, description = "Success", body = GitRepositoryConfigResponse, content_type = "application/json"),
@@ -671,6 +712,7 @@ async fn get_git_repository_config(
     post,
     path = "/api/v1/gitRepositories",
     operation_id = "createGitRepository",
+    tag = "GitRepositories",
     summary = "Create a Git repository",
     request_body = NewGitRepository,
     responses(
@@ -714,8 +756,12 @@ async fn create_git_repository(
     patch,
     path = "/api/v1/gitRepositories/{id}",
     operation_id = "updateGitRepository",
+    tag = "GitRepositories",
     summary = "Update a Git repository",
-    request_body = GitRepositoryPatch,
+    request_body(content(
+        (GitRepositoryPatch = "application/merge-patch+json"),
+        (GitRepositoryPatch = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -782,8 +828,12 @@ async fn mutate_git_repository(
     patch,
     path = "/api/v1/gitRepositories/{id}/_metadata",
     operation_id = "updateGitRepositoryMetadata",
+    tag = "GitRepositories",
     summary = "Update Git repository metadata",
-    request_body = PatchResourceMetadataInput,
+    request_body(content(
+        (PatchResourceMetadataInput = "application/merge-patch+json"),
+        (PatchResourceMetadataInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -818,6 +868,7 @@ async fn update_git_repository_metadata(
     post,
     path = "/api/v1/gitRepositories/rename",
     operation_id = "renameGitRepository",
+    tag = "GitRepositories",
     summary = "Rename a Git repository",
     request_body = RenameResourceInput,
     responses(
@@ -852,6 +903,7 @@ async fn rename_git_repository(
     delete,
     path = "/api/v1/gitRepositories",
     operation_id = "deleteGitRepositories",
+    tag = "GitRepositories",
     summary = "Delete Git repositories",
     request_body = DeleteResourcesInput,
     responses(

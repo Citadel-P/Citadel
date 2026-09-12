@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
     get,
     path = "/api/v1/containers/{id}/adoption-draft",
     operation_id = "getContainerAdoptionDraft",
+    tag = "Containers",
     summary = "Review adoption of an unmanaged Container",
     responses(
         (status = 200, description = "Success", body = citadel_deployments::adoption::ContainerAdoptionDraft, content_type = "application/json"),
@@ -63,6 +64,7 @@ pub(super) async fn draft(
     post,
     path = "/api/v1/containers/{id}/adopt",
     operation_id = "adoptContainer",
+    tag = "Containers",
     summary = "Adopt a Container without changing Docker",
     request_body = AdoptContainerInput,
     responses(

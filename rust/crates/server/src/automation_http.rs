@@ -136,6 +136,7 @@ struct LimitQuery {
     get,
     path = "/api/v1/automation/actions",
     operation_id = "listAutomationActions",
+    tag = "AutomationActions",
     summary = "List Automation Actions",
     responses(
         (status = 200, description = "Success", body = ActionList, content_type = "application/json"),
@@ -197,6 +198,7 @@ async fn list(
     post,
     path = "/api/v1/automation/actions",
     operation_id = "createAutomationAction",
+    tag = "AutomationActions",
     summary = "Create an Automation Action",
     request_body = AutomationActionInput,
     responses(
@@ -261,6 +263,7 @@ async fn create(
     get,
     path = "/api/v1/automation/actions/{id}",
     operation_id = "getAutomationAction",
+    tag = "AutomationActions",
     summary = "Get an Automation Action",
     responses(
         (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
@@ -289,6 +292,7 @@ async fn get_one(
     post,
     path = "/api/v1/automation/actions/rename",
     operation_id = "renameAutomationAction",
+    tag = "AutomationActions",
     summary = "Rename an Automation Action",
     request_body = RenameInput,
     responses(
@@ -329,8 +333,12 @@ async fn rename(
     patch,
     path = "/api/v1/automation/actions/{id}",
     operation_id = "updateAutomationAction",
+    tag = "AutomationActions",
     summary = "Update an Automation Action",
-    request_body = UpdateAutomationActionInput,
+    request_body(content(
+        (UpdateAutomationActionInput = "application/merge-patch+json"),
+        (UpdateAutomationActionInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -361,8 +369,12 @@ async fn update(
     patch,
     path = "/api/v1/automation/actions/{id}/_metadata",
     operation_id = "updateAutomationActionMetadata",
+    tag = "AutomationActions",
     summary = "Update Automation Action metadata",
-    request_body = UpdateAutomationActionMetadata,
+    request_body(content(
+        (UpdateAutomationActionMetadata = "application/merge-patch+json"),
+        (UpdateAutomationActionMetadata = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_automation::AutomationActionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -455,6 +467,7 @@ async fn update_action(
     delete,
     path = "/api/v1/automation/actions/{id}",
     operation_id = "deleteAutomationAction",
+    tag = "AutomationActions",
     summary = "Delete an Automation Action",
     responses(
         (status = 204, description = "Success"),
@@ -488,6 +501,7 @@ async fn remove(
     post,
     path = "/api/v1/automation/actions/{id}/run",
     operation_id = "runAutomationAction",
+    tag = "AutomationActions",
     summary = "Queue an Automation Action run",
     request_body = Option<RunInput>,
     responses(
@@ -512,6 +526,7 @@ async fn run_action(
     post,
     path = "/api/v1/automation/actions/{id}/test",
     operation_id = "testAutomationAction",
+    tag = "AutomationActions",
     summary = "Queue a test Automation Action run",
     request_body = Option<RunInput>,
     responses(
@@ -625,6 +640,7 @@ async fn enqueue(
     get,
     path = "/api/v1/automation/actions/{id}/runs",
     operation_id = "listAutomationActionRuns",
+    tag = "AutomationActions",
     summary = "List Automation Action runs",
     responses(
         (status = 200, description = "Success", body = RunList, content_type = "application/json"),
@@ -659,6 +675,7 @@ async fn list_runs(
     get,
     path = "/api/v1/automation/actions/{id}/runs/{runId}",
     operation_id = "getAutomationActionRun",
+    tag = "AutomationActions",
     summary = "Get an Automation Action run",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/AutomationActionRunView"), content_type = "application/json"),
@@ -692,6 +709,7 @@ async fn get_run(
     get,
     path = "/api/v1/automation/actions/{id}/runs/{runId}/logs",
     operation_id = "getAutomationActionRunLogs",
+    tag = "AutomationActions",
     summary = "Get Automation Action run logs",
     responses(
         (status = 200, description = "Success", body = AutomationActionRunLogsView, content_type = "application/json"),
@@ -731,6 +749,7 @@ async fn run_logs(
     post,
     path = "/api/v1/automation/actions/{id}/runs/{runId}/cancel",
     operation_id = "cancelAutomationActionRun",
+    tag = "AutomationActions",
     summary = "Cancel an Automation Action run",
     responses(
         (status = 204, description = "Success"),

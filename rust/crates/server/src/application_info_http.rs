@@ -31,6 +31,7 @@ pub fn router() -> Router {
     get,
     path = "/api/v1/application/info",
     operation_id = "getApplicationInfo",
+    tag = "Application",
     summary = "Get application information",
     responses(
         (status = 200, description = "Success", body = crate::application_info_http::ApplicationInfoView, content_type = "application/json"),

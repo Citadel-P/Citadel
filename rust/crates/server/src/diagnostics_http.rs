@@ -30,6 +30,7 @@ pub fn router(state: DiagnosticsHttpState) -> Router {
     get,
     path = "/health",
     operation_id = "getHealth",
+    tag = "Diagnostics",
     summary = "Process liveness",
     responses(
         (status = 200, description = "Success", body = HealthResponse, content_type = "application/json"),
@@ -46,6 +47,7 @@ async fn health() -> axum::Json<HealthResponse> {
     get,
     path = "/ready",
     operation_id = "getReadiness",
+    tag = "Diagnostics",
     summary = "Dependency readiness",
     responses(
         (status = 200, description = "Success", body = crate::ReadinessResponse, content_type = "application/json"),
@@ -68,6 +70,7 @@ async fn ready(State(state): State<DiagnosticsHttpState>) -> Response {
     get,
     path = "/metrics",
     operation_id = "getMetrics",
+    tag = "Diagnostics",
     summary = "OpenMetrics diagnostics",
     responses(
         (status = 200, description = "Success"),

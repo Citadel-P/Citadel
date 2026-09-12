@@ -92,6 +92,7 @@ struct EventFilter {
     get,
     path = "/api/v1/alertRules/channels",
     operation_id = "listAlertChannels",
+    tag = "AlertRules",
     summary = "List Alert Channels",
     responses(
         (status = 200, description = "Success", body = Channels, content_type = "application/json"),
@@ -118,6 +119,7 @@ async fn list_channels(
     post,
     path = "/api/v1/alertRules/channels",
     operation_id = "createAlertChannel",
+    tag = "AlertRules",
     summary = "Create an Alert Channel",
     request_body = AlertChannelInput,
     responses(
@@ -151,6 +153,7 @@ async fn create_channel(
     get,
     path = "/api/v1/alertRules/channels/{id}",
     operation_id = "getAlertChannel",
+    tag = "AlertRules",
     summary = "Get an Alert Channel",
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertChannelView, content_type = "application/json"),
@@ -184,8 +187,12 @@ async fn get_channel(
     patch,
     path = "/api/v1/alertRules/channels/{id}",
     operation_id = "updateAlertChannel",
+    tag = "AlertRules",
     summary = "Update an Alert Channel",
-    request_body = citadel_alerts::AlertChannelInput,
+    request_body(content(
+        (citadel_alerts::AlertChannelInput = "application/merge-patch+json"),
+        (citadel_alerts::AlertChannelInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertChannelView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -219,6 +226,7 @@ async fn update_channel(
     delete,
     path = "/api/v1/alertRules/channels",
     operation_id = "deleteAlertChannels",
+    tag = "AlertRules",
     summary = "Delete Alert Channels",
     request_body = Ids,
     responses(
@@ -251,6 +259,7 @@ async fn delete_channels(
     post,
     path = "/api/v1/alertRules/channels/verify",
     operation_id = "verifyAlertChannel",
+    tag = "AlertRules",
     summary = "Verify an Alert Channel",
     request_body = VerifyInput,
     responses(
@@ -305,6 +314,7 @@ async fn verify_channel(
     get,
     path = "/api/v1/alertRules",
     operation_id = "listAlertRules",
+    tag = "AlertRules",
     summary = "List Alert Rules",
     responses(
         (status = 200, description = "Success", body = Rules, content_type = "application/json"),
@@ -333,6 +343,7 @@ async fn list_rules(
     post,
     path = "/api/v1/alertRules",
     operation_id = "createAlertRule",
+    tag = "AlertRules",
     summary = "Create an Alert Rule",
     request_body = AlertRuleInput,
     responses(
@@ -367,6 +378,7 @@ async fn create_rule(
     get,
     path = "/api/v1/alertRules/{id}",
     operation_id = "getAlertRule",
+    tag = "AlertRules",
     summary = "Get an Alert Rule",
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
@@ -400,6 +412,7 @@ async fn get_rule(
     get,
     path = "/api/v1/alertRules/{id}/_cfg",
     operation_id = "getAlertRuleConfig",
+    tag = "AlertRules",
     summary = "Get Alert Rule configuration",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/AlertRuleConfigView"), content_type = "application/json"),
@@ -442,6 +455,7 @@ async fn get_rule_config(
     post,
     path = "/api/v1/alertRules/rename",
     operation_id = "renameAlertRule",
+    tag = "AlertRules",
     summary = "Rename an Alert Rule",
     request_body = citadel_alerts::RenameAlertRuleInput,
     responses(
@@ -477,8 +491,12 @@ async fn rename_rule(
     patch,
     path = "/api/v1/alertRules/{id}/_metadata",
     operation_id = "updateAlertRuleMetadata",
+    tag = "AlertRules",
     summary = "Update Alert Rule metadata",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body(content(
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -518,8 +536,12 @@ async fn update_rule_metadata(
     patch,
     path = "/api/v1/alertRules/{id}",
     operation_id = "updateAlertRule",
+    tag = "AlertRules",
     summary = "Update an Alert Rule",
-    request_body = ref("#/components/schemas/PatchAlertRuleInput"),
+    request_body(content(
+        (ref("#/components/schemas/PatchAlertRuleInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchAlertRuleInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -557,6 +579,7 @@ async fn update_rule(
     delete,
     path = "/api/v1/alertRules",
     operation_id = "deleteAlertRules",
+    tag = "AlertRules",
     summary = "Delete Alert Rules",
     request_body = Ids,
     responses(
@@ -589,6 +612,7 @@ async fn delete_rules(
     get,
     path = "/api/v1/alertEvents",
     operation_id = "listAlertEvents",
+    tag = "AlertEvents",
     summary = "List Alert Events",
     responses(
         (status = 200, description = "Success", body = Events, content_type = "application/json"),
@@ -625,6 +649,7 @@ async fn list_events(
     get,
     path = "/api/v1/alertEvents/{id}",
     operation_id = "getAlertEvent",
+    tag = "AlertEvents",
     summary = "Get an Alert Event",
     responses(
         (status = 200, description = "Success", body = citadel_alerts::AlertEventView, content_type = "application/json"),
@@ -658,6 +683,7 @@ async fn get_event(
     get,
     path = "/api/v1/alertEvents/unresolved-count",
     operation_id = "getUnresolvedAlertEventsCount",
+    tag = "AlertEvents",
     summary = "Count unresolved Alert Events",
     responses(
         (status = 200, description = "Success", body = Count, content_type = "application/json"),
@@ -688,6 +714,7 @@ async fn unresolved_count(
     post,
     path = "/api/v1/alertEvents/acknowledge",
     operation_id = "acknowledgeAlertEvents",
+    tag = "AlertEvents",
     summary = "Acknowledge Alert Events",
     request_body = Ids,
     responses(
@@ -720,6 +747,7 @@ async fn acknowledge(
     post,
     path = "/api/v1/alertEvents/resolve",
     operation_id = "resolveAlertEvents",
+    tag = "AlertEvents",
     summary = "Resolve Alert Events",
     request_body = ResolveInput,
     responses(

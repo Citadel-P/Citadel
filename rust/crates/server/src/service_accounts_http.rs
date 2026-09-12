@@ -60,6 +60,7 @@ struct ListFilter {
     get,
     path = "/api/v1/serviceAccounts",
     operation_id = "listServiceAccounts",
+    tag = "ServiceAccounts",
     summary = "List Service Accounts",
     responses(
         (status = 200, description = "Success", body = ServiceAccountsResponse, content_type = "application/json"),
@@ -105,6 +106,7 @@ async fn list(
     get,
     path = "/api/v1/serviceAccounts/{id}",
     operation_id = "getServiceAccount",
+    tag = "ServiceAccounts",
     summary = "Get a Service Account",
     responses(
         (status = 200, description = "Success", body = ServiceAccountDetailResponse, content_type = "application/json"),
@@ -137,6 +139,7 @@ async fn get_one(
     post,
     path = "/api/v1/serviceAccounts",
     operation_id = "createServiceAccount",
+    tag = "ServiceAccounts",
     summary = "Create a Service Account",
     request_body = CreateServiceAccountRequest,
     responses(
@@ -179,8 +182,12 @@ async fn create(
     patch,
     path = "/api/v1/serviceAccounts/{id}",
     operation_id = "updateServiceAccount",
+    tag = "ServiceAccounts",
     summary = "Update a Service Account",
-    request_body = UpdateServiceAccountRequest,
+    request_body(content(
+        (UpdateServiceAccountRequest = "application/merge-patch+json"),
+        (UpdateServiceAccountRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
@@ -224,6 +231,7 @@ async fn update(
     get,
     path = "/api/v1/serviceAccounts/{id}/usages",
     operation_id = "listServiceAccountUsages",
+    tag = "ServiceAccounts",
     summary = "List Service Account execution usages",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/RunAsActorUsageList"), content_type = "application/json"),
@@ -261,6 +269,7 @@ async fn usages(
     post,
     path = "/api/v1/serviceAccounts/rename",
     operation_id = "renameServiceAccount",
+    tag = "ServiceAccounts",
     summary = "Rename a Service Account",
     request_body = RenameServiceAccountRequest,
     responses(
@@ -304,6 +313,7 @@ async fn rename(
     delete,
     path = "/api/v1/serviceAccounts",
     operation_id = "archiveServiceAccounts",
+    tag = "ServiceAccounts",
     summary = "Archive Service Accounts",
     request_body = ArchiveServiceAccountsRequest,
     responses(
@@ -346,6 +356,7 @@ async fn archive(
     post,
     path = "/api/v1/serviceAccounts/{id}/roles",
     operation_id = "addServiceAccountRole",
+    tag = "ServiceAccounts",
     summary = "Assign a Role to a Service Account",
     request_body = AddServiceAccountRoleRequest,
     responses(
@@ -391,6 +402,7 @@ async fn add_role(
     delete,
     path = "/api/v1/serviceAccounts/{id}/roles/{roleId}",
     operation_id = "removeServiceAccountRole",
+    tag = "ServiceAccounts",
     summary = "Remove a Role from a Service Account",
     responses(
         (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
@@ -434,6 +446,7 @@ async fn remove_role(
     post,
     path = "/api/v1/serviceAccounts/{id}/resource-accesses",
     operation_id = "addServiceAccountResourceAccess",
+    tag = "ServiceAccounts",
     summary = "Add a resource override to a Service Account",
     request_body = AddServiceAccountResourceAccessRequest,
     responses(
@@ -479,6 +492,7 @@ async fn add_resource_access(
     delete,
     path = "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}",
     operation_id = "removeServiceAccountResourceAccess",
+    tag = "ServiceAccounts",
     summary = "Remove a resource override from a Service Account",
     responses(
         (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
@@ -522,6 +536,7 @@ async fn remove_resource_access(
     get,
     path = "/api/v1/serviceAccounts/limits",
     operation_id = "getServiceAccountLimits",
+    tag = "ServiceAccounts",
     summary = "Get Service Account limits",
     responses(
         (status = 200, description = "Success", body = citadel_identity::ServiceAccountLimitsView, content_type = "application/json"),
@@ -547,6 +562,7 @@ async fn limits(
     get,
     path = "/api/v1/serviceAccounts/{id}/tokens",
     operation_id = "listServiceAccountTokens",
+    tag = "ServiceAccounts",
     summary = "List Service Account tokens",
     responses(
         (status = 200, description = "Success", body = ServiceAccountTokensResponse, content_type = "application/json"),
@@ -591,6 +607,7 @@ async fn list_tokens(
     post,
     path = "/api/v1/serviceAccounts/{id}/tokens",
     operation_id = "createServiceAccountToken",
+    tag = "ServiceAccounts",
     summary = "Create a Service Account token",
     request_body = CreateServiceAccountTokenRequest,
     responses(
@@ -643,6 +660,7 @@ async fn create_token(
     delete,
     path = "/api/v1/serviceAccounts/{id}/tokens/{tokenId}",
     operation_id = "revokeServiceAccountToken",
+    tag = "ServiceAccounts",
     summary = "Revoke a Service Account token",
     responses(
         (status = 204, description = "Success"),

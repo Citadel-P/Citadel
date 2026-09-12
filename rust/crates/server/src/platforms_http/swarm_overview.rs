@@ -4,6 +4,7 @@ use super::*;
     get,
     path = "/api/v1/platforms/{platformId}/swarm",
     operation_id = "getSwarmOverview",
+    tag = "Platforms",
     summary = "Get Swarm inventory health and quorum",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::swarm_overview::SwarmOverviewView, content_type = "application/json"),

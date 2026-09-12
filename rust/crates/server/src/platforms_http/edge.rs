@@ -44,6 +44,7 @@ setup_handler!(
     post,
     path = "/api/v1/platforms/{id}/node-agents/install",
     operation_id = "installSwarmNodeAgents",
+    tag = "Platforms",
     summary = "Install Docker Swarm node agents",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
@@ -61,6 +62,7 @@ setup_handler!(
     post,
     path = "/api/v1/platforms/{id}/node-agents/repair",
     operation_id = "repairSwarmNodeAgents",
+    tag = "Platforms",
     summary = "Repair Docker Swarm node-agent coverage",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
@@ -78,6 +80,7 @@ setup_handler!(
     post,
     path = "/api/v1/platforms/{id}/node-agents/upgrade",
     operation_id = "upgradeSwarmNodeAgents",
+    tag = "Platforms",
     summary = "Upgrade Docker Swarm node agents",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
@@ -95,6 +98,7 @@ setup_handler!(
     delete,
     path = "/api/v1/platforms/{id}/node-agents",
     operation_id = "removeSwarmNodeAgents",
+    tag = "Platforms",
     summary = "Remove Docker Swarm node agents",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
@@ -268,6 +272,7 @@ pub(super) async fn initialize_swarm(
     get,
     path = "/api/v1/platforms/{id}/node-agent-coverage",
     operation_id = "getSwarmNodeAgentCoverage",
+    tag = "Platforms",
     summary = "Get Docker Swarm node-agent coverage",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeAgentCoverageView"), content_type = "application/json"),
@@ -341,6 +346,7 @@ pub(super) async fn node_coverage(
     post,
     path = "/api/v1/platforms/{id}/edge/enrollments",
     operation_id = "createEdgeAgentEnrollment",
+    tag = "Platforms",
     summary = "Create an Edge Agent enrollment token",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
@@ -371,6 +377,7 @@ pub(super) async fn enroll(
     get,
     path = "/api/v1/platforms/{id}/edge/status",
     operation_id = "getEdgeAgentStatus",
+    tag = "Platforms",
     summary = "Get Edge Agent connection status",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
@@ -402,6 +409,7 @@ pub(super) async fn status(
     post,
     path = "/api/v1/platforms/{id}/edge/revoke",
     operation_id = "revokeEdgeAgent",
+    tag = "Platforms",
     summary = "Revoke an Edge Agent binding",
     responses(
         (status = 204, description = "Success"),

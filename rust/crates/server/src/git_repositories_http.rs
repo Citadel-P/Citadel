@@ -84,6 +84,7 @@ impl From<RemoteBranch> for GitRepositoryBranchResponse {
     get,
     path = "/api/v1/gitRepositories/{id}/refs",
     operation_id = "getGitRepositoryRefs",
+    tag = "GitRepositories",
     summary = "Get synchronized Git repository references",
     responses(
         (status = 200, description = "Success", body = GitRepositoryRefsResponse, content_type = "application/json"),
@@ -114,6 +115,7 @@ async fn refs(
     get,
     path = "/api/v1/gitRepositories/{id}/files",
     operation_id = "listGitRepositoryDirectory",
+    tag = "GitRepositories",
     summary = "List files in an immutable Git tree",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryDirectoryListingView"), content_type = "application/json"),
@@ -152,6 +154,7 @@ async fn files(
     get,
     path = "/api/v1/gitRepositories/{id}/files/content",
     operation_id = "getGitRepositoryFileContent",
+    tag = "GitRepositories",
     summary = "Read a bounded immutable Git file",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryFileContentView"), content_type = "application/json"),
@@ -196,6 +199,7 @@ async fn file_content(
     get,
     path = "/api/v1/gitRepositories/{id}/compare",
     operation_id = "compareGitRepositoryCommits",
+    tag = "GitRepositories",
     summary = "Compare immutable Git commits",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/GitCommitComparisonView"), content_type = "application/json"),
@@ -234,6 +238,7 @@ async fn compare(
     get,
     path = "/api/v1/gitRepositories/{id}/branches",
     operation_id = "discoverGitRepositoryBranches",
+    tag = "GitRepositories",
     summary = "Discover remote Git branches",
     responses(
         (status = 200, description = "Success", body = GitRepositoryBranchesResponse, content_type = "application/json"),
@@ -271,6 +276,7 @@ async fn branches(
     get,
     path = "/api/v1/gitRepositories/{id}/compose-projects",
     operation_id = "discoverGitRepositoryComposeProjects",
+    tag = "GitRepositories",
     summary = "Discover Compose projects in a Git repository",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryComposeDiscovery"), content_type = "application/json"),
@@ -308,6 +314,7 @@ async fn compose_projects(
     post,
     path = "/api/v1/gitRepositories/{id}/sync",
     operation_id = "syncGitRepository",
+    tag = "GitRepositories",
     summary = "Queue Git repository synchronization",
     responses(
         (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),

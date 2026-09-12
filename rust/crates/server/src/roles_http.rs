@@ -47,6 +47,7 @@ struct RolesResponse {
     get,
     path = "/api/v1/roles",
     operation_id = "listRoles",
+    tag = "Roles",
     summary = "Get all Roles",
     responses(
         (status = 200, description = "Success", body = RolesResponse, content_type = "application/json"),
@@ -79,6 +80,7 @@ async fn list(
     get,
     path = "/api/v1/roles/{id}",
     operation_id = "getRole",
+    tag = "Roles",
     summary = "Get a Role by ID",
     responses(
         (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
@@ -107,6 +109,7 @@ async fn get(
     post,
     path = "/api/v1/roles",
     operation_id = "createRole",
+    tag = "Roles",
     summary = "Create a Role",
     request_body = CreateRoleRequest,
     responses(
@@ -138,8 +141,12 @@ async fn create(
     patch,
     path = "/api/v1/roles/{id}/permissions",
     operation_id = "updateRolePermissions",
+    tag = "Roles",
     summary = "Update Role permissions",
-    request_body = PatchRolePermissionsRequest,
+    request_body(content(
+        (PatchRolePermissionsRequest = "application/merge-patch+json"),
+        (PatchRolePermissionsRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -174,6 +181,7 @@ async fn patch_permissions(
     post,
     path = "/api/v1/roles/rename",
     operation_id = "renameRole",
+    tag = "Roles",
     summary = "Rename a Role",
     request_body = RenameRoleRequest,
     responses(
@@ -208,6 +216,7 @@ async fn rename(
     delete,
     path = "/api/v1/roles",
     operation_id = "deleteRoles",
+    tag = "Roles",
     summary = "Delete Roles",
     request_body = DeleteRolesRequest,
     responses(
@@ -275,6 +284,7 @@ async fn role_permission(
     get,
     path = "/api/v1/roles/permissions/matrix",
     operation_id = "getPermissionMatrix",
+    tag = "Roles",
     summary = "Get permission matrix",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/PermissionMatrixResponse"), content_type = "application/json"),

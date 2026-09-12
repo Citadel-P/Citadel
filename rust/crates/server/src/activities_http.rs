@@ -91,6 +91,7 @@ struct ActivitiesView {
     get,
     path = "/api/v1/activities/{id}",
     operation_id = "getActivity",
+    tag = "Activities",
     summary = "Get an authorized activity",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ActivityView"), content_type = "application/json"),
@@ -122,6 +123,7 @@ async fn get_by_id(
     get,
     path = "/api/v1/activities",
     operation_id = "listActivities",
+    tag = "Activities",
     summary = "List authorized activities",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ActivitiesView"), content_type = "application/json"),

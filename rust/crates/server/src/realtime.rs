@@ -119,10 +119,12 @@ impl RealtimeReadPort for IdentityRealtimeReader {
         token: &'a str,
     ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
         Box::pin(async move {
-            self.identity
-                .authenticate_bearer(token)
+            crate::token_safety::authenticate_realtime(&self.identity, token)
                 .await
-                .map_err(|_| RealtimeReadError::Authentication)
+                .map_err(|error| match error {
+                    citadel_identity::IdentityError::Forbidden => RealtimeReadError::Authorization,
+                    _ => RealtimeReadError::Authentication,
+                })
         })
     }
 

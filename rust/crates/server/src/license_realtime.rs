@@ -205,7 +205,7 @@ async fn handle(mut socket: WebSocket, service: LicenseRealtimeService) {
                 continue;
             },
             _ = authorization_recheck.tick() => {
-                if service.identity.authenticate_bearer(&access_token).await.is_err() {
+                if crate::token_safety::authenticate_realtime(&service.identity, &access_token).await.is_err() {
                     return;
                 }
                 continue;
@@ -256,9 +256,7 @@ async fn authenticate(
     if subscribe.protocol_version != PROTOCOL_VERSION || subscribe.kind != "subscribe" {
         return Err(());
     }
-    service
-        .identity
-        .authenticate_bearer(&subscribe.access_token)
+    crate::token_safety::authenticate_realtime(&service.identity, &subscribe.access_token)
         .await
         .map_err(|_| ())?;
     Ok(subscribe.access_token)

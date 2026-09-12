@@ -32,6 +32,7 @@ task_reader!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect",
     operation_id = "inspectSwarmTask",
+    tag = "Platforms",
     summary = "Inspect the current Task container",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
@@ -49,6 +50,7 @@ task_reader!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal",
     operation_id = "getSwarmTaskTerminalTarget",
+    tag = "Platforms",
     summary = "Resolve the current Task terminal target",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTaskTerminalView"), content_type = "application/json"),
