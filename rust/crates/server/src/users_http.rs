@@ -68,6 +68,7 @@ struct UsersResponse {
     get,
     path = "/api/v1/users",
     operation_id = "listUsers",
+    tag = "Users",
     summary = "Get all Users",
     responses(
         (status = 200, description = "Success", body = UsersResponse, content_type = "application/json"),
@@ -119,6 +120,7 @@ async fn list(
     get,
     path = "/api/v1/users/search",
     operation_id = "searchUsers",
+    tag = "Users",
     summary = "Search Users for assignment",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/UserSearchItems"), content_type = "application/json"),
@@ -151,6 +153,7 @@ async fn search(
     get,
     path = "/api/v1/users/{id}",
     operation_id = "getUser",
+    tag = "Users",
     summary = "Get a User by ID",
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
@@ -180,6 +183,7 @@ async fn get(
     post,
     path = "/api/v1/users",
     operation_id = "createUser",
+    tag = "Users",
     summary = "Create a User",
     request_body = CreateUserRequest,
     responses(
@@ -211,8 +215,12 @@ async fn create(
     patch,
     path = "/api/v1/users/{id}",
     operation_id = "updateUser",
+    tag = "Users",
     summary = "Update a User",
-    request_body = PatchUserRequest,
+    request_body(content(
+        (PatchUserRequest = "application/merge-patch+json"),
+        (PatchUserRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -245,6 +253,7 @@ async fn patch(
     post,
     path = "/api/v1/users/rename",
     operation_id = "renameUser",
+    tag = "Users",
     summary = "Rename a User",
     request_body = RenameUserRequest,
     responses(
@@ -279,6 +288,7 @@ async fn rename(
     post,
     path = "/api/v1/users/{id}/roles",
     operation_id = "addUserRole",
+    tag = "Users",
     summary = "Assign a Role to a User",
     request_body = AddUserRoleRequest,
     responses(
@@ -316,6 +326,7 @@ async fn add_role(
     delete,
     path = "/api/v1/users/{id}/roles/{roleId}",
     operation_id = "removeUserRole",
+    tag = "Users",
     summary = "Remove a Role from a User",
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
@@ -350,6 +361,7 @@ async fn remove_role(
     post,
     path = "/api/v1/users/{id}/resource-accesses",
     operation_id = "addUserResourceAccess",
+    tag = "Users",
     summary = "Add a resource override to a User",
     request_body = UserResourceAccessRequest,
     responses(
@@ -387,6 +399,7 @@ async fn add_resource_access(
     delete,
     path = "/api/v1/users/{id}/resource-accesses",
     operation_id = "removeUserResourceAccess",
+    tag = "Users",
     summary = "Remove a resource override from a User",
     request_body = UserResourceAccessRequest,
     responses(
@@ -424,6 +437,7 @@ async fn remove_resource_access(
     delete,
     path = "/api/v1/users",
     operation_id = "deleteUsers",
+    tag = "Users",
     summary = "Delete Users",
     request_body = DeleteUsersRequest,
     responses(

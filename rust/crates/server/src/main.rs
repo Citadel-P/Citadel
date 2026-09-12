@@ -4,10 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use axum::http::header;
 use axum::middleware;
-use axum::response::{IntoResponse, Response};
-use axum::routing::get;
 use citadel_adapters::PostgresAuthorizedPlatformReader;
 use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
@@ -1003,9 +1000,13 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         app = app.layer(axum::Extension(hub));
     }
     if config.transport.openapi_enabled {
-        app = app
-            .route("/openapi/v1.json", get(openapi_full))
-            .route("/openapi/public/v1.json", get(openapi_public));
+        app = app.merge(citadel_server::openapi::serving::router(
+            if config.transport.mode == citadel_server::config::TransportMode::Direct {
+                "https"
+            } else {
+                "http"
+            },
+        ));
     }
     let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
         citadel_adapters::edge::EdgeIntake::new(citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()), edge_registry.clone()),
@@ -1273,22 +1274,6 @@ async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Er
         }))?
     );
     Ok(())
-}
-
-async fn openapi_full() -> Response {
-    (
-        [(header::CONTENT_TYPE, "application/json")],
-        citadel_server::openapi::json_document(false),
-    )
-        .into_response()
-}
-
-async fn openapi_public() -> Response {
-    (
-        [(header::CONTENT_TYPE, "application/json")],
-        citadel_server::openapi::json_document(true),
-    )
-        .into_response()
 }
 
 async fn shutdown_signal(cancellation: CancellationToken) {

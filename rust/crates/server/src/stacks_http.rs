@@ -57,6 +57,7 @@ pub fn router(state: StacksHttpState) -> Router {
     post,
     path = "/api/v1/stacks/{stackId}/check-updates",
     operation_id = "checkStackUpdates",
+    tag = "Stacks",
     summary = "Check a Stack source for updates",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
@@ -106,6 +107,7 @@ async fn check_updates(
     get,
     path = "/api/v1/stacks",
     operation_id = "listStacks",
+    tag = "Stacks",
     summary = "List authorized Stacks",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StacksView, content_type = "application/json"),
@@ -148,6 +150,7 @@ async fn list(
     get,
     path = "/api/v1/stacks/{stackId}",
     operation_id = "getStack",
+    tag = "Stacks",
     summary = "Get a Stack",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
@@ -187,6 +190,7 @@ async fn get(
     get,
     path = "/api/v1/stacks/{stackId}/_cfg",
     operation_id = "getStackConfig",
+    tag = "Stacks",
     summary = "Get Stack configuration",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackConfigView, content_type = "application/json"),
@@ -226,6 +230,7 @@ async fn get_config(
     get,
     path = "/api/v1/stacks/{stackId}/duplicate-draft",
     operation_id = "getStackDuplicateDraft",
+    tag = "Stacks",
     summary = "Build a Stack duplicate draft",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackDuplicateDraftView, content_type = "application/json"),
@@ -265,6 +270,7 @@ async fn duplicate_draft(
     get,
     path = "/api/v1/stacks/{stackId}/releases",
     operation_id = "listStackReleases",
+    tag = "Stacks",
     summary = "List previous healthy Stack releases",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackReleasesView, content_type = "application/json"),
@@ -306,6 +312,7 @@ async fn releases(
     post,
     path = "/api/v1/stacks",
     operation_id = "createStack",
+    tag = "Stacks",
     summary = "Create a Stack",
     request_body = CreateStackInput,
     responses(
@@ -351,8 +358,12 @@ async fn create(
     patch,
     path = "/api/v1/stacks/{id}",
     operation_id = "updateStack",
+    tag = "Stacks",
     summary = "Update Stack configuration",
-    request_body = PatchStackInput,
+    request_body(content(
+        (PatchStackInput = "application/merge-patch+json"),
+        (PatchStackInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -394,8 +405,12 @@ async fn update(
     patch,
     path = "/api/v1/stacks/{id}/_metadata",
     operation_id = "updateStackMetadata",
+    tag = "Stacks",
     summary = "Update Stack metadata",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body(content(
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -460,6 +475,7 @@ async fn update_metadata(
     post,
     path = "/api/v1/stacks/rename",
     operation_id = "renameStack",
+    tag = "Stacks",
     summary = "Rename a Stack",
     request_body = RenameStackInput,
     responses(
@@ -506,6 +522,7 @@ async fn rename(
     delete,
     path = "/api/v1/stacks",
     operation_id = "deleteStacks",
+    tag = "Stacks",
     summary = "Delete Stacks",
     request_body = Vec<Uuid>,
     responses(
@@ -549,6 +566,7 @@ async fn delete(
     post,
     path = "/api/v1/stacks/apply",
     operation_id = "applyStack",
+    tag = "Stacks",
     summary = "Apply a Stack and stream progress",
     request_body = ApplyStackInput,
     responses(
@@ -590,6 +608,7 @@ async fn apply(
     post,
     path = "/api/v1/stacks/rollback",
     operation_id = "rollbackStack",
+    tag = "Stacks",
     summary = "Roll back a Stack and stream progress",
     request_body = RollbackStackInput,
     responses(
@@ -638,6 +657,7 @@ struct SwarmPreflightInput {
     post,
     path = "/api/v1/stacks/preflight/swarm",
     operation_id = "preflightSwarmStack",
+    tag = "Stacks",
     summary = "Validate Docker Swarm Stack compatibility",
     request_body = SwarmPreflightInput,
     responses(
@@ -682,6 +702,7 @@ async fn preflight(
     get,
     path = "/api/v1/stacks/{stackId}/drift",
     operation_id = "getStackDrift",
+    tag = "Stacks",
     summary = "Get Stack drift",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackDriftReport, content_type = "application/json"),
@@ -753,6 +774,7 @@ impl From<StackDriftPolicyInput> for citadel_stacks::StackDriftPolicy {
     put,
     path = "/api/v1/stacks/{stackId}/drift-policy",
     operation_id = "updateStackDriftPolicy",
+    tag = "Stacks",
     summary = "Update Stack drift policy",
     request_body = StackDriftPolicyInput,
     responses(
@@ -800,6 +822,7 @@ async fn update_drift_policy(
     post,
     path = "/api/v1/stacks/{stackId}/reconcile",
     operation_id = "reconcileStack",
+    tag = "Stacks",
     summary = "Reconcile safe Stack drift",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::StackReconciliationResult, content_type = "application/json"),
@@ -839,6 +862,7 @@ async fn reconcile(
     get,
     path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}",
     operation_id = "getComposeProjectImportDraft",
+    tag = "Platforms",
     summary = "Get a Compose or Swarm Stack import draft",
     responses(
         (status = 200, description = "Success", body = citadel_stacks::ComposeProjectImportDraftView, content_type = "application/json"),
@@ -901,6 +925,7 @@ struct ValidateImportRequest {
     post,
     path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import-draft",
     operation_id = "validateComposeProjectImportDraft",
+    tag = "Platforms",
     summary = "Validate a source for an unmanaged Compose project",
     request_body = ValidateImportRequest,
     responses(
@@ -971,6 +996,7 @@ struct ImportRequest {
     post,
     path = "/api/v1/platforms/{platformId}/unmanaged-compose-projects/{projectName}/import",
     operation_id = "importComposeProject",
+    tag = "Platforms",
     summary = "Import a Compose project or Swarm Stack",
     request_body = ImportRequest,
     responses(
@@ -1152,6 +1178,7 @@ state_action!(
     post,
     path = "/api/v1/stacks/start",
     operation_id = "startStacks",
+    tag = "Stacks",
     summary = "Start Stacks",
     request_body = ref("#/components/schemas/StackIds"),
     responses(
@@ -1169,6 +1196,7 @@ state_action!(
     post,
     path = "/api/v1/stacks/stop",
     operation_id = "stopStacks",
+    tag = "Stacks",
     summary = "Stop Stacks",
     request_body = ref("#/components/schemas/StackIds"),
     responses(
@@ -1186,6 +1214,7 @@ state_action!(
     post,
     path = "/api/v1/stacks/pause",
     operation_id = "pauseStacks",
+    tag = "Stacks",
     summary = "Pause Stacks",
     request_body = ref("#/components/schemas/StackIds"),
     responses(
@@ -1203,6 +1232,7 @@ state_action!(
     post,
     path = "/api/v1/stacks/resume",
     operation_id = "resumeStacks",
+    tag = "Stacks",
     summary = "Resume Stacks",
     request_body = ref("#/components/schemas/StackIds"),
     responses(
@@ -1220,6 +1250,7 @@ state_action!(
     post,
     path = "/api/v1/stacks/restart",
     operation_id = "restartStacks",
+    tag = "Stacks",
     summary = "Restart Stacks",
     request_body = ref("#/components/schemas/StackIds"),
     responses(

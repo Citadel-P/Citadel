@@ -87,6 +87,7 @@ struct PlatformsResponse {
     get,
     path = "/api/v1/platforms/agent/setup",
     operation_id = "getAgentSetup",
+    tag = "Platforms",
     summary = "Get regular Agent setup instructions",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
@@ -252,6 +253,7 @@ struct SwarmItemsResponse<T> {
     get,
     path = "/api/v1/platforms",
     operation_id = "listPlatforms",
+    tag = "Platforms",
     summary = "List authorized Platforms",
     responses(
         (status = 200, description = "Success", body = PlatformsResponse, content_type = "application/json"),
@@ -320,6 +322,7 @@ async fn list_platforms(
     post,
     path = "/api/v1/platforms",
     operation_id = "createPlatform",
+    tag = "Platforms",
     summary = "Create a Platform",
     request_body = CreatePlatformInput,
     responses(
@@ -369,6 +372,7 @@ async fn create_platform(
     get,
     path = "/api/v1/platforms/{id}",
     operation_id = "getPlatfom",
+    tag = "Platforms",
     summary = "Get a Platform",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
@@ -403,8 +407,12 @@ async fn get_platform(
     patch,
     path = "/api/v1/platforms/{id}/_metadata",
     operation_id = "updatePlatformMetadata",
+    tag = "Platforms",
     summary = "Update Platform metadata",
-    request_body = PatchPlatformMetadataInput,
+    request_body(content(
+        (PatchPlatformMetadataInput = "application/merge-patch+json"),
+        (PatchPlatformMetadataInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -468,6 +476,7 @@ async fn update_platform_metadata(
     get,
     path = "/api/v1/platforms/{id}/containers",
     operation_id = "listContainers",
+    tag = "Platforms",
     summary = "List Platform Containers",
     responses(
         (status = 200, description = "Success", body = ContainersResponse, content_type = "application/json"),
@@ -510,6 +519,7 @@ async fn list_containers(
     get,
     path = "/api/v1/containers/{id}",
     operation_id = "getContainer",
+    tag = "Containers",
     summary = "Get a Container",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::ContainerView, content_type = "application/json"),
@@ -574,6 +584,7 @@ fn valid_container_reference(reference: &str) -> bool {
     get,
     path = "/api/v1/images/{platformId}",
     operation_id = "listImages",
+    tag = "Images",
     summary = "List Platform Images",
     responses(
         (status = 200, description = "Success", body = ImagesResponse, content_type = "application/json"),
@@ -618,6 +629,7 @@ async fn list_images(
     get,
     path = "/api/v1/networks/{platformId}",
     operation_id = "listNetworks",
+    tag = "Networks",
     summary = "List Platform Networks",
     responses(
         (status = 200, description = "Success", body = NetworksResponse, content_type = "application/json"),
@@ -769,6 +781,7 @@ pub(crate) async fn lookup_platform_resources(
     get,
     path = "/api/v1/networks/{platformId}/{networkId}",
     operation_id = "inspectNetwork",
+    tag = "Networks",
     summary = "Inspect a Platform Network",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/DockerNetworkDetailsView"), content_type = "application/json"),
@@ -824,6 +837,7 @@ async fn get_network(
     post,
     path = "/api/v1/networks",
     operation_id = "createNetwork",
+    tag = "Networks",
     summary = "Create a Network",
     request_body = CreateNetworkInput,
     responses(
@@ -888,6 +902,7 @@ async fn create_network(
     delete,
     path = "/api/v1/networks",
     operation_id = "deleteNetworks",
+    tag = "Networks",
     summary = "Delete Networks",
     request_body = DeleteNetworksInput,
     responses(
@@ -1026,6 +1041,7 @@ async fn delete_networks(
     get,
     path = "/api/v1/volumes/{platformId}",
     operation_id = "listVolumes",
+    tag = "Volumes",
     summary = "List Platform Volumes",
     responses(
         (status = 200, description = "Success", body = VolumesResponse, content_type = "application/json"),
@@ -1115,6 +1131,7 @@ async fn list_volumes(
     get,
     path = "/api/v1/volumes/{platformId}/{name}",
     operation_id = "inspectVolume",
+    tag = "Volumes",
     summary = "Inspect a Platform Volume",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/DockerVolumeResultView"), content_type = "application/json"),
@@ -1177,6 +1194,7 @@ async fn get_volume(
     post,
     path = "/api/v1/volumes",
     operation_id = "createVolume",
+    tag = "Volumes",
     summary = "Create a Volume",
     request_body = CreateVolumeInput,
     responses(
@@ -1238,6 +1256,7 @@ async fn create_volume(
     delete,
     path = "/api/v1/volumes",
     operation_id = "deleteVolumes",
+    tag = "Volumes",
     summary = "Delete Volumes",
     request_body = DeleteVolumesInput,
     responses(
@@ -1399,6 +1418,7 @@ swarm_list_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/nodes",
     operation_id = "listSwarmNodes",
+    tag = "Platforms",
     summary = "List Swarm Nodes",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodesView"), content_type = "application/json"),
@@ -1417,6 +1437,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}",
     operation_id = "getSwarmNode",
+    tag = "Platforms",
     summary = "Get a Swarm Node",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmNodeView, content_type = "application/json"),
@@ -1434,6 +1455,7 @@ swarm_list_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services",
     operation_id = "listSwarmServices",
+    tag = "Platforms",
     summary = "List Swarm Services",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServicesView"), content_type = "application/json"),
@@ -1452,6 +1474,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}",
     operation_id = "getSwarmService",
+    tag = "Platforms",
     summary = "Get a Swarm Service",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmServiceView, content_type = "application/json"),
@@ -1469,6 +1492,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks",
     operation_id = "listSwarmTasks",
+    tag = "Platforms",
     summary = "List Swarm Tasks",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTasksView"), content_type = "application/json"),
@@ -1515,6 +1539,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}",
     operation_id = "getSwarmTask",
+    tag = "Platforms",
     summary = "Get a Swarm Task",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmTaskView, content_type = "application/json"),
@@ -1532,6 +1557,7 @@ swarm_list_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/networks",
     operation_id = "listSwarmNetworks",
+    tag = "Platforms",
     summary = "List Swarm Networks",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNetworksView"), content_type = "application/json"),
@@ -1550,6 +1576,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/networks/{resourceId}",
     operation_id = "getSwarmNetwork",
+    tag = "Platforms",
     summary = "Get a Swarm Network",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmNetworkView, content_type = "application/json"),
@@ -1567,6 +1594,7 @@ swarm_list_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/configs",
     operation_id = "listSwarmConfigs",
+    tag = "Platforms",
     summary = "List Swarm Configs",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigsView"), content_type = "application/json"),
@@ -1585,6 +1613,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}",
     operation_id = "getSwarmConfig",
+    tag = "Platforms",
     summary = "Get a Swarm Config",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmConfigView, content_type = "application/json"),
@@ -1602,6 +1631,7 @@ swarm_list_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/secrets",
     operation_id = "listSwarmSecrets",
+    tag = "Platforms",
     summary = "List Swarm Secrets",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmSecretsView"), content_type = "application/json"),
@@ -1620,6 +1650,7 @@ swarm_get_handler!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}",
     operation_id = "getSwarmSecret",
+    tag = "Platforms",
     summary = "Get a Swarm Secret",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::SwarmSecretView, content_type = "application/json"),

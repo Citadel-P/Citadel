@@ -55,6 +55,7 @@ struct DeleteGitAccountsInput {
     get,
     path = "/api/v1/gitAccounts",
     operation_id = "listGitAccounts",
+    tag = "GitAccounts",
     summary = "List Git accounts",
     responses(
         (status = 200, description = "Success", body = GitAccountsResponse, content_type = "application/json"),
@@ -99,6 +100,7 @@ async fn list(
     get,
     path = "/api/v1/gitAccounts/{id}",
     operation_id = "getGitAccount",
+    tag = "GitAccounts",
     summary = "Get a Git account",
     responses(
         (status = 200, description = "Success", body = AuthorizedGitAccountView, content_type = "application/json"),
@@ -141,6 +143,7 @@ async fn get(
     get,
     path = "/api/v1/gitAccounts/{id}/_cfg",
     operation_id = "getGitAccountConfig",
+    tag = "GitAccounts",
     summary = "Get Git account configuration",
     responses(
         (status = 200, description = "Success", body = citadel_git::GitAccountConfigView, content_type = "application/json"),
@@ -176,6 +179,7 @@ async fn get_config(
     post,
     path = "/api/v1/gitAccounts",
     operation_id = "createGitAccount",
+    tag = "GitAccounts",
     summary = "Create a Git account",
     request_body = GitAccountInput,
     responses(
@@ -210,8 +214,12 @@ async fn create(
     patch,
     path = "/api/v1/gitAccounts/{id}",
     operation_id = "updateGitAccount",
+    tag = "GitAccounts",
     summary = "Update a Git account",
-    request_body = GitAccountPatch,
+    request_body(content(
+        (GitAccountPatch = "application/merge-patch+json"),
+        (GitAccountPatch = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_git::GitAccountView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -253,6 +261,7 @@ async fn update(
     delete,
     path = "/api/v1/gitAccounts",
     operation_id = "deleteGitAccounts",
+    tag = "GitAccounts",
     summary = "Delete Git accounts",
     request_body = DeleteGitAccountsInput,
     responses(

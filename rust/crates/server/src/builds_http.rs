@@ -135,6 +135,7 @@ struct RunFilter {
     get,
     path = "/api/v1/buildProjects",
     operation_id = "listBuildProjects",
+    tag = "BuildProjects",
     summary = "List Build Projects",
     responses(
         (status = 200, description = "Success", body = Projects, content_type = "application/json"),
@@ -195,6 +196,7 @@ async fn list_projects(
     post,
     path = "/api/v1/buildProjects",
     operation_id = "createBuildProject",
+    tag = "BuildProjects",
     summary = "Create a Build Project",
     request_body = BuildProjectInput,
     responses(
@@ -335,6 +337,7 @@ async fn authorize_build_dependencies(
     get,
     path = "/api/v1/buildProjects/{id}",
     operation_id = "getBuildProject",
+    tag = "BuildProjects",
     summary = "Get a Build Project",
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
@@ -362,6 +365,7 @@ async fn get_project(
     delete,
     path = "/api/v1/buildProjects/{id}",
     operation_id = "archiveBuildProject",
+    tag = "BuildProjects",
     summary = "Archive a Build Project",
     responses(
         (status = 204, description = "Success"),
@@ -395,8 +399,12 @@ async fn archive_project(
     patch,
     path = "/api/v1/buildProjects/{id}",
     operation_id = "updateBuildProject",
+    tag = "BuildProjects",
     summary = "Update Build Project",
-    request_body = ref("#/components/schemas/UpdateBuildProjectInput"),
+    request_body(content(
+        (ref("#/components/schemas/UpdateBuildProjectInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/UpdateBuildProjectInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -419,8 +427,12 @@ async fn update_project(
     patch,
     path = "/api/v1/buildProjects/{id}/_metadata",
     operation_id = "updateBuildMetadata",
+    tag = "BuildProjects",
     summary = "Update Build Project",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body(content(
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -443,6 +455,7 @@ async fn update_project_metadata(
     post,
     path = "/api/v1/buildProjects/rename",
     operation_id = "renameBuild",
+    tag = "BuildProjects",
     summary = "Update Build Project",
     request_body = RenamePool,
     responses(
@@ -521,6 +534,7 @@ async fn save_project(
     post,
     path = "/api/v1/buildProjects/{id}/runs",
     operation_id = "queueBuildRun",
+    tag = "BuildProjects",
     summary = "Queue a Build Run",
     request_body = Option<QueueInput>,
     responses(
@@ -588,6 +602,7 @@ async fn queue_run(
     get,
     path = "/api/v1/buildRuns",
     operation_id = "listBuildRuns",
+    tag = "BuildRuns",
     summary = "List Build Runs",
     responses(
         (status = 200, description = "Success", body = Runs, content_type = "application/json"),
@@ -627,6 +642,7 @@ async fn list_runs(
     get,
     path = "/api/v1/buildRuns/{id}",
     operation_id = "getBuildRun",
+    tag = "BuildRuns",
     summary = "Get a Build Run",
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildRunView, content_type = "application/json"),
@@ -661,6 +677,7 @@ async fn get_run(
     get,
     path = "/api/v1/buildRuns/{id}/logs",
     operation_id = "getBuildRunLogs",
+    tag = "BuildRuns",
     summary = "Get Build Run logs",
     responses(
         (status = 200, description = "Success", body = Logs, content_type = "application/json"),
@@ -699,6 +716,7 @@ async fn get_logs(
     post,
     path = "/api/v1/buildRuns/{id}/cancel",
     operation_id = "cancelBuildRun",
+    tag = "BuildRuns",
     summary = "Cancel a Build Run",
     responses(
         (status = 204, description = "Success"),
@@ -739,6 +757,7 @@ async fn cancel_run(
     get,
     path = "/api/v1/buildAgentPools",
     operation_id = "listBuildAgentPools",
+    tag = "BuildAgentPools",
     summary = "List Build Agent Pools",
     responses(
         (status = 200, description = "Success", body = Pools, content_type = "application/json"),
@@ -790,6 +809,7 @@ async fn list_pools(
     post,
     path = "/api/v1/buildAgentPools",
     operation_id = "createBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Create a Build Agent Pool",
     request_body = BuildAgentPoolInput,
     responses(
@@ -831,6 +851,7 @@ async fn create_pool(
     get,
     path = "/api/v1/buildAgentPools/{id}",
     operation_id = "getBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Get a Build Agent Pool",
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
@@ -867,6 +888,7 @@ async fn get_pool(
     post,
     path = "/api/v1/buildAgentPools/{id}/test",
     operation_id = "testBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Test a Build Agent Pool",
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
@@ -907,8 +929,12 @@ async fn test_pool(
     patch,
     path = "/api/v1/buildAgentPools/{id}",
     operation_id = "updateBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Update a Build Agent Pool",
-    request_body = ref("#/components/schemas/UpdateBuildAgentPoolInput"),
+    request_body(content(
+        (ref("#/components/schemas/UpdateBuildAgentPoolInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/UpdateBuildAgentPoolInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -931,8 +957,12 @@ async fn update_pool(
     patch,
     path = "/api/v1/buildAgentPools/{id}/_metadata",
     operation_id = "updateBuildAgentPoolMetadata",
+    tag = "BuildAgentPools",
     summary = "Update Build Agent Pool metadata",
-    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    request_body(content(
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -961,6 +991,7 @@ struct RenamePool {
     post,
     path = "/api/v1/buildAgentPools/rename",
     operation_id = "renameBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Rename a Build Agent Pool",
     request_body = RenamePool,
     responses(
@@ -1108,6 +1139,7 @@ async fn pool_response(
     delete,
     path = "/api/v1/buildAgentPools/{id}",
     operation_id = "archiveBuildAgentPool",
+    tag = "BuildAgentPools",
     summary = "Archive a Build Agent Pool",
     responses(
         (status = 204, description = "Success"),
@@ -1160,6 +1192,7 @@ fn actor(
     post,
     path = "/api/v1/buildAgentPools/{id}/edge/enrollments",
     operation_id = "createBuildAgentPoolEdgeEnrollment",
+    tag = "BuildAgentPools",
     summary = "Create build pool Edge Agent enrollment",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
@@ -1198,6 +1231,7 @@ async fn enroll_pool(
     get,
     path = "/api/v1/buildAgentPools/{id}/edge/status",
     operation_id = "getBuildAgentPoolEdgeStatus",
+    tag = "BuildAgentPools",
     summary = "Get build pool Edge Agent status",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
@@ -1238,6 +1272,7 @@ async fn pool_edge_status(
     post,
     path = "/api/v1/buildAgentPools/{id}/edge/revoke",
     operation_id = "revokeBuildAgentPoolEdgeAgent",
+    tag = "BuildAgentPools",
     summary = "Revoke build pool Edge Agent",
     responses(
         (status = 204, description = "Success"),

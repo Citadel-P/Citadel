@@ -26,6 +26,7 @@ pub fn router(state: LicenseHttpState) -> Router {
     get,
     path = "/api/v1/license/entitlements",
     operation_id = "getLicenseEntitlements",
+    tag = "License",
     summary = "Get effective license entitlements",
     responses(
         (status = 200, description = "Success", body = citadel_application::LicenseEntitlementsView, content_type = "application/json"),
@@ -52,6 +53,7 @@ async fn entitlements(
     get,
     path = "/api/v1/license",
     operation_id = "getLicense",
+    tag = "License",
     summary = "Get installed license state",
     responses(
         (status = 200, description = "Success", body = citadel_application::LicenseView, content_type = "application/json"),
@@ -78,6 +80,7 @@ async fn get(
     post,
     path = "/api/v1/license",
     operation_id = "installLicense",
+    tag = "License",
     summary = "Install or replace a license",
     request_body = InstallLicenseRequest,
     responses(
@@ -117,6 +120,7 @@ async fn install(
     delete,
     path = "/api/v1/license",
     operation_id = "removeLicense",
+    tag = "License",
     summary = "Remove the installed license",
     responses(
         (status = 200, description = "Success", body = citadel_application::LicenseView, content_type = "application/json"),
@@ -144,6 +148,7 @@ async fn remove(
     get,
     path = "/api/v1/license/request",
     operation_id = "getLicenseRequest",
+    tag = "License",
     summary = "Get license request metadata",
     responses(
         (status = 200, description = "Success", body = citadel_application::LicenseRequestView, content_type = "application/json"),

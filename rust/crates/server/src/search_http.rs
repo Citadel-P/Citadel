@@ -22,6 +22,7 @@ pub fn router(store: Arc<dyn GlobalSearchStore>) -> Router {
     get,
     path = "/api/v1/search",
     operation_id = "globalSearch",
+    tag = "Search",
     summary = "Search authorized resources",
     responses(
         (status = 200, description = "Success", body = citadel_resources::GlobalSearchResponse, content_type = "application/json"),

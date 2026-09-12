@@ -9,6 +9,7 @@ static PULL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4)
     post,
     path = "/api/v1/images/pull",
     operation_id = "pullImage",
+    tag = "Images",
     summary = "Pull a Docker image with progress",
     request_body = PullImageInput,
     responses(

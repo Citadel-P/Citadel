@@ -29,6 +29,7 @@ pub(super) fn router(state: ResourcesHttpState) -> Router {
     post,
     path = "/api/v1/resourceBindings/secret-providers/vault-kv2/test",
     operation_id = "testVaultKvV2SecretProviderConnection",
+    tag = "ResourceBindings",
     summary = "Test a Vault-compatible KV v2 Secret provider connection",
     request_body = citadel_resources::TestSecretProviderInput,
     responses(
@@ -61,6 +62,7 @@ async fn test_secret_provider(
     post,
     path = "/api/v1/resourceBindings/secrets/external/test",
     operation_id = "testExternalSecret",
+    tag = "ResourceBindings",
     summary = "Test an external Secret reference",
     request_body = citadel_resources::TestExternalSecretInput,
     responses(
@@ -130,6 +132,7 @@ struct SecretScopeQuery {
     get,
     path = "/api/v1/resourceBindings/global",
     operation_id = "getGlobalResourceBindings",
+    tag = "ResourceBindings",
     summary = "Get global resource bindings",
     responses(
         (status = 200, description = "Success", body = GlobalBindingsResponse, content_type = "application/json"),
@@ -160,6 +163,7 @@ async fn get_global_bindings(
     post,
     path = "/api/v1/resourceBindings/global",
     operation_id = "createGlobalResourceBinding",
+    tag = "ResourceBindings",
     summary = "Create a global resource binding",
     request_body = NewResourceBinding,
     responses(
@@ -197,6 +201,7 @@ async fn create_global_binding(
     patch,
     path = "/api/v1/resourceBindings/global",
     operation_id = "updateGlobalResourceBinding",
+    tag = "ResourceBindings",
     summary = "Update a global resource binding",
     request_body = ResourceBindingInput,
     responses(
@@ -232,6 +237,7 @@ async fn update_global_binding(
     delete,
     path = "/api/v1/resourceBindings/global/{id}",
     operation_id = "deleteGlobalResourceBinding",
+    tag = "ResourceBindings",
     summary = "Delete a global resource binding",
     responses(
         (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
@@ -266,6 +272,7 @@ async fn delete_global_binding(
     get,
     path = "/api/v1/resourceBindings/{scope}/{resourceId}",
     operation_id = "getResourceBindings",
+    tag = "ResourceBindings",
     summary = "Get resource bindings",
     responses(
         (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
@@ -292,6 +299,7 @@ async fn get_resource_bindings(
     post,
     path = "/api/v1/resourceBindings/{scope}/{resourceId}",
     operation_id = "createResourceBinding",
+    tag = "ResourceBindings",
     summary = "Create a resource binding",
     request_body = NewResourceBinding,
     responses(
@@ -332,6 +340,7 @@ async fn create_resource_binding(
     patch,
     path = "/api/v1/resourceBindings/{scope}/{resourceId}",
     operation_id = "updateResourceBinding",
+    tag = "ResourceBindings",
     summary = "Update a resource binding",
     request_body = ResourceBindingInput,
     responses(
@@ -370,6 +379,7 @@ async fn update_resource_binding(
     delete,
     path = "/api/v1/resourceBindings/{scope}/{resourceId}/{id}",
     operation_id = "deleteResourceBinding",
+    tag = "ResourceBindings",
     summary = "Delete a resource binding",
     responses(
         (status = 200, description = "Success", body = citadel_resources::ResourceBindingsView, content_type = "application/json"),
@@ -416,6 +426,7 @@ async fn delete_resource_binding(
     get,
     path = "/api/v1/resourceBindings/secrets",
     operation_id = "listSecretDefinitions",
+    tag = "ResourceBindings",
     summary = "List Secret definitions",
     responses(
         (status = 200, description = "Success", body = SecretDefinitionsResponse, content_type = "application/json"),
@@ -458,6 +469,7 @@ async fn list_secrets(
     post,
     path = "/api/v1/resourceBindings/secrets",
     operation_id = "createInternalSecret",
+    tag = "ResourceBindings",
     summary = "Create an internal encrypted Secret",
     request_body = InternalSecretInput,
     responses(
@@ -494,6 +506,7 @@ async fn create_internal_secret(
     post,
     path = "/api/v1/resourceBindings/secrets/external",
     operation_id = "createExternalSecret",
+    tag = "ResourceBindings",
     summary = "Create an external Secret definition",
     request_body = ExternalSecretInput,
     responses(
@@ -529,8 +542,12 @@ async fn create_external_secret(
     patch,
     path = "/api/v1/resourceBindings/secrets/external/{id}",
     operation_id = "updateExternalSecret",
+    tag = "ResourceBindings",
     summary = "Update an external Secret definition",
-    request_body = ExternalSecretPatch,
+    request_body(content(
+        (ExternalSecretPatch = "application/merge-patch+json"),
+        (ExternalSecretPatch = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::SecretDefinitionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -566,6 +583,7 @@ async fn update_external_secret(
     delete,
     path = "/api/v1/resourceBindings/secrets/{id}",
     operation_id = "deleteSecretDefinition",
+    tag = "ResourceBindings",
     summary = "Delete an unused Secret definition",
     responses(
         (status = 204, description = "Success"),
@@ -600,6 +618,7 @@ async fn delete_secret(
     get,
     path = "/api/v1/resourceBindings/secret-providers",
     operation_id = "listSecretProviders",
+    tag = "ResourceBindings",
     summary = "List Secret providers",
     responses(
         (status = 200, description = "Success", body = SecretProvidersResponse, content_type = "application/json"),
@@ -632,6 +651,7 @@ async fn list_secret_providers(
     post,
     path = "/api/v1/resourceBindings/secret-providers/vault-kv2",
     operation_id = "createVaultKvV2SecretProvider",
+    tag = "ResourceBindings",
     summary = "Create a Vault-compatible KV v2 Secret provider",
     request_body = SecretProviderInput,
     responses(
@@ -665,8 +685,12 @@ async fn create_secret_provider(
     patch,
     path = "/api/v1/resourceBindings/secret-providers/vault-kv2/{id}",
     operation_id = "updateVaultKvV2SecretProvider",
+    tag = "ResourceBindings",
     summary = "Update a Vault-compatible KV v2 Secret provider",
-    request_body = SecretProviderPatch,
+    request_body(content(
+        (SecretProviderPatch = "application/merge-patch+json"),
+        (SecretProviderPatch = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_resources::SecretProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -701,6 +725,7 @@ async fn update_secret_provider(
     delete,
     path = "/api/v1/resourceBindings/secret-providers/{id}",
     operation_id = "deleteSecretProvider",
+    tag = "ResourceBindings",
     summary = "Delete a Secret provider",
     responses(
         (status = 204, description = "Success"),

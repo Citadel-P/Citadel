@@ -92,6 +92,7 @@ pub(super) async fn swarm_platform(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs",
     operation_id = "getSwarmServiceLogs",
+    tag = "Platforms",
     summary = "Read bounded Service logs",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
@@ -154,6 +155,7 @@ async fn service_logs(
     get,
     path = "/api/v1/swarmServices/{id}/logs",
     operation_id = "getManagedSwarmServiceLogs",
+    tag = "SwarmServices",
     summary = "Read managed Service logs",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
@@ -211,6 +213,7 @@ pub(super) async fn managed_service(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs",
     operation_id = "getSwarmTaskLogs",
+    tag = "Platforms",
     summary = "Read current Task logs on its owning node",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),

@@ -152,6 +152,7 @@ async fn bounded<T>(
     patch,
     path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}",
     operation_id = "updateSwarmNode",
+    tag = "Platforms",
     summary = "updateSwarmNode",
     request_body = UpdateSwarmNodeInput,
     responses(
@@ -217,6 +218,7 @@ fn check_node(node: &SwarmNodeView, version: i64) -> Result<(), IdentityError> {
     patch,
     path = "/api/v1/platforms/{platformId}/swarm/nodes/availability",
     operation_id = "updateSwarmNodesAvailability",
+    tag = "Platforms",
     summary = "updateSwarmNodesAvailability",
     request_body = UpdateSwarmNodesAvailabilityInput,
     responses(
@@ -351,6 +353,7 @@ async fn service_guard(
     post,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart",
     operation_id = "restartSwarmService",
+    tag = "Platforms",
     summary = "restartSwarmService",
     responses(
         (status = 204, description = "Success"),
@@ -413,6 +416,7 @@ material_create!(
     post,
     path = "/api/v1/platforms/{platformId}/swarm/secrets",
     operation_id = "createSwarmSecret",
+    tag = "Platforms",
     summary = "createSwarmSecret",
     request_body = ref("#/components/schemas/CreateSwarmSecretInput"),
     responses(
@@ -431,6 +435,7 @@ material_create!(
     post,
     path = "/api/v1/platforms/{platformId}/swarm/configs",
     operation_id = "createSwarmConfig",
+    tag = "Platforms",
     summary = "createSwarmConfig",
     request_body = ref("#/components/schemas/CreateSwarmConfigInput"),
     responses(
@@ -500,6 +505,7 @@ material_labels!(
     patch,
     path = "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}/labels",
     operation_id = "updateSwarmSecretLabels",
+    tag = "Platforms",
     summary = "updateSwarmSecretLabels",
     request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
     responses(
@@ -518,6 +524,7 @@ material_labels!(
     patch,
     path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/labels",
     operation_id = "updateSwarmConfigLabels",
+    tag = "Platforms",
     summary = "updateSwarmConfigLabels",
     request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
     responses(
@@ -641,6 +648,7 @@ delete_resources!(
     delete,
     path = "/api/v1/platforms/{platformId}/swarm/services",
     operation_id = "deleteSwarmInventoryServices",
+    tag = "Platforms",
     summary = "deleteSwarmInventoryServices",
     request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
     responses(
@@ -659,6 +667,7 @@ delete_resources!(
     delete,
     path = "/api/v1/platforms/{platformId}/swarm/secrets",
     operation_id = "deleteSwarmSecrets",
+    tag = "Platforms",
     summary = "deleteSwarmSecrets",
     request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
     responses(
@@ -677,6 +686,7 @@ delete_resources!(
     delete,
     path = "/api/v1/platforms/{platformId}/swarm/configs",
     operation_id = "deleteSwarmConfigs",
+    tag = "Platforms",
     summary = "deleteSwarmConfigs",
     request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
     responses(
@@ -798,6 +808,7 @@ reader!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect",
     operation_id = "inspectSwarmNode",
+    tag = "Platforms",
     summary = "inspectSwarmNode",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeInspectView"), content_type = "application/json"),
@@ -815,6 +826,7 @@ reader!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect",
     operation_id = "inspectSwarmService",
+    tag = "Platforms",
     summary = "inspectSwarmService",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
@@ -832,6 +844,7 @@ reader!(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content",
     operation_id = "getSwarmConfigData",
+    tag = "Platforms",
     summary = "getSwarmConfigData",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigDataView"), content_type = "application/json"),

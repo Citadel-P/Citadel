@@ -53,6 +53,7 @@ pub fn router(state: SwarmServicesHttpState) -> Router {
     get,
     path = "/api/v1/swarmServices/{id}/duplicate-draft",
     operation_id = "getSwarmServiceDuplicateDraft",
+    tag = "SwarmServices",
     summary = "Prepare a managed Service duplicate",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceDuplicateDraftView"), content_type = "application/json"),
@@ -136,6 +137,7 @@ async fn authorize_adoption(
     get,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adoption-draft",
     operation_id = "getSwarmServiceAdoptionDraft",
+    tag = "Platforms",
     summary = "Review an unmanaged Docker Service for adoption",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceAdoptionDraftView"), content_type = "application/json"),
@@ -181,6 +183,7 @@ async fn adoption_draft(
     post,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adopt",
     operation_id = "adoptSwarmService",
+    tag = "Platforms",
     summary = "Adopt an existing Docker Service without changing Docker",
     request_body = citadel_swarm_services::adoption::AdoptSwarmServiceInput,
     responses(
@@ -238,8 +241,12 @@ fn deserialize_description<'de, D: serde::Deserializer<'de>>(
     patch,
     path = "/api/v1/swarmServices/{id}/_metadata",
     operation_id = "updateSwarmServiceMetadata",
+    tag = "SwarmServices",
     summary = "Update managed Service metadata",
-    request_body = ServiceMetadataInput,
+    request_body(content(
+        (ServiceMetadataInput = "application/merge-patch+json"),
+        (ServiceMetadataInput = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -287,6 +294,7 @@ async fn update_metadata(
     post,
     path = "/api/v1/swarmServices/{id}/check-updates",
     operation_id = "checkSwarmServiceUpdates",
+    tag = "SwarmServices",
     summary = "Check the applied Service image for updates",
     responses(
         (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
@@ -338,6 +346,7 @@ async fn check_updates(
     get,
     path = "/api/v1/swarmServices",
     operation_id = "listManagedSwarmServices",
+    tag = "SwarmServices",
     summary = "List managed Docker Swarm Services",
     responses(
         (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServicesView, content_type = "application/json"),
@@ -379,6 +388,7 @@ async fn list(
     get,
     path = "/api/v1/swarmServices/{id}",
     operation_id = "getManagedSwarmService",
+    tag = "SwarmServices",
     summary = "Get a managed Docker Swarm Service",
     responses(
         (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
@@ -419,6 +429,7 @@ async fn get(
     post,
     path = "/api/v1/swarmServices",
     operation_id = "createSwarmService",
+    tag = "SwarmServices",
     summary = "Create a managed Docker Swarm Service",
     request_body = CreateSwarmServiceInput,
     responses(
@@ -462,6 +473,7 @@ async fn create(
     patch,
     path = "/api/v1/swarmServices/{id}",
     operation_id = "updateSwarmService",
+    tag = "SwarmServices",
     summary = "Update managed Docker Swarm Service configuration",
     request_body = UpdateSwarmServiceInput,
     responses(
@@ -505,6 +517,7 @@ async fn update(
     post,
     path = "/api/v1/swarmServices/rename",
     operation_id = "renameSwarmService",
+    tag = "SwarmServices",
     summary = "Rename a managed Docker Swarm Service",
     request_body = RenameSwarmServiceInput,
     responses(
@@ -545,6 +558,7 @@ async fn rename(
     delete,
     path = "/api/v1/swarmServices",
     operation_id = "deleteSwarmServices",
+    tag = "SwarmServices",
     summary = "Delete managed Docker Swarm Services",
     request_body = Vec<Uuid>,
     responses(
@@ -576,6 +590,7 @@ async fn delete(
     post,
     path = "/api/v1/swarmServices/{id}/apply",
     operation_id = "applySwarmService",
+    tag = "SwarmServices",
     summary = "Apply a managed Docker Swarm Service and stream progress",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
@@ -612,6 +627,7 @@ async fn apply(
     post,
     path = "/api/v1/swarmServices/{id}/scale",
     operation_id = "scaleSwarmService",
+    tag = "SwarmServices",
     summary = "Scale a managed Docker Swarm Service and stream progress",
     request_body = ScaleSwarmServiceInput,
     responses(
@@ -652,6 +668,7 @@ async fn scale(
     post,
     path = "/api/v1/swarmServices/{id}/force-update",
     operation_id = "forceUpdateSwarmService",
+    tag = "SwarmServices",
     summary = "Force a managed Docker Swarm Service task update and stream progress",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),

@@ -29,6 +29,7 @@ action_handler!(
     patch,
     path = "/api/v1/containers/start",
     operation_id = "startContainers",
+    tag = "Containers",
     summary = "Start Containers",
     request_body = ref("#/components/schemas/ContainerIdsInput"),
     responses(
@@ -46,6 +47,7 @@ action_handler!(
     patch,
     path = "/api/v1/containers/stop",
     operation_id = "stopContainers",
+    tag = "Containers",
     summary = "Stop Containers",
     request_body = ref("#/components/schemas/ContainerIdsInput"),
     responses(
@@ -63,6 +65,7 @@ action_handler!(
     patch,
     path = "/api/v1/containers/restart",
     operation_id = "restartContainers",
+    tag = "Containers",
     summary = "Restart Containers",
     request_body = ref("#/components/schemas/ContainerIdsInput"),
     responses(
@@ -80,6 +83,7 @@ action_handler!(
     patch,
     path = "/api/v1/containers/pause",
     operation_id = "pauseContainers",
+    tag = "Containers",
     summary = "Pause Containers",
     request_body = ref("#/components/schemas/ContainerIdsInput"),
     responses(
@@ -97,6 +101,7 @@ action_handler!(
     patch,
     path = "/api/v1/containers/unpause",
     operation_id = "unpauseContainers",
+    tag = "Containers",
     summary = "Unpause Containers",
     request_body = ref("#/components/schemas/ContainerIdsInput"),
     responses(
@@ -142,6 +147,7 @@ deployment_action_handler!(
     post,
     path = "/api/v1/deployments/start",
     operation_id = "startDeployments",
+    tag = "Deployments",
     summary = "Start Deployments",
     request_body = ref("#/components/schemas/DeploymentIds"),
     responses(
@@ -159,6 +165,7 @@ deployment_action_handler!(
     post,
     path = "/api/v1/deployments/stop",
     operation_id = "stopDeployments",
+    tag = "Deployments",
     summary = "Stop Deployments",
     request_body = ref("#/components/schemas/DeploymentIds"),
     responses(
@@ -176,6 +183,7 @@ deployment_action_handler!(
     post,
     path = "/api/v1/deployments/restart",
     operation_id = "restartDeployments",
+    tag = "Deployments",
     summary = "Restart Deployments",
     request_body = ref("#/components/schemas/DeploymentIds"),
     responses(
@@ -193,6 +201,7 @@ deployment_action_handler!(
     post,
     path = "/api/v1/deployments/pause",
     operation_id = "pauseDeployments",
+    tag = "Deployments",
     summary = "Pause Deployments",
     request_body = ref("#/components/schemas/DeploymentIds"),
     responses(
@@ -210,6 +219,7 @@ deployment_action_handler!(
     post,
     path = "/api/v1/deployments/resume",
     operation_id = "resumeDeployments",
+    tag = "Deployments",
     summary = "Resume Deployments",
     request_body = ref("#/components/schemas/DeploymentIds"),
     responses(
@@ -227,6 +237,7 @@ deployment_action_handler!(
     delete,
     path = "/api/v1/containers",
     operation_id = "deleteContainers",
+    tag = "Containers",
     summary = "Delete Containers",
     request_body = DeleteInput,
     responses(

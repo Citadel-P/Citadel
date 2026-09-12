@@ -103,6 +103,14 @@ fn verify_frontend_contract(root: &Path, full: &Value) -> Result<(), Box<dyn std
             )
             .into());
         }
+        if actual.value["tags"] != reference.value["tags"] {
+            return Err(format!("Frontend tags mismatch for {id}").into());
+        }
+        if actual.method == "patch" && content_types(actual.value) != content_types(reference.value)
+        {
+            return Err(format!("Frontend PATCH media types mismatch for {id}").into());
+        }
+        verify_operation_metadata(id, actual.value, reference.value)?;
         if !error_statuses(reference.value).is_subset(&error_statuses(actual.value)) {
             return Err(format!("Frontend error responses mismatch for {id}").into());
         }
@@ -110,12 +118,75 @@ fn verify_frontend_contract(root: &Path, full: &Value) -> Result<(), Box<dyn std
     Ok(())
 }
 
+// Compare names rather than example payloads: Rust examples must use the Rust wire contract.
+fn verify_operation_metadata(
+    id: &str,
+    actual: &Value,
+    reference: &Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (media, content) in reference["requestBody"]["content"]
+        .as_object()
+        .into_iter()
+        .flatten()
+    {
+        for name in content["examples"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, _)| name)
+        {
+            if actual["requestBody"]["content"][media]["examples"]
+                .get(name)
+                .is_none()
+            {
+                return Err(format!("Missing {media} request example {name} for {id}").into());
+            }
+        }
+    }
+    for (status, response) in reference["responses"].as_object().into_iter().flatten() {
+        for name in response["headers"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, _)| name)
+        {
+            // .NET emitted cookie names as headers, sometimes on a synthetic 200.
+            // Rust documents real Set-Cookie headers on the actual response status.
+            let preserved = if name == "refresh_token" {
+                actual["responses"]
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .any(|(_, response)| {
+                        response["headers"]["Set-Cookie"]["description"]
+                            .as_str()
+                            .is_some_and(|v| v.contains(name))
+                    })
+            } else {
+                actual["responses"][status]["headers"].get(name).is_some()
+            };
+            if !preserved {
+                return Err(format!("Missing response header {name} for {id}").into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn content_types(operation: &Value) -> BTreeSet<&str> {
+    operation["requestBody"]["content"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(name, _)| name.as_str())
+        .collect()
+}
+
 fn parameters(operation: &Value) -> BTreeSet<(&str, &str, bool)> {
     operation["parameters"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|p| p["in"] != "cookie")
         .filter_map(|p| {
             Some((
                 p["in"].as_str()?,
@@ -293,6 +364,27 @@ mod tests {
             schemas["AutomationActionRunLogsView"]["properties"]["logs"]["type"],
             "string"
         );
+    }
+
+    #[test]
+    fn metadata_gate_detects_missing_cookies_examples_and_response_headers() {
+        let reference = json!({
+            "parameters": [{"name":"refresh_token","in":"cookie","required":true}],
+            "requestBody":{"content":{"application/json":{"examples":{"Azure":{"value":{}}}}}},
+            "responses":{"200":{"headers":{"refresh_token":{"schema":{"type":"string"}}}}}
+        });
+        let mut actual = reference.clone();
+        actual["responses"] =
+            json!({"302":{"headers":{"Set-Cookie":{"description":"Sets refresh_token."}}}});
+        verify_operation_metadata("example", &actual, &reference).unwrap();
+        let mut missing = actual.clone();
+        missing["parameters"] = json!([]);
+        assert_ne!(parameters(&missing), parameters(&reference));
+        missing = actual.clone();
+        missing["requestBody"]["content"]["application/json"]["examples"] = json!({});
+        assert!(verify_operation_metadata("example", &missing, &reference).is_err());
+        actual["responses"] = json!({});
+        assert!(verify_operation_metadata("example", &actual, &reference).is_err());
     }
 
     #[test]

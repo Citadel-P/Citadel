@@ -70,6 +70,7 @@ struct TeamsResponse {
     get,
     path = "/api/v1/teams",
     operation_id = "listTeams",
+    tag = "Teams",
     summary = "Get all Teams",
     responses(
         (status = 200, description = "Success", body = TeamsResponse, content_type = "application/json"),
@@ -121,6 +122,7 @@ async fn list(
     get,
     path = "/api/v1/teams/search",
     operation_id = "searchTeams",
+    tag = "Teams",
     summary = "Search Teams for assignment",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/TeamSearchItems"), content_type = "application/json"),
@@ -153,6 +155,7 @@ async fn search(
     get,
     path = "/api/v1/teams/{id}",
     operation_id = "getTeam",
+    tag = "Teams",
     summary = "Get a Team by ID",
     responses(
         (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
@@ -181,6 +184,7 @@ async fn get(
     post,
     path = "/api/v1/teams",
     operation_id = "createTeam",
+    tag = "Teams",
     summary = "Create a Team",
     request_body = CreateTeamRequest,
     responses(
@@ -211,8 +215,12 @@ async fn create(
     patch,
     path = "/api/v1/teams/{id}",
     operation_id = "updateTeam",
+    tag = "Teams",
     summary = "Update a Team",
-    request_body = PatchTeamRequest,
+    request_body(content(
+        (PatchTeamRequest = "application/merge-patch+json"),
+        (PatchTeamRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -243,6 +251,7 @@ async fn patch(
     post,
     path = "/api/v1/teams/rename",
     operation_id = "renameTeam",
+    tag = "Teams",
     summary = "Rename a Team",
     request_body = RenameTeamRequest,
     responses(
@@ -276,6 +285,7 @@ async fn rename(
     post,
     path = "/api/v1/teams/{id}/roles",
     operation_id = "addTeamRole",
+    tag = "Teams",
     summary = "Assign a Role to a Team",
     request_body = AddTeamRoleRequest,
     responses(
@@ -311,6 +321,7 @@ async fn add_role(
     delete,
     path = "/api/v1/teams/{id}/roles/{roleId}",
     operation_id = "removeTeamRole",
+    tag = "Teams",
     summary = "Remove a Role from a Team",
     responses(
         (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
@@ -344,6 +355,7 @@ async fn remove_role(
     post,
     path = "/api/v1/teams/{id}/members",
     operation_id = "addTeamMember",
+    tag = "Teams",
     summary = "Add an Actor to a Team",
     request_body = AddTeamMemberRequest,
     responses(
@@ -379,6 +391,7 @@ async fn add_member(
     delete,
     path = "/api/v1/teams/{id}/members/{memberActorId}",
     operation_id = "removeTeamMember",
+    tag = "Teams",
     summary = "Remove an Actor from a Team",
     responses(
         (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
@@ -412,6 +425,7 @@ async fn remove_member(
     post,
     path = "/api/v1/teams/{id}/resource-accesses",
     operation_id = "addTeamResourceAccess",
+    tag = "Teams",
     summary = "Add a resource override to a Team",
     request_body = TeamResourceAccessInput,
     responses(
@@ -447,6 +461,7 @@ async fn add_resource_access(
     delete,
     path = "/api/v1/teams/{id}/resource-accesses",
     operation_id = "removeTeamResourceAccess",
+    tag = "Teams",
     summary = "Remove a resource override from a Team",
     request_body = TeamResourceAccessInput,
     responses(
@@ -482,6 +497,7 @@ async fn remove_resource_access(
     delete,
     path = "/api/v1/teams",
     operation_id = "deleteTeams",
+    tag = "Teams",
     summary = "Delete Teams",
     request_body = DeleteTeamsRequest,
     responses(

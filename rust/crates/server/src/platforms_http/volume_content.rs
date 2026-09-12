@@ -40,6 +40,7 @@ async fn authorize(
     get,
     path = "/api/v1/platforms/{platformId}/volumes/{name}/files",
     operation_id = "listVolumeDirectory",
+    tag = "Platforms",
     summary = "Browse a Volume directory",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/VolumeDirectoryView"), content_type = "application/json"),
@@ -93,6 +94,7 @@ pub(super) async fn list(
     get,
     path = "/api/v1/platforms/{platformId}/volumes/{name}/files/download",
     operation_id = "downloadVolumePath",
+    tag = "Platforms",
     summary = "Download a Volume file or directory",
     responses(
         (status = 200, description = "Success"),

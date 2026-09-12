@@ -18,6 +18,7 @@ pub(super) struct DeleteImagesInput {
     delete,
     path = "/api/v1/images",
     operation_id = "deleteImages",
+    tag = "Images",
     summary = "Delete Images",
     request_body = DeleteImagesInput,
     responses(
@@ -129,6 +130,7 @@ pub(super) async fn delete(
     get,
     path = "/api/v1/images/{platformId}/{imageId}/_ports",
     operation_id = "getExposedPorts",
+    tag = "Images",
     summary = "Read exposed ports using the Citadel Image ID",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ExposedPortsResult"), content_type = "application/json"),
@@ -202,6 +204,7 @@ pub(super) async fn exposed_ports(
     get,
     path = "/api/v1/images/{platformId}/{imageId}",
     operation_id = "inspectImage",
+    tag = "Images",
     summary = "Inspect an Image on its owning Docker node",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/InspectImageView"), content_type = "application/json"),

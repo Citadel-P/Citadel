@@ -6,6 +6,7 @@ use citadel_platforms::{StatisticsReadStore, containers::ContainerInspectionPort
     get,
     path = "/api/v1/swarmServices/{id}/inspect",
     operation_id = "inspectManagedSwarmService",
+    tag = "SwarmServices",
     summary = "Inspect the deployed managed Service",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
@@ -89,6 +90,7 @@ pub(super) async fn inspect_managed_service(
     get,
     path = "/api/v1/stacks/{stackId}/data",
     operation_id = "getContainersData",
+    tag = "Stacks",
     summary = "Get Stack runtime containers",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainersDataView"), content_type = "application/json"),
@@ -167,6 +169,7 @@ container_reader!(
     get,
     path = "/api/v1/containers/{id}/inspect",
     operation_id = "inspectContainer",
+    tag = "Containers",
     summary = "Inspect a Container with sensitive environment values redacted",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
@@ -184,6 +187,7 @@ container_reader!(
     get,
     path = "/api/v1/containers/{id}/info",
     operation_id = "getContainerInfo",
+    tag = "Containers",
     summary = "getContainerInfo",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
@@ -201,6 +205,7 @@ container_reader!(
     get,
     path = "/api/v1/containers/{id}/data",
     operation_id = "getContainerData",
+    tag = "Containers",
     summary = "getContainerData",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerDataView"), content_type = "application/json"),
@@ -281,6 +286,7 @@ deployment_reader!(
     get,
     path = "/api/v1/deployments/{id}/inspect",
     operation_id = "inspectDeployment",
+    tag = "Deployments",
     summary = "inspectDeployment",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
@@ -298,6 +304,7 @@ deployment_reader!(
     get,
     path = "/api/v1/deployments/{id}/info",
     operation_id = "getDeploymentContainerInfo",
+    tag = "Deployments",
     summary = "getDeploymentContainerInfo",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
@@ -370,6 +377,7 @@ async fn read_deployment(
     get,
     path = "/api/v1/stacks/{stackId}/containers/{containerId}/inspect",
     operation_id = "inspectStackContainer",
+    tag = "Stacks",
     summary = "Inspect a Stack Container with sensitive environment values redacted",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),

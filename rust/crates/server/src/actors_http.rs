@@ -22,6 +22,7 @@ pub fn router(store: Arc<dyn ActorStore>) -> Router {
     get,
     path = "/api/v1/actors/{id}",
     operation_id = "getActor",
+    tag = "Actors",
     summary = "Get an Actor",
     responses(
         (status = 200, description = "Success", body = citadel_identity::ActorView, content_type = "application/json"),
@@ -51,6 +52,7 @@ async fn get(
     patch,
     path = "/api/v1/actors/{id}/enabled",
     operation_id = "patchActorEnabled",
+    tag = "Actors",
     summary = "Enable or disable an Actor",
     request_body = PatchActorEnabledInput,
     responses(

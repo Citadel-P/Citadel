@@ -96,3 +96,27 @@ dispatch. Its schema is derived and registered through those DTOs, including
 nullable PATCH fields; it has no frozen compatibility entry or custom schema
 builder. PostgreSQL uses SQLx's typed JSON codec. The unrelated webhook event
 payload remains raw bytes for signature verification.
+
+## .NET OpenAPI transformer parity
+
+Cookie parameters, actual `Set-Cookie` response headers and named registry examples
+live in the handler annotations. Shared examples use Rust wire casing and are tested
+against the request DTOs and registry validation. The compatibility gate includes
+cookie parameters, example names for each media type and response headers. Legacy
+.NET cookie-name headers are checked against real `Set-Cookie` documentation.
+Bearer documentation describes both User JWTs and Service Account tokens; shared
+error responses document 429 using `application/problem+json`.
+
+With `EnableSwagger=true`, `/swagger/` serves embedded Swagger UI assets, the custom
+operation-ID stylesheet, deep links, operation IDs, request durations, enabled
+Try it out and persisted authorization. No CDN is needed. Both JSON endpoints add
+the request origin after transport Host/proxy validation and return `no-store`;
+static exports remain independent of the build machine's hostname. The existing
+transport mode supplies the HTTP/HTTPS fallback for direct connections.
+
+Endpoint tags match the .NET resource groups and are declared on each handler.
+The frontend compatibility gate checks tags and exact PATCH request media types.
+Merge-patch operations advertise both `application/merge-patch+json` and
+`application/json`; command-style PATCH operations retain their JSON contract.
+The Swagger UI content-type component puts merge-patch first when advertised,
+so it is the initial selection without removing the JSON option.

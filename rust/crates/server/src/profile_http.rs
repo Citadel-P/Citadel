@@ -29,6 +29,7 @@ pub fn router(state: ProfileHttpState) -> Router {
     post,
     path = "/api/v1/profile/change-password",
     operation_id = "changeCurrentPassword",
+    tag = "Profile",
     summary = "Change current profile password",
     request_body = ChangeCurrentPasswordRequest,
     responses(
@@ -61,6 +62,7 @@ async fn change_password(
     get,
     path = "/api/v1/profile/sessions",
     operation_id = "listProfileSessions",
+    tag = "Profile",
     summary = "List current profile sessions",
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserSessionsView, content_type = "application/json"),
@@ -91,6 +93,7 @@ async fn list_sessions(
     delete,
     path = "/api/v1/profile/sessions/{sessionId}",
     operation_id = "revokeProfileSession",
+    tag = "Profile",
     summary = "Revoke a profile session",
     responses(
         (status = 204, description = "Success"),
@@ -123,6 +126,7 @@ async fn revoke_session(
     delete,
     path = "/api/v1/profile/sessions",
     operation_id = "revokeOtherProfileSessions",
+    tag = "Profile",
     summary = "Revoke other profile sessions",
     responses(
         (status = 200, description = "Success", body = citadel_identity::RevokeOtherProfileSessionsView, content_type = "application/json"),
@@ -153,6 +157,7 @@ async fn revoke_other_sessions(
     get,
     path = "/api/v1/profile/preferences",
     operation_id = "getProfilePreferences",
+    tag = "Profile",
     summary = "Get current profile preferences",
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
@@ -179,8 +184,12 @@ async fn get_preferences(
     patch,
     path = "/api/v1/profile/preferences",
     operation_id = "patchProfilePreferences",
+    tag = "Profile",
     summary = "Update current profile preferences",
-    request_body = PatchUserPreferencesRequest,
+    request_body(content(
+        (PatchUserPreferencesRequest = "application/merge-patch+json"),
+        (PatchUserPreferencesRequest = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
@@ -207,6 +216,7 @@ async fn patch_preferences(
     get,
     path = "/api/v1/profile",
     operation_id = "getCurrentProfile",
+    tag = "Profile",
     summary = "Get current profile",
     responses(
         (status = 200, description = "Success", body = citadel_identity::CurrentProfileView, content_type = "application/json"),
@@ -233,6 +243,7 @@ async fn get_current(
     patch,
     path = "/api/v1/profile",
     operation_id = "updateCurrentProfile",
+    tag = "Profile",
     summary = "Update current profile",
     request_body = UpdateCurrentProfileRequest,
     responses(

@@ -53,6 +53,7 @@ struct ReplaceResourceTagsInput {
     get,
     path = "/api/v1/tags",
     operation_id = "listTags",
+    tag = "Tags",
     summary = "List resource tags",
     responses(
         (status = 200, description = "Success", body = TagsResponse, content_type = "application/json"),
@@ -103,6 +104,7 @@ async fn list_tags(
     post,
     path = "/api/v1/tags",
     operation_id = "createTag",
+    tag = "Tags",
     summary = "Create a resource tag",
     request_body = NewTag,
     responses(
@@ -146,6 +148,7 @@ async fn create_tag(
     patch,
     path = "/api/v1/tags/{id}",
     operation_id = "patchTag",
+    tag = "Tags",
     summary = "Update a resource tag",
     request_body = TagPatch,
     responses(
@@ -196,6 +199,7 @@ async fn patch_tag(
     delete,
     path = "/api/v1/tags/{id}",
     operation_id = "deleteTag",
+    tag = "Tags",
     summary = "Delete a resource tag",
     responses(
         (status = 204, description = "Success"),
@@ -279,6 +283,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/platforms/{id}/tags",
     operation_id = "getPlatformTags",
+    tag = "Platforms",
     summary = "Get Platform tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -293,6 +298,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/platforms/{id}/tags",
     operation_id = "replacePlatformTags",
+    tag = "Platforms",
     summary = "Replace Platform tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -312,6 +318,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/registries/{id}/tags",
     operation_id = "getRegistryTags",
+    tag = "Registries",
     summary = "Get Registry tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -326,6 +333,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/registries/{id}/tags",
     operation_id = "replaceRegistryTags",
+    tag = "Registries",
     summary = "Replace Registry tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -345,6 +353,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/gitRepositories/{id}/tags",
     operation_id = "getGitRepositoryTags",
+    tag = "GitRepositories",
     summary = "Get Git repository tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -359,6 +368,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/gitRepositories/{id}/tags",
     operation_id = "replaceGitRepositoryTags",
+    tag = "GitRepositories",
     summary = "Replace Git repository tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -379,6 +389,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/automation/actions/{id}/tags",
     operation_id = "getAutomationActionTags",
+    tag = "AutomationActions",
     summary = "Get AutomationAction tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -393,6 +404,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/automation/actions/{id}/tags",
     operation_id = "replaceAutomationActionTags",
+    tag = "AutomationActions",
     summary = "Replace AutomationAction tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -412,6 +424,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/buildProjects/{id}/tags",
     operation_id = "getBuildTags",
+    tag = "BuildProjects",
     summary = "Get BuildProject tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -426,6 +439,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/buildProjects/{id}/tags",
     operation_id = "replaceBuildTags",
+    tag = "BuildProjects",
     summary = "Replace BuildProject tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -445,6 +459,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/buildAgentPools/{id}/tags",
     operation_id = "getBuildAgentPoolTags",
+    tag = "BuildAgentPools",
     summary = "Get BuildAgentPool tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -459,6 +474,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/buildAgentPools/{id}/tags",
     operation_id = "replaceBuildAgentPoolTags",
+    tag = "BuildAgentPools",
     summary = "Replace BuildAgentPool tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -478,6 +494,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/backupPolicies/{id}/tags",
     operation_id = "getBackupPolicyTags",
+    tag = "BackupPolicies",
     summary = "Get BackupPolicy tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -492,6 +509,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/backupPolicies/{id}/tags",
     operation_id = "replaceBackupPolicyTags",
+    tag = "BackupPolicies",
     summary = "Replace BackupPolicy tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -512,6 +530,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/deployments/{deploymentId}/tags",
     operation_id = "getDeploymentTags",
+    tag = "Deployments",
     summary = "Get Deployment tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -526,6 +545,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/deployments/{deploymentId}/tags",
     operation_id = "replaceDeploymentTags",
+    tag = "Deployments",
     summary = "Replace Deployment tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -545,6 +565,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/stacks/{stackId}/tags",
     operation_id = "getStackTags",
+    tag = "Stacks",
     summary = "Get Stack tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -559,6 +580,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/stacks/{stackId}/tags",
     operation_id = "replaceStackTags",
+    tag = "Stacks",
     summary = "Replace Stack tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
@@ -578,6 +600,7 @@ resource_tag_handlers!(
     get,
     path = "/api/v1/swarmServices/{id}/tags",
     operation_id = "getSwarmServiceTags",
+    tag = "SwarmServices",
     summary = "Get SwarmService tags",
     responses(
         (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
@@ -592,6 +615,7 @@ resource_tag_handlers!(
     put,
     path = "/api/v1/swarmServices/{id}/tags",
     operation_id = "replaceSwarmServiceTags",
+    tag = "SwarmServices",
     summary = "Replace SwarmService tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(

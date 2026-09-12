@@ -11,6 +11,7 @@ static PRUNE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4
     post,
     path = "/api/v1/platforms/{id}/prune",
     operation_id = "prunePlatform",
+    tag = "Platforms",
     summary = "Prune unused Docker resources",
     request_body = PrunePlatformInput,
     responses(
@@ -95,6 +96,7 @@ impl AgentSetupContext {
     post,
     path = "/api/v1/platforms/agent/setup/rotate-key",
     operation_id = "rotateAgentHubKey",
+    tag = "Platforms",
     summary = "Rotate the Agent signing key",
     responses(
         (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
@@ -145,6 +147,7 @@ pub(super) async fn rotate_key(
     post,
     path = "/api/v1/platforms/rename",
     operation_id = "renamePlatform",
+    tag = "Platforms",
     summary = "Rename a Platform",
     request_body = RenamePlatformInput,
     responses(
@@ -177,8 +180,12 @@ pub(super) async fn rename(
     patch,
     path = "/api/v1/platforms/{id}",
     operation_id = "updatePlatform",
+    tag = "Platforms",
     summary = "Update a Platform",
-    request_body = ref("#/components/schemas/PlatformInput"),
+    request_body(content(
+        (ref("#/components/schemas/PlatformInput") = "application/merge-patch+json"),
+        (ref("#/components/schemas/PlatformInput") = "application/json")
+    )),
     responses(
         (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
