@@ -81,3 +81,19 @@ pub mod volume_content;
 pub use postgres::PostgresAuthorizedPlatformReader;
 
 pub mod host_disk_usage;
+
+pub mod resource_status_store;
+
+pub mod maintenance_store;
+
+mod swarm_stack_status;
+
+mod swarm_runtime_hash;
+
+mod swarm_operation_reconciliation;
+
+pub mod image_digest_cache;
+
+pub mod image_scanner;
+
+pub mod node_agent_reconciliation;

@@ -448,7 +448,7 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
 }
 
 async fn fixture() -> Fixture {
-    fixture_for_cluster("cluster-test".into()).await
+    fixture_for_cluster(String::new()).await
 }
 
 async fn fixture_for_cluster(cluster: String) -> Fixture {
@@ -466,6 +466,11 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .await
         .unwrap();
     let platform_id = Uuid::now_v7();
+    let cluster = if cluster.is_empty() {
+        format!("cluster-{platform_id}")
+    } else {
+        cluster
+    };
     let actor_id = Uuid::now_v7();
     let tag_id = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,'Local',0,0,0,$3,0,'{\"$type\":\"DockerSwarm\"}','Online',0)")
@@ -475,8 +480,10 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .execute(&pool)
         .await
         .unwrap();
+    let mut initial = snapshot(platform_id);
+    initial.info.swarm.as_mut().unwrap().cluster_id = Some(cluster.clone());
     PostgresInventoryProjectionStore::new(pool.clone())
-        .persist(&snapshot(platform_id))
+        .persist(&initial)
         .await
         .unwrap();
     seed_reader_access(&pool, platform_id, actor_id, tag_id).await;
@@ -717,7 +724,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
     RuntimeInventorySnapshot {
         platform_id,
         info: RuntimePlatformInfo {
-            daemon_id: "daemon-1".into(),
+            daemon_id: "daemon-test".into(),
             server_version: "28.0.0".into(),
             operating_system: "Linux".into(),
             os_type: "linux".into(),
@@ -731,7 +738,13 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             api_version: "1.49".into(),
             minimum_api_version: "1.24".into(),
             agent_version: None,
-            swarm: None,
+            swarm: Some(citadel_platforms::RuntimeSwarmInfo {
+                node_id: "manager-node".into(),
+                cluster_id: Some(format!("cluster-{platform_id}")),
+                local_node_state: "active".into(),
+                control_available: true,
+                ..Default::default()
+            }),
         },
         containers: vec![RuntimeContainerSummary {
             id: "container-1".into(),

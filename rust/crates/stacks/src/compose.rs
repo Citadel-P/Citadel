@@ -401,9 +401,13 @@ pub fn create_ownership_labels_override(
     include_swarm_service_labels: bool,
 ) -> Result<String, StackError> {
     validate_input_limits(compose_files)?;
+    let mut compose_version = None;
     let mut definitions = BTreeMap::<String, Vec<String>>::new();
     for content in compose_files {
         let document = parse_document(content)?;
+        if include_swarm_service_labels && compose_version.is_none() {
+            compose_version = document.get("version").cloned();
+        }
         let Some(services) = mapping_at(&document, "services") else {
             continue;
         };
@@ -465,6 +469,11 @@ pub fn create_ownership_labels_override(
         services.insert(Value::String(name), Value::Mapping(service));
     }
     let mut root = Mapping::new();
+    // Docker stack deploy requires every input file, including generated
+    // overrides, to use the same Compose version as the user's source.
+    if let Some(version) = compose_version {
+        root.insert(Value::String("version".into()), version);
+    }
     root.insert(
         Value::String("services".to_owned()),
         Value::Mapping(services),
@@ -1170,6 +1179,18 @@ mod tests {
         )
         .unwrap();
         assert!(report.is_compatible);
+    }
+
+    #[test]
+    fn swarm_ownership_override_preserves_the_declared_compose_version() {
+        for version in ["3.8", "3.9"] {
+            let source = format!("version: '{version}'\nservices:\n  web:\n    image: alpine\n");
+            let generated =
+                create_ownership_labels_override(&[source], Uuid::now_v7(), Uuid::now_v7(), true)
+                    .unwrap();
+            let document: Value = serde_yaml_ng::from_str(&generated).unwrap();
+            assert_eq!(document["version"].as_str(), Some(version));
+        }
     }
 
     #[test]

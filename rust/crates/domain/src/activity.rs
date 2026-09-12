@@ -888,6 +888,26 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Deployment")]
         deployment: DeploymentActivitySnapshot,
     },
+    DeploymentStarted {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    DeploymentStopped {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    DeploymentPaused {
+        #[serde(rename = "ContainerIds")]
+        container_ids: Vec<String>,
+    },
+    DeploymentDegraded {
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    StackDegraded {
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
     DeploymentApplied {
         #[serde(rename = "Deployment")]
         deployment: Option<DeploymentActivitySnapshot>,
@@ -1021,6 +1041,18 @@ pub enum ActivityEventInfo {
         kind: String,
         #[serde(rename = "Reason")]
         reason: String,
+    },
+    PlatformConnected {
+        #[serde(rename = "Platform")]
+        platform: PlatformActivitySnapshot,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
+    },
+    PlatformDisconnected {
+        #[serde(rename = "Platform")]
+        platform: PlatformActivitySnapshot,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
     },
     PlatformCreated {
         #[serde(rename = "Platform")]
@@ -1803,6 +1835,11 @@ impl ActivityEventInfo {
             Self::DeploymentUpdated { .. } => ActivityEventType::DeploymentUpdated,
             Self::DeploymentRenamed { .. } => ActivityEventType::DeploymentRenamed,
             Self::DeploymentDeleted { .. } => ActivityEventType::DeploymentDeleted,
+            Self::DeploymentStarted { .. } => ActivityEventType::DeploymentStarted,
+            Self::DeploymentStopped { .. } => ActivityEventType::DeploymentStopped,
+            Self::DeploymentPaused { .. } => ActivityEventType::DeploymentPaused,
+            Self::DeploymentDegraded { .. } => ActivityEventType::DeploymentDegraded,
+            Self::StackDegraded { .. } => ActivityEventType::StackDegraded,
             Self::DeploymentApplied { .. } => ActivityEventType::DeploymentApplied,
             Self::StackCreated { .. } => ActivityEventType::StackCreated,
             Self::StackDuplicated { .. } => ActivityEventType::StackDuplicated,
@@ -1830,6 +1867,8 @@ impl ActivityEventInfo {
                 ActivityEventType::SwarmServiceOperationFailed
             }
             Self::PlatformCreated { .. } => ActivityEventType::PlatformCreated,
+            Self::PlatformConnected { .. } => ActivityEventType::PlatformConnected,
+            Self::PlatformDisconnected { .. } => ActivityEventType::PlatformDisconnected,
             Self::PlatformRenamed { .. } => ActivityEventType::PlatformRenamed,
             Self::PlatformDeleted { .. } => ActivityEventType::PlatformDeleted,
             Self::PlatformNodeAgentLifecycle { .. } => {
@@ -2202,13 +2241,18 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
+        let status = if matches!(info, ActivityEventInfo::PlatformDisconnected { .. }) {
+            ActivityStatus::Warning
+        } else {
+            ActivityStatus::Success
+        };
         let mut event = Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::Platform,
             actor_id,
             info,
-            ActivityStatus::Success,
+            status,
             created_at,
         )?;
         event.platform_id = Some(resource_id);

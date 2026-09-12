@@ -79,6 +79,12 @@ pub struct RuntimeSwarmNode {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct RuntimeSwarmResourceMount {
+    pub resource_id: String,
+    pub target_name: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct RuntimeSwarmService {
     pub id: String,
     pub version_index: i64,
@@ -93,6 +99,8 @@ pub struct RuntimeSwarmService {
     pub network_ids: Vec<String>,
     pub secret_ids: Vec<String>,
     pub config_ids: Vec<String>,
+    pub secret_mounts: Vec<RuntimeSwarmResourceMount>,
+    pub config_mounts: Vec<RuntimeSwarmResourceMount>,
     pub labels: BTreeMap<String, String>,
     pub stack_namespace: Option<String>,
     pub ownership: SwarmServiceOwnership,
@@ -101,6 +109,8 @@ pub struct RuntimeSwarmService {
     pub stack_id: Option<Uuid>,
     pub force_update: i64,
     pub runtime_hash: String,
+    /// Present only for Local observations during the raw-JSON hash migration.
+    pub legacy_runtime_hash: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
 }

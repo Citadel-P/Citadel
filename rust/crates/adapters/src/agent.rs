@@ -189,6 +189,10 @@ const STREAM_DAEMON_EVENTS_METHOD: &str = "/citadel.platforms.v1.PlatformService
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentDaemonEvent {
+    pub container_id: Option<String>,
+    pub container_state: Option<String>,
+    pub container_name: Option<String>,
+    pub container: Option<RuntimeContainerSummary>,
     pub resource_type: &'static str,
     pub action: String,
 }
@@ -443,6 +447,30 @@ pub(crate) struct AgentBuildCommand {
 }
 
 impl AgentClient {
+    /// Construct a reusable signing/transport context without requiring any
+    /// remote platform to be online during Core startup.
+    pub fn lazy(
+        address: &str,
+        signer: AgentRequestSigner,
+        operation_timeout: Duration,
+        allow_insecure: bool,
+    ) -> Result<Self, RuntimeCapabilityError> {
+        if operation_timeout.is_zero() {
+            return Err(invalid_address("Agent timeout must be positive"));
+        }
+        let address = validate_address(address, allow_insecure)?;
+        let endpoint = Endpoint::from_shared(address.clone())
+            .map_err(|error| invalid_address(error.to_string()))?
+            .connect_timeout(operation_timeout);
+        Ok(Self {
+            channel: endpoint.connect_lazy(),
+            signer,
+            operation_timeout,
+            address,
+            allow_insecure,
+        })
+    }
+
     pub async fn connect(
         address: &str,
         signer: AgentRequestSigner,
@@ -1349,29 +1377,57 @@ impl AgentClient {
     }
 }
 
-pub(crate) fn map_daemon_event(
+pub fn decode_daemon_event(bytes: &[u8]) -> Result<Option<AgentDaemonEvent>, prost::DecodeError> {
+    let response = citadel_contracts::citadel::platforms::v1::DaemonEventResponse::decode(bytes)?;
+    Ok(map_daemon_event(response.kind))
+}
+
+pub fn map_daemon_event(
     kind: Option<daemon_event_response::Kind>,
 ) -> Option<AgentDaemonEvent> {
     let event = match kind? {
         daemon_event_response::Kind::DaemonContainerEventResponse(value) => AgentDaemonEvent {
             resource_type: "container",
+            container_id: Some(value.container_id),
+            container_state: value
+                .container
+                .as_ref()
+                .map(|c| c.state().as_str_name().to_ascii_lowercase()),
+            container_name: value.container.as_ref().map(|c| c.name.clone()),
+            container: value.container.map(map_container),
             action: value.action,
         },
         daemon_event_response::Kind::DaemonImageEventResponse(value) => AgentDaemonEvent {
             resource_type: "image",
             action: value.action,
+            container_id: None,
+            container_state: None,
+            container_name: None,
+            container: None,
         },
         daemon_event_response::Kind::DaemonVolumeEventResponse(value) => AgentDaemonEvent {
             resource_type: "volume",
             action: value.action,
+            container_id: None,
+            container_state: None,
+            container_name: None,
+            container: None,
         },
         daemon_event_response::Kind::DaemonNetworkEventResponse(value) => AgentDaemonEvent {
             resource_type: "network",
             action: value.action,
+            container_id: None,
+            container_state: None,
+            container_name: None,
+            container: None,
         },
         daemon_event_response::Kind::DaemonResourceEventResponse(value) => AgentDaemonEvent {
             resource_type: daemon_resource_type(value.r#type),
             action: value.action,
+            container_id: None,
+            container_state: None,
+            container_name: None,
+            container: None,
         },
     };
     (!event.action.is_empty()).then_some(event)
@@ -2091,6 +2147,26 @@ pub(crate) fn map_swarm_service(
         update_message: nonempty(value.update_message),
         ports: value.ports,
         network_ids: value.network_ids,
+        secret_mounts: value
+            .definition
+            .as_ref()
+            .into_iter()
+            .flat_map(|d| &d.secrets)
+            .map(|r| citadel_platforms::RuntimeSwarmResourceMount {
+                resource_id: r.id.clone(),
+                target_name: r.target_name.clone(),
+            })
+            .collect(),
+        config_mounts: value
+            .definition
+            .as_ref()
+            .into_iter()
+            .flat_map(|d| &d.configs)
+            .map(|r| citadel_platforms::RuntimeSwarmResourceMount {
+                resource_id: r.id.clone(),
+                target_name: r.target_name.clone(),
+            })
+            .collect(),
         secret_ids: value.secret_ids,
         config_ids: value.config_ids,
         stack_namespace: value.labels.get("com.docker.stack.namespace").cloned(),
@@ -2101,6 +2177,7 @@ pub(crate) fn map_swarm_service(
         stack_id: None,
         force_update: value.force_update,
         runtime_hash: value.runtime_hash,
+        legacy_runtime_hash: None,
         created_at: protobuf_timestamp(value.created_at),
         updated_at: protobuf_timestamp(value.updated_at),
     }
@@ -2234,15 +2311,27 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
             })
             .collect(),
     );
+    let mut labels = std::collections::BTreeMap::new();
+    if let Ok(id) = uuid::Uuid::parse_str(&value.stack_id)
+        && !id.is_nil()
+    {
+        labels.insert("com.citadel.managed".into(), "true".into());
+        labels.insert("com.citadel.stack-id".into(), id.to_string());
+    }
+    let image_id = if value.image_id.is_empty() {
+        value.image.clone()
+    } else {
+        value.image_id.clone()
+    };
     RuntimeContainerSummary {
         id: value.id,
         name: value.name.trim_start_matches('/').to_owned(),
         image: value.image,
-        image_id: value.image_id,
+        image_id,
         created: value.created,
         state,
         status: value.status,
-        labels: Default::default(),
+        labels,
         ports,
         stack: value.stack,
         is_system: value.is_system,
@@ -2255,8 +2344,17 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
 pub(crate) fn map_platform_stats(
     value: citadel_contracts::citadel::platforms::v1::PlatformStatsResponse,
 ) -> RuntimePlatformStats {
+    // Existing Agents put container counts in the embedded sample. Use the
+    // envelope counts when the optional sample is absent (descriptor-only frame).
+    let has_stat = value.stat.is_some();
     let stat = value.stat.unwrap_or_default();
     RuntimePlatformStats {
+        image_used_bytes: value.image_used_bytes,
+        volume_used_bytes: value.volume_used_bytes,
+        image_count: value.image_count,
+        volume_count: value.volume_count,
+        network_count: value.network_count,
+        mem_total: value.mem_total,
         disk_used_bytes: stat.disk_used_bytes,
         disk_total_bytes: stat.disk_total_bytes,
         disk_usage: stat.disk_usage,
@@ -2264,10 +2362,26 @@ pub(crate) fn map_platform_stats(
         cpu_usage: stat.cpu_usage,
         receive_bytes: stat.rx_bytes,
         transmit_bytes: stat.tx_bytes,
-        container_count: i64::from(stat.container_count),
-        containers_running: i64::from(stat.containers_running),
-        containers_paused: i64::from(stat.containers_paused),
-        containers_stopped: i64::from(stat.containers_stopped),
+        container_count: if has_stat {
+            i64::from(stat.container_count)
+        } else {
+            value.container_count
+        },
+        containers_running: if has_stat {
+            i64::from(stat.containers_running)
+        } else {
+            value.containers_running
+        },
+        containers_paused: if has_stat {
+            i64::from(stat.containers_paused)
+        } else {
+            value.containers_paused
+        },
+        containers_stopped: if has_stat {
+            i64::from(stat.containers_stopped)
+        } else {
+            value.containers_stopped
+        },
     }
 }
 
@@ -2541,6 +2655,8 @@ mod tests {
             daemon_event_response::Kind::DaemonContainerEventResponse(
                 DaemonContainerEventResponse {
                     action: "start".to_owned(),
+                    container_id: "docker-1".into(),
+                    container: Some(ContainerMessage { state: ContainerStateType::Exited as i32, name: "nginx".into(), ..Default::default() }),
                     ..Default::default()
                 },
             ),
@@ -2548,6 +2664,9 @@ mod tests {
         .unwrap();
         assert_eq!(container.resource_type, "container");
         assert_eq!(container.action, "start");
+        assert_eq!(container.container_id.as_deref(), Some("docker-1"));
+        assert_eq!(container.container_state.as_deref(), Some("exited"));
+        assert_eq!(container.container_name.as_deref(), Some("nginx"));
 
         let service = map_daemon_event(Some(
             daemon_event_response::Kind::DaemonResourceEventResponse(DaemonResourceEventResponse {
@@ -2742,5 +2861,49 @@ mod disk_mapping_tests {
             map_platform_stats(PlatformStatsResponse::default()).disk(),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod platform_stats_mapping_tests {
+    #[test]
+    fn platform_stats_keep_storage_totals_and_outer_descriptor_counts() {
+        let response = citadel_contracts::citadel::platforms::v1::PlatformStatsResponse {
+            image_used_bytes: Some(2048),
+            volume_used_bytes: Some(4096),
+            image_count: 7,
+            volume_count: 3,
+            network_count: 2,
+            mem_total: 8192,
+            container_count: 6,
+            containers_running: 3,
+            containers_paused: 1,
+            containers_stopped: 2,
+            ..Default::default()
+        };
+        let sample = super::map_platform_stats(response);
+        assert_eq!(
+            (sample.image_used_bytes, sample.volume_used_bytes),
+            (Some(2048), Some(4096))
+        );
+        assert_eq!(
+            (
+                sample.image_count,
+                sample.volume_count,
+                sample.network_count,
+                sample.mem_total
+            ),
+            (7, 3, 2, 8192)
+        );
+        assert_eq!(
+            (
+                sample.container_count,
+                sample.containers_running,
+                sample.containers_paused,
+                sample.containers_stopped
+            ),
+            (6, 3, 1, 2)
+        );
+        assert_eq!(sample.disk(), None);
     }
 }

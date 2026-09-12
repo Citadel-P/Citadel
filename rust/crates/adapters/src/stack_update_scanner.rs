@@ -27,6 +27,23 @@ impl StackUpdateScanner for StackUpdateRuntime {
         stack: &'a StackView,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_mode(stack, false, cancel)
+    }
+    fn scan_cached<'a>(
+        &'a self,
+        stack: &'a StackView,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_mode(stack, true, cancel)
+    }
+}
+impl StackUpdateRuntime {
+    fn scan_mode<'a>(
+        &'a self,
+        stack: &'a StackView,
+        scheduled: bool,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         Box::pin(async move {
             let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
             if let StackSpec::Git {
@@ -199,21 +216,36 @@ impl StackUpdateScanner for StackUpdateRuntime {
                     digests.into_iter().next().unwrap(),
                 );
                 if !remote.contains_key(&check.key) {
-                    let digest = crate::registry_digest::inspect(
-                        &self.runtime.pool,
-                        &self.runtime.docker,
-                        peer.clone(),
-                        check.key.registry_id,
-                        &check.image_name,
-                        cancel,
-                    )
-                    .await
-                    .map_err(|_| {
-                        StackError::Runtime(
+                    let digest = if scheduled {
+                        if !self.runtime.image_cache.wait_ready(cancel).await {
+                            return Err(StackError::Cancelled);
+                        }
+                        self.runtime
+                            .image_cache
+                            .get(check.key.registry_id, &check.image_name)
+                            .ok_or_else(|| {
+                                StackError::Conflict(
+                                    "No recent registry observation is available.".into(),
+                                )
+                            })?
+                            .digest
+                    } else {
+                        crate::registry_digest::inspect(
+                            &self.runtime.pool,
+                            &self.runtime.docker,
+                            peer.clone(),
+                            check.key.registry_id,
+                            &check.image_name,
+                            cancel,
+                        )
+                        .await
+                        .map_err(|_| {
+                            StackError::Runtime(
                             "Registry update check failed. Verify connectivity and credentials."
                                 .into(),
                         )
-                    })?;
+                        })?
+                    };
                     remote.insert(check.key.clone(), digest);
                 }
             }

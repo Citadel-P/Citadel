@@ -369,3 +369,125 @@ The React UI contains functionality that has not yet migrated to Rust. A page
 can therefore return a deliberate missing or unsupported-operation response
 even when the API health endpoint succeeds. The migration ledger and slice
 tests remain authoritative for what is currently implemented.
+
+### Container-driven resource status
+
+Daemon container events update the persisted runtime identity and its Deployment
+or Compose Stack status in one transaction. Local Core inspects the affected
+container; Direct and Edge Agents supply the observed container state. Confirmed
+deletions preserve the resource binding long enough to mark the owner degraded.
+Status-change activities use the .NET payload names, and realtime invalidations
+are published after commit. Duplicate observations do not create duplicate activities.
+
+Full inventory reconciliation remains the recovery path for missed events and
+new resource discovery. It runs at startup, after recovery, and at the configured
+`JobConfiguration__SwarmReconciliationIntervalSeconds` interval (30 minutes by
+default). Platform health is checked every five seconds with a two-second timeout,
+three failures before going offline, and two successes before recovery.
+`JobConfiguration__MonitoringInterval` controls the readiness probe. An unreachable daemon degrades its Deployments; recovery
+refreshes inventory before restoring observed health. Separate node-Agent
+container projections are preserved when the manager disconnects.
+
+Swarm task health remains owned by Swarm reconciliation. Existing container,
+Deployment Apply, and Stack operation recovery jobs continue to recover expired
+operations; event synchronization does not overwrite active operation claims.
+
+### Background job lifecycle and configuration
+
+Core holds a PostgreSQL advisory lease for its background jobs for the entire
+process lifetime. A second Core against the same database is rejected before
+startup recovery. Stop the previous backend before starting a new binary.
+Startup marks abandoned build, backup, restore and automation executions as
+interrupted, including when their dispatch is disabled. Periodic recovery
+continues to respect active execution deadlines and operation claims.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `JobConfiguration__FlashInterval` | `60` seconds | Flush CPU/RAM threshold observations even when sample input is idle; matches shipped .NET settings |
+| `JobConfiguration__BatchSize` | `500` | Flush threshold observations early at this persisted sample count |
+| `EdgeAgent__NodeAgentRemovalGraceMinutes` | `10` | Revoke credentials only for absent Swarm nodes beyond this grace period |
+| `EdgeAgent__SupportedNodeArchitectures__0`, `__1`, … | `amd64`, `arm64` | Architectures requiring node-agent coverage; `x86_64`/`aarch64` aliases normalize |
+| `Builds__MaxParallelRuns` | `4` | Concurrent build executions |
+| `Builds__RunCleanupEnabled` | `true` | Scheduled build retention |
+| `Builds__RunRetentionDays` | `90` | Terminal build retention; nonpositive disables cleanup |
+| `Backups__Enabled` | `true` | Backup/restore dispatch and policy scheduling |
+| `Backups__MaxParallelRuns` | `2` | Slots in each backup and restore worker; repository/source leases still serialize conflicting work |
+| `Backups__PollIntervalSeconds` | `2` | Minimum queue polling delay |
+| `Backups__SchedulePollIntervalSeconds` | `30` | Backup scheduling interval |
+
+Every persisted Direct Agent has independent event/statistics subscriptions;
+endpoint rejection and reconfiguration do not terminate Core. Unmanaged-container
+alerts recheck ownership after a 30-second grace period. Historical Swarm task
+pruning honors the platform setting and uses node-aware, non-forced deletion
+without removing volumes. Stack AutoFix consumes committed stop/pause events as
+well as periodic sweeps. PostgreSQL listeners are registered before producers.
+
+Maintenance runs every minute, independently of dispatch and incoming samples.
+It retains seven days of statistics and 90 days of activities/action runs,
+removes expired refresh tokens and backup leases, and applies configured build
+retention while preserving referenced builds. Deletion batches are bounded.
+
+Image registry scanning runs every 90 minutes and shares a bounded, one-day cache
+across Deployment, Compose Stack and managed Swarm Service update checks. The
+initial scan barrier honors shutdown; manual/webhook checks still perform fresh
+registry I/O. Scheduled Notify checks do not require automatic-deployment
+entitlements. Automatic mutations retain their entitlement gates.
+
+Statistics are committed as they arrive. The threshold worker uses persisted
+samples as its buffer, takes the median CPU/RAM per flush, and uses only the
+newest disk reading (including an unavailable reading). Failed writes retain
+one batch with bounded retry delays. Successful threshold alerts consume their
+consecutive-match count.
+
+Citadel is unreleased: all SQL changes belong in the declarative schema and
+`0001_initial.sql`, not additional migrations. Regenerate with
+`cargo run -p xtask -- database refresh-baseline`, then verify with
+`cargo run -p xtask -- database verify`.
+
+The initial baseline includes the durable Git Manual/Poll/Apply/Webhook origin
+and pending statistics alert markers. Polling includes branches tracked by Git
+Stacks; unchanged polls and identical repeated failures do not add activities.
+Webhook sync failures publish committed alert snapshots. Late statistics are
+included in a subsequent flush; acknowledged history is not replayed at startup.
+
+### Live Swarm job recovery regression
+
+`citadel-adapters --test stack_runtime_local swarm_material_capture` is an opt-in test for an **isolated two-node Swarm**. It deploys test Configs/Secrets, interrupts a release, stops the supplied worker container, and verifies that periodic inventory degrades and then restores the Stack. Do not point it at a development or production Swarm.
+
+Required test-process environment:
+
+- `CITADEL_PHASE6_DATABASE_URL`: disposable PostgreSQL database.
+- `CITADEL_PHASE6_DOCKER_SOCKET`: isolated manager's Unix socket.
+- `DOCKER_HOST`: the same manager socket, for the Docker CLI.
+- `CITADEL_PHASE6_RUNTIME_IMAGE`: image present on both nodes; the fixture uses shell/sleep (tested with `alpine:3.21`).
+- `CITADEL_PHASE6_SWARM_WORKER`: outer Docker-in-Docker worker container, labelled `citadel.test=jobs-live`. The test checks this label before stopping it; outer container commands use the default Docker connection with `DOCKER_HOST` removed.
+- A current Docker CLI supporting `stack deploy --detach=false` on the test-process `PATH`, and a writable process-specific `TMPDIR`.
+
+For Docker-in-Docker, bind a dedicated socket directory and add a socket listener there. Do not share the entire `/var/run`: persisted containerd PID files can prevent the test worker restarting. Keep the DinD network private and clean up only the test containers, their volumes and that network afterward.
+
+From `rust/`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters \
+  --test stack_runtime_local swarm_material_capture -- --include-ignored --nocapture
+```
+
+### Production Edge Agent jobs regression
+
+`crates/adapters/tests/edge_agent_jobs_acceptance.rs` tests the actual Agent binary against Rust Core's Edge transport and persistence. Build the Agent image from its separate checkout, then run from `rust/`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters \
+  --test edge_agent_jobs_acceptance -- --ignored --nocapture
+```
+
+Supply these environment variables:
+
+- `CITADEL_PHASE7_DATABASE_URL`: a disposable PostgreSQL database.
+- `CITADEL_PHASE7_AGENT_IMAGE`: the production Agent image built for this checkout.
+- `CITADEL_PHASE7_AGENT_NETWORK`: the isolated Docker network.
+- `CITADEL_PHASE7_AGENT_HOST`: an address the Agent container can use to reach the test process's listener (`host.docker.internal` worked with Docker Desktop/WSL).
+- `CITADEL_PHASE6_SWARM_MANAGER`: the disposable DinD container, labelled `citadel.test=jobs-live`.
+- `CITADEL_PHASE6_DOCKER_SOCKET`: that isolated daemon's socket exposed at a host bind-mount path.
+
+The test explicitly uses the outer Docker socket `/var/run/docker.sock` for fixture management. The Agent mounts only the supplied isolated daemon socket. It creates a uniquely named Agent and workload, restarts that Agent, exercises reconnect/revocation, and removes its containers. It does not restart Core or use a development database. The fixture checks the DinD label before any runtime mutation.

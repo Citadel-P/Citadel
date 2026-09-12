@@ -3,6 +3,13 @@ use crate::{StackUpdateBehavior, StackUpdateState};
 use sha2::Digest;
 
 pub trait StackUpdateScanner: Send + Sync {
+    fn scan_cached<'a>(
+        &'a self,
+        stack: &'a StackView,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan(stack, cancellation)
+    }
     fn scan<'a>(
         &'a self,
         stack: &'a StackView,
@@ -20,6 +27,17 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
+        cancellation: &CancellationToken,
+    ) -> Result<StackView, StackError> {
+        self.check_updates_mode(actor, administrator, id, false, cancellation)
+            .await
+    }
+    async fn check_updates_mode(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        scheduled: bool,
         cancellation: &CancellationToken,
     ) -> Result<StackView, StackError> {
         let _permit = self
@@ -47,10 +65,15 @@ impl StackService {
             .ok_or_else(|| StackError::Runtime("Stack update checks are unavailable.".into()))?;
         let cancel = cancellation.child_token();
         let _guard = cancel.clone().drop_guard();
+        let scan = if scheduled {
+            scanner.scan_cached(&snapshot, &cancel)
+        } else {
+            scanner.scan(&snapshot, &cancel)
+        };
         let next = tokio::select! {
             ()=cancel.cancelled()=>return Err(StackError::Cancelled),
             ()=self.shutdown.cancelled()=>return Err(StackError::Cancelled),
-            result=tokio::time::timeout(Duration::from_secs(60),scanner.scan(&snapshot,&cancel))=>
+            result=tokio::time::timeout(Duration::from_secs(60),scan)=>
                 result.map_err(|_|StackError::Runtime("Stack update check timed out.".into()))??,
         };
         // The scan only reads Docker/Git. Compare-and-swap at commit rejects a
@@ -87,7 +110,9 @@ impl StackService {
                     return Ok(());
                 }
                 let result = async {
-                    let checked = self.check_updates(actor, true, id, cancellation).await?;
+                    let checked = self
+                        .check_updates_mode(actor, true, id, images, cancellation)
+                        .await?;
                     let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
                         StackSpec::Git {
                             update_behavior, ..

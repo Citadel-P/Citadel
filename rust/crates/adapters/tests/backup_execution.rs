@@ -221,21 +221,18 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap()
         .unwrap();
-    sqlx::query(
-        "UPDATE backupruns SET status='Interrupted',completedat=CURRENT_TIMESTAMP WHERE id=$1",
-    )
-    .bind(late_claim.run.id)
-    .execute(&pool)
-    .await
-    .unwrap();
-    store
-        .finish_backup(&late_claim, &success_result("b", None))
+    // Port worker startup interruption: periodic maintenance must preserve a
+    // fresh execution, but exclusive Core startup recovery interrupts it.
+    citadel_adapters::maintenance_store::reconcile(&pool)
         .await
         .unwrap();
-    assert_eq!(
+    assert_ne!(
         store.get_run(late_claim.run.id).await.unwrap().status,
         "Interrupted"
     );
+    citadel_adapters::maintenance_store::recover_on_startup(&pool)
+        .await
+        .unwrap();
     assert!(
         store
             .backup_logs(late_claim.run.id)
@@ -267,6 +264,59 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .await
     .unwrap();
     assert_eq!(scheduled_count, 1);
+    let schedule: (chrono::DateTime<Utc>, String, Uuid) = sqlx::query_as("SELECT p.lastscheduledrunat,r.trigger,r.triggeredbyactorid FROM backuppolicies p JOIN backupruns r ON r.id=p.currentrunid WHERE p.id=$1")
+        .bind(policies[0].id).fetch_one(&pool).await.unwrap();
+    assert_eq!(schedule.0, scheduled_minute);
+    assert_eq!(schedule.1, "Schedule");
+    assert_eq!(schedule.2, policies[0].run_as_actor_id);
+    sqlx::query(
+        "UPDATE backupruns SET status='Cancelled' WHERE backuppolicyid=$1 AND trigger='Schedule'",
+    )
+    .bind(policies[0].id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL WHERE id=$1")
+        .bind(policies[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let restarted = PostgresBackupStore::new(pool.clone());
+    assert!(
+        !restarted
+            .enqueue_scheduled_backup(policies[0].id, scheduled_minute)
+            .await
+            .unwrap()
+    );
+    sqlx::query("UPDATE backuppolicies SET enabled=false WHERE id=$1")
+        .bind(policies[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        !restarted
+            .enqueue_scheduled_backup(policies[0].id, scheduled_minute + Duration::minutes(1))
+            .await
+            .unwrap()
+    );
+    let last: chrono::DateTime<Utc> =
+        sqlx::query_scalar("SELECT lastscheduledrunat FROM backuppolicies WHERE id=$1")
+            .bind(policies[0].id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(last, scheduled_minute);
+    sqlx::query("UPDATE backuppolicies SET enabled=true WHERE id=$1")
+        .bind(policies[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        restarted
+            .enqueue_scheduled_backup(policies[0].id, scheduled_minute + Duration::minutes(1))
+            .await
+            .unwrap()
+    );
 
     sqlx::query("UPDATE platforms SET connectortype='EdgeAgent' WHERE id=$1")
         .bind(platform)

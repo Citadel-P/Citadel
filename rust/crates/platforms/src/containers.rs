@@ -168,6 +168,7 @@ impl ContainerMutationService {
             ids,
             action,
             ContainerSelectionKind::Containers,
+            CancellationToken::new(),
         )
         .await
     }
@@ -191,6 +192,26 @@ impl ContainerMutationService {
             ids.into_iter().map(|id| id.to_string()).collect(),
             action,
             ContainerSelectionKind::Deployments,
+            CancellationToken::new(),
+        )
+        .await
+    }
+
+    /// A hosted job owns cancellation, unlike a disconnected HTTP request.
+    pub async fn execute_background(
+        &self,
+        actor: ActorId,
+        ids: Vec<String>,
+        action: ContainerAction,
+        cancellation: CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        self.execute_selection(
+            actor,
+            true,
+            ids,
+            action,
+            ContainerSelectionKind::Containers,
+            cancellation,
         )
         .await
     }
@@ -202,6 +223,7 @@ impl ContainerMutationService {
         ids: Vec<String>,
         action: ContainerAction,
         selection: ContainerSelectionKind,
+        cancellation: CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if ids.is_empty()
             || ids.len() > MAX_CONTAINER_BATCH
@@ -256,7 +278,6 @@ impl ContainerMutationService {
                 )
             })??;
             (service.changed)(&claim);
-            let cancellation = CancellationToken::new();
             let _cancel_on_drop = cancellation.clone().drop_guard();
             let work = async {
                 for target in &claim.targets {

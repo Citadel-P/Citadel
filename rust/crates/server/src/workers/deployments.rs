@@ -12,7 +12,10 @@ pub(super) async fn image_updates(
     cancellation: CancellationToken,
     deployments: Arc<DeploymentService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(Duration::from_secs(2 * 60 * 60));
+    let mut ticker = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_secs(2 * 60 * 60),
+        Duration::from_secs(2 * 60 * 60),
+    );
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }

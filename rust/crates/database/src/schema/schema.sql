@@ -374,6 +374,7 @@ CREATE TABLE deployments (
 
 CREATE TABLE platformstats (
     id uuid NOT NULL,
+    alertpending boolean NOT NULL DEFAULT false,
     cpuusage double precision NOT NULL,
     created bigint NOT NULL,
     disktotalbytes bigint,
@@ -1127,6 +1128,7 @@ CREATE TABLE buildprojects (
 );
 
 CREATE TABLE gitrepositoryrefs (
+    synctrigger text NOT NULL DEFAULT 'Manual' CHECK (synctrigger IN ('Manual', 'Poll', 'Apply', 'Webhook')),
     id uuid NOT NULL,
     branch text NOT NULL,
     gitrepositoryid uuid NOT NULL,
@@ -1979,6 +1981,8 @@ CREATE INDEX ix_platforms_globalsearch_address_trgm ON platforms USING gin (addr
 CREATE INDEX ix_platforms_globalsearch_name_trgm ON platforms USING gin (name gin_trgm_ops);
 
 CREATE INDEX ix_platformstats_created ON platformstats (created);
+
+CREATE INDEX ix_platformstats_alertpending ON platformstats (created, id) WHERE alertpending;
 
 CREATE UNIQUE INDEX ix_platformstats_platformid_created ON platformstats (platformid, created);
 

@@ -3,7 +3,6 @@ use crate::docker::generated::{SwarmService, SwarmTask};
 use citadel_contracts::citadel::swarm::v1::*;
 use citadel_platforms::RuntimeCapabilityError;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().to_owned()
@@ -51,10 +50,7 @@ fn enum_name(value: &Value, default: &str) -> String {
 }
 
 pub(crate) fn runtime_hash(spec: &Value) -> String {
-    Sha256::digest(serde_json::to_vec(spec).expect("Docker JSON serializes"))
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    crate::swarm_runtime_hash::hash(spec)
 }
 
 pub(crate) fn inspect_service_message(

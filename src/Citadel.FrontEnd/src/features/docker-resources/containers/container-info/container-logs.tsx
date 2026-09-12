@@ -36,7 +36,11 @@ const Logs = memo(
     const nid = normalizeContainerReference(containerId);
     const effectiveGroupName = groupName ?? (nid ? `container-log:${nid}` : undefined);
     const hubMethodArg = deploymentId ?? stackId ?? nid;
-    const { containerLogs: logs, clearLogs } = useContainerLogGroup({
+    const {
+      containerLogs: logs,
+      clearLogs,
+      errorMessage,
+    } = useContainerLogGroup({
       hubMethodName,
       hubMethodArg,
       groupName: effectiveGroupName,
@@ -48,7 +52,9 @@ const Logs = memo(
       <div className="flex flex-col gap-3">
         <LogViewer
           logs={logs}
-          emptyMessage="Waiting for logs…"
+          emptyMessage={
+            errorMessage ?? (!effectiveGroupName ? 'No container available for logs.' : 'Waiting for logs…')
+          }
           autoScroll={true}
           timeStamps={true}
           allowWrap={true}
@@ -156,6 +162,7 @@ export const useContainerLogGroup = ({
   logBatchEventName: string;
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>(() => getCachedLogs(groupName));
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   const logsRef = useRef<LogEntry[]>(getCachedLogs(groupName));
   const bufferRef = useRef<string[]>([]);
@@ -184,6 +191,7 @@ export const useContainerLogGroup = ({
       }
 
       setLogs(logsRef.current);
+      setErrorMessage(undefined);
     }
   }, [groupName]);
 
@@ -242,10 +250,13 @@ export const useContainerLogGroup = ({
 
   const startLogs = useCallback(
     async (hub: RealtimeConnection) => {
+      setErrorMessage(undefined);
       try {
         await hub.invoke(hubMethodName, hubMethodArg);
       } catch (error) {
         console.error('Failed to start container logs stream', error);
+        if (mountedRef.current)
+          setErrorMessage('Unable to load container logs. Check the connection and your log permissions, then retry.');
       }
     },
     [hubMethodArg, hubMethodName],
@@ -288,5 +299,5 @@ export const useContainerLogGroup = ({
     setLogs([]);
   }, [groupName]);
 
-  return { containerLogs: logs, clearLogs };
+  return { containerLogs: logs, clearLogs, errorMessage };
 };

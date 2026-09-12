@@ -338,7 +338,7 @@ pub struct NewAlertEvent {
     pub deduplication_key: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlertObservation {
     pub alert_type: String,
     pub info: Value,

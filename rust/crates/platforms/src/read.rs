@@ -575,12 +575,36 @@ pub trait PlatformReadStore: Send + Sync {
 #[derive(Clone)]
 pub struct PlatformReadService {
     store: Arc<dyn PlatformReadStore>,
+    inventory_reads: Arc<std::sync::Mutex<BTreeMap<Uuid, std::sync::Weak<tokio::sync::Mutex<()>>>>>,
 }
 
 impl PlatformReadService {
     #[must_use]
     pub fn new(store: Arc<dyn PlatformReadStore>) -> Self {
-        Self { store }
+        Self {
+            store,
+            inventory_reads: Default::default(),
+        }
+    }
+
+    /// Coalesce concurrent lazy initialization on one Platform without serializing
+    /// different Platforms or holding database locks while querying the daemon.
+    pub async fn inventory_guard(&self, platform: Uuid) -> tokio::sync::OwnedMutexGuard<()> {
+        let lock = {
+            let mut locks = self
+                .inventory_reads
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            locks.retain(|_, lock| lock.strong_count() > 0);
+            if let Some(lock) = locks.get(&platform).and_then(std::sync::Weak::upgrade) {
+                lock
+            } else {
+                let lock = Arc::new(tokio::sync::Mutex::new(()));
+                locks.insert(platform, Arc::downgrade(&lock));
+                lock
+            }
+        };
+        lock.lock_owned().await
     }
 
     pub async fn list_authorized(

@@ -65,6 +65,7 @@ SELECT s.*, p.name platform_name, p.status platform_status,
          WHEN s.dockerserviceid IS NULL THEN s.health
          WHEN projection.dockerserviceid IS NULL OR projection.isstale THEN 'Unknown'
          WHEN lower(COALESCE(projection.updatestate,'')) IN ('paused','rollback_paused','rollback_completed') THEN 'Failed'
+         WHEN lower(COALESCE(projection.updatestate,'')) NOT IN ('','none','completed') THEN 'Progressing'
          WHEN projection.desiredtaskcount=0 THEN 'Stopped'
          WHEN projection.runningtaskcount>=projection.desiredtaskcount THEN 'Healthy'
          WHEN projection.runningtaskcount>0 THEN 'Degraded'
@@ -162,7 +163,7 @@ impl SwarmServiceStore for PostgresSwarmServiceStore {
         limit: usize,
     ) -> BoxFuture<'_, Result<Vec<Uuid>, SwarmServiceError>> {
         Box::pin(async move {
-            sqlx::query_scalar("SELECT s.id FROM swarmservices s JOIN platforms p ON p.id=s.platformid WHERE ($1::uuid IS NULL OR s.id>$1) AND s.controlstate='Idle' AND s.spec->>'UpdateBehavior' IN ('Notify','AutoDeploy') AND s.spec->'Image'->>'$type'='External' AND s.spec->'Image'->>'ImageTag' NOT LIKE '%@%' AND COALESCE(s.appliedimagedigest,'')<>'' AND p.status='Online' ORDER BY s.id LIMIT $2")
+            sqlx::query_scalar("SELECT s.id FROM swarmservices s JOIN platforms p ON p.id=s.platformid WHERE ($1::uuid IS NULL OR s.id>$1) AND s.controlstate='Idle' AND s.spec->>'UpdateBehavior' IN ('Notify','AutoDeploy') AND s.spec->'Image'->>'$type'='External' AND s.spec->'Image'->>'ImageTag' NOT LIKE '%@%' AND COALESCE(s.appliedimagedigest,'')<>'' AND p.status='Online' AND p.platformdescriptor->>'$type'='DockerSwarm' ORDER BY s.id LIMIT $2")
                 .bind(after).bind(i64::try_from(limit.clamp(1,100)).unwrap_or(100)).fetch_all(&self.pool).await.map_err(storage)
         })
     }
@@ -484,9 +485,11 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 let row=sqlx::query("SELECT platformid,dockerserviceid,controlstate FROM swarmservices WHERE id=$1 FOR UPDATE")
                     .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(SwarmServiceError::NotFound)?;
                 ensure_idle(&row)?;
-                sqlx::query("UPDATE swarmservices SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,rowversion=rowversion+1 WHERE id=$1")
-                    .bind(id).bind(Utc::now().timestamp()).bind(actor_id.value()).execute(&mut *tx).await.map_err(storage)?;
+                let operation_id = Uuid::now_v7();
+                sqlx::query("UPDATE swarmservices s SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,rowversion=rowversion+1,operationid=$4,operationkind='Delete',operationstate='Prepared',basedockerversion=dockerversionindex,targetdesiredspechash=desiredspechash,targetruntimehash=NULL,targetrowversion=rowversion+1,expectedforceupdate=NULL,preparedat=now(),attemptedat=NULL,completedat=NULL,observeddockerversion=NULL,resultcode=NULL,resultmessage=NULL,warnings=NULL,operationactorid=$3,operationclusterid=COALESCE(p.clusterid,p.platformdescriptor->>'clusterId','') FROM platforms p WHERE s.id=$1 AND p.id=s.platformid")
+                    .bind(id).bind(Utc::now().timestamp()).bind(actor_id.value()).bind(operation_id).execute(&mut *tx).await.map_err(storage)?;
                 claims.push(ServiceDeletionClaim {
+                    operation_id,
                     id: *id,
                     platform_id: row.try_get("platformid").map_err(storage)?,
                     docker_service_id: row.try_get("dockerserviceid").map_err(storage)?,
@@ -497,6 +500,21 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         })
     }
 
+    fn mark_delete_attempted<'a>(
+        &'a self,
+        claim: &'a ServiceDeletionClaim,
+    ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
+        Box::pin(async move {
+            let changed=sqlx::query("UPDATE swarmservices SET operationstate='PendingAcceptance',attemptedat=now(),rowversion=rowversion+1 WHERE id=$1 AND operationid=$2 AND operationkind='Delete' AND operationstate='Prepared' AND controlstate='Processing'")
+                .bind(claim.id).bind(claim.operation_id).execute(&self.pool).await.map_err(storage)?.rows_affected();
+            if changed != 1 {
+                return Err(SwarmServiceError::Conflict(
+                    "The deletion claim changed before dispatch.".into(),
+                ));
+            }
+            Ok(())
+        })
+    }
     fn complete_delete<'a>(
         &'a self,
         actor_id: ActorId,
@@ -505,9 +523,23 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             for claim in deleted {
-                let row = sqlx::query("SELECT * FROM swarmservices WHERE id=$1 AND controlstate='Processing' FOR UPDATE")
-                    .bind(claim.id).fetch_optional(&mut *tx).await.map_err(storage)?
-                    .ok_or(SwarmServiceError::NotFound)?;
+                let row = sqlx::query("SELECT * FROM swarmservices WHERE id=$1 AND operationid=$2 AND operationkind='Delete' AND controlstate='Processing' FOR UPDATE")
+                    .bind(claim.id).bind(claim.operation_id).fetch_optional(&mut *tx).await.map_err(storage)?;
+                let Some(row) = row else {
+                    let exists: bool = sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM swarmservices WHERE id=$1)",
+                    )
+                    .bind(claim.id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(storage)?;
+                    if exists {
+                        return Err(SwarmServiceError::Conflict(
+                            "The deletion operation changed before completion.".into(),
+                        ));
+                    }
+                    continue;
+                };
                 let snapshot = activity_snapshot(&row)?;
                 let activity_name = snapshot.name.clone();
                 insert_swarm_activity(
@@ -535,7 +567,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
         Box::pin(async move {
-            sqlx::query("UPDATE swarmservices SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1 WHERE id=ANY($1::uuid[]) AND controlstate='Processing' AND updatecheckid IS NULL").bind(ids).execute(&self.pool).await.map_err(storage)?;
+            sqlx::query("UPDATE swarmservices SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1,operationstate=CASE WHEN operationkind='Delete' THEN 'Rejected' ELSE operationstate END,completedat=CASE WHEN operationkind='Delete' THEN now() ELSE completedat END WHERE id=ANY($1::uuid[]) AND controlstate='Processing' AND updatecheckid IS NULL").bind(ids).execute(&self.pool).await.map_err(storage)?;
             Ok(())
         })
     }
@@ -546,11 +578,12 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, ServiceDeletionClaim)>, SwarmServiceError>> {
         Box::pin(async move {
-            sqlx::query("SELECT id,platformid,dockerserviceid,controltriggeredby FROM swarmservices WHERE controlstate='Processing' AND updatecheckid IS NULL AND controlstartedat <= $1 AND (operationstate IS NULL OR operationstate NOT IN ('Prepared','PendingAcceptance','Accepted')) AND controltriggeredby IS NOT NULL ORDER BY controlstartedat,id LIMIT $2")
+            sqlx::query("SELECT id,operationid,platformid,dockerserviceid,controltriggeredby FROM swarmservices WHERE controlstate='Processing' AND updatecheckid IS NULL AND controlstartedat <= $1 AND (operationstate IS NULL OR operationstate NOT IN ('Prepared','PendingAcceptance','Accepted')) AND controltriggeredby IS NOT NULL ORDER BY controlstartedat,id LIMIT $2")
                 .bind(started_before).bind(limit).fetch_all(&self.pool).await.map_err(storage)?
                 .into_iter().map(|row| Ok((
                     ActorId::new(row.try_get("controltriggeredby").map_err(storage)?),
                     ServiceDeletionClaim {
+                        operation_id: row.try_get::<Option<Uuid>,_>("operationid").map_err(storage)?.unwrap_or_default(),
                         id: row.try_get("id").map_err(storage)?,
                         platform_id: row.try_get("platformid").map_err(storage)?,
                         docker_service_id: row.try_get("dockerserviceid").map_err(storage)?,
@@ -613,7 +646,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                     "The Docker Swarm cluster identity is unavailable.".to_owned(),
                 ));
             }
-            sqlx::query("UPDATE swarmservices SET spec=$2,desiredspechash=$3,operationid=$4,operationkind=$5,operationstate='Prepared',targetdesiredspechash=$3,targetrowversion=$6,preparedat=$7,operationactorid=$8,operationclusterid=$10,basedockerversion=dockerversionindex,controlstate='Processing',controlstartedat=$9,controltriggeredby=$8,rowversion=rowversion+1,updatedat=$7 WHERE id=$1")
+            sqlx::query("UPDATE swarmservices SET spec=$2,desiredspechash=$3,operationid=$4,operationkind=$5,operationstate='Prepared',targetdesiredspechash=$3,targetruntimehash=NULL,expectedforceupdate=NULL,attemptedat=NULL,completedat=NULL,observeddockerversion=NULL,resultcode=NULL,resultmessage=NULL,warnings=NULL,targetrowversion=$6,preparedat=$7,operationactorid=$8,operationclusterid=$10,basedockerversion=dockerversionindex,controlstate='Processing',controlstartedat=$9,controltriggeredby=$8,rowversion=rowversion+1,updatedat=$7 WHERE id=$1")
                 .bind(id).bind(spec.to_storage_value()?).bind(&desired).bind(operation_id).bind(kind.as_str()).bind(new_version).bind(now).bind(actor_id.value()).bind(now.timestamp()).bind(cluster_id)
                 .execute(&mut *tx).await.map_err(database_error)?;
             let claim = ServiceOperationClaim {
@@ -668,6 +701,11 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             .map_err(storage)?
             .rows_affected();
             if changed != 1 {
+                let settled: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmservices WHERE id=$1 AND operationid=$2 AND operationstate IN ('Accepted','Completed'))")
+                    .bind(claim.id).bind(claim.operation_id).fetch_one(&self.pool).await.map_err(storage)?;
+                if settled {
+                    return Ok(());
+                }
                 return Err(SwarmServiceError::Conflict(
                     "The Service operation changed before Docker acceptance was recorded."
                         .to_owned(),
@@ -685,9 +723,17 @@ ORDER BY s.createdat DESC,s.name,s.id"#
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row = sqlx::query("SELECT name,platformid,operationkind,spec FROM swarmservices WHERE id=$1 AND operationid=$2 FOR UPDATE")
+            let row = sqlx::query("SELECT name,platformid,operationkind,operationstate,spec FROM swarmservices WHERE id=$1 AND operationid=$2 FOR UPDATE")
                 .bind(claim.id).bind(claim.operation_id).fetch_optional(&mut *tx).await.map_err(storage)?
                 .ok_or(SwarmServiceError::NotFound)?;
+            if row
+                .try_get::<String, _>("operationstate")
+                .map_err(storage)?
+                == "Completed"
+            {
+                tx.commit().await.map_err(storage)?;
+                return Ok(());
+            }
             let changed=sqlx::query("UPDATE swarmservices SET dockerserviceid=$3,dockerversionindex=$4,operationstate='Completed',observeddockerversion=$4,completedat=$5,warnings=$6,lastapplieddesiredspechash=targetdesiredspechash,lastappliedruntimehash=$7,appliedimagedigest=COALESCE($8,appliedimagedigest),health='Healthy',synchronizationstate='InSync',controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1,updatedat=$5 WHERE id=$1 AND operationid=$2 AND operationstate IN ('PendingAcceptance','Accepted')")
             .bind(claim.id).bind(claim.operation_id).bind(&result.docker_service_id).bind(result.version_index).bind(Utc::now()).bind(serde_json::to_value(&result.warnings).map_err(storage)?).bind(&result.runtime_hash).bind(&result.applied_digest)
             .execute(&mut *tx).await.map_err(storage)?.rows_affected();
@@ -776,7 +822,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, ServiceOperationClaim)>, SwarmServiceError>> {
         Box::pin(async move {
-            sqlx::query("SELECT id,platformid,dockername,dockerserviceid,dockerversionindex,rowversion,desiredspechash,spec,operationid,operationactorid FROM swarmservices WHERE controlstate='Processing' AND updatecheckid IS NULL AND controlstartedat <= $1 AND operationid IS NOT NULL ORDER BY controlstartedat,id LIMIT $2")
+            sqlx::query("SELECT id,platformid,dockername,dockerserviceid,dockerversionindex,rowversion,desiredspechash,spec,operationid,operationactorid FROM swarmservices WHERE controlstate='Processing' AND updatecheckid IS NULL AND controlstartedat <= $1 AND operationid IS NOT NULL AND operationkind<>'Delete' ORDER BY controlstartedat,id LIMIT $2")
             .bind(started_before).bind(limit).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(|row| Ok((ActorId::new(row.try_get("operationactorid").map_err(storage)?),ServiceOperationClaim{operation_id:row.try_get("operationid").map_err(storage)?,id:row.try_get("id").map_err(storage)?,platform_id:row.try_get("platformid").map_err(storage)?,docker_name:row.try_get("dockername").map_err(storage)?,docker_service_id:row.try_get("dockerserviceid").map_err(storage)?,docker_version_index:row.try_get("dockerversionindex").map_err(storage)?,row_version:row.try_get("rowversion").map_err(storage)?,desired_hash:row.try_get("desiredspechash").map_err(storage)?,spec:SwarmServiceSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?}))).collect()
         })
     }
@@ -1179,7 +1225,9 @@ fn json<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, SwarmServiceE
 fn dotnet_min_datetime() -> DateTime<Utc> {
     DateTime::from_timestamp(-62_135_596_800, 0).expect(".NET minimum date is representable")
 }
-fn activity_snapshot(row: &PgRow) -> Result<SwarmServiceActivitySnapshot, SwarmServiceError> {
+pub(crate) fn activity_snapshot(
+    row: &PgRow,
+) -> Result<SwarmServiceActivitySnapshot, SwarmServiceError> {
     Ok(SwarmServiceActivitySnapshot {
         id: row.try_get("id").map_err(storage)?,
         platform_id: row.try_get("platformid").map_err(storage)?,
@@ -1190,7 +1238,7 @@ fn activity_snapshot(row: &PgRow) -> Result<SwarmServiceActivitySnapshot, SwarmS
         spec: row.try_get("spec").map_err(storage)?,
     })
 }
-async fn insert_swarm_activity(
+pub(crate) async fn insert_swarm_activity(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     name: &str,

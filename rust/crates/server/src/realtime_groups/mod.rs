@@ -115,6 +115,16 @@ impl Group {
         if event.event_kind == "buildLogs" {
             return self.kind == "build-run" && self.id == Some(event.resource_id);
         }
+        if self.kind == "activity"
+            && event.event_kind == "runtimeChanged"
+            && event.payload["dockerResourceType"] != "containerStats"
+            && matches!(
+                self.reference.as_deref(),
+                Some("Deployment" | "Stack" | "SwarmService")
+            )
+        {
+            return true;
+        }
         if self.kind == "activity" {
             // The existing Alert router publishes a coarse Alert invalidation
             // for Rule mutations too. Reload through the authorized activity
@@ -134,7 +144,8 @@ impl Group {
                 ) || (self.kind == "containers" && self.id == Some(platform));
             }
             return match self.kind.as_str() {
-                "platforms" | "container-info" | "stack-info" => true,
+                "platforms" | "container-info" | "stack-info" | "deployment" | "deployments"
+                | "stack" | "stacks" | "swarm-service" => true,
                 "containers" | "docker-daemon" | "images" | "swarm-services" => {
                     self.id == Some(platform)
                 }
@@ -399,6 +410,27 @@ impl GroupSubscription {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deployment_groups_refresh_on_container_inventory_but_not_stats() {
+        let mut event = PublishedRuntimeEvent {
+            platform_id: Some(Uuid::now_v7()),
+            resource_type: "DockerRuntime",
+            resource_id: Uuid::now_v7(),
+            event_kind: "runtimeChanged",
+            resource_revision: 1,
+            payload: json!({"dockerResourceType":"container"}),
+        };
+        for name in [
+            "deployments".to_owned(),
+            format!("deployment:{}", Uuid::now_v7()),
+        ] {
+            let group = Group::parse(&name).unwrap();
+            assert!(group.affected_by(&event));
+            event.payload = json!({"dockerResourceType":"containerStats"});
+            assert!(!group.affected_by(&event));
+            event.payload = json!({"dockerResourceType":"container"});
+        }
+    }
     #[test]
     fn alert_notifications_do_not_replay_history_or_repeat_existing_events() {
         let mut subscription = GroupSubscription::new(Group::parse("alert-events").unwrap());

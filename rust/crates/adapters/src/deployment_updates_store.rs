@@ -57,6 +57,6 @@ pub(super) async fn candidates(
     after: Uuid,
     limit: i64,
 ) -> Result<Vec<Uuid>, DeploymentError> {
-    sqlx::query_scalar("SELECT d.id FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id>$1 AND d.controlstate='Idle' AND p.status='Online' AND d.spec->>'UpdateBehavior' IN ('Notify','AutoDeploy') AND d.spec->'Image'->>'$type'='External' AND COALESCE(d.spec->'Image'->>'ResolvedDigest','')<>'' AND position('@' in COALESCE(d.spec->'Image'->>'ImageTag',''))=0 ORDER BY d.id LIMIT $2")
+    sqlx::query_scalar("SELECT d.id FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id>$1 AND d.controlstate='Idle' AND p.status='Online' AND p.platformdescriptor->>'$type'='Docker' AND d.spec->>'UpdateBehavior' IN ('Notify','AutoDeploy') AND d.spec->'Image'->>'$type'='External' AND COALESCE(d.spec->'Image'->>'ResolvedDigest','')<>'' AND position('@' in COALESCE(d.spec->'Image'->>'ImageTag',''))=0 ORDER BY d.id LIMIT $2")
         .bind(after).bind(limit.clamp(1,100)).fetch_all(&store.pool).await.map_err(storage)
 }

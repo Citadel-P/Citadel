@@ -14,7 +14,10 @@ pub(super) async fn swarm_service_image_updates(
 ) -> Result<(), std::convert::Infallible> {
     // Matches DeploymentAutoUpdateJob's two-hour Service check cadence. Keep it
     // separate from the five-second operation recovery path.
-    let mut ticker = tokio::time::interval(Duration::from_secs(2 * 60 * 60));
+    let mut ticker = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_secs(2 * 60 * 60),
+        Duration::from_secs(2 * 60 * 60),
+    );
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }

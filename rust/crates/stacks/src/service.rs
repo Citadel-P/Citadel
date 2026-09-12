@@ -146,6 +146,11 @@ pub trait StackStore: Send + Sync {
         rollback_release_id: Option<Uuid>,
         webhook_job_id: Option<Uuid>,
     ) -> BoxFuture<'_, Result<StackOperationClaim, StackError>>;
+    fn record_apply_source<'a>(
+        &'a self,
+        claim: &'a StackOperationClaim,
+        source: &'a crate::StackReleaseSource,
+    ) -> BoxFuture<'a, Result<(), StackError>>;
     fn complete_apply<'a>(
         &'a self,
         actor: ActorId,
@@ -422,9 +427,37 @@ impl StackService {
         })
     }
 
+    async fn operational_guardrails_enabled(&self) -> Result<bool, StackError> {
+        match &self.entitlements {
+            Some(entitlements) => entitlements.operational_guardrails().await,
+            None => Ok(false),
+        }
+    }
+
     /// Evaluates the bounded set of active Stacks whose drift policy is enabled.
     /// A failure on one Stack is returned to the caller for diagnostics without
     /// preventing the remaining candidates from being checked.
+    /// The daemon-event fast path shares the same reconciliation and persisted
+    /// drift state as the sweep, but never reverses an intentional stop/pause.
+    pub async fn monitor_container_event(&self, id: Uuid) -> Result<(), StackError> {
+        if !self.operational_guardrails_enabled().await? {
+            return Ok(());
+        }
+        let actor = ActorId::new(Uuid::from_u128(1));
+        let stack = self.store.get_authorized(actor, true, id).await?;
+        if !event_drift_eligible(&stack) {
+            return Ok(());
+        }
+        let result = self.reconcile_drift(actor, true, id).await?;
+        let report = result.after_report.unwrap_or(result.before_report);
+        if let Some((status, info)) = drift_status_update(&stack, &report) {
+            if self.store.record_drift(&stack, status, info).await? {
+                self.notifier.changed(id, "driftChanged");
+            }
+        }
+        Ok(())
+    }
+
     pub async fn monitor_drift(
         &self,
         after: Option<Uuid>,
@@ -435,17 +468,17 @@ impl StackService {
                 "The Stack drift monitor limit must be positive.",
             ));
         }
-        let mut candidates = self.store.drift_monitor_candidates(after, limit).await?;
-        if candidates.is_empty() && after.is_some() {
-            candidates = self.store.drift_monitor_candidates(None, limit).await?;
-        }
         let mut result = StackDriftMonitorResult {
             checked: 0,
             reconciled: 0,
             failures: Vec::new(),
             next_cursor: None,
         };
-        let system = ActorId::new(Uuid::nil());
+        if !self.operational_guardrails_enabled().await? {
+            return Ok(result);
+        }
+        let candidates = self.store.drift_monitor_candidates(after, limit).await?;
+        let system = ActorId::new(Uuid::from_u128(1));
         for stack in candidates {
             if self.shutdown.is_cancelled() {
                 break;
@@ -1346,6 +1379,22 @@ impl StackService {
             .await?;
         let mut count = 0;
         for (actor, claim) in claims {
+            if claim.platform_type == "DockerSwarm" {
+                // Namespace/task counts cannot prove that every Service in this
+                // release was accepted. Release the expired claim as recoverable;
+                // the authoritative Swarm snapshot owns convergence and metadata checks.
+                self.store
+                    .fail_apply(
+                        actor,
+                        &claim,
+                        "Stack deployment was interrupted before its outcome could be confirmed.",
+                        true,
+                    )
+                    .await?;
+                self.notifier.changed(claim.stack_id, "reconciled");
+                count += 1;
+                continue;
+            }
             let result = tokio::time::timeout(
                 Duration::from_secs(30),
                 self.runtime.observe(&claim, &self.shutdown.child_token()),
@@ -1728,6 +1777,12 @@ async fn execute_apply(
             "Submitting Stack deployment to Docker...",
         ))
         .await;
+    if let Some(source) = release_source.as_ref()
+        && let Err(error) = store.record_apply_source(&claim, source).await
+    {
+        fail_apply_before_runtime(&store, actor, &claim, &sender, &error.to_string()).await;
+        return;
+    }
     let progress = StackProgress::new(sender.clone(), redactions.clone(), cancellation.clone());
     match tokio::time::timeout(
         timeout,
@@ -1998,6 +2053,15 @@ fn project_name(stack: &StackView) -> Result<String, StackError> {
     } else {
         Ok(normalized)
     }
+}
+
+fn event_drift_eligible(stack: &StackView) -> bool {
+    stack.drift_policy.mode == crate::StackDriftMode::AutoFix
+        && stack.control_state == "Idle"
+        && matches!(
+            stack.status,
+            StackReleaseStatus::Healthy | StackReleaseStatus::Degraded
+        )
 }
 
 fn drift_status_update(
@@ -2321,6 +2385,32 @@ mod tests {
         })
         .unwrap();
         assert_eq!(value["canViewResourceBindings"], true);
+    }
+
+    // Port: StackDriftMonitorJobTests die on AutoFix vs intentional stop.
+    #[test]
+    fn daemon_drift_repair_only_targets_idle_healthy_or_degraded_auto_fix_stacks() {
+        let mut policy = StackDriftPolicy::default();
+        policy.mode = crate::StackDriftMode::AutoFix;
+        for status in [StackReleaseStatus::Healthy, StackReleaseStatus::Degraded] {
+            let mut value = stack(status, policy.clone());
+            assert!(event_drift_eligible(&value));
+            value.control_state = "Processing".into();
+            assert!(!event_drift_eligible(&value));
+        }
+        for status in [
+            StackReleaseStatus::Stopped,
+            StackReleaseStatus::Paused,
+            StackReleaseStatus::Applying,
+            StackReleaseStatus::Created,
+        ] {
+            assert!(!event_drift_eligible(&stack(status, policy.clone())));
+        }
+        policy.mode = crate::StackDriftMode::DetectOnly;
+        assert!(!event_drift_eligible(&stack(
+            StackReleaseStatus::Healthy,
+            policy
+        )));
     }
 
     #[test]

@@ -237,6 +237,18 @@ pub(super) async fn initialize_swarm(
     state: &PlatformsHttpState,
     platform: &PlatformView,
 ) -> Result<bool, RuntimeCapabilityError> {
+    let _guard = state.platforms.inventory_guard(platform.id).await;
+    let initialized: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1)")
+            .bind(platform.id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(|error| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
+            })?;
+    if initialized {
+        return Ok(false);
+    }
     let runtime = runtime_for(state, platform.id).await?;
     let port: &dyn PlatformInventoryPort = match &runtime {
         RuntimeRef::Local(port) => *port,

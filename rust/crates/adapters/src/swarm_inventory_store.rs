@@ -37,6 +37,6 @@ pub async fn refresh(
             false,
         ));
     }
-    crate::inventory_projection_store::persist_snapshot(&mut tx, snapshot).await?;
+    crate::inventory_projection_store::persist_snapshot(&mut tx, snapshot, None).await?;
     tx.commit().await.map_err(storage)
 }

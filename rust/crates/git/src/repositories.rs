@@ -131,6 +131,9 @@ pub struct GitRepositorySource {
 
 #[derive(Debug, Clone)]
 pub struct GitSyncClaim {
+    pub trigger: String,
+    pub previous_commit: Option<String>,
+    pub previous_error: Option<String>,
     pub repository: GitRepositorySource,
     pub reference_id: Uuid,
     pub branch: String,
@@ -168,6 +171,14 @@ pub trait GitRepositoryExecutionStore: Send + Sync {
         id: Uuid,
         branch: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>>;
+    fn enqueue_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        self.enqueue_sync(actor_id, id, Some(branch))
+    }
     fn enqueue_webhook<'a>(
         &'a self,
         actor_id: ActorId,
@@ -299,7 +310,7 @@ impl GitRepositoryExecutionService {
         if cancellation.is_cancelled() {
             return Err(GitError::Process(citadel_execution::ProcessError::Cancelled).into());
         }
-        self.store.enqueue_sync(actor, id, Some(branch)).await?;
+        self.store.enqueue_apply(actor, id, branch).await?;
         self.changed();
         // Enqueue changes Healthy/Failed to Pending under the repository lock,
         // and a request arriving during Syncing causes another Pending pass.

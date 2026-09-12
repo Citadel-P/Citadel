@@ -197,3 +197,32 @@ async fn concurrent_direct_inserts_allow_only_one_active_run_per_action() {
     right.close().await.unwrap();
     database.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn initial_baseline_includes_job_state_and_restart_preserves_git_refs() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    let first = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(first.applied, 1);
+    assert_eq!(first.already_applied, 0);
+    let pending_column: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='platformstats' AND column_name='alertpending' AND column_default='false')")
+        .fetch_one(&mut connection).await.unwrap();
+    assert!(pending_column);
+    let repository = Uuid::now_v7();
+    let reference = Uuid::now_v7();
+    sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url) VALUES($1,$2,'main','migration-fixture','Healthy','Manual','https://example.invalid/repo')").bind(repository).bind(Uuid::from_u128(1)).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lastsyncedat) VALUES($1,$2,'main','retained-commit','Healthy',now())").bind(reference).bind(repository).execute(&mut connection).await.unwrap();
+    let result = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(result.applied, 0);
+    assert_eq!(result.already_applied, 1);
+    let result: (String, String) =
+        sqlx::query_as("SELECT synctrigger,resolvedcommitsha FROM gitrepositoryrefs WHERE id=$1")
+            .bind(reference)
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(result, ("Manual".into(), "retained-commit".into()));
+    drop(connection);
+    database.close().await;
+}

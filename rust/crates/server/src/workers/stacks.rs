@@ -20,7 +20,7 @@ pub(super) async fn stack_updates(
 ) -> Result<(), std::convert::Infallible> {
     let mut ticker = tokio::time::interval(Duration::from_secs(30));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut last_images = None;
+    let mut last_images = Some(tokio::time::Instant::now());
     loop {
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
         let images = last_images.is_none_or(|last: tokio::time::Instant| {
@@ -83,32 +83,68 @@ pub(super) async fn stack_drift_monitor(
 ) -> Result<(), std::convert::Infallible> {
     let mut ticker = tokio::time::interval(DRIFT_MONITOR_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut cursor = None;
     loop {
         tokio::select! {
             biased;
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
-        match stacks.monitor_drift(cursor, DRIFT_MONITOR_BATCH).await {
-            Ok(result) => {
-                cursor = result.next_cursor;
-                if result.reconciled > 0 {
-                    tracing::info!(
-                        checked = result.checked,
-                        reconciled = result.reconciled,
-                        "reconciled Stack drift"
-                    );
+        let mut cursor = None;
+        loop {
+            match stacks.monitor_drift(cursor, DRIFT_MONITOR_BATCH).await {
+                Ok(result) => {
+                    cursor = result.next_cursor;
+                    if result.reconciled > 0 {
+                        tracing::info!(
+                            checked = result.checked,
+                            reconciled = result.reconciled,
+                            "reconciled Stack drift"
+                        );
+                    }
+                    let last_page = result.checked < DRIFT_MONITOR_BATCH as usize;
+                    for failure in result.failures {
+                        tracing::warn!(
+                            stack_id = %failure.stack_id,
+                            error = %failure.message,
+                            "Stack drift monitoring failed"
+                        );
+                    }
+                    if last_page || cancellation.is_cancelled() {
+                        break;
+                    }
                 }
-                for failure in result.failures {
-                    tracing::warn!(
-                        stack_id = %failure.stack_id,
-                        error = %failure.message,
-                        "Stack drift monitoring failed"
-                    );
+                Err(error) => {
+                    tracing::warn!(%error, "Stack drift monitor query failed");
+                    break;
                 }
             }
-            Err(error) => tracing::warn!(%error, "Stack drift monitor query failed"),
         }
+    }
+}
+
+/// The .NET drift monitor also consumes stop/pause events. Notifications are
+/// transactional and originate from the shared Local/Direct/Edge event store.
+pub(super) async fn event_drift(
+    cancellation: CancellationToken,
+    stacks: Arc<StackService>,
+    mut listener: sqlx::postgres::PgListener,
+) -> Result<(), std::convert::Infallible> {
+    loop {
+        let result = async {
+            loop {
+                let notification = tokio::select! { ()=cancellation.cancelled()=>return Ok::<(),sqlx::Error>(()), notification=listener.recv()=>notification? };
+                let Ok(id) = uuid::Uuid::parse_str(notification.payload()) else { continue; };
+                if let Err(error) = stacks.monitor_container_event(id).await {
+                    tracing::warn!(%error, %id, "Event-triggered Stack drift repair failed");
+                }
+            }
+        }.await;
+        if cancellation.is_cancelled() {
+            return Ok(());
+        }
+        if let Err(error) = result {
+            tracing::warn!(%error, "Stack drift event listener failed");
+        }
+        tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
     }
 }

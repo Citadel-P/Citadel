@@ -106,6 +106,10 @@ pub trait SwarmServiceStore: Send + Sync {
         administrator: bool,
         ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<Vec<ServiceDeletionClaim>, SwarmServiceError>>;
+    fn mark_delete_attempted<'a>(
+        &'a self,
+        claim: &'a ServiceDeletionClaim,
+    ) -> BoxFuture<'a, Result<(), SwarmServiceError>>;
     fn complete_delete<'a>(
         &'a self,
         actor_id: ActorId,
@@ -285,13 +289,15 @@ impl ManagedSwarmServiceService {
                 alert_type: "SwarmServiceOperationFailed".into(),
                 info: serde_json::json!({
                     "HumanMessage": message,
-                    "Operation": operation,
+                    "OperationKind": operation,
+                    "ServiceName": claim.docker_name,
+                    "Reason": message,
                     "OperationId": claim.operation_id,
                 }),
                 resource_id: claim.id,
                 resource_name: claim.docker_name.clone(),
                 resource_type: "SwarmService".into(),
-                deduplication_component: "operation".into(),
+                deduplication_component: claim.operation_id.simple().to_string(),
                 observed_at: chrono::Utc::now(),
                 value: None,
                 matched,
@@ -506,6 +512,7 @@ impl ManagedSwarmServiceService {
         let claims = self.store.delete(actor_id, administrator, &ids).await?;
         let cancellation = self.shutdown.child_token();
         for claim in &claims {
+            self.store.mark_delete_attempted(claim).await?;
             if let Some(docker_id) = &claim.docker_service_id
                 && let Err(error) = self
                     .runtime
@@ -520,10 +527,10 @@ impl ManagedSwarmServiceService {
                 }
                 return Err(error);
             }
-        }
-        self.store.complete_delete(actor_id, &claims).await?;
-        for id in ids {
-            self.notifier.changed(id, "deleted");
+            self.store
+                .complete_delete(actor_id, std::slice::from_ref(claim))
+                .await?;
+            self.notifier.changed(claim.id, "deleted");
         }
         Ok(())
     }
@@ -913,41 +920,8 @@ impl ManagedSwarmServiceService {
             .stale_operation_claims(cutoff, limit.clamp(1, 100))
             .await?;
         let mut reconciled = 0;
-        for (actor_id, deletion) in self
-            .store
-            .stale_deletion_claims(cutoff, limit.clamp(1, 100))
-            .await?
-        {
-            let cancellation = self.shutdown.child_token();
-            let result = match deletion.docker_service_id.as_deref() {
-                Some(docker_id) => tokio::time::timeout(
-                    self.operation_timeout.min(Duration::from_secs(30)),
-                    self.runtime
-                        .delete(deletion.platform_id, docker_id, &cancellation),
-                )
-                .await
-                .map_err(|_| {
-                    SwarmServiceError::Runtime(
-                        "Timed out while reconciling Service deletion.".to_owned(),
-                    )
-                })?,
-                None => Ok(()),
-            };
-            match result {
-                Ok(()) => {
-                    self.store
-                        .complete_delete(actor_id, std::slice::from_ref(&deletion))
-                        .await?;
-                    self.notifier.changed(deletion.id, "deleted");
-                    reconciled += 1;
-                }
-                Err(SwarmServiceError::RuntimeRejected(_)) => {
-                    self.store.release_delete(&[deletion.id]).await?;
-                    reconciled += 1;
-                }
-                Err(_) => {}
-            }
-        }
+        // Deletion outcomes are reconciled from the complete manager snapshot.
+        // Never replay an ambiguous daemon mutation from a recovery timer.
         for (actor_id, claim) in claims {
             let cancellation = self.shutdown.child_token();
             match tokio::time::timeout(

@@ -829,7 +829,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     let deployment = Uuid::now_v7();
     let spec:citadel_deployments::DeploymentSpec=serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
     sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("logs-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
-    sqlx::query("UPDATE containers SET deploymentid=$1 WHERE id=$2")
+    sqlx::query("UPDATE containers SET deploymentid=$1,state='Exited' WHERE id=$2")
         .bind(deployment)
         .bind(id)
         .execute(&f.pool)
@@ -849,6 +849,21 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         format!("container-log:{}", &docker_id[..12]),
         "the unchanged Deployment viewer joins a short Docker-ID group"
     );
+    let group = deployment_group.name;
+    super::lookup::grant(
+        &f,
+        principal.actor_id.value(),
+        ResourceType::Deployment,
+        deployment,
+        0,
+    )
+    .await;
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
+        .bind(SpecificPermission::Logs as i32)
+        .bind(principal.actor_id.value())
+        .execute(&f.pool)
+        .await
+        .unwrap();
     let registry = &f.lookup_state.platforms.edge;
     let (session, mut commands) = registry
         .register(
@@ -896,13 +911,13 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     assert!(
-        invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_string(),
+        invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_string(),
         "must join an authorized group first"
     );
     for revoke in [false, true] {
         assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
         assert!(
-            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_null()
         );
         let command = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
             .await
@@ -919,7 +934,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         assert_eq!(request.follow, Some(true));
         assert!(other_commands.try_recv().is_err());
         assert!(
-            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_null()
         );
         assert!(
             commands.try_recv().is_err(),

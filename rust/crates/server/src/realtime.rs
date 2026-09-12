@@ -1081,3 +1081,31 @@ fn connection_resource_type(connection: &ConnectionState) -> &'static str {
         "Global"
     }
 }
+
+#[cfg(test)]
+mod stats_notification_tests {
+    use super::*;
+
+    // ContainerStatsWriterJobTests: no subscribers means no notification payload.
+    #[test]
+    fn statistics_notifications_only_advance_with_subscribers() {
+        let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
+        let platform = Uuid::now_v7();
+        assert_eq!(hub.publish_container_stats(platform, &[]), 0);
+        assert_eq!(
+            hub.publish_scoped_container_stats(platform, Some("node-a"), &[]),
+            0
+        );
+        let mut subscriber = hub.subscribe();
+        assert_eq!(
+            hub.publish_scoped_container_stats(platform, Some("node-a"), &[]),
+            1
+        );
+        let event = subscriber.try_recv().unwrap();
+        assert_eq!(event.platform_id, Some(platform));
+        assert_eq!(event.payload["dockerNodeId"], "node-a");
+        assert_eq!(event.payload["stats"], json!([]));
+        drop(subscriber);
+        assert_eq!(hub.publish_container_stats(platform, &[]), 1);
+    }
+}

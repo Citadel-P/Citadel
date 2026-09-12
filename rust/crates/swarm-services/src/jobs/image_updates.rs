@@ -32,7 +32,10 @@ impl ManagedSwarmServiceService {
                     Err(SwarmServiceError::NotFound) => continue,
                     Err(error) => return Err(error),
                 };
-                match self.check_automated_updates(snapshot, cancel).await {
+                match self
+                    .check_automated_updates_mode(snapshot, true, cancel)
+                    .await
+                {
                     Ok(_) => checked += 1,
                     Err(SwarmServiceError::Cancelled) => return Err(SwarmServiceError::Cancelled),
                     Err(error) => tracing::warn!(%id, %error, "Service image update check failed"),

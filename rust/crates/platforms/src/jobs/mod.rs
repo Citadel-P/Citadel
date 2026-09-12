@@ -10,3 +10,6 @@ pub use event_policy::triggers_inventory_reconciliation;
 pub use inventory_reconciliation::{
     InventoryCollectionTarget, collect_inventory, collect_inventory_from_info,
 };
+
+mod swarm_rollout;
+pub use swarm_rollout::{rollout_complete_state, rollout_paused, stack_observed_status};

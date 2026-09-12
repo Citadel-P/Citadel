@@ -56,6 +56,7 @@ struct CompletingStackRuntime {
     apply_failure: AtomicU8,
     hold_apply: AtomicU8,
     runtime_state: AtomicU8,
+    reconcile_calls: AtomicU8,
     release_apply: tokio::sync::Notify,
 }
 
@@ -177,7 +178,10 @@ impl StackRuntimePort for CompletingStackRuntime {
         _policy: &'a citadel_stacks::StackDriftPolicy,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<citadel_stacks::StackReconciliationAction>, StackError>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move {
+            self.reconcile_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(Vec::new())
+        })
     }
 
     fn import_claim<'a>(
@@ -276,7 +280,8 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
             Arc::new(NoopStackChangeNotifier),
             CancellationToken::new(),
         )
-        .with_update_scanner(scanner.clone()),
+        .with_update_scanner(scanner.clone())
+        .with_entitlements(Arc::new(drift::Entitlements(true))),
     );
     let app = stacks_http::router(StacksHttpState {
         identity,

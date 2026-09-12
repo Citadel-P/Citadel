@@ -237,6 +237,73 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     );
     assert_eq!(store.get(action.id).await.unwrap().name, action.name);
 
+    // AutomationActionSchedulerJobTests: use the production scheduler, restart
+    // its service, and verify queue validation does not consume the minute.
+    let now = chrono::DateTime::parse_from_rfc3339("2026-07-14T08:30:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    sqlx::query("UPDATE actions SET scheduleenabled=true,schedulecron='30 10 * * *',scheduletimezone='Europe/Paris',lastscheduledrunat=NULL,controlstate='Idle',currentrunid=NULL,timeoutseconds=2000 WHERE id=$1")
+        .bind(action.id).execute(&pool).await.unwrap();
+    let before = store.list_runs(action.id, 100).await.unwrap().len();
+    assert_eq!(
+        scheduler(pool.clone())
+            .queue_due_scheduled(now)
+            .await
+            .unwrap(),
+        0
+    );
+    let last: Option<chrono::DateTime<Utc>> =
+        sqlx::query_scalar("SELECT lastscheduledrunat FROM actions WHERE id=$1")
+            .bind(action.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(last, None);
+    assert_eq!(store.list_runs(action.id, 100).await.unwrap().len(), before);
+    sqlx::query("UPDATE actions SET timeoutseconds=30 WHERE id=$1")
+        .bind(action.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduler(pool.clone())
+            .queue_due_scheduled(now - Duration::minutes(1))
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        scheduler(pool.clone())
+            .queue_due_scheduled(now)
+            .await
+            .unwrap(),
+        1
+    );
+    let run = store.get(action.id).await.unwrap().current_run_id.unwrap();
+    assert_eq!(
+        store.get_run(action.id, run).await.unwrap().trigger,
+        "Schedule"
+    );
+    store.cancel(action.id, run).await.unwrap();
+    assert_eq!(
+        scheduler(pool.clone())
+            .queue_due_scheduled(now)
+            .await
+            .unwrap(),
+        0
+    );
+    let last: Option<chrono::DateTime<Utc>> =
+        sqlx::query_scalar("SELECT lastscheduledrunat FROM actions WHERE id=$1")
+            .bind(action.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(last, Some(now));
+    assert_eq!(
+        store.list_runs(action.id, 100).await.unwrap().len(),
+        before + 1
+    );
+
     sqlx::query("DELETE FROM actions WHERE id=$1")
         .bind(action.id)
         .execute(&pool)
@@ -252,4 +319,41 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .execute(&pool)
         .await
         .unwrap();
+}
+
+struct SchedulerDependencies;
+impl citadel_automation::AutomationRunTokenIssuer for SchedulerDependencies {
+    fn issue<'a>(
+        &'a self,
+        _: ActorId,
+        _: Uuid,
+        _: std::time::Duration,
+    ) -> futures_util::future::BoxFuture<'a, Result<String, citadel_automation::AutomationError>>
+    {
+        Box::pin(async { panic!("scheduler must not execute code or issue tokens") })
+    }
+}
+impl citadel_automation::AutomationEntitlements for SchedulerDependencies {
+    fn automated_operations(
+        &self,
+    ) -> futures_util::future::BoxFuture<'_, Result<bool, citadel_automation::AutomationError>>
+    {
+        Box::pin(async { Ok(true) })
+    }
+}
+fn scheduler(pool: sqlx::PgPool) -> citadel_automation::AutomationService {
+    use std::sync::Arc;
+    citadel_automation::AutomationService::new(
+        Arc::new(PostgresAutomationStore::new(pool)),
+        Arc::new(SchedulerDependencies),
+        citadel_automation::AutomationRuntimeConfig {
+            deno_path: "must-not-execute".into(),
+            work_root: std::env::temp_dir(),
+            internal_base_url: "http://unused.invalid".into(),
+            endpoint_catalog_json: "{}".into(),
+            maximum_log_bytes: 1024,
+            stale_after: std::time::Duration::from_secs(300),
+        },
+    )
+    .with_entitlements(Arc::new(SchedulerDependencies))
 }

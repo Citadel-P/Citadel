@@ -27,6 +27,27 @@ impl PostgresContainerStatsStore {
         transaction.commit().await.map_err(storage)?;
         Ok(inserted)
     }
+    pub async fn persist_with_platform_stats(
+        &self,
+        platform_id: Uuid,
+        stats: &[RuntimeContainerStat],
+        platform_stats: Option<&citadel_platforms::RuntimePlatformStats>,
+    ) -> Result<usize, RuntimeCapabilityError> {
+        let mut transaction = self.pool.begin().await.map_err(storage)?;
+        if let Some(sample) = platform_stats {
+            persist_platform_metadata(&mut transaction, platform_id, sample).await?;
+        }
+        let inserted = persist_scoped_with_disk(
+            &mut transaction,
+            platform_id,
+            None,
+            stats,
+            platform_stats.and_then(citadel_platforms::RuntimePlatformStats::disk),
+        )
+        .await?;
+        transaction.commit().await.map_err(storage)?;
+        Ok(inserted)
+    }
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -121,18 +142,17 @@ WITH incoming AS (
                 ELSE 'node:' || task.dockernodeid END,
            sample.created, sample."memoryActive", sample."memoryCache",
            sample."cpuUsage", sample."memoryLimit", sample."rxBytes", sample."txBytes"
-    FROM eligible sample
-    JOIN containers container ON container.id = sample.persisted_container_id
-    JOIN platforms platform ON platform.id = container.platformid
+    FROM incoming sample
+    JOIN platforms platform ON platform.id = $1
     JOIN swarmtaskprojections task
-      ON task.platformid = container.platformid
-     AND task.dockernodeid = COALESCE(container.dockernodeid,
+      ON task.platformid = platform.id
+     AND task.dockernodeid = COALESCE($3,
          CASE WHEN platform.connectortype IN ('Local','Agent','EdgeAgent') THEN platform.platformdescriptor::jsonb->>'nodeID' END)
-     AND task.dockercontainerid = container.dockercontainerid
+     AND task.dockercontainerid = sample."dockerContainerId"
     JOIN swarmserviceprojections service
       ON service.platformid = task.platformid
      AND service.dockerserviceid = task.dockerserviceid
-    WHERE container.isswarmtask AND service.ownership <> 'System'
+    WHERE service.ownership <> 'System'
     ON CONFLICT (platformid, dockertaskid, created) DO UPDATE SET
         memoryactive = EXCLUDED.memoryactive, memorycache = EXCLUDED.memorycache,
         cpuusage = EXCLUDED.cpuusage, memorylimit = EXCLUDED.memorylimit,
@@ -143,17 +163,19 @@ WITH incoming AS (
            COALESCE(SUM("cpuUsage"), 0) AS cpu_usage,
            COALESCE(SUM("rxBytes"), 0) AS rx_bytes,
            COALESCE(SUM("txBytes"), 0) AS tx_bytes,
-           COALESCE(MAX(created), $7::bigint) AS created
+           COALESCE(created, $7::bigint) AS created
     FROM eligible
+    GROUP BY created
+    UNION ALL SELECT 0,0,0,0,$7::bigint WHERE $7::bigint IS NOT NULL AND NOT EXISTS(SELECT 1 FROM eligible)
 ), persisted_platform AS (
     INSERT INTO platformstats (
-        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage)
+        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage, alertpending)
     SELECT gen_random_uuid(), platform.id,
            CASE WHEN platform.memtotal > 0
                 THEN sample.memory_active / platform.memtotal * 100.0 ELSE 0 END,
            CASE WHEN platform.cpucount > 0
                 THEN sample.cpu_usage / platform.cpucount ELSE sample.cpu_usage END,
-           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6
+           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6, true
     FROM platform_sample sample
     JOIN platforms platform ON platform.id = $1
     WHERE sample.created IS NOT NULL AND $3::text IS NULL
@@ -164,7 +186,8 @@ WITH incoming AS (
         txbytes = EXCLUDED.txbytes,
         diskusedbytes = EXCLUDED.diskusedbytes,
         disktotalbytes = EXCLUDED.disktotalbytes,
-        diskusage = EXCLUDED.diskusage
+        diskusage = EXCLUDED.diskusage,
+        alertpending = true
 )
 SELECT COUNT(*) FROM inserted
 "#,
@@ -187,7 +210,7 @@ SELECT COUNT(*) FROM inserted
                 .execute(&mut **transaction)
                 .await
                 .map_err(storage)?;
-    sqlx::query("DELETE FROM platformstats WHERE id IN (SELECT id FROM platformstats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
+    sqlx::query("DELETE FROM platformstats WHERE id IN (SELECT id FROM platformstats WHERE created < $1 AND NOT alertpending ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
                 .bind(retention_cutoff)
                 .execute(&mut **transaction)
                 .await
@@ -208,4 +231,21 @@ mod tests {
     fn retention_is_bounded_to_seven_days() {
         assert_eq!(RETENTION_SECONDS, 604_800);
     }
+}
+
+/// Statistics update descriptor/counts only. Connectivity belongs to the health worker.
+pub(crate) async fn persist_platform_metadata(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    platform: Uuid,
+    sample: &citadel_platforms::RuntimePlatformStats,
+) -> Result<(), RuntimeCapabilityError> {
+    let descriptor = serde_json::json!({
+        "containerCount": sample.container_count, "containersRunning": sample.containers_running,
+        "containersPaused": sample.containers_paused, "containersStopped": sample.containers_stopped,
+        "imageUsedBytes": sample.image_used_bytes, "volumeUsedBytes": sample.volume_used_bytes,
+    });
+    sqlx::query("UPDATE platforms SET networkcount=$2, volumecount=$3, imagecount=$4, memtotal=$5, platformdescriptor=(platformdescriptor::jsonb || $6::jsonb)::json WHERE id=$1")
+        .bind(platform).bind(sample.network_count).bind(sample.volume_count).bind(i32::try_from(sample.image_count).unwrap_or(i32::MAX))
+        .bind(sample.mem_total).bind(descriptor).execute(&mut **transaction).await.map_err(storage)?;
+    Ok(())
 }
