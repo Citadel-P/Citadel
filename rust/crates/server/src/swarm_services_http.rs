@@ -7,7 +7,6 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_swarm_services::{
@@ -17,8 +16,8 @@ use citadel_swarm_services::{
 };
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 pub struct SwarmServicesRealtimeNotifier {
@@ -45,24 +44,22 @@ pub struct SwarmServicesHttpState {
 }
 
 pub fn router(state: SwarmServicesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_MANAGED_SWARM_SERVICES, list)
-        .contract_route(routes::CREATE_SWARM_SERVICE, create)
-        .contract_route(routes::DELETE_SWARM_SERVICES, delete)
-        .contract_route(routes::GET_MANAGED_SWARM_SERVICE, get)
-        .contract_route(routes::GET_SWARM_SERVICE_DUPLICATE_DRAFT, duplicate_draft)
-        .contract_route(routes::GET_SWARM_SERVICE_ADOPTION_DRAFT, adoption_draft)
-        .contract_route(routes::ADOPT_SWARM_SERVICE, adopt)
-        .contract_route(routes::UPDATE_SWARM_SERVICE, update)
-        .contract_route(routes::RENAME_SWARM_SERVICE, rename)
-        .contract_route(routes::UPDATE_SWARM_SERVICE_METADATA, update_metadata)
-        .contract_route(routes::APPLY_SWARM_SERVICE, apply)
-        .contract_route(routes::SCALE_SWARM_SERVICE, scale)
-        .contract_route(routes::FORCE_UPDATE_SWARM_SERVICE, force_update)
-        .contract_route(routes::CHECK_SWARM_SERVICE_UPDATES, check_updates)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices/{id}/duplicate-draft",
+    operation_id = "getSwarmServiceDuplicateDraft",
+    summary = "Prepare a managed Service duplicate",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceDuplicateDraftView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn duplicate_draft(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -133,6 +130,19 @@ async fn authorize_adoption(
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adoption-draft",
+    operation_id = "getSwarmServiceAdoptionDraft",
+    summary = "Review an unmanaged Docker Service for adoption",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceAdoptionDraftView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn adoption_draft(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -165,6 +175,20 @@ async fn adoption_draft(
     })).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/adopt",
+    operation_id = "adoptSwarmService",
+    summary = "Adopt an existing Docker Service without changing Docker",
+    request_body = citadel_swarm_services::adoption::AdoptSwarmServiceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn adopt(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -196,7 +220,7 @@ async fn adopt(
     Ok(no_store(Json(service).into_response()))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 struct ServiceMetadataInput {
     #[serde(deserialize_with = "deserialize_description")]
     description: Option<String>,
@@ -208,6 +232,20 @@ fn deserialize_description<'de, D: serde::Deserializer<'de>>(
     serde::Deserialize::deserialize(deserializer)
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/swarmServices/{id}/_metadata",
+    operation_id = "updateSwarmServiceMetadata",
+    summary = "Update managed Service metadata",
+    request_body = ServiceMetadataInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_metadata(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -243,6 +281,19 @@ async fn update_metadata(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices/{id}/check-updates",
+    operation_id = "checkSwarmServiceUpdates",
+    summary = "Check the applied Service image for updates",
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn check_updates(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -281,6 +332,19 @@ async fn check_updates(
     Ok(no_store(Json(value).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices",
+    operation_id = "listManagedSwarmServices",
+    summary = "List managed Docker Swarm Services",
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServicesView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -305,6 +369,19 @@ async fn list(
     )?;
     Ok(no_store(Json(value).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices/{id}",
+    operation_id = "getManagedSwarmService",
+    summary = "Get a managed Docker Swarm Service",
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -332,6 +409,19 @@ async fn get(
     )?;
     Ok(no_store(Json(value).into_response()))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices",
+    operation_id = "createSwarmService",
+    summary = "Create a managed Docker Swarm Service",
+    request_body = CreateSwarmServiceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -362,6 +452,20 @@ async fn create(
     )?;
     Ok(no_store(Json(value).into_response()))
 }
+#[utoipa::path(
+    patch,
+    path = "/api/v1/swarmServices/{id}",
+    operation_id = "updateSwarmService",
+    summary = "Update managed Docker Swarm Service configuration",
+    request_body = UpdateSwarmServiceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -391,6 +495,19 @@ async fn update(
     )?;
     Ok(no_store(Json(value).into_response()))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices/rename",
+    operation_id = "renameSwarmService",
+    summary = "Rename a managed Docker Swarm Service",
+    request_body = RenameSwarmServiceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_swarm_services::ManagedSwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -418,6 +535,19 @@ async fn rename(
     )?;
     Ok(no_store(Json(value).into_response()))
 }
+#[utoipa::path(
+    delete,
+    path = "/api/v1/swarmServices",
+    operation_id = "deleteSwarmServices",
+    summary = "Delete managed Docker Swarm Services",
+    request_body = Vec<Uuid>,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -436,6 +566,19 @@ async fn delete(
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices/{id}/apply",
+    operation_id = "applySwarmService",
+    summary = "Apply a managed Docker Swarm Service and stream progress",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn apply(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -459,6 +602,20 @@ async fn apply(
         id,
     )))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices/{id}/scale",
+    operation_id = "scaleSwarmService",
+    summary = "Scale a managed Docker Swarm Service and stream progress",
+    request_body = ScaleSwarmServiceInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn scale(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -485,6 +642,19 @@ async fn scale(
         input.replicas,
     )))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/swarmServices/{id}/force-update",
+    operation_id = "forceUpdateSwarmService",
+    summary = "Force a managed Docker Swarm Service task update and stream progress",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn force_update(
     State(state): State<SwarmServicesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -618,4 +788,22 @@ fn invalid_path(_: PathRejection) -> IdentityError {
 }
 fn invalid_json(error: JsonRejection) -> IdentityError {
     crate::request_validation::invalid_json(error)
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<SwarmServicesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(delete))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(duplicate_draft))
+        .normalized_routes(utoipa_axum::routes!(adoption_draft))
+        .normalized_routes(utoipa_axum::routes!(adopt))
+        .normalized_routes(utoipa_axum::routes!(update))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(update_metadata))
+        .normalized_routes(utoipa_axum::routes!(apply))
+        .normalized_routes(utoipa_axum::routes!(scale))
+        .normalized_routes(utoipa_axum::routes!(force_update))
+        .normalized_routes(utoipa_axum::routes!(check_updates))
 }

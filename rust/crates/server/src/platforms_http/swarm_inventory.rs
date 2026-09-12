@@ -148,6 +148,20 @@ async fn bounded<T>(
         })
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}",
+    operation_id = "updateSwarmNode",
+    summary = "updateSwarmNode",
+    request_body = UpdateSwarmNodeInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("nodeId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn update_node(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -199,6 +213,20 @@ fn check_node(node: &SwarmNodeView, version: i64) -> Result<(), IdentityError> {
         Ok(())
     }
 }
+#[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{platformId}/swarm/nodes/availability",
+    operation_id = "updateSwarmNodesAvailability",
+    summary = "updateSwarmNodesAvailability",
+    request_body = UpdateSwarmNodesAvailabilityInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn update_availability(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -319,6 +347,19 @@ async fn service_guard(
     }
     Ok(())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart",
+    operation_id = "restartSwarmService",
+    summary = "restartSwarmService",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn restart_service(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -354,7 +395,8 @@ pub(super) async fn restart_service(
 }
 
 macro_rules! material_create {
-    ($name:ident,$secret:expr) => {
+    ($(#[$name_attr:meta])* $name:ident,$secret:expr) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -366,8 +408,42 @@ macro_rules! material_create {
         }
     };
 }
-material_create!(create_secret, true);
-material_create!(create_config, false);
+material_create!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/swarm/secrets",
+    operation_id = "createSwarmSecret",
+    summary = "createSwarmSecret",
+    request_body = ref("#/components/schemas/CreateSwarmSecretInput"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    create_secret,
+    true
+);
+material_create!(
+    #[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/swarm/configs",
+    operation_id = "createSwarmConfig",
+    summary = "createSwarmConfig",
+    request_body = ref("#/components/schemas/CreateSwarmConfigInput"),
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    create_config,
+    false
+);
 async fn create_material(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -406,7 +482,8 @@ async fn create_material(
     finish(&state, &platform, result, &headers).await
 }
 macro_rules! material_labels {
-    ($name:ident,$secret:expr) => {
+    ($(#[$name_attr:meta])* $name:ident,$secret:expr) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -418,8 +495,42 @@ macro_rules! material_labels {
         }
     };
 }
-material_labels!(update_secret_labels, true);
-material_labels!(update_config_labels, false);
+material_labels!(
+    #[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}/labels",
+    operation_id = "updateSwarmSecretLabels",
+    summary = "updateSwarmSecretLabels",
+    request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    update_secret_labels,
+    true
+);
+material_labels!(
+    #[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/labels",
+    operation_id = "updateSwarmConfigLabels",
+    summary = "updateSwarmConfigLabels",
+    request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    update_config_labels,
+    false
+);
 async fn material_guard(
     state: &PlatformsHttpState,
     pid: Uuid,
@@ -512,7 +623,8 @@ async fn update_labels(
     finish(&state, &platform, result, &headers).await
 }
 macro_rules! delete_resources {
-    ($name:ident,$kind:expr) => {
+    ($(#[$name_attr:meta])* $name:ident,$kind:expr) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -524,9 +636,60 @@ macro_rules! delete_resources {
         }
     };
 }
-delete_resources!(delete_services, "service");
-delete_resources!(delete_secrets, "secret");
-delete_resources!(delete_configs, "config");
+delete_resources!(
+    #[utoipa::path(
+    delete,
+    path = "/api/v1/platforms/{platformId}/swarm/services",
+    operation_id = "deleteSwarmInventoryServices",
+    summary = "deleteSwarmInventoryServices",
+    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    delete_services,
+    "service"
+);
+delete_resources!(
+    #[utoipa::path(
+    delete,
+    path = "/api/v1/platforms/{platformId}/swarm/secrets",
+    operation_id = "deleteSwarmSecrets",
+    summary = "deleteSwarmSecrets",
+    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    delete_secrets,
+    "secret"
+);
+delete_resources!(
+    #[utoipa::path(
+    delete,
+    path = "/api/v1/platforms/{platformId}/swarm/configs",
+    operation_id = "deleteSwarmConfigs",
+    summary = "deleteSwarmConfigs",
+    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    delete_configs,
+    "config"
+);
 async fn delete(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -618,7 +781,8 @@ pub(crate) fn inspect_service_view(value: SwarmServiceMessage) -> Value {
     json!({"id":value.id,"versionIndex":value.version_index,"name":value.name,"mode":value.mode,"image":value.image,"runningTaskCount":value.running_task_count,"desiredTaskCount":value.desired_task_count,"updateState":value.update_state,"updateMessage":(!value.update_message.is_empty()).then_some(value.update_message),"ports":value.ports,"networkIds":value.network_ids,"secretIds":value.secret_ids,"configIds":value.config_ids,"labels":value.labels,"createdAt":value.created_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32)),"updatedAt":value.updated_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32))})
 }
 macro_rules! reader {
-    ($name:ident,$kind:expr) => {
+    ($(#[$name_attr:meta])* $name:ident,$kind:expr) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -629,9 +793,57 @@ macro_rules! reader {
         }
     };
 }
-reader!(inspect_node, "node");
-reader!(inspect_service, "service");
-reader!(config_data, "config");
+reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect",
+    operation_id = "inspectSwarmNode",
+    summary = "inspectSwarmNode",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("nodeId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    inspect_node,
+    "node"
+);
+reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect",
+    operation_id = "inspectSwarmService",
+    summary = "inspectSwarmService",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    inspect_service,
+    "service"
+);
+reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content",
+    operation_id = "getSwarmConfigData",
+    summary = "getSwarmConfigData",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigDataView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    config_data,
+    "config"
+);
 async fn read(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,

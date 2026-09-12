@@ -572,7 +572,7 @@ impl ActivityEvent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "PascalCase")]
 pub struct VolumeContentDownloaded {
     pub volume_name: String,

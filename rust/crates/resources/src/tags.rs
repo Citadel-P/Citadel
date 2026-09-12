@@ -36,7 +36,7 @@ impl TaggableResourceType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagView {
     pub id: Uuid,
@@ -49,7 +49,8 @@ pub struct TagView {
     pub usage_count: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = resources::tags::TagSummary)]
 #[serde(rename_all = "camelCase")]
 pub struct TagSummary {
     pub id: Uuid,
@@ -57,7 +58,7 @@ pub struct TagSummary {
     pub color: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewTag {
     pub name: String,
@@ -73,7 +74,7 @@ impl NewTag {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagPatch {
     pub name: Option<String>,

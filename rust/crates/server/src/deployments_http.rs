@@ -7,7 +7,6 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_deployments::{
     ApplyDeploymentInput, CreateDeploymentInput, DeploymentChangeNotifier, DeploymentError,
     DeploymentFilter, DeploymentService, PatchDeploymentInput, PatchDeploymentMetadataInput,
@@ -17,8 +16,8 @@ use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 #[path = "deployments_http/adoption.rs"]
@@ -64,29 +63,22 @@ pub struct DeploymentsHttpState {
 }
 
 pub fn router(state: DeploymentsHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_DEPLOYMENTS, list_deployments)
-        .contract_route(routes::CREATE_DEPLOYMENT, create_deployment)
-        .contract_route(routes::GET_CONTAINER_ADOPTION_DRAFT, adoption::draft)
-        .contract_route(routes::ADOPT_CONTAINER, adoption::adopt)
-        .contract_route(routes::APPLY_DEPLOYMENT, apply_deployment)
-        .contract_route(routes::DELETE_DEPLOYMENTS, delete_deployments)
-        .contract_route(routes::RENAME_DEPLOYMENT, rename_deployment)
-        .contract_route(routes::GET_DEPLOYMENT, get_deployment)
-        .contract_route(routes::CHECK_DEPLOYMENT_UPDATES, check_deployment_updates)
-        .contract_route(routes::GET_DEPLOYMENT_CONFIG, get_deployment_config)
-        .contract_route(
-            routes::GET_DEPLOYMENT_DUPLICATE_DRAFT,
-            get_deployment_duplicate_draft,
-        )
-        .contract_route(routes::UPDATE_DEPLOYMENT, update_deployment)
-        .contract_route(
-            routes::UPDATE_DEPLOYMENT_METADATA,
-            update_deployment_metadata,
-        )
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/deployments/{deploymentId}/check-updates",
+    operation_id = "checkDeploymentUpdates",
+    summary = "Check the applied Deployment image for updates",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("deploymentId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn check_deployment_updates(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -125,6 +117,19 @@ async fn check_deployment_updates(
     Ok(no_store(Json(checked).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/deployments/apply",
+    operation_id = "applyDeployment",
+    summary = "Apply a Deployment",
+    request_body = ApplyDeploymentInput,
+    responses(
+        (status = 200, description = "Success", body = Vec<citadel_deployments::DeploymentStreamItem>, content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn apply_deployment(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -184,6 +189,19 @@ async fn apply_deployment(
     Ok(response)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/deployments",
+    operation_id = "listDeployments",
+    summary = "List authorized Deployments",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentsView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_deployments(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -208,6 +226,19 @@ async fn list_deployments(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{deploymentId}",
+    operation_id = "getDeployment",
+    summary = "Get a Deployment",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("deploymentId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_deployment(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -236,6 +267,19 @@ async fn get_deployment(
     Ok(no_store(Json(deployment).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{deploymentId}/_cfg",
+    operation_id = "getDeploymentConfig",
+    summary = "Get Deployment configuration",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentConfigView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("deploymentId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_deployment_config(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -264,6 +308,19 @@ async fn get_deployment_config(
     Ok(no_store(Json(config).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{deploymentId}/duplicate-draft",
+    operation_id = "getDeploymentDuplicateDraft",
+    summary = "Build a Deployment duplicate draft",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentDuplicateDraftView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("deploymentId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_deployment_duplicate_draft(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -292,6 +349,19 @@ async fn get_deployment_duplicate_draft(
     Ok(no_store(Json(draft).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/deployments",
+    operation_id = "createDeployment",
+    summary = "Create a Deployment",
+    request_body = CreateDeploymentInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_deployment(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -323,6 +393,20 @@ async fn create_deployment(
     Ok(no_store(Json(deployment).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/deployments/{id}",
+    operation_id = "updateDeployment",
+    summary = "Update Deployment configuration",
+    request_body = PatchDeploymentInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_deployment(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -359,6 +443,20 @@ async fn update_deployment(
     Ok(no_store(Json(deployment).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/deployments/{id}/_metadata",
+    operation_id = "updateDeploymentMetadata",
+    summary = "Update Deployment metadata",
+    request_body = PatchDeploymentMetadataInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_deployment_metadata(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -389,6 +487,19 @@ async fn update_deployment_metadata(
     Ok(no_store(Json(deployment).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/deployments/rename",
+    operation_id = "renameDeployment",
+    summary = "Rename a Deployment",
+    request_body = RenameDeploymentInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_deployment(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -422,6 +533,19 @@ async fn rename_deployment(
     Ok(no_store(Json(deployment).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/deployments",
+    operation_id = "deleteDeployments",
+    summary = "Delete Deployments",
+    request_body = Vec<Uuid>,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_deployments(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -516,7 +640,9 @@ fn parse_filter(query: Option<&str>) -> Result<DeploymentFilter, IdentityError> 
 
 fn deployment_error(error: DeploymentError) -> IdentityError {
     match error {
-        DeploymentError::Validation(message) => crate::request_validation::validation_error(message),
+        DeploymentError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
         DeploymentError::NotFound => IdentityError::NotFound,
         DeploymentError::Forbidden => IdentityError::Forbidden,
         DeploymentError::LicenseRequired(capability) => IdentityError::LicenseRequired(capability),
@@ -569,4 +695,21 @@ mod tests {
             .is_err()
         );
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DeploymentsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_deployments))
+        .normalized_routes(utoipa_axum::routes!(create_deployment))
+        .normalized_routes(utoipa_axum::routes!(adoption::draft))
+        .normalized_routes(utoipa_axum::routes!(adoption::adopt))
+        .normalized_routes(utoipa_axum::routes!(apply_deployment))
+        .normalized_routes(utoipa_axum::routes!(delete_deployments))
+        .normalized_routes(utoipa_axum::routes!(rename_deployment))
+        .normalized_routes(utoipa_axum::routes!(get_deployment))
+        .normalized_routes(utoipa_axum::routes!(check_deployment_updates))
+        .normalized_routes(utoipa_axum::routes!(get_deployment_config))
+        .normalized_routes(utoipa_axum::routes!(get_deployment_duplicate_draft))
+        .normalized_routes(utoipa_axum::routes!(update_deployment))
+        .normalized_routes(utoipa_axum::routes!(update_deployment_metadata))
 }

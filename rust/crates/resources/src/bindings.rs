@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 use crate::{MetadataPatch, ResourceMetadataError, validate_name};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum ResourceBindingKind {
     Variable,
     Secret,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum ResourceBindingScope {
     Global,
     Stack,
@@ -30,20 +30,20 @@ impl ResourceBindingScope {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum SecretDeliveryMode {
     EnvironmentVariable,
     MountedFile,
     NativePlatformSecret,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum SecretProviderType {
     InternalEncrypted,
     VaultCompatibleKvV2,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceBindingView {
     pub id: Uuid,
@@ -58,14 +58,14 @@ pub struct ResourceBindingView {
     pub is_inherited: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceBindingsView {
     pub entries: Vec<ResourceBindingView>,
     pub effective_entries: Vec<ResourceBindingView>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewResourceBinding {
     pub name: String,
@@ -80,7 +80,7 @@ pub struct NewResourceBinding {
     pub target_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceBindingInput {
     pub id: Uuid,
@@ -186,7 +186,7 @@ fn validate_target_path(target_path: Option<&str>) -> Result<(), ResourceMetadat
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretDefinitionView {
     pub id: Uuid,
@@ -199,7 +199,7 @@ pub struct SecretDefinitionView {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalSecretInput {
     pub name: String,
@@ -221,7 +221,7 @@ impl ExternalSecretInput {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalSecretPatch {
     pub name: Option<String>,
@@ -229,6 +229,7 @@ pub struct ExternalSecretPatch {
     pub external_path: Option<String>,
     pub external_key: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<i32>, required = false)]
     pub external_version: MetadataPatch<i32>,
 }
 
@@ -295,7 +296,7 @@ pub(crate) fn validate_external_secret(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretProviderView {
     pub id: Uuid,
@@ -322,7 +323,7 @@ pub struct StoredSecretProviderPatch {
     pub protected_token: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretProviderInput {
     pub name: String,
@@ -331,7 +332,7 @@ pub struct SecretProviderInput {
     pub token: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretProviderPatch {
     pub name: Option<String>,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::contract_router::ContractRouterExt;
+use crate::openapi::router::OpenApiRouterExt;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -9,7 +9,6 @@ use axum::{Json, Router};
 use chrono::Utc;
 use citadel_alerts::{AlertEventSink, AlertObservation};
 use citadel_automation::{AutomationError, AutomationService};
-use citadel_contracts::http::routes;
 use citadel_domain::ActorId;
 use citadel_git::{GitRepositoryExecutionError, GitRepositoryExecutionService, GitWebhookOutcome};
 use citadel_resources::webhooks::{WebhookConfiguration, WebhookError};
@@ -36,12 +35,10 @@ pub struct WebhooksHttpState {
 }
 
 pub fn router(state: WebhooksHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::RECEIVE_WEBHOOK, receive)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct WebhookResponse {
     accepted: bool,
@@ -50,6 +47,20 @@ struct WebhookResponse {
     reason: Option<&'static str>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/listener/{authType}/{resourceType}/{id}/{execution}",
+    operation_id = "receiveWebhook",
+    summary = "Receive a provider webhook delivery",
+    request_body = serde_json::Value,
+    responses(
+        (status = 202, description = "Success", body = WebhookResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("authType" = String, Path), ("resourceType" = String, Path), ("id" = uuid::Uuid, Path), ("execution" = String, Path)),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(true)))
+)]
 async fn receive(
     State(state): State<WebhooksHttpState>,
     Path((auth_type, resource_type, id, execution)): Path<(String, String, Uuid, String)>,
@@ -488,4 +499,8 @@ fn webhook_error(status: StatusCode, request_id: Uuid, reason: &'static str) -> 
         }),
     )
         .into_response()
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<WebhooksHttpState> {
+    utoipa_axum::router::OpenApiRouter::new().normalized_routes(utoipa_axum::routes!(receive))
 }

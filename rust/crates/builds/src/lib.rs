@@ -23,21 +23,21 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildArgSpec {
     pub name: String,
     pub value: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildSecretSpec {
     pub id: String,
     pub secret_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectInput {
     pub name: String,
@@ -272,7 +272,7 @@ fn normalize_path(value: Option<String>, fallback: &str) -> Result<String, Build
     Ok(value)
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectView {
     pub tags: Vec<citadel_resources::TagSummary>,
@@ -308,7 +308,7 @@ pub struct BuildProjectView {
     pub row_version: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildRunView {
     pub id: Uuid,
@@ -337,7 +337,7 @@ pub struct BuildRunView {
     pub triggered_by_actor_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAgentPoolInput {
     pub name: String,
@@ -459,7 +459,7 @@ fn validate_range(value: i32, min: i32, max: i32, label: &str) -> Result<(), Bui
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAgentPoolView {
     pub tags: Vec<citadel_resources::TagSummary>,

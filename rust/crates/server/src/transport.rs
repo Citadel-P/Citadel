@@ -17,7 +17,6 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::any;
 use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
-use citadel_contracts::http::ROUTES;
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -342,9 +341,7 @@ fn is_trusted_peer(transport: &TransportConfig, peer: IpAddr) -> bool {
 }
 
 fn setup_gated(path: &str) -> bool {
-    let explicitly_exempt = ROUTES
-        .iter()
-        .any(|route| route.path == path && route.setup_exempt);
+    let explicitly_exempt = crate::openapi::setup_exempt(path);
     !explicitly_exempt
         && !path.starts_with("/api/v1/setup")
         && (path.starts_with("/api/v1")

@@ -91,20 +91,20 @@ pub struct LicenseTransitionCheck {
 pub const LICENSE_TRANSITION_MAXIMUM_CHECK_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 pub const LICENSE_TRANSITION_BOUNDARY_MARGIN: StdDuration = StdDuration::from_secs(1);
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstallLicenseRequest {
     pub license: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseCapabilityView {
     pub capability: LicenseCapability,
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseView {
     pub status: LicenseStatus,
@@ -125,7 +125,7 @@ pub struct LicenseView {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseEntitlementsView {
     pub status: LicenseStatus,
@@ -133,7 +133,7 @@ pub struct LicenseEntitlementsView {
     pub capabilities: Vec<LicenseCapabilityView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseRequestView {
     pub product: &'static str,

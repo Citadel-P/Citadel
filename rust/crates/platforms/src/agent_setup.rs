@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// Public installation instructions. The signing private key never enters this model.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSetupView {
     pub hub_public_key: String,

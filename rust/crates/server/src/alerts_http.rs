@@ -6,7 +6,6 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
 use citadel_alerts::{AlertChannelInput, AlertDelivery, AlertError, AlertRuleInput, AlertStore};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use serde::{Deserialize, Serialize};
@@ -14,8 +13,8 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct AlertsHttpState {
@@ -26,63 +25,44 @@ pub struct AlertsHttpState {
 
 pub fn router(state: AlertsHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_ALERT_CHANNELS, list_channels)
-            .contract_route(routes::CREATE_ALERT_CHANNEL, create_channel)
-            .contract_route(routes::GET_ALERT_CHANNEL, get_channel)
-            .contract_route(routes::UPDATE_ALERT_CHANNEL, update_channel)
-            .contract_route(routes::DELETE_ALERT_CHANNELS, delete_channels)
-            .contract_route(routes::VERIFY_ALERT_CHANNEL, verify_channel)
-            .contract_route(routes::LIST_ALERT_RULES, list_rules)
-            .contract_route(routes::CREATE_ALERT_RULE, create_rule)
-            .contract_route(routes::GET_ALERT_RULE, get_rule)
-            .contract_route(routes::GET_ALERT_RULE_CONFIG, get_rule_config)
-            .contract_route(routes::RENAME_ALERT_RULE, rename_rule)
-            .contract_route(routes::UPDATE_ALERT_RULE_METADATA, update_rule_metadata)
-            .contract_route(routes::UPDATE_ALERT_RULE, update_rule)
-            .contract_route(routes::DELETE_ALERT_RULES, delete_rules)
-            .contract_route(routes::LIST_ALERT_EVENTS, list_events)
-            .contract_route(routes::GET_ALERT_EVENT, get_event)
-            .contract_route(routes::GET_UNRESOLVED_ALERT_COUNT, unresolved_count)
-            .contract_route(routes::ACKNOWLEDGE_ALERT_EVENTS, acknowledge)
-            .contract_route(routes::RESOLVE_ALERT_EVENTS, resolve)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "Alert",
     )
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Channels {
     channels: Vec<citadel_alerts::AlertChannelView>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Rules {
     alert_rules: Vec<citadel_alerts::AlertRuleListItem>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::alerts_http::Events)]
 #[serde(rename_all = "camelCase")]
 struct Events {
     paged_result: citadel_alerts::AlertEventPage,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Count {
     count: i64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Ids {
     ids: Vec<Uuid>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ResolveInput {
     ids: Vec<Uuid>,
     resolution_note: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct VerifyInput {
     name: String,
@@ -106,6 +86,18 @@ struct EventFilter {
     page_size: Option<i32>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertRules/channels",
+    operation_id = "listAlertChannels",
+    summary = "List Alert Channels",
+    responses(
+        (status = 200, description = "Success", body = Channels, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_channels(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -120,6 +112,19 @@ async fn list_channels(
     )?;
     Ok(no_store(Json(Channels { channels }).into_response()))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertRules/channels",
+    operation_id = "createAlertChannel",
+    summary = "Create an Alert Channel",
+    request_body = AlertChannelInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertChannelView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -140,6 +145,19 @@ async fn create_channel(
     let v = result(s.store.create_channel(p.actor_id, &i).await, &h)?;
     Ok(no_store(Json(v).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertRules/channels/{id}",
+    operation_id = "getAlertChannel",
+    summary = "Get an Alert Channel",
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertChannelView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -160,6 +178,20 @@ async fn get_channel(
         Json(result(s.store.get_channel(id).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    patch,
+    path = "/api/v1/alertRules/channels/{id}",
+    operation_id = "updateAlertChannel",
+    summary = "Update an Alert Channel",
+    request_body = citadel_alerts::AlertChannelInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertChannelView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -181,6 +213,19 @@ async fn update_channel(
         Json(result(s.store.update_channel(id, &patch).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    delete,
+    path = "/api/v1/alertRules/channels",
+    operation_id = "deleteAlertChannels",
+    summary = "Delete Alert Channels",
+    request_body = Ids,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_channels(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -200,6 +245,19 @@ async fn delete_channels(
     result(s.store.delete_channels(&i.ids).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertRules/channels/verify",
+    operation_id = "verifyAlertChannel",
+    summary = "Verify an Alert Channel",
+    request_body = VerifyInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ExternalAccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn verify_channel(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -241,6 +299,18 @@ async fn verify_channel(
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertRules",
+    operation_id = "listAlertRules",
+    summary = "List Alert Rules",
+    responses(
+        (status = 200, description = "Success", body = Rules, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_rules(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -257,6 +327,19 @@ async fn list_rules(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertRules",
+    operation_id = "createAlertRule",
+    summary = "Create an Alert Rule",
+    request_body = AlertRuleInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -278,6 +361,19 @@ async fn create_rule(
         Json(result(s.store.create_rule(p.actor_id, &i).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertRules/{id}",
+    operation_id = "getAlertRule",
+    summary = "Get an Alert Rule",
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -298,6 +394,19 @@ async fn get_rule(
         Json(result(s.store.get_rule(id).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertRules/{id}/_cfg",
+    operation_id = "getAlertRuleConfig",
+    summary = "Get Alert Rule configuration",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/AlertRuleConfigView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_rule_config(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -327,6 +436,19 @@ async fn get_rule_config(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertRules/rename",
+    operation_id = "renameAlertRule",
+    summary = "Rename an Alert Rule",
+    request_body = citadel_alerts::RenameAlertRuleInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -349,6 +471,20 @@ async fn rename_rule(
     ))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/alertRules/{id}/_metadata",
+    operation_id = "updateAlertRuleMetadata",
+    summary = "Update Alert Rule metadata",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_rule_metadata(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -376,6 +512,20 @@ async fn update_rule_metadata(
     ))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/alertRules/{id}",
+    operation_id = "updateAlertRule",
+    summary = "Update an Alert Rule",
+    request_body = ref("#/components/schemas/PatchAlertRuleInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertRuleView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_rule(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -401,6 +551,19 @@ async fn update_rule(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    delete,
+    path = "/api/v1/alertRules",
+    operation_id = "deleteAlertRules",
+    summary = "Delete Alert Rules",
+    request_body = Ids,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_rules(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -420,6 +583,19 @@ async fn delete_rules(
     result(s.store.delete_rules(&i.ids).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertEvents",
+    operation_id = "listAlertEvents",
+    summary = "List Alert Events",
+    responses(
+        (status = 200, description = "Success", body = Events, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("ResourceId" = Option<uuid::Uuid>, Query), ("AlertType" = Option<String>, Query), ("ResourceType" = Option<String>, Query), ("UnresolvedOnly" = Option<bool>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 1000, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_events(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -443,6 +619,19 @@ async fn list_events(
     )?;
     Ok(no_store(Json(Events { paged_result }).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertEvents/{id}",
+    operation_id = "getAlertEvent",
+    summary = "Get an Alert Event",
+    responses(
+        (status = 200, description = "Success", body = citadel_alerts::AlertEventView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_event(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -463,6 +652,18 @@ async fn get_event(
         Json(result(s.store.get_event(id).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/alertEvents/unresolved-count",
+    operation_id = "getUnresolvedAlertEventsCount",
+    summary = "Count unresolved Alert Events",
+    responses(
+        (status = 200, description = "Success", body = Count, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn unresolved_count(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -481,6 +682,19 @@ async fn unresolved_count(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertEvents/acknowledge",
+    operation_id = "acknowledgeAlertEvents",
+    summary = "Acknowledge Alert Events",
+    request_body = Ids,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn acknowledge(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -500,6 +714,19 @@ async fn acknowledge(
     result(s.store.acknowledge(p.actor_id, &i.ids).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/alertEvents/resolve",
+    operation_id = "resolveAlertEvents",
+    summary = "Resolve Alert Events",
+    request_body = ResolveInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn resolve(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -590,4 +817,27 @@ fn result<T>(r: Result<T, AlertError>, h: &HeaderMap) -> IdentityHttpResult<T> {
         }),
         h,
     )
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<AlertsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_channels))
+        .normalized_routes(utoipa_axum::routes!(create_channel))
+        .normalized_routes(utoipa_axum::routes!(get_channel))
+        .normalized_routes(utoipa_axum::routes!(update_channel))
+        .normalized_routes(utoipa_axum::routes!(delete_channels))
+        .normalized_routes(utoipa_axum::routes!(verify_channel))
+        .normalized_routes(utoipa_axum::routes!(list_rules))
+        .normalized_routes(utoipa_axum::routes!(create_rule))
+        .normalized_routes(utoipa_axum::routes!(get_rule))
+        .normalized_routes(utoipa_axum::routes!(get_rule_config))
+        .normalized_routes(utoipa_axum::routes!(rename_rule))
+        .normalized_routes(utoipa_axum::routes!(update_rule_metadata))
+        .normalized_routes(utoipa_axum::routes!(update_rule))
+        .normalized_routes(utoipa_axum::routes!(delete_rules))
+        .normalized_routes(utoipa_axum::routes!(list_events))
+        .normalized_routes(utoipa_axum::routes!(get_event))
+        .normalized_routes(utoipa_axum::routes!(unresolved_count))
+        .normalized_routes(utoipa_axum::routes!(acknowledge))
+        .normalized_routes(utoipa_axum::routes!(resolve))
 }

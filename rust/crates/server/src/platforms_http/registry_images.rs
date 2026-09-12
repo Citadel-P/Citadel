@@ -7,7 +7,8 @@ static BROWSER: std::sync::OnceLock<Result<RegistryBrowser, String>> = std::sync
 static BROWSE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
 
 macro_rules! browse_one {
-    ($handler:ident,$kind:ident) => {
+    ($(#[$handler_attr:meta])* $handler:ident,$kind:ident) => {
+        $(#[$handler_attr])*
         pub(super) async fn $handler(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -31,7 +32,8 @@ macro_rules! browse_one {
     };
 }
 macro_rules! browse_two {
-    ($handler:ident,$kind:ident) => {
+    ($(#[$handler_attr:meta])* $handler:ident,$kind:ident) => {
+        $(#[$handler_attr])*
         pub(super) async fn $handler(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -54,10 +56,74 @@ macro_rules! browse_two {
         }
     };
 }
-browse_one!(repositories, Repositories);
-browse_one!(docker_repositories, DockerHubRepositories);
-browse_two!(docker_tags, DockerHubTags);
-browse_two!(github_versions, GithubVersions);
+browse_one!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/images/{registryName}/repositories",
+    operation_id = "getExternalRepositories",
+    summary = "List Registry repositories",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/getExternalRepositoriesResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("registryName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    repositories,
+    Repositories
+);
+browse_one!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/images/dockerhub/{registryName}/repositories",
+    operation_id = "getDockerHubRepositories",
+    summary = "List Docker Hub repositories",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoriesResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("registryName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    docker_repositories,
+    DockerHubRepositories
+);
+browse_two!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags",
+    operation_id = "getDockerHubRepositoryTags",
+    summary = "List Docker Hub repository tags",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoryTagsResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("registryName" = String, Path), ("repositoryName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    docker_tags,
+    DockerHubTags
+);
+browse_two!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/images/ghcr/{registryName}/{packageName}/versions",
+    operation_id = "getGhcrPackageVersions",
+    summary = "List GitHub package versions",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/getGhcrPackageVersionsResponse"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("registryName" = String, Path), ("packageName" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    github_versions,
+    GithubVersions
+);
 
 async fn browse(
     state: &PlatformsHttpState,

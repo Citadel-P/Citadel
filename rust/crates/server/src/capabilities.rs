@@ -2,7 +2,8 @@ use citadel_domain::PermissionLevel;
 use citadel_identity::PermissionGrant;
 use serde::Serialize;
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, utoipa::ToSchema)]
+#[schema(as = server::capabilities::ResourceCapabilities)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ResourceCapabilities {
     pub can_read: bool,

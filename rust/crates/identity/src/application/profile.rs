@@ -27,20 +27,20 @@ pub struct CurrentProfileRecord {
     pub teams: Vec<ProfileResourceInfo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileResourceInfo {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub enum CurrentProfileAuthenticationType {
     Local,
     Oidc,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileAuthenticationView {
     pub r#type: CurrentProfileAuthenticationType,
@@ -51,7 +51,8 @@ pub struct CurrentProfileAuthenticationView {
     pub oidc_provider_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[schema(as = identity::application::profile::ResourceCapabilities)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilities {
     pub can_read: bool,
@@ -59,7 +60,7 @@ pub struct ResourceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileAuthorizationView {
     pub is_administrator: bool,
@@ -68,7 +69,7 @@ pub struct CurrentProfileAuthorizationView {
     pub tags: ResourceCapabilities,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileView {
     pub id: Uuid,
@@ -81,13 +82,13 @@ pub struct CurrentProfileView {
     pub teams: Vec<ProfileResourceInfo>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCurrentProfileRequest {
     pub display_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferencesView {
     pub time_zone: Option<String>,
@@ -96,14 +97,17 @@ pub struct UserPreferencesView {
     pub is_persisted: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchUserPreferencesRequest {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub time_zone: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<UserDateTimeFormat>, required = false)]
     pub date_time_format: PatchField<UserDateTimeFormat>,
     #[serde(default)]
+    #[schema(value_type = Option<UserTheme>, required = false)]
     pub theme: PatchField<UserTheme>,
 }
 
@@ -114,7 +118,7 @@ pub struct UserPreferencesUpdate {
     pub theme: Option<UserTheme>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSessionSummaryView {
     pub id: Uuid,
@@ -127,19 +131,19 @@ pub struct UserSessionSummaryView {
     pub is_current: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSessionsView {
     pub sessions: Vec<UserSessionSummaryView>,
     pub can_revoke_other_sessions: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct RevokeOtherProfileSessionsView {
     pub count: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeCurrentPasswordRequest {
     pub current_password: String,

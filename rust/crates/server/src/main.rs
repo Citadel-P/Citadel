@@ -4,8 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use axum::extract::State;
-use axum::http::{StatusCode, header};
+use axum::http::header;
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -71,7 +70,6 @@ use citadel_application::{
 use citadel_automation::{AutomationRuntimeConfig, AutomationService};
 use citadel_backups::BackupService;
 use citadel_builds::BuildService;
-use citadel_contracts::http::routes;
 use citadel_database::MigrationRunner;
 use citadel_deployments::DeploymentService;
 use citadel_domain::ActorId;
@@ -86,7 +84,6 @@ use citadel_platforms::{
 };
 use citadel_resources::ResourceMetadataService;
 use citadel_server::config::{Config, DatabaseConfig};
-use citadel_server::contract_router::ContractRouterExt;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
 use citadel_server::{
@@ -100,7 +97,6 @@ use citadel_stacks::StackService;
 use citadel_swarm_services::ManagedSwarmServiceService;
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
-use serde::Serialize;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use tower_http::catch_panic::CatchPanicLayer;
@@ -149,18 +145,6 @@ enum Command {
         #[arg(long, default_value = "http://127.0.0.1:8000/health")]
         url: String,
     },
-}
-
-#[derive(Clone)]
-struct AppState {
-    readiness: Arc<Readiness>,
-    metrics: Arc<Metrics>,
-    pool: PgPool,
-}
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
 }
 
 #[tokio::main]
@@ -864,155 +848,150 @@ async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         },
     );
 
-    let state = AppState {
-        readiness: Arc::clone(&readiness),
-        metrics,
-        pool: pool.clone(),
-    };
-    let app = Router::new()
-        .contract_route(routes::GET_HEALTH, health)
-        .contract_route(routes::GET_READINESS, ready)
-        .contract_route(routes::GET_METRICS, open_metrics)
-        .with_state(state)
-        .merge(identity_http::router(identity_http::IdentityHttpState {
-            identity: Arc::clone(&identity),
-            mfa,
+    let app = citadel_server::diagnostics_http::router(
+        citadel_server::diagnostics_http::DiagnosticsHttpState {
             readiness: Arc::clone(&readiness),
-            secure_cookies: config.transport.mode
-                != citadel_server::config::TransportMode::Disabled,
-        }))
-        .merge(oidc_http::router(oidc_http::OidcHttpState {
-            oidc,
-            public_url: config.transport.public_url.clone(),
-            allowed_return_origins: config.transport.cors_origins.clone(),
-            secure_cookies: config.transport.mode
-                != citadel_server::config::TransportMode::Disabled,
-        }))
-        .merge(application_info_http::router())
-        .merge(citadel_server::search_http::router(Arc::new(
-            citadel_adapters::global_search::PostgresGlobalSearchStore::new(pool.clone()),
-        )))
-        .merge(citadel_server::actors_http::router(Arc::new(
-            citadel_adapters::actor_store::PostgresActorStore::new(pool.clone()),
-        )))
-        .merge(license_http::router(license_http::LicenseHttpState {
+            metrics,
+            pool: pool.clone(),
+        },
+    )
+    .merge(identity_http::router(identity_http::IdentityHttpState {
+        identity: Arc::clone(&identity),
+        mfa,
+        readiness: Arc::clone(&readiness),
+        secure_cookies: config.transport.mode != citadel_server::config::TransportMode::Disabled,
+    }))
+    .merge(oidc_http::router(oidc_http::OidcHttpState {
+        oidc,
+        public_url: config.transport.public_url.clone(),
+        allowed_return_origins: config.transport.cors_origins.clone(),
+        secure_cookies: config.transport.mode != citadel_server::config::TransportMode::Disabled,
+    }))
+    .merge(application_info_http::router())
+    .merge(citadel_server::search_http::router(Arc::new(
+        citadel_adapters::global_search::PostgresGlobalSearchStore::new(pool.clone()),
+    )))
+    .merge(citadel_server::actors_http::router(Arc::new(
+        citadel_adapters::actor_store::PostgresActorStore::new(pool.clone()),
+    )))
+    .merge(license_http::router(license_http::LicenseHttpState {
+        identity: Arc::clone(&identity),
+        licenses,
+    }))
+    .merge(activities_http::router(
+        activities_http::ActivitiesHttpState { activities },
+    ))
+    .merge(users_http::router(users_http::UsersHttpState {
+        identity: Arc::clone(&identity),
+        users,
+        mutations: user_mutations,
+    }))
+    .merge(teams_http::router(teams_http::TeamsHttpState {
+        identity: Arc::clone(&identity),
+        teams,
+        mutations: team_mutations,
+    }))
+    .merge(roles_http::router(roles_http::RolesHttpState {
+        identity: Arc::clone(&identity),
+        roles,
+        mutations: role_mutations,
+    }))
+    .merge(service_accounts_http::router(
+        service_accounts_http::ServiceAccountHttpState {
             identity: Arc::clone(&identity),
-            licenses,
-        }))
-        .merge(activities_http::router(
-            activities_http::ActivitiesHttpState { activities },
-        ))
-        .merge(users_http::router(users_http::UsersHttpState {
+            service_accounts,
+        },
+    ))
+    .merge(git_accounts_http::router(
+        git_accounts_http::GitAccountsHttpState {
             identity: Arc::clone(&identity),
-            users,
-            mutations: user_mutations,
-        }))
-        .merge(teams_http::router(teams_http::TeamsHttpState {
-            identity: Arc::clone(&identity),
-            teams,
-            mutations: team_mutations,
-        }))
-        .merge(roles_http::router(roles_http::RolesHttpState {
-            identity: Arc::clone(&identity),
-            roles,
-            mutations: role_mutations,
-        }))
-        .merge(service_accounts_http::router(
-            service_accounts_http::ServiceAccountHttpState {
-                identity: Arc::clone(&identity),
-                service_accounts,
-            },
-        ))
-        .merge(git_accounts_http::router(
-            git_accounts_http::GitAccountsHttpState {
-                identity: Arc::clone(&identity),
-                accounts: git_accounts,
-                realtime: realtime_hub.clone(),
-            },
-        ))
-        .merge(git_repositories_http::router(
-            git_repositories_http::GitRepositoriesHttpState {
-                identity: Arc::clone(&identity),
-                resources: Arc::clone(&resources),
-                execution: Arc::clone(&git_execution),
-                realtime: realtime_hub.clone(),
-                cancellation: cancellation.clone(),
-            },
-        ))
-        .merge(webhooks_http::router(webhooks_http::WebhooksHttpState {
-            git: Arc::clone(&git_execution),
-            automation: Arc::clone(&automation),
-            backups: Some(backups.clone()),
-            builds: Some(builds.clone()),
-            stacks: Some(stacks.clone()),
-            services: Some(swarm_services.clone()),
-            audit: Some(Arc::new(PostgresActivityStore::new(pool.clone()))),
-            alerts: Some(alert_store.clone()),
-        }))
-        .merge(automation_http::router(
-            automation_http::AutomationHttpState {
-                identity: Arc::clone(&identity),
-                automation,
-            },
-        ))
-        .merge(builds_http::router(builds_http::BuildsHttpState {
-            identity: Arc::clone(&identity),
-            builds,
-        }))
-        .merge(backups_http::router(backups_http::BackupsHttpState {
-            identity: Arc::clone(&identity),
-            backups,
-            cancellation: cancellation.clone(),
-        }))
-        .merge(alerts_http::router(alerts_http::AlertsHttpState {
-            identity: Arc::clone(&identity),
-            store: alert_store,
-            delivery: alert_delivery,
-        }))
-        .merge(deployments_http::router(
-            deployments_http::DeploymentsHttpState {
-                identity: Arc::clone(&identity),
-                deployments: Arc::clone(&deployments),
-            },
-        ))
-        .merge(swarm_services_http::router(
-            swarm_services_http::SwarmServicesHttpState {
-                identity: Arc::clone(&identity),
-                services: Arc::clone(&swarm_services),
-            },
-        ))
-        .merge(stacks_http::router(stacks_http::StacksHttpState {
-            identity: Arc::clone(&identity),
-            stacks,
-        }))
-        .merge(resources_http::router(resources_http::ResourcesHttpState {
-            identity: Arc::clone(&identity),
-            resources,
+            accounts: git_accounts,
             realtime: realtime_hub.clone(),
-        }))
-        .merge({
-            platforms_http::router(platform_state.clone())
-                .layer(axum::Extension(agent_setup))
-                .layer(axum::Extension(
-                    citadel_server::platforms_http::AgentSetupContext {
-                        signer: agent_signer,
-                        image: agent_image.clone(),
-                        requires_tls: !citadel_server::config::agent_allows_insecure()?,
-                    },
-                ))
-                .merge(citadel_server::lookup_http::router(
-                    citadel_server::lookup_http::LookupHttpState {
-                        store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
-                            pool.clone(),
-                        )),
-                        entitlements: entitlements.clone(),
-                        platforms: platform_state,
-                    },
-                ))
-        })
-        .merge(profile_http::router(profile_http::ProfileHttpState {
-            profiles,
-        }));
+        },
+    ))
+    .merge(git_repositories_http::router(
+        git_repositories_http::GitRepositoriesHttpState {
+            identity: Arc::clone(&identity),
+            resources: Arc::clone(&resources),
+            execution: Arc::clone(&git_execution),
+            realtime: realtime_hub.clone(),
+            cancellation: cancellation.clone(),
+        },
+    ))
+    .merge(webhooks_http::router(webhooks_http::WebhooksHttpState {
+        git: Arc::clone(&git_execution),
+        automation: Arc::clone(&automation),
+        backups: Some(backups.clone()),
+        builds: Some(builds.clone()),
+        stacks: Some(stacks.clone()),
+        services: Some(swarm_services.clone()),
+        audit: Some(Arc::new(PostgresActivityStore::new(pool.clone()))),
+        alerts: Some(alert_store.clone()),
+    }))
+    .merge(automation_http::router(
+        automation_http::AutomationHttpState {
+            identity: Arc::clone(&identity),
+            automation,
+        },
+    ))
+    .merge(builds_http::router(builds_http::BuildsHttpState {
+        identity: Arc::clone(&identity),
+        builds,
+    }))
+    .merge(backups_http::router(backups_http::BackupsHttpState {
+        identity: Arc::clone(&identity),
+        backups,
+        cancellation: cancellation.clone(),
+    }))
+    .merge(alerts_http::router(alerts_http::AlertsHttpState {
+        identity: Arc::clone(&identity),
+        store: alert_store,
+        delivery: alert_delivery,
+    }))
+    .merge(deployments_http::router(
+        deployments_http::DeploymentsHttpState {
+            identity: Arc::clone(&identity),
+            deployments: Arc::clone(&deployments),
+        },
+    ))
+    .merge(swarm_services_http::router(
+        swarm_services_http::SwarmServicesHttpState {
+            identity: Arc::clone(&identity),
+            services: Arc::clone(&swarm_services),
+        },
+    ))
+    .merge(stacks_http::router(stacks_http::StacksHttpState {
+        identity: Arc::clone(&identity),
+        stacks,
+    }))
+    .merge(resources_http::router(resources_http::ResourcesHttpState {
+        identity: Arc::clone(&identity),
+        resources,
+        realtime: realtime_hub.clone(),
+    }))
+    .merge({
+        platforms_http::router(platform_state.clone())
+            .layer(axum::Extension(agent_setup))
+            .layer(axum::Extension(
+                citadel_server::platforms_http::AgentSetupContext {
+                    signer: agent_signer,
+                    image: agent_image.clone(),
+                    requires_tls: !citadel_server::config::agent_allows_insecure()?,
+                },
+            ))
+            .merge(citadel_server::lookup_http::router(
+                citadel_server::lookup_http::LookupHttpState {
+                    store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
+                        pool.clone(),
+                    )),
+                    entitlements: entitlements.clone(),
+                    platforms: platform_state,
+                },
+            ))
+    })
+    .merge(profile_http::router(profile_http::ProfileHttpState {
+        profiles,
+    }));
     let mut app = if let Some(realtime) = realtime {
         app.merge(realtime.router())
     } else if let Some(license_realtime) = license_realtime_service {
@@ -1296,35 +1275,10 @@ async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-async fn health() -> axum::Json<HealthResponse> {
-    axum::Json(HealthResponse { status: "ok" })
-}
-
-async fn ready(State(state): State<AppState>) -> Response {
-    let readiness = state.readiness.snapshot();
-    let status = if readiness.database && readiness.docker {
-        StatusCode::OK
-    } else {
-        StatusCode::SERVICE_UNAVAILABLE
-    };
-    (status, axum::Json(readiness)).into_response()
-}
-
-async fn open_metrics(State(state): State<AppState>) -> Response {
-    (
-        [(
-            header::CONTENT_TYPE,
-            "application/openmetrics-text; version=1.0.0; charset=utf-8",
-        )],
-        state.metrics.render(&state.pool),
-    )
-        .into_response()
-}
-
 async fn openapi_full() -> Response {
     (
         [(header::CONTENT_TYPE, "application/json")],
-        include_str!("../../../generated/openapi/v1.json"),
+        citadel_server::openapi::json_document(false),
     )
         .into_response()
 }
@@ -1332,7 +1286,7 @@ async fn openapi_full() -> Response {
 async fn openapi_public() -> Response {
     (
         [(header::CONTENT_TYPE, "application/json")],
-        include_str!("../../../generated/openapi/public-v1.json"),
+        citadel_server::openapi::json_document(true),
     )
         .into_response()
 }

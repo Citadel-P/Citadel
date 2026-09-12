@@ -3,7 +3,7 @@ use citadel_platforms::images::ImageInspectionPort;
 
 static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct DeleteImagesInput {
     platform_id: Uuid,
@@ -14,6 +14,19 @@ pub(super) struct DeleteImagesInput {
     no_prune: bool,
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/images",
+    operation_id = "deleteImages",
+    summary = "Delete Images",
+    request_body = DeleteImagesInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/DeleteImageResult"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn delete(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -112,6 +125,19 @@ pub(super) async fn delete(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/images/{platformId}/{imageId}/_ports",
+    operation_id = "getExposedPorts",
+    summary = "Read exposed ports using the Citadel Image ID",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ExposedPortsResult"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("imageId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn exposed_ports(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -172,6 +198,19 @@ pub(super) async fn exposed_ports(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/images/{platformId}/{imageId}",
+    operation_id = "inspectImage",
+    summary = "Inspect an Image on its owning Docker node",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/InspectImageView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("imageId" = String, Path), ("dockerNodeId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn inspect(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

@@ -5,7 +5,6 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, PermissionGrant};
 use citadel_identity::{
@@ -17,10 +16,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct UsersHttpState {
@@ -31,19 +30,7 @@ pub struct UsersHttpState {
 
 pub fn router(state: UsersHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_USERS, list)
-            .contract_route(routes::SEARCH_USERS, search)
-            .contract_route(routes::GET_USER, get)
-            .contract_route(routes::CREATE_USER, create)
-            .contract_route(routes::UPDATE_USER, patch)
-            .contract_route(routes::RENAME_USER, rename)
-            .contract_route(routes::ADD_USER_ROLE, add_role)
-            .contract_route(routes::REMOVE_USER_ROLE, remove_role)
-            .contract_route(routes::ADD_USER_RESOURCE_ACCESS, add_resource_access)
-            .contract_route(routes::REMOVE_USER_RESOURCE_ACCESS, remove_resource_access)
-            .contract_route(routes::DELETE_USERS, delete)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "User",
     )
 }
@@ -70,13 +57,26 @@ struct UserSearchFilter {
     limit: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct UsersResponse {
     paged_result: PagedResult<UserView>,
     capabilities: ResourceCapabilities,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    operation_id = "listUsers",
+    summary = "Get all Users",
+    responses(
+        (status = 200, description = "Success", body = UsersResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("Name" = Option<String>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -115,6 +115,19 @@ async fn list(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/search",
+    operation_id = "searchUsers",
+    summary = "Search Users for assignment",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/UserSearchItems"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("Query" = Option<String>, Query), ("Limit" = Option<i32>, Query, minimum = 1, maximum = 50, extensions(("x-citadel-default" = json!(20))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn search(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -137,6 +150,19 @@ async fn search(
     Ok(no_store(Json(users).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{id}",
+    operation_id = "getUser",
+    summary = "Get a User by ID",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -153,6 +179,19 @@ async fn get(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/users",
+    operation_id = "createUser",
+    summary = "Create a User",
+    request_body = CreateUserRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -171,6 +210,20 @@ async fn create(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/users/{id}",
+    operation_id = "updateUser",
+    summary = "Update a User",
+    request_body = PatchUserRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn patch(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -191,6 +244,19 @@ async fn patch(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/rename",
+    operation_id = "renameUser",
+    summary = "Rename a User",
+    request_body = RenameUserRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -212,6 +278,20 @@ async fn rename(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/{id}/roles",
+    operation_id = "addUserRole",
+    summary = "Assign a Role to a User",
+    request_body = AddUserRoleRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_role(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -235,6 +315,19 @@ async fn add_role(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{id}/roles/{roleId}",
+    operation_id = "removeUserRole",
+    summary = "Remove a Role from a User",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_role(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -256,6 +349,20 @@ async fn remove_role(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/{id}/resource-accesses",
+    operation_id = "addUserResourceAccess",
+    summary = "Add a resource override to a User",
+    request_body = UserResourceAccessRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_resource_access(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -279,6 +386,20 @@ async fn add_resource_access(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{id}/resource-accesses",
+    operation_id = "removeUserResourceAccess",
+    summary = "Remove a resource override from a User",
+    request_body = UserResourceAccessRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_resource_access(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -302,6 +423,19 @@ async fn remove_resource_access(
     Ok(no_store(Json(user).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users",
+    operation_id = "deleteUsers",
+    summary = "Delete Users",
+    request_body = DeleteUsersRequest,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete(
     State(state): State<UsersHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -387,4 +521,19 @@ const fn default_page_size() -> i64 {
 
 const fn default_search_limit() -> i64 {
     20
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<UsersHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(search))
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(patch))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(add_role))
+        .normalized_routes(utoipa_axum::routes!(remove_role))
+        .normalized_routes(utoipa_axum::routes!(add_resource_access))
+        .normalized_routes(utoipa_axum::routes!(remove_resource_access))
+        .normalized_routes(utoipa_axum::routes!(delete))
 }

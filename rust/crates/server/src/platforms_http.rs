@@ -8,7 +8,6 @@ use axum::{Json, Router};
 use citadel_adapters::agent::AgentClient;
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeTarget};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_platforms::{
@@ -27,8 +26,8 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 const ALL_LEVELS: i32 =
@@ -44,14 +43,14 @@ mod container_inspection;
 mod container_mutations;
 mod deletion;
 mod edge;
-mod images;
 mod image_pull;
-mod registry_images;
-mod management;
+mod images;
 mod logs;
+mod management;
+mod registry_images;
 mod statistics;
-mod swarm_overview;
 pub(crate) mod swarm_inventory;
+mod swarm_overview;
 mod task_runtime;
 mod volume_content;
 pub use edge::EdgeHttpContext;
@@ -73,145 +72,28 @@ pub struct PlatformsHttpState {
 }
 
 pub fn router(state: PlatformsHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::GET_SWARM_OVERVIEW, swarm_overview::get)
-        .contract_route(routes::INSPECT_SWARM_TASK, task_runtime::inspect)
-        .contract_route(
-            routes::GET_SWARM_TASK_TERMINAL_TARGET,
-            task_runtime::terminal,
-        )
-        .contract_route(routes::INSPECT_CONTAINER, container_inspection::inspect)
-        .contract_route(routes::GET_CONTAINER_INFO, container_inspection::info)
-        .contract_route(routes::GET_CONTAINER_DATA, container_inspection::data)
-        .contract_route(
-            routes::GET_DEPLOYMENT_CONTAINER_INFO,
-            container_inspection::deployment_info,
-        )
-        .contract_route(
-            routes::START_DEPLOYMENTS,
-            container_mutations::start_deployments,
-        )
-        .contract_route(
-            routes::STOP_DEPLOYMENTS,
-            container_mutations::stop_deployments,
-        )
-        .contract_route(
-            routes::RESTART_DEPLOYMENTS,
-            container_mutations::restart_deployments,
-        )
-        .contract_route(
-            routes::PAUSE_DEPLOYMENTS,
-            container_mutations::pause_deployments,
-        )
-        .contract_route(
-            routes::RESUME_DEPLOYMENTS,
-            container_mutations::resume_deployments,
-        )
-        .contract_route(
-            routes::INSPECT_DEPLOYMENT,
-            container_inspection::inspect_deployment,
-        )
-        .contract_route(
-            routes::GET_STACK_CONTAINERS_DATA,
-            container_inspection::stack_data,
-        )
-        .contract_route(
-            routes::INSPECT_STACK_CONTAINER,
-            container_inspection::inspect_stack,
-        )
-        .contract_route(routes::LIST_VOLUME_DIRECTORY, volume_content::list)
-        .contract_route(routes::DOWNLOAD_VOLUME_PATH, volume_content::download)
-        .contract_route(routes::LIST_PLATFORMS, list_platforms)
-        .contract_route(routes::CREATE_PLATFORM, create_platform)
-        .contract_route(routes::DELETE_PLATFORMS, deletion::delete)
-        .contract_route(routes::GET_AGENT_SETUP, get_agent_setup)
-        .contract_route(routes::ROTATE_AGENT_HUB_KEY, management::rotate_key)
-        .contract_route(routes::UPDATE_PLATFORM, management::patch)
-        .contract_route(routes::RENAME_PLATFORM, management::rename)
-        .contract_route(routes::PRUNE_PLATFORM, management::prune)
-        .contract_route(routes::GET_PLATFORM, get_platform)
-        .contract_route(routes::CREATE_EDGE_ENROLLMENT, edge::enroll)
-        .contract_route(routes::GET_EDGE_STATUS, edge::status)
-        .contract_route(routes::GET_NODE_AGENT_COVERAGE, edge::node_coverage)
-        .contract_route(routes::REMOVE_NODE_AGENTS, edge::remove_node_agents)
-        .contract_route(routes::INSTALL_NODE_AGENTS, edge::install_node_agents)
-        .contract_route(routes::REPAIR_NODE_AGENTS, edge::repair_node_agents)
-        .contract_route(routes::UPGRADE_NODE_AGENTS, edge::upgrade_node_agents)
-        .contract_route(routes::REVOKE_EDGE, edge::revoke)
-        .contract_route(routes::UPDATE_PLATFORM_METADATA, update_platform_metadata)
-        .contract_route(routes::LIST_PLATFORM_CONTAINERS, list_containers)
-        .contract_route(routes::GET_CONTAINER, get_container)
-        .contract_route(routes::START_CONTAINERS, container_mutations::start)
-        .contract_route(routes::STOP_CONTAINERS, container_mutations::stop)
-        .contract_route(routes::RESTART_CONTAINERS, container_mutations::restart)
-        .contract_route(routes::PAUSE_CONTAINERS, container_mutations::pause)
-        .contract_route(routes::UNPAUSE_CONTAINERS, container_mutations::unpause)
-        .contract_route(routes::DELETE_CONTAINERS, container_mutations::delete)
-        .contract_route(routes::GET_CONTAINER_STATS, statistics::container)
-        .contract_route(routes::GET_PLATFORM_STATS, statistics::platform)
-        .contract_route(routes::GET_DEPLOYMENT_STATS, statistics::deployment)
-        .contract_route(routes::GET_STACK_STATS, statistics::stack)
-        .contract_route(routes::GET_SWARM_SERVICE_STATS, statistics::service)
-        .contract_route(routes::GET_SWARM_TASK_STATS, statistics::task)
-        .contract_route(routes::GET_SWARM_SERVICE_LOGS, logs::service)
-        .contract_route(routes::INSPECT_MANAGED_SWARM_SERVICE, container_inspection::inspect_managed_service)
-        .contract_route(routes::GET_SWARM_TASK_LOGS, logs::task)
-        .contract_route(
-            routes::GET_MANAGED_SWARM_SERVICE_LOGS,
-            logs::managed_service,
-        )
-        .contract_route(routes::LIST_PLATFORM_IMAGES, list_images)
-        .contract_route(routes::DELETE_IMAGES, images::delete)
-        .contract_route(routes::PULL_IMAGE, image_pull::pull)
-        .contract_route(routes::GET_EXTERNAL_REPOSITORIES, registry_images::repositories)
-        .contract_route(routes::GET_DOCKER_HUB_REPOSITORIES, registry_images::docker_repositories)
-        .contract_route(routes::GET_DOCKER_HUB_REPOSITORY_TAGS, registry_images::docker_tags)
-        .contract_route(routes::GET_GHCR_PACKAGE_VERSIONS, registry_images::github_versions)
-        .contract_route(routes::GET_PLATFORM_IMAGE, images::inspect)
-        .contract_route(routes::GET_IMAGE_EXPOSED_PORTS, images::exposed_ports)
-        .contract_route(routes::LIST_PLATFORM_NETWORKS, list_networks)
-        .contract_route(routes::GET_PLATFORM_NETWORK, get_network)
-        .contract_route(routes::CREATE_NETWORK, create_network)
-        .contract_route(routes::DELETE_NETWORKS, delete_networks)
-        .contract_route(routes::LIST_PLATFORM_VOLUMES, list_volumes)
-        .contract_route(routes::GET_PLATFORM_VOLUME, get_volume)
-        .contract_route(routes::CREATE_VOLUME, create_volume)
-        .contract_route(routes::DELETE_VOLUMES, delete_volumes)
-        .contract_route(routes::LIST_SWARM_NODES, list_swarm_nodes)
-        .contract_route(routes::GET_SWARM_NODE, get_swarm_node)
-        .contract_route(routes::LIST_SWARM_SERVICES, list_swarm_services)
-        .contract_route(routes::GET_SWARM_SERVICE, get_swarm_service)
-        .contract_route(routes::LIST_SWARM_TASKS, list_swarm_tasks)
-        .contract_route(routes::GET_SWARM_TASK, get_swarm_task)
-        .contract_route(routes::LIST_SWARM_NETWORKS, list_swarm_networks)
-        .contract_route(routes::GET_SWARM_NETWORK, get_swarm_network)
-        .contract_route(routes::LIST_SWARM_CONFIGS, list_swarm_configs)
-        .contract_route(routes::GET_SWARM_CONFIG, get_swarm_config)
-        .contract_route(routes::LIST_SWARM_SECRETS, list_swarm_secrets)
-        .contract_route(routes::GET_SWARM_SECRET, get_swarm_secret)
-        .contract_route(routes::UPDATE_SWARM_NODE, swarm_inventory::update_node)
-        .contract_route(routes::INSPECT_SWARM_NODE, swarm_inventory::inspect_node)
-        .contract_route(routes::UPDATE_SWARM_NODES_AVAILABILITY, swarm_inventory::update_availability)
-        .contract_route(routes::DELETE_SWARM_INVENTORY_SERVICES, swarm_inventory::delete_services)
-        .contract_route(routes::INSPECT_SWARM_SERVICE, swarm_inventory::inspect_service)
-        .contract_route(routes::RESTART_SWARM_SERVICE, swarm_inventory::restart_service)
-        .contract_route(routes::CREATE_SWARM_SECRET, swarm_inventory::create_secret)
-        .contract_route(routes::DELETE_SWARM_SECRETS, swarm_inventory::delete_secrets)
-        .contract_route(routes::UPDATE_SWARM_SECRET_LABELS, swarm_inventory::update_secret_labels)
-        .contract_route(routes::CREATE_SWARM_CONFIG, swarm_inventory::create_config)
-        .contract_route(routes::DELETE_SWARM_CONFIGS, swarm_inventory::delete_configs)
-        .contract_route(routes::GET_SWARM_CONFIG_DATA, swarm_inventory::config_data)
-        .contract_route(routes::UPDATE_SWARM_CONFIG_LABELS, swarm_inventory::update_config_labels)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct PlatformsResponse {
     platforms: Vec<PlatformView>,
     capabilities: ResourceCapabilitiesView,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/agent/setup",
+    operation_id = "getAgentSetup",
+    summary = "Get regular Agent setup instructions",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_agent_setup(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -249,37 +131,38 @@ async fn get_agent_setup(
 
 pub use management::AgentSetupContext;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct PatchPlatformMetadataInput {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     description: MetadataPatch<String>,
     #[serde(default, rename = "tags")]
     _tags: Option<Vec<String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ContainersResponse {
     containers: Vec<ContainerView>,
     capabilities: PlatformCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ImagesResponse {
     images: Vec<ImageView>,
     capabilities: ImageCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct NetworksResponse {
     networks: Vec<NetworkView>,
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct VolumesResponse {
     volumes: Vec<VolumeView>,
@@ -308,7 +191,7 @@ struct VolumeFilters {
     name: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct CreateNetworkInput {
     platform_id: Uuid,
@@ -316,14 +199,14 @@ struct CreateNetworkInput {
     network: CreateRuntimeNetwork,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct DeleteNetworksInput {
     platform_id: Uuid,
     ids: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct CreateVolumeInput {
     platform_id: Uuid,
@@ -331,7 +214,7 @@ struct CreateVolumeInput {
     volume: CreateRuntimeVolume,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct DeleteVolumesInput {
     platform_id: Uuid,
@@ -364,6 +247,19 @@ struct SwarmItemsResponse<T> {
     capabilities: PlatformCapabilitiesView,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms",
+    operation_id = "listPlatforms",
+    summary = "List authorized Platforms",
+    responses(
+        (status = 200, description = "Success", body = PlatformsResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_platforms(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -419,6 +315,19 @@ async fn list_platforms(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms",
+    operation_id = "createPlatform",
+    summary = "Create a Platform",
+    request_body = CreatePlatformInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_platform(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -455,6 +364,19 @@ async fn create_platform(
     Ok(no_store(Json(platform).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{id}",
+    operation_id = "getPlatfom",
+    summary = "Get a Platform",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_platform(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -476,6 +398,20 @@ async fn get_platform(
     Ok(no_store(Json(platform).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/platforms/{id}/_metadata",
+    operation_id = "updatePlatformMetadata",
+    summary = "Update Platform metadata",
+    request_body = PatchPlatformMetadataInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_platform_metadata(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -527,6 +463,19 @@ async fn update_platform_metadata(
     Ok(no_store(Json(platform).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{id}/containers",
+    operation_id = "listContainers",
+    summary = "List Platform Containers",
+    responses(
+        (status = 200, description = "Success", body = ContainersResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_containers(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -556,6 +505,19 @@ async fn list_containers(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}",
+    operation_id = "getContainer",
+    summary = "Get a Container",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::ContainerView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_container(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -607,6 +569,19 @@ fn valid_container_reference(reference: &str) -> bool {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/images/{platformId}",
+    operation_id = "listImages",
+    summary = "List Platform Images",
+    responses(
+        (status = 200, description = "Success", body = ImagesResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_images(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -638,6 +613,19 @@ async fn list_images(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/networks/{platformId}",
+    operation_id = "listNetworks",
+    summary = "List Platform Networks",
+    responses(
+        (status = 200, description = "Success", body = NetworksResponse, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("Dangling" = Option<bool>, Query), ("Driver" = Option<String>, Query), ("Id" = Option<String>, Query), ("Name" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_networks(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -776,6 +764,19 @@ pub(crate) async fn lookup_platform_resources(
     Ok(no_store(Json(rows).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/networks/{platformId}/{networkId}",
+    operation_id = "inspectNetwork",
+    summary = "Inspect a Platform Network",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/DockerNetworkDetailsView"), content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("networkId" = String, Path), ("dockerNodeId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_network(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -818,6 +819,19 @@ async fn get_network(
     Ok(no_store(Json(network).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/networks",
+    operation_id = "createNetwork",
+    summary = "Create a Network",
+    request_body = CreateNetworkInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/CreateNetworkView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_network(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -869,6 +883,19 @@ async fn create_network(
     Ok(no_store(Json(created).into_response()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/networks",
+    operation_id = "deleteNetworks",
+    summary = "Delete Networks",
+    request_body = DeleteNetworksInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_networks(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -994,6 +1021,19 @@ async fn delete_networks(
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/volumes/{platformId}",
+    operation_id = "listVolumes",
+    summary = "List Platform Volumes",
+    responses(
+        (status = 200, description = "Success", body = VolumesResponse, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("Dangling" = Option<bool>, Query), ("Driver" = Option<String>, Query), ("Name" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_volumes(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1070,6 +1110,19 @@ async fn list_volumes(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/volumes/{platformId}/{name}",
+    operation_id = "inspectVolume",
+    summary = "Inspect a Platform Volume",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/DockerVolumeResultView"), content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("name" = String, Path), ("dockerNodeId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_volume(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1119,6 +1172,19 @@ async fn get_volume(
     Ok(no_store(Json(volume).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/volumes",
+    operation_id = "createVolume",
+    summary = "Create a Volume",
+    request_body = CreateVolumeInput,
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/DockerVolumeResultView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_volume(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1167,6 +1233,19 @@ async fn create_volume(
     ))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/volumes",
+    operation_id = "deleteVolumes",
+    summary = "Delete Volumes",
+    request_body = DeleteVolumesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_volumes(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1251,7 +1330,8 @@ async fn delete_volumes(
 }
 
 macro_rules! swarm_list_handler {
-    ($name:ident, $method:ident, $item:ty) => {
+    ($(#[$name_attr:meta])* $name:ident, $method:ident, $item:ty) => {
+        $(#[$name_attr])*
         async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -1285,7 +1365,8 @@ macro_rules! swarm_list_handler {
 }
 
 macro_rules! swarm_get_handler {
-    ($name:ident, $method:ident) => {
+    ($(#[$name_attr:meta])* $name:ident, $method:ident) => {
+        $(#[$name_attr])*
         async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -1312,11 +1393,90 @@ macro_rules! swarm_get_handler {
     };
 }
 
-swarm_list_handler!(list_swarm_nodes, list_swarm_nodes, SwarmNodeView);
-swarm_get_handler!(get_swarm_node, get_swarm_node);
-swarm_list_handler!(list_swarm_services, list_swarm_services, SwarmServiceView);
-swarm_get_handler!(get_swarm_service, get_swarm_service);
+swarm_list_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/nodes",
+    operation_id = "listSwarmNodes",
+    summary = "List Swarm Nodes",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodesView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    list_swarm_nodes,
+    list_swarm_nodes,
+    SwarmNodeView
+);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}",
+    operation_id = "getSwarmNode",
+    summary = "Get a Swarm Node",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmNodeView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("nodeId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_node,
+    get_swarm_node
+);
+swarm_list_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services",
+    operation_id = "listSwarmServices",
+    summary = "List Swarm Services",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServicesView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    list_swarm_services,
+    list_swarm_services,
+    SwarmServiceView
+);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}",
+    operation_id = "getSwarmService",
+    summary = "Get a Swarm Service",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmServiceView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_service,
+    get_swarm_service
+);
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks",
+    operation_id = "listSwarmTasks",
+    summary = "List Swarm Tasks",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTasksView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("limit" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(50)))), ("serviceId" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_swarm_tasks(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -1349,13 +1509,128 @@ async fn list_swarm_tasks(
     ))
 }
 
-swarm_get_handler!(get_swarm_task, get_swarm_task);
-swarm_list_handler!(list_swarm_networks, list_swarm_networks, SwarmNetworkView);
-swarm_get_handler!(get_swarm_network, get_swarm_network);
-swarm_list_handler!(list_swarm_configs, list_swarm_configs, SwarmConfigView);
-swarm_get_handler!(get_swarm_config, get_swarm_config);
-swarm_list_handler!(list_swarm_secrets, list_swarm_secrets, SwarmSecretView);
-swarm_get_handler!(get_swarm_secret, get_swarm_secret);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}",
+    operation_id = "getSwarmTask",
+    summary = "Get a Swarm Task",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmTaskView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_task,
+    get_swarm_task
+);
+swarm_list_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/networks",
+    operation_id = "listSwarmNetworks",
+    summary = "List Swarm Networks",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNetworksView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    list_swarm_networks,
+    list_swarm_networks,
+    SwarmNetworkView
+);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/networks/{resourceId}",
+    operation_id = "getSwarmNetwork",
+    summary = "Get a Swarm Network",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmNetworkView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_network,
+    get_swarm_network
+);
+swarm_list_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/configs",
+    operation_id = "listSwarmConfigs",
+    summary = "List Swarm Configs",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    list_swarm_configs,
+    list_swarm_configs,
+    SwarmConfigView
+);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/configs/{resourceId}",
+    operation_id = "getSwarmConfig",
+    summary = "Get a Swarm Config",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmConfigView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_config,
+    get_swarm_config
+);
+swarm_list_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/secrets",
+    operation_id = "listSwarmSecrets",
+    summary = "List Swarm Secrets",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmSecretsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    list_swarm_secrets,
+    list_swarm_secrets,
+    SwarmSecretView
+);
+swarm_get_handler!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/secrets/{resourceId}",
+    operation_id = "getSwarmSecret",
+    summary = "Get a Swarm Secret",
+    responses(
+        (status = 200, description = "Success", body = citadel_platforms::SwarmSecretView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    get_swarm_secret,
+    get_swarm_secret
+);
 
 async fn effective_permissions(
     state: &PlatformsHttpState,
@@ -1764,8 +2039,17 @@ async fn runtime_for(
         return Ok(RuntimeRef::Local(&state.docker));
     }
     if connector.eq_ignore_ascii_case("Agent") {
-        let agent = state.agent.as_ref().ok_or_else(|| RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, "The configured Agent transport is unavailable.", true))?;
-        return agent.for_address(&address, &CancellationToken::new()).await.map(RuntimeRef::Agent);
+        let agent = state.agent.as_ref().ok_or_else(|| {
+            RuntimeCapabilityError::new(
+                RuntimeErrorKind::Unavailable,
+                "The configured Agent transport is unavailable.",
+                true,
+            )
+        })?;
+        return agent
+            .for_address(&address, &CancellationToken::new())
+            .await
+            .map(RuntimeRef::Agent);
     }
     Err(RuntimeCapabilityError::new(
         RuntimeErrorKind::Unavailable,
@@ -2488,4 +2772,111 @@ mod tests {
         assert_eq!(ids, ["network-1", "network-2"]);
         assert!(validate_resource_ids(&mut Vec::new(), 100, "Network").is_err());
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<PlatformsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(swarm_overview::get))
+        .normalized_routes(utoipa_axum::routes!(task_runtime::inspect))
+        .normalized_routes(utoipa_axum::routes!(task_runtime::terminal))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::inspect))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::info))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::data))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::deployment_info))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::start_deployments))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::stop_deployments))
+        .normalized_routes(utoipa_axum::routes!(
+            container_mutations::restart_deployments
+        ))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::pause_deployments))
+        .normalized_routes(utoipa_axum::routes!(
+            container_mutations::resume_deployments
+        ))
+        .normalized_routes(utoipa_axum::routes!(
+            container_inspection::inspect_deployment
+        ))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::stack_data))
+        .normalized_routes(utoipa_axum::routes!(container_inspection::inspect_stack))
+        .normalized_routes(utoipa_axum::routes!(volume_content::list))
+        .normalized_routes(utoipa_axum::routes!(volume_content::download))
+        .normalized_routes(utoipa_axum::routes!(list_platforms))
+        .normalized_routes(utoipa_axum::routes!(create_platform))
+        .normalized_routes(utoipa_axum::routes!(deletion::delete))
+        .normalized_routes(utoipa_axum::routes!(get_agent_setup))
+        .normalized_routes(utoipa_axum::routes!(management::rotate_key))
+        .normalized_routes(utoipa_axum::routes!(management::patch))
+        .normalized_routes(utoipa_axum::routes!(management::rename))
+        .normalized_routes(utoipa_axum::routes!(management::prune))
+        .normalized_routes(utoipa_axum::routes!(get_platform))
+        .normalized_routes(utoipa_axum::routes!(edge::enroll))
+        .normalized_routes(utoipa_axum::routes!(edge::status))
+        .normalized_routes(utoipa_axum::routes!(edge::node_coverage))
+        .normalized_routes(utoipa_axum::routes!(edge::remove_node_agents))
+        .normalized_routes(utoipa_axum::routes!(edge::install_node_agents))
+        .normalized_routes(utoipa_axum::routes!(edge::repair_node_agents))
+        .normalized_routes(utoipa_axum::routes!(edge::upgrade_node_agents))
+        .normalized_routes(utoipa_axum::routes!(edge::revoke))
+        .normalized_routes(utoipa_axum::routes!(update_platform_metadata))
+        .normalized_routes(utoipa_axum::routes!(list_containers))
+        .normalized_routes(utoipa_axum::routes!(get_container))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::start))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::stop))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::restart))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::pause))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::unpause))
+        .normalized_routes(utoipa_axum::routes!(container_mutations::delete))
+        .normalized_routes(utoipa_axum::routes!(statistics::container))
+        .normalized_routes(utoipa_axum::routes!(statistics::platform))
+        .normalized_routes(utoipa_axum::routes!(statistics::deployment))
+        .normalized_routes(utoipa_axum::routes!(statistics::stack))
+        .normalized_routes(utoipa_axum::routes!(statistics::service))
+        .normalized_routes(utoipa_axum::routes!(statistics::task))
+        .normalized_routes(utoipa_axum::routes!(logs::service))
+        .normalized_routes(utoipa_axum::routes!(
+            container_inspection::inspect_managed_service
+        ))
+        .normalized_routes(utoipa_axum::routes!(logs::task))
+        .normalized_routes(utoipa_axum::routes!(logs::managed_service))
+        .normalized_routes(utoipa_axum::routes!(list_images))
+        .normalized_routes(utoipa_axum::routes!(images::delete))
+        .normalized_routes(utoipa_axum::routes!(image_pull::pull))
+        .normalized_routes(utoipa_axum::routes!(registry_images::repositories))
+        .normalized_routes(utoipa_axum::routes!(registry_images::docker_repositories))
+        .normalized_routes(utoipa_axum::routes!(registry_images::docker_tags))
+        .normalized_routes(utoipa_axum::routes!(registry_images::github_versions))
+        .normalized_routes(utoipa_axum::routes!(images::inspect))
+        .normalized_routes(utoipa_axum::routes!(images::exposed_ports))
+        .normalized_routes(utoipa_axum::routes!(list_networks))
+        .normalized_routes(utoipa_axum::routes!(get_network))
+        .normalized_routes(utoipa_axum::routes!(create_network))
+        .normalized_routes(utoipa_axum::routes!(delete_networks))
+        .normalized_routes(utoipa_axum::routes!(list_volumes))
+        .normalized_routes(utoipa_axum::routes!(get_volume))
+        .normalized_routes(utoipa_axum::routes!(create_volume))
+        .normalized_routes(utoipa_axum::routes!(delete_volumes))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_nodes))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_node))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_services))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_service))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_tasks))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_task))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_networks))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_network))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_configs))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_config))
+        .normalized_routes(utoipa_axum::routes!(list_swarm_secrets))
+        .normalized_routes(utoipa_axum::routes!(get_swarm_secret))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::update_node))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::inspect_node))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::update_availability))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::delete_services))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::inspect_service))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::restart_service))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::create_secret))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::delete_secrets))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::update_secret_labels))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::create_config))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::delete_configs))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::config_data))
+        .normalized_routes(utoipa_axum::routes!(swarm_inventory::update_config_labels))
 }

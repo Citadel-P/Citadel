@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{RuntimeCapabilityError, RuntimeVolumeSummary};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRuntimeNetwork {
     pub name: String,
@@ -28,7 +28,7 @@ pub struct CreateRuntimeNetwork {
     pub options: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeIpam {
     pub driver: String,
@@ -38,7 +38,7 @@ pub struct RuntimeIpam {
     pub options: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeIpamConfig {
     pub subnet: Option<String>,
@@ -46,7 +46,7 @@ pub struct RuntimeIpamConfig {
     pub gateway: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfigFrom {
     pub network: String,
@@ -58,7 +58,7 @@ pub struct CreatedRuntimeNetwork {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRuntimeVolume {
     pub name: String,

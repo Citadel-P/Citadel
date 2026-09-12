@@ -5,7 +5,6 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_git::{
     GitRepositoryExecutionError, GitRepositoryExecutionService, GitRepositoryRefView, RemoteBranch,
@@ -16,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 use crate::realtime::RealtimeHub;
 
 #[derive(Clone)]
@@ -30,18 +29,7 @@ pub struct GitRepositoriesHttpState {
 }
 
 pub fn router(state: GitRepositoriesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::GET_GIT_REPOSITORY_REFS, refs)
-        .contract_route(routes::LIST_GIT_REPOSITORY_FILES, files)
-        .contract_route(routes::GET_GIT_REPOSITORY_FILE_CONTENT, file_content)
-        .contract_route(routes::COMPARE_GIT_REPOSITORY_COMMITS, compare)
-        .contract_route(routes::DISCOVER_GIT_REPOSITORY_BRANCHES, branches)
-        .contract_route(
-            routes::DISCOVER_GIT_REPOSITORY_COMPOSE_PROJECTS,
-            compose_projects,
-        )
-        .contract_route(routes::SYNC_GIT_REPOSITORY, sync)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -63,19 +51,19 @@ struct BranchQuery {
     branch: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoryRefsResponse {
     refs: Vec<GitRepositoryRefView>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoryBranchesResponse {
     branches: Vec<GitRepositoryBranchResponse>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoryBranchResponse {
     branch: String,
@@ -91,6 +79,19 @@ impl From<RemoteBranch> for GitRepositoryBranchResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/refs",
+    operation_id = "getGitRepositoryRefs",
+    summary = "Get synchronized Git repository references",
+    responses(
+        (status = 200, description = "Success", body = GitRepositoryRefsResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn refs(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -108,6 +109,19 @@ async fn refs(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/files",
+    operation_id = "listGitRepositoryDirectory",
+    summary = "List files in an immutable Git tree",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryDirectoryListingView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("commitSha" = Option<String>, Query), ("path" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn files(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -133,6 +147,19 @@ async fn files(
     Ok(no_store(Json(listing).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/files/content",
+    operation_id = "getGitRepositoryFileContent",
+    summary = "Read a bounded immutable Git file",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryFileContentView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("commitSha" = Option<String>, Query), ("path" = String, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn file_content(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -164,6 +191,19 @@ async fn file_content(
     Ok(no_store(Json(file).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/compare",
+    operation_id = "compareGitRepositoryCommits",
+    summary = "Compare immutable Git commits",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/GitCommitComparisonView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("baseCommitSha" = String, Query), ("headCommitSha" = String, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn compare(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -189,6 +229,19 @@ async fn compare(
     Ok(no_store(Json(comparison).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/branches",
+    operation_id = "discoverGitRepositoryBranches",
+    summary = "Discover remote Git branches",
+    responses(
+        (status = 200, description = "Success", body = GitRepositoryBranchesResponse, content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn branches(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -213,6 +266,19 @@ async fn branches(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/compose-projects",
+    operation_id = "discoverGitRepositoryComposeProjects",
+    summary = "Discover Compose projects in a Git repository",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryComposeDiscovery"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("branch" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn compose_projects(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -237,6 +303,19 @@ async fn compose_projects(
     Ok(no_store(Json(projects).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/gitRepositories/{id}/sync",
+    operation_id = "syncGitRepository",
+    summary = "Queue Git repository synchronization",
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::UnavailableResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("branch" = Option<String>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn sync(
     State(state): State<GitRepositoriesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -306,7 +385,9 @@ async fn authorize(
 
 fn execution_error(error: GitRepositoryExecutionError) -> IdentityError {
     match error {
-        GitRepositoryExecutionError::Validation(message) => crate::request_validation::validation_error(message),
+        GitRepositoryExecutionError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
         GitRepositoryExecutionError::NotFound => IdentityError::NotFound,
         GitRepositoryExecutionError::NotSynchronized => {
             IdentityError::Conflict("Git repository has not been synchronized yet.".to_owned())
@@ -322,4 +403,15 @@ fn execution_error(error: GitRepositoryExecutionError) -> IdentityError {
         GitRepositoryExecutionError::Authentication => IdentityError::Unauthenticated,
         GitRepositoryExecutionError::Storage(message) => IdentityError::Storage(message),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<GitRepositoriesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(refs))
+        .normalized_routes(utoipa_axum::routes!(files))
+        .normalized_routes(utoipa_axum::routes!(file_content))
+        .normalized_routes(utoipa_axum::routes!(compare))
+        .normalized_routes(utoipa_axum::routes!(branches))
+        .normalized_routes(utoipa_axum::routes!(compose_projects))
+        .normalized_routes(utoipa_axum::routes!(sync))
 }

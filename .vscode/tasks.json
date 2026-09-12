@@ -36,8 +36,25 @@
       "problemMatcher": []
     },
     {
+      "label": "Citadel: Build Rust API",
+      "detail": "Builds the Rust API and exports its OpenAPI documents to schema/.",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/build.sh"],
+      "options": {
+        "cwd": "${workspaceFolder}/rust"
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Citadel: Prepare Rust API",
+      "dependsOn": ["Citadel: Prepare development environment", "Citadel: Build Rust API"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "Citadel: Run Rust API",
-      "dependsOn": "Citadel: Prepare development environment",
+      "dependsOn": "Citadel: Prepare Rust API",
       "type": "process",
       "command": "bash",
       "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "cargo", "run", "--locked", "-p", "citadel-server", "--", "serve"],
@@ -93,6 +110,34 @@
       "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "bash", "-c", "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast"],
       "options": {
         "cwd": "${workspaceFolder}/rust"
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Citadel: Generate OpenAPI spec",
+      "detail": "Exports the full/public OpenAPI documents and operation catalog without starting the API or database.",
+      "type": "process",
+      "command": "cargo",
+      "args": ["run", "--locked", "-p", "xtask", "--", "openapi"],
+      "options": {
+        "cwd": "${workspaceFolder}/rust",
+        "env": {
+          "SQLX_OFFLINE": "true"
+        }
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Citadel: Verify OpenAPI spec",
+      "detail": "Checks that the generated OpenAPI documents and operation catalog are up to date.",
+      "type": "process",
+      "command": "cargo",
+      "args": ["run", "--locked", "-p", "xtask", "--", "openapi", "--check"],
+      "options": {
+        "cwd": "${workspaceFolder}/rust",
+        "env": {
+          "SQLX_OFFLINE": "true"
+        }
       },
       "problemMatcher": ["$rustc"]
     },

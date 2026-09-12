@@ -29,7 +29,7 @@ pub struct SwarmServiceAdoptionDraft {
     pub issues: Vec<SwarmServiceAdoptionIssue>,
     pub preview_fingerprint: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdoptSwarmServiceInput {
     pub name: String,
@@ -37,6 +37,7 @@ pub struct AdoptSwarmServiceInput {
     pub spec: SwarmServiceSpec,
     pub preview_fingerprint: String,
     #[serde(default, deserialize_with = "crate::model::deserialize_null_default")]
+    #[schema(nullable)]
     pub tag_ids: Vec<Uuid>,
 }
 pub trait SwarmServiceAdoptionPort: Send + Sync {

@@ -5,7 +5,6 @@ use axum::extract::{ConnectInfo, Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::ActorPrincipal;
 use citadel_identity::{
@@ -15,33 +14,30 @@ use citadel_identity::{
 };
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     IdentityHttpState, MFA_CHALLENGE_COOKIE, MFA_SETUP_COOKIE, cookie, current_refresh_token,
     identity_error_response, no_store, require_human, require_human_administrator,
     session_metadata, with_deleted_cookie, with_refresh_cookie,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 pub fn router(state: IdentityHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::VERIFY_AUTHENTICATION_MFA, verify_authentication)
-        .contract_route(routes::GET_AUTHENTICATION_MFA_SETUP, get_mandatory_setup)
-        .contract_route(
-            routes::CONFIRM_AUTHENTICATION_MFA_SETUP,
-            confirm_mandatory_setup,
-        )
-        .contract_route(routes::GET_PROFILE_MFA_STATUS, get_profile_status)
-        .contract_route(routes::START_PROFILE_MFA_SETUP, start_profile_setup)
-        .contract_route(routes::CONFIRM_PROFILE_MFA_SETUP, confirm_profile_setup)
-        .contract_route(routes::DISABLE_PROFILE_MFA, disable_profile_mfa)
-        .contract_route(
-            routes::REGENERATE_PROFILE_MFA_RECOVERY_CODES,
-            regenerate_recovery_codes,
-        )
-        .contract_route(routes::RESET_USER_MFA, reset_user_mfa)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/authentication/mfa/verify",
+    operation_id = "verifyAuthenticationMfa",
+    summary = "Complete an MFA challenge",
+    request_body = MfaVerificationInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::MfaVerificationView, content_type = "application/json"),
+        crate::openapi::errors::AuthenticationErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn verify_authentication(
     State(state): State<IdentityHttpState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
@@ -77,6 +73,18 @@ async fn verify_authentication(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/authentication/mfa/setup",
+    operation_id = "getAuthenticationMfaSetup",
+    summary = "Get mandatory MFA setup",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupView, content_type = "application/json"),
+        crate::openapi::errors::AuthenticationErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_mandatory_setup(
     State(state): State<IdentityHttpState>,
     headers: HeaderMap,
@@ -91,6 +99,19 @@ async fn get_mandatory_setup(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/authentication/mfa/setup/confirm",
+    operation_id = "confirmAuthenticationMfaSetup",
+    summary = "Complete mandatory MFA setup",
+    request_body = ConfirmMandatoryMfaSetupInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupCompleteView, content_type = "application/json"),
+        crate::openapi::errors::AuthenticationErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn confirm_mandatory_setup(
     State(state): State<IdentityHttpState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
@@ -126,6 +147,18 @@ async fn confirm_mandatory_setup(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/profile/mfa",
+    operation_id = "getProfileMfaStatus",
+    summary = "Get MFA status",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ProfileMfaStatusView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_profile_status(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -141,6 +174,19 @@ async fn get_profile_status(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/mfa/setup",
+    operation_id = "startProfileMfaSetup",
+    summary = "Start MFA setup",
+    request_body = StartProfileMfaSetupInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ProfileMfaSetupView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn start_profile_setup(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -160,6 +206,19 @@ async fn start_profile_setup(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/mfa/setup/confirm",
+    operation_id = "confirmProfileMfaSetup",
+    summary = "Complete MFA setup",
+    request_body = ConfirmProfileMfaSetupInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ProfileMfaRecoveryCodesView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn confirm_profile_setup(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -183,6 +242,19 @@ async fn confirm_profile_setup(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/mfa/disable",
+    operation_id = "disableProfileMfa",
+    summary = "Disable MFA",
+    request_body = DisableProfileMfaInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn disable_profile_mfa(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -206,6 +278,19 @@ async fn disable_profile_mfa(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/mfa/recovery-codes",
+    operation_id = "regenerateProfileMfaRecoveryCodes",
+    summary = "Regenerate MFA recovery codes",
+    request_body = RegenerateProfileMfaRecoveryCodesInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ProfileMfaRecoveryCodesView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn regenerate_recovery_codes(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -225,6 +310,19 @@ async fn regenerate_recovery_codes(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{id}/mfa",
+    operation_id = "resetUserMfa",
+    summary = "Reset a user's MFA",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn reset_user_mfa(
     State(state): State<IdentityHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -295,4 +393,17 @@ mod tests {
             Err(IdentityError::Unauthenticated)
         ));
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(verify_authentication))
+        .normalized_routes(utoipa_axum::routes!(get_mandatory_setup))
+        .normalized_routes(utoipa_axum::routes!(confirm_mandatory_setup))
+        .normalized_routes(utoipa_axum::routes!(get_profile_status))
+        .normalized_routes(utoipa_axum::routes!(start_profile_setup))
+        .normalized_routes(utoipa_axum::routes!(confirm_profile_setup))
+        .normalized_routes(utoipa_axum::routes!(disable_profile_mfa))
+        .normalized_routes(utoipa_axum::routes!(regenerate_recovery_codes))
+        .normalized_routes(utoipa_axum::routes!(reset_user_mfa))
 }

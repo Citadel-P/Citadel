@@ -26,7 +26,7 @@ pub fn normalize_project_name(name: &str, id: Uuid) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StackSource {
     #[serde(alias = "webEditor", alias = "webeditor")]
     WebEditor,
@@ -44,7 +44,7 @@ impl StackSource {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StackUpdateBehavior {
     #[serde(alias = "disabled")]
     Disabled,
@@ -56,7 +56,7 @@ pub enum StackUpdateBehavior {
     StackAutoDeploy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StackReleaseStatus {
     Unknown,
     Created,
@@ -112,14 +112,14 @@ pub enum StackOrchestrationMode {
     DockerSwarm,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StackDriftMode {
     Disabled,
     DetectOnly,
     AutoFix,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackDriftPolicy {
     pub mode: StackDriftMode,
@@ -168,7 +168,7 @@ impl StackDriftPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StackCommand {
     #[serde(default)]
@@ -181,7 +181,7 @@ fn default_command_path() -> String {
     "./".to_owned()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StackBuildImageBinding {
     pub service_name: String,
@@ -241,14 +241,14 @@ pub struct ResolvedStackBuildImageBinding {
     pub build_run_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum WebhookProvider {
     GitHub,
     GitLab,
     Generic,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum WebhookAuthScheme {
     GitHubHmacSha256,
     GitLabSignedToken,
@@ -256,7 +256,7 @@ pub enum WebhookAuthScheme {
     BearerToken,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StackWebhookConfig {
     #[serde(default)]
@@ -281,7 +281,7 @@ const fn default_webhook_auth() -> WebhookAuthScheme {
     WebhookAuthScheme::GitHubHmacSha256
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 // Stack specs are request/configuration objects, not hot-path event values.
 // Boxing the Git fields would add heap indirection to every parse and clone.
@@ -328,7 +328,7 @@ const fn disabled_update() -> StackUpdateBehavior {
     StackUpdateBehavior::Disabled
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StackSpecCommon {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -493,7 +493,7 @@ fn camelize_stack_spec(mut value: Value) -> Value {
     value
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 pub enum StackUpdateState {
     WebEditor {
@@ -508,14 +508,14 @@ pub enum StackUpdateState {
     },
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RecreateStackOnNewImageState {
     #[serde(default)]
     pub auto_update_states: Vec<ImageUpdateState>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RecreateStackOnNewCommitState {
     pub current_commit_sha: String,
@@ -524,7 +524,7 @@ pub struct RecreateStackOnNewCommitState {
     pub last_checked_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageUpdateState {
     pub service_name: String,
@@ -586,7 +586,7 @@ impl StackUpdateState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceBindingSnapshot {
     pub name: String,
@@ -614,7 +614,7 @@ impl ResourceBindingSnapshot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackReleaseSource {
     pub source_type: StackSource,
@@ -647,7 +647,7 @@ impl StackReleaseSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackReleaseView {
     pub id: Uuid,
@@ -666,13 +666,14 @@ pub struct StackReleaseView {
     pub platform_name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackReleasesView {
     pub releases: Vec<StackReleaseView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(as = stacks::model::TagSummary)]
 #[serde(rename_all = "camelCase")]
 pub struct TagSummary {
     pub id: Uuid,
@@ -680,7 +681,7 @@ pub struct TagSummary {
     pub color: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackCapabilities {
     pub can_read: bool,
@@ -696,7 +697,8 @@ pub struct StackCapabilities {
     pub can_view_releases: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[schema(as = stacks::model::ResourceCapabilities)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCapabilities {
     pub can_read: bool,
@@ -704,7 +706,7 @@ pub struct ResourceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackView {
     pub id: Uuid,
@@ -732,14 +734,14 @@ pub struct StackView {
     pub row_version: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StacksView {
     pub stacks: Vec<StackView>,
     pub capabilities: ResourceCapabilities,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackConfigView {
     pub id: Uuid,
@@ -773,7 +775,7 @@ impl From<StackView> for StackConfigView {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateStackInput {
     pub name: String,
@@ -788,7 +790,7 @@ pub struct CreateStackInput {
     pub duplicate_source: Option<Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchStackInput {
     #[serde(default)]
@@ -815,14 +817,14 @@ where
     Option::<String>::deserialize(deserializer).map(Some)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenameStackInput {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplyStackInput {
     pub id: Uuid,
@@ -830,7 +832,7 @@ pub struct ApplyStackInput {
     pub recreate: Option<bool>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RollbackStackInput {
     pub stack_id: Uuid,
@@ -1109,14 +1111,14 @@ pub struct ResolvedStackBindings {
     pub entries: Vec<StackBinding>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackDuplicateDraftView {
     pub draft: Value,
     pub warnings: Vec<DuplicateDraftWarning>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateDraftWarning {
     pub code: String,
@@ -1149,7 +1151,7 @@ pub struct StackRuntimeSnapshot {
     pub services: Vec<StackRuntimeService>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackDriftReport {
     pub stack_id: Uuid,
@@ -1174,7 +1176,7 @@ pub struct StackDriftMonitorResult {
     pub next_cursor: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(tag = "$type", rename_all_fields = "camelCase")]
 pub enum StackDrift {
     MissingContainer {
@@ -1209,7 +1211,7 @@ pub enum StackDrift {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub enum StackReconciliationStatus {
     NoDrift,
     Reconciled,
@@ -1219,14 +1221,14 @@ pub enum StackReconciliationStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub enum StackReconciliationActionType {
     StartContainer,
     ResumeContainer,
     RemoveContainer,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackReconciliationAction {
     pub container_id: String,
@@ -1236,7 +1238,7 @@ pub struct StackReconciliationAction {
     pub error_message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackReconciliationResult {
     pub stack_id: Uuid,
@@ -1255,7 +1257,7 @@ pub enum StackAction {
     Restart,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum StackImportKind {
     ComposeProject,
     SwarmStack,
@@ -1278,7 +1280,7 @@ pub struct ImportComposeProjectInput {
     pub detected_secret_values: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectRuntimeService {
     pub name: String,
@@ -1287,7 +1289,7 @@ pub struct ComposeProjectRuntimeService {
     pub states: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectImportSourceView {
     pub platform_id: Uuid,
@@ -1298,7 +1300,7 @@ pub struct ComposeProjectImportSourceView {
     pub services: Vec<ComposeProjectRuntimeService>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectStackDraftView {
     pub name: String,
@@ -1308,7 +1310,7 @@ pub struct ComposeProjectStackDraftView {
     pub tag_ids: Vec<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackAdoptionIssue {
     pub code: String,
@@ -1317,7 +1319,7 @@ pub struct StackAdoptionIssue {
     pub field_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectImportDraftView {
     pub import_kind: StackImportKind,
@@ -1327,7 +1329,7 @@ pub struct ComposeProjectImportDraftView {
     pub runtime_fingerprint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectServiceComparison {
     pub name: String,
@@ -1337,7 +1339,7 @@ pub struct ComposeProjectServiceComparison {
     pub source_image: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectImportValidation {
     pub services: Vec<ComposeProjectServiceComparison>,

@@ -17,10 +17,11 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertChannelInput {
     #[serde(default, deserialize_with = "optional_name")]
+    #[schema(nullable)]
     pub name: String,
     pub alert_destination: String,
     pub url: String,
@@ -77,7 +78,7 @@ impl AlertChannelInput {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertChannelView {
     pub id: Uuid,
@@ -89,10 +90,11 @@ pub struct AlertChannelView {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertRuleInput {
     #[serde(default, deserialize_with = "optional_name")]
+    #[schema(nullable)]
     pub name: String,
     pub description: Option<String>,
     #[serde(rename = "type")]
@@ -255,7 +257,7 @@ pub trait AlertEntitlements: Send + Sync {
     fn advanced_alerting(&self) -> BoxFuture<'_, Result<bool, AlertError>>;
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertRuleView {
     pub id: Uuid,
@@ -275,7 +277,7 @@ pub struct AlertRuleView {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct AlertRuleListItem {
     #[serde(flatten)]
     pub rule: AlertRuleView,
@@ -301,7 +303,7 @@ impl AlertRuleView {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertEventView {
     pub id: Uuid,
@@ -359,7 +361,7 @@ pub struct AlertEventFilter {
     pub page_size: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertEventPage {
     pub items: Vec<AlertEventView>,

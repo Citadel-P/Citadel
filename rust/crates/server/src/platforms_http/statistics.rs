@@ -6,7 +6,7 @@ use citadel_platforms::{StatisticsReadStore, StatisticsWorkload, StatsWindow};
 struct History<T> {
     stats: Vec<T>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct TaskHistory {
     container_projection_id: Uuid,
@@ -48,6 +48,19 @@ fn storage(error: RuntimeCapabilityError) -> IdentityError {
     IdentityError::Storage(error.to_string())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/stats",
+    operation_id = "getSwarmTaskStats",
+    summary = "Get current Task statistics",
+    responses(
+        (status = 200, description = "Success", body = TaskHistory, content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn task(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -141,6 +154,19 @@ pub(super) async fn task(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats",
+    operation_id = "getSwarmServiceStats",
+    summary = "Get Service statistics and node coverage",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceStatsView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn service(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -209,6 +235,19 @@ pub(super) async fn service(
     Ok(no_store(Json(response).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}/stats",
+    operation_id = "getContainerStats",
+    summary = "Get Container statistics",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn container(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -249,6 +288,19 @@ pub(super) async fn container(
     Ok(no_store(Json(History { stats }).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{id}/stats",
+    operation_id = "getPlatformStats",
+    summary = "Get Platform statistics",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/PlatformStatsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn platform(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -279,6 +331,19 @@ pub(super) async fn platform(
     Ok(no_store(Json(History { stats }).into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{id}/stats",
+    operation_id = "getDeploymentStats",
+    summary = "Get Deployment statistics",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn deployment(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -296,6 +361,19 @@ pub(super) async fn deployment(
     )
     .await
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/stats",
+    operation_id = "getStackStats",
+    summary = "Get Stack Container statistics",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/StackStatsView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn stack(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

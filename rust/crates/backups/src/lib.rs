@@ -20,7 +20,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryInput {
     pub name: String,
@@ -86,7 +86,7 @@ impl BackupRepositoryInput {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryView {
     pub id: Uuid,
@@ -110,7 +110,7 @@ pub struct BackupRepositoryView {
     pub row_version: i64,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPolicyInput {
     pub name: String,
@@ -201,7 +201,7 @@ impl BackupPolicyInput {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPolicyView {
     pub id: Uuid,
@@ -229,7 +229,7 @@ pub struct BackupPolicyView {
     pub row_version: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRunView {
     pub id: Uuid,
@@ -257,7 +257,7 @@ pub struct BackupRunView {
     pub items: Vec<BackupRunItemView>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRunItemView {
     pub id: Uuid,
@@ -279,7 +279,7 @@ pub struct BackupRunItemView {
     pub error_message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRestoreRunView {
     pub id: Uuid,
@@ -420,7 +420,7 @@ pub struct BackupRepositoryOperationResult {
     pub error_message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryValidationView {
     pub id: Uuid,

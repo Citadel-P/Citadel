@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+utoipa.workspace = true
 base64.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true

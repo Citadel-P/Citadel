@@ -5,13 +5,23 @@
 Phase 7.5 is still in progress; this workspace is not yet a full replacement
 for the .NET Core. Run `cargo run -p xtask -- parity` from `rust/` to compare all
 .NET operation IDs, HTTP methods, paths, and public/internal exposure with the
-Rust route catalog. The command deliberately fails while omissions remain;
+Utoipa handler contracts. The command deliberately fails while omissions remain;
 there is no allowlist that hides missing operations.
 
 This is separate from `cargo run -p xtask -- openapi --check`, which checks
 generated-artifact freshness and compatibility of the implemented subset.
 Neither command replaces HTTP/persistence tests or live transport acceptance.
 See [Phase 7.5 implementation evidence](reports/phase7-5-api-parity.md).
+
+## OpenAPI generation
+
+Run `bash rust/scripts/build.sh` from the repository root to build the API and
+export `schema/v1.json` and `schema/public-v1.json`. The VS Code build/run and
+debug workflows do this automatically. Plain `cargo build` only compiles.
+
+The API uses Utoipa and utoipa-axum to share route registration and documentation.
+Schemas derive from Rust DTOs; the former central HTTP catalog and handwritten
+schema generator have been removed. See [OpenAPI ownership and migration boundary](crates/server/src/openapi/README.md).
 
 ## Unattended first run and recovery
 

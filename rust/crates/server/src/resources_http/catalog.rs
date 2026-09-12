@@ -3,7 +3,6 @@ use axum::extract::{Extension, Path, RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::ActorPrincipal;
 use citadel_platforms::ResourceCapabilitiesView;
@@ -19,41 +18,21 @@ use super::{
     ResourcesHttpState, authorize_global, authorize_resource, capabilities, invalid_json,
     metadata_error, publish_resource_change, require_actor,
 };
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpError, IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 pub(super) fn router(state: ResourcesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_REGISTRIES, list_registries)
-        .contract_route(routes::CREATE_REGISTRY, create_registry)
-        .contract_route(routes::DELETE_REGISTRIES, delete_registries)
-        .contract_route(routes::GET_REGISTRY, get_registry)
-        .contract_route(routes::GET_REGISTRY_CONFIG, get_registry_config)
-        .contract_route(routes::UPDATE_REGISTRY, update_registry)
-        .contract_route(routes::UPDATE_REGISTRY_METADATA, update_registry_metadata)
-        .contract_route(routes::RENAME_REGISTRY, rename_registry)
-        .contract_route(routes::LIST_GIT_REPOSITORIES, list_git_repositories)
-        .contract_route(routes::CREATE_GIT_REPOSITORY, create_git_repository)
-        .contract_route(routes::DELETE_GIT_REPOSITORIES, delete_git_repositories)
-        .contract_route(routes::GET_GIT_REPOSITORY, get_git_repository)
-        .contract_route(routes::GET_GIT_REPOSITORY_CONFIG, get_git_repository_config)
-        .contract_route(routes::UPDATE_GIT_REPOSITORY, update_git_repository)
-        .contract_route(
-            routes::UPDATE_GIT_REPOSITORY_METADATA,
-            update_git_repository_metadata,
-        )
-        .contract_route(routes::RENAME_GIT_REPOSITORY, rename_git_repository)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RegistriesResponse {
     registries: Vec<AuthorizedRegistryView>,
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct AuthorizedRegistryView {
     #[serde(flatten)]
@@ -62,7 +41,7 @@ struct AuthorizedRegistryView {
     is_default: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RegistryConfigResponse {
     id: Uuid,
@@ -74,14 +53,14 @@ struct RegistryConfigResponse {
     tags: Vec<citadel_resources::TagSummary>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoriesResponse {
     git_repositories: Vec<AuthorizedGitRepositoryView>,
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct AuthorizedGitRepositoryView {
     #[serde(flatten)]
@@ -89,7 +68,7 @@ struct AuthorizedGitRepositoryView {
     capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoryConfigResponse {
     id: Uuid,
@@ -106,23 +85,24 @@ struct GitRepositoryConfigResponse {
     tags: Vec<citadel_resources::TagSummary>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct DeleteResourcesInput {
     ids: Vec<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RenameResourceInput {
     id: Uuid,
     name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct PatchResourceMetadataInput {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     description: MetadataPatch<String>,
     #[serde(default, rename = "tags")]
     _tags: Option<Vec<String>>,
@@ -134,6 +114,19 @@ struct CatalogFilters {
     tags: Vec<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/registries",
+    operation_id = "listRegistries",
+    summary = "List Registries",
+    responses(
+        (status = 200, description = "Success", body = RegistriesResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("includeDisabled" = Option<bool>, Query, extensions(("x-citadel-default" = json!(false)))), ("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_registries(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -181,6 +174,19 @@ async fn list_registries(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/registries/{id}",
+    operation_id = "getRegistry",
+    summary = "Get a Registry",
+    responses(
+        (status = 200, description = "Success", body = AuthorizedRegistryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_registry(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -217,6 +223,19 @@ async fn get_registry(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/registries/{id}/_cfg",
+    operation_id = "getRegistryConfig",
+    summary = "Get Registry configuration",
+    responses(
+        (status = 200, description = "Success", body = RegistryConfigResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_registry_config(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -249,6 +268,19 @@ async fn get_registry_config(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/registries",
+    operation_id = "createRegistry",
+    summary = "Create a Registry",
+    request_body = NewRegistry,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_registry(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -279,6 +311,20 @@ async fn create_registry(
     Ok(no_store(Json(registry).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/registries/{id}",
+    operation_id = "updateRegistry",
+    summary = "Update a Registry",
+    request_body = RegistryPatch,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_registry(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -334,6 +380,20 @@ async fn mutate_registry(
     Ok(no_store(Json(registry).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/registries/{id}/_metadata",
+    operation_id = "updateRegistryMetadata",
+    summary = "Update Registry metadata",
+    request_body = PatchResourceMetadataInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_registry_metadata(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -356,6 +416,19 @@ async fn update_registry_metadata(
     .await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/registries/rename",
+    operation_id = "renameRegistry",
+    summary = "Rename a Registry",
+    request_body = RenameResourceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::RegistryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_registry(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -377,6 +450,19 @@ async fn rename_registry(
     .await
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/registries",
+    operation_id = "deleteRegistries",
+    summary = "Delete Registries",
+    request_body = DeleteResourcesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_registries(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -418,6 +504,19 @@ async fn delete_registries(
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories",
+    operation_id = "listGitRepositories",
+    summary = "List Git repositories",
+    responses(
+        (status = 200, description = "Success", body = GitRepositoriesResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_git_repositories(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -470,6 +569,19 @@ async fn list_git_repositories(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}",
+    operation_id = "getGitRepository",
+    summary = "Get a Git repository",
+    responses(
+        (status = 200, description = "Success", body = AuthorizedGitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_git_repository(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -505,6 +617,19 @@ async fn get_git_repository(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/gitRepositories/{id}/_cfg",
+    operation_id = "getGitRepositoryConfig",
+    summary = "Get Git repository configuration",
+    responses(
+        (status = 200, description = "Success", body = GitRepositoryConfigResponse, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_git_repository_config(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -542,6 +667,19 @@ async fn get_git_repository_config(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/gitRepositories",
+    operation_id = "createGitRepository",
+    summary = "Create a Git repository",
+    request_body = NewGitRepository,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_git_repository(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -572,6 +710,20 @@ async fn create_git_repository(
     Ok(no_store(Json(repository).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/gitRepositories/{id}",
+    operation_id = "updateGitRepository",
+    summary = "Update a Git repository",
+    request_body = GitRepositoryPatch,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_git_repository(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -626,6 +778,20 @@ async fn mutate_git_repository(
     Ok(no_store(Json(repository).into_response()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/gitRepositories/{id}/_metadata",
+    operation_id = "updateGitRepositoryMetadata",
+    summary = "Update Git repository metadata",
+    request_body = PatchResourceMetadataInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_git_repository_metadata(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -648,6 +814,19 @@ async fn update_git_repository_metadata(
     .await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/gitRepositories/rename",
+    operation_id = "renameGitRepository",
+    summary = "Rename a Git repository",
+    request_body = RenameResourceInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_resources::GitRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_git_repository(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -669,6 +848,19 @@ async fn rename_git_repository(
     .await
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/gitRepositories",
+    operation_id = "deleteGitRepositories",
+    summary = "Delete Git repositories",
+    request_body = DeleteResourcesInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn delete_git_repositories(
     State(state): State<ResourcesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -792,4 +984,24 @@ fn has_all_tags(tags: &[citadel_resources::TagSummary], required: &[Uuid]) -> bo
     required
         .iter()
         .all(|required| tags.iter().any(|tag| tag.id == *required))
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ResourcesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_registries))
+        .normalized_routes(utoipa_axum::routes!(create_registry))
+        .normalized_routes(utoipa_axum::routes!(delete_registries))
+        .normalized_routes(utoipa_axum::routes!(get_registry))
+        .normalized_routes(utoipa_axum::routes!(get_registry_config))
+        .normalized_routes(utoipa_axum::routes!(update_registry))
+        .normalized_routes(utoipa_axum::routes!(update_registry_metadata))
+        .normalized_routes(utoipa_axum::routes!(rename_registry))
+        .normalized_routes(utoipa_axum::routes!(list_git_repositories))
+        .normalized_routes(utoipa_axum::routes!(create_git_repository))
+        .normalized_routes(utoipa_axum::routes!(delete_git_repositories))
+        .normalized_routes(utoipa_axum::routes!(get_git_repository))
+        .normalized_routes(utoipa_axum::routes!(get_git_repository_config))
+        .normalized_routes(utoipa_axum::routes!(update_git_repository))
+        .normalized_routes(utoipa_axum::routes!(update_git_repository_metadata))
+        .normalized_routes(utoipa_axum::routes!(rename_git_repository))
 }

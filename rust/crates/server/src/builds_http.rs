@@ -5,14 +5,13 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
 use citadel_builds::{BuildAgentPoolInput, BuildError, BuildProjectInput, BuildService};
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct BuildsHttpState {
@@ -22,53 +21,28 @@ pub struct BuildsHttpState {
 
 pub fn router(state: BuildsHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_BUILD_PROJECTS, list_projects)
-            .contract_route(routes::CREATE_BUILD_PROJECT, create_project)
-            .contract_route(routes::GET_BUILD_PROJECT, get_project)
-            .contract_route(routes::UPDATE_BUILD_PROJECT, update_project)
-            .contract_route(routes::RENAME_BUILD_PROJECT, rename_project)
-            .contract_route(
-                routes::UPDATE_BUILD_PROJECT_METADATA,
-                update_project_metadata,
-            )
-            .contract_route(routes::ARCHIVE_BUILD_PROJECT, archive_project)
-            .contract_route(routes::QUEUE_BUILD_RUN, queue_run)
-            .contract_route(routes::LIST_BUILD_RUNS, list_runs)
-            .contract_route(routes::GET_BUILD_RUN, get_run)
-            .contract_route(routes::GET_BUILD_RUN_LOGS, get_logs)
-            .contract_route(routes::CANCEL_BUILD_RUN, cancel_run)
+        documented_routes()
+            .split_for_parts()
+            .0
             .with_state(state.clone()),
         "Build",
     )
     .merge(crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_BUILD_AGENT_POOLS, list_pools)
-            .contract_route(routes::CREATE_BUILD_AGENT_POOL, create_pool)
-            .contract_route(routes::GET_BUILD_AGENT_POOL, get_pool)
-            .contract_route(routes::UPDATE_BUILD_AGENT_POOL, update_pool)
-            .contract_route(routes::RENAME_BUILD_AGENT_POOL, rename_pool)
-            .contract_route(
-                routes::UPDATE_BUILD_AGENT_POOL_METADATA,
-                update_pool_metadata,
-            )
-            .contract_route(routes::TEST_BUILD_AGENT_POOL, test_pool)
-            .contract_route(routes::ARCHIVE_BUILD_AGENT_POOL, archive_pool)
-            .contract_route(routes::CREATE_BUILD_POOL_EDGE_ENROLLMENT, enroll_pool)
-            .contract_route(routes::GET_BUILD_POOL_EDGE_STATUS, pool_edge_status)
-            .contract_route(routes::REVOKE_BUILD_POOL_EDGE, revoke_pool_edge)
+        documented_pool_routes()
+            .split_for_parts()
+            .0
             .with_state(state),
         "BuildAgentPool",
     ))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Projects {
     projects: Vec<AuthorizedProject>,
     capabilities: citadel_platforms::ResourceCapabilitiesView,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct AuthorizedProject {
     #[serde(flatten)]
     project: citadel_builds::BuildProjectView,
@@ -116,30 +90,33 @@ async fn project_response(
     )?;
     Ok(no_store(Json(projects.remove(0)).into_response()))
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::builds_http::Runs)]
 #[serde(rename_all = "camelCase")]
 struct Runs {
     runs: Vec<citadel_builds::BuildRunView>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::builds_http::Logs)]
 #[serde(rename_all = "camelCase")]
 struct Logs {
     run_id: Uuid,
     logs: Vec<citadel_builds::BuildLogEntry>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Pools {
     pools: Vec<AuthorizedPool>,
     capabilities: citadel_platforms::ResourceCapabilitiesView,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct AuthorizedPool {
     #[serde(flatten)]
     pool: citadel_builds::BuildAgentPoolView,
     capabilities: citadel_platforms::ResourceCapabilitiesView,
 }
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
+#[schema(as = server::builds_http::QueueInput)]
 #[serde(rename_all = "camelCase")]
 struct QueueInput {
     trigger: Option<String>,
@@ -151,6 +128,19 @@ struct RunFilter {
     limit: Option<usize>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildProjects",
+    operation_id = "listBuildProjects",
+    summary = "List Build Projects",
+    responses(
+        (status = 200, description = "Success", body = Projects, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_projects(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -198,6 +188,19 @@ async fn list_projects(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildProjects",
+    operation_id = "createBuildProject",
+    summary = "Create a Build Project",
+    request_body = BuildProjectInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -325,6 +328,19 @@ async fn authorize_build_dependencies(
     }
     Ok(())
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildProjects/{id}",
+    operation_id = "getBuildProject",
+    summary = "Get a Build Project",
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -339,6 +355,19 @@ async fn get_project(
     )?;
     project_response(&state, &principal, project, &headers).await
 }
+#[utoipa::path(
+    delete,
+    path = "/api/v1/buildProjects/{id}",
+    operation_id = "archiveBuildProject",
+    summary = "Archive a Build Project",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn archive_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -359,6 +388,20 @@ async fn archive_project(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/buildProjects/{id}",
+    operation_id = "updateBuildProject",
+    summary = "Update Build Project",
+    request_body = ref("#/components/schemas/UpdateBuildProjectInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -369,6 +412,20 @@ async fn update_project(
     save_project(&state, principal, id, patch, None, false, &headers).await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/buildProjects/{id}/_metadata",
+    operation_id = "updateBuildMetadata",
+    summary = "Update Build Project",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_project_metadata(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -379,6 +436,19 @@ async fn update_project_metadata(
     save_project(&state, principal, id, patch, None, true, &headers).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildProjects/rename",
+    operation_id = "renameBuild",
+    summary = "Update Build Project",
+    request_body = RenamePool,
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildProjectView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -444,6 +514,20 @@ async fn save_project(
     project_response(state, &principal, project, headers).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildProjects/{id}/runs",
+    operation_id = "queueBuildRun",
+    summary = "Queue a Build Run",
+    request_body = Option<QueueInput>,
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn queue_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -497,6 +581,19 @@ async fn queue_run(
     )?;
     Ok(no_store(Json(run).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildRuns",
+    operation_id = "listBuildRuns",
+    summary = "List Build Runs",
+    responses(
+        (status = 200, description = "Success", body = Runs, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("projectId" = Option<uuid::Uuid>, Query), ("limit" = Option<i32>, Query, minimum = 1, maximum = 100, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_runs(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -523,6 +620,19 @@ async fn list_runs(
     )?;
     Ok(no_store(Json(Runs { runs }).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildRuns/{id}",
+    operation_id = "getBuildRun",
+    summary = "Get a Build Run",
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -544,6 +654,19 @@ async fn get_run(
     .await?;
     Ok(no_store(Json(run).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildRuns/{id}/logs",
+    operation_id = "getBuildRunLogs",
+    summary = "Get Build Run logs",
+    responses(
+        (status = 200, description = "Success", body = Logs, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_logs(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -569,6 +692,19 @@ async fn get_logs(
     )?;
     Ok(no_store(Json(Logs { run_id: id, logs }).into_response()))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildRuns/{id}/cancel",
+    operation_id = "cancelBuildRun",
+    summary = "Cancel a Build Run",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn cancel_run(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -596,6 +732,19 @@ async fn cancel_run(
     identity_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildAgentPools",
+    operation_id = "listBuildAgentPools",
+    summary = "List Build Agent Pools",
+    responses(
+        (status = 200, description = "Success", body = Pools, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_pools(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -634,6 +783,19 @@ async fn list_pools(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildAgentPools",
+    operation_id = "createBuildAgentPool",
+    summary = "Create a Build Agent Pool",
+    request_body = BuildAgentPoolInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::CreateErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -662,6 +824,19 @@ async fn create_pool(
     pool_response(&state, &principal, pool, &headers).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildAgentPools/{id}",
+    operation_id = "getBuildAgentPool",
+    summary = "Get a Build Agent Pool",
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -685,6 +860,19 @@ async fn get_pool(
     pool_response(&state, &principal, pool, &headers).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildAgentPools/{id}/test",
+    operation_id = "testBuildAgentPool",
+    summary = "Test a Build Agent Pool",
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn test_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -712,6 +900,20 @@ async fn test_pool(
     pool_response(&state, &principal, pool, &headers).await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/buildAgentPools/{id}",
+    operation_id = "updateBuildAgentPool",
+    summary = "Update a Build Agent Pool",
+    request_body = ref("#/components/schemas/UpdateBuildAgentPoolInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -722,6 +924,20 @@ async fn update_pool(
     save_pool(&state, principal, id, patch, None, false, &headers).await
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/buildAgentPools/{id}/_metadata",
+    operation_id = "updateBuildAgentPoolMetadata",
+    summary = "Update Build Agent Pool metadata",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_pool_metadata(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -732,12 +948,25 @@ async fn update_pool_metadata(
     save_pool(&state, principal, id, patch, None, true, &headers).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 struct RenamePool {
     id: Uuid,
     name: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildAgentPools/rename",
+    operation_id = "renameBuildAgentPool",
+    summary = "Rename a Build Agent Pool",
+    request_body = RenamePool,
+    responses(
+        (status = 200, description = "Success", body = citadel_builds::BuildAgentPoolView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -872,6 +1101,19 @@ async fn pool_response(
     ))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/buildAgentPools/{id}",
+    operation_id = "archiveBuildAgentPool",
+    summary = "Archive a Build Agent Pool",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn archive_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -911,6 +1153,19 @@ fn actor(
     )
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildAgentPools/{id}/edge/enrollments",
+    operation_id = "createBuildAgentPoolEdgeEnrollment",
+    summary = "Create build pool Edge Agent enrollment",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn enroll_pool(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
@@ -936,6 +1191,19 @@ async fn enroll_pool(
     .await
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildAgentPools/{id}/edge/status",
+    operation_id = "getBuildAgentPoolEdgeStatus",
+    summary = "Get build pool Edge Agent status",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn pool_edge_status(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
@@ -963,6 +1231,19 @@ async fn pool_edge_status(
     Ok(no_store(Json(status).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/buildAgentPools/{id}/edge/revoke",
+    operation_id = "revokeBuildAgentPoolEdgeAgent",
+    summary = "Revoke build pool Edge Agent",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn revoke_pool_edge(
     State(state): State<BuildsHttpState>,
     Extension(edge): Extension<crate::platforms_http::EdgeHttpContext>,
@@ -1058,4 +1339,35 @@ fn map_error(error: BuildError) -> IdentityError {
         BuildError::Conflict(message) => IdentityError::Conflict(message),
         BuildError::Storage(message) => IdentityError::Storage(message),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_projects))
+        .normalized_routes(utoipa_axum::routes!(create_project))
+        .normalized_routes(utoipa_axum::routes!(get_project))
+        .normalized_routes(utoipa_axum::routes!(update_project))
+        .normalized_routes(utoipa_axum::routes!(rename_project))
+        .normalized_routes(utoipa_axum::routes!(update_project_metadata))
+        .normalized_routes(utoipa_axum::routes!(archive_project))
+        .normalized_routes(utoipa_axum::routes!(queue_run))
+        .normalized_routes(utoipa_axum::routes!(list_runs))
+        .normalized_routes(utoipa_axum::routes!(get_run))
+        .normalized_routes(utoipa_axum::routes!(get_logs))
+        .normalized_routes(utoipa_axum::routes!(cancel_run))
+}
+
+pub(crate) fn documented_pool_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_pools))
+        .normalized_routes(utoipa_axum::routes!(create_pool))
+        .normalized_routes(utoipa_axum::routes!(get_pool))
+        .normalized_routes(utoipa_axum::routes!(update_pool))
+        .normalized_routes(utoipa_axum::routes!(rename_pool))
+        .normalized_routes(utoipa_axum::routes!(update_pool_metadata))
+        .normalized_routes(utoipa_axum::routes!(test_pool))
+        .normalized_routes(utoipa_axum::routes!(archive_pool))
+        .normalized_routes(utoipa_axum::routes!(enroll_pool))
+        .normalized_routes(utoipa_axum::routes!(pool_edge_status))
+        .normalized_routes(utoipa_axum::routes!(revoke_pool_edge))
 }

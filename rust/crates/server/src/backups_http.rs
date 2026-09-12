@@ -1,7 +1,7 @@
-use crate::request_validation::ValidatedJson;
 use crate::capabilities::ResourceCapabilities;
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+use crate::openapi::router::OpenApiRouterExt;
+use crate::request_validation::ValidatedJson;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -10,7 +10,6 @@ use citadel_backups::{
     BackupError, BackupLog, BackupPolicyInput, BackupRepositoryInput, BackupRestoreRequest,
     BackupService,
 };
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService, PermissionGrant};
 use serde::{Deserialize, Serialize};
@@ -27,92 +26,49 @@ pub struct BackupsHttpState {
 }
 pub fn router(state: BackupsHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_BACKUP_REPOSITORIES, list_repositories)
-            .contract_route(routes::CREATE_BACKUP_REPOSITORY, create_repository)
-            .contract_route(routes::GET_BACKUP_REPOSITORY, get_repository)
-            .contract_route(routes::UPDATE_BACKUP_REPOSITORY, update_repository)
-            .contract_route(routes::ARCHIVE_BACKUP_REPOSITORY, archive_repository)
-            .contract_route(routes::VALIDATE_BACKUP_REPOSITORY, validate_repository)
-            .contract_route(routes::INITIALIZE_BACKUP_REPOSITORY, initialize_repository)
-            .contract_route(routes::CHECK_BACKUP_REPOSITORY, check_repository)
-            .contract_route(routes::PRUNE_BACKUP_REPOSITORY, prune_repository)
-            .contract_route(routes::LIST_BACKUP_POLICIES, list_policies)
-            .contract_route(routes::GET_PLATFORM_BACKUP_SUMMARIES, platform_summaries)
-            .contract_route(
-                routes::GET_DEPLOYMENT_BACKUP_SOURCE_PREVIEW,
-                deployment_source_preview,
-            )
-            .contract_route(
-                routes::GET_STACK_BACKUP_SOURCE_PREVIEW,
-                stack_source_preview,
-            )
-            .contract_route(
-                routes::GET_SWARM_SERVICE_BACKUP_SOURCE_PREVIEW,
-                service_source_preview,
-            )
-            .contract_route(routes::CREATE_BACKUP_POLICY, create_policy)
-            .contract_route(routes::GET_BACKUP_POLICY, get_policy)
-            .contract_route(routes::UPDATE_BACKUP_POLICY, update_policy)
-            .contract_route(routes::RENAME_BACKUP_POLICY, rename_policy)
-            .contract_route(
-                routes::UPDATE_BACKUP_POLICY_METADATA,
-                update_policy_metadata,
-            )
-            .contract_route(routes::ARCHIVE_BACKUP_POLICY, archive_policy)
-            .contract_route(routes::QUEUE_BACKUP_RUN, queue_backup)
-            .contract_route(routes::RUN_BACKUP_POLICY, streams::run_backup)
-            .contract_route(routes::LIST_BACKUP_RUNS, list_runs)
-            .contract_route(routes::GET_BACKUP_RUN, get_run)
-            .contract_route(routes::GET_BACKUP_LOGS, get_backup_logs)
-            .contract_route(routes::GET_BACKUP_RUN_EVENTS, get_backup_events)
-            .contract_route(routes::CANCEL_BACKUP_RUN, cancel_backup)
-            .contract_route(routes::QUEUE_BACKUP_RESTORE, queue_restore)
-            .contract_route(routes::RUN_BACKUP_RESTORE_VOLUME, streams::run_restore)
-            .contract_route(routes::LIST_BACKUP_RESTORES, list_restores)
-            .contract_route(routes::GET_BACKUP_RESTORE, get_restore)
-            .contract_route(routes::GET_BACKUP_RESTORE_LOGS, get_restore_logs)
-            .contract_route(routes::GET_BACKUP_RESTORE_RUN_EVENTS, get_restore_events)
-            .contract_route(routes::CANCEL_BACKUP_RESTORE, cancel_restore)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "BackupPolicy",
     )
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Repositories {
     repositories: Vec<citadel_backups::BackupRepositoryView>,
     capabilities: ResourceCapabilities,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Policies {
     policies: Vec<citadel_backups::BackupPolicyView>,
     capabilities: ResourceCapabilities,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::backups_http::Runs)]
 #[serde(rename_all = "camelCase")]
 struct Runs {
     runs: Vec<citadel_backups::BackupRunView>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Restores {
     runs: Vec<citadel_backups::BackupRestoreRunView>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::backups_http::Logs)]
 #[serde(rename_all = "camelCase")]
 struct Logs {
     run_id: Uuid,
     logs: String,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = server::backups_http::Events)]
 #[serde(rename_all = "camelCase")]
 struct Events {
     run_id: Uuid,
     events: Vec<String>,
 }
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
+#[schema(as = server::backups_http::QueueInput)]
 #[serde(rename_all = "camelCase")]
 struct QueueInput {
     trigger: Option<String>,
@@ -124,7 +80,7 @@ struct RunFilter {
     backup_run_id: Option<Uuid>,
     limit: Option<usize>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RestoreInput {
     target_platform_id: Uuid,
@@ -134,13 +90,25 @@ struct RestoreInput {
     source_backup_run_item_id: Option<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct RepositoryLocationInput {
     location: String,
     platform_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRepositories",
+    operation_id = "listBackupRepositories",
+    summary = "List Backup Repositories",
+    responses(
+        (status = 200, description = "Success", body = Repositories, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_repositories(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -167,6 +135,19 @@ async fn list_repositories(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories",
+    operation_id = "createBackupRepository",
+    summary = "Create a Backup Repository",
+    request_body = BackupRepositoryInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -193,6 +174,19 @@ async fn create_repository(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRepositories/{id}",
+    operation_id = "getBackupRepository",
+    summary = "Get a Backup Repository",
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -213,6 +207,20 @@ async fn get_repository(
         Json(result(s.backups.store().get_repository(id).await, &h)?).into_response(),
     ))
 }
+#[utoipa::path(
+    patch,
+    path = "/api/v1/backupRepositories/{id}",
+    operation_id = "updateBackupRepository",
+    summary = "Update a Backup Repository",
+    request_body = ref("#/components/schemas/UpdateBackupRepositoryInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRepositoryView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -242,10 +250,7 @@ async fn update_repository(
         &h,
     )
     .await?;
-    let Json(patch) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(patch) = identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     if patch.get("spec").is_some_and(|v| !v.is_null()) {
         let current = result(s.backups.store().get_repository(id).await, &h)?;
         let input = result(
@@ -263,6 +268,19 @@ async fn update_repository(
     ))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/backupRepositories/{id}",
+    operation_id = "archiveBackupRepository",
+    summary = "Archive a Backup Repository",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn archive_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -282,6 +300,20 @@ async fn archive_repository(
     result(s.backups.store().archive_repository(id).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories/{id}/validate",
+    operation_id = "validateBackupRepository",
+    summary = "Validate a Backup Repository",
+    request_body = RepositoryLocationInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRepositoryValidationView, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn validate_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -291,6 +323,20 @@ async fn validate_repository(
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Validate").await
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories/{id}/initialize",
+    operation_id = "initializeBackupRepository",
+    summary = "Initialize a Backup Repository",
+    request_body = RepositoryLocationInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn initialize_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -300,6 +346,20 @@ async fn initialize_repository(
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Initialize").await
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories/{id}/check",
+    operation_id = "checkBackupRepository",
+    summary = "Check a Backup Repository",
+    request_body = RepositoryLocationInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn check_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -309,6 +369,20 @@ async fn check_repository(
 ) -> IdentityHttpResult {
     repository_operation(s, p, id, h, input, "Check").await
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories/{id}/prune",
+    operation_id = "pruneBackupRepository",
+    summary = "Prune a Backup Repository",
+    request_body = RepositoryLocationInput,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn prune_repository(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -369,6 +443,19 @@ async fn repository_operation(
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupPolicies",
+    operation_id = "listBackupPolicies",
+    summary = "List Backup Policies",
+    responses(
+        (status = 200, description = "Success", body = Policies, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("tags" = Option<Vec<String>>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_policies(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -395,6 +482,19 @@ async fn list_policies(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupPolicies/platform-summaries",
+    operation_id = "getPlatformBackupSummaries",
+    summary = "Get Platform Backup summaries",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/PlatformBackupSummariesView"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("platformIds" = Vec<uuid::Uuid>, Query)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn platform_summaries(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -447,6 +547,19 @@ async fn platform_summaries(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupPolicies",
+    operation_id = "createBackupPolicy",
+    summary = "Create a Backup Policy",
+    request_body = BackupPolicyInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -485,7 +598,8 @@ async fn create_policy(
     ))
 }
 macro_rules! backup_source_preview {
-    ($handler:ident,$kind:ident,$resource:ident) => {
+    ($(#[$handler_attr:meta])* $handler:ident,$kind:ident,$resource:ident) => {
+        $(#[$handler_attr])*
         async fn $handler(
             State(s): State<BackupsHttpState>,
             p: Option<Extension<ActorPrincipal>>,
@@ -537,10 +651,74 @@ macro_rules! backup_source_preview {
         }
     };
 }
-backup_source_preview!(deployment_source_preview, Deployment, Deployment);
-backup_source_preview!(stack_source_preview, Stack, Stack);
-backup_source_preview!(service_source_preview, SwarmService, SwarmService);
+backup_source_preview!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/deployments/{deploymentId}/backup-source-preview",
+    operation_id = "getDeploymentBackupSourcePreview",
+    summary = "Preview Deployment Backup volumes",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/DeploymentBackupSourcePreviewView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("deploymentId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    deployment_source_preview,
+    Deployment,
+    Deployment
+);
+backup_source_preview!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/stacks/{stackId}/backup-source-preview",
+    operation_id = "getStackBackupSourcePreview",
+    summary = "Preview Stack Backup volumes",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/StackBackupSourcePreviewView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("stackId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    stack_source_preview,
+    Stack,
+    Stack
+);
+backup_source_preview!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/swarmServices/{id}/backup-source-preview",
+    operation_id = "getSwarmServiceBackupSourcePreview",
+    summary = "Preview Service Backup volumes",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceBackupSourcePreviewView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    service_source_preview,
+    SwarmService,
+    SwarmService
+);
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupPolicies/{id}",
+    operation_id = "getBackupPolicy",
+    summary = "Get a Backup Policy",
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -562,6 +740,20 @@ async fn get_policy(
     ))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/backupPolicies/{id}",
+    operation_id = "updateBackupPolicy",
+    summary = "Update a Backup Policy",
+    request_body = ref("#/components/schemas/UpdateBackupPolicyInput"),
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -589,10 +781,7 @@ async fn update_policy(
         &h,
     )
     .await?;
-    let Json(patch) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(patch) = identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     let current = result(s.backups.store().get_policy(id).await, &h)?;
     let input = result(citadel_backups::policy_update::merge(&current, &patch), &h)?;
     if citadel_backups::policy_update::changes_paid_trigger(&current, &input) {
@@ -654,6 +843,19 @@ async fn update_policy(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupPolicies/rename",
+    operation_id = "renameBackupPolicy",
+    summary = "Rename a Backup Policy",
+    request_body = citadel_backups::policy_metadata::RenameBackupPolicyInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -664,10 +866,8 @@ async fn rename_policy(
     >,
 ) -> IdentityHttpResult {
     let p = actor(p, &h)?;
-    let Json(mut input) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(mut input) =
+        identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     result(input.validate(), &h)?;
     auth(
         &s,
@@ -687,6 +887,20 @@ async fn rename_policy(
     ))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/backupPolicies/{id}/_metadata",
+    operation_id = "updateBackupPolicyMetadata",
+    summary = "Update Backup Policy metadata",
+    request_body = ref("#/components/schemas/PatchResourceMetadata"),
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupPolicyView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_policy_metadata(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -714,10 +928,7 @@ async fn update_policy_metadata(
         &h,
     )
     .await?;
-    let Json(patch) = identity_result(
-        body.map_err(crate::request_validation::invalid_json),
-        &h,
-    )?;
+    let Json(patch) = identity_result(body.map_err(crate::request_validation::invalid_json), &h)?;
     let description = result(
         citadel_backups::policy_metadata::description_patch(&patch),
         &h,
@@ -815,6 +1026,19 @@ fn json_uuid(value: &serde_json::Value, key: &str) -> Option<Uuid> {
         .and_then(serde_json::Value::as_str)
         .and_then(|value| Uuid::parse_str(value).ok())
 }
+#[utoipa::path(
+    delete,
+    path = "/api/v1/backupPolicies/{id}",
+    operation_id = "archiveBackupPolicy",
+    summary = "Archive a Backup Policy",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn archive_policy(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -834,6 +1058,20 @@ async fn archive_policy(
     result(s.backups.store().archive_policy(id).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupPolicies/{id}/runs",
+    operation_id = "queueBackupRun",
+    summary = "Queue a Backup Run",
+    request_body = Option<QueueInput>,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn queue_backup(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -883,6 +1121,19 @@ async fn enqueue_backup(
     )?;
     Ok(run)
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRuns",
+    operation_id = "listBackupRuns",
+    summary = "List Backup Runs",
+    responses(
+        (status = 200, description = "Success", body = Runs, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("policyId" = Option<uuid::Uuid>, Query), ("limit" = Option<i32>, Query, minimum = 1, maximum = 100, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_runs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -919,6 +1170,19 @@ async fn list_runs(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRuns/{id}",
+    operation_id = "getBackupRun",
+    summary = "Get a Backup Run",
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_run(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -938,6 +1202,19 @@ async fn get_run(
     .await?;
     Ok(no_store(Json(run).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRuns/{id}/events",
+    operation_id = "getBackupRunEvents",
+    summary = "Get Backup Run events",
+    responses(
+        (status = 200, description = "Success", body = Events, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_backup_events(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -965,6 +1242,19 @@ async fn get_backup_events(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRestoreRuns/{id}/events",
+    operation_id = "getBackupRestoreRunEvents",
+    summary = "Get Backup Restore Run events",
+    responses(
+        (status = 200, description = "Success", body = Events, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_restore_events(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -992,6 +1282,19 @@ async fn get_restore_events(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRuns/{id}/logs",
+    operation_id = "getBackupRunLogs",
+    summary = "Get Backup Run logs",
+    responses(
+        (status = 200, description = "Success", body = Logs, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_backup_logs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1017,6 +1320,19 @@ async fn get_backup_logs(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRuns/{id}/cancel",
+    operation_id = "cancelBackupRun",
+    summary = "Cancel a Backup Run",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn cancel_backup(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1037,6 +1353,20 @@ async fn cancel_backup(
     result(s.backups.cancel_backup(id).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRuns/{id}/restoreVolume",
+    operation_id = "restoreBackupVolume",
+    summary = "Queue a Volume restore",
+    request_body = RestoreInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRestoreRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn queue_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1099,6 +1429,19 @@ async fn enqueue_restore(
     )?;
     Ok(run)
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRestoreRuns",
+    operation_id = "listBackupRestoreRuns",
+    summary = "List Backup Restore Runs",
+    responses(
+        (status = 200, description = "Success", body = Restores, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("backupRunId" = Option<uuid::Uuid>, Query), ("policyId" = Option<uuid::Uuid>, Query), ("limit" = Option<i32>, Query, minimum = 1, maximum = 100, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_restores(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1136,6 +1479,19 @@ async fn list_restores(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRestoreRuns/{id}",
+    operation_id = "getBackupRestoreRun",
+    summary = "Get a Backup Restore Run",
+    responses(
+        (status = 200, description = "Success", body = citadel_backups::BackupRestoreRunView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1156,6 +1512,19 @@ async fn get_restore(
     .await?;
     Ok(no_store(Json(restore).into_response()))
 }
+#[utoipa::path(
+    get,
+    path = "/api/v1/backupRestoreRuns/{id}/logs",
+    operation_id = "getBackupRestoreRunLogs",
+    summary = "Get Backup Restore Run logs",
+    responses(
+        (status = 200, description = "Success", body = Logs, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_restore_logs(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1182,6 +1551,19 @@ async fn get_restore_logs(
         .into_response(),
     ))
 }
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRestoreRuns/{id}/cancel",
+    operation_id = "cancelBackupRestoreRun",
+    summary = "Cancel a Backup Restore Run",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn cancel_restore(
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -1281,4 +1663,42 @@ fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> IdentityHttpResult<T> 
         }),
         h,
     )
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BackupsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_repositories))
+        .normalized_routes(utoipa_axum::routes!(create_repository))
+        .normalized_routes(utoipa_axum::routes!(get_repository))
+        .normalized_routes(utoipa_axum::routes!(update_repository))
+        .normalized_routes(utoipa_axum::routes!(archive_repository))
+        .normalized_routes(utoipa_axum::routes!(validate_repository))
+        .normalized_routes(utoipa_axum::routes!(initialize_repository))
+        .normalized_routes(utoipa_axum::routes!(check_repository))
+        .normalized_routes(utoipa_axum::routes!(prune_repository))
+        .normalized_routes(utoipa_axum::routes!(list_policies))
+        .normalized_routes(utoipa_axum::routes!(platform_summaries))
+        .normalized_routes(utoipa_axum::routes!(deployment_source_preview))
+        .normalized_routes(utoipa_axum::routes!(stack_source_preview))
+        .normalized_routes(utoipa_axum::routes!(service_source_preview))
+        .normalized_routes(utoipa_axum::routes!(create_policy))
+        .normalized_routes(utoipa_axum::routes!(get_policy))
+        .normalized_routes(utoipa_axum::routes!(update_policy))
+        .normalized_routes(utoipa_axum::routes!(rename_policy))
+        .normalized_routes(utoipa_axum::routes!(update_policy_metadata))
+        .normalized_routes(utoipa_axum::routes!(archive_policy))
+        .normalized_routes(utoipa_axum::routes!(queue_backup))
+        .normalized_routes(utoipa_axum::routes!(streams::run_backup))
+        .normalized_routes(utoipa_axum::routes!(list_runs))
+        .normalized_routes(utoipa_axum::routes!(get_run))
+        .normalized_routes(utoipa_axum::routes!(get_backup_logs))
+        .normalized_routes(utoipa_axum::routes!(get_backup_events))
+        .normalized_routes(utoipa_axum::routes!(cancel_backup))
+        .normalized_routes(utoipa_axum::routes!(queue_restore))
+        .normalized_routes(utoipa_axum::routes!(streams::run_restore))
+        .normalized_routes(utoipa_axum::routes!(list_restores))
+        .normalized_routes(utoipa_axum::routes!(get_restore))
+        .normalized_routes(utoipa_axum::routes!(get_restore_logs))
+        .normalized_routes(utoipa_axum::routes!(get_restore_events))
+        .normalized_routes(utoipa_axum::routes!(cancel_restore))
 }

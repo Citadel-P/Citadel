@@ -5,7 +5,6 @@ use axum::Router;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::IntoResponse;
-use citadel_contracts::http::routes;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, PermissionGrant};
 use citadel_identity::{
@@ -20,10 +19,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{
     IdentityHttpResult, identity_result, require_human, require_human_administrator,
 };
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct ServiceAccountHttpState {
@@ -33,29 +32,7 @@ pub struct ServiceAccountHttpState {
 
 pub fn router(state: ServiceAccountHttpState) -> Router {
     crate::realtime::notify_mutations(
-        Router::new()
-            .contract_route(routes::LIST_SERVICE_ACCOUNTS, list)
-            .contract_route(routes::CREATE_SERVICE_ACCOUNT, create)
-            .contract_route(routes::ARCHIVE_SERVICE_ACCOUNTS, archive)
-            .contract_route(routes::GET_SERVICE_ACCOUNT_LIMITS, limits)
-            .contract_route(routes::GET_SERVICE_ACCOUNT, get_one)
-            .contract_route(routes::LIST_SERVICE_ACCOUNT_USAGES, usages)
-            .contract_route(routes::UPDATE_SERVICE_ACCOUNT, update)
-            .contract_route(routes::RENAME_SERVICE_ACCOUNT, rename)
-            .contract_route(routes::ADD_SERVICE_ACCOUNT_ROLE, add_role)
-            .contract_route(routes::REMOVE_SERVICE_ACCOUNT_ROLE, remove_role)
-            .contract_route(
-                routes::ADD_SERVICE_ACCOUNT_RESOURCE_ACCESS,
-                add_resource_access,
-            )
-            .contract_route(
-                routes::REMOVE_SERVICE_ACCOUNT_RESOURCE_ACCESS,
-                remove_resource_access,
-            )
-            .contract_route(routes::LIST_SERVICE_ACCOUNT_TOKENS, list_tokens)
-            .contract_route(routes::CREATE_SERVICE_ACCOUNT_TOKEN, create_token)
-            .contract_route(routes::REVOKE_SERVICE_ACCOUNT_TOKEN, revoke_token)
-            .with_state(state),
+        documented_routes().split_for_parts().0.with_state(state),
         "ServiceAccount",
     )
 }
@@ -76,6 +53,19 @@ struct ListFilter {
     include_archived: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/serviceAccounts",
+    operation_id = "listServiceAccounts",
+    summary = "List Service Accounts",
+    responses(
+        (status = 200, description = "Success", body = ServiceAccountsResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("Page" = Option<i64>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i64>, Query, minimum = 1, extensions(("x-citadel-default" = json!(50)))), ("Name" = Option<String>, Query), ("IncludeArchived" = Option<bool>, Query, extensions(("x-citadel-default" = json!(false))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -108,6 +98,19 @@ async fn list(
     .into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/serviceAccounts/{id}",
+    operation_id = "getServiceAccount",
+    summary = "Get a Service Account",
+    responses(
+        (status = 200, description = "Success", body = ServiceAccountDetailResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_one(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -127,6 +130,19 @@ async fn get_one(
     .into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/serviceAccounts",
+    operation_id = "createServiceAccount",
+    summary = "Create a Service Account",
+    request_body = CreateServiceAccountRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -156,6 +172,20 @@ async fn create(
     Ok((StatusCode::OK, Json(account)).into_response())
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/serviceAccounts/{id}",
+    operation_id = "updateServiceAccount",
+    summary = "Update a Service Account",
+    request_body = UpdateServiceAccountRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -187,6 +217,19 @@ async fn update(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/serviceAccounts/{id}/usages",
+    operation_id = "listServiceAccountUsages",
+    summary = "List Service Account execution usages",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/RunAsActorUsageList"), content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn usages(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -211,6 +254,19 @@ async fn usages(
     Ok(crate::identity_http::no_store(Json(usages).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/serviceAccounts/rename",
+    operation_id = "renameServiceAccount",
+    summary = "Rename a Service Account",
+    request_body = RenameServiceAccountRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn rename(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -241,6 +297,19 @@ async fn rename(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/serviceAccounts",
+    operation_id = "archiveServiceAccounts",
+    summary = "Archive Service Accounts",
+    request_body = ArchiveServiceAccountsRequest,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn archive(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -270,6 +339,20 @@ async fn archive(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/serviceAccounts/{id}/roles",
+    operation_id = "addServiceAccountRole",
+    summary = "Assign a Role to a Service Account",
+    request_body = AddServiceAccountRoleRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_role(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -301,6 +384,19 @@ async fn add_role(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/serviceAccounts/{id}/roles/{roleId}",
+    operation_id = "removeServiceAccountRole",
+    summary = "Remove a Role from a Service Account",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_role(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -331,6 +427,20 @@ async fn remove_role(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/serviceAccounts/{id}/resource-accesses",
+    operation_id = "addServiceAccountResourceAccess",
+    summary = "Add a resource override to a Service Account",
+    request_body = AddServiceAccountResourceAccessRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn add_resource_access(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -362,6 +472,19 @@ async fn add_resource_access(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/serviceAccounts/{id}/resource-accesses/{resourceAccessId}",
+    operation_id = "removeServiceAccountResourceAccess",
+    summary = "Remove a resource override from a Service Account",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("resourceAccessId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn remove_resource_access(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -392,6 +515,18 @@ async fn remove_resource_access(
     Ok(Json(account).into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/serviceAccounts/limits",
+    operation_id = "getServiceAccountLimits",
+    summary = "Get Service Account limits",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ServiceAccountLimitsView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn limits(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
@@ -405,6 +540,19 @@ async fn limits(
     .into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/serviceAccounts/{id}/tokens",
+    operation_id = "listServiceAccountTokens",
+    summary = "List Service Account tokens",
+    responses(
+        (status = 200, description = "Success", body = ServiceAccountTokensResponse, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("Page" = Option<i64>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i64>, Query, minimum = 1, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_tokens(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -436,6 +584,20 @@ async fn list_tokens(
     Ok(Json(ServiceAccountTokensResponse { paged_result }).into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/serviceAccounts/{id}/tokens",
+    operation_id = "createServiceAccountToken",
+    summary = "Create a Service Account token",
+    request_body = CreateServiceAccountTokenRequest,
+    responses(
+        (status = 201, description = "Success", body = citadel_identity::CreatedServiceAccountTokenView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn create_token(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -474,6 +636,19 @@ async fn create_token(
     Ok(response)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/serviceAccounts/{id}/tokens/{tokenId}",
+    operation_id = "revokeServiceAccountToken",
+    summary = "Revoke a Service Account token",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path), ("tokenId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn revoke_token(
     State(state): State<ServiceAccountHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -558,20 +733,20 @@ const fn default_page_size() -> i64 {
     50
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ServiceAccountsResponse {
     paged_result: PagedResult<ServiceAccountView>,
     capabilities: ResourceCapabilities,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ServiceAccountTokensResponse {
     paged_result: PagedResult<ServiceAccountTokenView>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ServiceAccountDetailResponse {
     #[serde(flatten)]
@@ -579,7 +754,7 @@ struct ServiceAccountDetailResponse {
     capabilities: ServiceAccountCapabilities,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ServiceAccountCapabilities {
     can_use: bool,
@@ -599,4 +774,23 @@ impl From<PermissionGrant> for ServiceAccountCapabilities {
             can_execute: permission.level.grants(PermissionLevel::Execute),
         }
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ServiceAccountHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(utoipa_axum::routes!(archive))
+        .normalized_routes(utoipa_axum::routes!(limits))
+        .normalized_routes(utoipa_axum::routes!(get_one))
+        .normalized_routes(utoipa_axum::routes!(usages))
+        .normalized_routes(utoipa_axum::routes!(update))
+        .normalized_routes(utoipa_axum::routes!(rename))
+        .normalized_routes(utoipa_axum::routes!(add_role))
+        .normalized_routes(utoipa_axum::routes!(remove_role))
+        .normalized_routes(utoipa_axum::routes!(add_resource_access))
+        .normalized_routes(utoipa_axum::routes!(remove_resource_access))
+        .normalized_routes(utoipa_axum::routes!(list_tokens))
+        .normalized_routes(utoipa_axum::routes!(create_token))
+        .normalized_routes(utoipa_axum::routes!(revoke_token))
 }

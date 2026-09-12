@@ -11,7 +11,6 @@ use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
-use citadel_contracts::http::routes;
 use citadel_identity::ActorPrincipal;
 use citadel_identity::{
     BrowserAuthenticationAction, IdentityError, IdentityService, InitializeCitadelRequest,
@@ -20,7 +19,7 @@ use citadel_identity::{
 use serde::Serialize;
 
 use crate::Readiness;
-use crate::contract_router::ContractRouterExt;
+use crate::openapi::router::OpenApiRouterExt;
 
 pub(crate) const REFRESH_COOKIE: &str = "refresh_token";
 pub(crate) const MFA_CHALLENGE_COOKIE: &str = "citadel_mfa_challenge";
@@ -38,12 +37,9 @@ pub struct IdentityHttpState {
 
 pub fn router(state: IdentityHttpState) -> Router {
     let mfa = crate::mfa_http::router(state.clone());
-    Router::new()
-        .contract_route(routes::GET_SETUP_STATUS, setup_status)
-        .contract_route(routes::INITIALIZE_CITADEL, initialize)
-        .contract_route(routes::LOGIN, login)
-        .contract_route(routes::REFRESH_TOKEN, refresh)
-        .contract_route(routes::LOGOUT, logout)
+    documented_routes()
+        .split_for_parts()
+        .0
         .with_state(state)
         .merge(mfa)
 }
@@ -76,6 +72,18 @@ fn automation_token_path_is_blocked(path: &str) -> bool {
         })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/setup/status",
+    operation_id = "getSetupStatus",
+    summary = "Get setup status",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SetupStatusView"), content_type = "application/json"),
+        crate::openapi::errors::ReadinessErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(true)))
+)]
 async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap) -> Response {
     match state.identity.setup_status().await {
         Ok(status) => no_store(Json(status).into_response()),
@@ -83,6 +91,19 @@ async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/setup/initialize",
+    operation_id = "initializeCitadel",
+    summary = "Initialize Citadel",
+    request_body = InitializeCitadelRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json"),
+        crate::openapi::errors::InitializationErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(true)))
+)]
 async fn initialize(
     State(state): State<IdentityHttpState>,
     connect: ConnectInfo<SocketAddr>,
@@ -103,6 +124,19 @@ async fn initialize(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/authentication/login",
+    operation_id = "login",
+    summary = "Sign in",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json"),
+        crate::openapi::errors::LoginErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn login(
     State(state): State<IdentityHttpState>,
     connect: ConnectInfo<SocketAddr>,
@@ -120,6 +154,18 @@ async fn login(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/authentication/refresh",
+    operation_id = "refreshToken",
+    summary = "Refresh browser access",
+    responses(
+        (status = 200, description = "Success", body = AccessTokenResponse, content_type = "application/json"),
+        crate::openapi::errors::LoginErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn refresh(
     State(state): State<IdentityHttpState>,
     connect: ConnectInfo<SocketAddr>,
@@ -148,6 +194,18 @@ async fn refresh(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/authentication/logout",
+    operation_id = "logout",
+    summary = "End browser session",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    security(),
+    extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn logout(State(state): State<IdentityHttpState>, headers: HeaderMap) -> Response {
     let refresh_token = current_refresh_token(&headers);
     match state.identity.logout(refresh_token).await {
@@ -515,15 +573,16 @@ fn license_required_response(capability_key: &'static str, request_id: String) -
     no_store(response)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct AccessTokenResponse {
     access_token: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(as = ProblemDetails)]
 #[serde(rename_all = "camelCase")]
-struct IdentityProblemDetails {
+pub(crate) struct IdentityProblemDetails {
     r#type: &'static str,
     title: &'static str,
     status: u16,
@@ -769,4 +828,13 @@ mod tests {
             "/api/v1/stacks/one/apply"
         ));
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(setup_status))
+        .normalized_routes(utoipa_axum::routes!(initialize))
+        .normalized_routes(utoipa_axum::routes!(login))
+        .normalized_routes(utoipa_axum::routes!(refresh))
+        .normalized_routes(utoipa_axum::routes!(logout))
 }

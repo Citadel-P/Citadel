@@ -1,6 +1,6 @@
 use crate::{
-    contract_router::ContractRouterExt,
     identity_http::{IdentityHttpResult, identity_result, no_store, require_human_administrator},
+    openapi::router::OpenApiRouterExt,
 };
 use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::{
@@ -9,19 +9,28 @@ use axum::{
     http::HeaderMap,
     response::IntoResponse,
 };
-use citadel_contracts::http::routes;
 use citadel_identity::IdentityError;
 use citadel_identity::{ActorPrincipal, ActorStore, PatchActorEnabledInput};
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn router(store: Arc<dyn ActorStore>) -> Router {
-    Router::new()
-        .contract_route(routes::GET_ACTOR, get)
-        .contract_route(routes::PATCH_ACTOR_ENABLED, set_enabled)
-        .with_state(store)
+    documented_routes().split_for_parts().0.with_state(store)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/actors/{id}",
+    operation_id = "getActor",
+    summary = "Get an Actor",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ActorView, content_type = "application/json"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get(
     State(store): State<Arc<dyn ActorStore>>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -38,6 +47,20 @@ async fn get(
     ))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/actors/{id}/enabled",
+    operation_id = "patchActorEnabled",
+    summary = "Enable or disable an Actor",
+    request_body = PatchActorEnabledInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::ActorView, content_type = "application/json"),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn set_enabled(
     State(store): State<Arc<dyn ActorStore>>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -61,4 +84,10 @@ async fn set_enabled(
         )?)
         .into_response(),
     ))
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Arc<dyn ActorStore>> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(set_enabled))
 }

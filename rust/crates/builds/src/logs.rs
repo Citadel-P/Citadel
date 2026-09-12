@@ -8,7 +8,7 @@ use std::sync::{
 };
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildLogEntry {
     pub id: Uuid,

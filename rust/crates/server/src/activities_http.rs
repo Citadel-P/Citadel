@@ -7,15 +7,14 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use citadel_application::{ActivityFilter, ActivityRecord, ActivityService, PagedActivityRecords};
-use citadel_contracts::http::routes;
 use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
 use citadel_identity::{ActorPrincipal, IdentityError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{identity_error_response, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct ActivitiesHttpState {
@@ -23,10 +22,7 @@ pub struct ActivitiesHttpState {
 }
 
 pub fn router(state: ActivitiesHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::LIST_ACTIVITIES, list)
-        .contract_route(routes::GET_ACTIVITY, get_by_id)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
@@ -90,6 +86,19 @@ struct ActivitiesView {
     paged_result: PagedActivityView,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/activities/{id}",
+    operation_id = "getActivity",
+    summary = "Get an authorized activity",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ActivityView"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_by_id(
     State(state): State<ActivitiesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -108,6 +117,19 @@ async fn get_by_id(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/activities",
+    operation_id = "listActivities",
+    summary = "List authorized activities",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ActivitiesView"), content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<citadel_domain::ActivityResourceType>, Query), ("EventType" = Option<citadel_domain::ActivityEventType>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list(
     State(state): State<ActivitiesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -220,4 +242,10 @@ mod tests {
             })
         );
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ActivitiesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(get_by_id))
 }

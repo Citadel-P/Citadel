@@ -102,19 +102,19 @@ pub struct GlobalSearchMatch {
     pub parent: Option<GlobalSearchParent>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchParent {
     pub id: Uuid,
     pub resource_type: ResourceType,
     pub name: String,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchStatus {
     pub label: String,
     pub tone: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchItem {
     pub id: Uuid,
@@ -127,12 +127,12 @@ pub struct GlobalSearchItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<GlobalSearchParent>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchGroup {
     pub category: &'static str,
     pub items: Vec<GlobalSearchItem>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchResponse {
     pub query: String,
     pub groups: Vec<GlobalSearchGroup>,

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{ResourceMetadataError, validate_provider};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TestSecretProviderInput {
     pub provider_id: Option<Uuid>,
@@ -32,7 +32,7 @@ impl TestSecretProviderInput {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TestExternalSecretInput {
     pub provider_id: Uuid,

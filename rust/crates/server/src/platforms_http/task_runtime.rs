@@ -8,7 +8,8 @@ struct TaskTerminalView {
 }
 
 macro_rules! task_reader {
-    ($name:ident, $permission:ident) => {
+    ($(#[$name_attr:meta])* $name:ident, $permission:ident) => {
+        $(#[$name_attr])*
         pub(super) async fn $name(
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
@@ -26,8 +27,40 @@ macro_rules! task_reader {
         }
     };
 }
-task_reader!(inspect, Inspect);
-task_reader!(terminal, Terminal);
+task_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect",
+    operation_id = "inspectSwarmTask",
+    summary = "Inspect the current Task container",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    inspect,
+    Inspect
+);
+task_reader!(
+    #[utoipa::path(
+    get,
+    path = "/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal",
+    operation_id = "getSwarmTaskTerminalTarget",
+    summary = "Resolve the current Task terminal target",
+    responses(
+        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTaskTerminalView"), content_type = "application/json"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+    terminal,
+    Terminal
+);
 
 async fn read(
     state: PlatformsHttpState,

@@ -42,7 +42,7 @@ pub fn is_sensitive_environment_name(name: &str) -> bool {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(transparent)]
 pub struct ActorId(Uuid);
 

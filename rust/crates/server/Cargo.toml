@@ -6,6 +6,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+utoipa-axum.workspace = true
+utoipa.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 async-stream.workspace = true

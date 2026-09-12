@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
-pub mod http;
-
 // Mirrors Hosting.Common.Constants while .NET Agents share this wire contract.
 pub const EDGE_AGENT_PROTOCOL_VERSION: i32 = 2;
 

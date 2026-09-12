@@ -2,6 +2,19 @@ use super::*;
 use citadel_deployments::adoption::AdoptContainerInput;
 use tokio_util::sync::CancellationToken;
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/containers/{id}/adoption-draft",
+    operation_id = "getContainerAdoptionDraft",
+    summary = "Review adoption of an unmanaged Container",
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::adoption::ContainerAdoptionDraft, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn draft(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -46,6 +59,20 @@ pub(super) async fn draft(
     Ok(no_store(Json(draft).into_response()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/containers/{id}/adopt",
+    operation_id = "adoptContainer",
+    summary = "Adopt a Container without changing Docker",
+    request_body = AdoptContainerInput,
+    responses(
+        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        crate::openapi::errors::ExternalResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 pub(super) async fn adopt(
     State(state): State<DeploymentsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,

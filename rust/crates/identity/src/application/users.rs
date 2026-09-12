@@ -16,7 +16,7 @@ const MINIMUM_SEARCH_CHARACTERS: usize = 2;
 const MAXIMUM_PAGE_SIZE: i64 = 500;
 const MAXIMUM_SEARCH_RESULTS: i64 = 50;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserView {
     pub id: Uuid,
@@ -37,7 +37,7 @@ pub struct UserSearchItemView {
     pub email: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResourceAccessView {
     pub resource_type: ResourceType,
@@ -48,7 +48,7 @@ pub struct UserResourceAccessView {
     pub id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResourceAccessInput {
     pub resource_type: ResourceType,
@@ -58,7 +58,7 @@ pub struct UserResourceAccessInput {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {
     pub name: String,
@@ -74,37 +74,43 @@ pub struct CreateUserRequest {
     pub resource_accesses: Vec<UserResourceAccessInput>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchUserRequest {
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub email: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, required = false)]
     pub password: PatchField<String>,
     #[serde(default)]
+    #[schema(value_type = Option<bool>, required = false)]
     pub is_enabled: PatchField<bool>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub team_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
+    #[schema(value_type = Option<Vec<UserResourceAccessInput>>, required = false)]
     pub resource_accesses: PatchField<Vec<UserResourceAccessInput>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameUserRequest {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddUserRoleRequest {
     pub role_id: Uuid,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResourceAccessRequest {
     pub resource_type: ResourceType,
@@ -114,7 +120,7 @@ pub struct UserResourceAccessRequest {
     pub specific_permissions: Vec<SpecificPermission>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteUsersRequest {
     pub ids: Vec<Uuid>,

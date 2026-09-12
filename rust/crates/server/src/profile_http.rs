@@ -5,15 +5,14 @@ use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use citadel_contracts::http::routes;
 use citadel_identity::ActorPrincipal;
 use citadel_identity::{
     ChangeCurrentPasswordRequest, IdentityError, PatchUserPreferencesRequest, ProfileService,
     UpdateCurrentProfileRequest,
 };
 
-use crate::contract_router::ContractRouterExt;
 use crate::identity_http::{current_refresh_token, identity_error_response, no_store};
+use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
 pub struct ProfileHttpState {
@@ -21,18 +20,22 @@ pub struct ProfileHttpState {
 }
 
 pub fn router(state: ProfileHttpState) -> Router {
-    Router::new()
-        .contract_route(routes::GET_CURRENT_PROFILE, get_current)
-        .contract_route(routes::UPDATE_CURRENT_PROFILE, update_current)
-        .contract_route(routes::GET_PROFILE_PREFERENCES, get_preferences)
-        .contract_route(routes::PATCH_PROFILE_PREFERENCES, patch_preferences)
-        .contract_route(routes::CHANGE_CURRENT_PASSWORD, change_password)
-        .contract_route(routes::LIST_PROFILE_SESSIONS, list_sessions)
-        .contract_route(routes::REVOKE_OTHER_PROFILE_SESSIONS, revoke_other_sessions)
-        .contract_route(routes::REVOKE_PROFILE_SESSION, revoke_session)
-        .with_state(state)
+    documented_routes().split_for_parts().0.with_state(state)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/change-password",
+    operation_id = "changeCurrentPassword",
+    summary = "Change current profile password",
+    request_body = ChangeCurrentPasswordRequest,
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn change_password(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -52,6 +55,18 @@ async fn change_password(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/profile/sessions",
+    operation_id = "listProfileSessions",
+    summary = "List current profile sessions",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserSessionsView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn list_sessions(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -70,6 +85,19 @@ async fn list_sessions(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/profile/sessions/{sessionId}",
+    operation_id = "revokeProfileSession",
+    summary = "Revoke a profile session",
+    responses(
+        (status = 204, description = "Success"),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("sessionId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn revoke_session(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -89,6 +117,18 @@ async fn revoke_session(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/profile/sessions",
+    operation_id = "revokeOtherProfileSessions",
+    summary = "Revoke other profile sessions",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::RevokeOtherProfileSessionsView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn revoke_other_sessions(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -107,6 +147,18 @@ async fn revoke_other_sessions(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/profile/preferences",
+    operation_id = "getProfilePreferences",
+    summary = "Get current profile preferences",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_preferences(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -121,6 +173,19 @@ async fn get_preferences(
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/profile/preferences",
+    operation_id = "patchProfilePreferences",
+    summary = "Update current profile preferences",
+    request_body = PatchUserPreferencesRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn patch_preferences(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -136,6 +201,18 @@ async fn patch_preferences(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/profile",
+    operation_id = "getCurrentProfile",
+    summary = "Get current profile",
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::CurrentProfileView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_current(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -150,6 +227,19 @@ async fn get_current(
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/profile",
+    operation_id = "updateCurrentProfile",
+    summary = "Update current profile",
+    request_body = UpdateCurrentProfileRequest,
+    responses(
+        (status = 200, description = "Success", body = citadel_identity::CurrentProfileView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn update_current(
     State(state): State<ProfileHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
@@ -163,4 +253,16 @@ async fn update_current(
         Ok(profile) => no_store(Json(profile).into_response()),
         Err(error) => identity_error_response(error, &headers),
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ProfileHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(get_current))
+        .normalized_routes(utoipa_axum::routes!(update_current))
+        .normalized_routes(utoipa_axum::routes!(get_preferences))
+        .normalized_routes(utoipa_axum::routes!(patch_preferences))
+        .normalized_routes(utoipa_axum::routes!(change_password))
+        .normalized_routes(utoipa_axum::routes!(list_sessions))
+        .normalized_routes(utoipa_axum::routes!(revoke_other_sessions))
+        .normalized_routes(utoipa_axum::routes!(revoke_session))
 }
