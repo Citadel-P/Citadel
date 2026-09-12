@@ -112,6 +112,9 @@ pub struct RuntimeContainerSummary {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimePlatformStats {
+    pub disk_used_bytes: Option<i64>,
+    pub disk_total_bytes: Option<i64>,
+    pub disk_usage: Option<f64>,
     pub memory_usage: f64,
     pub cpu_usage: f64,
     pub receive_bytes: f64,
@@ -187,4 +190,37 @@ pub trait PlatformRuntimePort: Send + Sync {
         fetch_interval: Duration,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>>;
+}
+
+/// A complete, validated host filesystem measurement; unavailable is not zero.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HostDiskUsage {
+    pub used_bytes: i64,
+    pub total_bytes: i64,
+    pub usage_percent: f64,
+}
+
+impl HostDiskUsage {
+    pub fn new(used_bytes: i64, total_bytes: i64, usage_percent: f64) -> Option<Self> {
+        (total_bytes > 0
+            && used_bytes >= 0
+            && used_bytes <= total_bytes
+            && usage_percent.is_finite()
+            && (0.0..=100.0).contains(&usage_percent))
+        .then_some(Self {
+            used_bytes,
+            total_bytes,
+            usage_percent,
+        })
+    }
+}
+
+impl RuntimePlatformStats {
+    pub fn disk(&self) -> Option<HostDiskUsage> {
+        HostDiskUsage::new(
+            self.disk_used_bytes?,
+            self.disk_total_bytes?,
+            self.disk_usage?,
+        )
+    }
 }

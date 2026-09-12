@@ -448,7 +448,17 @@ async fn verify_node_projection_isolation(
         tx_bytes: 3.,
         created: observed.timestamp(),
     }];
-    assert_eq!(store.persist_stats(&session, &stats).await.unwrap(), 1);
+    assert_eq!(
+        store
+            .persist_stats_with_disk(
+                &session,
+                &stats,
+                citadel_platforms::HostDiskUsage::new(95, 100, 95.0)
+            )
+            .await
+            .unwrap(),
+        1
+    );
     let nodes: Vec<String> = sqlx::query_scalar("SELECT container.dockernodeid FROM containerstats stat JOIN containers container ON container.id=stat.containerid WHERE container.platformid=$1").bind(platform).fetch_all(pool).await.unwrap();
     assert_eq!(nodes, ["worker"]);
     let platform_stats: i64 =
@@ -479,7 +489,26 @@ async fn verify_node_projection_isolation(
         .connected(binding, replacement.connected_at)
         .await
         .unwrap();
-    assert!(store.persist_stats(&session, &stats).await.is_err());
+    assert!(
+        store
+            .persist_stats_with_disk(
+                &session,
+                &stats,
+                citadel_platforms::HostDiskUsage::new(95, 100, 95.0)
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        store
+            .persist_stats_with_disk(
+                &session,
+                &[],
+                citadel_platforms::HostDiskUsage::new(95, 100, 95.0)
+            )
+            .await
+            .is_err()
+    );
     assert!(store.persist_inventory(&session, &newer).await.is_err());
     sqlx::query("INSERT INTO containers(id,platformid,dockernodeid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,'worker','new-container','image','new',1,1,'Running','[]')")
         .bind(Uuid::now_v7()).bind(platform).execute(pool).await.unwrap();

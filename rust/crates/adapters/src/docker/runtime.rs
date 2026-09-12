@@ -130,16 +130,22 @@ impl PlatformRuntimePort for DockerClient {
                         result = client.info() => result,
                     };
                     match result {
-                        Ok(info) => yield Ok(RuntimePlatformStats {
-                            memory_usage: 0.0,
-                            cpu_usage: 0.0,
-                            receive_bytes: 0.0,
-                            transmit_bytes: 0.0,
-                            container_count: bounded_i64(info.containers),
-                            containers_running: bounded_i64(info.containers_running),
-                            containers_paused: bounded_i64(info.containers_paused),
-                            containers_stopped: bounded_i64(info.containers_stopped),
-                        }),
+                        Ok(info) => {
+                            let disk = client.read_host_disk(&info.docker_root_dir).await;
+                            yield Ok(RuntimePlatformStats {
+                                disk_used_bytes: disk.map(|d| d.used_bytes),
+                                disk_total_bytes: disk.map(|d| d.total_bytes),
+                                disk_usage: disk.map(|d| d.usage_percent),
+                                memory_usage: 0.0,
+                                cpu_usage: 0.0,
+                                receive_bytes: 0.0,
+                                transmit_bytes: 0.0,
+                                container_count: bounded_i64(info.containers),
+                                containers_running: bounded_i64(info.containers_running),
+                                containers_paused: bounded_i64(info.containers_paused),
+                                containers_stopped: bounded_i64(info.containers_stopped),
+                            });
+                        },
                         Err(error) => {
                             yield Err(normalize_docker_error(error));
                             break;
@@ -243,6 +249,22 @@ pub(crate) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityErr
         DockerError::Api { .. } => (RuntimeErrorKind::Remote, false),
     };
     RuntimeCapabilityError::new(kind, error.to_string(), retryable)
+}
+
+impl DockerClient {
+    async fn read_host_disk(&self, docker_root: &str) -> Option<citadel_platforms::HostDiskUsage> {
+        let provider = self.host_disk.clone();
+        let docker_root = docker_root.to_owned();
+        tokio::task::spawn_blocking(move || provider.read(&docker_root))
+            .await
+            .ok()
+            .flatten()
+    }
+
+    pub async fn host_disk_usage(&self) -> Option<citadel_platforms::HostDiskUsage> {
+        let info = self.info().await.ok()?;
+        self.read_host_disk(&info.docker_root_dir).await
+    }
 }
 
 #[cfg(test)]

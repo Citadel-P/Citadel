@@ -17,6 +17,10 @@ const PASSWORD: &str = "citadel-bootstrap-parity-passphrase";
 #[path = "bootstrap_process/setup.rs"]
 mod setup;
 
+#[cfg(unix)]
+#[path = "bootstrap_process/lifecycle.rs"]
+mod lifecycle;
+
 struct Fixture {
     admin_url: String,
     database_name: String,
@@ -30,6 +34,8 @@ struct Server {
     output: JoinHandle<String>,
     errors: JoinHandle<String>,
     url: String,
+    #[cfg(unix)]
+    edge_port: u16,
 }
 
 impl Fixture {
@@ -61,6 +67,10 @@ impl Fixture {
     }
 
     fn start(&self, bootstrap: bool, partial: bool) -> Server {
+        self.start_with_realtime(bootstrap, partial, true)
+    }
+
+    fn start_with_realtime(&self, bootstrap: bool, partial: bool, realtime: bool) -> Server {
         // Bind ephemeral test ports, never use the running development server.
         let http = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let edge = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -74,6 +84,8 @@ impl Fixture {
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("DATABASE_URL", &self.database_url)
             .env("Transport__Mode", "Disabled")
+            .env("EnableSwagger", "true")
+            .env("CITADEL_RUST_REALTIME_ENABLED", realtime.to_string())
             .env("Transport__ApiPort", http_port.to_string())
             .env("Transport__EdgeGrpcPort", edge_port.to_string())
             .env("Transport__PublicUrl", &url)
@@ -111,6 +123,8 @@ impl Fixture {
             output: tokio::spawn(capture(stdout)),
             errors: tokio::spawn(capture(stderr)),
             url,
+            #[cfg(unix)]
+            edge_port,
         }
     }
 

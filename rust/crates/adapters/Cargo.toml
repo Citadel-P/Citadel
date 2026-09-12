@@ -51,6 +51,9 @@ urlencoding.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix.workspace = true
+
 [dev-dependencies]
 axum.workspace = true
 citadel-database = { path = "../database" }
