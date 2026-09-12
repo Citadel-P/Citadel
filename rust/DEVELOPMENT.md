@@ -253,6 +253,38 @@ settings compatibility and startup guards without building Rust or starting
 containers. In WSL it additionally exercises the daemon selection and database
 startup guards with a mocked Docker command.
 
+## Host disk metrics
+
+Disk usage measures the filesystem containing Docker's data directory, rather
+than the sum of Docker image or volume sizes. Rust persists the used bytes, total
+bytes, and percentage for dashboard/history queries and built-in disk alerts.
+
+For containerized Core or Agent, expose the daemon host read-only:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+  - /:/host:ro
+```
+
+`CITADEL_HOST_ROOT` defaults to `/host`. Core running natively **on the same host
+as Docker** can use `CITADEL_HOST_ROOT=/`, with permission to access Docker's
+data directory. There is no automatic fallback to the Core filesystem: WSL
+Ubuntu connected to Docker Desktop cannot measure Docker Desktop's disk through
+the socket. Use a Core or Agent container on that daemon with the host mount.
+With Docker Desktop, verify the mount source: binding `/` from Ubuntu WSL can
+expose Ubuntu's root rather than the daemon filesystem. A mount alone does not
+prove it is the correct disk.
+
+Agent and Edge telemetry retains nullable disk fields; older agents without
+these measurements remain supported. Missing mounts, failed probes, invalid or
+stale remote measurements remain unavailable, rather than reporting zero.
+
+The seeded critical disk rule triggers at 90% or more after three matching
+observations, with a 300-second cooldown. Valid below-threshold readings resolve
+the incident; missing telemetry does not falsely resolve it. Notification
+channels must be attached to the rule for external delivery.
+
 ## Database schema changes
 
 The declarative schema in `crates/database/src/schema/schema.sql` is the Rust

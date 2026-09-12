@@ -477,3 +477,77 @@ async fn seed_platform(pool: &sqlx::PgPool, platform_id: Uuid, actor_id: Uuid, t
         .await
         .unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
+    use citadel_platforms::{HostDiskUsage, StatisticsReadStore, StatsWindow};
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    let tag = Uuid::now_v7();
+    seed_platform(&pool, platform, actor, tag).await;
+    PostgresInventoryProjectionStore::new(pool.clone())
+        .persist(&snapshot(platform, true))
+        .await
+        .unwrap();
+    let created = Utc::now().timestamp();
+    let stats = [RuntimeContainerStat {
+        docker_container_id: "container-1".into(),
+        memory_active: 128.0,
+        memory_cache: 32.0,
+        cpu_usage: 4.5,
+        memory_limit: 1024.0,
+        rx_bytes: 12.0,
+        tx_bytes: 34.0,
+        created,
+    }];
+    let store = PostgresContainerStatsStore::new(pool.clone());
+    assert_eq!(
+        store
+            .persist_with_disk(platform, &stats, HostDiskUsage::new(90, 100, 90.0))
+            .await
+            .unwrap(),
+        1
+    );
+    let views = PostgresPlatformReadStore::new(pool.clone())
+        .list_authorized(ActorId::new(actor), true, &[tag])
+        .await
+        .unwrap();
+    let current = &views[0].stats.as_ref().unwrap()[0];
+    assert_eq!(current.cpu_usage, 1.125);
+    assert_eq!(current.disk_used_bytes, Some(90));
+    assert_eq!(current.disk_total_bytes, Some(100));
+    assert_eq!(current.disk_usage, Some(90.0));
+    let history =
+        citadel_adapters::statistics_read_store::PostgresStatisticsReadStore::new(pool.clone())
+            .platform(platform, StatsWindow::new(24).unwrap(), created)
+            .await
+            .unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].disk_used_bytes, Some(90));
+    assert_eq!(history[0].disk_total_bytes, Some(100));
+    assert_eq!(history[0].disk_usage, Some(90.0));
+    // Invalid or missing remote telemetry must not leave the previous disk value.
+    store
+        .persist_with_disk(
+            platform,
+            &stats,
+            Some(HostDiskUsage {
+                used_bytes: -1,
+                total_bytes: 100,
+                usage_percent: 95.0,
+            }),
+        )
+        .await
+        .unwrap();
+    let row: (Option<i64>,Option<i64>,Option<f64>,f64) = sqlx::query_as("SELECT diskusedbytes,disktotalbytes,diskusage,cpuusage FROM platformstats WHERE platformid=$1 ORDER BY created DESC LIMIT 1").bind(platform).fetch_one(&pool).await.unwrap();
+    assert_eq!(row, (None, None, None, 1.125));
+    pool.close().await;
+}

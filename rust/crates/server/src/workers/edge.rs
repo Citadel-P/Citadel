@@ -15,6 +15,7 @@ pub async fn run(
     registry: EdgeRegistry,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
+    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
     let mut tasks = JoinSet::new();
@@ -38,12 +39,12 @@ pub async fn run(
                 for session in registry.current_sessions().into_iter().filter(|session| session.target.resource_type==0) {
                     if active.values().any(|id| *id == session.id) { continue; }
                     let session_id = session.id;
-                    let pool=pool.clone(); let realtime=realtime.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
+                    let pool=pool.clone(); let realtime=realtime.clone(); let alerts=alerts.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
                     let task = tasks.spawn(async move {
                         tokio::select! {
                             ()=cancellation.cancelled()=>{},
                             ()=session.closed()=>{},
-                            result=monitor(session.clone(),pool,realtime,scans,&cancellation)=>{
+                            result=monitor(session.clone(),pool,realtime,scans,alerts,&cancellation)=>{
                                 if let Err(error)=result { tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge inventory synchronization interrupted"); }
                             }
                         }
@@ -63,6 +64,7 @@ async fn monitor(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     scans: Arc<Semaphore>,
+    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::try_join!(
@@ -73,7 +75,7 @@ async fn monitor(
             scans,
             cancellation
         ),
-        observe_stats(session, pool, realtime, cancellation),
+        observe_stats(session, pool, realtime, alerts, cancellation),
     )?;
     Ok(())
 }
@@ -82,16 +84,43 @@ async fn observe_stats(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
+    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let store = PostgresEdgeStore::new(pool);
+    let store = PostgresEdgeStore::new(pool.clone());
     let mut stream = runtime.stream_container_stats(Duration::from_secs(10), cancellation)?;
-    while let Some(stats) = stream.next().await {
+    let interval = Duration::from_secs(10);
+    let mut disk = super::disk::LatestDisk::new(interval);
+    let mut disk_updates = if session.target.node_id.is_none() {
+        super::disk::samples(runtime, interval, cancellation.clone())
+    } else {
+        Box::pin(futures_util::stream::pending())
+    };
+    loop {
+        let stats = tokio::select! {
+            () = cancellation.cancelled() => return Ok(()),
+            update = disk_updates.next() => { disk.record(update.flatten()); continue; },
+            stats = stream.next() => stats,
+        };
+        let Some(stats) = stats else {
+            break;
+        };
         let stats = stats?;
-        if store.persist_stats(&session, &stats).await? > 0
+        let persisted = store
+            .persist_stats_with_disk(&session, &stats, disk.get())
+            .await?;
+        if session.target.node_id.is_none() && (persisted > 0 || stats.is_empty()) {
+            super::platforms::observe_platform_metrics(
+                &pool,
+                alerts.as_ref(),
+                session.target.platform_id,
+            )
+            .await;
+        }
+        if (persisted > 0 || (session.target.node_id.is_none() && stats.is_empty()))
             && let Some(hub) = &realtime
         {
             hub.publish_scoped_container_stats(

@@ -2257,6 +2257,9 @@ pub(crate) fn map_platform_stats(
 ) -> RuntimePlatformStats {
     let stat = value.stat.unwrap_or_default();
     RuntimePlatformStats {
+        disk_used_bytes: stat.disk_used_bytes,
+        disk_total_bytes: stat.disk_total_bytes,
+        disk_usage: stat.disk_usage,
         memory_usage: stat.memory_usage,
         cpu_usage: stat.cpu_usage,
         receive_bytes: stat.rx_bytes,
@@ -2712,6 +2715,32 @@ mod tests {
         assert_eq!(
             mapped.ownership,
             citadel_domain::SwarmServiceOwnership::CitadelService
+        );
+    }
+}
+
+#[cfg(test)]
+mod disk_mapping_tests {
+    use super::*;
+    #[test]
+    fn platform_stats_preserve_optional_disk_measurements() {
+        use citadel_contracts::citadel::{
+            platforms::v1::PlatformStatsResponse, shared_models::v1::PlatformStatMessage,
+        };
+        let response = PlatformStatsResponse {
+            stat: Some(PlatformStatMessage {
+                disk_used_bytes: Some(0),
+                disk_total_bytes: Some(100),
+                disk_usage: Some(0.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mapped = map_platform_stats(response);
+        assert_eq!(mapped.disk().unwrap().used_bytes, 0);
+        assert_eq!(
+            map_platform_stats(PlatformStatsResponse::default()).disk(),
+            None
         );
     }
 }

@@ -144,6 +144,7 @@ pub enum DockerError {
 
 #[derive(Clone)]
 pub struct DockerClient {
+    pub(crate) host_disk: std::sync::Arc<crate::host_disk_usage::HostDiskUsageProvider>,
     client: Client,
     socket_path: PathBuf,
     request_timeout: Duration,
@@ -163,6 +164,7 @@ impl DockerClient {
         let client = Client::builder().build()?;
 
         Ok(Self {
+            host_disk: std::sync::Arc::new(crate::host_disk_usage::HostDiskUsageProvider::from_env()),
             client,
             socket_path,
             request_timeout,

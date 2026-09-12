@@ -16,7 +16,7 @@ use citadel_deployments::DeploymentService;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_platforms::jobs::{
     InventoryCollectionTarget, collect_inventory, collect_running_container_stats,
-    persist_container_stats, triggers_inventory_reconciliation,
+    triggers_inventory_reconciliation,
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
@@ -606,9 +606,16 @@ async fn local_container_stats(
                 "some local container statistics samples failed"
             );
         }
+        if batch.stats.is_empty() && batch.failed_samples != 0 {
+            continue;
+        }
         let stats = batch.stats;
-        match persist_container_stats(&store, platform_id, &stats).await {
-            Ok(0) => continue,
+        let disk = tokio::select! {
+            () = cancellation.cancelled() => return Ok(()),
+            disk = docker.host_disk_usage() => disk,
+        };
+        match store.persist_with_disk(platform_id, &stats, disk).await {
+            Ok(0) if !stats.is_empty() => continue,
             Ok(_) => {
                 context.metrics.local_stats_sampled();
                 observe_platform_metrics(&context.pool, context.alerts.as_ref(), platform_id).await;
@@ -678,6 +685,9 @@ async fn agent_container_stats(
             }
             Err(error) => return Err(error),
         };
+        let mut disk = super::disk::LatestDisk::new(context.fetch_interval);
+        let mut disk_updates =
+            super::disk::samples(agent.clone(), context.fetch_interval, cancellation.clone());
         let changed = wait_for_agent_reconfiguration(&context.pool, platform_id, agent.address());
         tokio::pin!(changed);
         loop {
@@ -685,15 +695,16 @@ async fn agent_container_stats(
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
                 () = &mut changed => break,
+                update = disk_updates.next() => { disk.record(update.flatten()); continue; },
                 next = stream.next() => next,
             };
             match next {
                 Some(Ok(stats)) => {
-                    if stats.is_empty() {
-                        continue;
-                    }
-                    match persist_container_stats(&store, platform_id, &stats).await {
-                        Ok(0) => continue,
+                    match store
+                        .persist_with_disk(platform_id, &stats, disk.get())
+                        .await
+                    {
+                        Ok(0) if !stats.is_empty() => continue,
                         Ok(_) => {
                             context.metrics.agent_stats_sampled();
                             observe_platform_metrics(
@@ -730,7 +741,7 @@ async fn agent_container_stats(
     }
 }
 
-async fn observe_platform_metrics(
+pub(super) async fn observe_platform_metrics(
     pool: &PgPool,
     alerts: &dyn AlertEventSink,
     platform_id: uuid::Uuid,
@@ -756,6 +767,13 @@ async fn observe_platform_metrics(
             return;
         }
     };
+    let disk = (|| {
+        citadel_platforms::HostDiskUsage::new(
+            row.try_get::<Option<i64>, _>("diskusedbytes").ok()??,
+            row.try_get::<Option<i64>, _>("disktotalbytes").ok()??,
+            row.try_get::<Option<f64>, _>("diskusage").ok()??,
+        )
+    })();
     let values = [
         (
             "PlatformCpuHigh",
@@ -770,7 +788,7 @@ async fn observe_platform_metrics(
         (
             "PlatformDiskHigh",
             "disk",
-            row.try_get::<Option<f64>, _>("diskusage").ok().flatten(),
+            disk.map(|sample| sample.usage_percent),
         ),
     ];
     for (alert_type, label, value) in values {
@@ -783,6 +801,7 @@ async fn observe_platform_metrics(
             info: serde_json::json!({
                 "PlatformName": name,
                 "Value": value,
+                "DiskUsagePercent": if alert_type == "PlatformDiskHigh" { Some(value) } else { None },
                 "DiskUsedBytes": row.try_get::<Option<i64>, _>("diskusedbytes").ok().flatten(),
                 "DiskTotalBytes": row.try_get::<Option<i64>, _>("disktotalbytes").ok().flatten(),
                 "HumanMessage": format!("Platform '{name}' {label} usage is {value:.1}%."),

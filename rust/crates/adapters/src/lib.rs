@@ -79,3 +79,5 @@ pub mod user_store;
 pub mod volume_content;
 
 pub use postgres::PostgresAuthorizedPlatformReader;
+
+pub mod host_disk_usage;

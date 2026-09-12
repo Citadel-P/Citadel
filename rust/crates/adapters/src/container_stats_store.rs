@@ -13,6 +13,20 @@ pub struct PostgresContainerStatsStore {
 }
 
 impl PostgresContainerStatsStore {
+    /// Persist host disk and container-derived metrics in the same platform sample.
+    /// Empty Docker hosts still get a platform sample, independent of containers.
+    pub async fn persist_with_disk(
+        &self,
+        platform_id: Uuid,
+        stats: &[RuntimeContainerStat],
+        disk: Option<citadel_platforms::HostDiskUsage>,
+    ) -> Result<usize, RuntimeCapabilityError> {
+        let mut transaction = self.pool.begin().await.map_err(storage)?;
+        let inserted =
+            persist_scoped_with_disk(&mut transaction, platform_id, None, stats, disk).await?;
+        transaction.commit().await.map_err(storage)?;
+        Ok(inserted)
+    }
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -51,6 +65,19 @@ pub(crate) async fn persist_scoped(
     if stats.is_empty() {
         return Ok(0);
     }
+    persist_scoped_with_disk(transaction, platform_id, node_id, stats, None).await
+}
+
+pub(crate) async fn persist_scoped_with_disk(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    platform_id: Uuid,
+    node_id: Option<&str>,
+    stats: &[RuntimeContainerStat],
+    disk: Option<citadel_platforms::HostDiskUsage>,
+) -> Result<usize, RuntimeCapabilityError> {
+    let disk = disk.and_then(|d| {
+        citadel_platforms::HostDiskUsage::new(d.used_bytes, d.total_bytes, d.usage_percent)
+    });
     let payload = serde_json::to_value(stats).map_err(storage)?;
     let inserted = sqlx::query_scalar::<_, i64>(
                 r#"
@@ -116,17 +143,17 @@ WITH incoming AS (
            COALESCE(SUM("cpuUsage"), 0) AS cpu_usage,
            COALESCE(SUM("rxBytes"), 0) AS rx_bytes,
            COALESCE(SUM("txBytes"), 0) AS tx_bytes,
-           MAX(created) AS created
+           COALESCE(MAX(created), $7::bigint) AS created
     FROM eligible
 ), persisted_platform AS (
     INSERT INTO platformstats (
-        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created)
+        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage)
     SELECT gen_random_uuid(), platform.id,
            CASE WHEN platform.memtotal > 0
                 THEN sample.memory_active / platform.memtotal * 100.0 ELSE 0 END,
            CASE WHEN platform.cpucount > 0
                 THEN sample.cpu_usage / platform.cpucount ELSE sample.cpu_usage END,
-           sample.rx_bytes, sample.tx_bytes, sample.created
+           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6
     FROM platform_sample sample
     JOIN platforms platform ON platform.id = $1
     WHERE sample.created IS NOT NULL AND $3::text IS NULL
@@ -134,7 +161,10 @@ WITH incoming AS (
         memoryusage = EXCLUDED.memoryusage,
         cpuusage = EXCLUDED.cpuusage,
         rxbytes = EXCLUDED.rxbytes,
-        txbytes = EXCLUDED.txbytes
+        txbytes = EXCLUDED.txbytes,
+        diskusedbytes = EXCLUDED.diskusedbytes,
+        disktotalbytes = EXCLUDED.disktotalbytes,
+        diskusage = EXCLUDED.diskusage
 )
 SELECT COUNT(*) FROM inserted
 "#,
@@ -142,6 +172,10 @@ SELECT COUNT(*) FROM inserted
             .bind(platform_id)
             .bind(payload)
             .bind(node_id)
+            .bind(disk.map(|d| d.used_bytes))
+            .bind(disk.map(|d| d.total_bytes))
+            .bind(disk.map(|d| d.usage_percent))
+            .bind(stats.is_empty().then(|| chrono::Utc::now().timestamp()))
             .fetch_one(&mut **transaction)
             .await
             .map_err(storage)?;

@@ -23,6 +23,45 @@ The API uses Utoipa and utoipa-axum to share route registration and documentatio
 Schemas derive from Rust DTOs; the former central HTTP catalog and handwritten
 schema generator have been removed. See [OpenAPI ownership and migration boundary](crates/server/src/openapi/README.md).
 
+## Server startup ownership
+
+The executable entry point in `crates/server/src/main.rs` calls `app::run()`.
+The executable modules own composition; feature handlers remain in the server
+library and receive their existing, narrowly scoped HTTP state.
+
+- `app.rs`: tracing, application lifecycle, HTTP and edge gRPC serving, signals,
+  worker supervision, and bounded shutdown of listeners, workers, and the pool.
+- `cli.rs`: command parsing and the existing migration, recovery, diagnostics,
+  healthcheck, and smoke commands. These do not build the full application.
+- `state.rs`: explicit database/client/repository/service construction. Shared
+  `AppState` is cloneable; owned worker inputs are returned separately because
+  the service-account usage queue has a single receiver.
+- `startup.rs`: schema migration, unattended bootstrap, and persisted readiness.
+- `api/mod.rs`: feature routes, realtime and Swagger, edge gRPC, and middleware.
+- `jobs/mod.rs`: registration of all jobs with the existing `TaskSupervisor`.
+  Implementations remain in `workers/` and their owning crates.
+
+Serving initializes tracing and loads configuration, migrates the schema,
+builds dependencies, completes bootstrap/readiness, starts supervised jobs,
+composes both routers, and starts both listeners. Migrations precede dependency
+construction; bootstrap completes before jobs or requests can observe setup.
+SIGTERM, Ctrl+C, server failure, or worker exit trigger the existing shared
+cancellation and bounded shutdown. Auxiliary commands retain their individual
+configuration requirements.
+
+Run `cargo check --locked` and `cargo test --locked` from `rust/`. To exercise
+actual startup, all documented route registrations, workers, restart, and Unix
+signal shutdown, use a **disposable** PostgreSQL instance with CREATE DATABASE
+permission:
+
+```bash
+CITADEL_TEST_DATABASE_URL=postgres://user:password@localhost:port/test_database \
+  cargo test --locked -p citadel-server --test bootstrap_process -- --ignored --test-threads=1
+```
+
+These process tests use isolated databases, temporary data directories, ephemeral
+HTTP/gRPC ports, and an absent Docker socket; they do not use development workloads.
+
 ## Unattended first run and recovery
 
 For unattended Rust Core setup, supply all three settings:

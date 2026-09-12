@@ -13,3 +13,8 @@ mod swarm_services;
 mod volume_helpers;
 
 pub use platforms::{WorkerDependencies, WorkerSettings, register};
+
+mod disk;
+
+#[cfg(test)]
+mod disk_tests;
